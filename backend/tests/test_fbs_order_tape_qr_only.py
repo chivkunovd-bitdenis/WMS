@@ -142,7 +142,7 @@ async def test_delivered_wb_reuses_saved_code_without_packaging_task(
     )
     code = SimpleNamespace(id=uuid.uuid4(), cis_code="saved-test-cis", label_artifact_pdf=b"pdf")
     marking = None if saved_code == "missing" else SimpleNamespace(
-        source=saved_code, marking_code=code,
+        source=saved_code, marking_code=code, order_product_id=None,
     )
     monkeypatch.setattr(service, "_load_supply", AsyncMock(return_value=supply))
     monkeypatch.setattr(service, "_line_by_product", AsyncMock(return_value={}))

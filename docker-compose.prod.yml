@@ -30,6 +30,10 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
+      # The value stays in the deployment environment; this only makes an
+      # already configured DaData credential available to the API process.
+      DADATA_TOKEN: ${DADATA_TOKEN:-}
+      WMS_DADATA_TOKEN: ${WMS_DADATA_TOKEN:-}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
       WMS_MARKING_IMPORT_LOCAL_STORAGE: ${WMS_MARKING_IMPORT_LOCAL_STORAGE:-false}

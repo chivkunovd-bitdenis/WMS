@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-09-10T12:05:30.686997+00:00",
+  "project": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "service": "7ba030a6-5608-406f-838f-22cd19b44a11",
+  "exit_code": 0,
+  "backup_created_and_archive_list_verified": true,
+  "backup_relative_to_pgdata": "wms-stage-before-0261-20260910.dump",
+  "restore_tested": false,
+  "application_deploy_executed": false,
+  "initial_attempt": "shell argv quoting failed before backup; corrected direct argv"
+}

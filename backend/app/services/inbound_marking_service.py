@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
+from app.models.document_event import DOCUMENT_TYPE_INBOUND_INTAKE, EVENT_DATA_CHANGED
 from app.models.fbs_order import FbsOrderMarking
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.marking_code import (
@@ -32,12 +33,18 @@ from app.models.marking_code import (
 )
 from app.models.product import Product
 from app.services import public_marking_check as public_check
+from app.services import true_api_marking_check as true_api
+from app.services.document_event_service import record_document_mutation
 from app.services.inbound_intake_service import (
     RECEIVING_STATUSES,
     InboundIntakeError,
     effective_actual_qty,
 )
 from app.services.marking_code_service import extract_gtin_from_cis
+from app.services.seller_marking_credentials_service import (
+    get_cz_token_for_seller,
+    get_public_credentials,
+)
 
 JOB_TYPE = "inbound_marking_check"
 
@@ -390,6 +397,27 @@ async def delete_code(
     ):
         if await session.scalar(stmt.limit(1)) is not None:
             raise InboundIntakeError("marking_code_already_used")
+    # Keep only validated identities of the attachment being removed, never CIS/meta content.
+    try:
+        line_id = str(uuid.UUID(str(_meta(own[0]).get("line_id"))))
+    except ValueError:
+        line_id = None
+    attachment = {
+        "code_id": str(code.id),
+        "line_id": line_id,
+        "attachment_event_id": str(own[0].id),
+        "attached_by_user_id": str(own[0].actor_user_id) if own[0].actor_user_id else None,
+        "pool_id": str(code.pool_id) if code.pool_id else None,
+    }
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        before={**attachment, "attached": True, "code_exists": True},
+        after={**attachment, "attached": False, "code_exists": is_printed_pool},
+    )
     await session.execute(delete(MarkingCodeEvent).where(MarkingCodeEvent.id == own[0].id))
     if not is_printed_pool:
         await session.execute(delete(MarkingCode).where(MarkingCode.id == code.id))
@@ -464,44 +492,88 @@ async def _run_check_job(job_id: uuid.UUID) -> None:
                     await session.commit()
                     return
                 await session.commit()
-            for event_id in event_ids:
-                async with SessionLocal() as session:
-                    event = await session.get(MarkingCodeEvent, event_id)
-                    if (
-                        event is None
-                        or event.tenant_id != tenant_id
-                        or (_meta(event).get("cz_check") or {}).get("status")
-                        not in {None, "pending"}
-                    ):
-                        continue
-                    code = await session.get(MarkingCode, event.code_id)
-                    if code is None or code.tenant_id != tenant_id:
-                        continue
-                    code_text = code.cis_code
-                check = await public_check.check_code(client, code_text)
-                async with SessionLocal() as session:
-                    # Keep schedule_check lock order: an expired worker must not
-                    # overwrite snapshots owned by a replacement job.
-                    await _request(session, tenant_id, request_id, lock=True)
-                    job = await session.get(BackgroundJob, job_id, populate_existing=True)
-                    if job is None or job.status != "running":
-                        return
-                    event = await session.scalar(
-                        select(MarkingCodeEvent)
+            async with SessionLocal() as session:
+                rows = (
+                    await session.execute(
+                        select(MarkingCodeEvent.id, MarkingCode.cis_code, MarkingCode.seller_id)
+                        .join(MarkingCode, MarkingCode.id == MarkingCodeEvent.code_id)
                         .where(
-                            MarkingCodeEvent.id == event_id,
+                            MarkingCodeEvent.id.in_(event_ids),
                             MarkingCodeEvent.tenant_id == tenant_id,
+                            MarkingCode.tenant_id == tenant_id,
                         )
-                        .with_for_update()
                     )
-                    if event is None:
-                        continue
-                    meta = _meta(event)
-                    if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
-                        continue
-                    meta["cz_check"] = check
-                    event.meta_json = json.dumps(meta)
-                    await session.commit()
+                ).all()
+                by_seller: dict[uuid.UUID, list[tuple[uuid.UUID, str]]] = {}
+                for event_id, code_text, seller_id in rows:
+                    by_seller.setdefault(seller_id, []).append((event_id, code_text))
+                credentials = {
+                    seller_id: await get_public_credentials(session, tenant_id, seller_id)
+                    for seller_id in by_seller
+                }
+                tokens = {
+                    seller_id: await get_cz_token_for_seller(session, tenant_id, seller_id)
+                    for seller_id, credential in credentials.items()
+                    if credential is not None and credential.has_cz_token
+                }
+
+            for seller_id, entries in by_seller.items():
+                credential = credentials[seller_id]
+                has_cz_token = credential is not None and credential.has_cz_token
+                # Public mobile/check is one-code-per-request, so persist each
+                # answer before starting the next potentially slow request.
+                batch_size = true_api.BATCH_SIZE if has_cz_token else 1
+                for offset in range(0, len(entries), batch_size):
+                    batch = entries[offset : offset + batch_size]
+                    if has_cz_token:
+                        token = tokens.get(seller_id)
+                        checks = (
+                            await true_api.check_batch(client, [code for _, code in batch], token)
+                            if token
+                            else {
+                                code: true_api.unavailable(
+                                    "Сохранённый токен Честного знака недоступен. "
+                                    "Проверьте интеграцию селлера."
+                                )
+                                for _, code in batch
+                            }
+                        )
+                    else:
+                        # The public check is the existing token-free route. Do not
+                        # substitute it after a failed authenticated True API check.
+                        checks = {
+                            code: await public_check.check_code(client, code)
+                            for _, code in batch
+                        }
+
+                    async with SessionLocal() as session:
+                        # Keep schedule_check lock order: an expired worker must not
+                        # overwrite snapshots owned by a replacement job.
+                        await _request(session, tenant_id, request_id, lock=True)
+                        job = await session.get(BackgroundJob, job_id, populate_existing=True)
+                        if job is None or job.status != "running":
+                            return
+                        events = (
+                            await session.scalars(
+                                select(MarkingCodeEvent)
+                                .where(
+                                    MarkingCodeEvent.id.in_([event_id for event_id, _ in batch]),
+                                    MarkingCodeEvent.tenant_id == tenant_id,
+                                )
+                                .with_for_update()
+                            )
+                        ).all()
+                        codes_by_event = dict(batch)
+                        for event in events:
+                            meta = _meta(event)
+                            if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
+                                continue
+                            meta["cz_check"] = checks.get(
+                                codes_by_event[event.id],
+                                true_api.unavailable(),
+                            )
+                            event.meta_json = json.dumps(meta)
+                        await session.commit()
 
 
 async def run_check_job(job_id: uuid.UUID) -> None:

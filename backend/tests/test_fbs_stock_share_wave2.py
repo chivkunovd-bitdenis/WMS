@@ -403,7 +403,7 @@ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -
 
 # TC-NEW-FBS-SHARE-W2-004: legacy values reset only by the explicit second step.
 @pytest.mark.asyncio
-async def test_fbs_legacy_limits_reset_requires_rule_and_zeros_all_old_values(
+async def test_fbs_legacy_limits_reset_requires_rule_and_preserves_operator_cap(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_admin(async_client)
@@ -490,4 +490,4 @@ async def test_fbs_legacy_limits_reset_requires_rule_and_zeros_all_old_values(
                 FbsBindingStockPool.product_id == uuid.UUID(configured_product_id)
             )
         )
-        assert quantity == 0
+        assert quantity == 7  # WMS-338: only the obsolete product limit is reset.

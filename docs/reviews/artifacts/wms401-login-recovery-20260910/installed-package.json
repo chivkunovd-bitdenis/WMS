@@ -1,0 +1,8 @@
+{
+  "sha256": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
+  "version_fields": [
+    "versionCode=11 minSdk=24 targetSdk=35",
+    "versionName=0.1.10-mobile-recovery"
+  ],
+  "install_method": "local adb install -r candidate; NOT network update proof"
+}

@@ -174,6 +174,9 @@ class InboundIntakeBoxOut(BaseModel):
     remaining_qty: int = 0
     pallet_id: str | None = None
     pallet_code: str | None = None
+    # WMS-174: короб пришёл битым — оператор ставит галку прямо на приёмке.
+    # Не влияет на движения, не блокирует этап, только видимая всем заметка.
+    is_damaged: bool = False
     lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
 
 
@@ -346,6 +349,7 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
         remaining_qty=svc.box_remaining_qty(b),
         pallet_id=str(b.pallet_id) if b.pallet_id is not None else None,
         pallet_code=pallet.code if pallet is not None else None,
+        is_damaged=bool(b.is_damaged),
         lines=lines_out,
     )
 
@@ -513,7 +517,7 @@ def _request_out(
         else None,
         planned_box_count=r.planned_box_count,
         actual_box_count=len(boxes_out),
-        boxes_discrepancy=bool(r.boxes_discrepancy),
+        boxes_discrepancy=svc.boxes_discrepancy(r.planned_box_count, len(boxes_out)),
         has_discrepancy=bool(r.has_discrepancy),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=r.seller.name if r.seller is not None else None,
@@ -699,7 +703,7 @@ async def list_inbound_requests(
             else None,
             planned_box_count=r.planned_box_count,
             actual_box_count=len(r.boxes),
-            boxes_discrepancy=bool(r.boxes_discrepancy),
+            boxes_discrepancy=svc.boxes_discrepancy(r.planned_box_count, len(r.boxes)),
             has_discrepancy=bool(r.has_discrepancy),
             seller_id=str(r.seller_id) if r.seller_id is not None else None,
             seller_name=r.seller.name if r.seller is not None else None,
@@ -1435,6 +1439,55 @@ async def delete_inbound_box(
         )
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
+
+
+class InboundBoxDamageIn(BaseModel):
+    is_damaged: bool
+
+
+@router.patch(
+    "/{request_id}/boxes/{box_id}/damaged",
+    response_model=InboundIntakeBoxOut,
+)
+async def set_inbound_box_damaged(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: InboundBoxDamageIn,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    """WMS-174: пометить или снять пометку «пришёл битым» на конкретном коробе.
+
+    Признак — только заметка, не жизненный цикл: не блокирует этапы, не
+    участвует в расчётах остатков и не меняет движения. Правила доступа те
+    же, что и у остальных ручек приёмки (`require_reception_access`), склад
+    и приёмка того же арендатора проверяются по паре request/box.
+    """
+    bx = await session.get(InboundIntakeBox, box_id)
+    if bx is None or bx.request_id != request_id or bx.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="box_not_found",
+        )
+    before = svc.container_audit_fields(bx)
+    bx.is_damaged = bool(body.is_damaged)
+    await svc.record_container_mutation(
+        session,
+        bx,
+        before=before,
+        after=svc.container_audit_fields(bx),
+    )
+    await session.commit()
+    stmt = (
+        select(InboundIntakeBox)
+        .where(InboundIntakeBox.id == box_id)
+        .options(
+            selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
+            selectinload(InboundIntakeBox.pallet),
+        )
+    )
+    box = (await session.execute(stmt)).scalar_one()
+    return _box_out(box)
 
 
 @router.post(

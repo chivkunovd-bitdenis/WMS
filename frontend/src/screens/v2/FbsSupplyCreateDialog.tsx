@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { fbsErrorText } from './fbsUx'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -64,6 +65,14 @@ export function FbsSupplyCreateDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(createFbsIdempotencyKey)
+  const isOzonSupply = preflight?.summary?.marketplace === 'ozon'
+
+  const requestClose = () => {
+    if (confirmDiscardChanges(deliveryType !== 'warehouse_sc')) {
+      setDeliveryType('warehouse_sc')
+      onClose()
+    }
+  }
 
   const orderKey = useMemo(() => orderIds.join(','), [orderIds])
 
@@ -145,7 +154,7 @@ export function FbsSupplyCreateDialog({
 
   const summary = preflight?.summary
   return (
-    <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={creating ? undefined : requestClose} fullWidth maxWidth="md">
       <DialogTitle component="div" sx={{ pb: 1 }}>
         <Typography component="h2" variant="h6">Новая поставка FBS</Typography>
         <Typography variant="body2" color="text.secondary">
@@ -169,7 +178,7 @@ export function FbsSupplyCreateDialog({
             </Alert>
           ) : null}
 
-          <Box>
+          {!isOzonSupply ? <Box>
             <Typography variant="subtitle2" gutterBottom>
               Планируемый способ сдачи
             </Typography>
@@ -193,7 +202,7 @@ export function FbsSupplyCreateDialog({
                 маршрута для каждого заказа.
               </Typography>
             ) : null}
-          </Box>
+          </Box> : null}
 
           <Divider />
 
@@ -223,13 +232,19 @@ export function FbsSupplyCreateDialog({
               >
                 <SummaryItem label="Селлер" value={summary.seller.name} />
                 <SummaryItem
-                  label="Склад WB"
-                  value={summary.wb_warehouse.name ? String(summary.wb_warehouse.name) : `WB ${summary.wb_warehouse.id}`}
+                  label={isOzonSupply ? 'Склад Ozon' : 'Склад WB'}
+                  value={summary.wb_warehouse.name
+                    ? String(summary.wb_warehouse.name)
+                    : `${isOzonSupply ? 'Ozon' : 'WB'} ${summary.wb_warehouse.id}`}
                 />
                 <SummaryItem label="Склад WMS" value={summary.wms_warehouse.name} />
                 <SummaryItem label="Заказов" value={String(summary.orders_count)} />
-                <SummaryItem label="Грузовой тип" value={summary.cargo_type} />
-                <SummaryItem label="Контроль сборки" value="без подтверждённого WB SLA" />
+                {isOzonSupply ? (
+                  <SummaryItem label="Метод доставки Ozon" value={summary.delivery_route ?? 'Не указан в отправлении'} />
+                ) : <>
+                  <SummaryItem label="Грузовой тип" value={summary.cargo_type} />
+                  <SummaryItem label="Контроль сборки" value="без подтверждённого WB SLA" />
+                </>}
                 {summary.buyer_type === 'legal' ? <SummaryItem label="Покупатель" value="Юридическое лицо" /> : null}
                 {summary.required_marking_count > 0 ? <SummaryItem label="Нужна маркировка" value={String(summary.required_marking_count)} /> : null}
                 {deliveryType === 'pvz' && summary.pvz_blocked_count > 0 ? <SummaryItem label="Нельзя сдать через ПВЗ" value={String(summary.pvz_blocked_count)} /> : null}
@@ -251,7 +266,7 @@ export function FbsSupplyCreateDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={creating}>
+        <Button onClick={requestClose} disabled={creating}>
           Отмена
         </Button>
         <Button

@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.core.settings import settings
+from app.models.document_event import (
+    DOCUMENT_TYPE_STAFF_USER,
+    EVENT_STAFF_USER_CREATED,
+    SOURCE_USER,
+)
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
 from app.models.tenant import Tenant
@@ -23,9 +28,14 @@ from app.services.auth_link_tokens import (
     fingerprint_matches,
 )
 from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
+from app.services.catalog_service import create_warehouse
+from app.services.document_event_service import record_document_event_safely
 from app.services.mailer import send_email
 from app.services.passwords import hash_password, verify_password
 from app.services.tokens import create_access_token
+
+DEFAULT_WAREHOUSE_NAME = "Основной"
+DEFAULT_WAREHOUSE_CODE = "main"
 
 
 class AuthError(Exception):
@@ -54,6 +64,13 @@ async def register_fulfillment(
     try:
         await session.flush()
         await ensure_disabled_tariff_matrix(session, tenant=tenant)
+        # WMS-062: у новой организации всегда есть один «Основной» склад.
+        # Форма приёмки/отгрузки в UI и мобильный ТСД падали на пустом списке
+        # складов, поэтому склад создаётся в той же транзакции, что и tenant.
+        await create_warehouse(
+            session, tenant.id,
+            name=DEFAULT_WAREHOUSE_NAME, code=DEFAULT_WAREHOUSE_CODE, commit=False,
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -208,6 +225,33 @@ async def create_staff_user(
         await session.flush()
         perms = FfStaffPermissions(user_id=user.id)
         session.add(perms)
+        # WMS-325: точка создания FF-сотрудника — сразу с набором прав (все False
+        # по умолчанию). Пишем в тот же document_event с acting_user + after.
+        await record_document_event_safely(
+            session,
+            tenant_id=user.tenant_id,
+            document_type=DOCUMENT_TYPE_STAFF_USER,
+            document_id=user.id,
+            event_type=EVENT_STAFF_USER_CREATED,
+            source=SOURCE_USER,
+            actor_user_id=acting_user.id,
+            payload_json={
+                "role": "fulfillment_staff",
+                "target_user_id": str(user.id),
+                "acting_user_id": str(acting_user.id),
+                "email": user.email,
+                "before": None,
+                "after": {
+                    "settings": False,
+                    "mp_shipments": False,
+                    "reception": False,
+                    "cells": False,
+                    "inventory": False,
+                    "packaging": False,
+                    "shift_lead": False,
+                },
+            },
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()

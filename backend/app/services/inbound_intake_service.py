@@ -6,12 +6,17 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_INBOUND_INTAKE,
+    EVENT_DATA_CHANGED,
+    EVENT_DOCUMENT_CREATED,
+)
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
@@ -40,6 +45,7 @@ from app.services.catalog_service import (
     get_warehouse,
 )
 from app.services.defect_warehouse_service import get_or_create_defect_location
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
     assign_display_number_if_missing,
@@ -89,6 +95,11 @@ class DistributionScanResult:
 def _loose_qty(line: InboundIntakeLine) -> int:
     """General (non-box) intake quantity; default 0 — never falls back to expected."""
     return line.actual_qty if line.actual_qty is not None else 0
+
+
+def boxes_discrepancy(planned: int | None, actual: int) -> bool:
+    """The physical box count is authoritative, including zero received boxes."""
+    return planned is not None and planned != actual
 
 
 async def effective_actual_qty(
@@ -297,6 +308,60 @@ async def sync_request_actuals_from_boxes(
             raise InboundIntakeError("actual_below_posted")
 
 
+def _request_audit_fields(req: InboundIntakeRequest) -> dict[str, object]:
+    # Explicit business identifiers only; never include notes, files or model dumps.
+    return {
+        "request_id": req.id,
+        "warehouse_id": req.warehouse_id,
+        "seller_id": req.seller_id,
+        "status": req.status,
+        "operation_type": req.operation_type,
+        "marketplace": req.marketplace,
+        "planned_box_count": req.planned_box_count,
+        "waybill_number": req.waybill_number,
+    }
+
+
+def container_audit_fields(
+    container: InboundIntakeBox | InboundIntakeCargoPlace,
+) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "container_kind": "box" if isinstance(container, InboundIntakeBox) else "cargo_place",
+        "container_id": str(container.id),
+        "label_printed_at": container.label_printed_at.isoformat()
+        if container.label_printed_at
+        else None,
+    }
+    if isinstance(container, InboundIntakeBox):
+        fields.update(
+            box_number=container.box_number,
+            intake_opened=container.intake_opened_at is not None,
+            intake_closed=container.intake_closed_at is not None,
+            is_damaged=bool(container.is_damaged),
+        )
+    else:
+        fields["place_number"] = container.place_number
+    return fields
+
+
+async def record_container_mutation(
+    session: AsyncSession,
+    container: InboundIntakeBox | InboundIntakeCargoPlace,
+    *,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+) -> None:
+    await record_document_mutation(
+        session,
+        tenant_id=container.tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=container.request_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=after,
+    )
+
+
 async def create_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -341,6 +406,16 @@ async def create_request(
     session.add(req)
     await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_INBOUND, req)
     await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_INBOUND, req)
+    await session.flush()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DOCUMENT_CREATED,
+        before=None,
+        after=_request_audit_fields(req),
+    )
     await session.commit()
     reloaded = await get_request(session, tenant_id, req.id)
     if reloaded is None:
@@ -373,6 +448,15 @@ async def list_requests(
     if seller_product_owner_id is not None:
         stmt = stmt.where(
             InboundIntakeRequest.seller_id == seller_product_owner_id,
+        )
+    else:
+        # FF sees its own drafts and submitted seller documents, but not a
+        # seller's unfinished local plan (WMS-184).
+        stmt = stmt.where(
+            or_(
+                InboundIntakeRequest.status != STATUS_DRAFT,
+                InboundIntakeRequest.created_by_seller_id.is_(None),
+            )
         )
     res = await session.execute(stmt)
     return list(res.scalars().unique().all())
@@ -516,9 +600,7 @@ async def add_line(
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
         raise InboundIntakeError("mixed_seller_lines")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     loc_id: uuid.UUID | None = None
     if address_enabled and storage_location_id is not None:
         loc = await get_storage_location_in_warehouse(
@@ -628,6 +710,19 @@ async def delete_draft_request(
         raise InboundIntakeError("line_already_posted")
     if any(box_line.posted_qty != 0 for box in req.boxes for box_line in box.lines):
         raise InboundIntakeError("line_already_posted")
+    before = _request_audit_fields(req)
+    before["containers"] = [container_audit_fields(c) for c in req.boxes] + [
+        container_audit_fields(c) for c in req.cargo_places
+    ]
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=None,
+    )
     await session.delete(req)
     await session.commit()
 
@@ -655,6 +750,10 @@ async def patch_request_draft(
         raise InboundIntakeError("request_not_found")
     if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
+    before: dict[str, object] = {
+        "planned_box_count": req.planned_box_count,
+        "waybill_number": req.waybill_number,
+    }
     if planned_delivery_date_set:
         req.planned_delivery_date = planned_delivery_date
     if planned_box_count_set:
@@ -663,6 +762,15 @@ async def patch_request_draft(
         req.planned_box_count = planned_box_count
     if waybill_number_set:
         req.waybill_number = normalize_waybill_number(waybill_number)
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after={"planned_box_count": req.planned_box_count, "waybill_number": req.waybill_number},
+    )
     await session.commit()
     await session.refresh(req)
     return req
@@ -709,8 +817,22 @@ async def set_line_storage_location(
         line
     ):
         raise InboundIntakeError("line_closed")
+    before: dict[str, object] = {
+        "line_id": line.id,
+        "storage_location_id": line.storage_location_id,
+    }
     if not await tenant_settings_svc.is_address_storage_enabled(session, tenant_id):
         line.storage_location_id = None
+        await record_document_mutation(
+            session,
+            tenant_id=tenant_id,
+            document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+            document_id=req.id,
+            event_type=EVENT_DATA_CHANGED,
+            product_id=line.product_id,
+            before=before,
+            after={"line_id": line.id, "storage_location_id": line.storage_location_id},
+        )
         await session.commit()
         await session.refresh(line)
         return line
@@ -722,6 +844,16 @@ async def set_line_storage_location(
     if sorting_loc_svc.is_sorting_location(loc):
         raise InboundIntakeError("sorting_location_reserved")
     line.storage_location_id = storage_location_id
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        product_id=line.product_id,
+        before=before,
+        after={"line_id": line.id, "storage_location_id": line.storage_location_id},
+    )
     await session.commit()
     await session.refresh(line)
     return line
@@ -796,7 +928,8 @@ async def _record_charge_if_done(
                     Decimal(line.posted_qty),
                     {"inbound_intake_line_id": str(line.id)},
                 )
-                for line in req.lines if line.posted_qty
+                for line in req.lines
+                if line.posted_qty
             ),
         )
     except BillingLedgerError:
@@ -828,7 +961,7 @@ async def primary_accept_request(
     if actual_box_count is not None:
         req.actual_box_count = actual_box_count
         if req.planned_box_count is not None:
-            req.boxes_discrepancy = actual_box_count != req.planned_box_count
+            req.boxes_discrepancy = boxes_discrepancy(req.planned_box_count, actual_box_count)
     req.status = STATUS_RECEIVING
     req.primary_accepted_at = datetime.now(UTC)
     await session.commit()
@@ -891,6 +1024,14 @@ async def create_cargo_places(
         )
         session.add(place)
         created.append(place)
+    await session.flush()
+    for place in created:
+        await record_container_mutation(
+            session,
+            place,
+            before=None,
+            after=container_audit_fields(place),
+        )
     await session.commit()
     for place in created:
         await session.refresh(place)
@@ -909,7 +1050,14 @@ async def mark_cargo_place_label_printed(
     place = await session.get(InboundIntakeCargoPlace, place_id)
     if place is None or place.request_id != request_id or place.tenant_id != tenant_id:
         raise InboundIntakeError("cargo_place_not_found")
+    before = container_audit_fields(place)
     place.label_printed_at = datetime.now(UTC)
+    await record_container_mutation(
+        session,
+        place,
+        before=before,
+        after=container_audit_fields(place),
+    )
     await session.commit()
     await session.refresh(place)
     return place
@@ -1201,7 +1349,10 @@ async def complete_receiving(
         line.actual_qty = effective
         if effective != line.expected_qty:
             line_discrepancy = True
-    req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
+    live_box_discrepancy = boxes_discrepancy(req.planned_box_count, len(req.boxes))
+    req.boxes_discrepancy = live_box_discrepancy
+    req.actual_box_count = len(req.boxes)
+    req.has_discrepancy = live_box_discrepancy or line_discrepancy
     req.status = STATUS_SORTING
     req.verified_at = datetime.now(UTC)
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
@@ -1306,9 +1457,7 @@ async def receive_line(
     remaining = accepted - line.posted_qty
     if remaining <= 0:
         raise InboundIntakeError("nothing_to_receive")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     if address_enabled and line.storage_location_id is None:
         raise InboundIntakeError("storage_not_assigned")
     if quantity < 1 or quantity > remaining:
@@ -1352,9 +1501,7 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         accepted = _accepted_qty_for_line(line)
@@ -1426,10 +1573,7 @@ def _box_quantity_total_for_product(
     product_id: uuid.UUID,
 ) -> int:
     return sum(
-        int(bl.quantity)
-        for box in req.boxes
-        for bl in box.lines
-        if bl.product_id == product_id
+        int(bl.quantity) for box in req.boxes for bl in box.lines if bl.product_id == product_id
     )
 
 
@@ -1932,9 +2076,7 @@ async def replace_distribution_lines(
         keep_qty = min(int(row.quantity), max(0, int(box_line.posted_qty) - already_preserved))
         if keep_qty < 1:
             continue
-        preserved_box_rows.append(
-            (row.box_id, row.product_id, row.storage_location_id, keep_qty)
-        )
+        preserved_box_rows.append((row.box_id, row.product_id, row.storage_location_id, keep_qty))
         preserved_by_key[key] = already_preserved + keep_qty
 
     accepted_by_product: dict[uuid.UUID, int] = {}
@@ -2178,9 +2320,7 @@ async def reopen_receiving(
             for cargo_line in cargo_place.lines:
                 if cargo_line.product_id == line.product_id and cargo_line.quantity > 0:
                     container_qty += int(cargo_line.quantity)
-                    sources.append(
-                        ("cargo_place", cargo_place.id, int(cargo_line.quantity))
-                    )
+                    sources.append(("cargo_place", cargo_place.id, int(cargo_line.quantity)))
         loose_qty = qty - container_qty
         if loose_qty < 0:
             raise InboundIntakeError("actual_below_container_total")

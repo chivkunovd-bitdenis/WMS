@@ -541,6 +541,7 @@ async def test_units_shipment_consumes_once_with_or_without_reserve(
 ) -> None:
     from app.models.fbs_binding_stock_pool import FbsBindingStockPool
     from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+    from app.services.fbs_stock_rule_service import get_rule_view
     from app.services.inventory_service import update_fbs_order_reservation
 
     case = await _seed_packed_order(db_session, quantities, marketplace=marketplace)
@@ -560,22 +561,42 @@ async def test_units_shipment_consumes_once_with_or_without_reserve(
         product = await db_session.get(Product, product_id)
         assert product is not None
         product.fbs_units_mode = True
+        product.fbs_stock_sync_enabled = True
+        product.fbs_ozon_stock_sync_enabled = True
         pool = FbsBindingStockPool(
             tenant_id=case.tenant_id,
             binding_id=binding.id,
             product_id=product_id,
-            quantity=4,
+            quantity=case.initial_quantity,
         )
         db_session.add(pool)
         pools.append(pool)
     await db_session.flush()
     if reserved:
         await update_fbs_order_reservation(db_session, case.order, reserve=True)
+    for pid, quantity in zip(case.product_ids, quantities, strict=True):
+        view = await get_rule_view(db_session, case.tenant_id, pid)
+        assert view.on_hand == case.initial_quantity
+        assert view.reserved == (quantity if reserved else 0)
+        assert view.published_now == case.initial_quantity - (quantity if reserved else 0)
     await _write_off_case(db_session, case)
+    await db_session.commit()
+    for pid, quantity in zip(case.product_ids, quantities, strict=True):
+        view = await get_rule_view(db_session, case.tenant_id, pid)
+        assert (view.on_hand, view.reserved, view.free_stock, view.published_now) == (
+            case.initial_quantity - quantity, 0,
+            case.initial_quantity - quantity, case.initial_quantity - quantity,
+        )
     await _write_off_case(db_session, case)
     await _apply_status(db_session, case.order, "cancelled")
     await _apply_status(db_session, case.order, "cancelled")
-    assert [p.quantity for p in pools] == [4 - q for q in quantities]
+    # WMS-338: pool.quantity — операторский потолок; ни передача, ни отмена
+    # его не расходуют. Раньше здесь ожидалось `4 - quantities`, потому что
+    # передача автоматически ела число оператора; убрано. Единожды расходуется
+    # физический баланс — за ним и следим.
+    for pool in pools:
+        await db_session.refresh(pool)
+    assert [p.quantity for p in pools] == [case.initial_quantity for _ in quantities]
     assert await _balances(db_session, case) == {
         pid: case.initial_quantity - q for pid, q in zip(case.product_ids, quantities, strict=True)
     }

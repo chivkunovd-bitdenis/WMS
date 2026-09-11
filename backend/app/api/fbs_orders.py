@@ -270,6 +270,11 @@ class FbsWorklistWarehouseOut(BaseModel):
     name: str | None
 
 
+class FbsWorklistMarketplaceBindingOut(BaseModel):
+    marketplace: Literal["wb", "ozon"]
+    external_barcodes: list[str] = Field(default_factory=list)
+
+
 class FbsWorklistProductOut(BaseModel):
     id: str | None
     name: str
@@ -282,6 +287,7 @@ class FbsWorklistProductOut(BaseModel):
     category: str | None = None
     color: str | None = None
     size: str | None
+    marketplace_bindings: list[FbsWorklistMarketplaceBindingOut] = Field(default_factory=list)
 
 
 class FbsWorklistInventoryLocationOut(BaseModel):
@@ -343,6 +349,7 @@ class FbsWorklistPositionOut(BaseModel):
     barcode: str | None = None
     image_url: str | None = None
     product_id: str | None
+    marketplace_bindings: list[FbsWorklistMarketplaceBindingOut] = Field(default_factory=list)
     name: str
     seller_article: str | None
     sku: str | None

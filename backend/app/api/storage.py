@@ -33,6 +33,7 @@ from app.services.storage_measurement_service import (
 from app.services.storage_statement_service import (
     StorageNightCharge,
     StorageStatementError,
+    build_storage_report,
     create_storage_tariff,
     get_storage_ledger_rows,
     get_storage_ledger_rows_batch,
@@ -615,3 +616,116 @@ async def print_statement(
     )
     _apply_night_charges(out, rows, charges.get(statement.id, {}))
     return out
+
+
+class StorageReportProductOut(BaseModel):
+    product_id: uuid.UUID | None
+    sku: str | None
+    product_name: str
+    seller_article: str | None
+    category: str | None
+    volume_liters: str | None
+    liter_days: str
+    # Ставка за период — начисленные деньги, делённые на начисленные литро-дни.
+    # Пусто, когда денег за период не начислено: ставки на эти сутки не было.
+    period_rate_kopecks: str | None
+    current_rate_kopecks: int | None
+    amount_kopecks: int | None
+
+
+class StorageReportSellerOut(BaseModel):
+    seller_id: uuid.UUID
+    seller_name: str
+    liter_days: str
+    amount_kopecks: int | None
+    products: list[StorageReportProductOut]
+
+
+class StorageReportOut(BaseModel):
+    date_from: str
+    date_to: str
+    total_liter_days: str
+    total_amount_kopecks: int | None
+    sellers: list[StorageReportSellerOut]
+
+
+def _period_rate_kopecks(liter_days: Decimal, amount_kopecks: int | None) -> str | None:
+    """Фактическая ставка периода: сколько копеек пришлось на литро-день.
+
+    Внутри периода ставку могли менять, и тогда «ставки за период» как заведённой
+    величины не существует. Делить начисленные деньги на начисленные литро-дни —
+    единственный способ показать ставку, которая сходится с суммой, а не спорит
+    с ней; так же считает её строка месячной ведомости.
+    """
+    if amount_kopecks is None or liter_days <= 0:
+        return None
+    return str(
+        (Decimal(amount_kopecks) / liter_days).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+    )
+
+
+@router.get("/report", response_model=StorageReportOut)
+async def storage_report(
+    user: Annotated[User, Depends(require_storage_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+    category: str | None = None,
+) -> StorageReportOut:
+    """Отчёт хранения за произвольный период: селлеры, товары, литро-дни, деньги.
+
+    Цифры — ночные начисления за хранение, те же, из которых собрана плашка
+    хранения на экране «Расчёты» и счёт селлеру. Отчёт их только группирует.
+    """
+    scoped_seller_id = user.seller_id if user.role == "fulfillment_seller" else seller_id
+    normalized_category = category.strip() if category is not None else None
+    try:
+        report = await build_storage_report(
+            session,
+            user.tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            seller_id=scoped_seller_id,
+            category=normalized_category or None,
+        )
+    except StorageStatementError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return StorageReportOut(
+        date_from=date_from.isoformat(),
+        date_to=date_to.isoformat(),
+        total_liter_days=str(report.liter_days),
+        total_amount_kopecks=report.amount_kopecks,
+        sellers=[
+            StorageReportSellerOut(
+                seller_id=seller.seller_id,
+                seller_name=seller.seller_name,
+                liter_days=str(seller.liter_days),
+                amount_kopecks=seller.amount_kopecks,
+                products=[
+                    StorageReportProductOut(
+                        product_id=product.product_id,
+                        sku=product.sku,
+                        product_name=product.product_name,
+                        seller_article=product.seller_article,
+                        category=product.category,
+                        volume_liters=(
+                            str(product.volume_liters)
+                            if product.volume_liters is not None
+                            else None
+                        ),
+                        liter_days=str(product.liter_days),
+                        period_rate_kopecks=_period_rate_kopecks(
+                            product.liter_days, product.amount_kopecks
+                        ),
+                        current_rate_kopecks=product.current_rate_kopecks,
+                        amount_kopecks=product.amount_kopecks,
+                    )
+                    for product in seller.products
+                ],
+            )
+            for seller in report.sellers
+        ],
+    )

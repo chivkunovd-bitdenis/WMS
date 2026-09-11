@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_STAFF
+from app.models.document_event import (
+    DOCUMENT_TYPE_STAFF_USER,
+    EVENT_PERMISSIONS_CHANGED,
+    SOURCE_USER,
+)
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.user import User
+from app.services.document_event_service import (
+    record_document_event_safely,
+)
 
 PERM_SETTINGS = "settings"
 PERM_MP_SHIPMENTS = "mp_shipments"
@@ -129,16 +137,19 @@ async def update_staff_permissions(
         raise PermissionError("forbidden")
     if acting_user.id == staff_user_id:
         raise PermissionError("self_update_forbidden")
-    user = await session.get(
-        User,
-        staff_user_id,
-        options=(selectinload(User.ff_staff_permissions),),
+    user = await session.scalar(
+        select(User)
+        .where(User.id == staff_user_id, User.tenant_id == acting_user.tenant_id)
+        .options(selectinload(User.ff_staff_permissions))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if user is None or user.tenant_id != acting_user.tenant_id:
         raise LookupError("user_not_found")
     if user.role != FULFILLMENT_STAFF:
         raise PermissionError("not_staff_user")
     row = user.ff_staff_permissions
+    before = _from_row(row).as_dict()
     if row is None:
         row = FfStaffPermissions(user_id=user.id)
         session.add(row)
@@ -150,6 +161,27 @@ async def update_staff_permissions(
     row.can_inventory = permissions.inventory
     row.can_packaging = permissions.packaging
     row.can_shift_lead = permissions.shift_lead
+    after = permissions.as_dict()
+    # WMS-325: append-only факт смены прав в существующем document_event; acting_user
+    # — тот, кто нажал кнопку, target — тот, кому меняют права. Пишем ДО commit,
+    # чтобы событие и права уехали в одну транзакцию. Новую таблицу не заводим.
+    if before != after:
+        await record_document_event_safely(
+            session,
+            tenant_id=user.tenant_id,
+            document_type=DOCUMENT_TYPE_STAFF_USER,
+            document_id=user.id,
+            event_type=EVENT_PERMISSIONS_CHANGED,
+            source=SOURCE_USER,
+            actor_user_id=acting_user.id,
+            payload_json={
+                "role": "fulfillment_staff",
+                "target_user_id": str(user.id),
+                "acting_user_id": str(acting_user.id),
+                "before": before,
+                "after": after,
+            },
+        )
     await session.commit()
     await session.refresh(user)
     await session.refresh(row)

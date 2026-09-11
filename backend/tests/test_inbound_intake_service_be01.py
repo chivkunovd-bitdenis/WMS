@@ -75,7 +75,7 @@ async def _setup_request(
 
 
 @pytest.mark.asyncio
-async def test_loose_only_receiving_no_boxes(async_client: AsyncClient) -> None:
+async def test_loose_only_receiving_flags_missing_planned_box(async_client: AsyncClient) -> None:
     tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id, expected_qty=5)
     async with SessionLocal() as session:
@@ -95,7 +95,9 @@ async def test_loose_only_receiving_no_boxes(async_client: AsyncClient) -> None:
             session, tenant_id, request_id, actor_user_id=actor_user_id
         )
         assert done.status == svc.STATUS_SORTING
-        assert done.has_discrepancy is False
+        # The request planned one box, but all goods arrived loose. Flag that
+        # physical discrepancy while still completing receipt of all five units.
+        assert done.has_discrepancy is True
         assert done.lines[0].actual_qty == 5
 
 

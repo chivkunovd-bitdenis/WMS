@@ -25,11 +25,16 @@ from app.models.billing import (
     BillingLedgerEntry,
     BillingProfile,
 )
+from app.models.document_event import (
+    DOCUMENT_TYPE_BILLING_INVOICE,
+    EVENT_DOCUMENT_CREATED,
+    EVENT_STATUS_CHANGED,
+)
 from app.models.fbs_order import FbsOrder
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.operation_fact import OperationFact
 from app.models.seller import Seller
-from app.services.billing_invoice_service import invoiced_ledger_ids
+from app.services.billing_invoice_service import invoice_audit_fields, invoiced_ledger_ids
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     OperationalBillingLine,
@@ -38,6 +43,7 @@ from app.services.billing_ledger_service import (
     record_operational_charge,
 )
 from app.services.billing_seller_report_service import moscow_interval
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 from app.services.fbs_order_billing_service import _positions, confirmed_order_handover_dates
 
@@ -724,17 +730,35 @@ async def create_invoice_v2(
     except IntegrityError as exc:
         raise BillingInvoiceV2Error("idempotency_conflict") from exc
     await session.refresh(invoice, attribute_names=["lines_v2"])
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+        document_id=invoice.id,
+        event_type=EVENT_DOCUMENT_CREATED,
+        before=None,
+        after=invoice_audit_fields(invoice),
+    )
     return invoice
 
 
 async def get_invoice_v2(
-    session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    for_update: bool = False,
 ) -> BillingInvoiceV2:
-    invoice = await session.scalar(
-        select(BillingInvoiceV2).where(
-            BillingInvoiceV2.tenant_id == tenant_id, BillingInvoiceV2.id == invoice_id
-        )
+    statement = select(BillingInvoiceV2).where(
+        BillingInvoiceV2.tenant_id == tenant_id, BillingInvoiceV2.id == invoice_id
     )
+    if for_update:
+        # Cancellation must reread the committed status after waiting, including
+        # when this session has already cached an issued invoice.
+        statement = statement.with_for_update(key_share=True).execution_options(
+            populate_existing=True
+        )
+    invoice = await session.scalar(statement)
     if invoice is None:
         raise BillingInvoiceV2Error("invoice_not_found")
     await session.refresh(invoice, attribute_names=["lines_v2"])
@@ -744,9 +768,21 @@ async def get_invoice_v2(
 async def cancel_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> BillingInvoiceV2:
-    invoice = await get_invoice_v2(session, tenant_id=tenant_id, invoice_id=invoice_id)
+    invoice = await get_invoice_v2(
+        session, tenant_id=tenant_id, invoice_id=invoice_id, for_update=True
+    )
+    before = invoice_audit_fields(invoice)
     if invoice.status == "issued":
         invoice.status = "cancelled"
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+        document_id=invoice.id,
+        event_type=EVENT_STATUS_CHANGED,
+        before=before,
+        after=invoice_audit_fields(invoice),
+    )
     return invoice
 
 

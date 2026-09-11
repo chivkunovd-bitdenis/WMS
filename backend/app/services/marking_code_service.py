@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import re
@@ -10,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.models.document_event import DOCUMENT_TYPE_MARKING_POOL, EVENT_DATA_CHANGED
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_DEFECTIVE,
@@ -58,6 +60,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services.catalog_service import get_product
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import (
     DOC_TYPE_MARKING_IMPORT,
     assign_document_number_if_missing,
@@ -869,7 +872,63 @@ async def set_pool_products(
     pool_id: uuid.UUID,
     product_ids: list[uuid.UUID],
 ) -> PoolProductsResult:
-    await _apply_pool_products(session, tenant_id, pool_id, product_ids)
+    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    # Serialize replacements only; never hold a parent-row lock while waiting
+    # for a concurrent link insert (its FK check may need that parent).
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        key = int.from_bytes(
+            hashlib.sha256(f"marking-pool-products:{tenant_id}:{pool_id}".encode()).digest()[:8],
+            signed=True,
+        )
+        await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+    unique_ids = sorted(set(product_ids), key=str)
+    await _validate_pool_products(session, tenant_id, pool.seller_id, unique_ids)
+    links = list(
+        (
+            await session.scalars(
+                select(MarkingPoolProduct)
+                .where(
+                    MarkingPoolProduct.tenant_id == tenant_id, MarkingPoolProduct.pool_id == pool_id
+                )
+                .order_by(MarkingPoolProduct.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    desired = set(unique_ids)
+    existing = {link.product_id for link in links}
+    removed = []
+    for link in links:
+        if link.product_id not in desired:
+            removed.append(str(link.product_id))
+            await session.delete(link)
+    await session.flush()
+    added = []
+    connection = await session.connection()
+    insert_cls = sqlite_insert if connection.dialect.name == "sqlite" else pg_insert
+    for product_id in unique_ids:
+        if product_id in existing:
+            continue
+        inserted = await session.scalar(
+            insert_cls(MarkingPoolProduct)
+            .values(tenant_id=tenant_id, pool_id=pool_id, product_id=product_id)
+            .on_conflict_do_nothing(index_elements=["pool_id", "product_id"])
+            .returning(MarkingPoolProduct.product_id)
+        )
+        if inserted is not None:
+            added.append(str(inserted))
+    # Only links changed by this transaction: a concurrent additive/import
+    # writer that won INSERT must not be attributed to this replacement.
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKING_POOL,
+        document_id=pool_id,
+        event_type=EVENT_DATA_CHANGED,
+        before={"linked_product_ids": sorted(removed), "unlinked_product_ids": sorted(added)},
+        after={"linked_product_ids": sorted(added), "unlinked_product_ids": sorted(removed)},
+    )
     await session.commit()
     return await _pool_products_result(session, tenant_id, pool_id)
 
@@ -2403,13 +2462,36 @@ async def set_pool_threshold(
     low_stock_threshold: int | None,
     forecast_days_threshold: int | None,
 ) -> MarkingPool:
-    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    pool = await session.scalar(
+        select(MarkingPool)
+        .where(MarkingPool.tenant_id == tenant_id, MarkingPool.id == pool_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+    if pool is None:
+        raise MarkingCodeServiceError("pool_not_found")
+    before: dict[str, object] = {
+        "low_stock_threshold": pool.low_stock_threshold,
+        "forecast_days_threshold": pool.forecast_days_threshold,
+    }
     if low_stock_threshold is not None and low_stock_threshold < 0:
         raise MarkingCodeServiceError("invalid_threshold")
     if forecast_days_threshold is not None and forecast_days_threshold < 0:
         raise MarkingCodeServiceError("invalid_threshold")
     pool.low_stock_threshold = low_stock_threshold
     pool.forecast_days_threshold = forecast_days_threshold
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKING_POOL,
+        document_id=pool_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after={
+            "low_stock_threshold": pool.low_stock_threshold,
+            "forecast_days_threshold": pool.forecast_days_threshold,
+        },
+    )
     await session.commit()
     await session.refresh(pool)
     return pool

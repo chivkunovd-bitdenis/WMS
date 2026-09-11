@@ -9,6 +9,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_PACKAGING_TASK,
+    EVENT_PACKED_CONFIRMED,
+    EVENT_PACKED_RECALCULATED,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -42,6 +47,7 @@ from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_product
+from app.services.document_event_service import record_document_mutation, system_document_events
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     assign_display_number_if_missing,
@@ -679,6 +685,8 @@ async def sync_mp_task_packed_from_boxes(
     }
     if not boxed_by_product:
         return task
+    changes: list[tuple[PackagingTaskLine, int]] = []
+    status_before = task.status
     changed = False
     for line in task.lines:
         boxed = boxed_by_product.get(line.product_id)
@@ -686,10 +694,22 @@ async def sync_mp_task_packed_from_boxes(
             continue
         target = min(int(line.qty_total) - int(line.qty_confirmed_packed), boxed)
         if int(line.qty_packed_in_task) != target:
+            changes.append((line, int(line.qty_packed_in_task)))
             line.qty_packed_in_task = target
             changed = True
     if changed:
         _touch_task(task)
+    with system_document_events():
+        for line, qty_before in changes:
+            await record_document_mutation(
+                session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_PACKAGING_TASK,
+                document_id=task.id, event_type=EVENT_PACKED_RECALCULATED,
+                product_id=line.product_id,
+                before={"line_id": line.id, "qty_packed_in_task": qty_before,
+                        "status": status_before},
+                after={"line_id": line.id, "qty_packed_in_task": int(line.qty_packed_in_task),
+                       "status": task.status, "reason": "mp_boxes_recalculation"},
+            )
     return task
 
 
@@ -777,8 +797,18 @@ async def confirm_line_packed_from_shelf(
     confirmed = int(line.qty_suggested_packed if qty is None else qty)
     if confirmed < 0 or confirmed > line.qty_total:
         raise PackagingTaskServiceError("invalid_qty")
+    before: dict[str, object] = {
+        "line_id": line.id, "qty_confirmed_packed": int(line.qty_confirmed_packed),
+        "status": task.status,
+    }
     line.qty_confirmed_packed = confirmed
     _touch_task(task)
+    await record_document_mutation(
+        session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_PACKAGING_TASK,
+        document_id=task.id, event_type=EVENT_PACKED_CONFIRMED, product_id=line.product_id,
+        before=before, after={"line_id": line.id, "qty_confirmed_packed": confirmed,
+                              "status": task.status},
+    )
     if acting_user_id is not None:
         await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
     await session.commit()

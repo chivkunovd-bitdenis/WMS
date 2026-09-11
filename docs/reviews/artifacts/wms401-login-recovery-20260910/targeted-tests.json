@@ -1,0 +1,26 @@
+[
+  {
+    "name": "ru.wms.tsd.core.auth.ServerHealthCheckTest",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "timestamp": "2026-09-10T12:02:40"
+  },
+  {
+    "name": "ru.wms.tsd.core.auth.AuthManagerUrlPersistenceTest",
+    "tests": "6",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "timestamp": "2026-09-10T12:02:35"
+  },
+  {
+    "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+    "tests": "49",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "timestamp": "2026-09-10T12:02:40"
+  }
+]

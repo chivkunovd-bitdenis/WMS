@@ -44,12 +44,14 @@ _CONTENT_TYPE_SUFFIX: dict[str, str] = {
 PRINT_ASSET_SUBDIR_ORDER_STICKER = "fbs-print-assets/order-stickers"
 PRINT_ASSET_SUBDIR_CARGO_QR = "fbs-print-assets/cargo-place-qr"
 PRINT_ASSET_SUBDIR_SUPPLY_QR = "fbs-print-assets/supply-qr"
+PRINT_ASSET_SUBDIR_OPERATOR_DOCUMENT = "fbs-print-assets/operator-documents"
 
 _ALLOWED_SUBDIRS = frozenset(
     {
         PRINT_ASSET_SUBDIR_ORDER_STICKER,
         PRINT_ASSET_SUBDIR_CARGO_QR,
         PRINT_ASSET_SUBDIR_SUPPLY_QR,
+        PRINT_ASSET_SUBDIR_OPERATOR_DOCUMENT,
         "fbs-stickers",
         "fbs-trbx-stickers",
         "fbs-supply-barcodes",
@@ -130,6 +132,10 @@ def cargo_qr_relative_path(trbx_id: uuid.UUID) -> str:
 
 def supply_qr_relative_path(supply_id: uuid.UUID) -> str:
     return f"{PRINT_ASSET_SUBDIR_SUPPLY_QR}/{supply_id}.png"
+
+
+def operator_document_relative_path(asset_id: uuid.UUID) -> str:
+    return f"{PRINT_ASSET_SUBDIR_OPERATOR_DOCUMENT}/{asset_id}.pdf"
 
 
 def decode_png_payload(raw: object) -> bytes | None:

@@ -34,7 +34,6 @@ from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
@@ -137,7 +136,6 @@ __all__ = [
     "FbsPackingBoxItem",
     "FbsPrintAsset",
     "FbsShipmentReversalLedger",
-    "FbsStockPoolDebit",
     "FbsStockSyncItem",
     "FbsSupply",
     "FbsTrbx",

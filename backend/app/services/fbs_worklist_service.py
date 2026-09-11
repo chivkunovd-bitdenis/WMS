@@ -44,6 +44,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
@@ -485,6 +486,9 @@ async def _load_worklist_context(
         if position.product_id is not None
     )
     products = await _load_products(session, tenant_id, product_ids)
+    marketplace_bindings = await _load_product_marketplace_bindings(
+        session, tenant_id, product_ids
+    )
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
     availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
@@ -499,6 +503,7 @@ async def _load_worklist_context(
         "warehouses": warehouses,
         "wb_names": wb_names,
         "products": products,
+        "marketplace_bindings": marketplace_bindings,
         "positions": positions,
         "cards": cards,
         "ozon_photos": ozon_photos,
@@ -569,6 +574,38 @@ async def _load_products(
     )
     res = await session.execute(stmt)
     return {p.id: p for p in res.scalars().all()}
+
+
+async def _load_product_marketplace_bindings(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    if not product_ids:
+        return {}
+    rows = list(
+        (
+            await session.scalars(
+                select(ProductMarketplaceLink).where(
+                    ProductMarketplaceLink.tenant_id == tenant_id,
+                    ProductMarketplaceLink.product_id.in_(product_ids),
+                    ProductMarketplaceLink.is_active.is_(True),
+                )
+            )
+        ).all()
+    )
+    bindings: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for row in rows:
+        marketplace = "wb" if row.marketplace in {"wb", "wildberries"} else row.marketplace
+        if marketplace not in {"wb", "ozon"}:
+            continue
+        bindings.setdefault(row.product_id, []).append(
+            {
+                "marketplace": marketplace,
+                "external_barcodes": list(row.external_barcodes or []),
+            }
+        )
+    return bindings
 
 
 async def _load_order_positions(
@@ -812,7 +849,13 @@ def compute_selection_blockers(
         )
     if order.supply_id is not None:
         blockers.append({"code": "already_in_supply", "message": "Заказ уже в поставке."})
-    if order.mapping_status == MAPPING_STATUS_MISSING or order.product_id is None:
+    product_missing = order.product_id is None
+    if order.marketplace == "ozon":
+        positions = order.product_positions
+        product_missing = not positions or any(
+            position.product_id is None for position in positions
+        )
+    if order.mapping_status == MAPPING_STATUS_MISSING or product_missing:
         blockers.append(
             {"code": "product_not_mapped", "message": "Товар не сопоставлен с карточкой."}
         )
@@ -839,6 +882,30 @@ def compute_selection_blockers(
     if order.marketplace != "ozon" and _as_utc(order.deadline_at) < _as_utc(server_now):
         blockers.append({"code": "deadline_passed", "message": "Срок сборки истёк."})
     return blockers
+
+
+def _position_barcode(
+    order: FbsOrder,
+    position: FbsOrderProduct,
+    ctx: dict[str, Any],
+) -> str | None:
+    if position.product_id is None:
+        return None
+    if order.marketplace == "ozon":
+        for binding in ctx["marketplace_bindings"].get(position.product_id, []):
+            if binding["marketplace"] != "ozon":
+                continue
+            return next(
+                (
+                    barcode.strip()
+                    for barcode in binding["external_barcodes"]
+                    if isinstance(barcode, str) and barcode.strip()
+                ),
+                None,
+            )
+        return None
+    product = ctx["products"].get(position.product_id)
+    return product.wb_barcode if product is not None else None
 
 
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
@@ -882,6 +949,9 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     pick_row = ctx["picks"].get(order.id)
     sticker_asset = ctx["sticker_assets"].get(order.id)
     positions = ctx["positions"].get(order.id, [])
+    product_bindings = (
+        ctx["marketplace_bindings"].get(order.product_id, []) if order.product_id else []
+    )
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
@@ -936,22 +1006,32 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 and product.packaging_instructions
                 and product.packaging_instructions.strip()
             ),
+            "marketplace_bindings": product_bindings,
         },
         "positions": [
             {
+                "marketplace_bindings": ctx["marketplace_bindings"].get(
+                    position.product_id, []
+                ) if position.product_id else [],
                 "id": str(position.id),
                 "image_url": ctx["ozon_photos"].get(position.product_id),
-                "barcode": ctx["products"][position.product_id].wb_barcode
-                if position.product_id in ctx["products"]
-                else None,
+                "barcode": _position_barcode(order, position, ctx),
                 "product_id": str(position.product_id) if position.product_id else None,
+                # Ozon supplies its own position name and offer id.  Prefer
+                # them here: an already linked WMS product may carry a WB
+                # title/article, which must not overwrite what Ozon sent.
                 "name": (
-                    ctx["products"][position.product_id].name
-                    if position.product_id in ctx["products"]
-                    else position.name or MISSING_PRODUCT
+                    position.name
+                    or (
+                        ctx["products"][position.product_id].name
+                        if position.product_id in ctx["products"]
+                        else MISSING_PRODUCT
+                    )
                 ),
                 "seller_article": (
-                    ctx["products"][position.product_id].wb_vendor_code
+                    position.offer_id
+                    if order.marketplace == "ozon" and position.offer_id
+                    else ctx["products"][position.product_id].wb_vendor_code
                     if position.product_id in ctx["products"]
                     and ctx["products"][position.product_id].wb_vendor_code
                     else position.offer_id

@@ -206,6 +206,16 @@ async def test_one_physical_unit_cannot_be_allocated_to_wb_and_ozon(
     db_session.add_all([product, wb_binding, ozon_binding])
     await db_session.commit()
 
+    from app.models.inventory_balance import InventoryBalance
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
+    location = await get_or_create_sorting_location(db_session, tenant.id, wh_a.id)
+    db_session.add(InventoryBalance(
+        tenant_id=tenant.id, product_id=product.id, storage_location_id=location.id,
+        quantity=1, quantity_unpacked=1, quantity_packed=0,
+    ))
+    await db_session.commit()
+
     await set_binding_stock_pool_quantity(
         db_session,
         tenant.id,

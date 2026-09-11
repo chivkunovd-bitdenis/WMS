@@ -17,8 +17,8 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import Column, Table, delete, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Column, Table, UniqueConstraint, delete, select, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -65,9 +65,93 @@ _FILL_IF_EMPTY = (
 
 
 class ProductMergeError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, message: str | None = None) -> None:
         self.code = code
+        self.message = message or code
         super().__init__(code)
+
+
+_CONFLICT_LABELS = {
+    "fbs_binding_stock_pools": "настройках остатка FBS одного склада",
+    "inbound_intake_lines": "одной приёмке",
+    "inventory_count_lines": "одной позиции инвентаризации",
+    "marketplace_unload_lines": "одной отгрузке на маркетплейс",
+    "marketplace_unload_pick_allocations": "одной позиции подбора отгрузки",
+    "marking_pool_products": "одном пуле маркировки",
+    "outbound_shipment_lines": "одной отгрузке",
+    "stock_monthly_snapshots": "одном месячном снимке остатка",
+    "discrepancy_act_lines": "одном акте расхождений",
+    "packaging_task_lines": "одной позиции задания на упаковку",
+    "inbound_intake_box_lines": "одном коробе приёмки",
+    "inbound_intake_cargo_place_lines": "одном грузовом месте приёмки",
+    "storage_measurements": "одном расчёте хранения",
+    "marketplace_unload_box_lines": "одном коробе отгрузки",
+    "billing_tariff_versions_v2": "одном периоде тарифа",
+}
+
+
+async def _lock_references_and_check_conflicts(
+    session: AsyncSession,
+    target_id: uuid.UUID,
+    source_id: uuid.UUID,
+) -> None:
+    """Do not wait on documents while holding Product: cancellation does the reverse.
+
+    Lock the existing references before changing anything. NOWAIT gives a clean
+    retryable refusal instead of forming Product -> Order -> Product deadlock.
+    Product locks prevent new FK references while this check and merge run.
+    Operator caps and document lines must never be silently added or discarded.
+    """
+    references = [
+        *_product_fk_columns(),
+        (InventoryBalance.__table__, InventoryBalance.__table__.c.product_id),
+        (ProductDimensionEvent.__table__, ProductDimensionEvent.__table__.c.product_id),
+        (ProductMarketplaceLink.__table__, ProductMarketplaceLink.__table__.c.product_id),
+    ]
+    for _table, column in references:
+        await session.execute(
+            select(column)
+            .where(column.in_([target_id, source_id]))
+            .with_for_update(nowait=True)
+        )
+
+    for table, column in _product_fk_columns():
+        keys = [
+            ([c.name for c in constraint.columns if c.name != column.name], False)
+            for constraint in table.constraints
+            if isinstance(constraint, UniqueConstraint) and column.name in constraint.columns
+        ]
+        # These existing unique indexes have expressions/partial predicates;
+        # spell out their equality rather than treating NULL as SQL equality.
+        if table.name == "inventory_count_lines":
+            keys.append(
+                (["count_id", "storage_location_id", "container_kind", "container_id"], True)
+            )
+        elif table.name == "marketplace_unload_pick_allocations":
+            keys.append((["request_id", "storage_location_id", "container_id"], True))
+        elif table.name == "billing_tariff_versions_v2":
+            keys.append((["tenant_id", "seller_id", "service_code", "valid_from_at"], False))
+        for columns, nulls_equal in keys:
+            kept, removed = table.alias("kept"), table.alias("removed")
+            predicates = [kept.c[column.name] == target_id, removed.c[column.name] == source_id]
+            predicates.extend(
+                kept.c[name].is_not_distinct_from(removed.c[name])
+                if nulls_equal
+                else kept.c[name] == removed.c[name]
+                for name in columns
+            )
+            if table.name == "billing_tariff_versions_v2":
+                predicates.extend(
+                    [kept.c.employee_user_id.is_(None), removed.c.employee_user_id.is_(None)]
+                )
+            collision = await session.scalar(select(kept.c.id).where(*predicates).limit(1))
+            if collision is not None:
+                label = _CONFLICT_LABELS.get(table.name, "одной уникальной связи")
+                raise ProductMergeError(
+                    "merge_conflict",
+                    message=f"Обе карточки используются в {label}. "
+                    "Сначала устраните дублирующую связь. Объединение ничего не изменило.",
+                )
 
 
 def _product_fk_columns() -> list[tuple[Table, Column[uuid.UUID]]]:
@@ -95,11 +179,7 @@ def _product_fk_columns() -> list[tuple[Table, Column[uuid.UUID]]]:
 
 
 def _has_wb_identity(product: Product) -> bool:
-    return (
-        product.wb_nm_id is not None
-        or bool(product.wb_vendor_code)
-        or bool(product.wb_barcode)
-    )
+    return product.wb_nm_id is not None or bool(product.wb_vendor_code) or bool(product.wb_barcode)
 
 
 def _pick_target(first: Product, second: Product) -> tuple[Product, Product]:
@@ -129,19 +209,37 @@ async def _sum_inventory_balances(
     ячейка занята только исчезающей карточкой, строка просто меняет владельца.
     Итог по товару поэтому равен сумме двух прежних итогов, ни одна штука не
     теряется.
+
+    Product-lock сериализует складских писателей, включая создание новых строк.
+    Перечитываем баланс после ожидания блокировки, даже если вызывающий код
+    уже загрузил старое значение в ORM-сессию.
     """
     target_rows = (
-        await session.execute(
-            select(InventoryBalance).where(InventoryBalance.product_id == target_id)
+        (
+            await session.execute(
+                select(InventoryBalance)
+                .where(InventoryBalance.product_id == target_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     by_cell = {(row.storage_location_id, row.container_id): row for row in target_rows}
 
     source_rows = (
-        await session.execute(
-            select(InventoryBalance).where(InventoryBalance.product_id == source_id)
+        (
+            await session.execute(
+                select(InventoryBalance)
+                .where(InventoryBalance.product_id == source_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in source_rows:
         kept = by_cell.get((row.storage_location_id, row.container_id))
         if kept is None:
@@ -208,24 +306,50 @@ async def merge_products(
     tenant_id: uuid.UUID,
     product_ids: Sequence[uuid.UUID],
 ) -> Product:
-    """Объединить ровно две карточки. Возвращает ту, что осталась."""
+    """Объединить ровно две карточки. Возвращает ту, что осталась.
+
+    Сериализация с обычной складской записью (WMS-349). Штатный writer остатка
+    ``record_movement_and_adjust_balance`` берёт ``SELECT Product ... FOR UPDATE``
+    через :func:`app.services.inventory_service.lock_stock_product` до чтения и
+    правки баланса. Merge должен идти тем же путём, иначе конкурентное движение
+    успевает изменить остаток между нашим SELECT и UPDATE, и мы записываем сумму
+    из прежнего снимка — движение теряется. Поэтому обе карточки блокируются
+    здесь строго в порядке возрастания ``id``: одинаковый порядок у обеих сторон
+    исключает встречный deadlock двух merge, а сам ``FOR UPDATE`` гарантирует, что
+    последующие чтения балансов идут под уже удерживаемой блокировкой.
+    """
     ids = list(dict.fromkeys(product_ids))
     if len(ids) != 2:
         raise ProductMergeError("merge_needs_exactly_two")
 
-    products = list(
-        (
-            await session.execute(
+    # Стабильный порядок блокировок: строго по возрастанию id. Два параллельных
+    # merge над пересекающимися карточками не могут выстроить обратные очереди и
+    # заклиниться — оба берут первую блокировку по меньшему id, второй ждёт.
+    locked_ids = sorted(ids)
+    locked: dict[uuid.UUID, Product] = {}
+    for product_id in locked_ids:
+        row = (
+            await session.scalars(
                 select(Product)
-                .options(selectinload(Product.seller))
-                .where(Product.tenant_id == tenant_id, Product.id.in_(ids))
+                .where(Product.tenant_id == tenant_id, Product.id == product_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-        )
-        .scalars()
-        .all()
+        ).one_or_none()
+        if row is None:
+            raise ProductMergeError("product_not_found")
+        locked[product_id] = row
+
+    # Selectinload после lock, чтобы не смешивать блокирующий SELECT с загрузкой
+    # связанной строки продавца одним запросом (with_for_update + join не всеми
+    # диалектами поддерживается корректно).
+    await session.execute(
+        select(Product)
+        .options(selectinload(Product.seller))
+        .where(Product.tenant_id == tenant_id, Product.id.in_(locked_ids))
     )
-    if len(products) != 2:
-        raise ProductMergeError("product_not_found")
+
+    products = [locked[product_id] for product_id in ids]
     if products[0].seller_id != products[1].seller_id:
         # Разные продавцы — разные юрлица и разный товар на полке. Объединение
         # переложило бы остаток одного продавца другому.
@@ -233,12 +357,11 @@ async def merge_products(
 
     target, source = _pick_target(products[0], products[1])
     source_id = source.id
-    source_values: dict[str, object] = {
-        field: getattr(source, field) for field in _FILL_IF_EMPTY
-    }
+    source_values: dict[str, object] = {field: getattr(source, field) for field in _FILL_IF_EMPTY}
     source_values["requires_honest_sign"] = source.requires_honest_sign
 
     try:
+        await _lock_references_and_check_conflicts(session, target.id, source_id)
         await _sum_inventory_balances(session, target.id, source_id)
         await session.execute(
             delete(ProductDimensionEvent).where(ProductDimensionEvent.product_id == source_id)
@@ -259,5 +382,13 @@ async def merge_products(
     except IntegrityError as exc:
         await session.rollback()
         raise ProductMergeError("merge_conflict") from exc
+    except OperationalError as exc:
+        await session.rollback()
+        if getattr(exc.orig, "sqlstate", None) == "55P03":
+            raise ProductMergeError("merge_busy") from exc
+        raise
+    except ProductMergeError:
+        await session.rollback()
+        raise
 
     return target

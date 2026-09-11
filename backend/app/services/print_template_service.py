@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from dataclasses import dataclass, replace
 from typing import Any
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import Update, and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
+from app.models.document_event import (
+    DOCUMENT_TYPE_PRINT_TEMPLATE,
+    EVENT_DATA_CHANGED,
+    EVENT_DOCUMENT_CREATED,
+)
 from app.models.print_template import (
     LAYOUT_BLOCK_CZ,
     LAYOUT_BLOCKS,
@@ -18,6 +24,7 @@ from app.models.print_template import (
 )
 from app.models.seller import Seller
 from app.services.catalog_service import get_product
+from app.services.document_event_service import record_document_mutation
 
 
 class PrintTemplateServiceError(Exception):
@@ -188,6 +195,132 @@ def _row_from_model(model: PrintTemplate) -> PrintTemplateRow:
     )
 
 
+def _template_audit_fields(model: PrintTemplate) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "template_id": model.id,
+        "seller_id": model.seller_id,
+        "product_id": model.product_id,
+        "owner_user_id": model.user_id,
+        "name": model.name,
+        "is_default": model.is_default,
+    }
+    # Parse only the finite supported layout schema. Never copy stored JSON or
+    # arbitrary input keys into history; malformed old content must not gate deletion.
+    try:
+        layout = parse_layout(model.layout_json)
+    except PrintTemplateServiceError:
+        fields["layout_valid"] = False
+        return fields
+    fields.update(
+        {
+            "layout_units": [{"block": u.block, "copies": u.copies} for u in layout.units],
+            "include_size": layout.label_options.include_size,
+            "include_color": layout.label_options.include_color,
+            "include_brand": layout.label_options.include_brand,
+            "include_composition": layout.label_options.include_composition,
+            "options_only": layout.options_only,
+        }
+    )
+    return fields
+
+
+async def _audit_template(
+    session: AsyncSession,
+    model: PrintTemplate,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+) -> None:
+    await record_document_mutation(
+        session,
+        tenant_id=model.tenant_id,
+        document_type=DOCUMENT_TYPE_PRINT_TEMPLATE,
+        document_id=model.id,
+        event_type=EVENT_DOCUMENT_CREATED if before is None else EVENT_DATA_CHANGED,
+        before=before,
+        after=after,
+    )
+
+
+async def _serialize_template_scope(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+) -> None:
+    # Existing rows alone cannot serialize creation into an empty scope or a
+    # newly inserted default. This transaction lock is local to exactly this
+    # tenant + owner + product/seller scope, with no foreign parent-row lock.
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        scope = (
+            f"print-template:{tenant_id}:{user_id}:"
+            f"{'product' if product_id else 'seller'}:{product_id or seller_id}"
+        )
+        key = int.from_bytes(hashlib.sha256(scope.encode()).digest()[:8], signed=True)
+        await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+
+
+async def _locked_template(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    template_id: uuid.UUID,
+) -> PrintTemplate:
+    # Scalar columns bypass a stale ORM identity loaded by the access check.
+    scope = (
+        await session.execute(
+            select(
+                PrintTemplate.user_id,
+                PrintTemplate.seller_id,
+                PrintTemplate.product_id,
+            ).where(PrintTemplate.tenant_id == tenant_id, PrintTemplate.id == template_id)
+        )
+    ).one_or_none()
+    if scope is not None:
+        await _serialize_template_scope(
+            session,
+            tenant_id,
+            user_id=scope.user_id,
+            seller_id=scope.seller_id,
+            product_id=scope.product_id,
+        )
+        # Revalidate the unlocked scope lookup as part of the locked fresh read.
+        model = await session.scalar(
+            select(PrintTemplate)
+            .where(
+                PrintTemplate.tenant_id == tenant_id,
+                PrintTemplate.id == template_id,
+                PrintTemplate.user_id == scope.user_id,
+                PrintTemplate.seller_id == scope.seller_id,
+                PrintTemplate.product_id == scope.product_id,
+            )
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+        if model is not None:
+            return model
+    raise PrintTemplateServiceError("template_not_found")
+
+
+async def _clear_template_defaults(session: AsyncSession, stmt: Update) -> None:
+    assert stmt.whereclause is not None
+    rows = list(
+        (
+            await session.scalars(
+                select(PrintTemplate)
+                .where(stmt.whereclause)
+                .order_by(PrintTemplate.id)
+                .with_for_update(key_share=True)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    for row in rows:
+        before = _template_audit_fields(row)
+        row.is_default = False
+        await _audit_template(session, row, before, _template_audit_fields(row))
+
+
 async def _clear_default_flags(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -197,6 +330,13 @@ async def _clear_default_flags(
     user_id: uuid.UUID | None = None,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
+    await _serialize_template_scope(
+        session,
+        tenant_id,
+        user_id=user_id,
+        seller_id=seller_id,
+        product_id=product_id,
+    )
     conditions = [PrintTemplate.tenant_id == tenant_id, PrintTemplate.is_default.is_(True)]
     if user_id is not None:
         conditions.append(PrintTemplate.user_id == user_id)
@@ -213,7 +353,7 @@ async def _clear_default_flags(
     stmt = update(PrintTemplate).where(*conditions).values(is_default=False)
     if exclude_id is not None:
         stmt = stmt.where(PrintTemplate.id != exclude_id)
-    await session.execute(stmt)
+    await _clear_template_defaults(session, stmt)
 
 
 async def _clear_user_product_default_flags(
@@ -224,6 +364,13 @@ async def _clear_user_product_default_flags(
     product_id: uuid.UUID,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
+    await _serialize_template_scope(
+        session,
+        tenant_id,
+        user_id=user_id,
+        seller_id=None,
+        product_id=product_id,
+    )
     stmt = (
         update(PrintTemplate)
         .where(
@@ -236,7 +383,7 @@ async def _clear_user_product_default_flags(
     )
     if exclude_id is not None:
         stmt = stmt.where(PrintTemplate.id != exclude_id)
-    await session.execute(stmt)
+    await _clear_template_defaults(session, stmt)
 
 
 async def _clear_user_seller_default_flags(
@@ -247,6 +394,13 @@ async def _clear_user_seller_default_flags(
     seller_id: uuid.UUID,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
+    await _serialize_template_scope(
+        session,
+        tenant_id,
+        user_id=user_id,
+        seller_id=seller_id,
+        product_id=None,
+    )
     stmt = (
         update(PrintTemplate)
         .where(
@@ -260,7 +414,7 @@ async def _clear_user_seller_default_flags(
     )
     if exclude_id is not None:
         stmt = stmt.where(PrintTemplate.id != exclude_id)
-    await session.execute(stmt)
+    await _clear_template_defaults(session, stmt)
 
 
 async def _validate_scope(
@@ -361,6 +515,13 @@ async def create_print_template(
         product_id=product_id,
     )
     if is_default:
+        await _serialize_template_scope(
+            session,
+            tenant_id,
+            user_id=user_id,
+            seller_id=resolved_seller_id,
+            product_id=product_id,
+        )
         if user_id is not None and product_id is None and resolved_seller_id is None:
             await _clear_default_flags(session, tenant_id, user_id=user_id)
         elif product_id is not None and user_id is not None:
@@ -386,6 +547,7 @@ async def create_print_template(
     )
     session.add(model)
     await session.flush()
+    await _audit_template(session, model, None, _template_audit_fields(model))
     await session.commit()
     return _row_from_model(model)
 
@@ -399,9 +561,8 @@ async def update_print_template(
     layout: PrintLayout | dict[str, Any] | None = None,
     is_default: bool | None = None,
 ) -> PrintTemplateRow:
-    model = await session.get(PrintTemplate, template_id)
-    if model is None or model.tenant_id != tenant_id:
-        raise PrintTemplateServiceError("template_not_found")
+    model = await _locked_template(session, tenant_id, template_id)
+    before = _template_audit_fields(model)
     if name is not None:
         clean_name = name.strip()
         if not clean_name:
@@ -451,6 +612,7 @@ async def update_print_template(
                 )
         model.is_default = is_default
     await session.flush()
+    await _audit_template(session, model, before, _template_audit_fields(model))
     await session.commit()
     return _row_from_model(model)
 
@@ -460,9 +622,9 @@ async def delete_print_template(
     tenant_id: uuid.UUID,
     template_id: uuid.UUID,
 ) -> None:
-    model = await session.get(PrintTemplate, template_id)
-    if model is None or model.tenant_id != tenant_id:
-        raise PrintTemplateServiceError("template_not_found")
+    model = await _locked_template(session, tenant_id, template_id)
+    before = _template_audit_fields(model)
+    await _audit_template(session, model, before, None)
     await session.delete(model)
     await session.commit()
 

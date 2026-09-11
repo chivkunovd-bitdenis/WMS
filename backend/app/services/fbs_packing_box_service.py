@@ -14,6 +14,12 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_BOX_DELETED,
+    EVENT_BOX_DISTRIBUTION_CHANGED,
+    EVENT_BOX_ITEM_REMOVED,
+)
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
@@ -25,7 +31,41 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services.document_event_service import record_document_mutation, system_document_events
 from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
+
+
+def _distribution_state(supply: FbsSupply) -> dict[str, object]:
+    return {
+        "enabled": supply.boxes_without_distribution_at is not None,
+        "boxes_without_distribution_at": supply.boxes_without_distribution_at,
+        "boxes_without_distribution_by_user_id": supply.boxes_without_distribution_by_user_id,
+    }
+
+
+async def _audit_distribution(
+    session: AsyncSession, supply: FbsSupply, before: dict[str, object],
+) -> None:
+    await record_document_mutation(
+        session, tenant_id=supply.tenant_id, document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply.id, event_type=EVENT_BOX_DISTRIBUTION_CHANGED,
+        before=before, after=_distribution_state(supply),
+    )
+
+
+async def _audit_item_removal(
+    session: AsyncSession, supply_id: uuid.UUID, item: FbsPackingBoxItem,
+) -> None:
+    await record_document_mutation(
+        session, tenant_id=item.tenant_id, document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id, event_type=EVENT_BOX_ITEM_REMOVED,
+        before={
+            "item_id": item.id, "box_id": item.box_id, "fbs_order_id": item.fbs_order_id,
+            "order_product_id": item.order_product_id,
+            "assigned_by_user_id": item.assigned_by_user_id, "assigned_at": item.assigned_at,
+        },
+        after=None,
+    )
 
 
 class FbsPackingBoxError(Exception):
@@ -172,9 +212,11 @@ async def create_boxes(
         if without_distribution and assigned_count:
             raise FbsPackingBoxError("boxes_already_distributed")
         if without_distribution and supply.boxes_without_distribution_at is None:
+            distribution_before = _distribution_state(supply)
             enabled_without_distribution_now = True
             supply.boxes_without_distribution_at = datetime.now(UTC)
             supply.boxes_without_distribution_by_user_id = actor_user_id
+            await _audit_distribution(session, supply, distribution_before)
         max_number = await session.scalar(
             select(func.max(FbsPackingBox.box_number)).where(
                 FbsPackingBox.tenant_id == tenant_id,
@@ -239,8 +281,11 @@ async def create_boxes(
                 compensated_supply = await _get_supply(
                     session, tenant_id, supply_id, for_update=True
                 )
+                distribution_before = _distribution_state(compensated_supply)
                 compensated_supply.boxes_without_distribution_at = None
                 compensated_supply.boxes_without_distribution_by_user_id = None
+                with system_document_events():
+                    await _audit_distribution(session, compensated_supply, distribution_before)
             await session.commit()
         raise
     return await _load_boxes(session, tenant_id, supply_id)
@@ -295,6 +340,7 @@ async def set_boxes_without_distribution(
     if assigned_count:
         raise FbsPackingBoxError("boxes_already_distributed")
 
+    before = _distribution_state(supply)
     if enabled and supply.boxes_without_distribution_at is None:
         # A legacy box prefix is only an input for compatibility.  Once the
         # mode is changed through this operation, the supply fields become
@@ -305,6 +351,7 @@ async def set_boxes_without_distribution(
     elif not enabled:
         supply.boxes_without_distribution_at = None
         supply.boxes_without_distribution_by_user_id = None
+    await _audit_distribution(session, supply, before)
     await session.flush()
     return enabled
 
@@ -464,6 +511,7 @@ async def remove_order(
     if not items:
         raise FbsPackingBoxError("box_assignment_not_found")
     for item in items:
+        await _audit_item_removal(session, supply_id, item)
         await session.delete(item)
     await session.flush()
     session.expire(box, ["items"])
@@ -488,6 +536,8 @@ async def clear_box(
         await _assert_ozon_orders_mutable(
             session, tenant_id, list({item.fbs_order_id for item in box.items})
         )
+    for item in box.items:
+        await _audit_item_removal(session, supply_id, item)
     await session.execute(
         delete(FbsPackingBoxItem).where(
             FbsPackingBoxItem.tenant_id == tenant_id,
@@ -526,6 +576,13 @@ async def delete_box(
         except pvz_svc.FbsShipmentPvzError as exc:
             raise FbsPackingBoxError(exc.code) from exc
     warehouse_box = box.warehouse_box
+    await record_document_mutation(
+        session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id, event_type=EVENT_BOX_DELETED,
+        before={"box_id": box.id, "box_number": box.box_number,
+                "warehouse_box_id": box.warehouse_box_id, "trbx_id": box.trbx_id},
+        after=None,
+    )
     await session.delete(box)
     await session.flush()
     await session.delete(warehouse_box)

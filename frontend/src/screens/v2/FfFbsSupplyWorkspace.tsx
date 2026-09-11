@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   Alert,
@@ -48,6 +49,7 @@ import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPag
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
+import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
@@ -113,6 +115,7 @@ type Props = {
   initialWorkspace?: FbsWorkspace | null
   open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 const STAGES = [
@@ -263,13 +266,82 @@ function kizScannerDebug(cause: unknown): KizScannerDebug | null {
   return { length: row.length, first8: row.first8, last8: row.last8 }
 }
 
-function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductThermalLabelData {
+function productBarcodeOptionsForOrder(
+  order: FbsWorkspace['orders'][number],
+  marketplace: 'wb' | 'ozon',
+) {
+  const options = resolveProductBarcodeOptions({
+    wb_primary_barcode: order.product.barcode,
+    marketplace_bindings: order.product.marketplace_bindings,
+  })
+  // An Ozon label must never silently fall back to a WB barcode.  An absent
+  // Ozon barcode stays absent and the established dialog explains that it
+  // cannot print one; the operator can correct the product binding first.
+  return marketplace === 'ozon'
+    ? options.filter((option) => option.marketplace === 'ozon')
+    : options
+}
+
+function productBarcodeOptionsForPosition(
+  position: FbsWorkspace['orders'][number]['positions'][number],
+  marketplace: 'wb' | 'ozon',
+) {
+  const options = resolveProductBarcodeOptions({
+    wb_primary_barcode: position.barcode,
+    marketplace_bindings: position.marketplace_bindings,
+  })
+  return marketplace === 'ozon'
+    ? options.filter((option) => option.marketplace === 'ozon')
+    : options
+}
+
+function productLabelFromPosition(
+  order: FbsWorkspace['orders'][number],
+  position: FbsWorkspace['orders'][number]['positions'][number],
+  marketplace: 'wb' | 'ozon',
+): ProductThermalLabelData {
+  const barcode = productBarcodeOptionsForPosition(position, marketplace)[0]?.barcode ?? ''
   return {
-    product_name: order.product.name,
-    sku_code: order.product.seller_article ?? `WB-${order.wb_order_id}`,
-    wb_vendor_code: order.product.seller_article,
+    product_name: position.name,
+    sku_code: position.sku ?? position.seller_article ?? order.product.sku ?? `WMS-${order.id}`,
+    wb_vendor_code: position.seller_article,
+    // Ozon position DTO does not carry a size.  The compatibility product can
+    // describe another position, so an absent position size stays blank.
+    wb_size: null,
+    barcode,
+  }
+}
+
+function productLabelsFromOrder(
+  order: FbsWorkspace['orders'][number],
+  marketplace: 'wb' | 'ozon',
+) {
+  if (marketplace !== 'ozon' || order.positions.length === 0) {
+    return [{ productLabel: productLabelFromOrder(order, marketplace), copies: 1 }]
+  }
+  return order.positions.map((position) => ({
+    positionId: position.id ?? undefined,
+    productLabel: productLabelFromPosition(order, position, marketplace),
+    copies: Math.max(1, position.quantity),
+  }))
+}
+
+function productLabelFromOrder(
+  order: FbsWorkspace['orders'][number],
+  marketplace: 'wb' | 'ozon',
+): ProductThermalLabelData {
+  const position = marketplace === 'ozon' ? order.positions[0] : undefined
+  const barcode = productBarcodeOptionsForOrder(order, marketplace)[0]?.barcode
+    ?? (marketplace === 'ozon' ? '' : order.product.barcode ?? '')
+  return {
+    product_name: position?.name ?? order.product.name,
+    sku_code: position?.sku ?? position?.seller_article ?? order.product.sku ?? order.product.seller_article
+      ?? (marketplace === 'ozon' ? `Ozon-${order.external_order_id ?? order.id}` : `WB-${order.wb_order_id}`),
+    wb_vendor_code: marketplace === 'ozon'
+      ? position?.seller_article ?? null
+      : position?.seller_article ?? order.product.seller_article,
     wb_size: order.product.size,
-    barcode: order.product.barcode ?? '',
+    barcode,
   }
 }
 
@@ -305,6 +377,7 @@ export function FfFbsSupplyWorkspace({
   initialWorkspace,
   open, addressStorageEnabled = true,
   onClose,
+  onDirtyChange,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
@@ -364,19 +437,56 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const boxAssignmentDirty = Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
+    boxSelectedPositionIds.size > 0
+  const unsavedInput = open && (
+    plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
+    boxCount !== '1' || boxAssignmentDirty || addableSelected.size > 0 ||
+    Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
+  )
+  useEffect(() => {
+    onDirtyChange?.(unsavedInput)
+    return () => onDirtyChange?.(false)
+  }, [unsavedInput, onDirtyChange])
+  const requestClose = () => {
+    if (confirmDiscardChanges(unsavedInput)) {
+      onDirtyChange?.(false)
+      onClose()
+    }
+  }
+  const closeBoxAssignment = () => {
+    if (!confirmDiscardChanges(boxAssignmentDirty)) return
+    setBoxProductQty({})
+    setBoxSelectedPositionIds(new Set())
+    setBoxAssignTarget(null)
+  }
+  const closeAddOrders = () => {
+    if (!confirmDiscardChanges(addableSelected.size > 0)) return
+    setAddableSelected(new Set())
+    setAddOrdersOpen(false)
+  }
+
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
     workspace?.supply.marketplace ?? 'wb',
   )
+  const workspaceOpenGeneration = useRef(0)
+  useEffect(() => {
+    workspaceOpenGeneration.current += 1
+    return () => { workspaceOpenGeneration.current += 1 }
+  }, [open, supplyId])
 
   const load = useCallback(
     async (silent = false) => {
-      if (!supplyId) return
+      if (!open || !supplyId) return
+      const generation = workspaceOpenGeneration.current
+      const isCurrent = () => workspaceOpenGeneration.current === generation
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
+        if (!isCurrent()) return
         setWorkspace(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
@@ -387,16 +497,17 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
-        if (!silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
+        if (isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
-        if (!silent) setBusy(false)
+        if (isCurrent() && !silent) setBusy(false)
       }
     },
-    [supplyId, token, authHeaders],
+    [open, supplyId, token, authHeaders],
   )
 
   useEffect(() => {
     if (!open || !supplyId) return
+    setBusy(false)
     setError(null)
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
@@ -815,7 +926,7 @@ export function FfFbsSupplyWorkspace({
     if (isOzonSupply) {
       const assets = [...new Map(boxes.flatMap((box) => box.qr_asset?.status === 'ready' && box.qr_asset.preview_url ? [[box.qr_asset.id, box.qr_asset] as const] : [])).values()]
       if (assets.length === 0) {
-        setError('Этикетки Ozon ещё не готовы. Нажмите QR у короба, чтобы собрать заказ и получить этикетки.')
+        setError('Этикетки Ozon ещё не готовы. Соберите заказ в коробе и получите этикетку.')
         return
       }
       openAssetPreview(assets)
@@ -873,7 +984,10 @@ export function FfFbsSupplyWorkspace({
       }),
       '',
     )
-    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+    if (next) {
+      clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+      setBoxCount('1')
+    }
   }
 
   const assignBoxOrders = async () => {
@@ -943,7 +1057,7 @@ export function FfFbsSupplyWorkspace({
     setStage('boxes')
     const box = next.boxes.find((item) => item.id === boxId)
     if (box?.qr_asset?.status === 'ready' && box.qr_asset.preview_url) openAssetPreview([box.qr_asset])
-    else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетки Ozon ещё не готовы — нажмите QR повторно через минуту.')
+    else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетка Ozon ещё не готова — повторите получение через минуту.')
   }
 
   const deliver = async () => {
@@ -1043,38 +1157,49 @@ export function FfFbsSupplyWorkspace({
   const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
     if (!workspace || orders.length === 0) return
     const firstOrder = orders[0]
-    const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
-    if (!firstOrder || !firstOrder.product.id) return
+    const firstProductId = firstOrder?.product.id
+      ?? (isOzonSupply ? firstOrder?.positions.find((position) => position.product_id)?.product_id : null)
+    const firstLine = firstProductId ? packLineByProduct.get(firstProductId) : undefined
+    if (!firstOrder || !firstProductId) return
+    const firstOzonPosition = isOzonSupply ? firstOrder.positions[0] : undefined
     const anyHonestSign = orders.some(requiresOrderHonestSign)
     const tapeOrders = orders.map((order) => ({
       orderId: order.id,
       wbOrderId: order.wb_order_id,
+      marketplace: workspace.supply.marketplace,
       requiresHonestSign: requiresOrderHonestSign(order),
-      productLabel: productLabelFromOrder(order),
+      productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
+      productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
     }))
     openPrint(
       {
         token,
-        productId: firstOrder.product.id,
+        productId: firstProductId,
         sellerId: workspace.supply.seller.id,
         documentNumber: workspace.supply.name,
         qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
         markingAvailable: markingAvailableForOrders(orders),
         qtyMarkingPrinted: orders.filter(orderPrintDone).length,
         requiresHonestSign: anyHonestSign,
-        skuCode: firstLine?.sku_code ?? firstOrder.product.seller_article ?? `WB-${firstOrder.wb_order_id}`,
-        productName: workspace.supply.name,
-        productLabel: productLabelFromOrder(firstOrder),
+        skuCode: firstOzonPosition?.sku ?? firstOzonPosition?.seller_article ?? firstLine?.sku_code ?? firstOrder.product.seller_article
+          ?? (isOzonSupply ? `Ozon-${firstOrder.external_order_id ?? firstOrder.id}` : `WB-${firstOrder.wb_order_id}`),
+        productName: firstOzonPosition?.name ?? workspace.supply.name,
+        productLabel: productLabelFromOrder(firstOrder, workspace.supply.marketplace),
+        productBarcodeOptions: isOzonSupply && firstOzonPosition
+          ? productBarcodeOptionsForPosition(firstOzonPosition, 'ozon')
+          : productBarcodeOptionsForOrder(firstOrder, workspace.supply.marketplace),
         fbsTape: {
           orders: tapeOrders,
+          selectedBarcodeOrderId: isOzonSupply ? firstOrder.id : undefined,
+          selectedBarcodePositionId: isOzonSupply ? firstOzonPosition?.id ?? undefined : undefined,
           markingShortage: markingShortageForOrders(orders),
-          includeOrderQr: true,
+          includeOrderQr: !isOzonSupply,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
             const body: FbsOrderPrintTapeRequest = {
               order_ids: orders.map((order) => order.id),
               layout_json: layout,
               allow_partial: allowPartial,
-              include_order_qr: true,
+              include_order_qr: !isOzonSupply,
               reprint: printReprint,
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
@@ -1124,29 +1249,42 @@ export function FfFbsSupplyWorkspace({
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
   const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line?: PackagingTaskLine, reprint = false) => {
-    if (!workspace || !order.product.id) return
+    const productId = order.product.id
+      ?? (workspace?.supply.marketplace === 'ozon'
+        ? order.positions.find((position) => position.product_id)?.product_id
+        : null)
+    if (!workspace || !productId) return
+    const ozonPosition = workspace.supply.marketplace === 'ozon' ? order.positions[0] : undefined
     openPrint(
       {
         token,
         lineId: line?.id,
-        productId: order.product.id,
+        productId,
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
         markingAvailable: requiresOrderHonestSign(order) ? (line?.marking_available_count ?? 0) : 0,
         qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
         requiresHonestSign: requiresOrderHonestSign(order),
-        skuCode: line?.sku_code ?? order.product.sku ?? order.product.seller_article ?? `WB-${order.wb_order_id}`,
-        productName: line?.product_name ?? order.product.name,
+        skuCode: ozonPosition?.sku ?? ozonPosition?.seller_article ?? line?.sku_code ?? order.product.sku ?? order.product.seller_article
+          ?? (workspace.supply.marketplace === 'ozon' ? `Ozon-${order.external_order_id ?? order.id}` : `WB-${order.wb_order_id}`),
+        productName: ozonPosition?.name ?? line?.product_name ?? order.product.name,
         packagingInstructions: line?.packaging_instructions,
-        productLabel: productLabelFromOrder(order),
+        productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
+        productBarcodeOptions: workspace.supply.marketplace === 'ozon' && ozonPosition
+          ? productBarcodeOptionsForPosition(ozonPosition, 'ozon')
+          : productBarcodeOptionsForOrder(order, workspace.supply.marketplace),
         fbsTape: {
           orders: [{
             orderId: order.id,
             wbOrderId: order.wb_order_id,
+            marketplace: workspace.supply.marketplace,
             requiresHonestSign: requiresOrderHonestSign(order),
-            productLabel: productLabelFromOrder(order),
+            productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
+            productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
           }],
+          selectedBarcodeOrderId: workspace.supply.marketplace === 'ozon' ? order.id : undefined,
+          selectedBarcodePositionId: workspace.supply.marketplace === 'ozon' ? ozonPosition?.id ?? undefined : undefined,
           markingShortage: markingShortageForOrders([order]),
           includeOrderQr: false,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
@@ -1253,31 +1391,55 @@ export function FfFbsSupplyWorkspace({
       nearestDeadline: string
     }>()
     for (const order of fullTapeOrders) {
-      const key = order.product.id ?? `unmapped-${order.id}`
-      const current = grouped.get(key) ?? {
-        key,
-        name: order.product.name,
-        size: order.product.size,
-        imageUrl: order.product.image_url,
-        identifiers: [order.product.seller_article, order.product.wb_article ? `WB ${order.product.wb_article}` : null, order.product.barcode].filter((value): value is string => Boolean(value)),
-        locations: [],
-        required: 0,
-        picked: 0,
-        wbOrders: [],
-        stickerCodes: [],
-        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
-        nearestDeadline: order.deadline_at,
+      const rows = isOzonSupply
+        ? order.positions.map((position) => ({
+          key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
+          name: position.name,
+          size: null,
+          imageUrl: position.image_url ?? null,
+          identifiers: [
+            position.seller_article,
+            position.sku ? `SKU ${position.sku}` : null,
+            productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode,
+          ].filter((value): value is string => Boolean(value)),
+          required: position.quantity,
+          picked: position.picked_quantity,
+        }))
+        : [{
+          key: order.product.id ?? `unmapped-${order.id}`,
+          name: order.product.name,
+          size: order.product.size,
+          imageUrl: order.product.image_url,
+          identifiers: [
+            order.product.seller_article,
+            order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+            order.product.barcode,
+          ].filter((value): value is string => Boolean(value)),
+          required: 1,
+          picked: order.pick.status === 'picked' ? 1 : 0,
+        }]
+      for (const row of rows) {
+        const current = grouped.get(row.key) ?? {
+          ...row,
+          locations: [],
+          required: 0,
+          picked: 0,
+          wbOrders: [],
+          stickerCodes: [],
+          marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+          nearestDeadline: order.deadline_at,
+        }
+        current.required += row.required
+        current.picked += row.picked
+        current.wbOrders.push(order.wb_order_id)
+        current.stickerCodes.push(order.sticker.code)
+        const locations = order.inventory.locations
+          .filter((location) => location.available_unpacked > 0)
+          .map((location) => `${location.code}: ${location.available_unpacked}`)
+        current.locations = [...new Set([...current.locations, ...locations])]
+        if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
+        grouped.set(row.key, current)
       }
-      current.required += 1
-      if (order.pick.status === 'picked') current.picked += 1
-      current.wbOrders.push(order.wb_order_id)
-      current.stickerCodes.push(order.sticker.code)
-      const locations = order.inventory.locations
-        .filter((location) => location.available_unpacked > 0)
-        .map((location) => `${location.code}: ${location.available_unpacked}`)
-      current.locations = [...new Set([...current.locations, ...locations])]
-      if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
-      grouped.set(key, current)
     }
     return [...grouped.values()]
   }, [fullTapeOrders, workspace])
@@ -1377,6 +1539,10 @@ export function FfFbsSupplyWorkspace({
   const deliveryConfirmLabel = cancelledDeliveryOrders.length > 0
     ? 'Передать без этих заказов'
     : `Передать в ${providerName}`
+  const ozonDeliveryRoute = workspace?.orders.find((order) => Boolean(order.delivery_route))?.delivery_route
+  const workspaceRouteLabel = isOzonSupply
+    ? ozonDeliveryRoute ?? 'Метод доставки Ozon не указан'
+    : workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
   const packagingEditable = !deliveryConfirmed
   // Короба — рабочая поверхность, а не ступень после упаковки. Серверный stage
   // не гасит действия внутри открытой вкладки; редактирование прекращается
@@ -1561,7 +1727,7 @@ export function FfFbsSupplyWorkspace({
           if (!kizScanBusy) dropKizScanActive()
           return
         }
-        onClose()
+        requestClose()
       }}
       maxWidth={false}
       fullScreen={false}
@@ -1597,7 +1763,7 @@ export function FfFbsSupplyWorkspace({
               {workspace ? (
                 <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }} useFlexGap>
                   <Metric label="Склад WMS" value={workspace.supply.wms_warehouse.name} />
-                  <Metric label="Маршрут" value={workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'} />
+                  <Metric label={isOzonSupply ? 'Метод доставки Ozon' : 'Маршрут'} value={workspaceRouteLabel} />
                   <Stack
                     direction="row"
                     spacing={1}
@@ -1664,7 +1830,7 @@ export function FfFbsSupplyWorkspace({
               ) : null}
             </Stack>
           </Box>
-          <IconButton onClick={onClose} disabled={busy} aria-label="Закрыть">
+          <IconButton onClick={requestClose} disabled={busy} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>
         </Stack>
@@ -1814,7 +1980,7 @@ export function FfFbsSupplyWorkspace({
                     requestId={supplyId}
                     source="fbs"
                     hideHeader
-                    onPaused={onClose}
+                    onPaused={requestClose}
                     onFinished={() => { void load() }}
                   />
                 </Box>
@@ -2006,11 +2172,16 @@ export function FfFbsSupplyWorkspace({
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = kizScanActive?.order_id === order.id
-                      const ids = [
-                        order.product.seller_article,
-                        order.product.barcode,
-                        isOzonSupply ? `заказ Ozon ${order.external_order_id ?? '—'}` : `заказ ${order.wb_order_id}`,
-                      ].filter(Boolean).join(' · ')
+                      const ozonPositions = isOzonSupply ? order.positions : []
+                      const ids = (isOzonSupply
+                        ? [
+                          `отправление Ozon ${order.external_order_id ?? '—'}`,
+                        ]
+                        : [
+                          order.product.seller_article,
+                          order.product.barcode,
+                          `заказ ${order.wb_order_id}`,
+                        ]).filter(Boolean).join(' · ')
                       const czStates = order.metadata.states.filter((state) => state.kind === 'sgtin' && state.status !== 'missing')
                       const acceptedCz = czStates.filter((state) => state.status === 'accepted').length
                       const czRejected = czStates.some((state) => state.status === 'rejected' || state.status === 'replacement_required')
@@ -2066,13 +2237,30 @@ export function FfFbsSupplyWorkspace({
                           />
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                              {order.product.name}
-                            </Typography>
-                            <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
-                              {ids}
-                              {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: 'error.main' }}> · ЧЗ не хватило</Box> : null}
-                            </Typography>
+                            {isOzonSupply ? (
+                              <Stack spacing={0.5}>
+                                {ozonPositions.map((position) => (
+                                  <Box key={position.id ?? position.product_id ?? position.name}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                      {position.name}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                      {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Stack>
+                            ) : <>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                {order.product.name}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                {ids}
+                              </Typography>
+                            </>}
+                            {markingShortOrderIds.has(order.id) ? <Typography variant="caption" sx={{ display: 'block', color: 'error.main' }}>ЧЗ не хватило</Typography> : null}
                             {markingView.label ? (
                               <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
                                 {markingView.tone === 'error' ? (
@@ -2154,15 +2342,17 @@ export function FfFbsSupplyWorkspace({
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
                             </Button>
-                            <Button size="small" variant="outlined" disabled={busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
-                              QR
-                            </Button>
-                            <IconButton size="small" disabled={busy || !order.product.id} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
+                            {!isOzonSupply ? (
+                              <Button size="small" variant="outlined" disabled={busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
+                                QR
+                              </Button>
+                            ) : null}
+                            <IconButton size="small" disabled={busy || (!order.product.id && !(isOzonSupply && order.positions.some((position) => position.product_id)))} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
-                              disabled={busy || !order.product.id}
+                              disabled={busy || (!order.product.id && !(isOzonSupply && order.positions.some((position) => position.product_id)))}
                               onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
                               aria-label="Перепечатать"
                               data-task-id="FBS-11"
@@ -2202,7 +2392,9 @@ export function FfFbsSupplyWorkspace({
                         onClick={() => void openAllBoxQrPreview()}
                         data-testid="fbs-boxes-print-all-qr"
                       >
-                        Печать всех QR ({workspace.boxes.length})
+                        {isOzonSupply
+                          ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
+                          : `Печать всех QR (${workspace.boxes.length})`}
                       </Button>
                       {!isOzonSupply ? <FormControlLabel
                         control={(
@@ -2311,7 +2503,9 @@ export function FfFbsSupplyWorkspace({
                               }}
                               data-task-id="FBS-09"
                             >
-                              QR
+                              {isOzonSupply
+                                ? box.ozon_assembled ? 'Этикетка Ozon' : 'Собрать и получить этикетку'
+                                : 'QR'}
                             </Button>
                             <Button
                               size="small"
@@ -2440,7 +2634,7 @@ export function FfFbsSupplyWorkspace({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
-      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : () => setAddOrdersOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5}>
@@ -2490,7 +2684,7 @@ export function FfFbsSupplyWorkspace({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOrdersOpen(false)} disabled={addOrdersBusy}>
+          <Button onClick={closeAddOrders} disabled={addOrdersBusy}>
             Отмена
           </Button>
           <Button
@@ -2657,10 +2851,12 @@ export function FfFbsSupplyWorkspace({
         <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), addressStorageEnabled ? 'Подбор отменён, остаток возвращён в исходную ячейку.' : 'Подбор отменён, товар возвращён в остаток.') }}>{addressStorageEnabled ? 'Вернуть в ячейку' : 'Вернуть в остаток'}</Button></DialogActions>
       </Dialog>
       <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Передать поставку в {providerName}?</DialogTitle>
+        <DialogTitle>{isOzonSupply ? 'Передать собранные отправления в Ozon?' : `Передать поставку в ${providerName}?`}</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            После передачи поставку нельзя будет отменить или вернуть в работу.
+            {isOzonSupply
+              ? 'WMS создаст и подтвердит перевозку Ozon из уже собранных отправлений. После подтверждения поставку нельзя будет вернуть в работу.'
+              : 'После передачи поставку нельзя будет отменить или вернуть в работу.'}
           </Typography>
           <Stack spacing={1.5} sx={{ mt: 1.5 }} data-testid="fbs-delivery-marking-status">
             {deliveryPreflightLoading ? (
@@ -2696,7 +2892,9 @@ export function FfFbsSupplyWorkspace({
                 ))}
                 <Typography variant="caption" color="text.secondary">
                   Проверьте список. Чтобы продолжить, нажмите «{deliveryConfirmLabel}».
-                  Стикеры, Честный знак и QR можно напечатать и после передачи.
+                  {isOzonSupply
+                    ? 'Этикетки отправлений Ozon получают при сборке коробов; это подтверждение создаёт перевозку Ozon.'
+                    : 'Стикеры, Честный знак и QR можно напечатать и после передачи.'}
                 </Typography>
               </Alert>
             ) : null}
@@ -2721,7 +2919,9 @@ export function FfFbsSupplyWorkspace({
               && deliveryChecks.warnings.length === 0
               && cancelledDeliveryOrders.length === 0
               && deliveryPreflight ? (
-                <Alert severity="success">Все проверки пройдены. Поставку можно передать.</Alert>
+                <Alert severity="success">{isOzonSupply
+                  ? 'Проверки пройдены. Перевозку Ozon можно создать и подтвердить.'
+                  : 'Все проверки пройдены. Поставку можно передать.'}</Alert>
               ) : null}
           </Stack>
         </DialogContent>
@@ -2744,7 +2944,7 @@ export function FfFbsSupplyWorkspace({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
+      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : closeBoxAssignment} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>

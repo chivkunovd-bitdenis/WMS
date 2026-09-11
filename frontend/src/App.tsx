@@ -1,7 +1,8 @@
+import { confirmDiscardChanges } from './utils/confirmDiscardChanges'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams, useBlocker, useBeforeUnload } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { SubscriptionBlockedScreen } from './screens/SubscriptionBlockedScreen'
@@ -44,7 +45,7 @@ import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
-import { FfStoragePage } from './screens/ff/FfStoragePage'
+import { FfStorageReportPage } from './screens/ff/FfStorageReportPage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
 import { FfSortingObjectsPage } from './screens/ff/sorting-objects/FfSortingObjectsPage'
@@ -285,6 +286,9 @@ export default function App() {
   const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  // WMS-177: держим id открытой FF-приёмки в адресе (?open_inbound=...), чтобы
+  // reload не выкидывал оператора в журнал документов.
+  const [appSearchParams, setAppSearchParams] = useSearchParams()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -331,7 +335,42 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
-  const [ffDocDirty, setFfDocDirty] = useState(false)
+  const [ffDocDirty, setFfDocDirtyState] = useState(false)
+  const ffDocDirtyRef = useRef(false)
+  const fbsDirtyRef = useRef(false)
+  const setFfDocDirty = useCallback((dirty: boolean) => {
+    ffDocDirtyRef.current = dirty
+    setFfDocDirtyState(dirty)
+  }, [])
+  const setFbsDirty = useCallback((dirty: boolean) => {
+    fbsDirtyRef.current = dirty
+  }, [])
+  const navigationBlocker = useBlocker(useCallback(({ currentLocation, nextLocation }) =>
+    (ffDocDirtyRef.current || fbsDirtyRef.current) &&
+    (currentLocation.pathname !== nextLocation.pathname ||
+      currentLocation.search !== nextLocation.search), []))
+  const handledNavigation = useRef<string | null>(null)
+  useEffect(() => {
+    if (navigationBlocker.state !== 'blocked') {
+      handledNavigation.current = null
+      return
+    }
+    if (handledNavigation.current === navigationBlocker.location.key) return
+    handledNavigation.current = navigationBlocker.location.key
+    if (confirmDiscardChanges(true)) {
+      setFfDocDirty(false)
+      setFbsDirty(false)
+      navigationBlocker.proceed()
+    } else {
+      navigationBlocker.reset()
+    }
+  }, [navigationBlocker, setFfDocDirty, setFbsDirty])
+  useBeforeUnload(useCallback((event) => {
+    if (ffDocDirtyRef.current || fbsDirtyRef.current) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+  }, []))
   const [ffInboundWorkspace, setFfInboundWorkspace] =
     useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
@@ -2746,8 +2785,13 @@ export default function App() {
     }
   }, [authHeaders, refreshInboundList, selectedWarehouseId, token, warehouses])
 
-  const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
-    if (!token) {
+  const onCreateFfDiscrepancyAct = useCallback(async (
+    // WMS-156: обязательный inbound_intake_request_id прилетает от экрана,
+    // и мы кладём его в тело запроса. Без связи с приёмкой approve всё равно
+    // не выполнится, поэтому запрещаем создание акта-сироты уже здесь.
+    inboundIntakeRequestId: string,
+  ): Promise<{ id: string } | null> => {
+    if (!token || !inboundIntakeRequestId) {
       return null
     }
     setFfSuppliesNotice(null)
@@ -2760,7 +2804,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ inbound_intake_request_id: inboundIntakeRequestId }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -2781,7 +2825,7 @@ export default function App() {
   }, [token, authHeaders, refreshDiscrepancyActList])
 
   const closeFfDocument = useCallback(() => {
-    if (ffDocDirty && !window.confirm('Закрыть без сохранения?')) {
+    if (!confirmDiscardChanges(ffDocDirty)) {
       return
     }
     setFfDocDirty(false)
@@ -2789,10 +2833,47 @@ export default function App() {
     setSelectedInboundId(null)
     setSelectedOutboundId(null)
     setFfInboundWorkspace('full')
+    // WMS-177: явное закрытие документа убирает и URL-параметр, иначе при
+    // следующем возврате на эту страницу тот же документ откроется снова.
+    if (appSearchParams.get('open_inbound')) {
+      const cleaned = new URLSearchParams(appSearchParams)
+      cleaned.delete('open_inbound')
+      cleaned.delete('inbound_workspace')
+      setAppSearchParams(cleaned, { replace: true })
+    }
     if (token) {
       void refreshInboundList(token)
     }
-  }, [ffDocDirty, refreshInboundList, token])
+  }, [ffDocDirty, refreshInboundList, token, appSearchParams, setAppSearchParams])
+
+  // The URL owns the open document and workspace, including Back/Forward.
+  useEffect(() => {
+    const id = appSearchParams.get('open_inbound')
+    const isInboundRoute = pathname === '/app/ff/reception' || pathname === '/app/ff/sorting'
+    if (!token || !me || !isInboundRoute || !id ||
+      !canAccessFfBlock(me.role, me.permissions, 'reception')) {
+      setFfDocModal((current) => current === 'inbound' ? null : current)
+      setSelectedInboundId(null)
+      return
+    }
+    const workspace = pathname === '/app/ff/sorting' ? 'sorting'
+      : appSearchParams.get('inbound_workspace') === 'full' ? 'full' : 'reception'
+    setSelectedOutboundId(null)
+    setSelectedInboundId(id)
+    setFfInboundWorkspace(workspace)
+    setFfDocModal('inbound')
+  }, [appSearchParams, pathname, token, me])
+
+  const openInboundDocument = useCallback(
+    (id: string, workspace: 'full' | 'reception' | 'sorting' = 'reception') => {
+      const params = new URLSearchParams()
+      params.set('open_inbound', id)
+      params.set('inbound_workspace', workspace)
+      const route = workspace === 'sorting' ? '/app/ff/sorting' : '/app/ff/reception'
+      navigate(`${route}?${params}`)
+    },
+    [navigate],
+  )
 
   const rootElement = (() => {
     if (!token || location.pathname.endsWith('/set-password')) {
@@ -2890,12 +2971,7 @@ export default function App() {
                       r.marketplace === 'ozon' ? 'Ozon' : 'Wildberries',
                     goods_qty_total: r.line_count,
                   }))}
-                onOpenInbound={(id) => {
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(id)
-                  setFfInboundWorkspace('full')
-                  setFfDocModal('inbound')
-                }}
+                onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 onOpenOutbound={(id) => {
                   setPendingMpUnloadId(null)
                   setSelectedInboundId(null)
@@ -2949,12 +3025,7 @@ export default function App() {
                   discrepancyActSummaries={discrepancyActSummaries}
                   initialMarketplaceUnloadId={pendingMpUnloadId}
                   onInitialMarketplaceUnloadOpened={() => setPendingMpUnloadId(null)}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('full')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                   onOpenOutbound={(id) => {
                     setSelectedInboundId(null)
                     setSelectedOutboundId(id)
@@ -3001,18 +3072,10 @@ export default function App() {
                     if (!created?.id) {
                       return null
                     }
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(created.id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
+                    openInboundDocument(created.id, 'reception')
                     return created
                   }}
-                  onOpen={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpen={(id) => openInboundDocument(id, 'reception')}
                 />
               ) : (
                 ffAccessDenied
@@ -3027,12 +3090,7 @@ export default function App() {
                 <FfInboundQueuePage
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="sorting"
                   rows={inboundSummaries}
-                  onOpen={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('sorting')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpen={(id) => openInboundDocument(id, 'sorting')}
                 />
               ) : (
                 ffAccessDenied
@@ -3065,6 +3123,7 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   sellers={sellers}
+                  onDirtyChange={setFbsDirty}
                   isAdmin={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (
@@ -3170,12 +3229,7 @@ export default function App() {
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                   warehouses={reportWarehouseOptions(warehouses)}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('full')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
               ) : (
                 ffAccessDenied
@@ -3203,12 +3257,7 @@ export default function App() {
                 <FfBillingScreen
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'reception')}
                 />
               ) : (
                 ffAccessDenied
@@ -3251,9 +3300,21 @@ export default function App() {
             }
           />
 
+          {/* «Хранение» в меню ведёт сюда. Экран отвечает на один вопрос — сколько
+              лежало и на сколько, — а обмеры, ставки и печать ведомостей с него
+              убраны по прямому поручению владельца. */}
           <Route
             path="ff/inventory"
-            element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+            element={
+              token && canInventoryOps ? (
+                <FfStorageReportPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
           />
 
           {/* Раскладка объектами: товар в коробе, короб на палете, палета в ячейке.
@@ -3304,7 +3365,7 @@ export default function App() {
           />
 
           {/* Пересчёт живёт отдельным адресом: «ff/inventory» занят экраном
-              расчёта хранения, и отбирать у него адрес — ломать работающее. */}
+              хранения, и отбирать у него адрес — ломать работающее. */}
           <Route
             path="ff/stocktaking"
             element={

@@ -30,6 +30,10 @@ if TYPE_CHECKING:
 PRINT_ASSET_KIND_ORDER_STICKER = "order_sticker"
 PRINT_ASSET_KIND_CARGO_PLACE_QR = "cargo_place_qr"
 PRINT_ASSET_KIND_SUPPLY_QR = "supply_qr"
+# Готовый лист этикеток, который ТСД уже собрал сам (товарный ШК, ЧЗ, QR).
+# У маркетплейса он не запрашивается, поэтому и в FBS_PRINT_ASSET_KINDS —
+# наборе типов, которые можно попросить у маркетплейса, — его нет.
+PRINT_ASSET_KIND_OPERATOR_DOCUMENT = "operator_document"
 FBS_PRINT_ASSET_KINDS = frozenset(
     {
         PRINT_ASSET_KIND_ORDER_STICKER,

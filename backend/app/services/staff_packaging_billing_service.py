@@ -10,11 +10,17 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_STAFF
+from app.models.document_event import (
+    DOCUMENT_TYPE_STAFF_USER,
+    EVENT_STAFF_RATE_CHANGED,
+    SOURCE_USER,
+)
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
 from app.models.packaging_task import STATUS_DONE, PackagingTask
 from app.models.user import User
+from app.services.document_event_service import record_document_event_safely
 
 MSK = ZoneInfo("Europe/Moscow")
 
@@ -197,12 +203,31 @@ async def update_staff_packaging_rate(
         raise PermissionError("forbidden")
     if rate_rub < 0:
         raise ValueError("invalid_rate")
-    user = await session.get(User, staff_user_id)
+    user = await session.scalar(
+        select(User)
+        .where(User.id == staff_user_id, User.tenant_id == acting_user.tenant_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if user is None or user.tenant_id != acting_user.tenant_id:
         raise LookupError("user_not_found")
     if user.role != FULFILLMENT_STAFF:
         raise PermissionError("not_staff_user")
-    user.packaging_rate_kopecks = rub_to_kopecks(rate_rub)
+    before = int(user.packaging_rate_kopecks)
+    after = rub_to_kopecks(rate_rub)
+    user.packaging_rate_kopecks = after
+    if before != after:
+        await record_document_event_safely(
+            session, tenant_id=user.tenant_id,
+            document_type=DOCUMENT_TYPE_STAFF_USER, document_id=user.id,
+            event_type=EVENT_STAFF_RATE_CHANGED, source=SOURCE_USER,
+            actor_user_id=acting_user.id,
+            payload_json={
+                "acting_user_id": str(acting_user.id), "target_user_id": str(user.id),
+                "before": {"packaging_rate_kopecks": before},
+                "after": {"packaging_rate_kopecks": after},
+            },
+        )
     await session.commit()
     await session.refresh(user)
     return user

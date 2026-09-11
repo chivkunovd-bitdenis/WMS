@@ -221,7 +221,7 @@ function pushContainer(
     wbSize: null,
     photoUrl: null,
     expected: agg.expected,
-    actual: agg.actual,
+    actual: node.confirmedEmpty ? 0 : agg.actual,
     delta: agg.delta,
     surplus: agg.surplus,
     shortage: agg.shortage,
@@ -320,7 +320,7 @@ export function buildRows(
       wbSize: null,
       photoUrl: null,
       expected: agg.expected,
-      actual: agg.actual,
+      actual: cell.confirmedEmpty ? 0 : agg.actual,
       delta: agg.delta,
       surplus: agg.surplus,
       shortage: agg.shortage,
@@ -411,6 +411,85 @@ export function setActual(
   return changed ? { ...count, cells } : count
 }
 
+/**
+ * WMS-154: пометить всё содержимое выбранной ячейки/тары как «здесь пусто».
+ *
+ * До этого пустое место и непосчитанное выглядели одинаково: у оператора нет
+ * очевидного способа сказать «я подошёл и там ничего нет» — единственное, что
+ * он делал, это набивал 0 в каждую строку руками. Кнопка «Здесь пусто» кладёт
+ * `actual = 0` только на непосчитанные листья внутри выделенного места. Уже
+ * посчитанные значения не трогаем: если оператор насчитал 3, а потом нажал
+ * пустоту по ошибке, три штуки не должны молча исчезнуть.
+ *
+ * Возвращает пару: обновлённый документ и список тронутых product id — они
+ * попадают в `touchedRef`, чтобы сохранение отправило именно их.
+ */
+export function markUncountedEmptyIn(
+  count: InventoryCount,
+  target: { kind: 'cell'; cellId: string } | { kind: 'container'; containerId: string },
+): { count: InventoryCount; touched: string[] } {
+  const touched: string[] = []
+
+  function zeroProducts(nodes: InventoryNode[]): InventoryNode[] {
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.kind === 'product') {
+        if (node.actual !== null) return node
+        changed = true
+        touched.push(node.id)
+        return { ...node, actual: 0 }
+      }
+      const children = zeroProducts(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
+    })
+    return changed ? next : nodes
+  }
+
+  function walkContainers(nodes: InventoryNode[]): InventoryNode[] {
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.kind === 'product') return node
+      if (target.kind === 'container' && node.id === target.containerId) {
+        const children = zeroProducts(node.children)
+        if (children === node.children) return node
+        changed = true
+        return { ...node, children }
+      }
+      const children = walkContainers(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
+    })
+    return changed ? next : nodes
+  }
+
+  let cells = count.cells
+  if (target.kind === 'cell') {
+    let cellsChanged = false
+    cells = count.cells.map((cell) => {
+      if (cell.id !== target.cellId) return cell
+      const children = zeroProducts(cell.children)
+      if (children === cell.children) return cell
+      cellsChanged = true
+      return { ...cell, children }
+    })
+    if (!cellsChanged) return { count, touched: [] }
+  } else {
+    let cellsChanged = false
+    cells = count.cells.map((cell) => {
+      const children = walkContainers(cell.children)
+      if (children === cell.children) return cell
+      cellsChanged = true
+      return { ...cell, children }
+    })
+    if (!cellsChanged) return { count, touched: [] }
+  }
+  return { count: { ...count, cells }, touched }
+}
+
+
 export function collapseAllKeys(count: InventoryCount): Set<string> {
   const keys = new Set<string>()
   function walkNodes(nodes: InventoryNode[]) {
@@ -445,15 +524,22 @@ export function mergeInFlightActuals(
   sent: InventoryCount,
   current: InventoryCount,
 ): InventoryCount {
+  if (current.id !== server.id || sent.id !== server.id) return current
   const sentActuals = new Map(allProducts(sent).map((item) => [item.id, item.actual]))
   const changed = new Map<string, number | null>()
   for (const item of allProducts(current)) {
     if (!sentActuals.has(item.id)) continue
     if (sentActuals.get(item.id) !== item.actual) changed.set(item.id, item.actual)
   }
-  let merged = server
+  let merged = current.comment !== sent.comment ? { ...server, comment: current.comment } : server
   for (const [productId, actual] of changed) {
     merged = setActual(merged, productId, actual)
   }
   return merged
+}
+
+/** Only the values changed in this editing session may overwrite server values. */
+export function changedActualIds(edited: InventoryCount, original: InventoryCount): Set<string> {
+  const before = new Map(allProducts(original).map((item) => [item.id, item.actual]))
+  return new Set(allProducts(edited).filter((item) => before.get(item.id) !== item.actual).map((item) => item.id))
 }

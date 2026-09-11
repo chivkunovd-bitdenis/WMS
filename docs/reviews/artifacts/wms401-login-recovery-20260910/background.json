@@ -1,0 +1,10 @@
+{
+  "start_utc": "2026-09-10T12:12:29.827877+00:00",
+  "pid_before": "24063",
+  "screen": "Ozon synthetic original supply picking; no scan/action",
+  "resume_requested_utc": "2026-09-10T12:17:53.327289+00:00",
+  "background_seconds": 323.5,
+  "pid_after": "24063",
+  "same_process": true,
+  "result": "Same Ozon picking screen and both original orders visible; no blank screen"
+}

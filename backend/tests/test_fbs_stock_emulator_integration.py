@@ -313,12 +313,19 @@ async def test_wms_emulator_safe_sync_without_fbs_percent_ignores_legacy_pool(
         row.fbs_percent = None
         await session.commit()
 
-    legacy_pool = await async_client.put(
-        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings/{WB_WAREHOUSE_ID}/stock-pool/{product_id}",
-        headers=headers,
-        json={"quantity": 1},
-    )
-    assert legacy_pool.status_code == 200, legacy_pool.text
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+
+    async with SessionLocal() as session:
+        binding = await session.scalar(select(FbsWarehouseBinding).where(
+            FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+            FbsWarehouseBinding.wb_warehouse_id == WB_WAREHOUSE_ID,
+        ))
+        assert binding is not None
+        session.add(FbsBindingStockPool(
+            tenant_id=tenant_id,
+            binding_id=binding.id, product_id=product_id, quantity=1,
+        ))
+        await session.commit()
 
     await _emulator_put_stock(emu_client, CHRT_ID, 20)
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 20

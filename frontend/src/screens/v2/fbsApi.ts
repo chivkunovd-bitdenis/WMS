@@ -79,7 +79,7 @@ export type FbsSupply = {
   id: string
   seller_id: string
   warehouse_id: string
-  wb_supply_id: string
+  wb_supply_id: string | null
   name: string
   status: string // draft | assembling | in_delivery | done
   delivery_type: string // warehouse_sc | pvz
@@ -223,13 +223,22 @@ export type FbsWorklistOrder = {
     category: string | null
     color: string | null
     size: string | null
+    marketplace_bindings?: Array<{
+      marketplace: 'wb' | 'ozon'
+      external_barcodes?: string[]
+    }>
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
   }
   positions: Array<{
     id?: string | null
     image_url?: string | null
+    barcode?: string | null
     product_id: string | null
+    marketplace_bindings?: Array<{
+      marketplace: 'wb' | 'ozon'
+      external_barcodes?: string[]
+    }>
     name: string
     seller_article: string | null
     sku: string | null
@@ -282,11 +291,13 @@ export type FbsSupplyPreflightRequest = {
 export type FbsSupplyPreflight = {
   compatible: boolean
   summary: {
+    marketplace: 'wb' | 'ozon'
     seller: { id: string; name: string }
     wb_warehouse: { id: number; name: string | null }
     wms_warehouse: { id: string; name: string }
     buyer_type: 'individual' | 'legal'
     cargo_type: string
+    delivery_route: string | null
     orders_count: number
     required_marking_count: number
     pvz_allowed_count: number
@@ -389,7 +400,12 @@ export type FbsOrderPrintTapeOrder = {
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
   codes: string[]
-  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  printed_codes: Array<{
+    id: string
+    cis_code: string
+    has_label_artifact: boolean
+    order_product_id: string | null
+  }>
   shortage: number | null
 }
 
@@ -493,7 +509,7 @@ export type FbsWorkspace = {
   supply: {
     id: string
     marketplace: 'wb' | 'ozon'
-    wb_supply_id: string
+    wb_supply_id: string | null
     /** 'wms' — поставку собрали мы, 'wb' — её собрал продавец в своём кабинете. */
     source: 'wms' | 'wb'
     name: string

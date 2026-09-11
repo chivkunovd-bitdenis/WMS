@@ -41,11 +41,13 @@ class DocumentEventOut(BaseModel):
 
 
 def _event_out(event: DocumentEvent) -> DocumentEventOut:
-    actor = (
-        DocumentEventActorOut(id=event.actor.id, name=event.actor.email)
-        if event.actor is not None
-        else None
-    )
+    snapshot_name = event.payload_json.get("actor_name_snapshot")
+    snapshot_id = event.payload_json.get("actor_user_id_snapshot")
+    actor = None
+    if isinstance(snapshot_name, str) and isinstance(snapshot_id, str):
+        actor = DocumentEventActorOut(id=uuid.UUID(snapshot_id), name=snapshot_name)
+    elif event.actor is not None:
+        actor = DocumentEventActorOut(id=event.actor.id, name=event.actor.email)
     product = (
         DocumentEventProductOut(id=event.product.id, name=event.product.name)
         if event.product is not None
@@ -69,7 +71,23 @@ def _event_out(event: DocumentEvent) -> DocumentEventOut:
 async def get_document_events(
     # `fbs_order` сервис пишет, а ручка его не принимала: историю FBS-заказа
     # через этот эндпоинт было не запросить вовсе.
-    document_type: Literal["inbound_intake", "fbs_supply", "marketplace_unload", "fbs_order"],
+    document_type: Literal[
+        "inbound_intake",
+        "fbs_supply",
+        "marketplace_unload",
+        "fbs_order",
+        "staff_user",
+        "outbound_shipment",
+        "discrepancy_act",
+        "packaging_task",
+        "tenant_settings",
+        "billing_profile",
+        "billing_tariff",
+        "billing_tariff_matrix",
+        "billing_invoice",
+        "marking_pool",
+        "print_template",
+    ],
     document_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],

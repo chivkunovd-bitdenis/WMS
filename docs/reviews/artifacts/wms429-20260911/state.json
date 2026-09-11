@@ -1,0 +1,159 @@
+{
+  "updated_at_utc": "2026-09-11T00:05:08.998197+00:00",
+  "phase": "FINAL_CI_THEN_DEPLOY",
+  "release_branch": "codex/wms-release-20260911",
+  "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
+  "preserved_refs": [
+    "85d802b1",
+    "8de937e5"
+  ],
+  "automation_id": "wms-11",
+  "production_authorized": true,
+  "apk_publication_authorized": true,
+  "chat_deployment_authorized": false,
+  "development_test_policy": "No repeated author tests/builds; root runs necessary final checks only",
+  "review_sequence": [
+    "single Claude Opus5 xhigh",
+    "parallel fixes",
+    "isolated Astra high"
+  ],
+  "agents": {
+    "ozon": {
+      "native_task": "/root/ozon_release_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkout": ".worktrees/wms-ozon-20260911",
+      "scope_ids": [
+        418,
+        424,
+        425,
+        427,
+        431
+      ]
+    },
+    "integrations": {
+      "native_task": "/root/integrations_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkout": ".worktrees/wms-integrations-20260911",
+      "scope_ids": [
+        280,
+        396
+      ]
+    },
+    "claude_lanes": {
+      "native_task": "/root/claude_lanes_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkouts": {
+        "storage": ".worktrees/wms-storage-20260911",
+        "print": ".worktrees/wms-print-20260911",
+        "chat": ".worktrees/wms-chat-20260911"
+      },
+      "claude_requested_model": "claude-opus-5",
+      "claude_requested_effort": "xhigh",
+      "scope_ids": [
+        430,
+        402,
+        397,
+        399
+      ],
+      "latest_status": "One Opus5 xhigh review with same-session completion finished; final fixes integrated; Astra pending final SHA"
+    }
+  },
+  "external_inputs": {
+    "printer_hardware": "Asked owner OS/model/USB or network; awaiting text answer",
+    "dadata": "Production key absent; stage live lookup passed; requested separate permission to transfer existing configuration",
+    "cz": "Live public check unavailable; production has no saved True API authorization; seller/live sample pending"
+  },
+  "prohibitions": [
+    "No production chat",
+    "No credential dashboards or secret changes",
+    "No mobile PROGRESS/raw logs",
+    "No live operator document mutation for QA",
+    "No new FBS navigation blockers",
+    "No new frontend beyond explicit scope"
+  ],
+  "apk": {
+    "versionCode": 11,
+    "asset_uploaded": true,
+    "download_sha256_verified": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
+    "manifest_published": true,
+    "source_record_sha": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
+    "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+    "verified_at_utc": "2026-09-10T22:24:17.775852+00:00"
+  },
+  "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
+  "claude_quota": {
+    "checked_at_utc": "2026-09-11T00:05:08.998197+00:00",
+    "weekly_used_percent": 9,
+    "weekly_remaining_percent": 91,
+    "session_used_percent": 74,
+    "weekly_reset": "2026-09-17 10:00 Europe/Moscow",
+    "extra_usage_enabled": false
+  },
+  "server_preflight": {
+    "observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
+    "database_revision": "20260910_1500",
+    "network_topology": "verified existing topology unchanged",
+    "disk_free_before": "396 MB",
+    "disk_free_after": "1.8 GB",
+    "action": "Pruned only unused Docker build cache older than24h; reclaimed1.602GB; no images/volumes/backups removed",
+    "services": "API/web/worker/beat running, db/redishealthy"
+  },
+  "chat": {
+    "sha": "8cd7ca1f59a72228a21c3bf201ee72511366aa00",
+    "branch": "codex/wms-chat-20260911",
+    "pushed": true,
+    "deploy": false
+  },
+  "integrated_commits": {
+    "ozon": [
+      "d5ce887f",
+      "6376a119",
+      "72f2e1f7",
+      "654505d8",
+      "d5bb336a",
+      "6e65feda"
+    ],
+    "dadata_config": "f1e49c22",
+    "cz_receiving": [
+      "70e07a72",
+      "f2ef68ee"
+    ],
+    "storage": [
+      "66a6565a",
+      "cac452dc",
+      "2584d65c"
+    ]
+  },
+  "checks": {
+    "targeted_backend": "Initial151passed5skipped3failed; corrected3 nodes rerun3passed. No full suite.",
+    "static": "Seven Ozon/storage files ruff passed; Ozon mypy passed; storage variable fixed and mypy+ruff rerun passed.",
+    "storage_ui": "Actual seller expansion6 liter-days900kopecks; categoryA4/600; Sep09+categoryA2/400. Periodrate150/current200 verified.",
+    "ozon_ui": "Actual Ozon worklist identities/units, card reread without500, picking Ozon barcodes vs distinct WB fixtures, no navigation gates, final Ozon confirmation cancelled. Print multi-position button fix pending final click.",
+    "final_batch": "ruff/mypy five modified modules PASS; two targeted printing/storage regression tests PASS; final frontend typecheck/build PASS; OpenAPI regenerated",
+    "browser_lock": "CUA reported Mac locked and could not unlock; user asked to unlock; post-deploy visual reread pending",
+    "final_frontend_tests": "28 passed; final typecheck/build after preview fix",
+    "ci_859": "2478 passed,134 skipped,1 xfailed,3 failed; all3 corrected and targeted reruns passed",
+    "ozon_generator": "Exact generated-module equality passed; runtime schema unchanged"
+  },
+  "review": {
+    "opus_source_sha": "f9bceb5ab2711c2fca1a40f57c6ebddc3e896a9e",
+    "opus_session": "2ca839a6-4d18-46e5-9962-774dc1364596",
+    "complete": true,
+    "findings_fixed_in": [
+      "dd21479d",
+      "7578babb",
+      "42700915",
+      "851d27b9",
+      "6ca628f7"
+    ],
+    "mobile_patch": "UNAPPLIED and UNPUBLISHED; no physical printer/agent setup",
+    "astra_source_sha": "859fe08dc3fc6a20a2a16c91331f12b251756a2a",
+    "astra_thread": "01a08db5-fdff-7bb1-b235-e25fcf1a5c67",
+    "astra_fixes": "6185e3b7: selected barcode per position; no shared size; labels for positions not covered by KIZ",
+    "astra_remaining_preview_fixed": "6c3393d6 plus root empty barcode guard; root source verification; no extra review cycle",
+    "all_review_processes_finished": true
+  }
+}

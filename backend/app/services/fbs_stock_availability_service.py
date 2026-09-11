@@ -76,26 +76,14 @@ async def fbs_allocated_available_by_product(
     warehouse_id: uuid.UUID | None,
     product_ids: list[uuid.UUID],
 ) -> dict[uuid.UUID, int]:
-    """Выделенные свободные штуки; резервы заказов считаются отдельно ровно один раз."""
-    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
-    from app.models.product import Product
+    """Compatibility for callers of the former physical FBS allocation.
 
-    stmt = (
-        select(FbsBindingStockPool.product_id, func.sum(FbsBindingStockPool.quantity))
-        .join(FbsWarehouseBinding, FbsWarehouseBinding.id == FbsBindingStockPool.binding_id)
-        .join(Product, Product.id == FbsBindingStockPool.product_id)
-        .where(
-            FbsBindingStockPool.tenant_id == tenant_id,
-            FbsBindingStockPool.product_id.in_(product_ids),
-            Product.fbs_units_mode.is_(True),
-        )
-        .group_by(FbsBindingStockPool.product_id)
-    )
-    if warehouse_id is not None:
-        stmt = stmt.where(FbsWarehouseBinding.wms_warehouse_id == warehouse_id)
-    rows = await session.execute(stmt)
-    return {pid: int(quantity or 0) for pid, quantity in rows}
+    Operator caps only limit publication; they do not reserve physical stock.
+    Existing order reservations are counted by fbs_reserved_by_product instead.
+    Keep this entry point for catalog distribution consumers until their old
+    allocation field is removed; no cap may be subtracted from availability.
+    """
+    return {}
 
 
 async def fbs_reserved_qty_for_product(

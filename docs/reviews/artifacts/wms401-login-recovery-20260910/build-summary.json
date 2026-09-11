@@ -1,0 +1,17 @@
+{
+  "result": "BUILD SUCCESSFUL",
+  "duration": "5m 50s",
+  "test_count": 60,
+  "test_failures": 0,
+  "gradle_max_workers": 2,
+  "offline": true,
+  "lint": {
+    "Warning": 41,
+    "Information": 2
+  },
+  "tasks": [
+    "testDebugUnitTest (3 selected classes)",
+    "lintDebug",
+    "assembleDebug"
+  ]
+}

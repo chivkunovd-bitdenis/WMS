@@ -788,6 +788,8 @@ async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
         name="Last unit",
         sku_code=f"last-{uuid.uuid4().hex[:8]}",
         fbs_stock_limit=1,
+        fbs_stock_sync_enabled=True,
+        fbs_ozon_stock_sync_enabled=True,
     )
     db_session.add_all([tenant, seller, warehouse, product])
     await db_session.flush()
@@ -808,6 +810,16 @@ async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
         wms_warehouse_id=warehouse.id,
     )
     db_session.add_all([wb_binding, ozon_binding])
+    await db_session.commit()
+
+    from app.models.inventory_balance import InventoryBalance
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
+    location = await get_or_create_sorting_location(db_session, tenant.id, warehouse.id)
+    db_session.add(InventoryBalance(
+        tenant_id=tenant.id, product_id=product.id, storage_location_id=location.id,
+        quantity=1, quantity_unpacked=1, quantity_packed=0,
+    ))
     await db_session.commit()
 
     await set_binding_stock_pool_quantity(
@@ -1579,6 +1591,7 @@ async def test_ozon_supply_creation_never_calls_wb(
         packed=False,
     )
     summary = SupplyPreflightSummary(
+        marketplace="ozon",
         seller_id=seller.id,
         seller_name=seller.name,
         wb_warehouse_id=11,
@@ -1587,6 +1600,7 @@ async def test_ozon_supply_creation_never_calls_wb(
         wms_warehouse_name=warehouse.name,
         buyer_type="individual",
         cargo_type="unknown",
+        delivery_route=None,
         orders_count=1,
         required_marking_count=0,
         pvz_allowed_count=1,

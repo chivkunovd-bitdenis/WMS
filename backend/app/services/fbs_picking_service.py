@@ -39,6 +39,7 @@ from app.models.fbs_wb_operation import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service, warehouse_map_service
@@ -79,8 +80,10 @@ class FbsPickingError(Exception):
 @dataclass(frozen=True)
 class PickOptionProduct:
     product_id: uuid.UUID
-    sku_code: str
+    sku_code: str | None
     product_name: str
+    seller_article: str | None
+    barcode: str | None
     planned_qty: int
     picked_qty: int
     locations: list[PickOptionLocation]
@@ -279,6 +282,27 @@ async def get_pick_options(
 
     product_ids = list(planned)
     products = await _load_products(session, tenant_id, product_ids)
+    ozon_bindings: dict[uuid.UUID, ProductMarketplaceLink] = {}
+    ozon_names: dict[uuid.UUID, str] = {}
+    if supply.marketplace == "ozon":
+        rows = list(
+            (
+                await session.scalars(
+                    select(ProductMarketplaceLink).where(
+                        ProductMarketplaceLink.tenant_id == tenant_id,
+                        ProductMarketplaceLink.seller_id == supply.seller_id,
+                        ProductMarketplaceLink.product_id.in_(product_ids),
+                        ProductMarketplaceLink.marketplace == "ozon",
+                        ProductMarketplaceLink.is_active.is_(True),
+                    )
+                )
+            ).all()
+        )
+        ozon_bindings = {row.product_id: row for row in rows}
+        for order in supply.orders:
+            for position in order.product_positions:
+                if position.product_id is not None and position.name:
+                    ozon_names.setdefault(position.product_id, position.name)
     picked_by_location = await _picked_qty_by_product_location(
         session, tenant_id, supply.id
     )
@@ -323,8 +347,35 @@ async def get_pick_options(
     return [
         PickOptionProduct(
             product_id=product_id,
-            sku_code=product.sku_code,
-            product_name=product.name,
+            sku_code=(
+                ozon_bindings[product_id].external_sku
+                if supply.marketplace == "ozon" and product_id in ozon_bindings
+                else None
+                if supply.marketplace == "ozon"
+                else product.sku_code
+            ),
+            product_name=(
+                ozon_names.get(product_id, product.name)
+                if supply.marketplace == "ozon"
+                else product.name
+            ),
+            seller_article=(
+                ozon_bindings[product_id].external_offer_id
+                if supply.marketplace == "ozon" and product_id in ozon_bindings
+                else None
+            ),
+            barcode=(
+                next(
+                    (
+                        value.strip()
+                        for value in ozon_bindings[product_id].external_barcodes
+                        if isinstance(value, str) and value.strip()
+                    ),
+                    None,
+                )
+                if supply.marketplace == "ozon" and product_id in ozon_bindings
+                else None
+            ),
             planned_qty=planned[product_id],
             picked_qty=picked_by_product.get(product_id, 0),
             locations=locations_by_product[product_id],

@@ -44,6 +44,7 @@ type ApiLine = {
 
 type ApiDetail = {
   id: string
+  marketplace?: 'wb' | 'ozon'
   name?: string | null
   wb_supply_id?: string | null
   document_number: string | null
@@ -90,8 +91,10 @@ type ApiPickLocation = {
 
 type ApiPickProduct = {
   product_id: string
-  sku_code: string
+  sku_code: string | null
   product_name: string
+  seller_article: string | null
+  barcode: string | null
   planned_qty: number
   picked_qty: number
   locations: ApiPickLocation[]
@@ -162,6 +165,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  const isOzonFbs = source === 'fbs' && detail?.marketplace === 'ozon'
   // Тара, отсканированная как место снятия (§Ж-03), но пока не встретившаяся
   // среди источников pick-options — например, короб только что подъехал и в
   // pick-options ещё не попал. `screenData.placeSource` знает только про тару,
@@ -174,7 +178,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const {
     catalogById,
     error: catalogError,
-  } = useMarketplaceProductCatalog(token, Boolean(detail?.seller_id), detail?.seller_id)
+  } = useMarketplaceProductCatalog(
+    token,
+    !isOzonFbs && Boolean(detail?.seller_id),
+    detail?.seller_id,
+  )
 
   const load = useCallback(async () => {
     if (!requestId) {
@@ -216,7 +224,9 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       id: string
       productId: string
       name: string
-      sku: string
+      sku: string | null
+      sellerArticle: string | null
+      barcode: string | null
       plan: number
     }> = detail.lines
       ? detail.lines.map((line) => ({
@@ -224,6 +234,8 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           productId: line.product_id,
           name: line.product_name,
           sku: line.sku_code,
+          sellerArticle: null,
+          barcode: null,
           plan: line.quantity,
         }))
       : pickOptions.map((option) => ({
@@ -231,18 +243,20 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           productId: option.product_id,
           name: option.product_name,
           sku: option.sku_code,
+          sellerArticle: option.seller_article,
+          barcode: option.barcode,
           plan: option.planned_qty,
         }))
 
     const products: PickProduct[] = composition.map((item) => {
-      const catalog = catalogById.get(item.productId)
+      const catalog = isOzonFbs ? undefined : catalogById.get(item.productId)
       return {
         id: item.productId,
         name: item.name,
-        sku: item.sku,
-        sellerArticle: catalog?.wb_vendor_code ?? '',
-        barcode: catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
-        photo: catalog?.wb_primary_image_url ?? '',
+        sku: item.sku ?? '',
+        sellerArticle: isOzonFbs ? item.sellerArticle ?? '' : catalog?.wb_vendor_code ?? '',
+        barcode: isOzonFbs ? item.barcode ?? '' : catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
+        photo: isOzonFbs ? '' : catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
       }
     })
@@ -344,7 +358,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       picked,
       placeSource,
     }
-  }, [catalogById, detail, pickOptions, source])
+  }, [catalogById, detail, isOzonFbs, pickOptions, source])
 
   const updateOption = useCallback(async () => {
     if (!requestId) return

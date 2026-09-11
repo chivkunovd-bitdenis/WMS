@@ -567,7 +567,7 @@ def _stock_direction_out(direction: object) -> StockDirectionOut:
         name=direction.name,
         comment=direction.comment,
         quantity=int(direction.quantity),
-        is_fbs=bool(direction.is_fbs),
+        is_fbs=False,  # Legacy DTO compatibility; no persisted FBS direction flag.
         created_at=direction.created_at.isoformat(),
         updated_at=direction.updated_at.isoformat(),
     )
@@ -916,8 +916,8 @@ async def post_products_merge(
     except ProductMergeError as exc:
         if exc.code == "product_not_found":
             raise HTTPException(status_code=404, detail=exc.code) from None
-        if exc.code == "merge_conflict":
-            raise HTTPException(status_code=409, detail=exc.code) from None
+        if exc.code in {"merge_conflict", "merge_busy"}:
+            raise HTTPException(status_code=409, detail=exc.message) from None
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code
         ) from None

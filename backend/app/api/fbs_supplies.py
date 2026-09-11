@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -121,9 +121,12 @@ class FbsSupplyOrderOut(BaseModel):
 
 class FbsSupplyOut(BaseModel):
     id: str
+    marketplace: Literal["wb", "ozon"]
     seller_id: str
     warehouse_id: str
-    wb_supply_id: str
+    # Ozon creates its carriage only on the final delivery action, so this
+    # WB-specific field is absent while an Ozon supply is being assembled.
+    wb_supply_id: str | None
     name: str
     status: str
     delivery_type: str
@@ -209,8 +212,10 @@ class FbsPickOptionLocationOut(BaseModel):
 
 class FbsPickOptionProductOut(BaseModel):
     product_id: str
-    sku_code: str
+    sku_code: str | None
     product_name: str
+    seller_article: str | None
+    barcode: str | None
     planned_qty: int
     picked_qty: int
     locations: list[FbsPickOptionLocationOut]
@@ -331,6 +336,7 @@ class FbsOrderTapePrintedCodeOut(BaseModel):
     id: str
     cis_code: str
     has_label_artifact: bool
+    order_product_id: str | None
 
 
 class FbsOrderTapeOrderOut(BaseModel):
@@ -680,6 +686,7 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         orders_out = [_order_out(order) for order in supply.orders]
     return FbsSupplyOut(
         id=str(supply.id),
+        marketplace=cast(Literal["wb", "ozon"], supply.marketplace),
         seller_id=str(supply.seller_id),
         warehouse_id=str(supply.warehouse_id),
         wb_supply_id=supply.wb_supply_id,
@@ -870,6 +877,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
     detail = envelope_from_exc(exc)
     if exc.http_status is not None and (
         exc.context
+        or exc.code.startswith("ozon_")
         or exc.code
         in {
             "wb_timeout",
@@ -1253,6 +1261,8 @@ async def get_fbs_supply_pick_options(
             product_id=str(option.product_id),
             sku_code=option.sku_code,
             product_name=option.product_name,
+            seller_article=option.seller_article,
+            barcode=option.barcode,
             planned_qty=option.planned_qty,
             picked_qty=option.picked_qty,
             locations=[
@@ -1980,6 +1990,11 @@ async def print_fbs_supply_order_tape(
                         id=str(code.id),
                         cis_code=code.cis_code,
                         has_label_artifact=code.has_label_artifact,
+                        order_product_id=(
+                            str(code.order_product_id)
+                            if code.order_product_id is not None
+                            else None
+                        ),
                     )
                     for code in order.printed_codes
                 ],

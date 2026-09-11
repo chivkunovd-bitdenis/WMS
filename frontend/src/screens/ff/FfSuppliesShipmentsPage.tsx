@@ -266,7 +266,13 @@ type Props = {
     sellerId: string,
     marketplace: 'wb' | 'ozon',
   ) => Promise<{ id: string } | null>
-  onCreateDiverge: () => Promise<{ id: string } | null>
+  /**
+   * WMS-156: акт расхождений без указания приёмки нельзя завершить — approve
+   * требует inbound_intake_request. Экран передаёт выбранную оператором
+   * приёмку сразу при создании, а не после submit, иначе связь придётся
+   * задавать отдельным путём или собирать акт-сирот.
+   */
+  onCreateDiverge: (inboundIntakeRequestId: string) => Promise<{ id: string } | null>
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
   addressStorageEnabled?: boolean
@@ -300,6 +306,10 @@ export function FfSuppliesShipmentsPage({
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [mpCreateSellerId, setMpCreateSellerId] = useState<string>('')
   const [mpCreateMarketplace, setMpCreateMarketplace] = useState<'wb' | 'ozon'>('wb')
+  // WMS-156: приёмка, к которой относится создаваемый акт расхождений.
+  // Без неё сервер акт не approve-нет (approve_act требует inbound_intake_request),
+  // поэтому просим оператора выбрать её прямо здесь, при создании.
+  const [divergeInboundId, setDivergeInboundId] = useState<string>('')
   const [sortKey, setSortKey] = useState<'planned_desc' | 'planned_asc' | 'created_desc' | 'created_asc'>(
     'created_desc',
   )
@@ -653,33 +663,35 @@ export function FfSuppliesShipmentsPage({
     void loadDocDetail()
   }, [loadDocDetail])
 
+  const openMpDocument = useCallback((id: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('open_mp', id)
+    setSearchParams(next)
+  }, [searchParams, setSearchParams])
+
   useEffect(() => {
-    if (!initialMarketplaceUnloadId) {
-      return
-    }
-    setUnloadDetail(null)
-    setDivergeDetail(null)
-    setModalError(null)
-    setSelectedInboundLineId('')
-    setLineProductId('')
-    setDocModal('marketplace_unload')
-    setDocModalId(initialMarketplaceUnloadId)
+    if (!initialMarketplaceUnloadId) return
+    openMpDocument(initialMarketplaceUnloadId)
     onInitialMarketplaceUnloadOpened?.()
-  }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened])
+  }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened, openMpDocument])
 
   useEffect(() => {
     const openMp = searchParams.get('open_mp')
-    if (!openMp || !isMpShipmentsPage) {
+    if (!openMp || !isMpShipmentsPage || !token) {
+      if (docModal === 'marketplace_unload') {
+        docDetailRequests.current.invalidate()
+        setDocModal(null)
+        setDocModalId(null)
+        setUnloadDetail(null)
+      }
       return
     }
-    // Тот же документ уже открыт: так бывает после «Завершить подбор» —
-    // экран подбора просит список открыть документ, из которого сам и запущен.
-    // Обнулять данные тут нельзя: идентификатор не меняется, перезагрузка не
-    // запустится, и окно останется пустым. Только убираем параметр из адреса.
+    // WMS-177: пока в адресе стоит open_mp — документ должен быть открыт,
+    // даже после reload. Если уже открыт тот же документ, ничего не делаем
+    // и, главное, НЕ стираем параметр из URL: раньше второй проход эффекта
+    // (docModalId и docModal в deps) обнулял открытую ссылку сразу после
+    // установки state — и reload снова показывал журнал.
     if (docModalId === openMp && docModal === 'marketplace_unload') {
-      const cleaned = new URLSearchParams(searchParams)
-      cleaned.delete('open_mp')
-      setSearchParams(cleaned, { replace: true })
       return
     }
     setUnloadDetail(null)
@@ -689,7 +701,8 @@ export function FfSuppliesShipmentsPage({
     setDocModalId(openMp)
     // Параметр НЕ стираем: пока окно открыто, документ живёт в адресе, и
     // обновление страницы возвращает оператора в тот же документ, а не в журнал.
-  }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams])
+    // Уборка параметра — в closeDocModal, при явном закрытии окна.
+  }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams, token])
 
   useEffect(() => {
     if (docModal !== 'marketplace_unload' || docModalId == null) {
@@ -830,12 +843,15 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setSelectedInboundLineId('')
     setLineProductId('')
-    setDocModal('marketplace_unload')
-    setDocModalId(created.id)
+    openMpDocument(created.id)
   }
 
   const createAndOpenDiverge = async () => {
-    const created = await onCreateDiverge()
+    // WMS-156: без выбранной приёмки создавать нечего — approve всё равно
+    // потребует inbound_intake_request. Кнопка ниже отключается, но защита
+    // здесь на случай гонки состояний.
+    if (!divergeInboundId) return
+    const created = await onCreateDiverge(divergeInboundId)
     if (!created?.id) {
       return
     }
@@ -844,6 +860,9 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setSelectedInboundLineId('')
     setLineProductId('')
+    const cleaned = new URLSearchParams(searchParams)
+    cleaned.delete('open_mp')
+    setSearchParams(cleaned, { replace: true })
     setDocModal('discrepancy_act')
     setDocModalId(created.id)
   }
@@ -2142,15 +2161,37 @@ export function FfSuppliesShipmentsPage({
               </Button>
             </>
           ) : (
-            <Button
-              variant="outlined"
-              color="secondary"
-              disabled={busy}
-              data-testid="ff-create-diverge"
-              onClick={() => void createAndOpenDiverge()}
-            >
-              Создать расхождение
-            </Button>
+            <>
+              {/* WMS-156: селект приёмки живёт рядом с кнопкой. Список ограничен
+                  реальными приёмками этого арендатора — иначе оператор наберёт
+                  UUID руками и создаст акт-сироту. */}
+              <FormControl size="small" sx={{ minWidth: 300 }} required>
+                <InputLabel id="ff-diverge-inbound-label">Приёмка для акта</InputLabel>
+                <Select
+                  labelId="ff-diverge-inbound-label"
+                  label="Приёмка для акта"
+                  value={divergeInboundId}
+                  onChange={(event) => setDivergeInboundId(String(event.target.value))}
+                  data-testid="ff-diverge-inbound-picker"
+                >
+                  {inboundSummaries.map((row) => (
+                    <MenuItem key={row.id} value={row.id}>
+                      {(row.document_number ?? row.id.slice(0, 8) + '…')}
+                      {row.seller_name ? ` · ${row.seller_name}` : ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="outlined"
+                color="secondary"
+                disabled={busy || !divergeInboundId}
+                data-testid="ff-create-diverge"
+                onClick={() => void createAndOpenDiverge()}
+              >
+                Создать расхождение
+              </Button>
+            </>
           )}
         </Stack>
       </Paper>
@@ -2271,14 +2312,16 @@ export function FfSuppliesShipmentsPage({
                     setModalError(null)
                     setSelectedInboundLineId('')
                     setLineProductId('')
-                    setDocModal('marketplace_unload')
-                    setDocModalId(row.id)
+                    openMpDocument(row.id)
                   } else if (row.kind === 'discrepancy_act') {
                     setUnloadDetail(null)
                     setDivergeDetail(null)
                     setModalError(null)
                     setSelectedInboundLineId('')
                     setLineProductId('')
+                    const cleaned = new URLSearchParams(searchParams)
+                    cleaned.delete('open_mp')
+                    setSearchParams(cleaned, { replace: true })
                     setDocModal('discrepancy_act')
                     setDocModalId(row.id)
                   }

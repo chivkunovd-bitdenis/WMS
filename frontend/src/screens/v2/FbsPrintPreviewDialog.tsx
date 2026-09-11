@@ -1,5 +1,6 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { PrintQuantityField } from '../../components/PrintQuantityField'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -64,6 +65,11 @@ export function FbsPrintPreviewDialog({
   const [error, setError] = useState<string | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const [copies, setCopies] = useState(1)
+  const appliedCopies = useRef(1)
+  const requestClose = () => {
+    if (confirmDiscardChanges(copies !== appliedCopies.current)) onClose()
+  }
+
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
 
   const readyAssets = useMemo(
@@ -150,6 +156,7 @@ export function FbsPrintPreviewDialog({
 
   useEffect(() => {
     if (open) {
+      appliedCopies.current = 1
       setCopies(1)
       setLabelSize(resolveLabelSize(loadLabelSizeId()))
     }
@@ -172,7 +179,10 @@ export function FbsPrintPreviewDialog({
         return
       }
     }
-    if (images.length === 0) return
+    if (images.length === 0) {
+      appliedCopies.current = copies
+      return
+    }
     const safeCopies = Math.max(1, Math.min(99, copies))
     const popup = window.open('', '_blank')
     if (!popup) {
@@ -203,6 +213,7 @@ export function FbsPrintPreviewDialog({
     ].join('')
     popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>${printCss}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
     popup.document.close()
+    appliedCopies.current = copies
   }
 
   const apply = async (asset: FbsPrintAsset) => {
@@ -218,7 +229,7 @@ export function FbsPrintPreviewDialog({
   }
 
   return (
-    <Dialog open={open} onClose={loading || applyingId ? undefined : onClose} fullWidth maxWidth="lg">
+    <Dialog open={open} onClose={loading || applyingId ? undefined : requestClose} fullWidth maxWidth="lg">
       <DialogTitle>Проверка перед печатью</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -311,7 +322,7 @@ export function FbsPrintPreviewDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={Boolean(applyingId)}>Закрыть</Button>
+        <Button onClick={requestClose} disabled={Boolean(applyingId)}>Закрыть</Button>
         <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0} onClick={() => print(previews)} data-task-id="FBS-10">
           {previews.length === 1 ? 'Печать' : `Печать готовых (${previews.length})`}
         </Button>

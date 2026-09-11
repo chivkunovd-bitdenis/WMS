@@ -15,6 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_ORDER,
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_PRINT_OPENED,
+)
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     STICKER_STATUS_APPLIED,
@@ -36,6 +41,7 @@ from app.models.fbs_print_asset import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.services.document_event_service import record_document_mutation
 from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
@@ -333,13 +339,86 @@ async def _load_asset(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     asset_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> FbsPrintAsset | None:
     stmt = select(FbsPrintAsset).where(
         FbsPrintAsset.id == asset_id,
         FbsPrintAsset.tenant_id == tenant_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def _load_content_asset(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    *,
+    for_update: bool,
+) -> tuple[FbsPrintAsset | None, FbsOrder | None]:
+    if not for_update:
+        asset = await _load_asset(session, tenant_id, asset_id)
+        order = None
+        if asset is not None and asset.fbs_order_id is not None:
+            order = await session.scalar(
+                select(FbsOrder).where(
+                    FbsOrder.id == asset.fbs_order_id,
+                    FbsOrder.tenant_id == tenant_id,
+                )
+            )
+            if order is None:
+                return None, None
+        return asset, order
+
+    # Ozon assembly holds Order before invalidating PrintAsset. Never take
+    # the asset first: its later order UPDATE would form a deadlock cycle.
+    # The unlocked lookup is only a hint; recheck the identity under the lock.
+    with session.no_autoflush:
+        connection = await session.connection()
+        while True:
+            identity = (
+                await session.execute(
+                    select(FbsPrintAsset.fbs_order_id).where(
+                        FbsPrintAsset.id == asset_id,
+                        FbsPrintAsset.tenant_id == tenant_id,
+                    )
+                )
+            ).one_or_none()
+            if identity is None:
+                return None, None
+            order_id = identity[0]
+            # A stale hint must not leave an old order locked while we try a
+            # different one. This savepoint releases only this lookup's locks.
+            async with connection.begin_nested() as lookup:
+                order = None
+                if order_id is not None:
+                    order = await session.scalar(
+                        select(FbsOrder)
+                        .where(
+                            FbsOrder.id == order_id,
+                            FbsOrder.tenant_id == tenant_id,
+                        )
+                        .with_for_update()
+                        .execution_options(populate_existing=True)
+                    )
+                asset = await session.scalar(
+                    select(FbsPrintAsset)
+                    .where(
+                        FbsPrintAsset.id == asset_id,
+                        FbsPrintAsset.tenant_id == tenant_id,
+                        FbsPrintAsset.fbs_order_id == order_id,
+                    )
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+                if asset is not None:
+                    if order_id is not None and order is None:
+                        return None, None
+                    return asset, order
+                await lookup.rollback()
 
 
 async def _find_order_sticker_asset(
@@ -996,20 +1075,20 @@ async def get_asset_binary_content(
     user_id: uuid.UUID,
     record_print_opened: bool = True,
 ) -> tuple[bytes, str, FbsPrintAsset]:
-    asset = await _load_asset(session, tenant_id, asset_id)
+    asset, order = await _load_content_asset(
+        session, tenant_id, asset_id, for_update=record_print_opened
+    )
     if asset is None:
         raise FbsPrintAssetError(
             "asset_not_found",
             message="Печатный актив не найден.",
         )
-    if asset.fbs_order_id is not None:
-        order = await session.get(FbsOrder, asset.fbs_order_id)
-        if order is not None and order.status == FBS_ORDER_STATUS_CANCELLED:
-            raise FbsPrintAssetError(
-                "order_cancelled",
-                message=cancelled_operation_message(order, "клеить стикер нельзя"),
-                context={"order_id": str(order.id)},
-            )
+    if order is not None and order.status == FBS_ORDER_STATUS_CANCELLED:
+        raise FbsPrintAssetError(
+            "order_cancelled",
+            message=cancelled_operation_message(order, "клеить стикер нельзя"),
+            context={"order_id": str(order.id)},
+        )
     if asset.status != PRINT_ASSET_STATUS_READY or not asset.storage_path:
         raise FbsPrintAssetError(
             "asset_not_ready",
@@ -1025,24 +1104,42 @@ async def get_asset_binary_content(
         )
     except FbsPrintAssetStorageError as exc:
         _mark_asset_error(asset, code=exc.code, message="Файл печати недоступен.")
-        if asset.fbs_order_id is not None:
-            order = await session.get(FbsOrder, asset.fbs_order_id)
-            if order is not None:
-                order.sticker_status = STICKER_STATUS_ERROR
+        if order is not None:
+            order.sticker_status = STICKER_STATUS_ERROR
         raise FbsPrintAssetError(
             "asset_not_ready",
             message="Файл печати недоступен.",
             context={"asset_id": str(asset_id), "reason": exc.code},
         ) from exc
 
+    before: dict[str, object] = {
+        "asset_id": asset.id,
+        "print_opened_at": asset.print_opened_at,
+        "sticker_status": order.sticker_status if order is not None else None,
+    }
     if record_print_opened and asset.print_opened_at is None:
         asset.print_opened_at = datetime.now(tz=UTC)
-        if asset.fbs_order_id is not None:
-            order = await session.get(FbsOrder, asset.fbs_order_id)
-            if order is not None and order.sticker_status == STICKER_STATUS_READY:
-                order.sticker_status = STICKER_STATUS_PRINT_OPENED
+        if order is not None and order.sticker_status == STICKER_STATUS_READY:
+            order.sticker_status = STICKER_STATUS_PRINT_OPENED
 
-    _ = user_id
+    # user_id is kept for call compatibility; audit uses get_current_user's context.
+    document_id = asset.fbs_order_id or asset.fbs_supply_id
+    if document_id is not None:
+        await record_document_mutation(
+            session,
+            tenant_id=tenant_id,
+            document_type=(
+                DOCUMENT_TYPE_FBS_ORDER if asset.fbs_order_id else DOCUMENT_TYPE_FBS_SUPPLY
+            ),
+            document_id=document_id,
+            event_type=EVENT_PRINT_OPENED,
+            before=before,
+            after={
+                "asset_id": asset.id,
+                "print_opened_at": asset.print_opened_at,
+                "sticker_status": order.sticker_status if order is not None else None,
+            },
+        )
     await session.flush()
     return png_bytes, content_type, asset
 

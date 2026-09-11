@@ -1137,6 +1137,7 @@ async def move_object(
     to_kind: DestinationKind,
     to_id: uuid.UUID | None,
     quantity: int | None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     # Количество имеет смысл только для товара: тара всегда переезжает целиком
@@ -1274,7 +1275,10 @@ async def move_object(
         to_label=to_label,
     )
     session.add(event)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     return {"id": str(event.id), "moved_qty": moved_quantity}
 
 
@@ -1285,6 +1289,7 @@ async def create_sorting_object(
     *,
     kind: Literal["pallet", "box", "cargo_place"],
     inbound_request_id: uuid.UUID | None = None,
+    storage_location_id: uuid.UUID | None = None,
     commit: bool = True,
 ) -> dict[str, str | None]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
@@ -1296,12 +1301,25 @@ async def create_sorting_object(
             or request.warehouse_id != warehouse_id
         ):
             raise WarehouseMapError("inbound_request_not_found")
+    if storage_location_id is not None:
+        # WMS-153: тара должна попадать сразу в выбранную ячейку, а не в общий
+        # склад. Проверяем, что ячейка принадлежит тому же складу и тенанту —
+        # иначе оператор случайно создаст тару чужого склада.
+        location = await session.get(StorageLocation, storage_location_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.warehouse_id != warehouse_id
+            or location.deleted_at is not None
+        ):
+            raise WarehouseMapError("storage_location_not_found")
     if kind == "pallet":
         try:
             pallet = await pallet_service.create_pallet(
                 session,
                 tenant_id,
                 warehouse_id=warehouse_id,
+                storage_location_id=storage_location_id,
                 inbound_request_id=inbound_request_id,
                 commit=commit,
             )
@@ -1320,6 +1338,7 @@ async def create_sorting_object(
             session,
             tenant_id,
             warehouse_id=warehouse_id,
+            storage_location_id=storage_location_id,
             inbound_request_id=inbound_request_id,
             container_kind=kind,
         )
@@ -1327,7 +1346,8 @@ async def create_sorting_object(
             await session.commit()
             await session.refresh(container)
     except warehouse_box_service.WarehouseBoxError as exc:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         raise WarehouseMapError(exc.code) from exc
     return {
         "id": str(container.id),

@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TypedDict
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -306,6 +306,7 @@ async def _clear_previous_ozon_stock(
     *, product_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Clear the known own target before its address/publication flag is lost."""
+    from app.services.fbs_stock_rule_service import product_has_rule_predicate
     from app.services.marketplace_account_service import (
         MarketplaceAccountError,
         MarketplaceAccountService,
@@ -328,7 +329,8 @@ async def _clear_previous_ozon_stock(
             ProductMarketplaceLink.seller_id == binding.seller_id,
             ProductMarketplaceLink.marketplace == MARKETPLACE_OZON,
             ProductMarketplaceLink.is_active.is_(True),
-            or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True)),
+            # WMS-384: единый предикат наличия правила из fbs_stock_rule_service.
+            product_has_rule_predicate(),
         )
     )).all())
     stocks: list[dict[str, object]] = []
@@ -678,106 +680,43 @@ async def set_binding_stock_pool_quantity(
     *,
     updated_by: uuid.UUID | None = None,
 ) -> FbsBindingStockPool:
-    """Set manual FBS stock pool quantity allocated to a specific WB warehouse.
+    """Set an operator cap through the same locked validation as the rule editor."""
+    from app.services.fbs_stock_rule_service import FbsStockRuleError, set_rule_for_products
 
-    The operator manually decides how to distribute the product's FBS pool across
-    WB warehouses. This function validates that the total quantity allocated across
-    all bindings of this product for this seller does not exceed product.fbs_stock_limit
-    (where None is treated as 0).
-    """
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
     if quantity < 0:
         raise FbsWarehouseBindingError("invalid_quantity")
-
     binding = await session.get(FbsWarehouseBinding, binding_id)
     if binding is None or binding.tenant_id != tenant_id or binding.seller_id != seller_id:
         raise FbsWarehouseBindingError("binding_not_found")
-
     product = await session.get(Product, product_id)
     if product is None or product.tenant_id != tenant_id or product.seller_id != seller_id:
         raise FbsWarehouseBindingError("product_not_found")
-
-    if product.fbs_units_mode:
-        from dataclasses import replace
-
-        from app.services.fbs_stock_rule_service import get_rule_view, set_rule_for_products
-        from app.services.inventory_service import lock_stock_product
-
-        await lock_stock_product(session, tenant_id, product_id)
-        view = await get_rule_view(session, tenant_id, product_id)
-        amounts = dict(view.rule.units_by_warehouse)
-        amounts[int(binding.wb_warehouse_id)] = quantity
+    try:
+        # The partial edit is applied after seller and Product locks, so changing
+        # one binding cannot overwrite another concurrently saved binding cap.
         await set_rule_for_products(
             session,
             tenant_id,
             [product_id],
-            replace(view.rule, units_by_warehouse=amounts),
+            None,
             updated_by=updated_by,
+            _binding_quantity=(binding_id, quantity),
         )
-        pool = await session.scalar(
-            select(FbsBindingStockPool).where(
-                FbsBindingStockPool.binding_id == binding_id,
-                FbsBindingStockPool.product_id == product_id,
-            )
-        )
-        assert pool is not None
-        return pool
-
-    limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
-
-    # Sum of quantities allocated to other bindings of this product for this seller
-    # (excluding the current binding_id).
-    stmt = (
-        select(func.coalesce(func.sum(FbsBindingStockPool.quantity), 0))
-        .select_from(FbsBindingStockPool)
-        .join(FbsWarehouseBinding, FbsBindingStockPool.binding_id == FbsWarehouseBinding.id)
-        .where(
+    except FbsStockRuleError as exc:
+        # Keep the legacy endpoint's conflict status; the message/context now
+        # describe current free stock, never the retired fbs_stock_limit.
+        code = "pool_quota_exceeded" if exc.code == "units_sum_exceeded" else exc.code
+        raise FbsWarehouseBindingError(code, exc.context, exc.message) from exc
+    pool = await session.scalar(
+        select(FbsBindingStockPool).where(
+            FbsBindingStockPool.binding_id == binding_id,
             FbsBindingStockPool.product_id == product_id,
-            FbsWarehouseBinding.seller_id == seller_id,
-            FbsWarehouseBinding.tenant_id == tenant_id,
-            FbsBindingStockPool.binding_id != binding_id,
         )
     )
-    res = await session.execute(stmt)
-    allocated_elsewhere = int(res.scalar_one())
-
-    if allocated_elsewhere + quantity > limit:
-        available = max(limit - allocated_elsewhere, 0)
-        raise FbsWarehouseBindingError(
-            "pool_quota_exceeded",
-            context={
-                "limit": limit,
-                "allocated_elsewhere": allocated_elsewhere,
-                "requested": quantity,
-            },
-            message=(
-                f"Пул {limit}, на другие склады уже разложено {allocated_elsewhere}, "
-                f"свободно {available}. Запрошено {quantity} — уменьшите количество."
-            ),
-        )
-
-    # Get or create the stock pool entry for this binding and product.
-    stmt_existing = select(FbsBindingStockPool).where(
-        FbsBindingStockPool.binding_id == binding_id,
-        FbsBindingStockPool.product_id == product_id,
-    )
-    existing = (await session.execute(stmt_existing)).scalar_one_or_none()
-    if existing is not None:
-        existing.quantity = quantity
-        existing.updated_by = updated_by
-    else:
-        existing = FbsBindingStockPool(
-            tenant_id=tenant_id,
-            binding_id=binding_id,
-            product_id=product_id,
-            quantity=quantity,
-            updated_by=updated_by,
-        )
-        session.add(existing)
-    await session.commit()
-    await session.refresh(existing)
-    return existing
+    assert pool is not None
+    return pool
 
 
 async def get_binding_stock_pool_summary(
@@ -786,18 +725,17 @@ async def get_binding_stock_pool_summary(
     seller_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> FbsStockPoolSummary:
-    """Get FBS stock pool summary: limit, total allocated, available, and per-binding breakdown.
+    """Legacy response names backed by current stock and operator caps.
 
-    Returns a dictionary with:
-    - limit: the product's fbs_stock_limit (0 if None)
-    - allocated_total: total quantity allocated across all bindings
-    - available: remaining capacity (limit - allocated_total, never negative)
-    - by_binding: dict of {binding_id -> quantity} for all bindings of this product
+    limit/available both describe actual free stock, not an expendable quota.
+    allocated_total/by_binding report saved caps, which do not reduce free stock.
     """
+    from app.services.fbs_stock_rule_service import get_rule_view
+
     product = await session.get(Product, product_id)
     if product is None or product.tenant_id != tenant_id or product.seller_id != seller_id:
         raise FbsWarehouseBindingError("product_not_found")
-    limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
+    view = await get_rule_view(session, tenant_id, product_id)
 
     stmt = (
         select(FbsBindingStockPool.binding_id, FbsBindingStockPool.quantity)
@@ -813,8 +751,8 @@ async def get_binding_stock_pool_summary(
     rows = res.all()
     allocated_total = sum(int(row.quantity) for row in rows)
     return {
-        "limit": limit,
+        "limit": view.free_stock,
         "allocated_total": allocated_total,
-        "available": max(limit - allocated_total, 0),
+        "available": view.free_stock,
         "by_binding": {row.binding_id: int(row.quantity) for row in rows},
     }
