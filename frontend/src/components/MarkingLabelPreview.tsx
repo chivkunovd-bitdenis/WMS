@@ -306,6 +306,13 @@ export function MarkingLabelPreview(props: Props) {
                   () => ({ cis: previewCis(previewIndex++), productLabel: item.productLabel }),
                 ))
                 : [{ cis: previewCis(previewIndex++), productLabel: orderLabel }]
+              if (
+                isOzonPositionPreview
+                && props.layout.units.some((unit) => unit.block === 'label')
+                && units.some((unit) => !unit.productLabel?.barcode?.trim())
+              ) {
+                throw new Error('У товара нет штрихкода Ozon для печати.')
+              }
               orderSections.push(...(await buildMarkingTapeSections(
                 units,
                 props.layout,
