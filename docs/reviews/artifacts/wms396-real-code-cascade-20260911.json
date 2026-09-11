@@ -56,5 +56,10 @@
       "warehouse_code_status": "applied",
       "isolated_stock_movements": 1
     }
-  ]
+  ],
+  "source_seller_route_readback": {
+    "has_cz_authorization": false,
+    "actual_provider_branch": "mobile_check",
+    "credential_values_read": false
+  }
 }
