@@ -275,6 +275,8 @@ def _per_order_issues(
                 code, message = "order_incompatible", blocker["message"]
             else:
                 code, message = mapped
+                if code_raw in {"warehouse_unmapped", "order_external_processing"}:
+                    message = blocker["message"]
             issues.append(
                 SupplyValidationIssue(
                     order_id=order.id,

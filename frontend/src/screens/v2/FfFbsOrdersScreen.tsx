@@ -124,7 +124,7 @@ const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string
   },
   done: {
     title: 'Завершённых поставок нет',
-    hint: 'Поставки появятся здесь после приёмки Wildberries.',
+    hint: 'Поставки появятся здесь после приёмки маркетплейсом.',
   },
 }
 
@@ -189,9 +189,11 @@ function MissingText({ children }: { children: string }) {
 // подсказка с действием. Настройка остатка и сопоставление складов живут в каталоге.
 function BlockerLine({
   blocker,
+  marketplace,
   onGoToCatalog,
 }: {
   blocker: { code: string; message: string }
+  marketplace: 'wb' | 'ozon'
   onGoToCatalog: () => void
 }) {
   if (blocker.code === 'warehouse_unmapped') {
@@ -209,7 +211,7 @@ function BlockerLine({
         data-testid="fbs-warehouse-unmapped-link"
         data-task-id="FBS-02"
       >
-        Склад WB не привязан — настроить в каталоге
+        Склад {marketplace === 'ozon' ? 'Ozon' : 'WB'} не привязан — настроить в каталоге
       </Link>
     )
   }
@@ -358,6 +360,7 @@ const NewOrderRow = memo(function NewOrderRow({
                   <BlockerLine
                     key={blocker.code}
                     blocker={blocker}
+                    marketplace={order.marketplace}
                     onGoToCatalog={() => onGoToCatalog(order.product.id)}
                   />
                 ))}
@@ -375,7 +378,7 @@ const NewOrderRow = memo(function NewOrderRow({
           <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
             {order.product.seller_article ?? '—'}
           </Typography>
-        {order.product.wb_article ? (
+        {order.marketplace === 'wb' && order.product.wb_article ? (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
             WB {order.product.wb_article}
           </Typography>
@@ -1693,7 +1696,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                           <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
                             {order.product.seller_article ?? '—'}
                           </Typography>
-                        {order.product.wb_article ? (
+                        {order.marketplace === 'wb' && order.product.wb_article ? (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
                             WB {order.product.wb_article}
                           </Typography>
@@ -1942,7 +1945,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                         {orderNumberLabel(order)} · {order.product.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {order.seller.name} · {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`} · {order.product.barcode ?? 'ШК нет'}
+                        {order.seller.name} · {order.marketplace === 'ozon' ? deliveryRouteLabel(order) : order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`} · {order.product.barcode ?? 'ШК нет'}
                       </Typography>
                       {order.selection_blockers.length ? (
                         <Stack sx={{ mt: 0.5 }} spacing={0.25}>
@@ -1950,6 +1953,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                             <BlockerLine
                               key={blocker.code}
                               blocker={blocker}
+                              marketplace={order.marketplace}
                               onGoToCatalog={() => goToCatalog(order.product.id)}
                             />
                           ))}
