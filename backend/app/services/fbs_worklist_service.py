@@ -838,13 +838,14 @@ def compute_selection_blockers(
     server_now: datetime,
 ) -> list[dict[str, str]]:
     blockers: list[dict[str, str]] = []
+    marketplace_name = "Ozon" if order.marketplace == "ozon" else "WB"
     if order.status in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}:
         blockers.append({"code": "order_cancelled", "message": "Заказ отменён или брак."})
     if not _is_supplier_status_new(order.supplier_status):
         blockers.append(
             {
                 "code": "order_external_processing",
-                "message": "Заказ уже ушёл в кабинете WB.",
+                "message": f"Заказ уже ушёл в кабинете {marketplace_name}.",
             }
         )
     if order.supply_id is not None:
@@ -870,7 +871,10 @@ def compute_selection_blockers(
         blockers.append(
             {
                 "code": "warehouse_unmapped",
-                "message": "Склад WB не привязан к WMS — привяжите его на вкладке «Остатки WB».",
+                "message": (
+                    f"Склад {marketplace_name} не привязан к WMS — "
+                    "настройте привязку в каталоге."
+                ),
             }
         )
     # WMS-420. Просрочка запирает выбор только у Wildberries: там сборку после
@@ -909,13 +913,16 @@ def _position_barcode(
 
 
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
+    is_ozon = order.marketplace == "ozon"
+    positions = ctx["positions"].get(order.id, [])
+    first_position = positions[0] if positions else None
     seller = ctx["sellers"].get(order.seller_id)
     warehouse = ctx["warehouses"].get(order.warehouse_id) if order.warehouse_id else None
     wb_wh_id = int(order.wb_warehouse_id) if order.wb_warehouse_id is not None else 0
     wb_name = ctx["wb_names"].get(wb_wh_id) if wb_wh_id else None
     product = ctx["products"].get(order.product_id) if order.product_id else None
     card = None
-    if order.seller_id and order.wb_nm_id is not None:
+    if not is_ozon and order.seller_id and order.wb_nm_id is not None:
         card = ctx["cards"].get((order.seller_id, int(order.wb_nm_id)))
     card_raw = card.raw_json if card and isinstance(card.raw_json, dict) else None
     # Штрихкод товара берём из карточки WMS, а не из задания WB. У позиции в
@@ -924,10 +931,13 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     # ограниченного обращения). В задание WB кладёт свой внутренний, и печать по
     # нему давала на складе наклейку, не совпадающую с коробкой производителя.
     # От WB на упаковке нужен только QR стикера заказа; штрихкод — всегда наш.
-    barcode = (product.wb_barcode if product else None) or order.wb_barcode
+    barcode = (
+        _position_barcode(order, first_position, ctx) if first_position else None
+    ) if is_ozon else (product.wb_barcode if product else None) or order.wb_barcode
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
     # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
-    image_url = image_url or ctx["ozon_photos"].get(order.product_id)
+    if is_ozon:
+        image_url = ctx["ozon_photos"].get(order.product_id)
     category = subject_name_from_card(card_raw) if card_raw else None
     color = color_from_card(card_raw) if card_raw else None
     # Бренд и состав нужны этикетке ШК: без них она печаталась с пустыми
@@ -935,7 +945,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     brand = brand_from_card(card_raw) if card_raw else None
     composition = composition_from_card(card_raw) if card_raw else None
     size = None
-    if product and product.wb_size:
+    if not is_ozon and product and product.wb_size:
         size = product.wb_size
     elif card_raw:
         size = size_from_card_for_barcode(card_raw, barcode)
@@ -948,16 +958,29 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     markings = ctx["markings"].get(order.id, [])
     pick_row = ctx["picks"].get(order.id)
     sticker_asset = ctx["sticker_assets"].get(order.id)
-    positions = ctx["positions"].get(order.id, [])
-    product_bindings = (
-        ctx["marketplace_bindings"].get(order.product_id, []) if order.product_id else []
-    )
+    product_bindings = [
+        binding for binding in ctx["marketplace_bindings"].get(order.product_id, [])
+        if binding["marketplace"] == order.marketplace
+    ]
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
     if ctx["address_storage_enabled"] and pick_row and pick_row.source_storage_location is not None:
         pick_location = pick_row.source_storage_location.code
     picked_at = order.picked_at or (pick_row.picked_at if pick_row else None)
+    if is_ozon:
+        product_name = first_position.name if first_position else None
+        seller_article = first_position.offer_id if first_position else None
+        sku = (
+            str(first_position.ozon_sku)
+            if first_position and first_position.ozon_sku is not None else None
+        )
+    else:
+        product_name = product.name if product else None
+        seller_article = (
+            product.wb_vendor_code if product and product.wb_vendor_code else order.wb_article
+        )
+        sku = product.sku_code if product else None
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -980,15 +1003,15 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         },
         "product": {
             "id": str(order.product_id) if order.product_id else None,
-            "name": product.name if product else MISSING_PRODUCT,
+            "name": product_name or MISSING_PRODUCT,
             "image_url": image_url,
-            "seller_article": (
-                product.wb_vendor_code if product and product.wb_vendor_code else order.wb_article
+            "seller_article": seller_article,
+            "wb_article": (
+                int(order.wb_nm_id) if not is_ozon and order.wb_nm_id is not None else None
             ),
-            "wb_article": int(order.wb_nm_id) if order.wb_nm_id is not None else None,
             "barcode": barcode,
-            "sku": product.sku_code if product else None,
-            "chrt_id": (
+            "sku": sku,
+            "chrt_id": None if is_ozon else (
                 int(order.wb_chrt_id)
                 if order.wb_chrt_id is not None
                 else int(product.wb_chrt_id)
@@ -1010,9 +1033,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         },
         "positions": [
             {
-                "marketplace_bindings": ctx["marketplace_bindings"].get(
-                    position.product_id, []
-                ) if position.product_id else [],
+                "marketplace_bindings": [
+                    binding for binding in ctx["marketplace_bindings"].get(position.product_id, [])
+                    if binding["marketplace"] == order.marketplace
+                ],
                 "id": str(position.id),
                 "image_url": ctx["ozon_photos"].get(position.product_id),
                 "barcode": _position_barcode(order, position, ctx),
@@ -1030,7 +1054,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 ),
                 "seller_article": (
                     position.offer_id
-                    if order.marketplace == "ozon" and position.offer_id
+                    if order.marketplace == "ozon"
                     else ctx["products"][position.product_id].wb_vendor_code
                     if position.product_id in ctx["products"]
                     and ctx["products"][position.product_id].wb_vendor_code
