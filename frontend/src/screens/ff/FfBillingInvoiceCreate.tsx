@@ -268,9 +268,7 @@ export function FfBillingInvoiceCreate({
       return { source_type, source_id, service_code }
     }),
     ...(includeStorage ? { include_storage: true } : {}),
-    manual_lines: extraLines
-      .filter((line) => line.description.trim() && line.amount.trim())
-      .map((line) => ({ description: line.description.trim(), amount: line.amount.trim() })),
+    manual_lines: [],
   })
 
   const manualBody = () => ({
@@ -353,6 +351,32 @@ export function FfBillingInvoiceCreate({
     }
   }
 
+  const applyExtraLines = async () => {
+    if (!previewBody) return
+    setBusy(true)
+    setError(null)
+    try {
+      const body = {
+        ...previewBody,
+        manual_lines: extraLines
+          .filter((line) => line.description.trim() || line.amount.trim())
+          .map((line) => ({ description: line.description.trim(), amount: line.amount.trim() })),
+      }
+      const result = await request('invoices-v2/preview', {
+        ...body,
+        ...(appliedFinalAmount ? { final_amount: appliedFinalAmount } : {}),
+      })
+      setPreview(result)
+      setPreviewBody(body)
+      setIdempotencyKey(randomId())
+      setExtraOpen(false)
+    } catch (reason) {
+      setError((reason as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const print = () => {
     const source = issued ?? preview
     if (!source || source.total_amount_kopecks === null) return
@@ -371,9 +395,9 @@ export function FfBillingInvoiceCreate({
 
   const shown = issued ?? preview
   const manualFilled = manualLines.some((line) => line.description.trim() && line.amount.trim())
-  const filledExtraLines = extraLines.filter(
-    (line) => line.description.trim() && line.amount.trim(),
-  )
+  const savedExtraLineCount = Array.isArray(previewBody?.manual_lines)
+    ? previewBody.manual_lines.length
+    : 0
 
   return (
     <>
@@ -384,51 +408,9 @@ export function FfBillingInvoiceCreate({
       >
         Выставить счёт
       </PrimaryAction>
-      {hasSelection ? (
-        <SecondaryAction
-          onClick={() => {
-            setError(null)
-            if (extraLines.length === 0) setExtraLines([emptyManualLine(0)])
-            setExtraOpen(true)
-          }}
-          data-testid="billing-extra-lines-open"
-        >
-          {filledExtraLines.length > 0
-            ? `Добавленные строки (${filledExtraLines.length})`
-            : 'Добавить строку'}
-        </SecondaryAction>
-      ) : null}
       {error && !preview && !manualOpen ? (
         <ErrorNotice testId="billing-issue-error">{error}</ErrorNotice>
       ) : null}
-
-      <AppDialog
-        open={extraOpen}
-        title="Строки к счёту"
-        onClose={() => setExtraOpen(false)}
-        maxWidth="lg"
-        testId="billing-invoice-extra-lines"
-        actions={
-          <ActionGroup>
-            <PrimaryAction onClick={() => setExtraOpen(false)} data-testid="billing-extra-lines-done">
-              Готово
-            </PrimaryAction>
-          </ActionGroup>
-        }
-      >
-        <Stack spacing={2}>
-          <Typography>
-            Эти строки уйдут в счёт вместе с выбранными операциями. Начислений за ними нет —
-            сумму ставите вы: короба, доставка, разовая работа.
-          </Typography>
-          <ManualLinesEditor
-            lines={extraLines}
-            onChange={setExtraLines}
-            minLines={0}
-            testIdPrefix="billing-extra"
-          />
-        </Stack>
-      </AppDialog>
 
       <AppDialog
         open={manualOpen}
@@ -529,6 +511,23 @@ export function FfBillingInvoiceCreate({
               testId="billing-invoice-preview-lines"
               empty={{ title: 'Строк нет' }}
             />
+            {!issued && preview?.creation_mode === 'selected_operations' ? (
+              <SecondaryAction
+                onClick={() => {
+                  setError(null)
+                  const savedLines = (previewBody?.manual_lines ?? []) as { description: string; amount: string }[]
+                  setExtraLines(savedLines.length > 0
+                    ? savedLines.map((line, index) => ({ key: `line-${index}`, ...line }))
+                    : [emptyManualLine(0)])
+                  setExtraOpen(true)
+                }}
+                data-testid="billing-extra-lines-open"
+              >
+                {savedExtraLineCount > 0
+                  ? `Добавленные строки (${savedExtraLineCount})`
+                  : 'Добавить строку'}
+              </SecondaryAction>
+            ) : null}
             <Typography sx={{ textAlign: 'right', fontWeight: 'bold' }}>
               Итого: {shown.total_amount_kopecks === null ? 'Нет ставки — сумма не рассчитана' : formatMoney(shown.total_amount_kopecks)}
             </Typography>
@@ -543,6 +542,35 @@ export function FfBillingInvoiceCreate({
           </Stack>
         ) : null}
       </AppDialog>
+      <AppDialog
+        open={extraOpen}
+        title="Строки к счёту"
+        onClose={() => { if (!busy) setExtraOpen(false) }}
+        maxWidth="lg"
+        testId="billing-invoice-extra-lines"
+        actions={
+          <ActionGroup>
+            <PrimaryAction onClick={() => void applyExtraLines()} disabledReason={busy ? 'Счёт пересчитывается' : undefined} data-testid="billing-extra-lines-done">
+              Применить
+            </PrimaryAction>
+          </ActionGroup>
+        }
+      >
+        <Stack spacing={2}>
+          <Typography>
+            Эти строки уйдут в счёт вместе с выбранными операциями. Начислений за ними нет —
+            сумму ставите вы: короба, доставка, разовая работа.
+          </Typography>
+          {error ? <ErrorNotice testId="billing-extra-error">{error}</ErrorNotice> : null}
+          <ManualLinesEditor
+            lines={extraLines}
+            onChange={setExtraLines}
+            minLines={0}
+            testIdPrefix="billing-extra"
+          />
+        </Stack>
+      </AppDialog>
+
     </>
   )
 }
