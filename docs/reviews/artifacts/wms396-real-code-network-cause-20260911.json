@@ -1,0 +1,98 @@
+{
+  "checked_at_utc": "2026-09-11T10:48:58.158234+00:00",
+  "runtime": "local checkout 1e6fab89; unchanged application handlers; real httpx transport bound to Wi-Fi source address",
+  "isolation": "temporary SQLite database, in-process ASGI HTTP requests, normal FastAPI BackgroundTasks fallback (not production Redis/Celery transport)",
+  "real_code_origin": {
+    "origin": "historical accepted WB order 5693762855; original successful check 2026-09-08",
+    "code_sha256": "f721127eeafd043e1228dc4566fbdb2b05ffd3de1ae4b371e4b43e049f1197f8",
+    "length": 129,
+    "gs_count": 2
+  },
+  "production_documents_and_stock_changed": false,
+  "network_adjustment": "process-local HTTPX source address 192.168.3.4; global routes and VPN unchanged",
+  "external_calls": 1,
+  "trace": [
+    {
+      "phase": "begin_receiving",
+      "http_status": 200
+    },
+    {
+      "phase": "product_scan",
+      "http_status": 200,
+      "actual_qty": 1
+    },
+    {
+      "phase": "marking_scan",
+      "http_status": 200,
+      "cz_status": "pending",
+      "full_code_preserved": true
+    },
+    {
+      "phase": "outbound_real_http",
+      "url": "https://mobile.api.crpt.ru/mobile/check",
+      "full_code_sha256": "f721127eeafd043e1228dc4566fbdb2b05ffd3de1ae4b371e4b43e049f1197f8",
+      "length": 129,
+      "gs_count": 2,
+      "http_status": 200,
+      "status": "introduced",
+      "outer_status": "INTRODUCED",
+      "response_empty": false
+    },
+    {
+      "phase": "complete_receiving_response",
+      "http_status": 200,
+      "document_status": "sorting"
+    },
+    {
+      "phase": "persisted_result_and_api_reread",
+      "http_status": 200,
+      "checking": false,
+      "cz_status": "introduced",
+      "reason": "Код введён в оборот",
+      "outer_status": "INTRODUCED",
+      "job_status": "done",
+      "warehouse_code_status": "applied",
+      "isolated_stock_movements": 1
+    }
+  ],
+  "comparison": {
+    "same_request": {
+      "method": "POST",
+      "url": "https://mobile.api.crpt.ru/mobile/check",
+      "authorization": false,
+      "content_type": "application/json",
+      "code_sha256": "f721127eeafd043e1228dc4566fbdb2b05ffd3de1ae4b371e4b43e049f1197f8"
+    },
+    "vpn_egress": {
+      "ip": "194.87.96.144",
+      "rdap_country": "CH",
+      "rdap_network": "ZUR-CH-GLBBTLS",
+      "http_status": 451,
+      "body_bytes": 0,
+      "remote_ip": "91.230.251.205"
+    },
+    "direct_wifi_egress": {
+      "ip": "5.35.115.76",
+      "rdap_country": "RU",
+      "rdap_network": "RU-LEALTA-20120511",
+      "http_status": 200,
+      "remote_ip": "91.230.251.205",
+      "outerStatus": "INTRODUCED",
+      "checkResult": true,
+      "verified": true
+    },
+    "production_egress": "194.87.96.144",
+    "finding": "Response depends on actual outbound network. Local VPN and production share Swiss source IP. Same full real code and unauthenticated method work through direct Russian connection. Provider precise policy not disclosed; this comparison does not establish a rule for all foreign IPs."
+  },
+  "standalone_application_client": {
+    "status": "introduced",
+    "reason": "Код введён в оборот",
+    "outer_status": "INTRODUCED",
+    "checked_at": "2026-09-11T10:48:26.483977+00:00",
+    "provider": "mobile_check",
+    "http_status": 200,
+    "verified": true
+  },
+  "production_fix_deployed": false,
+  "next_step": "Provide stable supported Russian outbound connectivity for CZ checks, independent of laptop; validate same existing job from production. No change to method, no token requirement established."
+}
