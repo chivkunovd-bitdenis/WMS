@@ -1,0 +1,19 @@
+{
+  "task": "WMS-026",
+  "date": "2026-09-11",
+  "source_base": "675e69c7c97ac716a723249392499cdec8d275fc",
+  "verification": {
+    "typecheck": "passed",
+    "frontend_build": "passed",
+    "browser": "real FfBillingInvoiceCreate in WMS ThemeProvider, local mocked invoice API; not a deployed full-page or backend integration verification",
+    "steps": [
+      "Initial selected-order toolbar: only Выставить счёт, no Добавить строку",
+      "Clicked Выставить счёт: Добавить строку visible inside Предпросмотр счёта",
+      "Added Короба 5 шт / 500: preview showed FBS100 + manual500 =600",
+      "Applied manual final700, then edited extra line to400: preview preserved final700 and adjusted difference200",
+      "Clicked local fixture Сохранить: POST invoices-v2 carried same selected_sources, manual_lines amount400 and final_amount700",
+      "After fixture save no add-row action in issued invoice; closing returns to toolbar without extra button"
+    ]
+  },
+  "external_side_effects": false
+}
