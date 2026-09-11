@@ -125,6 +125,7 @@ function injectPreviewSeparators(html: string): string {
 
 export type FbsPreviewOrder = {
   requiresHonestSign: boolean
+  marketplace?: 'wb' | 'ozon'
   productLabel: ProductThermalLabelData | null
   /** Ozon keeps every posting position instead of a single compatibility product. */
   productLabels?: Array<{ productLabel: ProductThermalLabelData; copies: number }>
@@ -239,6 +240,7 @@ export function MarkingLabelPreview(props: Props) {
     ? JSON.stringify(
         fbsOrdersCapped.map((order) => ({
           h: order.requiresHonestSign,
+          m: order.marketplace ?? 'wb',
           b: order.productLabel?.barcode ?? '',
           n: order.productLabel?.product_name ?? '',
           p: order.productLabels?.map((item) => ({
@@ -256,9 +258,12 @@ export function MarkingLabelPreview(props: Props) {
     ? fbsOrdersCapped.reduce((sum, order) => {
         const orderLabel = order.productLabel ?? productLabel
         const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+        const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
         const isHonestTape = props.variant === 'tape' && order.requiresHonestSign
         const labelSections = isHonestTape
-          ? blocksPerUnit
+          ? isOzonPositionPreview
+            ? orderLabels.reduce((total, item) => total + Math.max(1, item.copies) * blocksPerUnit, 0)
+            : blocksPerUnit
           : orderLabels.reduce(
               (labelTotal, item) => item.productLabel.barcode?.trim()
                 ? labelTotal + Math.max(1, item.copies) * nonHonestLabelCopies
@@ -293,11 +298,19 @@ export function MarkingLabelPreview(props: Props) {
             }
             const orderLabel = order.productLabel ?? productLabel
             if (props.variant === 'tape' && order.requiresHonestSign) {
-              const units: MarkingTapeUnitInput[] = [
-                { cis: previewCis(previewIndex), productLabel: orderLabel },
-              ]
-              previewIndex += 1
-              orderSections.push(...(await buildMarkingTapeSections(units, props.layout, orderLabel)))
+              const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
+              const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+              const units: MarkingTapeUnitInput[] = isOzonPositionPreview
+                ? orderLabels.flatMap((item) => Array.from(
+                  { length: Math.max(1, item.copies) },
+                  () => ({ cis: previewCis(previewIndex++), productLabel: item.productLabel }),
+                ))
+                : [{ cis: previewCis(previewIndex++), productLabel: orderLabel }]
+              orderSections.push(...(await buildMarkingTapeSections(
+                units,
+                props.layout,
+                isOzonPositionPreview ? null : orderLabel,
+              )))
             } else {
               const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
               for (const item of orderLabels) {
