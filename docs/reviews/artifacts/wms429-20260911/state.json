@@ -1,6 +1,6 @@
 {
-  "updated_at_utc": "2026-09-11T00:05:08.998197+00:00",
-  "phase": "FINAL_CI_THEN_DEPLOY",
+  "updated_at_utc": "2026-09-11T00:28:29.678794+00:00",
+  "phase": "PRODUCTION_RELEASED_EXTERNAL_INPUTS_PENDING",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
   "preserved_refs": [
@@ -29,7 +29,8 @@
         425,
         427,
         431
-      ]
+      ],
+      "latest_status": "Development finished; no active writer or reviewer"
     },
     "integrations": {
       "native_task": "/root/integrations_0911",
@@ -39,7 +40,8 @@
       "scope_ids": [
         280,
         396
-      ]
+      ],
+      "latest_status": "Development finished; no active writer or reviewer"
     },
     "claude_lanes": {
       "native_task": "/root/claude_lanes_0911",
@@ -58,7 +60,7 @@
         397,
         399
       ],
-      "latest_status": "One Opus5 xhigh review with same-session completion finished; final fixes integrated; Astra pending final SHA"
+      "latest_status": "Development finished; no active writer or reviewer"
     }
   },
   "external_inputs": {
@@ -81,9 +83,9 @@
     "manifest_published": true,
     "source_record_sha": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
     "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
-    "verified_at_utc": "2026-09-10T22:24:17.775852+00:00"
+    "verified_at_utc": "2026-09-11T00:28:29.678794+00:00"
   },
-  "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
+  "production_observed_sha": "fb274e0da3429e679d9d71f93d588423ac20c7b9",
   "claude_quota": {
     "checked_at_utc": "2026-09-11T00:05:08.998197+00:00",
     "weekly_used_percent": 9,
@@ -102,10 +104,12 @@
     "services": "API/web/worker/beat running, db/redishealthy"
   },
   "chat": {
-    "sha": "8cd7ca1f59a72228a21c3bf201ee72511366aa00",
+    "sha": "8b474e98581d0b2d39082b9176ba71613ef6bac9",
     "branch": "codex/wms-chat-20260911",
     "pushed": true,
-    "deploy": false
+    "deploy": false,
+    "source_sha": "2a7a354d04bf685f77af3b41fab5ff9d58efc279",
+    "checks": "Final source merged main fb274; typecheck/build PASS; not deployed"
   },
   "integrated_commits": {
     "ozon": [
@@ -131,12 +135,14 @@
     "targeted_backend": "Initial151passed5skipped3failed; corrected3 nodes rerun3passed. No full suite.",
     "static": "Seven Ozon/storage files ruff passed; Ozon mypy passed; storage variable fixed and mypy+ruff rerun passed.",
     "storage_ui": "Actual seller expansion6 liter-days900kopecks; categoryA4/600; Sep09+categoryA2/400. Periodrate150/current200 verified.",
-    "ozon_ui": "Actual Ozon worklist identities/units, card reread without500, picking Ozon barcodes vs distinct WB fixtures, no navigation gates, final Ozon confirmation cancelled. Print multi-position button fix pending final click.",
+    "ozon_ui": "Local actual worklist/card/picking/packing/boxes/confirmation checked; final preview corrections source/build/test verified; production clicks blocked by Mac lock",
     "final_batch": "ruff/mypy five modified modules PASS; two targeted printing/storage regression tests PASS; final frontend typecheck/build PASS; OpenAPI regenerated",
     "browser_lock": "CUA reported Mac locked and could not unlock; user asked to unlock; post-deploy visual reread pending",
     "final_frontend_tests": "28 passed; final typecheck/build after preview fix",
     "ci_859": "2478 passed,134 skipped,1 xfailed,3 failed; all3 corrected and targeted reruns passed",
-    "ozon_generator": "Exact generated-module equality passed; runtime schema unchanged"
+    "ozon_generator": "Exact generated-module equality passed; runtime schema unchanged",
+    "final_ci": "34544983805 SUCCESS:2481 passed,134 skipped,1 xfailed",
+    "postdeploy": "438 API runtime files match source; public FF/seller HTML and99 referenced assets match runtime; health ok; api/web/worker/beat zero restarts"
   },
   "review": {
     "opus_source_sha": "f9bceb5ab2711c2fca1a40f57c6ebddc3e896a9e",
@@ -155,5 +161,9 @@
     "astra_fixes": "6185e3b7: selected barcode per position; no shared size; labels for positions not covered by KIZ",
     "astra_remaining_preview_fixed": "6c3393d6 plus root empty barcode guard; root source verification; no extra review cycle",
     "all_review_processes_finished": true
-  }
+  },
+  "release_source_sha": "fb274e0da3429e679d9d71f93d588423ac20c7b9",
+  "etalon_merge_sha": "b58f9cd81f3ff8457b8b1754ed8daf608f8d2aab",
+  "production_verification": "production-proof.json",
+  "production_database_revision": "20260911_0304"
 }
