@@ -1,0 +1,21 @@
+{
+  "verified_at_utc": "2026-09-11T09:48:15.315469+00:00",
+  "source_sha": "d65540597cb6907fcca042f5e9e578df29549f30",
+  "backend_files": {
+    "app/services/fbs_worklist_service.py": "23a2249b461a173083b8cb7d7c6e02420a3e37a98ebf8b9e0e8e751c3c3e1a44",
+    "app/services/fbs_supply_validator_service.py": "5520629ecf16b35e79be52a9c4a2b42e701fb38d6268e8f27670f4a15c671da2"
+  },
+  "public_fbs_html_matches_runtime": true,
+  "verified_public_js": {
+    "/assets/ff-DmIbMQGc.js": "7e59c4618f2c1bf7c9bd9904f960a72cfa6e018e8cc9d455531a2f1c9b9d63e6"
+  },
+  "health": {
+    "status": "ok"
+  },
+  "api_deployment": "79ea420d-e988-47a8-bd1d-45555d32c254",
+  "web_deployment": "006525b1-8a6f-4491-bff0-adfd1bfc32d6",
+  "deployment_statuses": {
+    "api": "SUCCESS",
+    "web": "SUCCESS"
+  }
+}
