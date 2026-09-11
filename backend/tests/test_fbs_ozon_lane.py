@@ -1591,6 +1591,7 @@ async def test_ozon_supply_creation_never_calls_wb(
         packed=False,
     )
     summary = SupplyPreflightSummary(
+        marketplace="ozon",
         seller_id=seller.id,
         seller_name=seller.name,
         wb_warehouse_id=11,
@@ -1599,6 +1600,7 @@ async def test_ozon_supply_creation_never_calls_wb(
         wms_warehouse_name=warehouse.name,
         buyer_type="individual",
         cargo_type="unknown",
+        delivery_route=None,
         orders_count=1,
         required_marking_count=0,
         pvz_allowed_count=1,

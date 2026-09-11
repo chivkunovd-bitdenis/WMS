@@ -1,0 +1,9 @@
+{
+  "versionCode": 11,
+  "versionName": "0.1.10-mobile-recovery",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+  "sha256": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
+  "sizeBytes": 45298277,
+  "minSdk": 24,
+  "notes": "WMS-401: возврат к сохранённым сотрудникам и PIN, восстановление рабочего экрана после паузы, исправление сортировки времени FBS."
+}

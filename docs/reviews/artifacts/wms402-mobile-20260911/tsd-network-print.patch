@@ -1,0 +1,279 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+index ccb8697c..51d8d599 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+@@ -41,6 +41,10 @@ interface FbsApi {
+     suspend fun printAssets(@Path("supplyId") supplyId: String, @Body body: PrintBatchBody): Response<FbsPrintBatch>
+     @Streaming
+     @GET suspend fun asset(@Url path: String): Response<ResponseBody>
++    // WMS-402: готовый лист этикеток уходит в очередь печати WMS. Склад сервер
++    // берёт у поставки, поэтому ТСД шлёт supply_id, а не UUID склада.
++    @POST("operations/fbs-print-jobs/document")
++    suspend fun queuePrintDocument(@Body body: FbsPrintDocumentBody): Response<FbsPrintJob>
+ 
+     @DELETE("operations/fbs-supplies/{supplyId}/boxes/{boxId}/orders/{orderId}")
+     suspend fun removeBoxOrder(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String, @Path("orderId") orderId: String, @Query("order_product_id") positionId: String? = null): Response<FbsWorkspace>
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index 1442fba7..7da6714a 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -348,6 +348,21 @@ data class FbsDeliveryCheck(
+     val failed: Int = 0,
+     @SerialName("order_errors") val orderErrors: List<FbsPrintOrderError> = emptyList(),
+ )
++// WMS-402: job_id ТСД задаёт один раз на явное нажатие печати. Повтор того же
++// запроса возвращает то же задание, а не печатает второй лист.
++@Serializable data class FbsPrintDocumentBody(
++    @SerialName("job_id") val jobId: String,
++    @SerialName("supply_id") val supplyId: String,
++    @SerialName("document_base64") val documentBase64: String,
++)
++// status_text приходит с сервера готовой фразой: «Передано в очередь принтера»
++// означает приём очередью ОС, а не вышедшую бумагу.
++@Serializable data class FbsPrintJob(
++    val id: String,
++    val status: String,
++    @SerialName("status_text") val statusText: String,
++    @SerialName("queue_receipt") val queueReceipt: String? = null,
++)
+ 
+ fun FbsOrder.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: id}" else "WB $wbOrderId"
+ fun KizLookup.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: orderId}" else "WB $wbOrderId"
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+index 24ab944e..9ae167f0 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+@@ -2,8 +2,8 @@ package ru.wms.tsd.features.fbs
+ 
+ import android.content.Context
+ import android.print.PrintAttributes
+-import android.print.PrintManager
+ import android.print.PrintDocumentAdapter
++import android.print.PrintDocumentInfo
+ import android.print.PageRange
+ import android.os.Bundle
+ import android.os.CancellationSignal
+@@ -11,56 +11,111 @@ import android.os.ParcelFileDescriptor
+ import android.webkit.WebView
+ import android.webkit.WebViewClient
+ import android.util.Base64
++import java.io.File
++import kotlinx.coroutines.CancellableContinuation
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.suspendCancellableCoroutine
++import kotlinx.coroutines.withContext
+ import kotlinx.serialization.encodeToString
+ import kotlinx.serialization.json.Json
+ 
+-private val activePrintViews = mutableSetOf<WebView>()
++private val LABELS_MEDIA_SIZE = PrintAttributes.MediaSize("WMS_58_40", "58 × 40 мм", 2283, 1575)
+ 
+-/** Local markup only; the system print dialog requires the operator to select a printer. */
+-fun printLabels(context: Context, html: String) {
++/**
++ * WMS-402: та же самая разметка этикеток, но выведенная в PDF-файл.
++ *
++ * Системный диалог печати здесь не открывается: лист уходит в очередь печати
++ * WMS, а на бумагу его выводит складской агент на принтере склада. Разметка,
++ * размер листа и проверка «штрихкод не нарисовался» остались прежними.
++ */
++suspend fun renderLabelsPdf(context: Context, html: String): ByteArray = withContext(Dispatchers.Main) {
+     val web = WebView(context)
+-    activePrintViews += web
+     web.settings.javaScriptEnabled = true
+     web.settings.blockNetworkLoads = true
+     web.settings.allowContentAccess = false
+     web.settings.allowFileAccess = false
+-    web.webViewClient = object : WebViewClient() {
+-        override fun onPageFinished(view: WebView, url: String) {
+-            view.evaluateJavascript("document.body.dataset.failed === 'true'") { failed ->
+-                if (failed == "true") {
+-                    android.widget.Toast.makeText(context, "Не удалось сформировать штрихкод. Печать отменена.", android.widget.Toast.LENGTH_LONG).show()
+-                    activePrintViews -= view
+-                    view.destroy()
+-                    return@evaluateJavascript
+-                }
+-            try {
+-            val delegate = view.createPrintDocumentAdapter("Этикетки FBS")
+-            val adapter = object : PrintDocumentAdapter() {
+-                override fun onStart() = delegate.onStart()
+-                override fun onLayout(old: PrintAttributes?, new: PrintAttributes?, cancellation: CancellationSignal?, callback: LayoutResultCallback?, extras: Bundle?) = delegate.onLayout(old, new, cancellation, callback, extras)
+-                override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor?, cancellation: CancellationSignal?, callback: WriteResultCallback?) = delegate.onWrite(pages, destination, cancellation, callback)
+-                override fun onFinish() {
+-                    try { delegate.onFinish() } finally {
+-                        activePrintViews -= view
+-                        view.destroy()
++    val file = File.createTempFile("fbs-labels-", ".pdf", context.cacheDir)
++    try {
++        suspendCancellableCoroutine { continuation ->
++            web.webViewClient = object : WebViewClient() {
++                override fun onPageFinished(view: WebView, url: String) {
++                    view.evaluateJavascript("document.body.dataset.failed === 'true'") { failed ->
++                        if (!continuation.isActive) return@evaluateJavascript
++                        if (failed == "true") continuation.resumeWith(Result.failure(
++                            IllegalStateException("Не удалось сформировать штрихкод. Печать отменена.")))
++                        else writeLabelsPdf(view, file, continuation)
+                     }
+                 }
+             }
+-            val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+-            manager.print("Этикетки FBS", adapter,
+-                PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize("WMS_58_40", "58 × 40 мм", 2283, 1575))
+-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
+-            } catch (_: Exception) {
+-                activePrintViews -= view
+-                view.destroy()
+-                android.widget.Toast.makeText(context, "Не удалось открыть печать. Повторите выбор принтера.", android.widget.Toast.LENGTH_LONG).show()
+-            }
+-            }
++            web.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+         }
++    } finally {
++        file.delete()
++        web.destroy()
+     }
+-    web.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+ }
+ 
++private fun writeLabelsPdf(view: WebView, file: File, continuation: CancellableContinuation<ByteArray>) {
++    val adapter = view.createPrintDocumentAdapter("Этикетки FBS")
++    // Разрешение и цвет задаём сами: адаптер вызывается напрямую, без системного
++    // диалога, и неполные PrintAttributes он не принимает.
++    val attributes = PrintAttributes.Builder()
++        .setMediaSize(LABELS_MEDIA_SIZE)
++        .setResolution(PrintAttributes.Resolution("wms-58-40", "WMS", 300, 300))
++        .setColorMode(PrintAttributes.COLOR_MODE_MONOCHROME)
++        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
++        .build()
++    adapter.onStart()
++    adapter.onLayout(null, attributes, CancellationSignal(), object : PrintDocumentAdapter.LayoutResultCallback() {
++        override fun onLayoutFailed(error: CharSequence?) {
++            adapter.onFinish()
++            continuation.failIfActive(error, "Не удалось разметить этикетки")
++        }
++
++        override fun onLayoutFinished(info: PrintDocumentInfo?, changed: Boolean) {
++            val descriptor = ParcelFileDescriptor.open(
++                file,
++                ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_TRUNCATE,
++            )
++            adapter.onWrite(arrayOf(PageRange.ALL_PAGES), descriptor, CancellationSignal(), object : PrintDocumentAdapter.WriteResultCallback() {
++                override fun onWriteFailed(error: CharSequence?) {
++                    closeWrite(adapter, descriptor)
++                    continuation.failIfActive(error, "Не удалось собрать файл этикеток")
++                }
++
++                override fun onWriteCancelled() {
++                    closeWrite(adapter, descriptor)
++                    continuation.failIfActive(null, "Сбор файла этикеток отменён")
++                }
++
++                override fun onWriteFinished(pages: Array<out PageRange>?) {
++                    closeWrite(adapter, descriptor)
++                    if (!continuation.isActive) return
++                    continuation.resumeWith(runCatching {
++                        val bytes = file.readBytes()
++                        require(bytes.isNotEmpty()) { "Файл этикеток пуст. Печать не начата." }
++                        require(bytes.size <= MAX_LABEL_FILE_BYTES) { LABEL_TOO_LARGE }
++                        bytes
++                    })
++                }
++            })
++        }
++    }, Bundle())
++}
++
++private fun closeWrite(adapter: PrintDocumentAdapter, descriptor: ParcelFileDescriptor) {
++    runCatching { descriptor.close() }
++    runCatching { adapter.onFinish() }
++}
++
++private fun CancellableContinuation<ByteArray>.failIfActive(error: CharSequence?, fallback: String) {
++    if (isActive) resumeWith(Result.failure(IllegalStateException(error?.toString()?.ifBlank { null } ?: fallback)))
++}
++
++/** Тот же PDF, но в base64: в этом виде лист уезжает в очередь печати WMS. */
++suspend fun labelsPdfBase64(context: Context, html: String): String =
++    Base64.encodeToString(renderLabelsPdf(context, html), Base64.NO_WRAP)
++
+ fun escapedLabel(value: String): String = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+ fun inlineImage(bytes: ByteArray, contentType: String): String {
+     require(contentType.substringBefore(';') in setOf("image/png", "image/jpeg", "image/webp")) { "Этикетка не является изображением" }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 1476576f..228e6068 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -193,11 +193,14 @@ internal fun displayTime(value: String): String = runCatching {
+     var editing by remember { mutableStateOf<Triple<FbsBox, String, Int>?>(null) }
+     LifecycleResumeEffect(supplyId) { vm.loadSupply(supplyId); onPauseOrDispose {} }
+     LaunchedEffect(mode) { AppGraph.scannerManager.scans.collect { vm.scan(mode, it.barcode) } }
+-    LaunchedEffect(state.printDocument) { state.printDocument?.let { printLabels(context, it); vm.clearPrint() } }
++    // WMS-402: собранный лист уходит в очередь печати WMS, а не в локальный диалог
++    // печати. Путь один для всех кнопок печати — QR, товарный ШК и ЧЗ.
++    LaunchedEffect(state.printJobId) { if (state.printJobId != null) vm.sendPrintDocumentToWarehouse { labelsPdfBase64(context, it) } }
+     val workspace = state.workspace
+     ScanScaffold(title = when (mode) { "pick" -> "Подбор FBS"; "pack" -> "Упаковка FBS"; else -> "Короба FBS" }, flash = state.flash, onExit = onBack) {
+         Column(Modifier.fillMaxSize()) {
+             ErrorPanel(state, vm)
++            state.printStatus?.let { Text(it, modifier = Modifier.padding(horizontal = 10.dp)) }
+             if (mode == "pick") Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                 Text(state.source?.let { it.containerCode ?: it.locationCode }.let { if (it == null) "Сканируйте источник или товар" else "Источник: $it" }, modifier = Modifier.weight(1f))
+                 TextButton(onClick = vm::clearSource, enabled = !state.busy) { Text("Сменить") }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index ce11620d..c6a9d30f 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -81,6 +81,10 @@ data class FbsState(
+     val pendingKiz: String? = null,
+     val kizResult: String? = null,
+     val printDocument: String? = null,
++    // WMS-402: номер задания печати задаётся один раз на нажатие кнопки. Тот же
++    // номер при повторе запроса возвращает то же задание, а не второй лист.
++    val printJobId: String? = null,
++    val printStatus: String? = null,
+     val deliveryConfirmationOpen: Boolean = false,
+     val deliveryPreflight: FbsDeliveryPreflight? = null,
+     val pendingDelivery: DeliverBody? = null,
+@@ -567,7 +571,7 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+                 for (code in entry?.codes.orEmpty()) repeat(kizCopies) { pages += labelPage(order.product.name, code, dataMatrix = true) }
+             }
+             require(pages.isNotEmpty()) { "Выберите хотя бы один вид этикетки" }
+-            mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages))
++            mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages), printJobId = UUID.randomUUID().toString(), printStatus = null)
+         }
+     }
+     fun printBoxes(encoder: String, boxIds: List<String>) = launch {
+@@ -577,9 +581,31 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+             assetImages(asset).map { labelPage("Короб №${box.boxNumber}", image = it) }
+         }
+         require(pages.isNotEmpty()) { "Нет коробов для печати" }
+-        mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages))
++        mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages), printJobId = UUID.randomUUID().toString(), printStatus = null)
++    }
++
++    /**
++     * WMS-402: единственный путь печати с ТСД — лист уезжает в очередь печати WMS,
++     * а на бумагу его выводит складской агент. Локального диалога печати больше нет,
++     * поэтому здесь одинаково проходят QR, товарный ШК и ЧЗ: разметка та же самая,
++     * меняется только адресат. render превращает готовый HTML в base64 PDF —
++     * вью-модель остаётся без зависимостей от Android и проверяется юнит-тестами.
++     */
++    fun sendPrintDocumentToWarehouse(render: suspend (String) -> String) {
++        val jobId = state.value.printJobId ?: return
++        viewModelScope.launch {
++            // Лист появляется в стейте раньше, чем подготовка отпускает busy,
++            // поэтому ждём её здесь: иначе задание молча не отправилось бы.
++            state.first { !it.busy }
++            if (state.value.printJobId != jobId) return@launch
++            perform {
++                val supplyId = state.value.workspace?.supply?.id ?: error("Поставка не открыта")
++                val html = state.value.printDocument ?: error("Лист этикеток не собран")
++                val job = required { api.fbs().queuePrintDocument(FbsPrintDocumentBody(jobId, supplyId, render(html))) }
++                mutable.value = state.value.copy(printDocument = null, printJobId = null, printStatus = job.statusText)
++            }
++        }
+     }
+-    fun clearPrint() { mutable.value = state.value.copy(printDocument = null) }
+ 
+     class Factory(private val api: ApiProvider, private val decodePdf: (ByteArray) -> List<String> = { error("PDF renderer unavailable") }) : ViewModelProvider.Factory {
+         @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = FbsViewModel(api, decodePdf) as T

@@ -57,6 +57,10 @@ class FbsOrderTapePrintedCode:
     id: uuid.UUID
     cis_code: str
     has_label_artifact: bool
+    # Ozon associates each KIZ with one posting position.  The tape response
+    # carries that existing association so the client never labels it as the
+    # first product of a multi-position posting.
+    order_product_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -169,9 +173,14 @@ async def print_fbs_order_tape(
             order.id: order
             for order in (
                 await session.execute(
-                    select(FbsOrder).where(
+                    select(FbsOrder)
+                    .where(
                         FbsOrder.tenant_id == tenant_id,
                         FbsOrder.id.in_(missing_ids),
+                    )
+                    .options(
+                        selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code),
+                        selectinload(FbsOrder.product_positions),
                     )
                 )
             ).scalars()
@@ -202,6 +211,7 @@ async def print_fbs_order_tape(
     if (
         prints_honest_sign and not reprint and not allow_partial
         and supply.honest_sign_skipped_at is None
+        and supply.marketplace == "wb"
     ):
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
         if preflight_shortage > 0:
@@ -234,6 +244,70 @@ async def print_fbs_order_tape(
                     wb_order_id=int(order.wb_order_id),
                     code="order_qr_missing",
                     message=f"Этикетка заказа {provider_name} не получена.",
+                )
+            )
+            continue
+        if supply.marketplace == "ozon":
+            # The Ozon scanner has already resolved every KIZ to a posting
+            # position and committed it.  A tape is only a representation of
+            # those facts: it must neither allocate another pool code nor
+            # collapse a multi-position posting to its newest code.
+            ozon_markings = _active_ozon_sgtin_markings(order)
+            requires_honest_sign = _order_requires_sgtin(order) or bool(ozon_markings)
+            if not requires_honest_sign:
+                result_orders.append(
+                    FbsOrderTapeOrder(
+                        order_id=order.id,
+                        wb_order_id=int(order.wb_order_id),
+                        requires_honest_sign=False,
+                        qr_asset_id=qr_asset_id,
+                    )
+                )
+                continue
+            if not prints_honest_sign or not ozon_markings:
+                result_orders.append(
+                    FbsOrderTapeOrder(
+                        order_id=order.id,
+                        wb_order_id=int(order.wb_order_id),
+                        requires_honest_sign=True,
+                        qr_asset_id=qr_asset_id,
+                    )
+                )
+                continue
+            if reprint:
+                for ozon_marking in ozon_markings:
+                    code = ozon_marking.marking_code
+                    assert code is not None
+                    await mc_svc.record_event(
+                        session,
+                        code=code,
+                        event_type=EVENT_REPRINTED,
+                        actor=actor_user_id,
+                        document_number=supply.document_number,
+                        copies=mc_svc.cz_copies_from_layout(print_layout),
+                        source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+                    )
+            result_orders.append(
+                FbsOrderTapeOrder(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    requires_honest_sign=True,
+                    qr_asset_id=qr_asset_id,
+                    codes=[
+                        ozon_marking.marking_code.cis_code
+                        for ozon_marking in ozon_markings
+                        if ozon_marking.marking_code is not None
+                    ],
+                    printed_codes=[
+                        FbsOrderTapePrintedCode(
+                            id=ozon_marking.marking_code.id,
+                            cis_code=ozon_marking.marking_code.cis_code,
+                            has_label_artifact=bool(ozon_marking.marking_code.label_artifact_pdf),
+                            order_product_id=ozon_marking.order_product_id,
+                        )
+                        for ozon_marking in ozon_markings
+                        if ozon_marking.marking_code is not None
+                    ],
                 )
             )
             continue
@@ -299,6 +373,7 @@ async def print_fbs_order_tape(
                     printed_codes=[FbsOrderTapePrintedCode(
                         id=code.id, cis_code=code.cis_code,
                         has_label_artifact=bool(code.label_artifact_pdf),
+                        order_product_id=existing.order_product_id,
                     )],
                 ))
                 continue
@@ -344,10 +419,9 @@ async def print_fbs_order_tape(
         shortage_total += printed.shortage or 0
         if (printed.shortage or 0) > 0 and not allow_partial:
             continue
-        if printed.codes:
-            marking = _existing_sgtin_marking(order)
-            if marking is not None:
-                bindings_to_send[order.id] = marking.id
+        marking = _existing_sgtin_marking(order)
+        if printed.codes and marking is not None:
+            bindings_to_send[order.id] = marking.id
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -360,6 +434,7 @@ async def print_fbs_order_tape(
                         id=row.id,
                         cis_code=row.cis_code,
                         has_label_artifact=row.has_label_artifact,
+                        order_product_id=marking.order_product_id if marking is not None else None,
                     )
                     for row in printed.printed_codes
                 ],
@@ -381,11 +456,15 @@ async def print_fbs_order_tape(
     await session.commit()
     failed_ids: set[uuid.UUID] = set()
     for order_id, marking_id in bindings_to_send.items():
-        order = await session.scalar(select(FbsOrder).where(
-            FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id,
-        ).options(
-            selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code),
-        ).with_for_update().execution_options(populate_existing=True))
+        order = await session.scalar(
+            select(FbsOrder)
+            .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+            .options(
+                selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if order is None:
             continue
         try:
@@ -495,6 +574,7 @@ async def _load_supply(
             selectinload(FbsSupply.orders)
             .selectinload(FbsOrder.markings)
             .selectinload(FbsOrderMarking.marking_code),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
         )
     )
     return (await session.execute(stmt)).scalar_one_or_none()
@@ -636,6 +716,31 @@ async def _print_or_reprint_order_code(
 
 def _existing_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
     return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
+
+
+def _active_ozon_sgtin_markings(order: FbsOrder) -> list[FbsOrderMarking]:
+    """Return every printable Ozon KIZ in the posting's position order."""
+    position_index = {
+        position.id: position.position_index for position in order.product_positions
+    }
+    markings = [
+        marking
+        for marking in order.markings
+        if marking.kind == MARKING_KIND_SGTIN
+        and marking.meta_status != "rejected"
+        and marking.order_product_id in position_index
+        and marking.marking_code is not None
+    ]
+    return sorted(
+        markings,
+        key=lambda marking: (
+            position_index[marking.order_product_id]
+            if marking.order_product_id is not None
+            else -1,
+            str(getattr(marking, "created_at", "")),
+            str(marking.id),
+        ),
+    )
 
 
 def _order_requires_sgtin(order: FbsOrder) -> bool:

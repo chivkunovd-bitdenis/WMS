@@ -83,8 +83,16 @@ type FbsTapeAsset = {
 type FbsTapeOrderContext = {
   orderId: string
   wbOrderId: number
+  marketplace: 'wb' | 'ozon'
   requiresHonestSign: boolean
   productLabel: ProductThermalLabelData
+  /** One Ozon posting can have several products.  Keep their own labels and
+   * quantities instead of repeating the compatibility product for every unit. */
+  productLabels?: Array<{
+    positionId?: string
+    productLabel: ProductThermalLabelData
+    copies: number
+  }>
 }
 
 type FbsTapePrintOrder = {
@@ -92,7 +100,12 @@ type FbsTapePrintOrder = {
   wb_order_id: number
   requires_honest_sign: boolean
   qr_asset: FbsTapeAsset | null
-  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  printed_codes: Array<{
+    id: string
+    cis_code: string
+    has_label_artifact: boolean
+    order_product_id: string | null
+  }>
   shortage: number | null
 }
 
@@ -104,11 +117,67 @@ type FbsTapePrintResult = {
 
 type FbsTapeContext = {
   orders: FbsTapeOrderContext[]
+  /** The selected barcode belongs to this one Ozon position, never the whole posting. */
+  selectedBarcodeOrderId?: string
+  selectedBarcodePositionId?: string
   /** New codes missing per SKU; already bound codes are reused by FBS. */
   markingShortage?: number
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
+}
+
+export function withSelectedFbsTapeBarcode(
+  order: FbsTapeOrderContext,
+  tape: FbsTapeContext | undefined,
+  selectedBarcode: ProductBarcodeOption | undefined,
+): FbsTapeOrderContext {
+  if (
+    !tape
+    || order.marketplace !== 'ozon'
+    || selectedBarcode?.marketplace !== 'ozon'
+    || tape.selectedBarcodeOrderId !== order.orderId
+    || !tape.selectedBarcodePositionId
+  ) {
+    return order
+  }
+  return {
+    ...order,
+    productLabels: order.productLabels?.map((item) =>
+      item.positionId === tape.selectedBarcodePositionId
+        ? { ...item, productLabel: { ...item.productLabel, barcode: selectedBarcode.barcode } }
+        : item,
+    ),
+  }
+}
+
+export function remainingProductLabelsAfterPrintedCodes(
+  order: FbsTapeOrderContext,
+  printedCodes: FbsTapePrintOrder['printed_codes'],
+) {
+  if (order.marketplace !== 'ozon' || !order.productLabels) return []
+  const printedByPosition = new Map<string, number>()
+  for (const code of printedCodes) {
+    if (!code.order_product_id) continue
+    printedByPosition.set(
+      code.order_product_id,
+      (printedByPosition.get(code.order_product_id) ?? 0) + 1,
+    )
+  }
+  return order.productLabels.flatMap((item) => {
+    const printed = item.positionId ? printedByPosition.get(item.positionId) ?? 0 : 0
+    const copies = Math.max(0, Math.max(1, item.copies) - printed)
+    return copies > 0 ? [{ ...item, copies }] : []
+  })
+}
+
+function productLabelForPrintedFbsCode(
+  order: FbsTapeOrderContext,
+  code: FbsTapePrintOrder['printed_codes'][number],
+): ProductThermalLabelData | null {
+  if (order.marketplace !== 'ozon') return order.productLabel
+  if (!code.order_product_id) return null
+  return order.productLabels?.find((item) => item.positionId === code.order_product_id)?.productLabel ?? null
 }
 
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
@@ -293,8 +362,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!label || barcodeOptions === undefined) return label
     return { ...label, barcode: selectedBarcode?.barcode ?? '' }
   }, [ctx?.productLabel, barcodeOptions, selectedBarcode])
-  const productBarcodeName = isOzonBarcode ? 'ШК Ozon' : 'ШК ВБ'
-
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
@@ -341,6 +408,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
+  const isOzonFbsTape = fbsTapeMode && fbsTapeOrders[0]?.marketplace === 'ozon'
+  const productBarcodeName = isOzonBarcode || isOzonFbsTape ? 'ШК Ozon' : 'ШК ВБ'
   const fbsHonestSignOrders = fbsTapeOrders.filter((order) => order.requiresHonestSign)
   /**
    * PRN-01: «Печать всего» на поставке FBS (openBulkOrderMarkingPrint) всегда
@@ -644,12 +713,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    */
   const fbsLabelCopiesPerOrder =
     Math.max(0, Math.min(999, Math.floor(Number(wbBarcodeQty) || 0))) * (printDoubleWbBarcode ? 2 : 1)
+  // У Ozon одна отправка содержит несколько позиций. Печать ниже идёт по каждой
+  // позиции и её количеству, поэтому в счётчике и предпросмотре берём тот же итог.
+  const fbsTapeProductUnits = fbsTapeOrders.reduce(
+    (total, order) => total + (order.productLabels ?? [{ copies: 1 }]).reduce(
+      (orderTotal, item) => orderTotal + Math.max(1, item.copies),
+      0,
+    ),
+    0,
+  )
+  const fbsTapeBarcodeLabels = fbsTapeProductUnits * fbsLabelCopiesPerOrder
   const qrOnlyTape = includesOrderQr && layout.units.length === 0
   /** Сколько листов реально уйдёт на принтер лентой FBS без Честного знака. */
   const fbsTapeSheets = fbsTapeMode
     ? qrOnlyTape
       ? fbsTapeOrders.length
-      : fbsTapeOrders.length * (fbsLabelCopiesPerOrder + (includesOrderQr ? 1 : 0))
+      : fbsTapeBarcodeLabels + (includesOrderQr ? fbsTapeOrders.length : 0)
     : 0
   /**
    * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
@@ -660,8 +739,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    * то же правило числа копий ШК-only этикетки на заказ без ЧЗ (fallbackLabelCopies
    * в printFbsTape). Сама печать этим не затронута.
    */
-  const fbsPreviewOrders = includesOrderQr
-    ? fbsTapeOrders.map((order) => qrOnlyTape ? { ...order, requiresHonestSign: false } : order)
+  const fbsPreviewOrders = includesOrderQr || isOzonFbsTape
+    ? fbsTapeOrders.map((order) => {
+      const withSelectedBarcode = ctx?.fbsTape
+        ? withSelectedFbsTapeBarcode(order, ctx.fbsTape, selectedBarcode)
+        : order
+      return qrOnlyTape ? { ...withSelectedBarcode, requiresHonestSign: false } : withSelectedBarcode
+    })
     : undefined
   const fbsPreviewLabelCopies =
     qrOnlyTape ? 0 : fbsHonestSignOrders.length > 0
@@ -865,6 +949,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             if (!order) {
               throw new Error('Заказ отсутствует в исходном списке печати.')
             }
+            const printOrder = withSelectedFbsTapeBarcode(order, ctx.fbsTape, selectedBarcode)
             const orderSections: string[] = []
             let qrAssetToConfirm: FbsTapeAsset | null = null
             if (ctx.fbsTape?.includeOrderQr) {
@@ -888,25 +973,46 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   cis: code.cis_code,
                   codeId: code.id,
                   hasLabelArtifact: code.has_label_artifact,
-                  productLabel: order.productLabel,
+                  productLabel: productLabelForPrintedFbsCode(printOrder, code),
                 }))
+                if (order.marketplace === 'ozon') {
+                  for (const unit of units) {
+                    const barcodeError = resolveProductTapeBarcodeError(
+                      [],
+                      unit.productLabel?.barcode,
+                      printLayout,
+                    )
+                    if (barcodeError) throw new Error(barcodeError)
+                  }
+                }
                 orderSections.push(
-                  ...(await buildMarkingTapeSections(units, printLayout, order.productLabel, {
-                    authToken: ctx.token,
-                    labelSize: size,
-                    signal: controller.signal,
-                  })),
+                  ...(await buildMarkingTapeSections(
+                    units,
+                    printLayout,
+                    printOrder.marketplace === 'ozon' ? null : printOrder.productLabel,
+                    {
+                      authToken: ctx.token,
+                      labelSize: size,
+                      signal: controller.signal,
+                    },
+                  )),
                 )
               }
-            } else if (fallbackLabelCopies > 0) {
-              orderSections.push(
-                ...buildProductLabelSections(
-                  order.productLabel,
-                  fallbackLabelCopies,
-                  size,
-                  labelOptionsFromLayout(printLayout),
-                ),
-              )
+            }
+            const fallbackLabels = printedOrder.requires_honest_sign
+              ? remainingProductLabelsAfterPrintedCodes(printOrder, printedOrder.printed_codes)
+              : printOrder.productLabels ?? [{ productLabel: printOrder.productLabel, copies: 1 }]
+            if (fallbackLabelCopies > 0) {
+              for (const item of fallbackLabels) {
+                orderSections.push(
+                  ...buildProductLabelSections(
+                    item.productLabel,
+                    Math.max(1, item.copies) * fallbackLabelCopies,
+                    size,
+                    labelOptionsFromLayout(printLayout),
+                  ),
+                )
+              }
             }
             if (orderSections.length === 0) {
               throw new Error('Для заказа не собрано ни одной этикетки.')
@@ -1455,10 +1561,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <>
                 <PrintQuantityField
                   size="small"
-                  label={fbsTapeMode ? `${productBarcodeName} на заказ` : 'Количество этикеток'}
+                  label={fbsTapeMode
+                    ? isOzonFbsTape ? `${productBarcodeName} на единицу` : `${productBarcodeName} на заказ`
+                    : 'Количество этикеток'}
                   helperText={
                     fbsTapeMode
-                      ? '0 — печатать ленту только с QR заказов'
+                      ? isOzonFbsTape
+                        ? 'Количество ШК для каждой единицы товара.'
+                        : '0 — печатать ленту только с QR заказов'
                       : undefined
                   }
                   value={wbBarcodeQty}
@@ -1895,10 +2005,15 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && !requiresHonestSign && fbsTapeMode ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {fbsTapeOrders.length} {plural(fbsTapeOrders.length, ['заказ', 'заказа', 'заказов'])} ·{' '}
-                {includesOrderQr ? `${fbsTapeOrders.length} QR + ` : ''}
-                {fbsTapeOrders.length * fbsLabelCopiesPerOrder} ШК ВБ · итого {fbsTapeSheets}{' '}
-                {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}
+                {isOzonFbsTape
+                  ? <>К печати: {fbsTapeProductUnits} {plural(fbsTapeProductUnits, ['единица', 'единицы', 'единиц'])} ·{' '}
+                    {fbsTapeBarcodeLabels} {productBarcodeName} · итого {fbsTapeSheets}{' '}
+                    {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}</>
+                  : <>К печати: {fbsTapeOrders.length} {plural(fbsTapeOrders.length, ['заказ', 'заказа', 'заказов'])} ·{' '}
+                    {includesOrderQr ? `${fbsTapeOrders.length} QR + ` : ''}
+                    {fbsTapeBarcodeLabels} {productBarcodeName} · итого {fbsTapeSheets}{' '}
+                    {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}</>}
+
               </Typography>
             ) : null}
 

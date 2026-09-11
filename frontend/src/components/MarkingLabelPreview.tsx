@@ -125,7 +125,10 @@ function injectPreviewSeparators(html: string): string {
 
 export type FbsPreviewOrder = {
   requiresHonestSign: boolean
+  marketplace?: 'wb' | 'ozon'
   productLabel: ProductThermalLabelData | null
+  /** Ozon keeps every posting position instead of a single compatibility product. */
+  productLabels?: Array<{ productLabel: ProductThermalLabelData; copies: number }>
 }
 
 type FbsOrdersPreviewProps = {
@@ -136,7 +139,7 @@ type FbsOrdersPreviewProps = {
    * повторяет тот же порядок (по заказам), а не один общий QR + один блок.
    */
   fbsOrders?: FbsPreviewOrder[]
-  /** Сколько копий ШК-only этикетки на заказ без ЧЗ — fallbackLabelCopies из printFbsTape. */
+  /** Сколько копий ШК-only этикетки на единицу товара без ЧЗ — fallbackLabelCopies из printFbsTape. */
   fbsNonHonestLabelCopies?: number
 }
 
@@ -219,10 +222,10 @@ export function MarkingLabelPreview(props: Props) {
         )
   const productLabel = props.productLabel ?? null
   const productPrintOptions = props.variant === 'product' ? props.printOptions : undefined
-  // PRN-04: показываем не больше MAX_PREVIEW_UNITS заказов — та же граница, что и
-  // раньше была у «единиц» (см. подпись под превью ниже).
+  // В FBS-превью передаётся тот же список отправлений, что и в печать. Для
+  // Ozon он нужен даже без QR: одна отправка может содержать несколько позиций.
   const fbsOrdersCapped =
-    showOrderQr && props.fbsOrders && props.fbsOrders.length > 0
+    props.fbsOrders && props.fbsOrders.length > 0
       ? props.fbsOrders.slice(0, MAX_PREVIEW_UNITS)
       : null
   const fbsOrdersTotal = props.fbsOrders?.length ?? 0
@@ -237,8 +240,14 @@ export function MarkingLabelPreview(props: Props) {
     ? JSON.stringify(
         fbsOrdersCapped.map((order) => ({
           h: order.requiresHonestSign,
+          m: order.marketplace ?? 'wb',
           b: order.productLabel?.barcode ?? '',
           n: order.productLabel?.product_name ?? '',
+          p: order.productLabels?.map((item) => ({
+            b: item.productLabel.barcode,
+            n: item.productLabel.product_name,
+            c: item.copies,
+          })),
         })),
       )
     : ''
@@ -248,13 +257,20 @@ export function MarkingLabelPreview(props: Props) {
   const sectionsCount = fbsOrdersCapped
     ? fbsOrdersCapped.reduce((sum, order) => {
         const orderLabel = order.productLabel ?? productLabel
+        const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+        const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
         const isHonestTape = props.variant === 'tape' && order.requiresHonestSign
         const labelSections = isHonestTape
-          ? blocksPerUnit
-          : orderLabel?.barcode?.trim()
-            ? nonHonestLabelCopies
-            : 0
-        return sum + 1 + labelSections
+          ? isOzonPositionPreview
+            ? orderLabels.reduce((total, item) => total + Math.max(1, item.copies) * blocksPerUnit, 0)
+            : blocksPerUnit
+          : orderLabels.reduce(
+              (labelTotal, item) => item.productLabel.barcode?.trim()
+                ? labelTotal + Math.max(1, item.copies) * nonHonestLabelCopies
+                : labelTotal,
+              0,
+            )
+        return sum + (showOrderQr ? 1 : 0) + labelSections
       }, 0)
     : shown * blocksPerUnit + (showOrderQr ? 1 : 0)
   const layoutKey = props.variant === 'product' ? 'product' : JSON.stringify(props.layout)
@@ -277,21 +293,40 @@ export function MarkingLabelPreview(props: Props) {
           const orderSections: string[] = []
           let previewIndex = 0
           for (const order of fbsOrdersCapped) {
-            orderSections.push(buildWbOrderQrLabelHtml(await renderOrderQrPreviewDataUrl()))
+            if (showOrderQr) {
+              orderSections.push(buildWbOrderQrLabelHtml(await renderOrderQrPreviewDataUrl()))
+            }
             const orderLabel = order.productLabel ?? productLabel
             if (props.variant === 'tape' && order.requiresHonestSign) {
-              const units: MarkingTapeUnitInput[] = [
-                { cis: previewCis(previewIndex), productLabel: orderLabel },
-              ]
-              previewIndex += 1
-              orderSections.push(...(await buildMarkingTapeSections(units, props.layout, orderLabel)))
+              const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
+              const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+              const units: MarkingTapeUnitInput[] = isOzonPositionPreview
+                ? orderLabels.flatMap((item) => Array.from(
+                  { length: Math.max(1, item.copies) },
+                  () => ({ cis: previewCis(previewIndex++), productLabel: item.productLabel }),
+                ))
+                : [{ cis: previewCis(previewIndex++), productLabel: orderLabel }]
+              if (
+                isOzonPositionPreview
+                && props.layout.units.some((unit) => unit.block === 'label')
+                && units.some((unit) => !unit.productLabel?.barcode?.trim())
+              ) {
+                throw new Error('У товара нет штрихкода Ozon для печати.')
+              }
+              orderSections.push(...(await buildMarkingTapeSections(
+                units,
+                props.layout,
+                isOzonPositionPreview ? null : orderLabel,
+              )))
             } else {
-              const barcode = orderLabel?.barcode?.trim()
-              if (orderLabel && barcode) {
+              const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+              for (const item of orderLabels) {
+                const barcode = item.productLabel.barcode?.trim()
+                if (!barcode) continue
                 const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
-                for (let i = 0; i < nonHonestLabelCopies; i += 1) {
+                for (let i = 0; i < Math.max(1, item.copies) * nonHonestLabelCopies; i += 1) {
                   orderSections.push(
-                    buildProductLabelSectionHtml(orderLabel, barcodeDataUrl, productPrintOptions, size).replace(
+                    buildProductLabelSectionHtml(item.productLabel, barcodeDataUrl, productPrintOptions, size).replace(
                       'data-testid="product-thermal-label"',
                       'data-testid="product-thermal-label" data-tape-block="label"',
                     ),
@@ -428,7 +463,9 @@ export function MarkingLabelPreview(props: Props) {
         {fbsOrdersCapped
           ? fbsOrdersTotal > fbsOrdersCapped.length
             ? `Показаны первые ${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} из ${fbsOrdersTotal}`
-            : `${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} на ленте`
+            : showOrderQr
+              ? `${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} на ленте`
+              : `${sectionsCount} ${plural(sectionsCount, ['копия', 'копии', 'копий'])} на ленте`
           : total > shown
             ? `Показаны первые ${shown} из ${total}`
             : `${total} ${total === 1 ? 'копия' : 'копий'} на ленте`}

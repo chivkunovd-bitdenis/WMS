@@ -5,6 +5,8 @@ import {
   resolveFbsFallbackLabelCopies,
   resolveProductTapeBarcodeError,
   resolveTapeCounts,
+  withSelectedFbsTapeBarcode,
+  remainingProductLabelsAfterPrintedCodes,
 } from './MarkingPrintDialog'
 
 describe('product tape barcode validation before consuming marking codes', () => {
@@ -82,5 +84,48 @@ describe('resolveFbsFallbackLabelCopies', () => {
 
   it('keeps the existing fallback outside QR-only printing', () => {
     expect(resolveFbsFallbackLabelCopies(true, { units: [{ block: 'cz', copies: 1 }] }, 1, false)).toBe(1)
+  })
+})
+
+
+describe('Ozon position labels stay complete and keep their own identity', () => {
+  const labelA = { product_name: 'A', sku_code: 'Ozon-A', barcode: '111', wb_size: null }
+  const labelB = { product_name: 'B', sku_code: 'Ozon-B', barcode: '222', wb_size: null }
+  const order: Parameters<typeof withSelectedFbsTapeBarcode>[0] = {
+    orderId: 'order-a', wbOrderId: 0, marketplace: 'ozon', requiresHonestSign: true,
+    productLabel: labelA,
+    productLabels: [
+      { positionId: 'position-a', productLabel: labelA, copies: 1 },
+      { positionId: 'position-b', productLabel: labelB, copies: 2 },
+    ],
+  }
+  const tape: Parameters<typeof withSelectedFbsTapeBarcode>[1] = {
+    orders: [order], selectedBarcodeOrderId: 'order-a', selectedBarcodePositionId: 'position-a',
+    includeOrderQr: false,
+    print: async () => ({ orders: [], order_errors: [], shortage: 0 }),
+    confirmQrApplied: async () => {},
+  }
+  const code = { id: 'code-a', cis_code: 'fixture-only', has_label_artifact: false, order_product_id: 'position-a' }
+
+  it('uses the selected barcode only for the exact position and order', () => {
+    const selected = { marketplace: 'ozon' as const, barcode: '113' }
+    const result = withSelectedFbsTapeBarcode(order, tape, selected)
+    expect(result.productLabels?.map((item) => item.productLabel.barcode)).toEqual(['113', '222'])
+    expect(order.productLabels?.[0].productLabel.barcode).toBe('111')
+    expect(withSelectedFbsTapeBarcode({ ...order, orderId: 'other' }, tape, selected).productLabels).toBe(order.productLabels)
+    expect(withSelectedFbsTapeBarcode({ ...order, marketplace: 'wb' }, tape, selected).productLabels).toBe(order.productLabels)
+  })
+
+  it('keeps both ordinary units when the other position has a marking label', () => {
+    const remaining = remainingProductLabelsAfterPrintedCodes(order, [code])
+    expect(remaining.map((item) => [item.productLabel.barcode, item.copies])).toEqual([['222', 2]])
+    expect(remainingProductLabelsAfterPrintedCodes({ ...order, marketplace: 'wb' }, [code])).toEqual([])
+  })
+
+  it('does not duplicate units already covered by their own marking labels', () => {
+    const remaining = remainingProductLabelsAfterPrintedCodes(order, [
+      code, { ...code, id: 'code-b', order_product_id: 'position-b' },
+    ])
+    expect(remaining.map((item) => [item.productLabel.barcode, item.copies])).toEqual([['222', 1]])
   })
 })

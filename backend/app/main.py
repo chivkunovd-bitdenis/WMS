@@ -20,6 +20,7 @@ from app.api.fbs_kiz import router as fbs_kiz_router
 from app.api.fbs_marking import router as fbs_marking_router
 from app.api.fbs_orders import router as fbs_orders_router
 from app.api.fbs_print_assets import router as fbs_print_assets_router
+from app.api.fbs_print_jobs import router as fbs_print_jobs_router
 from app.api.fbs_sellers import router as fbs_sellers_router
 from app.api.fbs_supplies import router as fbs_supplies_router
 from app.api.health import router as health_router
@@ -160,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(fbs_sellers_router)
     app.include_router(fbs_supplies_router)
     app.include_router(fbs_print_assets_router)
+    app.include_router(fbs_print_jobs_router)
     app.include_router(wildberries_integration_router)
     app.include_router(ozon_integration_router)
     app.include_router(ozon_returns_router)

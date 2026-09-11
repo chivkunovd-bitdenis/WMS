@@ -268,6 +268,7 @@ async def test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenan
 ) -> None:
     from app.models.fbs_order import FbsOrderProduct
     from app.models.product import Product
+    from app.models.product_marketplace_link import ProductMarketplaceLink
 
     headers, tenant, seller, _, ozon_id = await _seed_wb_and_ozon(async_client)
     # Another tenant's otherwise matching posting must not appear.
@@ -283,10 +284,15 @@ async def test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenan
             seller_id=seller,
             name="Second position",
             sku_code="363-POS",
-            wb_barcode="363-BARCODE",
+            wb_barcode="363-WB-ONLY",
         )
         session.add(product)
         await session.flush()
+        session.add(ProductMarketplaceLink(
+            tenant_id=tenant, seller_id=seller, product_id=product.id,
+            marketplace="ozon", external_sku="363",
+            external_barcodes=["363-OZON-BARCODE"],
+        ))
         position = FbsOrderProduct(
             order_id=first.id,
             product_id=product.id,
@@ -313,7 +319,7 @@ async def test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenan
     assert item["id"] == str(ozon_id)
     assert item["marketplace"] == "ozon" and item["external_order_id"] == "OZ-770002"
     assert item["positions"][0]["id"] == str(position_id)
-    assert item["positions"][0]["barcode"] == "363-BARCODE"
+    assert item["positions"][0]["barcode"] == "363-OZON-BARCODE"
     assert item["positions"][0]["quantity"] == 3
     cursor = page.json()["next_cursor"]
     tail = await async_client.get(url, headers=headers, params={**params, "cursor": cursor})
