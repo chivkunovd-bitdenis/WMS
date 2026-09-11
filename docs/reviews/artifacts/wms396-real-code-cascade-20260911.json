@@ -61,5 +61,27 @@
     "has_cz_authorization": false,
     "actual_provider_branch": "mobile_check",
     "credential_values_read": false
+  },
+  "followup_transport_comparison": {
+    "checked_at_utc": "2026-09-11T10:29:53.114545+00:00",
+    "same_real_code_sha256": "67620b1602f88849452bee50eef8775128c39caf19d51af93e414909878830f1",
+    "local_curl": {
+      "http_status": 451,
+      "http_version": "2",
+      "body": "empty"
+    },
+    "production_urllib": {
+      "http_status": 451,
+      "body_length": 0,
+      "response_header_names": [
+        "Server",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ]
+    },
+    "production_configured_cz_token_count": 0,
+    "credential_values_read": false,
+    "finding": "Original unauthenticated curl request also fails today. HTTP client replacement is not a demonstrated fix. Provider did not supply reason. No bypass attempted. True API requires configured participant authorization; existing adapter is not live validated."
   }
 }
