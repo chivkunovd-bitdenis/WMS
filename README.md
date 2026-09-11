@@ -5,8 +5,6 @@ Monorepo:
 - `backend/`: FastAPI + SQLAlchemy + Alembic
 - `frontend/`: React (Vite) + Playwright e2e
 
-Решения по MVP и интеграциям: **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)**.
-
 Целевой бизнес‑процесс (source of truth): **[docs/BUSINESS_PROCESS_SELLER_INBOUND_OUTBOUND_RU.md](docs/BUSINESS_PROCESS_SELLER_INBOUND_OUTBOUND_RU.md)**.
 
 ## Local dev
