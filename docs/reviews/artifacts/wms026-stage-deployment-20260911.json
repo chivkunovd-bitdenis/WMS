@@ -11,5 +11,16 @@
   },
   "web_deployment": "b620431c-cfde-4627-aa3f-9f7356ad443e",
   "api_deployed": false,
-  "production_deployed": false
+  "production_deployed": false,
+  "root_browser_check": {
+    "page": "/app/ff/billing",
+    "period": "2026-09-01..2026-09-11",
+    "seller": "Эмулятор WB",
+    "selected": "FBS group, 7 documents",
+    "toolbar_add_row_absent_with_selection": true,
+    "invoice_preview_add_row_present": true,
+    "preview_total_rub": "175.00",
+    "add_row_opens_service_and_amount_fields": true,
+    "invoice_saved": false
+  }
 }
