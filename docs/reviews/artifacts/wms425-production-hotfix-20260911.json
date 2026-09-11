@@ -28,5 +28,10 @@
     "stage": "Order 69718706-0152-1 shows Ozon warehouse warning and Ozon identifiers",
     "production": "Unauthenticated login screen; production table not opened"
   },
-  "changes": "Marketplace identifiers and wording only; no schema changes or FBS navigation changes"
+  "changes": "Marketplace identifiers and wording only; no schema changes or FBS navigation changes",
+  "ci": {
+    "run_id": 34585689109,
+    "conclusion": "success",
+    "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/34585689109"
+  }
 }
