@@ -1,0 +1,32 @@
+{
+  "verified_at_utc": "2026-09-11T09:52:04.265006+00:00",
+  "production_commit": "675e69c7c97ac716a723249392499cdec8d275fc",
+  "code_commit": "ae239e5b",
+  "runtime": {
+    "files": {
+      "app/services/fbs_worklist_service.py": "23a2249b461a173083b8cb7d7c6e02420a3e37a98ebf8b9e0e8e751c3c3e1a44",
+      "app/services/fbs_supply_validator_service.py": "5520629ecf16b35e79be52a9c4a2b42e701fb38d6268e8f27670f4a15c671da2"
+    },
+    "production_orders_verified": {
+      "wb": 10,
+      "ozon": 10
+    },
+    "marketplace_identity_checks": "passed"
+  },
+  "public_fbs_html_matches_container": true,
+  "public_assets": [
+    {
+      "path": "/assets/ff-UkQvipjh.js",
+      "sha256": "1427249ac5b493fbd80e0a9ad191a0fb130e62996ade0a9c5232909a3cbf2f0b"
+    }
+  ],
+  "health": {
+    "status": "ok"
+  },
+  "browser": {
+    "local_fixture": "Ozon and WB identifiers and Ozon warehouse warning observed",
+    "stage": "Order 69718706-0152-1 shows Ozon warehouse warning and Ozon identifiers",
+    "production": "Unauthenticated login screen; production table not opened"
+  },
+  "changes": "Marketplace identifiers and wording only; no schema changes or FBS navigation changes"
+}
