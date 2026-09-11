@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-09-11T00:28:29.678794+00:00",
+  "updated_at_utc": "2026-09-11T05:30:02.679069+00:00",
   "phase": "PRODUCTION_RELEASED_EXTERNAL_INPUTS_PENDING",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
@@ -65,7 +65,7 @@
   },
   "external_inputs": {
     "printer_hardware": "Asked owner OS/model/USB or network; awaiting text answer",
-    "dadata": "Production key absent; stage live lookup passed; requested separate permission to transfer existing configuration",
+    "dadata": "RESOLVED2026-09-11: owner explicitly authorized existing stage key transfer; production runtime live lookup success; browser UI awaits login",
     "cz": "Live public check unavailable; production has no saved True API authorization; seller/live sample pending"
   },
   "prohibitions": [
@@ -137,12 +137,13 @@
     "storage_ui": "Actual seller expansion6 liter-days900kopecks; categoryA4/600; Sep09+categoryA2/400. Periodrate150/current200 verified.",
     "ozon_ui": "Local actual worklist/card/picking/packing/boxes/confirmation checked; final preview corrections source/build/test verified; production clicks blocked by Mac lock",
     "final_batch": "ruff/mypy five modified modules PASS; two targeted printing/storage regression tests PASS; final frontend typecheck/build PASS; OpenAPI regenerated",
-    "browser_lock": "CUA reported Mac locked and could not unlock; user asked to unlock; post-deploy visual reread pending",
+    "browser_lock": "Mac unlocked; production browser shows login; final authenticated clicks pending",
     "final_frontend_tests": "28 passed; final typecheck/build after preview fix",
     "ci_859": "2478 passed,134 skipped,1 xfailed,3 failed; all3 corrected and targeted reruns passed",
     "ozon_generator": "Exact generated-module equality passed; runtime schema unchanged",
     "final_ci": "34544983805 SUCCESS:2481 passed,134 skipped,1 xfailed",
-    "postdeploy": "438 API runtime files match source; public FF/seller HTML and99 referenced assets match runtime; health ok; api/web/worker/beat zero restarts"
+    "postdeploy": "438 API runtime files match source; public FF/seller HTML and99 referenced assets match runtime; health ok; api/web/worker/beat zero restarts",
+    "dadata_live": "Production lookup619300127751 success, ACTIVE party, legal name/OGRN/address returned; health ok"
   },
   "review": {
     "opus_source_sha": "f9bceb5ab2711c2fca1a40f57c6ebddc3e896a9e",

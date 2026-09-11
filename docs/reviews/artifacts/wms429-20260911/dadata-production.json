@@ -1,0 +1,20 @@
+{
+  "task": "WMS-280",
+  "verified_at_utc": "2026-09-11T05:30:02.679069+00:00",
+  "authorization": "Owner explicitly approved existing stage DaData key transfer to production",
+  "source": "Railway loyal-wonder / production environment / WMS service (WMS staging)",
+  "destination": "VPS production API WMS_DADATA_TOKEN",
+  "secret_value_recorded": false,
+  "source_sha": "fb274e0da3429e679d9d71f93d588423ac20c7b9",
+  "runtime_lookup": {
+    "inn": "619300127751",
+    "success": true,
+    "legal_name": "ИП Львова Валентина Владимировна",
+    "ogrn": "325940100013494",
+    "address": "Луганская Народная Респ, г Брянка",
+    "kpp": null,
+    "state": "ACTIVE"
+  },
+  "public_health": "ok",
+  "ui": "Production Chrome login page; authenticated form not checked"
+}
