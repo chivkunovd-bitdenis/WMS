@@ -1,0 +1,15 @@
+{
+  "verified_at_utc": "2026-09-11T10:18:59.998816+00:00",
+  "source_sha": "3cde133ab16baf676c52333eae218ac4f15f248b",
+  "source_upload": "clean committed worktree, branch pushed before Railway CLI upload",
+  "public_billing_html_matches_runtime": true,
+  "verified_public_js": {
+    "/assets/ff-CNDDFvJO.js": "a97bf0e6f866de324dce46efaa790ee0e4b67ee250642172cb8801e6c161838a"
+  },
+  "health": {
+    "status": "ok"
+  },
+  "web_deployment": "b620431c-cfde-4627-aa3f-9f7356ad443e",
+  "api_deployed": false,
+  "production_deployed": false
+}
