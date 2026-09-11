@@ -1,0 +1,60 @@
+{
+  "checked_at_utc": "2026-09-11T10:14:29.151942+00:00",
+  "runtime": "deployed production API container, unchanged application code",
+  "isolation": "temporary SQLite database, in-process ASGI HTTP requests, normal FastAPI BackgroundTasks fallback (not production Redis/Celery transport)",
+  "real_code_origin": {
+    "code_id": "1964b543-d1b5-4674-96e7-70b9b16c430f",
+    "source": "external_fbs",
+    "status": "applied",
+    "marketplace": "wb",
+    "code_sha256": "67620b1602f88849452bee50eef8775128c39caf19d51af93e414909878830f1",
+    "length": 85,
+    "gs_count": 2
+  },
+  "production_documents_and_stock_changed": false,
+  "external_calls": 1,
+  "trace": [
+    {
+      "phase": "begin_receiving",
+      "http_status": 200
+    },
+    {
+      "phase": "product_scan",
+      "http_status": 200,
+      "actual_qty": 1
+    },
+    {
+      "phase": "marking_scan",
+      "http_status": 200,
+      "cz_status": "pending",
+      "full_code_preserved": true
+    },
+    {
+      "phase": "outbound_real_http",
+      "url": "https://mobile.api.crpt.ru/mobile/check",
+      "full_code_sha256": "67620b1602f88849452bee50eef8775128c39caf19d51af93e414909878830f1",
+      "length": 85,
+      "gs_count": 2,
+      "http_status": 451,
+      "status": "unavailable",
+      "outer_status": null,
+      "response_empty": true
+    },
+    {
+      "phase": "complete_receiving_response",
+      "http_status": 200,
+      "document_status": "sorting"
+    },
+    {
+      "phase": "persisted_result_and_api_reread",
+      "http_status": 200,
+      "checking": false,
+      "cz_status": "unavailable",
+      "reason": "Честный знак недоступен. Повторите проверку позже.",
+      "outer_status": null,
+      "job_status": "done",
+      "warehouse_code_status": "applied",
+      "isolated_stock_movements": 1
+    }
+  ]
+}
