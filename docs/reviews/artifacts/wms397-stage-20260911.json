@@ -1,0 +1,23 @@
+{
+  "verified_at_utc": "2026-09-11T09:22:23.346863+00:00",
+  "source_sha": "e3e6b1fa53bd5ab38394ebd1318b82aaf9e539ed",
+  "backend_files_matched": 446,
+  "schema": [
+    "20260911_0305"
+  ],
+  "public_chat_html_matches_runtime": true,
+  "public_seller_html_matches_runtime": true,
+  "verified_public_js": {
+    "/assets/ChatOpenButton-DfoPNE50.js": "c5dd0ba237fa92ebafcb8a6465d38017172610cd638643b37fbf1477cd17b61a",
+    "/assets/seller-CnDDFS6l.js": "99fcf8cd5441d4d4fcbce0bd9cc93660025f2918cc2dee79373b071b82d78e77",
+    "/assets/ff-HMjkCVoE.js": "bb53d3c8e56924c8c5b67a09b4a4f27ce93de605b6a7bcda923fb9473e9f64d8"
+  },
+  "health": {
+    "status": "ok"
+  },
+  "api_deployment": "710d8ef0-6db2-47b7-99af-eb5eeb2c0789",
+  "web_deployment": "d06d7348-7802-4e6a-bd37-0961c1b72b25",
+  "production_observed_unchanged": "fb274e0da3429e679d9d71f93d588423ac20c7b9",
+  "browser_check": "Reloaded actual stage chat route; login required; messages not sent",
+  "stage_backup": "Private PostgreSQL dump validated before migration; contents not exported"
+}
