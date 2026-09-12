@@ -13162,3 +13162,9 @@ Claude и Codex. AGENTS.md и CLAUDE.md приведены к одному те�
 [Независимое ревью Opus](reviews/2026-09-11-analyst-draft/rollout-opus-review.md).
 [Требования и результаты проверок внедрения](requirements/WMS-437.md).
 Деплой продукта не входит в эту задачу.
+
+Уточнение WMS-437 от 12.09.2026: разработка в Codex — Astra, в Claude — Sonnet,
+включая фронт. Перекрёстное ревью: Sonnet/Opus → Astra, Astra → Opus.
+Если effort ревью не указан, настройки по умолчанию — Astra high и Opus 5 Extra.
+Явные настройки владельца для конкретной задачи имеют приоритет.
+Правила синхронно обновлены в AGENTS.md и CLAUDE.md.
