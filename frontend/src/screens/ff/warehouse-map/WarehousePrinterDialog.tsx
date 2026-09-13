@@ -10,6 +10,10 @@ type Preview = PrinterPreview
 export function previewMatchesContext(preview: PrinterPreview | null, code: string, warehouseId: string | null): preview is PrinterPreview {
   return preview !== null && warehouseId !== null && preview.warehouseId === warehouseId && preview.pairingCode === code.trim()
 }
+/** A completion from an invalidated request must never release a newer request. */
+export function releasePrinterBusyRequest(activeRequest: number | null, finishedRequest: number): number | null {
+  return activeRequest === finishedRequest ? null : activeRequest
+}
 const headers = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
 function message(raw: string) {
   if (raw === 'pairing_not_found_or_expired') return 'Код не найден или истёк. Получите новый код в программе на ПК.'
@@ -30,7 +34,8 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
   const [preview, setPreview] = useState<Preview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busyRequest, setBusyRequest] = useState<number | null>(null)
+  const busy = busyRequest !== null
   const version = useRef(0)
   async function readDestination(request = version.current) {
     if (!warehouseId) return null
@@ -44,25 +49,25 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
     return data.destination
   }
   useEffect(() => {
-    if (!open || !warehouseId) { ++version.current; return }
+    if (!open || !warehouseId) { ++version.current; setBusyRequest(null); return }
     const request = ++version.current
-    setDestination(null); setDestinationLoaded(false); setCode(''); setPreview(null); setError(null); setNotice(null)
+    setBusyRequest(null); setDestination(null); setDestinationLoaded(false); setCode(''); setPreview(null); setError(null); setNotice(null)
     void readDestination(request).catch((cause) => { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.') })
   // warehouseId resets all temporary pairing state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, warehouseId, token])
-  function changeCode(next: string) { ++version.current; setCode(next); setPreview(null); setError(null); setNotice(null) }
+  function changeCode(next: string) { ++version.current; setBusyRequest(null); setCode(next); setPreview(null); setError(null); setNotice(null) }
   async function inspect() {
     if (!warehouseId || !code.trim()) return
     const request = ++version.current
-    setBusy(true); setPreview(null); setError(null); setNotice(null)
+    setBusyRequest(request); setPreview(null); setError(null); setNotice(null)
     try {
       const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair/preview`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: code.trim() }) })
       if (!response.ok) throw new Error(message(await readApiErrorMessage(response)))
       const data = await response.json() as Destination
       if (request === version.current) setPreview({ ...data, pairingCode: code.trim(), warehouseId })
     } catch (cause) { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось проверить код.') }
-    finally { if (request === version.current) setBusy(false) }
+    finally { setBusyRequest((active) => releasePrinterBusyRequest(active, request)) }
   }
   async function reconcile(checked: Preview, request: number) {
     try {
@@ -77,7 +82,7 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
     if (!previewMatchesContext(preview, code, warehouseId)) return
     const checked = preview
     const request = ++version.current
-    setBusy(true); setError(null)
+    setBusyRequest(request); setError(null)
     try {
       const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: checked.pairingCode }) })
       if (!response.ok) {
@@ -87,7 +92,7 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
       }
       await reconcile(checked, request)
     } catch { await reconcile(checked, request) }
-    finally { if (request === version.current) setBusy(false) }
+    finally { setBusyRequest((active) => releasePrinterBusyRequest(active, request)) }
   }
   return (
     <AppDialog

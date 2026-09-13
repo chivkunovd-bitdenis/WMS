@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { previewMatchesContext, type PrinterPreview } from './WarehousePrinterDialog'
+import { previewMatchesContext, releasePrinterBusyRequest, type PrinterPreview } from './WarehousePrinterDialog'
 
 describe('printer pairing preview', () => {
   const preview: PrinterPreview = {
@@ -13,5 +13,13 @@ describe('printer pairing preview', () => {
 
   it('does not allow a preview from another warehouse to confirm', () => {
     expect(previewMatchesContext(preview, 'A', 'warehouse-b')).toBe(false)
+  })
+
+  it('releases invalidated preview A, while an old completion cannot release new preview B', () => {
+    const previewA = 1
+    const previewB = 3
+    expect(releasePrinterBusyRequest(previewA, previewA)).toBeNull()
+    expect(releasePrinterBusyRequest(previewB, previewA)).toBe(previewB)
+    expect(releasePrinterBusyRequest(previewB, previewB)).toBeNull()
   })
 })

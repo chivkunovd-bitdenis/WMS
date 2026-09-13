@@ -19,6 +19,14 @@
 
 Мобильный commit `c60c236ca8cc6eba51d4cd529bfd62bf95f0f9a9` локальный и не публиковался. `mobile-integration.patch` заново собран из `af9693126d19d16918abd5cc7b7fbe99dfebc142..c60c236ca8cc6eba51d4cd529bfd62bf95f0f9a9` только по `android/app/src/main` и `android/app/src/test`; `git -C mobile apply --reverse --check ../docs/reviews/artifacts/tsd-package-20260913/mobile-integration.patch` прошёл.
 
+## Delta D3–D5
+
+- **D3:** stale preview release больше не удерживает busy. Смена кода, склада или закрытие освобождают старое busy-состояние; завершение A не освобождает начатый позже B. `WarehousePrinterDialog.test.ts` покрывает A → B, завершение A и завершение B. Web target test, `tsc` и build прошли.
+- **D4:** у pending/running sorting print раздельно доступны `Проверить` и `Печать ещё раз`. Перепечатка требует существующий confirm sheet с предупреждением о возможном дубликате и только после подтверждения отправляет то же тело с новым UUID. До подтверждения второго POST нет. `SortingViewModelTest` покрывает этот порядок.
+- **D5:** durable print receipt читается перед первой публикацией done-документа; локальная ошибка чтения оставляет load error, а не выглядит отсутствием receipt. `SortingViewModelTest` с отложенным destination проверяет, что done-документ остаётся открытым до восстановления job.
+
+Мобильный commit delta `45676eee0225d895a21d2d41030a652172411e6d` локальный и не публиковался. Aggregate patch пересобран из `af9693126d19d16918abd5cc7b7fbe99dfebc142..45676eee0225d895a21d2d41030a652172411e6d` только по `android/app/src/main` и `android/app/src/test`; обратное применение прошло.
+
 ## RELEASE
 
-Готово для одного финального Astra delta-review изменений F1–F6. Это техническая проверка исходников; стенд, реальные marketplace, физическая печать и приёмка аналитика не запускались.
+Готово для одного финального Astra delta-review изменений D3–D5 вместе с ранее закрытыми F1/F2/F6. Это техническая проверка исходников; стенд, реальные marketplace, физическая печать и приёмка аналитика не запускались.

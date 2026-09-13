@@ -2579,7 +2579,7 @@ index ee1e470c7b5b1513b3c7b24391a0887a1279369e..f176f20dbb3716aaf17186bb651499e0
                  isRefreshing = state.refreshing,
                  onRefresh = { vm.load() },
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
-index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d93f023ebc 100644
+index 833f3c39907f586972e0066d0665916b7d3dc9de..e43fb0c09ca20cf6f06790ae94fc949a800ebeae 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 @@ -14,13 +14,17 @@ import androidx.compose.foundation.lazy.items
@@ -2671,7 +2671,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
                      is SortTarget.Loose -> {
                          val line = lines.firstOrNull { it.productId == target.productId }
                          ScanTargetBar(
-@@ -119,9 +162,36 @@ fun SortingScreen(
+@@ -119,9 +162,44 @@ fun SortingScreen(
                      )
                  }
  
@@ -2692,6 +2692,14 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
 +                        actionLabel = if (refreshable) "Проверить" else "Печать ещё раз",
 +                        onAction = if (refreshable) vm::retryPrintRecovery else { { vm.openPrintPicker(SortingPrintKind.PRODUCT) } },
 +                    )
++                    if (refreshable) {
++                        ScanTargetBar(
++                            text = "Результат печати неизвестен",
++                            hint = "",
++                            actionLabel = "Печать ещё раз",
++                            onAction = vm::requestRepeatPrint,
++                        )
++                    }
 +                } else if (state.printUnknown) {
 +                    ScanTargetBar(
 +                        text = "Результат печати неизвестен",
@@ -2708,7 +2716,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
                      onLooseClick = vm::selectLooseProduct,
                  )
              }
-@@ -142,9 +212,22 @@ fun SortingScreen(
+@@ -142,9 +220,22 @@ fun SortingScreen(
              onDismiss = vm::dismissPending,
          )
      }
@@ -2732,7 +2740,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
          var qty by remember(pending, target) { mutableIntStateOf(maxQty) }
          ModalBottomSheet(onDismissRequest = vm::dismissPending) {
              Column(
-@@ -166,7 +249,9 @@ fun SortingScreen(
+@@ -166,7 +257,9 @@ fun SortingScreen(
                  )
                  Button(
                      onClick = { vm.confirmLoosePutaway(qty) },
@@ -2743,10 +2751,20 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
                      colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Success),
                      modifier = Modifier
                          .fillMaxWidth()
-@@ -186,21 +271,149 @@ fun SortingScreen(
+@@ -186,21 +279,159 @@ fun SortingScreen(
              onDismiss = vm::dismissComplete,
          )
      }
++
++    state.repeatPrintConfirmation?.let { _ ->
++        ConfirmSheet(
++            title = "Печать ещё раз?",
++            facts = listOf("Предыдущее задание ещё не подтверждено", "Возможен дубликат"),
++            confirmLabel = "Печать ещё раз",
++            onConfirm = vm::confirmRepeatPrint,
++            onDismiss = vm::dismissRepeatPrint,
++        )
++    }
 +
 +    when (state.printPicker) {
 +        SortingPrintKind.PRODUCT -> SortingPrintPicker(
@@ -2774,9 +2792,8 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
 +            onDismiss = vm::dismissPrintSelection,
 +        )
 +    }
- }
- 
--/** Список работы: неразмещённые короба + товары loose-пула. */
++}
++
 +@Composable
 +private fun PrintActions(onPrintProduct: () -> Unit, onPrintLocation: () -> Unit) {
 +    Row(
@@ -2792,8 +2809,9 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
 +            Text(" Ячейка")
 +        }
 +    }
-+}
-+
+ }
+ 
+-/** Список работы: неразмещённые короба + товары loose-пула. */
 +@OptIn(ExperimentalMaterial3Api::class)
 +@Composable
 +private fun SortingPrintPicker(
@@ -2895,7 +2913,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
  
      LazyColumn(
          modifier = Modifier.fillMaxSize(),
-@@ -218,6 +431,17 @@ private fun SortingWorkList(
+@@ -218,6 +449,17 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -2913,7 +2931,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
          if (loose.isNotEmpty()) {
              item { SectionHeader("Без короба") }
              items(loose, key = { it.first.productId }) { (line, rem) ->
-@@ -229,7 +453,7 @@ private fun SortingWorkList(
+@@ -229,7 +471,7 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -2923,7 +2941,7 @@ index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d9
                  Text(
                      "Всё размещено",
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
-index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586aabedd55 100644
+index 2edffa0d878be1366683f29938a90aac83a736b5..dfde5c09abe4329a47da9c67cb0f58213d231479 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 @@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
@@ -2936,7 +2954,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
  import kotlinx.coroutines.flow.MutableStateFlow
  import kotlinx.coroutines.flow.StateFlow
  import kotlinx.coroutines.launch
-@@ -15,44 +13,87 @@ import ru.wms.tsd.core.api.ApiProvider
+@@ -15,44 +13,89 @@ import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.networkErrorText
  import ru.wms.tsd.core.api.readableError
  import ru.wms.tsd.core.api.generated.models.InboundBoxPutawayBody
@@ -3008,6 +3026,8 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
 +    val printSelection: SortingPrintSelection? = null,
 +    /** До ответа сервера лежат UUID и неизменяемое тело, но никогда не файл. */
 +    val unresolvedPrint: SortingPrintJobBody? = null,
++    /** Explicit R8 confirmation is required before replacing an unknown job with a new UUID. */
++    val repeatPrintConfirmation: SortingPrintJobBody? = null,
 +    val printJob: SortingPrintJobOut? = null,
 +    val printUnknown: Boolean = false,
  )
@@ -3033,7 +3053,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
   */
  class SortingViewModel(
      private val requestId: UUID,
-@@ -62,6 +103,10 @@ class SortingViewModel(
+@@ -62,6 +105,10 @@ class SortingViewModel(
      private val _state = MutableStateFlow(SortingUiState())
      val state: StateFlow<SortingUiState> = _state
  
@@ -3044,7 +3064,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
      private val scanQueue = Channel<String>(capacity = 16)
      private var flashStamp = 0L
  
-@@ -75,27 +120,56 @@ class SortingViewModel(
+@@ -75,27 +122,64 @@ class SortingViewModel(
      fun load() {
          _state.value = _state.value.copy(loading = true, loadError = null)
          viewModelScope.launch {
@@ -3065,10 +3085,16 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
 +            } catch (_: Exception) {
 +                null
 +            }
++            val savedPrint = try { api.pendingSortingPrint(context, requestId.toString()) } catch (_: Exception) {
++                _state.value = _state.value.copy(loading = false, loadError = "Не удалось прочитать сохранённую печать. Повторите загрузку.")
++                return@launch
++            }
 +            _state.value = _state.value.copy(
 +                unresolvedPutaway = savedLoose,
 +                unresolvedCargoPutaway = savedCargo,
 +                unresolvedCargoWarehouseId = savedCargoWarehouseId,
++                unresolvedPrint = savedPrint,
++                printUnknown = savedPrint != null,
 +            )
              val ok = runCatching {
 -                coroutineScope {
@@ -3103,9 +3129,11 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
 +                    documentDone = isDoneStatus(request.status),
 +                    unresolvedPutaway = savedLoose,
 +                    unresolvedCargoPutaway = savedCargo,
++                    unresolvedPrint = savedPrint,
++                    printUnknown = savedPrint != null,
 +                )
 +                loadPrintDestination(request)
-+                recoverSavedPrint()
++                if (savedPrint != null) recoverPrint(savedPrint)
 +                null
              }.getOrElse { networkErrorText() }
              if (ok != null) _state.value = _state.value.copy(loading = false, loadError = ok)
@@ -3119,7 +3147,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
          }
      }
  
-@@ -104,13 +178,20 @@ class SortingViewModel(
+@@ -104,13 +188,20 @@ class SortingViewModel(
      }
  
      fun selectLooseProduct(productId: String) {
@@ -3140,7 +3168,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
      fun clearTarget() {
          _state.value = _state.value.copy(target = null, pendingLocation = null)
      }
-@@ -119,6 +200,170 @@ class SortingViewModel(
+@@ -119,6 +210,190 @@ class SortingViewModel(
          _state.value = _state.value.copy(pendingLocation = null)
      }
  
@@ -3212,6 +3240,32 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
 +        viewModelScope.launch { recoverPrint(body) }
 +    }
 +
++    /** R8: only an explicit confirmation may replace an unknown spool with a new UUID. */
++    fun requestRepeatPrint() {
++        val body = _state.value.unresolvedPrint ?: return
++        _state.value = _state.value.copy(repeatPrintConfirmation = body)
++    }
++
++    fun dismissRepeatPrint() {
++        _state.value = _state.value.copy(repeatPrintConfirmation = null)
++    }
++
++    fun confirmRepeatPrint() {
++        val old = _state.value.repeatPrintConfirmation ?: return
++        if (_state.value.unresolvedPrint?.jobId != old.jobId) {
++            dismissRepeatPrint()
++            return
++        }
++        val replacement = old.copy(jobId = UUID.randomUUID().toString())
++        _state.value = _state.value.copy(
++            repeatPrintConfirmation = null,
++            unresolvedPrint = replacement,
++            printJob = null,
++            printUnknown = false,
++        )
++        viewModelScope.launch { sendPrint(replacement) }
++    }
++
 +    private fun openPrintSelection(selection: SortingPrintSelection) {
 +        _state.value = _state.value.copy(printPicker = null, printSelection = selection)
 +        viewModelScope.launch {
@@ -3252,12 +3306,6 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
 +        "wildberries", "wb" -> "wb"
 +        "ozon" -> "ozon"
 +        else -> null
-+    }
-+
-+    private suspend fun recoverSavedPrint() {
-+        val saved = runCatching { api.pendingSortingPrint(context, requestId.toString()) }.getOrNull() ?: return
-+        _state.value = _state.value.copy(unresolvedPrint = saved, printUnknown = true)
-+        recoverPrint(saved)
 +    }
 +
 +    private suspend fun recoverPrint(body: SortingPrintJobBody) {
@@ -3311,7 +3359,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
      fun requestComplete() {
          _state.value = _state.value.copy(confirmComplete = true)
      }
-@@ -150,59 +395,188 @@ class SortingViewModel(
+@@ -150,59 +425,188 @@ class SortingViewModel(
          }
      }
  
@@ -3540,7 +3588,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
      fun confirmComplete(onDone: () -> Unit) {
          _state.value = _state.value.copy(confirmComplete = false, completing = true)
          viewModelScope.launch {
-@@ -219,6 +593,10 @@ class SortingViewModel(
+@@ -219,6 +623,10 @@ class SortingViewModel(
  
      private suspend fun processScan(barcode: String) {
          val st = _state.value
@@ -3551,7 +3599,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
          val request = st.request ?: return
  
          // 1) Скан закрытого короба с остатком?
-@@ -234,33 +612,50 @@ class SortingViewModel(
+@@ -234,33 +642,50 @@ class SortingViewModel(
              return
          }
  
@@ -3615,7 +3663,7 @@ index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586
      private fun successFlash() = ScanFlash.Success(++flashStamp)
      private fun errorFlash(message: String) = ScanFlash.Error(message, ++flashStamp)
  
-@@ -288,14 +683,25 @@ class SortingViewModel(
+@@ -288,14 +713,25 @@ class SortingViewModel(
  fun boxRemaining(box: InboundIntakeBoxOut): Int =
      box.remainingQty ?: box.lines.orEmpty().sumOf { it.remainingQty ?: 0 }
  
@@ -4771,10 +4819,10 @@ index 0000000000000000000000000000000000000000..a31d263c40197599dd9b45127a71de19
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
-index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85f30997d3 100644
+index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..8f3a2cc966c09079e579e0b6eb45b6f85ed24464 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
-@@ -1,9 +1,13 @@
+@@ -1,10 +1,15 @@
  package ru.wms.tsd.features.sorting
  
 +import io.mockk.Runs
@@ -4786,9 +4834,11 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
 +import io.mockk.verify
 +import java.io.IOException
  import java.util.UUID
++import kotlinx.coroutines.CompletableDeferred
  import kotlinx.coroutines.Dispatchers
  import kotlinx.coroutines.ExperimentalCoroutinesApi
-@@ -13,8 +17,13 @@ import kotlinx.coroutines.test.resetMain
+ import kotlinx.coroutines.test.UnconfinedTestDispatcher
+@@ -13,8 +18,13 @@ import kotlinx.coroutines.test.resetMain
  import kotlinx.coroutines.test.runCurrent
  import kotlinx.coroutines.test.runTest
  import kotlinx.coroutines.test.setMain
@@ -4802,7 +4852,7 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
  import org.junit.Assert.assertTrue
  import org.junit.Before
  import org.junit.Test
-@@ -22,31 +31,43 @@ import retrofit2.Response
+@@ -22,31 +32,43 @@ import retrofit2.Response
  import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
@@ -4855,7 +4905,7 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
      private lateinit var api: ApiProvider
  
      @Before
-@@ -54,9 +75,19 @@ class SortingViewModelTest {
+@@ -54,9 +76,19 @@ class SortingViewModelTest {
          Dispatchers.setMain(UnconfinedTestDispatcher())
          ops = mockk()
          whs = mockk()
@@ -4875,7 +4925,7 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
          }
      }
  
-@@ -77,65 +108,446 @@ class SortingViewModelTest {
+@@ -77,65 +109,506 @@ class SortingViewModelTest {
          storageLocationCode = null,
      )
  
@@ -5336,6 +5386,41 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
 +        advanceUntilIdle()
 +        val body = requireNotNull(saved)
 +        coEvery { sortingApi.sortingPrintJob(body.jobId) } returns Response.success(printJob(body, "done"))
++
++        vm.retryPrintRecovery()
++        advanceUntilIdle()
++
++        assertNull(vm.state.value.unresolvedPrint)
++        assertEquals("done", vm.state.value.printJob?.status)
++        coVerify(exactly = 1) { sortingApi.createSortingPrintJob(requestId.toString(), any()) }
++    }
++
++    @Test
++    fun `running print can be explicitly repeated once with a new UUID after check`() = runTest {
++        var saved: SortingPrintJobBody? = null
++        every { api.saveSortingPrint(any(), requestId.toString(), any()) } answers { saved = thirdArg() }
++        every { api.pendingSortingPrint(any(), requestId.toString()) } answers { saved }
++        stubLoad()
++        coEvery { sortingApi.printLabelPreview(requestId.toString(), "product", prodC, "wb") } returns
++            Response.success(SortingLabelPreview("4601234567893", "Товар", "WB · sku", warehouseId, true))
++        val jobs = mutableListOf<SortingPrintJobBody>()
++        coEvery { sortingApi.createSortingPrintJob(requestId.toString(), any()) } answers {
++            secondArg<SortingPrintJobBody>().also(jobs::add).let { Response.success(printJob(it, "running")) }
++        }
++
++        val vm = SortingViewModel(requestId, api)
++        advanceUntilIdle()
++        vm.selectProductForPrint(prodC, "sku · Товар")
++        advanceUntilIdle()
++        vm.confirmPrint()
++        advanceUntilIdle()
++        val original = requireNotNull(saved)
++
++        vm.retryPrintRecovery()
++        advanceUntilIdle()
++        vm.requestRepeatPrint()
++        assertEquals(original, vm.state.value.repeatPrintConfirmation)
++        coVerify(exactly = 1) { sortingApi.createSortingPrintJob(requestId.toString(), any()) }
  
 -        val sent = putSlot.captured
 -        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
@@ -5344,12 +5429,37 @@ index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85
 -        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
 -        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
 -        assertEquals("итого 3 строки", 3, sent.size)
-+        vm.retryPrintRecovery()
++        vm.confirmRepeatPrint()
 +        advanceUntilIdle()
 +
-+        assertNull(vm.state.value.unresolvedPrint)
-+        assertEquals("done", vm.state.value.printJob?.status)
-+        coVerify(exactly = 1) { sortingApi.createSortingPrintJob(requestId.toString(), any()) }
++        assertEquals(2, jobs.size)
++        assertEquals(original.copy(jobId = jobs[1].jobId), jobs[1])
++        assertFalse(original.jobId == jobs[1].jobId)
++    }
++
++    @Test
++    fun `saved print blocks completed auto exit before delayed destination is read`() = runTest {
++        val saved = SortingPrintJobBody("saved-job", "product", prodC, "wb", 1, "printer-442")
++        every { api.pendingSortingPrint(any(), requestId.toString()) } returns saved
++        stubLoad(document = request(status = "done", posted = 10))
++        val destination = CompletableDeferred<Response<PrintDestinationResponse>>()
++        coEvery { sortingApi.printDestination(warehouseId) } coAnswers { destination.await() }
++        coEvery { sortingApi.sortingPrintJob(saved.jobId) } returns Response.success(printJob(saved, "running"))
++
++        val vm = SortingViewModel(requestId, api)
++        runCurrent()
++
++        assertTrue(vm.state.value.documentDone)
++        assertEquals(saved, vm.state.value.unresolvedPrint)
++        assertFalse(canLeaveCompletedSorting(vm.state.value))
++
++        destination.complete(Response.success(PrintDestinationResponse(
++            PrintDestinationOut("printer-442", "Synthetic_442", "darwin", warehouseId, true, true, null, true),
++        )))
++        advanceUntilIdle()
++
++        assertEquals(saved, vm.state.value.unresolvedPrint)
++        assertEquals("running", vm.state.value.printJob?.status)
 +    }
 +
 +    @Test
