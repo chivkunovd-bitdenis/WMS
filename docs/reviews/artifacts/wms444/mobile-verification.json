@@ -1,0 +1,20 @@
+{
+  "mobile_sha": "3a3cf5dcf54c500ac4dbf5f6f22b75df2fc504fa",
+  "build": "assembleDebug PASS",
+  "unit_tests": {
+    "total": 158,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "OutboundPackAttemptTest": 10,
+    "OutboundAssemblyViewModelTest": 6
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 41,
+    "information": 2
+  },
+  "apk_sha256": "dee701e159c4aa1d702ed0be775a6f7c97ce8d464f5f7b2592de0a1a6ecbf2aa",
+  "apk_installed": false,
+  "end_to_end_lost_response_after_commit": "not executed; real UI path unavailable; returned to original analyst"
+}

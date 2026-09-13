@@ -1,9 +1,15 @@
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-index 6599df7..6fe899c 100644
+index 6599df7..ed94c86 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-@@ -6,6 +6,8 @@ import kotlinx.serialization.encodeToString
+@@ -4,8 +4,14 @@ import okhttp3.OkHttpClient
+ import kotlinx.serialization.json.Json
+ import kotlinx.serialization.encodeToString
  import kotlinx.serialization.decodeFromString
++import kotlinx.serialization.json.jsonObject
++import kotlinx.serialization.json.jsonPrimitive
++import okio.ByteString.Companion.decodeBase64
++import java.util.UUID
  import ru.wms.tsd.core.api.fbs.DeliverBody
  import ru.wms.tsd.core.api.fbs.FbsApi
 +import ru.wms.tsd.core.api.packaging.PackAttempt
@@ -11,57 +17,76 @@ index 6599df7..6fe899c 100644
  import ru.wms.tsd.BuildConfig
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
-@@ -28,6 +30,7 @@ class ApiProvider(
-     private var cachedOperations: OperationsApi? = null
-     private var cachedWarehouses: WarehousesApi? = null
-     private var cachedFbs: FbsApi? = null
-+    private var cachedPackaging: PackagingApi? = null
- 
-     private fun baseUrl(): String {
-         return normalizeBaseUrl(authStore.getBaseUrl() ?: BuildConfig.DEFAULT_API_BASE_URL)
-@@ -56,6 +59,7 @@ class ApiProvider(
-         cachedOperations = null
-         cachedWarehouses = null
-         cachedFbs = null
-+        cachedPackaging = null
-         return client
-     }
- 
-@@ -66,6 +70,19 @@ class ApiProvider(
+@@ -66,6 +72,42 @@ class ApiProvider(
          authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
      }
- 
+
 +    /** Незавершённая попытка упаковки строки — только если её начал текущий сотрудник. */
 +    fun pendingPackAttempt(taskId: String, lineId: String): PackAttempt? {
-+        val stored = authStore.getPackAttempt(baseUrl(), taskId, lineId) ?: return null
-+        val attempt = runCatching { Json.decodeFromString<PackAttempt>(stored) }.getOrNull() ?: return null
-+        return attempt.takeIf { it.actor == currentActor() }
++        val server = packServer()
++        val actor = currentActor()
++        val stored = authStore.getPackAttempt(server, actor, taskId, lineId) ?: return null
++        // A damaged receipt must not silently turn into a second physical operation.
++        val attempt = Json.decodeFromString<PackAttempt>(stored)
++        check(attempt.actor == actor && attempt.server == server && attempt.quantity > 0)
++        UUID.fromString(attempt.key)
++        return attempt
 +    }
 +
-+    fun savePackAttempt(taskId: String, lineId: String, attempt: PackAttempt?) {
-+        authStore.savePackAttempt(baseUrl(), taskId, lineId, attempt?.let { Json.encodeToString(it) })
++    fun savePackAttempt(taskId: String, lineId: String, attempt: PackAttempt) {
++        authStore.savePackAttempt(
++            attempt.server, attempt.actor, taskId, lineId, Json.encodeToString(attempt),
++        )
 +    }
 +
-+    fun currentActor(): String = authManager.getCurrentSession()?.email.orEmpty()
++    fun clearPackAttempt(taskId: String, lineId: String, attempt: PackAttempt) {
++        // Clear the captured context, even if the operator/server changed during HTTP.
++        authStore.savePackAttempt(attempt.server, attempt.actor, taskId, lineId, null)
++    }
++
++    fun packServer(): String = baseUrl()
++
++    fun currentActor(): String = packActor(checkNotNull(authManager.getCurrentSession()).token)
++
++    private fun packActor(token: String): String {
++        // Claims identify the local receipt only; the server still authenticates JWT.
++        val payload = checkNotNull(token.split('.').getOrNull(1)?.decodeBase64()).utf8()
++        val claims = Json.parseToJsonElement(payload).jsonObject
++        val tenant = UUID.fromString(claims.getValue("tenant_id").jsonPrimitive.content)
++        val user = UUID.fromString(claims.getValue("sub").jsonPrimitive.content)
++        return "$tenant:$user"
++    }
 +
      fun operations(): OperationsApi {
          val client = client()
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
-@@ -79,4 +96,8 @@ class ApiProvider(
+@@ -79,4 +121,20 @@ class ApiProvider(
          val client = client()
          return cachedFbs ?: client.createService(FbsApi::class.java).also { cachedFbs = it }
      }
-+    fun packaging(): PackagingApi {
-+        val client = client()
-+        return cachedPackaging ?: client.createService(PackagingApi::class.java).also { cachedPackaging = it }
++    fun packaging(attempt: PackAttempt): PackagingApi {
++        val session = checkNotNull(authManager.getCurrentSession())
++        check(attempt.server == baseUrl() && attempt.actor == packActor(session.token))
++        // Bind this one request to the same identity that was saved before HTTP.
++        val builder = OkHttpClient.Builder().addInterceptor { chain ->
++            val response = chain.proceed(
++                chain.request().newBuilder().header("Authorization", "Bearer ${session.token}").build(),
++            )
++            if (response.code == 401 && authManager.getCurrentSession()?.token == session.token) {
++                authManager.notifySessionExpired()
++            }
++            response
++        }
++        return ApiClient(baseUrl = attempt.server, okHttpClientBuilder = builder)
++            .createService(PackagingApi::class.java)
 +    }
  }
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
 new file mode 100644
-index 0000000..d88449c
+index 0000000..d6e6103
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,48 @@
 +package ru.wms.tsd.core.api.packaging
 +
 +import kotlinx.serialization.SerialName
@@ -108,22 +133,23 @@ index 0000000..d88449c
 +    val key: String,
 +    val quantity: Int,
 +    val actor: String,
++    val server: String,
 +)
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
-index 4243fa6..faea1be 100644
+index 4243fa6..7230b17 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 @@ -55,6 +55,18 @@ class AuthStore(context: Context) {
          check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
      }
- 
+
 +    // Identity of one physical pack attempt. Server, document and line are part of the
 +    // storage key, so a stored attempt can never be replayed against another of them.
-+    fun getPackAttempt(server: String, taskId: String, lineId: String): String? =
-+        encryptedPrefs.getString("pack_attempt:$server:$taskId:$lineId", null)
++    fun getPackAttempt(server: String, actor: String, taskId: String, lineId: String): String? =
++        encryptedPrefs.getString("pack_attempt:$server:$actor:$taskId:$lineId", null)
 +
-+    fun savePackAttempt(server: String, taskId: String, lineId: String, body: String?) {
-+        val key = "pack_attempt:$server:$taskId:$lineId"
++    fun savePackAttempt(server: String, actor: String, taskId: String, lineId: String, body: String?) {
++        val key = "pack_attempt:$server:$actor:$taskId:$lineId"
 +        val edit = encryptedPrefs.edit()
 +        if (body == null) edit.remove(key) else edit.putString(key, body)
 +        check(edit.commit()) { "Не удалось сохранить попытку упаковки на устройстве. Повторите попытку." }
@@ -133,10 +159,18 @@ index 4243fa6..faea1be 100644
          val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
-index 687e378..aca1974 100644
+index 687e378..07513cc 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
-@@ -19,9 +19,10 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadBoxCreate
+@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
+ import androidx.lifecycle.viewModelScope
+ import java.util.UUID
+ import kotlinx.coroutines.channels.Channel
++import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.launch
+@@ -19,9 +20,10 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadBoxCreate
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestDetailOut
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadScanBody
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadShipBody
@@ -146,9 +180,46 @@ index 687e378..aca1974 100644
 +import ru.wms.tsd.core.api.packaging.PackAttempt
 +import ru.wms.tsd.core.api.packaging.PackAttemptBody
  import ru.wms.tsd.ui.patterns.ScanFlash
- 
+
  data class AssemblyUiState(
-@@ -192,9 +193,11 @@ class OutboundAssemblyViewModel(
+@@ -115,7 +117,35 @@ class OutboundAssemblyViewModel(
+         runCatching {
+             api.operations().getPackagingTaskOperationsPackagingTasksTaskIdGet(UUID.fromString(taskId))
+         }.onSuccess { resp ->
+-            if (resp.isSuccessful) _state.value = _state.value.copy(packaging = resp.body())
++            if (resp.isSuccessful) {
++                _state.value = _state.value.copy(packaging = resp.body())
++                recoverPackAttempts()
++            }
++        }
++    }
++
++    /** Resolve saved attempts before a reopened screen offers the next physical unit. */
++    private suspend fun recoverPackAttempts() {
++        val task = _state.value.packaging ?: return
++        if (_state.value.packBusy) return
++        _state.value = _state.value.copy(packBusy = true)
++        try {
++            for (line in task.lines) {
++                val pending = api.pendingPackAttempt(task.id, line.id) ?: continue
++                when (val result = sendPackAttempt(task.id, line.id, pending)) {
++                    is ApiResult.Ok -> _state.value = _state.value.copy(packaging = result.value)
++                    is ApiResult.Err -> {
++                        _state.value = _state.value.copy(flash = errorFlash(result.message))
++                        break
++                    }
++                }
++            }
++        } catch (cancelled: CancellationException) {
++            throw cancelled
++        } catch (_: Exception) {
++            _state.value = _state.value.copy(flash = errorFlash("Не удалось восстановить попытку упаковки"))
++        } finally {
++            _state.value = _state.value.copy(packBusy = false)
+         }
+     }
+
+@@ -192,9 +222,11 @@ class OutboundAssemblyViewModel(
          val task = _state.value.packaging ?: return
          val line = _state.value.packLine ?: return
          packagingMutation {
@@ -162,8 +233,8 @@ index 687e378..aca1974 100644
 +            }
          }
      }
- 
-@@ -203,11 +206,36 @@ class OutboundAssemblyViewModel(
+
+@@ -203,11 +235,50 @@ class OutboundAssemblyViewModel(
          val task = _state.value.packaging ?: return
          val line = _state.value.packLine ?: return
          if (qty < 1) return
@@ -182,29 +253,43 @@ index 687e378..aca1974 100644
 +     */
 +    private suspend fun packAttempt(taskId: String, lineId: String, qty: Int): ApiResult<PackagingTaskOut> {
 +        val pending = api.pendingPackAttempt(taskId, lineId)
-+        val attempt = pending ?: PackAttempt(UUID.randomUUID().toString(), qty, api.currentActor())
++        val attempt = pending ?: PackAttempt(
++            UUID.randomUUID().toString(), qty, api.currentActor(), api.packServer(),
++        )
 +        if (pending == null) {
 +            val failure = runCatching { api.savePackAttempt(taskId, lineId, attempt) }.exceptionOrNull()
 +            if (failure != null) {
 +                return ApiResult.Err(failure.message ?: "Не удалось сохранить попытку упаковки на устройстве")
 +            }
 +        }
-+        val response = runCatching {
-+            api.packaging().pack(taskId, lineId, PackAttemptBody(attempt.quantity, attempt.key))
-+        }.getOrNull() ?: return ApiResult.Err(networkErrorText()) // ответ потерян — ключ остаётся жить
++        return sendPackAttempt(taskId, lineId, attempt)
++    }
++
++    private suspend fun sendPackAttempt(
++        taskId: String, lineId: String, attempt: PackAttempt,
++    ): ApiResult<PackagingTaskOut> {
++        val response = try {
++            api.packaging(attempt).pack(taskId, lineId, PackAttemptBody(attempt.quantity, attempt.key))
++        } catch (cancelled: CancellationException) {
++            throw cancelled
++        } catch (_: Exception) {
++            return ApiResult.Err(networkErrorText()) // ответ потерян — ключ остаётся жить
++        }
 +        val body = response.body()
 +        if (response.isSuccessful && body != null) {
-+            api.savePackAttempt(taskId, lineId, null)
++            api.clearPackAttempt(taskId, lineId, attempt)
 +            return ApiResult.Ok(body.packagingTask)
          }
 +        // Сервер ответил отказом — значит, он ничего не записал. Держать ключ нельзя:
 +        // иначе следующая законная упаковка вечно повторяла бы отклонённую попытку.
-+        if (response.code() in 400..499) api.savePackAttempt(taskId, lineId, null)
++        if (response.code() in 400..499 && response.code() !in listOf(401, 403)) {
++            api.clearPackAttempt(taskId, lineId, attempt)
++        }
 +        return ApiResult.Err(response.readableError())
      }
- 
+
      fun requestCompletePackaging() {
-@@ -218,17 +246,19 @@ class OutboundAssemblyViewModel(
+@@ -218,17 +289,27 @@ class OutboundAssemblyViewModel(
          val task = _state.value.packaging ?: return
          _state.value = _state.value.copy(confirm = null)
          packagingMutation {
@@ -218,19 +303,27 @@ index 687e378..aca1974 100644
 +            }
          }
      }
- 
+
 -    private fun packagingMutation(block: suspend () -> Response<PackagingTaskOut>) {
 +    private fun packagingMutation(block: suspend () -> ApiResult<PackagingTaskOut>) {
          if (_state.value.packBusy) return
          _state.value = _state.value.copy(packBusy = true)
          viewModelScope.launch {
 -            when (val result = apiCall(block)) {
-+            when (val result = block()) {
++            val outcome = try {
++                block()
++            } catch (cancelled: CancellationException) {
++                _state.value = _state.value.copy(packBusy = false)
++                throw cancelled
++            } catch (_: Exception) {
++                ApiResult.Err("Не удалось сохранить попытку упаковки на устройстве")
++            }
++            when (val result = outcome) {
                  is ApiResult.Ok -> {
                      val line = result.value.lines.firstOrNull { it.id == _state.value.packLineId }
                      _state.value = _state.value.copy(
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
-index 53a089e..4681c6f 100644
+index 53a089e..5c39cef 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
 @@ -27,6 +27,9 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadLineOut
@@ -240,17 +333,17 @@ index 53a089e..4681c6f 100644
 +import ru.wms.tsd.core.api.packaging.PackAttempt
 +import ru.wms.tsd.core.api.packaging.PackProgressResult
 +import ru.wms.tsd.core.api.packaging.PackagingApi
- 
+
  /**
   * T-17. Юнит-тесты сборки отгрузки: двухшаговая загрузка упаковки (T-15b),
-@@ -40,15 +43,32 @@ class OutboundAssemblyViewModelTest {
+@@ -40,15 +43,37 @@ class OutboundAssemblyViewModelTest {
      private val PACK_LINE_ID = "11111111-2222-3333-4444-555555555555"
- 
+
      private lateinit var ops: OperationsApi
 +    private lateinit var packing: PackagingApi
      private lateinit var api: ApiProvider
 +    private val attempts = mutableMapOf<String, PackAttempt>()
- 
+
      @Before
      fun setUp() {
          Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -260,8 +353,9 @@ index 53a089e..4681c6f 100644
 +        attempts.clear()
 +        api = mockk {
 +            every { operations() } returns ops
-+            every { packaging() } returns packing
++            every { packaging(any()) } returns packing
 +            every { currentActor() } returns "packer@ff.ru"
++            every { packServer() } returns "http://test/"
 +            every { pendingPackAttempt(any(), any()) } answers { attempts[slot(firstArg(), secondArg())] }
 +            every { savePackAttempt(any(), any(), any()) } answers {
 +                val at = slot(firstArg(), secondArg())
@@ -269,16 +363,20 @@ index 53a089e..4681c6f 100644
 +                if (attempt == null) attempts.remove(at) else attempts[at] = attempt
 +                Unit
 +            }
++            every { clearPackAttempt(any(), any(), any()) } answers {
++                attempts.remove("${firstArg<String>()}:${secondArg<String>()}")
++                Unit
++            }
 +        }
      }
- 
+
 +    private fun slot(taskId: String, lineId: String) = "$taskId:$lineId"
 +
      @After
      fun tearDown() {
          Dispatchers.resetMain()
-@@ -208,21 +228,19 @@ class OutboundAssemblyViewModelTest {
- 
+@@ -208,21 +233,19 @@ class OutboundAssemblyViewModelTest {
+
          val packed = packagingTask(listOf(packagingLine(done = 1, printed = 1)))
          coEvery {
 -            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(
@@ -287,11 +385,11 @@ index 53a089e..4681c6f 100644
 -        } returns Response.success(packed)
 +            packing.pack(taskId, PACK_LINE_ID, match { it.quantity == 1 && it.idempotencyKey.isNotBlank() })
 +        } returns Response.success(PackProgressResult(packed))
- 
+
          val vm = vm()
          vm.openPackLine(PACK_LINE_ID)
          vm.submitPack(1)
- 
+
 -        coVerify(exactly = 1) {
 -            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(any(), any(), any())
 -        }
@@ -302,14 +400,14 @@ index 53a089e..4681c6f 100644
 +        // работа записана — ключ снят, следующая упаковка получит новый
 +        assertTrue(attempts.isEmpty())
      }
- 
+
      @Test
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
 new file mode 100644
-index 0000000..445d508
+index 0000000..17791b1
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
-@@ -0,0 +1,333 @@
+@@ -0,0 +1,356 @@
 +package ru.wms.tsd.features.outbound
 +
 +import io.mockk.coEvery
@@ -378,13 +476,18 @@ index 0000000..445d508
 +        attempts.clear()
 +        api = mockk {
 +            every { operations() } returns ops
-+            every { packaging() } returns packing
++            every { packaging(any()) } returns packing
 +            every { currentActor() } returns "packer@ff.ru"
++            every { packServer() } returns "http://test/"
 +            every { pendingPackAttempt(any(), any()) } answers { attempts["${firstArg<String>()}:${secondArg<String>()}"] }
 +            every { savePackAttempt(any(), any(), any()) } answers {
 +                val at = "${firstArg<String>()}:${secondArg<String>()}"
 +                val attempt = thirdArg<PackAttempt?>()
 +                if (attempt == null) attempts.remove(at) else attempts[at] = attempt
++                Unit
++            }
++            every { clearPackAttempt(any(), any(), any()) } answers {
++                attempts.remove("${firstArg<String>()}:${secondArg<String>()}")
 +                Unit
 +            }
 +        }
@@ -468,7 +571,7 @@ index 0000000..445d508
 +        val bodies = mutableListOf<PackAttemptBody>()
 +        var call = 0
 +        coEvery { packing.pack(taskId, lineA, any()) } answers {
-+            bodies += thirdArg()
++            bodies += thirdArg<PackAttemptBody>()
 +            if (call++ == 0) throw IOException("ответ потерян")
 +            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3))))
 +        }
@@ -493,7 +596,7 @@ index 0000000..445d508
 +        val bodies = mutableListOf<PackAttemptBody>()
 +        var call = 0
 +        coEvery { packing.pack(taskId, lineA, any()) } answers {
-+            bodies += thirdArg()
++            bodies += thirdArg<PackAttemptBody>()
 +            if (call++ == 0) throw IOException("ответ потерян")
 +            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3))))
 +        }
@@ -502,7 +605,7 @@ index 0000000..445d508
 +        assertEquals(1, attempts.size)
 +
 +        // новый экран/процесс: ключ читается с диска
-+        openedVm().submitPack(1)
++        openedVm()
 +
 +        assertEquals(2, bodies.size)
 +        assertEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
@@ -515,7 +618,7 @@ index 0000000..445d508
 +        val bodies = mutableListOf<PackAttemptBody>()
 +        var done = 0
 +        coEvery { packing.pack(taskId, lineA, any()) } answers {
-+            bodies += thirdArg()
++            bodies += thirdArg<PackAttemptBody>()
 +            Response.success(PackProgressResult(task(line(lineA, done = ++done, total = 3))))
 +        }
 +
@@ -621,25 +724,43 @@ index 0000000..445d508
 +    }
 +
 +    @Test
-+    fun `сохранённая попытка чужого сотрудника и чужого сервера не подхватывается`() {
++    fun `сохранённые попытки разделены по серверу tenant и user`() {
 +        val store: AuthStore = mockk()
 +        val auth: AuthManager = mockk()
-+        every { auth.getCurrentSession() } returns AuthSession("packer@ff.ru", "Упаковщик", "token")
++        val tenant = UUID.randomUUID().toString()
++        val userA = UUID.randomUUID().toString()
++        val userB = UUID.randomUUID().toString()
++        fun token(t: String, u: String): String {
++            val claims = """{"tenant_id":"$t","sub":"$u"}"""
++            return "header." + java.util.Base64.getUrlEncoder().withoutPadding()
++                .encodeToString(claims.toByteArray()) + ".signature"
++        }
++        every { auth.getCurrentSession() } returns AuthSession("same@example.com", "A", token(tenant, userA))
 +        every { store.getBaseUrl() } returns "https://api.test/"
 +        val provider = ApiProvider(store, auth)
-+
-+        val mine = Json.encodeToString(PackAttempt("key-mine", 1, "packer@ff.ru"))
-+        val foreign = Json.encodeToString(PackAttempt("key-foreign", 1, "other@ff.ru"))
-+
-+        every { store.getPackAttempt("https://api.test/", taskId, lineA) } returns mine
-+        assertEquals("key-mine", provider.pendingPackAttempt(taskId, lineA)?.key)
-+
-+        every { store.getPackAttempt("https://api.test/", taskId, lineA) } returns foreign
++        val saved = mutableMapOf<String, String>()
++        every { store.getPackAttempt(any(), any(), any(), any()) } answers {
++            saved["${firstArg<String>()}|${secondArg<String>()}|${thirdArg<String>()}|${arg<String>(3)}"]
++        }
++        every { store.savePackAttempt(any(), any(), any(), any(), any()) } answers {
++            val slot = "${firstArg<String>()}|${secondArg<String>()}|${thirdArg<String>()}|${arg<String>(3)}"
++            val value = arg<String?>(4)
++            if (value == null) saved.remove(slot) else saved[slot] = value
++            Unit
++        }
++        val a = PackAttempt(UUID.randomUUID().toString(), 1, provider.currentActor(), provider.packServer())
++        provider.savePackAttempt(taskId, lineA, a)
++        assertEquals(a, provider.pendingPackAttempt(taskId, lineA))
++        every { auth.getCurrentSession() } returns AuthSession("same@example.com", "B", token(tenant, userB))
 +        assertNull(provider.pendingPackAttempt(taskId, lineA))
-+
-+        // другой сервер — другой ключ хранения, чужая запись невидима
++        val b = PackAttempt(UUID.randomUUID().toString(), 2, provider.currentActor(), provider.packServer())
++        provider.savePackAttempt(taskId, lineA, b)
++        assertEquals(b, provider.pendingPackAttempt(taskId, lineA))
++        provider.clearPackAttempt(taskId, lineA, a)
++        assertEquals(b, provider.pendingPackAttempt(taskId, lineA))
++        every { auth.getCurrentSession() } returns AuthSession("same@example.com", "B", token(UUID.randomUUID().toString(), userB))
++        assertNull(provider.pendingPackAttempt(taskId, lineA))
 +        every { store.getBaseUrl() } returns "https://other.test/"
-+        every { store.getPackAttempt("https://other.test/", taskId, lineA) } returns null
 +        assertNull(provider.pendingPackAttempt(taskId, lineA))
 +    }
 +}
