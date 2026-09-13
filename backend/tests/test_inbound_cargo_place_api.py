@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.inbound_intake import InboundIntakeCargoPlaceLine
+from app.models.inbound_intake import InboundIntakeCargoPlaceLine, InboundIntakeLine
 
 BASE = "/operations/inbound-intake-requests"
 
@@ -97,6 +97,12 @@ async def _create_receiving_with_cargo_place(
         headers=headers,
     )
     assert submitted.status_code == 200, submitted.text
+    # Preserve a historical submitted document whose plan has no physical fact yet.
+    async with SessionLocal() as session:
+        legacy_line = await session.get(InboundIntakeLine, uuid.UUID(line.json()["id"]))
+        assert legacy_line is not None
+        legacy_line.actual_qty = None
+        await session.commit()
     places = await async_client.post(
         f"{BASE}/{request_id}/cargo-places",
         headers=headers,

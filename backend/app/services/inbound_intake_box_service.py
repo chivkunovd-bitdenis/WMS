@@ -496,7 +496,10 @@ async def scan_product_into_box(
     qty_before_scan = int(line.quantity) if line is not None else 0
     if qty_before_scan >= 1_000_000_000:
         raise InboundIntakeBoxError("invalid_qty")
-    await intake_svc.redistribute_ff_draft_container(session, req, product_id, 1)
+    try:
+        await intake_svc.redistribute_ff_draft_container(session, req, product_id, 1)
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
     if line is None:
@@ -557,9 +560,12 @@ async def set_product_quantity_in_open_box(
     line = res.scalar_one_or_none()
 
     qty_before = int(line.quantity) if line is not None else 0
-    await intake_svc.redistribute_ff_draft_container(
-        session, req, product_id, quantity - qty_before
-    )
+    try:
+        await intake_svc.redistribute_ff_draft_container(
+            session, req, product_id, quantity - qty_before
+        )
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
 
     if quantity == 0:
         if line is None:
