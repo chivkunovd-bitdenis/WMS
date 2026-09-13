@@ -235,6 +235,7 @@ class WindowsAdapter:
                 raise ValueError("Очередь Windows доступна только в Windows-сборке")
             try:
                 import fitz
+                import win32gui
                 import win32print
                 import win32ui
                 from PIL import Image, ImageWin
@@ -244,6 +245,7 @@ class WindowsAdapter:
                 ) from exc
             modules = {
                 "fitz": fitz,
+                "win32gui": win32gui,
                 "win32print": win32print,
                 "win32ui": win32ui,
                 "Image": Image,
@@ -348,12 +350,47 @@ class WindowsAdapter:
     def validate_layout(
         self, queue: str, width_mm: int | None, height_mm: int | None
     ) -> None:
-        dc = self.modules["win32ui"].CreateDC()
+        dc = self._create_printer_dc(queue)
         try:
-            dc.CreatePrinterDC(queue)
             self._validate_page_size(dc, width_mm, height_mm)
         finally:
             dc.DeleteDC()
+
+    def _create_printer_dc(self, queue: str) -> Any:
+        """Create a selected-queue DC that cannot inherit driver copy count.
+
+        WMS expands the requested copies into pages in a single GDI document.
+        The printer's persisted ``dmCopies`` must therefore be one, otherwise a
+        driver configured for (for example) two copies would multiply every page.
+        ``GetPrinter`` returns a temporary DEVMODE; changing it here does not
+        alter the user's saved printer defaults.
+        """
+        printer = self.modules["win32print"].OpenPrinter(queue)
+        try:
+            details = self.modules["win32print"].GetPrinter(printer, 2)
+            devmode = details.get("pDevMode")
+            if devmode is None:
+                raise ValueError(
+                    "Windows не вернула параметры выбранной очереди печати"
+                )
+            # DM_COPIES | DM_COLLATE. Explicit bits make these values part of
+            # this job's DEVMODE instead of falling back to the driver default.
+            try:
+                devmode.Copies = 1
+                devmode.Collate = 0
+                devmode.Fields |= 0x00000100 | 0x00008000
+                if devmode.Copies != 1 or not devmode.Fields & 0x00000100:
+                    raise ValueError("DEVMODE не сохранил число копий")
+                handle = self.modules["win32gui"].CreateDC(
+                    "WINSPOOL", queue, devmode
+                )
+            except (AttributeError, TypeError) as exc:
+                raise ValueError(
+                    "Windows не смогла задать одну копию для задания печати"
+                ) from exc
+        finally:
+            self.modules["win32print"].ClosePrinter(printer)
+        return self.modules["win32ui"].CreateDCFromHandle(handle)
 
     def submit(
         self,
@@ -372,11 +409,8 @@ class WindowsAdapter:
         if type(copies) is not int or not 1 <= copies <= 999:
             raise ValueError("Некорректное число копий")
         pages = self._pages(data, mime, width_mm, height_mm)
-        dc = self.modules["win32ui"].CreateDC()
+        dc = self._create_printer_dc(queue)
         try:
-            # CreatePrinterDC takes the queue name explicitly; it never falls
-            # back to the default printer.
-            dc.CreatePrinterDC(queue)
             self._validate_page_size(dc, width_mm, height_mm)
             receipt = dc.StartDoc("WMS label")
             if not isinstance(receipt, int) or receipt <= 0:
@@ -803,6 +837,38 @@ def setup(directory: Path, adapter: Any) -> dict[str, Any]:
     return config
 
 
+def reconfigure(directory: Path, adapter: Any, *, reconnect: bool) -> dict[str, Any]:
+    """Run setup without leaving the previous background worker stopped.
+
+    A normal rerun uses the existing connection as R13 requires.  An explicit
+    reconnect may delete it only when no acknowledgement is waiting.  Both paths
+    stop the worker before taking its exclusive lock; a rejected reconnect or a
+    setup error starts the prior worker again after releasing that lock.
+    """
+    had_connection = (directory / "connection.json").exists()
+    if reconnect or had_connection:
+        stop_background_before_mutation(directory)
+    rejected_for_inflight = False
+    try:
+        with single_instance(directory):
+            if reconnect:
+                if (directory / "inflight.json").exists():
+                    rejected_for_inflight = True
+                else:
+                    (directory / "connection.json").unlink(missing_ok=True)
+            if not rejected_for_inflight:
+                return setup(directory, adapter)
+    except BaseException:
+        if had_connection:
+            start_registered_background(directory)
+        raise
+    if had_connection:
+        # The lock has been released, so the scheduler can start exactly one
+        # worker instead of immediately colliding with setup's mutex.
+        start_registered_background(directory)
+    raise ValueError("Сначала восстановите квитанцию прежнего подключения")
+
+
 def self_test() -> None:
     """Packaged executable can verify its own stdlib/queue boundary without Python installed."""
     if getattr(sys, "frozen", False):
@@ -955,55 +1021,42 @@ def main(argv: list[str] | None = None) -> int:
                 or "В ОС нет настроенных очередей принтеров."
             )
             return 0
-        start_after_setup = False
-        if args.reconnect:
-            stop_background_before_mutation(directory)
-        with single_instance(directory) as control:
-            if args.reconnect:
-                if (directory / "inflight.json").exists():
-                    raise ValueError(
-                        "Сначала восстановите квитанцию прежнего подключения"
-                    )
-                (directory / "connection.json").unlink(missing_ok=True)
-            if args.run:
-                config = read_private(directory / "connection.json")
-            else:
-                setup(directory, adapter)
-                start_after_setup = True
-            if args.run:
-                client = Client(config)
-                while True:
-                    try:
-                        status = client.api("/agent/heartbeat")
-                        if not status["paired"]:
-                            raise ValueError("Подключение ещё не подтверждено в WMS")
-                        message = process_once(config, directory, client, adapter)
-                        if message:
-                            print(message, flush=True)
-                    except (
-                        OSError,
-                        ValueError,
-                        KeyError,
-                        TypeError,
-                        urllib.error.URLError,
-                    ):
-                        print(
-                            "Связь с WMS недоступна. Квитанция сохранена; передача в ОС не повторяется.",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        if args.once:
-                            return 2
-                    if args.once:
-                        return 0
-                    if control.wait(3):
-                        return 0
-        if start_after_setup:
+        if args.reconnect or not args.run:
+            reconfigure(directory, adapter, reconnect=args.reconnect)
             start_registered_background(directory)
             print(
                 "Подключено. Фоновая программа запущена и будет запускаться автоматически."
             )
             return 0
+        with single_instance(directory) as control:
+            config = read_private(directory / "connection.json")
+            client = Client(config)
+            while True:
+                try:
+                    status = client.api("/agent/heartbeat")
+                    if not status["paired"]:
+                        raise ValueError("Подключение ещё не подтверждено в WMS")
+                    message = process_once(config, directory, client, adapter)
+                    if message:
+                        print(message, flush=True)
+                except (
+                    OSError,
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                    urllib.error.URLError,
+                ):
+                    print(
+                        "Связь с WMS недоступна. Квитанция сохранена; передача в ОС не повторяется.",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    if args.once:
+                        return 2
+                if args.once:
+                    return 0
+                if control.wait(3):
+                    return 0
     except KeyboardInterrupt:
         return 0
     except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):

@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 import uuid
+from contextlib import contextmanager
 from xml.etree import ElementTree
 from pathlib import Path
 from types import SimpleNamespace
@@ -283,10 +284,22 @@ class RuntimeTest(unittest.TestCase):
                 self.assertEqual(flags, 6)
                 return [(0, "", "Принтер склада 58", "")]
 
-        class FakeDc:
-            def CreatePrinterDC(self, queue):
-                calls.append(("queue", queue))
+            @staticmethod
+            def OpenPrinter(queue):
+                calls.append(("open", queue))
+                return queue
 
+            @staticmethod
+            def GetPrinter(handle, level):
+                self.assertEqual(handle, "Принтер склада 58")
+                self.assertEqual(level, 2)
+                return {"pDevMode": SimpleNamespace(Copies=2, Collate=1, Fields=0)}
+
+            @staticmethod
+            def ClosePrinter(handle):
+                calls.append(("close", handle))
+
+        class FakeDc:
             def StartDoc(self, name):
                 calls.append(("document", name))
                 return 442
@@ -344,10 +357,27 @@ class RuntimeTest(unittest.TestCase):
                 def draw(self, handle, target):
                     calls.append(("draw", handle, target))
 
+        class FakeGui:
+            @staticmethod
+            def CreateDC(driver, queue, devmode):
+                self.assertEqual(driver, "WINSPOOL")
+                self.assertEqual(queue, "Принтер склада 58")
+                calls.append(
+                    (
+                        "device-context",
+                        queue,
+                        devmode.Copies,
+                        devmode.Collate,
+                        devmode.Fields,
+                    )
+                )
+                return 17
+
         adapter = runtime.WindowsAdapter(
             {
                 "win32print": FakePrint,
-                "win32ui": SimpleNamespace(CreateDC=lambda: FakeDc()),
+                "win32gui": FakeGui,
+                "win32ui": SimpleNamespace(CreateDCFromHandle=lambda handle: FakeDc()),
                 "Image": FakeImageModule,
                 "ImageWin": FakeImageWin,
                 "fitz": None,
@@ -367,7 +397,15 @@ class RuntimeTest(unittest.TestCase):
             40,
         )
         self.assertEqual(receipt, "windows-442")
-        self.assertEqual(calls[0], ("queue", "Принтер склада 58"))
+        device_contexts = [call for call in calls if call[0] == "device-context"]
+        self.assertGreaterEqual(len(device_contexts), 4)
+        self.assertTrue(
+            all(
+                call[1:4] == ("Принтер склада 58", 1, 0)
+                and call[4] & 0x00000100
+                for call in device_contexts
+            )
+        )
         self.assertEqual(sum(call[0] == "draw" for call in calls), 2)
         self.assertNotIn(("abort",), calls)
 
@@ -385,6 +423,73 @@ class RuntimeTest(unittest.TestCase):
         )
         self.assertGreaterEqual(count, 1)
         self.assertLessEqual(count, 255)
+
+    def test_reconnect_with_inflight_restarts_worker_after_releasing_lock(self):
+        (self.directory / "connection.json").write_text("{}")
+        (self.directory / "inflight.json").write_text("{}")
+        events = []
+
+        @contextmanager
+        def lock(directory):
+            events.append("lock")
+            try:
+                yield SimpleNamespace()
+            finally:
+                events.append("unlock")
+
+        with (
+            patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
+            patch.object(runtime, "single_instance", lock),
+            patch.object(runtime, "setup", side_effect=AssertionError("must not set up")),
+            patch.object(runtime, "start_registered_background", lambda _: events.append("start")),
+            self.assertRaisesRegex(ValueError, "Сначала восстановите квитанцию"),
+        ):
+            runtime.reconfigure(self.directory, self.adapter, reconnect=True)
+        self.assertEqual(events, ["stop", "lock", "unlock", "start"])
+
+    def test_existing_setup_stops_worker_before_lock_and_restores_it_on_error(self):
+        (self.directory / "connection.json").write_text("{}")
+        events = []
+
+        @contextmanager
+        def lock(directory):
+            events.append("lock")
+            try:
+                yield SimpleNamespace()
+            finally:
+                events.append("unlock")
+
+        with (
+            patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
+            patch.object(runtime, "single_instance", lock),
+            patch.object(runtime, "setup", side_effect=ValueError("synthetic setup failure")),
+            patch.object(runtime, "start_registered_background", lambda _: events.append("start")),
+            self.assertRaisesRegex(ValueError, "synthetic setup failure"),
+        ):
+            runtime.reconfigure(self.directory, self.adapter, reconnect=False)
+        self.assertEqual(events, ["stop", "lock", "unlock", "start"])
+
+    def test_existing_setup_stops_worker_before_taking_its_lock(self):
+        (self.directory / "connection.json").write_text("{}")
+        events = []
+
+        @contextmanager
+        def lock(directory):
+            events.append("lock")
+            try:
+                yield SimpleNamespace()
+            finally:
+                events.append("unlock")
+
+        with (
+            patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
+            patch.object(runtime, "single_instance", lock),
+            patch.object(runtime, "setup", lambda *_: events.append("setup") or {}),
+        ):
+            self.assertEqual(
+                runtime.reconfigure(self.directory, self.adapter, reconnect=False), {}
+            )
+        self.assertEqual(events, ["stop", "lock", "setup", "unlock"])
 
     def test_windows_installer_stops_and_restores_before_supervised_start(self):
         installer = (Path(__file__).parent / "windows-installer.nsi").read_text()

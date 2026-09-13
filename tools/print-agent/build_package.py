@@ -65,6 +65,8 @@ def build_executable(name: str = "wms-print", *, windowed: bool = False) -> None
                 "--collect-all",
                 "PIL",
                 "--collect-all",
+                "win32gui",
+                "--collect-all",
                 "win32print",
                 "--collect-all",
                 "win32ui",
