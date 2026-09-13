@@ -5,13 +5,14 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, public_base_url, require_fulfillment_admin
 from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.user_profile import ProfilePatch, StaffIdentityCreate
 from app.services.auth_service import AuthError, create_staff_user, send_auth_link
 from app.services.staff_packaging_billing_service import (
     aggregate_staff_billing,
@@ -50,8 +51,7 @@ class StaffPermissionsBody(BaseModel):
         )
 
 
-class StaffAccountCreate(BaseModel):
-    email: EmailStr
+class StaffAccountCreate(StaffIdentityCreate):
     password: str | None = Field(default=None, max_length=128)
 
     @field_validator("password")
@@ -85,7 +85,10 @@ class StaffPackagingBillingOut(BaseModel):
 
 class StaffAccountOut(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     role: str
     must_set_password: bool
     permissions: StaffPermissionsOut
@@ -114,6 +117,9 @@ def _staff_account_out(user: User, perms: StaffPermissionsSnapshot) -> StaffAcco
     return StaffAccountOut(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         role=user.role,
         must_set_password=user.must_set_password,
         permissions=_permissions_out(perms),
@@ -191,6 +197,9 @@ async def get_staff_accounts(
         StaffAccountOut(
             id=str(row_user.id),
             email=row_user.email,
+            full_name=row_user.full_name,
+            job_title=row_user.job_title,
+            display_name=row_user.display_name,
             role=row_user.role,
             must_set_password=row_user.must_set_password,
             permissions=_permissions_out(perms),
@@ -222,7 +231,9 @@ async def post_staff_account(
         staff_user = await create_staff_user(
             session,
             acting_user=actor,
-            email=str(body.email),
+            email=str(body.email) if body.email else None,
+            full_name=body.full_name,
+            job_title=body.job_title,
             password=body.password,
         )
     except AuthError as exc:
@@ -359,3 +370,24 @@ async def patch_staff_permissions(
         staff_user=user,
         perms=perms,
     )
+
+
+@router.patch("/{user_id}/profile", response_model=StaffAccountOut)
+async def patch_staff_profile(
+    user_id: uuid.UUID,
+    body: ProfilePatch,
+    actor: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StaffAccountOut:
+    if not await can_manage_ff_staff(session, actor):
+        raise HTTPException(status_code=403, detail="forbidden")
+    rows = await list_staff_users(session, tenant_id=actor.tenant_id)
+    for staff_user, perms in rows:
+        if staff_user.id == user_id:
+            staff_user.full_name = body.full_name
+            staff_user.job_title = body.job_title
+            await session.commit()
+            return await _staff_account_out_for_actor(
+                session, actor=actor, staff_user=staff_user, perms=perms,
+            )
+    raise HTTPException(status_code=404, detail="user_not_found")

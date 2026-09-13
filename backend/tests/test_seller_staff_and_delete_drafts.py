@@ -89,6 +89,7 @@ async def test_seller_owner_creates_staff_user_and_updates_permissions(
         "/auth/seller-staff-accounts",
         headers=owner_headers,
         json={
+                 "full_name": "Иван Петров",
             "email": staff_email,
             "permissions": {
                 "documents": True,

@@ -590,7 +590,7 @@ async def get_billing_ledger(
     start, end = _month_bounds(month)
     requested_seller = _seller_filter(seller_id)
     query = (
-        select(BillingLedgerEntry, Seller.name, User.email)
+        select(BillingLedgerEntry, Seller.name, User.display_name)
         .outerjoin(Seller, BillingLedgerEntry.seller_id == Seller.id)
         .outerjoin(User, BillingLedgerEntry.performer_id == User.id)
         .where(
