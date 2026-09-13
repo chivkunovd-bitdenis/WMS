@@ -54,13 +54,17 @@ index 949796b..edfb539 100644
      "location_required" to "Сначала отсканируйте ячейку",
      "plan_limit_exceeded" to "Больше плана — товар уже собран",
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-index 6599df7..045fc95 100644
+index 6599df7..fa3253e 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-@@ -1,11 +1,16 @@
+@@ -1,11 +1,27 @@
  package ru.wms.tsd.core.api
  
  import okhttp3.OkHttpClient
++import kotlinx.serialization.json.jsonPrimitive
++import kotlinx.serialization.json.jsonObject
++import okio.ByteString.Companion.decodeBase64
++import java.util.UUID
 +import java.io.IOException
 +import ru.wms.tsd.core.api.sorting.SortingContext
  import kotlinx.serialization.json.Json
@@ -68,13 +72,73 @@ index 6599df7..045fc95 100644
  import kotlinx.serialization.decodeFromString
  import ru.wms.tsd.core.api.fbs.DeliverBody
  import ru.wms.tsd.core.api.fbs.FbsApi
++import ru.wms.tsd.core.api.fbs.SupplyCreateBody
++import ru.wms.tsd.core.api.fbs.PendingFbsSupplyAdd
++import ru.wms.tsd.core.api.fbs.FbsPendingIdentityApi
++import ru.wms.tsd.core.api.fbs.FbsPendingIdentity
++import ru.wms.tsd.core.api.packaging.PackAttempt
++import ru.wms.tsd.core.api.packaging.PackagingApi
 +import ru.wms.tsd.core.api.sorting.LoosePutawayBody
 +import ru.wms.tsd.core.api.sorting.CargoPlacePutawayBody
++import ru.wms.tsd.core.api.sorting.SortingPrintJobBody
 +import ru.wms.tsd.core.api.sorting.SortingApi
  import ru.wms.tsd.BuildConfig
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
-@@ -66,6 +71,51 @@ class ApiProvider(
+@@ -28,6 +44,8 @@ class ApiProvider(
+     private var cachedOperations: OperationsApi? = null
+     private var cachedWarehouses: WarehousesApi? = null
+     private var cachedFbs: FbsApi? = null
++    private var cachedFbsPendingIdentity: FbsPendingIdentity? = null
++    private var cachedPackaging: PackagingApi? = null
+ 
+     private fun baseUrl(): String {
+         return normalizeBaseUrl(authStore.getBaseUrl() ?: BuildConfig.DEFAULT_API_BASE_URL)
+@@ -56,9 +74,43 @@ class ApiProvider(
+         cachedOperations = null
+         cachedWarehouses = null
+         cachedFbs = null
++        cachedFbsPendingIdentity = null
++        cachedPackaging = null
+         return client
+     }
+ 
++    private suspend fun fbsPendingIdentity(): FbsPendingIdentity {
++        cachedFbsPendingIdentity?.let { return it }
++        val response = client().createService(FbsPendingIdentityApi::class.java).me()
++        val identity = response.body()
++        require(response.isSuccessful && identity != null && identity.id.isNotBlank() && identity.tenantId.isNotBlank()) {
++            "Не удалось определить сотрудника для восстановления FBS. Войдите снова."
++        }
++        return identity.also { cachedFbsPendingIdentity = it }
++    }
++
++    suspend fun pendingFbsSupplyCreate(): SupplyCreateBody? {
++        val identity = fbsPendingIdentity()
++        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create")
++            ?.let { Json.decodeFromString<SupplyCreateBody>(it) }
++    }
++
++    suspend fun saveFbsSupplyCreate(body: SupplyCreateBody?) {
++        val identity = fbsPendingIdentity()
++        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create", body?.let { Json.encodeToString(it) })
++    }
++
++    suspend fun pendingFbsSupplyAdd(): PendingFbsSupplyAdd? {
++        val identity = fbsPendingIdentity()
++        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add")
++            ?.let { Json.decodeFromString<PendingFbsSupplyAdd>(it) }
++    }
++
++    suspend fun saveFbsSupplyAdd(body: PendingFbsSupplyAdd?) {
++        val identity = fbsPendingIdentity()
++        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add", body?.let { Json.encodeToString(it) })
++    }
++
+     fun pendingFbsDelivery(supplyId: String): DeliverBody? =
+         authStore.getFbsDelivery(baseUrl(), supplyId)?.let { Json.decodeFromString<DeliverBody>(it) }
+ 
+@@ -66,6 +118,95 @@ class ApiProvider(
          authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
      }
  
@@ -123,13 +187,73 @@ index 6599df7..045fc95 100644
 +        )
 +    }
 +
++    fun pendingSortingPrint(context: SortingContext, requestId: String): SortingPrintJobBody? =
++        authStore.getSortingPrint(context.server, context.user, requestId)
++            ?.let { Json.decodeFromString<SortingPrintJobBody>(it) }
++
++    fun saveSortingPrint(context: SortingContext, requestId: String, body: SortingPrintJobBody?) {
++        authStore.saveSortingPrint(context.server, context.user, requestId, body?.let { Json.encodeToString(it) })
++    }
++
++    /** Незавершённая попытка упаковки строки — только если её начал текущий сотрудник. */
++    fun pendingPackAttempt(taskId: String, lineId: String): PackAttempt? {
++        val server = packServer()
++        val actor = currentActor()
++        val stored = authStore.getPackAttempt(server, actor, taskId, lineId) ?: return null
++        // A damaged receipt must not silently turn into a second physical operation.
++        val attempt = Json.decodeFromString<PackAttempt>(stored)
++        check(attempt.actor == actor && attempt.server == server && attempt.quantity > 0)
++        UUID.fromString(attempt.key)
++        return attempt
++    }
++
++    fun savePackAttempt(taskId: String, lineId: String, attempt: PackAttempt) {
++        authStore.savePackAttempt(
++            attempt.server, attempt.actor, taskId, lineId, Json.encodeToString(attempt),
++        )
++    }
++
++    fun clearPackAttempt(taskId: String, lineId: String, attempt: PackAttempt) {
++        // Clear the captured context, even if the operator/server changed during HTTP.
++        authStore.savePackAttempt(attempt.server, attempt.actor, taskId, lineId, null)
++    }
++
++    fun packServer(): String = baseUrl()
++
++    fun currentActor(): String = packActor(checkNotNull(authManager.getCurrentSession()).token)
++
++    private fun packActor(token: String): String {
++        // Claims identify the local receipt only; the server still authenticates JWT.
++        val payload = String(checkNotNull(token.split('.').getOrNull(1)?.decodeBase64()).toByteArray())
++        val claims = Json.parseToJsonElement(payload).jsonObject
++        val tenant = UUID.fromString(claims.getValue("tenant_id").jsonPrimitive.content)
++        val user = UUID.fromString(claims.getValue("sub").jsonPrimitive.content)
++        return "$tenant:$user"
++    }
++
      fun operations(): OperationsApi {
          val client = client()
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
-@@ -79,4 +129,21 @@ class ApiProvider(
+@@ -79,4 +220,37 @@ class ApiProvider(
          val client = client()
          return cachedFbs ?: client.createService(FbsApi::class.java).also { cachedFbs = it }
      }
++    fun packaging(attempt: PackAttempt): PackagingApi {
++        val session = checkNotNull(authManager.getCurrentSession())
++        check(attempt.server == baseUrl() && attempt.actor == packActor(session.token))
++        // Bind this one request to the same identity that was saved before HTTP.
++        val builder = OkHttpClient.Builder().addInterceptor { chain ->
++            val response = chain.proceed(
++                chain.request().newBuilder().header("Authorization", "Bearer ${session.token}").build(),
++            )
++            if (response.code == 401 && authManager.getCurrentSession()?.token == session.token) {
++                authManager.notifySessionExpired()
++            }
++            response
++        }
++        return ApiClient(baseUrl = attempt.server, okHttpClientBuilder = builder)
++            .createService(PackagingApi::class.java)
++    }
 +
 +    fun sorting(context: SortingContext): SortingApi {
 +        // Смена сотрудника/сервера не должна отправить старое намерение от имени
@@ -148,6 +272,142 @@ index 6599df7..045fc95 100644
 +            .createService(SortingApi::class.java)
 +    }
  }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index 1442fba..a57387e 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -2,6 +2,7 @@ package ru.wms.tsd.core.api.fbs
+ 
+ import kotlinx.serialization.SerialName
+ import kotlinx.serialization.Serializable
++import kotlinx.serialization.json.JsonPrimitive
+ import kotlinx.serialization.json.JsonObject
+ 
+ @Serializable
+@@ -23,10 +24,18 @@ data class FbsSupplySummary(
+     @SerialName("units_count") val unitsCount: Int,
+     @SerialName("boxes_count") val boxesCount: Int,
+     @SerialName("planned_shipment_date") val plannedShipmentDate: String? = null,
++    val marketplace: String = "wb",
++    @SerialName("delivery_type") val deliveryType: String = "warehouse_sc",
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
++    @SerialName("can_add_orders") val canAddOrders: Boolean = true,
+ )
+ 
+ @Serializable
+ data class FbsNamedRef(
++    // WB warehouse identifiers are numbers while WMS and seller identifiers are
++    // UUIDs. JsonPrimitive keeps both exact without turning a number into a
++    // made-up string in the compatibility hint.
++    val id: JsonPrimitive? = null,
+     val name: String? = null,
+ )
+ 
+@@ -57,6 +66,8 @@ data class FbsWorkspaceSupply(
+     @SerialName("nearest_deadline_at") val nearestDeadlineAt: String,
+     @SerialName("packaging_task_id") val packagingTaskId: String? = null,
+     val marketplace: String = "wb",
++    @SerialName("delivery_type") val deliveryType: String = "warehouse_sc",
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
+ )
+ 
+ @Serializable
+@@ -87,6 +98,11 @@ data class FbsOrder(
+     @SerialName("created_at_wb") val createdAt: String = "",
+     @SerialName("supply_id") val supplyId: String? = null,
+     val seller: FbsNamedRef = FbsNamedRef(),
++    @SerialName("wb_warehouse") val wbWarehouse: FbsNamedRef = FbsNamedRef(),
++    @SerialName("wms_warehouse") val wmsWarehouse: FbsNamedRef = FbsNamedRef(),
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
++    @SerialName("can_pvz") val canPvz: Boolean = false,
++    @SerialName("selection_blockers") val selectionBlockers: List<FbsSelectionBlocker> = emptyList(),
+     val product: FbsProduct,
+     val positions: List<FbsPosition> = emptyList(),
+     val sticker: FbsSticker,
+@@ -116,6 +132,13 @@ data class FbsPosition(
+     @SerialName("picked_quantity") val pickedQuantity: Int,
+     val id: String = "",
+     val barcode: String? = null,
++    @SerialName("packed_quantity") val packedQuantity: Int = 0,
++)
++
++@Serializable
++data class FbsSelectionBlocker(
++    val code: String,
++    val message: String,
+ )
+ 
+ @Serializable data class FbsSticker(val code: String? = null, val status: String)
+@@ -352,3 +375,33 @@ data class FbsDeliveryCheck(
+ fun FbsOrder.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: id}" else "WB $wbOrderId"
+ fun KizLookup.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: orderId}" else "WB $wbOrderId"
+ fun FbsWorkspace.marketplaceLabel(): String = if (supply.marketplace == "ozon") "Ozon" else "WB"
++fun FbsOrder.marketplaceLabel(): String = if (marketplace == "ozon") "Ozon" else "WB"
++fun FbsSupplySummary.marketplaceLabel(): String = if (marketplace == "ozon") "Ozon" else "WB"
++fun FbsOrder.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (canPvz) "ПВЗ" else "Склад / СЦ"
++fun FbsSupplySummary.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (deliveryType == "pvz") "ПВЗ" else "Склад / СЦ"
++fun FbsWorkspaceSupply.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (deliveryType == "pvz") "ПВЗ" else "Склад / СЦ"
++
++fun FbsOrder.statusLabel(): String = when (status) {
++    "new" -> "Новый"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакован"
++    "delivered" -> "Передан"
++    "cancelled" -> "Отменён"
++    else -> status
++}
++fun FbsSupplySummary.statusLabel(): String = when (status) {
++    "new" -> "Новая"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакована"
++    "delivered" -> "Передана"
++    "cancelled" -> "Отменена"
++    else -> status
++}
++fun FbsWorkspaceSupply.statusLabel(): String = when (status) {
++    "new" -> "Новая"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакована"
++    "delivered" -> "Передана"
++    "cancelled" -> "Отменена"
++    else -> status
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
+new file mode 100644
+index 0000000..8104300
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
+@@ -0,0 +1,30 @@
++package ru.wms.tsd.core.api.fbs
++
++import kotlinx.serialization.SerialName
++import kotlinx.serialization.Serializable
++import retrofit2.Response
++import retrofit2.http.GET
++
++/** Identity returned by the existing authenticated `/auth/me` endpoint. */
++@Serializable
++data class FbsPendingIdentity(
++    val id: String,
++    @SerialName("tenant_id") val tenantId: String,
++)
++
++/**
++ * A process-safe copy of the one create/add intent. It is keyed outside this
++ * object by server, tenant and user, and is removed only after the server
++ * confirms the same idempotency body.
++ */
++@Serializable
++data class PendingFbsSupplyAdd(
++    val supplyId: String,
++    val body: SupplyOrdersBody,
++)
++
++/** Hand-written so the generated API jar is not regenerated for one read. */
++interface FbsPendingIdentityApi {
++    @GET("auth/me")
++    suspend fun me(): Response<FbsPendingIdentity>
++}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
 new file mode 100644
 index 0000000..2ec1c2a
@@ -233,12 +493,66 @@ index 0000000..2ec1c2a
 +    val caption get() = (marketplaces.map { it.uppercase() } + listOfNotNull(ozonOfferId)).joinToString(" · ")
 +    val barcodes get() = wbBarcodes + listOfNotNull(wbPrimaryBarcode, skuCode, ozonSku, ozonOfferId) + marketplaceBindings.flatMap { it.externalBarcodes }
 +}
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
+new file mode 100644
+index 0000000..d6e6103
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
+@@ -0,0 +1,48 @@
++package ru.wms.tsd.core.api.packaging
++
++import kotlinx.serialization.SerialName
++import kotlinx.serialization.Serializable
++import retrofit2.Response
++import retrofit2.http.Body
++import retrofit2.http.POST
++import retrofit2.http.Path
++import ru.wms.tsd.core.api.generated.models.PackagingTaskOut
++
++/**
++ * Обычная (не FBS) упаковка ФБО, написанная руками поверх готового JAR по двум
++ * причинам: сгенерированный PackProgressIn не умеет idempotency_key, а его ответ
++ * до сих пор плоский PackagingTaskOut, хотя сервер отдаёт {"packaging_task": …}.
++ * order_id в этой ветке не шлём: с ключом сервер считает его чужим телом.
++ */
++interface PackagingApi {
++    @POST("operations/packaging-tasks/{taskId}/lines/{lineId}/pack")
++    suspend fun pack(
++        @Path("taskId") taskId: String,
++        @Path("lineId") lineId: String,
++        @Body body: PackAttemptBody,
++    ): Response<PackProgressResult>
++}
++
++@Serializable
++data class PackAttemptBody(
++    val quantity: Int,
++    @SerialName("idempotency_key") val idempotencyKey: String,
++)
++
++@Serializable
++data class PackProgressResult(
++    @SerialName("packaging_task") val packagingTask: PackagingTaskOut,
++)
++
++/**
++ * Одна физическая упаковка, сохранённая на устройстве до отправки. Сервер, документ
++ * и строка лежат в ключе хранения, поэтому здесь только то, что обязано совпасть
++ * при повторе: сам UUID, точное количество и сотрудник, который его набрал.
++ */
++@Serializable
++data class PackAttempt(
++    val key: String,
++    val quantity: Int,
++    val actor: String,
++    val server: String,
++)
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt
 new file mode 100644
-index 0000000..c24e2d0
+index 0000000..1c96402
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,165 @@
 +package ru.wms.tsd.core.api.sorting
 +
 +import kotlinx.serialization.SerialName
@@ -286,6 +600,8 @@ index 0000000..c24e2d0
 +    @SerialName("display_number") val displayNumber: String? = null,
 +    @SerialName("document_number") val documentNumber: String? = null,
 +    @SerialName("seller_name") val sellerName: String? = null,
++    /** Площадка документа нужна только для честной подписи товарной этикетки. */
++    val marketplace: String? = null,
 +)
 +
 +@Serializable
@@ -314,6 +630,56 @@ index 0000000..c24e2d0
 +
 +data class SortingContext(val server: String, val user: String)
 +
++@Serializable
++data class PrintDestinationOut(
++    @SerialName("connection_id") val connectionId: String,
++    @SerialName("queue_name") val queueName: String,
++    val platform: String,
++    @SerialName("warehouse_id") val warehouseId: String,
++    val paired: Boolean,
++    @SerialName("is_default") val isDefault: Boolean,
++    @SerialName("last_seen_at") val lastSeenAt: String? = null,
++    val online: Boolean,
++)
++
++@Serializable
++data class PrintDestinationResponse(val destination: PrintDestinationOut? = null)
++
++@Serializable
++data class SortingLabelPreview(
++    val barcode: String = "",
++    @SerialName("label_title") val labelTitle: String = "",
++    @SerialName("label_subtitle") val labelSubtitle: String = "",
++    @SerialName("warehouse_id") val warehouseId: String = "",
++    val printable: Boolean = false,
++    @SerialName("error_message") val errorMessage: String? = null,
++)
++
++/** Ровно это тело сохраняется перед POST и используется при восстановлении. */
++@Serializable
++data class SortingPrintJobBody(
++    @SerialName("job_id") val jobId: String,
++    val kind: String,
++    @SerialName("object_id") val objectId: String,
++    val marketplace: String? = null,
++    val copies: Int = 1,
++    @SerialName("connection_id") val connectionId: String,
++)
++
++@Serializable
++data class SortingPrintJobOut(
++    val id: String,
++    val status: String,
++    @SerialName("status_text") val statusText: String,
++    @SerialName("queue_receipt") val queueReceipt: String? = null,
++    @SerialName("error_message") val errorMessage: String? = null,
++    @SerialName("queue_name") val queueName: String? = null,
++    val copies: Int = 1,
++    val barcode: String? = null,
++    @SerialName("label_title") val labelTitle: String? = null,
++    @SerialName("label_subtitle") val labelSubtitle: String? = null,
++)
++
 +interface SortingApi {
 +    @GET("operations/inbound-intake-requests/{requestId}")
 +    suspend fun request(@Path("requestId") requestId: String): Response<SortingRequestOut>
@@ -329,6 +695,28 @@ index 0000000..c24e2d0
 +        @Path("warehouseId") warehouseId: String,
 +        @Body body: CargoPlacePutawayBody,
 +    ): Response<SortingObjectPlaceOut>
++
++    @GET("operations/print/warehouses/{warehouseId}/destination")
++    suspend fun printDestination(
++        @Path("warehouseId") warehouseId: String,
++    ): Response<PrintDestinationResponse>
++
++    @GET("operations/print/sorting/{requestId}/label")
++    suspend fun printLabelPreview(
++        @Path("requestId") requestId: String,
++        @retrofit2.http.Query("kind") kind: String,
++        @retrofit2.http.Query("object_id") objectId: String,
++        @retrofit2.http.Query("marketplace") marketplace: String? = null,
++    ): Response<SortingLabelPreview>
++
++    @POST("operations/print/sorting/{requestId}/jobs")
++    suspend fun createSortingPrintJob(
++        @Path("requestId") requestId: String,
++        @Body body: SortingPrintJobBody,
++    ): Response<SortingPrintJobOut>
++
++    @GET("operations/print/jobs/{jobId}")
++    suspend fun sortingPrintJob(@Path("jobId") jobId: String): Response<SortingPrintJobOut>
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
 index 708a941..624bba4 100644
@@ -502,7 +890,7 @@ index 708a941..624bba4 100644
  
      fun logout() {
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
-index 4243fa6..b75cb35 100644
+index 4243fa6..4ea6ca8 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 @@ -13,11 +13,27 @@ import kotlinx.serialization.decodeFromString
@@ -535,11 +923,32 @@ index 4243fa6..b75cb35 100644
  
  /**
   * Хранилище авторизации на устройстве через EncryptedSharedPreferences.
-@@ -55,7 +71,74 @@ class AuthStore(context: Context) {
+@@ -55,7 +71,106 @@ class AuthStore(context: Context) {
          check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
      }
  
 -    fun getSavedStaff(): List<SavedStaff> {
++    fun getFbsPendingMutation(server: String, tenantId: String, userId: String, kind: String): String? =
++        encryptedPrefs.getString("fbs_pending:$server:$tenantId:$userId:$kind", null)
++
++    fun saveFbsPendingMutation(server: String, tenantId: String, userId: String, kind: String, value: String?) {
++        val key = "fbs_pending:$server:$tenantId:$userId:$kind"
++        val edit = encryptedPrefs.edit()
++        if (value == null) edit.remove(key) else edit.putString(key, value)
++        check(edit.commit()) { "Не удалось сохранить запрос FBS на устройстве. Повторите попытку." }
++    }
++
++    // One physical pack attempt is scoped by server, employee, document and line.
++    fun getPackAttempt(server: String, actor: String, taskId: String, lineId: String): String? =
++        encryptedPrefs.getString("pack_attempt:$server:$actor:$taskId:$lineId", null)
++
++    fun savePackAttempt(server: String, actor: String, taskId: String, lineId: String, body: String?) {
++        val key = "pack_attempt:$server:$actor:$taskId:$lineId"
++        val edit = encryptedPrefs.edit()
++        if (body == null) edit.remove(key) else edit.putString(key, body)
++        check(edit.commit()) { "Не удалось сохранить попытку упаковки на устройстве. Повторите попытку." }
++    }
++
 +    fun getInboundDraft(scope: String, document: String): String? =
 +        encryptedPrefs.getString("inbound_draft:$scope:$document", null)
 +
@@ -607,11 +1016,22 @@ index 4243fa6..b75cb35 100644
 +        check(edit.commit()) { "Не удалось сохранить размещение на устройстве. Повторите попытку." }
 +    }
 +
++    /** Durable print request for one document in this employee/server scope. */
++    fun getSortingPrint(server: String, user: String, requestId: String): String? =
++        encryptedPrefs.getString("sorting_print:$server:$user:$requestId", null)
++
++    fun saveSortingPrint(server: String, user: String, requestId: String, body: String?) {
++        val key = "sorting_print:$server:$user:$requestId"
++        val edit = encryptedPrefs.edit()
++        if (body == null) edit.remove(key) else edit.putString(key, body)
++        check(edit.commit()) { "Не удалось сохранить запрос печати на устройстве. Повторите попытку." }
++    }
++
 +    private fun readSavedStaff(): List<SavedStaff> {
          val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
          return try {
              json.decodeFromString(jsonStr)
-@@ -64,23 +147,33 @@ class AuthStore(context: Context) {
+@@ -64,23 +179,33 @@ class AuthStore(context: Context) {
          }
      }
  
@@ -864,6 +1284,315 @@ index ed1b90a..6841537 100644
                      modifier = Modifier
                          .fillMaxWidth()
                          .height(WmsDimens.PrimaryButtonHeight),
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 1476576..dea98e5 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -47,9 +47,25 @@ internal fun displayTime(value: String): String = runCatching {
+     val vm = fbsViewModel(); val state by vm.state.collectAsState()
+     var createDialog by remember { mutableStateOf(false) }
+     var chooseSupply by remember { mutableStateOf(false) }
++    var showingWork by remember { mutableStateOf(false) }
+     var name by remember { mutableStateOf("") }
+     var delivery by remember { mutableStateOf("warehouse_sc") }
++    val selectedOrders = state.selectedOrders()
++    val compatibleSupplies = state.supplies.filter { it.isCompatibleWith(selectedOrders) }
++    val restoredAddSupply = state.restoredSupplyAddId?.let { id -> state.supplies.firstOrNull { it.id == id } }
++    val visibleSupplies = (compatibleSupplies + listOfNotNull(restoredAddSupply)).distinctBy { it.id }
+     LifecycleResumeEffect(Unit) { vm.loadOrders(); onPauseOrDispose {} }
++    LaunchedEffect(state.restoredSupplyCreate?.idempotencyKey, state.restoredSupplyAddId) {
++        state.restoredSupplyCreate?.let { saved ->
++            name = saved.name
++            delivery = saved.deliveryType
++            createDialog = true
++            vm.resumePendingSupplyMutation(onOpen)
++        } ?: state.restoredSupplyAddId?.let {
++            chooseSupply = true
++            vm.resumePendingSupplyMutation(onOpen)
++        }
++    }
+     ScanScaffold(title = "FBS · Заказы", flash = state.flash, onExit = onBack, cameraScanner = false) {
+         Column(Modifier.fillMaxSize()) {
+             ErrorPanel(state, vm)
+@@ -67,37 +83,74 @@ internal fun displayTime(value: String): String = runCatching {
+                     )
+                 }
+             }
+-            if (state.selected.isNotEmpty()) Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
++                TextButton(onClick = { showingWork = !showingWork }, enabled = !state.busy) {
++                    Text(if (showingWork) "К заказам" else "В работе (${state.supplies.size})")
++                }
++            }
++            if (state.selected.isNotEmpty() && !showingWork) Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                 Button(onClick = { createDialog = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("Новая поставка (${state.selected.size})") }
+                 OutlinedButton(onClick = { chooseSupply = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("В поставку") }
+             }
+             LazyColumn(Modifier.weight(1f).padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                item { Text("Все заказы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+-                items(sortedOrders(state.orders), key = { it.id }) { order ->
+-                    OrderCard(order, state.selected.contains(order.id), onClick = {
+-                        if (order.supplyId != null) onOpen(order.supplyId) else vm.toggle(order)
+-                    }, selectable = order.status == "new" && order.supplyId == null)
+-                }
+-                if (state.cursor != null) item { OutlinedButton(onClick = { vm.loadOrders(true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Загрузить ещё") } }
+-                if (state.orders.isEmpty() && !state.busy) item { Text("Заказов пока нет", modifier = Modifier.padding(16.dp)) }
+-                if (state.supplies.isNotEmpty()) item { Text("Поставки в работе", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
+-                items(state.supplies, key = { "supply:${it.id}" }) { supply ->
+-                    OutlinedButton(onClick = { onOpen(supply.id) }, modifier = Modifier.fillMaxWidth()) { Text("${supply.name} · ${supply.ordersCount} заказов") }
++                if (showingWork) {
++                    item { Text("Поставки в работе", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
++                    items(state.supplies, key = { "supply:${it.id}" }) { supply -> SupplyCard(supply) { onOpen(supply.id) } }
++                    if (state.supplies.isEmpty() && !state.busy) item { Text("Поставок в работе пока нет", modifier = Modifier.padding(16.dp)) }
++                } else {
++                    item { Text("Все заказы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
++                    items(sortedOrders(state.orders), key = { it.id }) { order ->
++                        OrderCard(order, state.selected.contains(order.id), onClick = {
++                            if (order.supplyId != null) onOpen(order.supplyId) else vm.toggle(order)
++                        }, selectable = order.status == "new" && order.supplyId == null)
++                    }
++                    if (state.cursor != null) item { OutlinedButton(onClick = { vm.loadOrders(true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Загрузить ещё") } }
++                    if (state.orders.isEmpty() && !state.busy) item { Text("Заказов пока нет", modifier = Modifier.padding(16.dp)) }
+                 }
+             }
+         }
+     }
+     if (createDialog) AlertDialog(onDismissRequest = { createDialog = false }, title = { Text("Создать поставку") }, text = {
+-        Column { OutlinedTextField(name, { name = it }, label = { Text("Название") });
+-            Row { RadioButton(delivery == "warehouse_sc", { delivery = "warehouse_sc" }); Text("Склад / СЦ", modifier = Modifier.padding(top = 12.dp)) }
+-            Row { RadioButton(delivery == "pvz", { delivery = "pvz" }); Text("ПВЗ", modifier = Modifier.padding(top = 12.dp)) }
++        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
++            SelectionSummary(selectedOrders)
++            OutlinedTextField(name, { name = it }, label = { Text("Название") })
++            if (state.marketplace == "wb") {
++                Row { RadioButton(delivery == "warehouse_sc", { delivery = "warehouse_sc" }); Text("Склад / СЦ", modifier = Modifier.padding(top = 12.dp)) }
++                Row { RadioButton(delivery == "pvz", { delivery = "pvz" }); Text("ПВЗ", modifier = Modifier.padding(top = 12.dp)) }
++            } else {
++                Text("Ozon · ${selectedOrders.firstOrNull()?.deliveryRouteLabel() ?: "Способ доставки не указан"}")
++            }
++            state.error?.let {
++                Text(it, color = MaterialTheme.colorScheme.error)
++                TextButton(onClick = vm::retry) { Text("Повторить проверку") }
++            }
+         }
+-    }, confirmButton = { Button(onClick = { createDialog = false; vm.create(name, delivery, onOpen) }, enabled = name.isNotBlank()) { Text("Создать") } }, dismissButton = { TextButton(onClick = { createDialog = false }) { Text("Отмена") } })
++    }, confirmButton = { Button(onClick = { vm.create(name, if (state.marketplace == "ozon") "warehouse_sc" else delivery, onOpen) }, enabled = name.isNotBlank() && !state.busy) { Text("Создать") } }, dismissButton = { TextButton(onClick = { createDialog = false }) { Text("Отмена") } })
+     if (chooseSupply) AlertDialog(onDismissRequest = { chooseSupply = false }, title = { Text("Выберите поставку") }, text = {
+-        LazyColumn { items(state.supplies) { supply -> TextButton(onClick = { chooseSupply = false; vm.addTo(supply.id, onOpen) }) { Text(supply.name) } } }
++        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            SelectionSummary(selectedOrders)
++            if (visibleSupplies.isEmpty()) Text("Совместимых активных поставок пока нет. Создайте новую.")
++            else LazyColumn(Modifier.heightIn(max = 280.dp)) {
++                items(visibleSupplies) { supply ->
++                    TextButton(onClick = { vm.addTo(supply.id, onOpen) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
++                        Column { Text(supply.name, fontWeight = FontWeight.Bold); Text("${supply.marketplaceLabel()} · ${supply.seller.name ?: "Селлер не указан"} · ${supply.deliveryRouteLabel()}") }
++                    }
++                }
++            }
++            selectedOrders.flatMap { it.selectionBlockers }.distinctBy { it.code }.forEach { blocker -> Text(blocker.message, color = MaterialTheme.colorScheme.error) }
++            state.error?.let {
++                Text(it, color = MaterialTheme.colorScheme.error)
++                TextButton(onClick = vm::retry) { Text("Повторить проверку") }
++            }
++        }
+     }, confirmButton = { TextButton(onClick = { chooseSupply = false }) { Text("Закрыть") } })
+ }
+ 
++@Composable private fun SelectionSummary(orders: List<FbsOrder>) {
++    Text("Выбрано: ${orders.size}", fontWeight = FontWeight.Bold)
++    orders.forEach { order -> Text("${order.displayNumber()} · ${order.seller.name ?: "Селлер не указан"} · ${order.deliveryRouteLabel()}") }
++}
++
+ @Composable private fun OrderCard(order: FbsOrder, selected: Boolean = false, onClick: () -> Unit = {}, selectable: Boolean = false, content: @Composable ColumnScope.() -> Unit = {}) {
+     val color = when {
+         order.pick.status == "picked" -> Color(0xffe5f4e9)
+@@ -116,9 +169,11 @@ internal fun displayTime(value: String): String = runCatching {
+                 }
+             }
+             if (order.marketplace == "ozon") for (position in order.positions) {
+-                Text("${position.name} · ${position.quantity} шт · подобрано ${position.pickedQuantity}")
++                Text("${position.name} · ${position.quantity} шт · подобрано ${position.pickedQuantity} · упаковано ${position.packedQuantity}")
+                 Text("ШК: ${position.barcode ?: position.sku ?: "не указан"}")
+             } else Text("ШК: ${order.product.barcode ?: "не указан"}")
++            Text("${order.marketplaceLabel()} · ${order.seller.name ?: "Селлер не указан"}")
++            Text("Маршрут: ${order.deliveryRouteLabel()} · Статус: ${order.statusLabel()}")
+             Text("Поступил: ${displayTime(order.createdAt)}")
+             Text("Отгрузить до: ${displayTime(order.deadlineAt)}", fontWeight = FontWeight.Medium)
+             if (order.pick.status == "picked") Text("Подобран · ${order.pick.locationCode.orEmpty()}", color = Color(0xff176b31))
+@@ -127,6 +182,16 @@ internal fun displayTime(value: String): String = runCatching {
+     }
+ }
+ 
++@Composable private fun SupplyCard(supply: FbsSupplySummary, onClick: () -> Unit) {
++    Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
++        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
++            Text(supply.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
++            Text("${supply.marketplaceLabel()} · ${supply.seller.name ?: "Селлер не указан"}")
++            Text("${supply.deliveryRouteLabel()} · ${supply.statusLabel()} · ${supply.ordersCount} заказов")
++        }
++    }
++}
++
+ @Composable fun FbsSupplyScreen(supplyId: String, onBack: () -> Unit, onStep: (String) -> Unit) {
+     val vm = fbsViewModel(); val state by vm.state.collectAsState()
+     LifecycleResumeEffect(supplyId) { vm.loadSupply(supplyId); onPauseOrDispose {} }
+@@ -135,7 +200,15 @@ internal fun displayTime(value: String): String = runCatching {
+             ErrorPanel(state, vm)
+             state.workspace?.let { ws ->
+                 Text(ws.supply.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
++                Text("${ws.marketplaceLabel()} · ${ws.supply.statusLabel()}")
++                Text("Селлер: ${ws.supply.seller.name ?: "не указан"}")
++                Text("Маршрут: ${ws.supply.deliveryRouteLabel()}")
++                ws.supply.wmsWarehouse.name?.let { Text("Склад: $it") }
+                 Text("${ws.orders.size} заказов · Подобрано ${ws.progress.picked} · Упаковано ${ws.progress.packed}")
++                Text("Состав", fontWeight = FontWeight.Bold)
++                ws.orders.forEach { order ->
++                    Text("${order.displayNumber()} · ${order.product.name}" + if (order.marketplace == "ozon") " · ${order.positions.sumOf { it.quantity }} шт" else "")
++                }
+                 for ((mode, label) in listOf("pick" to "Подбор", "pack" to "Упаковка и этикетки", "boxes" to "Короба")) {
+                     Button(onClick = { onStep(mode) }, modifier = Modifier.fillMaxWidth().height(72.dp)) { Text(label, fontSize = 20.sp) }
+                 }
+@@ -221,7 +294,12 @@ internal fun displayTime(value: String): String = runCatching {
+                             Text((order.externalOrderId ?: order.wbOrderId.toString()).takeLast(4), fontSize = 36.sp, fontWeight = FontWeight.Black)
+                             Button(onClick = { printing = listOf(order.id) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Печатать этикетки", fontSize = 20.sp) }
+                             if (order.marketplace == "ozon" && order.pack.status != "packed") {
+-                                for (position in order.positions) OutlinedButton(onClick = { vm.packOrder(order, position.productId) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Упаковать 1 шт · ${position.name}") }
++                                for (position in order.positions) {
++                                    val remaining = (position.quantity - position.packedQuantity).coerceAtLeast(0)
++                                    OutlinedButton(onClick = { vm.packOrder(order, position.productId) }, enabled = !state.busy && remaining > 0, modifier = Modifier.fillMaxWidth()) {
++                                        Text(if (remaining == 0) "Упаковано ${position.quantity} шт · ${position.name}" else "Упаковать 1 шт · ${position.name} · осталось $remaining")
++                                    }
++                                }
+                             } else OutlinedButton(onClick = { vm.packOrder(order) }, enabled = !state.busy && order.pack.status != "packed", modifier = Modifier.fillMaxWidth()) { Text(if (order.pack.status == "packed") "Упакован" else "Отметить упакованным") }
+                         }
+                     }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index ce11620..ba2d225 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -44,6 +44,23 @@ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
+ fun sortedOperationOrders(orders: List<FbsOrder>): List<FbsOrder> =
+     sortedOrders(orders).sortedBy { it.pick.status == "picked" }
+ 
++private fun sameKnown(left: String?, right: String?): Boolean = left == null || right == null || left == right
++
++/**
++ * The server remains the authority for supply compatibility. This only removes
++ * candidates that contradict values already returned by that server; incomplete
++ * references remain available for the server to decide.
++ */
++fun FbsSupplySummary.isCompatibleWith(orders: List<FbsOrder>): Boolean = canAddOrders && orders.all { order ->
++    marketplace == order.marketplace &&
++        sameKnown(seller.id?.content, order.seller.id?.content) &&
++        sameKnown(wmsWarehouse.id?.content, order.wmsWarehouse.id?.content) &&
++        sameKnown(wbWarehouse.id?.content, order.wbWarehouse.id?.content) &&
++        sameKnown(deliveryRoute, order.deliveryRoute)
++}
++
++fun FbsState.selectedOrders(): List<FbsOrder> = orders.filter { it.id in selected }
++
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+     runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+ 
+@@ -72,6 +89,8 @@ data class FbsState(
+     val cursor: String? = null,
+     val supplies: List<FbsSupplySummary> = emptyList(),
+     val selected: Set<String> = emptySet(),
++    val restoredSupplyCreate: SupplyCreateBody? = null,
++    val restoredSupplyAddId: String? = null,
+     val workspace: FbsWorkspace? = null,
+     val source: FbsScanResult? = null,
+     val pickChoices: List<FbsPickChoice> = emptyList(),
+@@ -105,6 +124,8 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     private var openedSupplyId: String? = null
+     private var retryAction: (suspend () -> Unit)? = null
+     private var pickChoiceReply: CompletableDeferred<FbsScanResult?>? = null
++    private var pendingSupplyCreate: SupplyCreateBody? = null
++    private var pendingSupplyAdd: Pair<String, SupplyOrdersBody>? = null
+     init { viewModelScope.launch { for (scan in scans) {
+         val key = UUID.randomUUID().toString()
+         state.first { !it.busy && it.error == null }
+@@ -153,7 +174,16 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         val marketplace = state.value.marketplace
+         val page = required { api.fbs().orders(marketplace = marketplace, group = null, cursor = if (append) state.value.cursor else null) }
+         val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
+-        mutable.value = state.value.copy(orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id }, cursor = page.nextCursor, supplies = supplies.items)
++        if (pendingSupplyCreate == null) pendingSupplyCreate = runCatching { api.pendingFbsSupplyCreate() }.getOrNull()
++        if (pendingSupplyAdd == null) pendingSupplyAdd = runCatching { api.pendingFbsSupplyAdd() }.getOrNull()?.let { it.supplyId to it.body }
++        mutable.value = state.value.copy(
++            orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id },
++            cursor = page.nextCursor,
++            supplies = supplies.items,
++            selected = pendingSupplyCreate?.orderIds?.toSet() ?: pendingSupplyAdd?.second?.orderIds?.toSet() ?: state.value.selected,
++            restoredSupplyCreate = pendingSupplyCreate,
++            restoredSupplyAddId = pendingSupplyAdd?.first,
++        )
+     }
+ 
+     /**
+@@ -172,12 +202,58 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     }
+     fun create(name: String, delivery: String, onOpen: (String) -> Unit) {
+         val ids = state.value.selected.toList(); if (ids.isEmpty() || name.isBlank()) return
+-        val body = SupplyCreateBody(name.trim(), ids, delivery, UUID.randomUUID().toString())
+-        launch { val workspace = required { api.fbs().createSupply(body) }; mutable.value = state.value.copy(selected = emptySet()); onOpen(workspace.supply.id) }
++        val requested = SupplyCreateBody(name.trim(), ids, delivery, UUID.randomUUID().toString())
++        val body = pendingSupplyCreate?.takeIf {
++            it.name == requested.name && it.orderIds.toSet() == requested.orderIds.toSet() && it.deliveryType == requested.deliveryType
++        } ?: requested.also { pendingSupplyCreate = it }
++        launch {
++            api.saveFbsSupplyCreate(body)
++            val workspace = required { api.fbs().createSupply(body) }
++            api.saveFbsSupplyCreate(null)
++            pendingSupplyCreate = null
++            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyCreate = null)
++            onOpen(workspace.supply.id)
++        }
+     }
+     fun addTo(supplyId: String, onOpen: (String) -> Unit) {
+-        val body = SupplyOrdersBody(state.value.selected.toList(), UUID.randomUUID().toString())
+-        launch { val workspace = required { api.fbs().addOrders(supplyId, body) }; mutable.value = state.value.copy(selected = emptySet()); onOpen(workspace.supply.id) }
++        val requested = SupplyOrdersBody(state.value.selected.toList(), UUID.randomUUID().toString())
++        val pending = pendingSupplyAdd
++        val body = pending?.takeIf { (savedSupply, savedBody) ->
++            savedSupply == supplyId && savedBody.orderIds.toSet() == requested.orderIds.toSet()
++        }?.second ?: requested.also { pendingSupplyAdd = supplyId to it }
++        launch {
++            api.saveFbsSupplyAdd(PendingFbsSupplyAdd(supplyId, body))
++            val workspace = required { api.fbs().addOrders(supplyId, body) }
++            api.saveFbsSupplyAdd(null)
++            pendingSupplyAdd = null
++            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyAddId = null)
++            onOpen(workspace.supply.id)
++        }
++    }
++    fun resumePendingSupplyMutation(onOpen: (String) -> Unit) {
++        val create = pendingSupplyCreate
++        val add = pendingSupplyAdd
++        if (create == null && add == null) return
++        launch {
++            val workspace = if (create != null) {
++                val result = required { api.fbs().createSupply(create) }
++                api.saveFbsSupplyCreate(null)
++                pendingSupplyCreate = null
++                result
++            } else {
++                val (supplyId, body) = requireNotNull(add)
++                val result = required { api.fbs().addOrders(supplyId, body) }
++                api.saveFbsSupplyAdd(null)
++                pendingSupplyAdd = null
++                result
++            }
++            mutable.value = state.value.copy(
++                restoredSupplyCreate = pendingSupplyCreate,
++                restoredSupplyAddId = pendingSupplyAdd?.first,
++                selected = emptySet(),
++            )
++            onOpen(workspace.supply.id)
++        }
+     }
+     fun loadSupply(supplyId: String) {
+         if (openedSupplyId != supplyId) {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
 index cd65432..2110b7e 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
@@ -1384,6 +2113,232 @@ index e7a3331..be6dbde 100644
          cameraScanner = false, // список не принимает сканы
      ) {
          when {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
+index 63fc4e3..491ba60 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
+@@ -255,7 +255,6 @@ fun OutboundAssemblyScreen(
+         PackLineSheet(
+             line = packLine,
+             busy = state.packBusy,
+-            onConfirmFromShelf = vm::confirmPackedFromShelf,
+             onPack = vm::submitPack,
+             onDismiss = vm::dismissPackLine,
+         )
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
+index 687e378..7424803 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
+@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
+ import androidx.lifecycle.viewModelScope
+ import java.util.UUID
+ import kotlinx.coroutines.channels.Channel
++import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.launch
+@@ -14,14 +15,14 @@ import ru.wms.tsd.core.api.ERROR_DISTRIBUTION_INCOMPLETE_RU
+ import ru.wms.tsd.core.api.networkErrorText
+ import ru.wms.tsd.core.api.readableError
+ import ru.wms.tsd.core.api.generated.models.CompletePackagingIn
+-import ru.wms.tsd.core.api.generated.models.ConfirmPackedIn
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadBoxCreate
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestDetailOut
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadScanBody
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadShipBody
+-import ru.wms.tsd.core.api.generated.models.PackProgressIn
+ import ru.wms.tsd.core.api.generated.models.PackagingTaskLineOut
+ import ru.wms.tsd.core.api.generated.models.PackagingTaskOut
++import ru.wms.tsd.core.api.packaging.PackAttempt
++import ru.wms.tsd.core.api.packaging.PackAttemptBody
+ import ru.wms.tsd.ui.patterns.ScanFlash
+ 
+ data class AssemblyUiState(
+@@ -115,7 +116,35 @@ class OutboundAssemblyViewModel(
+         runCatching {
+             api.operations().getPackagingTaskOperationsPackagingTasksTaskIdGet(UUID.fromString(taskId))
+         }.onSuccess { resp ->
+-            if (resp.isSuccessful) _state.value = _state.value.copy(packaging = resp.body())
++            if (resp.isSuccessful) {
++                _state.value = _state.value.copy(packaging = resp.body())
++                recoverPackAttempts()
++            }
++        }
++    }
++
++    /** Resolve saved attempts before a reopened screen offers the next physical unit. */
++    private suspend fun recoverPackAttempts() {
++        val task = _state.value.packaging ?: return
++        if (_state.value.packBusy) return
++        _state.value = _state.value.copy(packBusy = true)
++        try {
++            for (line in task.lines) {
++                val pending = api.pendingPackAttempt(task.id, line.id) ?: continue
++                when (val result = sendPackAttempt(task.id, line.id, pending)) {
++                    is ApiResult.Ok -> _state.value = _state.value.copy(packaging = result.value)
++                    is ApiResult.Err -> {
++                        _state.value = _state.value.copy(flash = errorFlash(result.message))
++                        break
++                    }
++                }
++            }
++        } catch (cancelled: CancellationException) {
++            throw cancelled
++        } catch (_: Exception) {
++            _state.value = _state.value.copy(flash = errorFlash("Не удалось восстановить попытку упаковки"))
++        } finally {
++            _state.value = _state.value.copy(packBusy = false)
+         }
+     }
+ 
+@@ -187,27 +216,55 @@ class OutboundAssemblyViewModel(
+         _state.value = _state.value.copy(packLineId = null)
+     }
+ 
+-    /** Подтвердить «уже упаковано на полке» (серверный suggested). */
+-    fun confirmPackedFromShelf() {
+-        val task = _state.value.packaging ?: return
+-        val line = _state.value.packLine ?: return
+-        packagingMutation {
+-            api.operations().confirmPackedFromShelfOperationsPackagingTasksTaskIdLinesLineIdConfirmPackedPost(
+-                UUID.fromString(task.id), UUID.fromString(line.id), ConfirmPackedIn(),
+-            )
+-        }
+-    }
+-
+     /** Записать упакованное сейчас количество по строке. */
+     fun submitPack(qty: Int) {
+         val task = _state.value.packaging ?: return
+         val line = _state.value.packLine ?: return
+         if (qty < 1) return
+-        packagingMutation {
+-            api.operations().recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(
+-                UUID.fromString(task.id), UUID.fromString(line.id), PackProgressIn(quantity = qty),
+-            )
++        packagingMutation { packAttempt(task.id, line.id, qty) }
++    }
++
++    /**
++     * Одна физическая упаковка — один UUID, записанный на диск до запроса. Пока исход
++     * прошлой попытки неизвестен, повтор уходит с тем же ключом и тем же количеством:
++     * сервер отвечает актуальным документом и не засчитывает работу второй раз.
++     * Ключ снимается только после ответа, поэтому следующая упаковка получит новый.
++     */
++    private suspend fun packAttempt(taskId: String, lineId: String, qty: Int): ApiResult<PackagingTaskOut> {
++        val pending = api.pendingPackAttempt(taskId, lineId)
++        val attempt = pending ?: PackAttempt(
++            UUID.randomUUID().toString(), qty, api.currentActor(), api.packServer(),
++        )
++        if (pending == null) {
++            val failure = runCatching { api.savePackAttempt(taskId, lineId, attempt) }.exceptionOrNull()
++            if (failure != null) {
++                return ApiResult.Err(failure.message ?: "Не удалось сохранить попытку упаковки на устройстве")
++            }
++        }
++        return sendPackAttempt(taskId, lineId, attempt)
++    }
++
++    private suspend fun sendPackAttempt(
++        taskId: String, lineId: String, attempt: PackAttempt,
++    ): ApiResult<PackagingTaskOut> {
++        val response = try {
++            api.packaging(attempt).pack(taskId, lineId, PackAttemptBody(attempt.quantity, attempt.key))
++        } catch (cancelled: CancellationException) {
++            throw cancelled
++        } catch (_: Exception) {
++            return ApiResult.Err(networkErrorText()) // ответ потерян — ключ остаётся жить
++        }
++        val body = response.body()
++        if (response.isSuccessful && body != null) {
++            api.clearPackAttempt(taskId, lineId, attempt)
++            return ApiResult.Ok(body.packagingTask)
++        }
++        // Сервер ответил отказом — значит, он ничего не записал. Держать ключ нельзя:
++        // иначе следующая законная упаковка вечно повторяла бы отклонённую попытку.
++        if (response.code() in 400..499 && response.code() !in listOf(401, 403)) {
++            api.clearPackAttempt(taskId, lineId, attempt)
+         }
++        return ApiResult.Err(response.readableError())
+     }
+ 
+     fun requestCompletePackaging() {
+@@ -218,17 +275,27 @@ class OutboundAssemblyViewModel(
+         val task = _state.value.packaging ?: return
+         _state.value = _state.value.copy(confirm = null)
+         packagingMutation {
+-            api.operations().completePackagingTaskOperationsPackagingTasksTaskIdCompletePost(
+-                UUID.fromString(task.id), CompletePackagingIn(acknowledgeAllPacked = false),
+-            )
++            apiCall {
++                api.operations().completePackagingTaskOperationsPackagingTasksTaskIdCompletePost(
++                    UUID.fromString(task.id), CompletePackagingIn(acknowledgeAllPacked = false),
++                )
++            }
+         }
+     }
+ 
+-    private fun packagingMutation(block: suspend () -> Response<PackagingTaskOut>) {
++    private fun packagingMutation(block: suspend () -> ApiResult<PackagingTaskOut>) {
+         if (_state.value.packBusy) return
+         _state.value = _state.value.copy(packBusy = true)
+         viewModelScope.launch {
+-            when (val result = apiCall(block)) {
++            val outcome = try {
++                block()
++            } catch (cancelled: CancellationException) {
++                _state.value = _state.value.copy(packBusy = false)
++                throw cancelled
++            } catch (_: Exception) {
++                ApiResult.Err("Не удалось сохранить попытку упаковки на устройстве")
++            }
++            when (val result = outcome) {
+                 is ApiResult.Ok -> {
+                     val line = result.value.lines.firstOrNull { it.id == _state.value.packLineId }
+                     _state.value = _state.value.copy(
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
+index 857e22b..20f6642 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
+@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.ExperimentalMaterial3Api
+-import androidx.compose.material3.FilledTonalButton
+ import androidx.compose.material3.LinearProgressIndicator
+ import androidx.compose.material3.ModalBottomSheet
+ import androidx.compose.material3.Surface
+@@ -173,14 +172,12 @@ private fun PackagingLineCard(
+ fun PackLineSheet(
+     line: PackagingTaskLineOut,
+     busy: Boolean,
+-    onConfirmFromShelf: () -> Unit,
+     onPack: (Int) -> Unit,
+     onDismiss: () -> Unit,
+ ) {
+     // Сколько ещё можно записать как «упаковано сейчас» (лимит сервера)
+     val packRemaining = (line.qtyNeedPack - line.qtyPackedInTask).coerceAtLeast(0)
+     var qty by remember(line.id, packRemaining) { mutableIntStateOf(packRemaining.coerceAtMost(1)) }
+-    val shelfAvailable = line.qtySuggestedPacked > line.qtyConfirmedPacked
+ 
+     ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }) {
+         Column(
+@@ -216,16 +213,6 @@ fun PackLineSheet(
+                 )
+             }
+ 
+-            if (shelfAvailable) {
+-                FilledTonalButton(
+-                    onClick = onConfirmFromShelf,
+-                    enabled = !busy,
+-                    modifier = Modifier.fillMaxWidth().height(WmsDimens.TouchTargetMin),
+-                ) {
+-                    Text("На полке уже упаковано ${line.qtySuggestedPacked} — подтвердить", fontSize = 17.sp)
+-                }
+-            }
+-
+             if (packRemaining > 0) {
+                 QtyInput(
+                     value = qty,
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
 index ee1e470..7c0a980 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
@@ -1492,10 +2447,28 @@ index ee1e470..7c0a980 100644
                          statusColor = WmsColors.Primary,
                          hasDiscrepancy = false,
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
-index 833f3c3..894c36a 100644
+index 833f3c3..cf00cda 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
-@@ -65,6 +65,12 @@ fun SortingScreen(
+@@ -14,13 +14,17 @@ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.Inventory2
++import androidx.compose.material.icons.filled.LocalPrintshop
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.ButtonDefaults
+ import androidx.compose.material3.CircularProgressIndicator
+ import androidx.compose.material3.ExperimentalMaterial3Api
++import androidx.compose.material3.FilledTonalButton
++import androidx.compose.material3.Icon
+ import androidx.compose.material3.ModalBottomSheet
+ import androidx.compose.material3.Surface
+ import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.collectAsState
+@@ -65,6 +69,12 @@ fun SortingScreen(
          AppGraph.scannerManager.scans.collect { vm.onScan(it.barcode) }
      }
  
@@ -1508,7 +2481,7 @@ index 833f3c3..894c36a 100644
      val request = state.request
      val boxes = request?.boxes.orEmpty()
      val lines = request?.lines.orEmpty()
-@@ -90,9 +96,29 @@ fun SortingScreen(
+@@ -90,9 +100,29 @@ fun SortingScreen(
                  horizontalAlignment = Alignment.CenterHorizontally,
              ) { CircularProgressIndicator() }
  
@@ -1539,7 +2512,7 @@ index 833f3c3..894c36a 100644
                  when (target) {
                      is SortTarget.Box -> {
                          val box = boxes.firstOrNull { it.id == target.boxId }
-@@ -103,6 +129,15 @@ fun SortingScreen(
+@@ -103,6 +133,15 @@ fun SortingScreen(
                              onAction = vm::clearTarget,
                          )
                      }
@@ -1555,7 +2528,35 @@ index 833f3c3..894c36a 100644
                      is SortTarget.Loose -> {
                          val line = lines.firstOrNull { it.productId == target.productId }
                          ScanTargetBar(
-@@ -122,6 +157,7 @@ fun SortingScreen(
+@@ -119,9 +158,35 @@ fun SortingScreen(
+                     )
+                 }
+ 
++                PrintActions(
++                    onPrintProduct = { vm.openPrintPicker(SortingPrintKind.PRODUCT) },
++                    onPrintLocation = { vm.openPrintPicker(SortingPrintKind.LOCATION) },
++                )
++                val job = state.printJob
++                if (job != null) {
++                    ScanTargetBar(
++                        text = job.statusText,
++                        hint = buildString {
++                            append("Принтер ${job.queueName ?: "склада"}")
++                            job.queueReceipt?.let { append(" · квитанция $it") }
++                            job.errorMessage?.let { append(" · $it") }
++                        },
++                        actionLabel = "Печать ещё раз",
++                        onAction = { vm.openPrintPicker(SortingPrintKind.PRODUCT) },
++                    )
++                } else if (state.printUnknown) {
++                    ScanTargetBar(
++                        text = "Результат печати неизвестен",
++                        hint = "Проверьте задание, новая печать сама не создаётся",
++                        actionLabel = "Проверить",
++                        onAction = vm::retryPrintRecovery,
++                    )
++                }
++
                  SortingWorkList(
                      state = state,
                      onBoxClick = vm::selectBox,
@@ -1563,7 +2564,7 @@ index 833f3c3..894c36a 100644
                      onLooseClick = vm::selectLooseProduct,
                  )
              }
-@@ -142,9 +178,22 @@ fun SortingScreen(
+@@ -142,9 +207,22 @@ fun SortingScreen(
              onDismiss = vm::dismissPending,
          )
      }
@@ -1587,7 +2588,7 @@ index 833f3c3..894c36a 100644
          var qty by remember(pending, target) { mutableIntStateOf(maxQty) }
          ModalBottomSheet(onDismissRequest = vm::dismissPending) {
              Column(
-@@ -166,7 +215,9 @@ fun SortingScreen(
+@@ -166,7 +244,9 @@ fun SortingScreen(
                  )
                  Button(
                      onClick = { vm.confirmLoosePutaway(qty) },
@@ -1598,11 +2599,137 @@ index 833f3c3..894c36a 100644
                      colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Success),
                      modifier = Modifier
                          .fillMaxWidth()
-@@ -188,19 +239,23 @@ fun SortingScreen(
+@@ -186,21 +266,149 @@ fun SortingScreen(
+             onDismiss = vm::dismissComplete,
+         )
      }
++
++    when (state.printPicker) {
++        SortingPrintKind.PRODUCT -> SortingPrintPicker(
++            title = "Печать товара",
++            values = lines.map { it.productId to "${it.skuCode} · ${it.productName}" },
++            onSelect = { id, title -> vm.selectProductForPrint(id, title) },
++            onDismiss = vm::dismissPrintPicker,
++        )
++        SortingPrintKind.LOCATION -> SortingPrintPicker(
++            title = "Печать ШК ячейки",
++            values = state.locations.sortedBy { it.code }.map { it.id to it.code },
++            onSelect = { id, _ -> state.locations.firstOrNull { it.id == id }?.let(vm::selectLocationForPrint) },
++            onDismiss = vm::dismissPrintPicker,
++        )
++        null -> Unit
++    }
++    state.printSelection?.let { selection ->
++        SortingPrintConfirmSheet(
++            selection = selection,
++            destination = state.printDestination,
++            destinationError = state.printDestinationError,
++            onCopiesChange = vm::setPrintCopies,
++            onMarketplace = vm::selectPrintMarketplace,
++            onConfirm = vm::confirmPrint,
++            onDismiss = vm::dismissPrintSelection,
++        )
++    }
  }
  
 -/** Список работы: неразмещённые короба + товары loose-пула. */
++@Composable
++private fun PrintActions(onPrintProduct: () -> Unit, onPrintLocation: () -> Unit) {
++    Row(
++        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
++        horizontalArrangement = Arrangement.spacedBy(8.dp),
++    ) {
++        FilledTonalButton(onClick = onPrintProduct, modifier = Modifier.weight(1f)) {
++            Icon(Icons.Default.LocalPrintshop, contentDescription = null)
++            Text(" Товар")
++        }
++        FilledTonalButton(onClick = onPrintLocation, modifier = Modifier.weight(1f)) {
++            Icon(Icons.Default.LocalPrintshop, contentDescription = null)
++            Text(" Ячейка")
++        }
++    }
++}
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun SortingPrintPicker(
++    title: String,
++    values: List<Pair<String, String>>,
++    onSelect: (String, String) -> Unit,
++    onDismiss: () -> Unit,
++) {
++    ModalBottomSheet(onDismissRequest = onDismiss) {
++        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
++            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = WmsColors.TextPrimary)
++            LazyColumn(modifier = Modifier.fillMaxWidth().height(320.dp)) {
++                items(values, key = { it.first }) { (id, text) ->
++                    TextButton(onClick = { onSelect(id, text) }, modifier = Modifier.fillMaxWidth()) {
++                        Text(text, modifier = Modifier.fillMaxWidth(), color = WmsColors.TextPrimary)
++                    }
++                }
++            }
++            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
++        }
++    }
++}
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun SortingPrintConfirmSheet(
++    selection: SortingPrintSelection,
++    destination: ru.wms.tsd.core.api.sorting.PrintDestinationOut?,
++    destinationError: String?,
++    onCopiesChange: (Int) -> Unit,
++    onMarketplace: (String) -> Unit,
++    onConfirm: () -> Unit,
++    onDismiss: () -> Unit,
++) {
++    var copies by remember(selection.objectId, selection.copies) { mutableIntStateOf(selection.copies) }
++    ModalBottomSheet(onDismissRequest = onDismiss) {
++        Column(
++            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
++            verticalArrangement = Arrangement.spacedBy(10.dp),
++        ) {
++            Text("Печать этикетки", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = WmsColors.TextPrimary)
++            Text(selection.title, fontSize = 18.sp, color = WmsColors.TextPrimary)
++            if (selection.kind == SortingPrintKind.PRODUCT) {
++                if (selection.marketplace == null) {
++                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                        TextButton(onClick = { onMarketplace("wb") }) { Text("WB") }
++                        TextButton(onClick = { onMarketplace("ozon") }) { Text("Ozon") }
++                    }
++                } else {
++                    Text("Площадка: ${if (selection.marketplace == "wb") "WB" else "Ozon"}", color = WmsColors.TextSecondary)
++                }
++            }
++            when {
++                selection.loading -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
++                    CircularProgressIndicator(); Text("Проверяем штрихкод")
++                }
++                selection.error != null -> Text(selection.error, color = WmsColors.Error)
++                selection.preview?.printable == true -> {
++                    Text("Код: ${selection.preview.barcode}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
++                    Text(selection.preview.labelSubtitle, color = WmsColors.TextSecondary)
++                }
++                else -> Text(selection.preview?.errorMessage ?: "Нет пригодного штрихкода для печати", color = WmsColors.Error)
++            }
++            Text(
++                destination?.let { "Принтер: ${it.queueName}${if (it.online) "" else " (нет связи с программой)"}" }
++                    ?: (destinationError ?: "Принтер для склада не назначен"),
++                color = if (destination == null) WmsColors.Error else WmsColors.TextSecondary,
++            )
++            QtyInput(value = copies, onValueChange = { copies = it }, min = 1, max = 999, maxHint = "Копий")
++            Button(
++                onClick = { onCopiesChange(copies); onConfirm() },
++                enabled = destination != null && !selection.loading && selection.preview?.printable == true,
++                colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Primary),
++                modifier = Modifier.fillMaxWidth().height(WmsDimens.PrimaryButtonHeight),
++            ) { Text("Отправить на печать", fontSize = 20.sp) }
++            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) { Text("Отмена") }
++        }
++    }
++}
++
 +/** Список работы: неразмещённые короба, грузоместа и товары loose-пула. */
  @Composable
  private fun SortingWorkList(
@@ -1624,7 +2751,7 @@ index 833f3c3..894c36a 100644
  
      LazyColumn(
          modifier = Modifier.fillMaxSize(),
-@@ -218,6 +273,17 @@ private fun SortingWorkList(
+@@ -218,6 +426,17 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -1642,7 +2769,7 @@ index 833f3c3..894c36a 100644
          if (loose.isNotEmpty()) {
              item { SectionHeader("Без короба") }
              items(loose, key = { it.first.productId }) { (line, rem) ->
-@@ -229,7 +295,7 @@ private fun SortingWorkList(
+@@ -229,7 +448,7 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -1652,7 +2779,7 @@ index 833f3c3..894c36a 100644
                  Text(
                      "Всё размещено",
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
-index 2edffa0..c68e9a8 100644
+index 2edffa0..93747da 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 @@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
@@ -1665,7 +2792,7 @@ index 2edffa0..c68e9a8 100644
  import kotlinx.coroutines.flow.MutableStateFlow
  import kotlinx.coroutines.flow.StateFlow
  import kotlinx.coroutines.launch
-@@ -15,44 +13,61 @@ import ru.wms.tsd.core.api.ApiProvider
+@@ -15,44 +13,87 @@ import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.networkErrorText
  import ru.wms.tsd.core.api.readableError
  import ru.wms.tsd.core.api.generated.models.InboundBoxPutawayBody
@@ -1679,6 +2806,10 @@ index 2edffa0..c68e9a8 100644
 +import ru.wms.tsd.core.api.sorting.CargoPlacePutawayBody
  import ru.wms.tsd.core.api.generated.models.LocationOut
 +import ru.wms.tsd.core.api.sorting.LoosePutawayBody
++import ru.wms.tsd.core.api.sorting.PrintDestinationOut
++import ru.wms.tsd.core.api.sorting.SortingLabelPreview
++import ru.wms.tsd.core.api.sorting.SortingPrintJobBody
++import ru.wms.tsd.core.api.sorting.SortingPrintJobOut
 +import ru.wms.tsd.features.inbound.isDoneStatus
  import ru.wms.tsd.ui.patterns.ScanFlash
  
@@ -1689,6 +2820,19 @@ index 2edffa0..c68e9a8 100644
      data class Loose(val productId: String) : SortTarget
  }
  
++enum class SortingPrintKind { PRODUCT, LOCATION }
++
++data class SortingPrintSelection(
++    val kind: SortingPrintKind,
++    val objectId: String,
++    val title: String,
++    val marketplace: String? = null,
++    val preview: SortingLabelPreview? = null,
++    val loading: Boolean = true,
++    val error: String? = null,
++    val copies: Int = 1,
++)
++
  data class SortingUiState(
      val loading: Boolean = true,
      val loadError: String? = null,
@@ -1713,6 +2857,15 @@ index 2edffa0..c68e9a8 100644
      val completing: Boolean = false,
 +    /** Документ оприходован сервером — экрану пора вернуться в очередь. */
 +    val documentDone: Boolean = false,
++    /** Назначение склада читается отдельно: его отсутствие не ломает сортировку. */
++    val printDestination: PrintDestinationOut? = null,
++    val printDestinationError: String? = null,
++    val printPicker: SortingPrintKind? = null,
++    val printSelection: SortingPrintSelection? = null,
++    /** До ответа сервера лежат UUID и неизменяемое тело, но никогда не файл. */
++    val unresolvedPrint: SortingPrintJobBody? = null,
++    val printJob: SortingPrintJobOut? = null,
++    val printUnknown: Boolean = false,
  )
  
 +/** Обрыв связи: сервер мог применить размещение, а мог и не успеть. */
@@ -1736,7 +2889,7 @@ index 2edffa0..c68e9a8 100644
   */
  class SortingViewModel(
      private val requestId: UUID,
-@@ -62,6 +77,10 @@ class SortingViewModel(
+@@ -62,6 +103,10 @@ class SortingViewModel(
      private val _state = MutableStateFlow(SortingUiState())
      val state: StateFlow<SortingUiState> = _state
  
@@ -1747,7 +2900,7 @@ index 2edffa0..c68e9a8 100644
      private val scanQueue = Channel<String>(capacity = 16)
      private var flashStamp = 0L
  
-@@ -75,27 +94,54 @@ class SortingViewModel(
+@@ -75,27 +120,56 @@ class SortingViewModel(
      fun load() {
          _state.value = _state.value.copy(loading = true, loadError = null)
          viewModelScope.launch {
@@ -1807,6 +2960,8 @@ index 2edffa0..c68e9a8 100644
 +                    unresolvedPutaway = savedLoose,
 +                    unresolvedCargoPutaway = savedCargo,
 +                )
++                loadPrintDestination(request)
++                recoverSavedPrint()
 +                null
              }.getOrElse { networkErrorText() }
              if (ok != null) _state.value = _state.value.copy(loading = false, loadError = ok)
@@ -1820,7 +2975,7 @@ index 2edffa0..c68e9a8 100644
          }
      }
  
-@@ -104,13 +150,20 @@ class SortingViewModel(
+@@ -104,13 +178,20 @@ class SortingViewModel(
      }
  
      fun selectLooseProduct(productId: String) {
@@ -1841,7 +2996,178 @@ index 2edffa0..c68e9a8 100644
      fun clearTarget() {
          _state.value = _state.value.copy(target = null, pendingLocation = null)
      }
-@@ -150,59 +203,188 @@ class SortingViewModel(
+@@ -119,6 +200,170 @@ class SortingViewModel(
+         _state.value = _state.value.copy(pendingLocation = null)
+     }
+ 
++    fun openPrintPicker(kind: SortingPrintKind) {
++        _state.value = _state.value.copy(printPicker = kind, printSelection = null)
++    }
++
++    fun dismissPrintPicker() {
++        _state.value = _state.value.copy(printPicker = null)
++    }
++
++    fun dismissPrintSelection() {
++        _state.value = _state.value.copy(printSelection = null)
++    }
++
++    fun selectProductForPrint(productId: String, title: String) {
++        val marketplace = currentPrintMarketplace()
++        openPrintSelection(
++            SortingPrintSelection(
++                kind = SortingPrintKind.PRODUCT,
++                objectId = productId,
++                title = title,
++                marketplace = marketplace,
++            ),
++        )
++    }
++
++    fun selectLocationForPrint(location: LocationOut) {
++        openPrintSelection(
++            SortingPrintSelection(
++                kind = SortingPrintKind.LOCATION,
++                objectId = location.id,
++                title = location.code,
++            ),
++        )
++    }
++
++    fun setPrintCopies(copies: Int) {
++        val selection = _state.value.printSelection ?: return
++        _state.value = _state.value.copy(printSelection = selection.copy(copies = copies.coerceIn(1, 999)))
++    }
++
++    fun selectPrintMarketplace(marketplace: String) {
++        val selection = _state.value.printSelection ?: return
++        if (selection.kind != SortingPrintKind.PRODUCT || selection.marketplace == marketplace) return
++        openPrintSelection(selection.copy(marketplace = marketplace, preview = null, loading = true, error = null))
++    }
++
++    /** Одно явное подтверждение создаёт новый UUID; транспортный повтор его не меняет. */
++    fun confirmPrint() {
++        val selection = _state.value.printSelection ?: return
++        val destination = _state.value.printDestination ?: return
++        if (selection.loading || selection.preview?.printable != true || _state.value.unresolvedPrint != null) return
++        val body = SortingPrintJobBody(
++            jobId = UUID.randomUUID().toString(),
++            kind = if (selection.kind == SortingPrintKind.PRODUCT) "product" else "location",
++            objectId = selection.objectId,
++            marketplace = selection.marketplace,
++            copies = selection.copies,
++            connectionId = destination.connectionId,
++        )
++        _state.value = _state.value.copy(printSelection = null, unresolvedPrint = body, printUnknown = false)
++        viewModelScope.launch { sendPrint(body) }
++    }
++
++    /** Проверяет уже сохранённое намерение; POST допускается только после честного 404. */
++    fun retryPrintRecovery() {
++        val body = _state.value.unresolvedPrint ?: return
++        viewModelScope.launch { recoverPrint(body) }
++    }
++
++    private fun openPrintSelection(selection: SortingPrintSelection) {
++        _state.value = _state.value.copy(printPicker = null, printSelection = selection)
++        viewModelScope.launch {
++            val response = runCatching {
++                sortingApi.printLabelPreview(
++                    requestId.toString(),
++                    if (selection.kind == SortingPrintKind.PRODUCT) "product" else "location",
++                    selection.objectId,
++                    selection.marketplace,
++                )
++            }.getOrNull()
++            val current = _state.value.printSelection
++            if (current?.objectId != selection.objectId || current.kind != selection.kind) return@launch
++            val preview = response?.body()
++            _state.value = _state.value.copy(
++                printSelection = when {
++                    response != null && response.isSuccessful && preview != null -> current.copy(loading = false, preview = preview)
++                    response != null -> current.copy(loading = false, error = response.readableError())
++                    else -> current.copy(loading = false, error = networkErrorText())
++                },
++            )
++        }
++    }
++
++    private suspend fun loadPrintDestination(request: SortingRequestOut) {
++        val response = runCatching { sortingApi.printDestination(request.warehouseId) }.getOrNull()
++        _state.value = _state.value.copy(
++            printDestination = response?.body()?.destination,
++            printDestinationError = when {
++                response == null -> networkErrorText()
++                !response.isSuccessful -> response.readableError()
++                else -> null
++            },
++        )
++    }
++
++    private fun currentPrintMarketplace(): String? = when (_state.value.request?.marketplace) {
++        "wildberries", "wb" -> "wb"
++        "ozon" -> "ozon"
++        else -> null
++    }
++
++    private suspend fun recoverSavedPrint() {
++        val saved = runCatching { api.pendingSortingPrint(context, requestId.toString()) }.getOrNull() ?: return
++        _state.value = _state.value.copy(unresolvedPrint = saved, printUnknown = true)
++        recoverPrint(saved)
++    }
++
++    private suspend fun recoverPrint(body: SortingPrintJobBody) {
++        val response = runCatching { sortingApi.sortingPrintJob(body.jobId) }.getOrNull()
++        when {
++            response != null && response.isSuccessful && response.body() != null -> finishKnownPrint(response.body()!!)
++            response?.code() == 404 -> sendPrint(body)
++            response != null -> _state.value = _state.value.copy(printUnknown = true, flash = errorFlash(response.readableError()))
++            else -> _state.value = _state.value.copy(printUnknown = true, flash = errorFlash("Результат печати неизвестен: ${networkErrorText()}"))
++        }
++    }
++
++    private suspend fun sendPrint(body: SortingPrintJobBody) {
++        // Диск — граница намерения. Без этой записи нельзя доказать, что повторит тот же UUID.
++        val saved = runCatching { api.saveSortingPrint(context, requestId.toString(), body) }
++        if (saved.isFailure) {
++            _state.value = _state.value.copy(unresolvedPrint = null, printUnknown = false, flash = errorFlash("Не удалось сохранить запрос печати на устройстве. Повторите попытку."))
++            return
++        }
++        _state.value = _state.value.copy(unresolvedPrint = body)
++        val response = runCatching { sortingApi.createSortingPrintJob(requestId.toString(), body) }.getOrNull()
++        when {
++            response != null && response.isSuccessful && response.body() != null -> finishKnownPrint(response.body()!!)
++            response != null && response.code() in setOf(400, 404, 409, 422) -> {
++                forgetPrint()
++                _state.value = _state.value.copy(unresolvedPrint = null, printUnknown = false, flash = errorFlash(response.readableError()))
++            }
++            response != null -> _state.value = _state.value.copy(printUnknown = true, flash = errorFlash("Результат печати неизвестен: ${response.readableError()}"))
++            else -> _state.value = _state.value.copy(printUnknown = true, flash = errorFlash("Результат печати неизвестен: ${networkErrorText()}"))
++        }
++    }
++
++    private fun finishKnownPrint(job: SortingPrintJobOut) {
++        // Pending/running не являются выясненным результатом. Оставляем точное
++        // тело на диске: после перезапуска сначала читаем этот же job_id и лишь
++        // при 404 повторяем POST. Конечный ответ уже не нуждается в повторе.
++        val complete = job.status in setOf("done", "failed")
++        if (complete) forgetPrint()
++        _state.value = _state.value.copy(
++            unresolvedPrint = if (complete) null else _state.value.unresolvedPrint,
++            printUnknown = job.status == "running",
++            printJob = job,
++            flash = successFlash(),
++        )
++    }
++
++    private fun forgetPrint() {
++        runCatching { api.saveSortingPrint(context, requestId.toString(), null) }
++    }
++
+     fun requestComplete() {
+         _state.value = _state.value.copy(confirmComplete = true)
+     }
+@@ -150,59 +395,188 @@ class SortingViewModel(
          }
      }
  
@@ -2070,7 +3396,7 @@ index 2edffa0..c68e9a8 100644
      fun confirmComplete(onDone: () -> Unit) {
          _state.value = _state.value.copy(confirmComplete = false, completing = true)
          viewModelScope.launch {
-@@ -219,6 +401,10 @@ class SortingViewModel(
+@@ -219,6 +593,10 @@ class SortingViewModel(
  
      private suspend fun processScan(barcode: String) {
          val st = _state.value
@@ -2081,7 +3407,7 @@ index 2edffa0..c68e9a8 100644
          val request = st.request ?: return
  
          // 1) Скан закрытого короба с остатком?
-@@ -234,33 +420,50 @@ class SortingViewModel(
+@@ -234,33 +612,50 @@ class SortingViewModel(
              return
          }
  
@@ -2145,7 +3471,7 @@ index 2edffa0..c68e9a8 100644
      private fun successFlash() = ScanFlash.Success(++flashStamp)
      private fun errorFlash(message: String) = ScanFlash.Error(message, ++flashStamp)
  
-@@ -288,14 +491,25 @@ class SortingViewModel(
+@@ -288,14 +683,25 @@ class SortingViewModel(
  fun boxRemaining(box: InboundIntakeBoxOut): Int =
      box.remainingQty ?: box.lines.orEmpty().sumOf { it.remainingQty ?: 0 }
  
@@ -2261,6 +3587,117 @@ index a1d4fb7..96d8afd 100644
      @Test
      fun `storage failure leaves session null and returns safe typed failure`() = runTest {
          coEvery { authApi.loginRouteAuthLoginPost(any()) } returns Response.success(
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index b0f4739..e8ebde8 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.*
++import kotlinx.serialization.json.JsonPrimitive
+ import okhttp3.ResponseBody.Companion.toResponseBody
+ import okhttp3.MediaType.Companion.toMediaType
+ import org.junit.*
+@@ -40,6 +41,10 @@ class FbsViewModelTest {
+             every { pendingFbsDelivery(any()) } returns null
+             every { saveFbsDelivery(any(), any()) } just Runs
+         }
++        coEvery { provider.pendingFbsSupplyCreate() } returns null
++        coEvery { provider.pendingFbsSupplyAdd() } returns null
++        coEvery { provider.saveFbsSupplyCreate(any()) } just Runs
++        coEvery { provider.saveFbsSupplyAdd(any()) } just Runs
+     }
+     @After fun teardown() { Dispatchers.resetMain() }
+ 
+@@ -60,6 +65,87 @@ class FbsViewModelTest {
+         coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
+         coVerify(exactly = 1) { service.worklist(marketplace = "ozon", statusGroup = "active") }
+     }
++
++    @Test fun `supply chooser removes only candidates that contradict selected order context`() {
++        val selected = order("1", "2026-09-08T09:00:00Z").copy(
++            status = "new",
++            marketplace = "ozon",
++            seller = FbsNamedRef(JsonPrimitive("seller-a"), "Селлер А"),
++            wmsWarehouse = FbsNamedRef(JsonPrimitive("warehouse-a"), "Склад А"),
++            deliveryRoute = "Ozon Express",
++        )
++        fun supply(id: String, seller: String?, warehouse: String?, route: String?) = FbsSupplySummary(
++            id = id, name = id, status = "assembling", marketplace = "ozon", seller = FbsNamedRef(seller?.let(::JsonPrimitive)),
++            wbWarehouse = FbsNamedRef(), wmsWarehouse = FbsNamedRef(warehouse?.let(::JsonPrimitive)),
++            ordersCount = 1, unitsCount = 1, boxesCount = 0, deliveryRoute = route,
++        )
++        assertTrue(supply("matching", "seller-a", "warehouse-a", "Ozon Express").isCompatibleWith(listOf(selected)))
++        assertTrue(supply("unknown", null, null, null).isCompatibleWith(listOf(selected)))
++        assertFalse(supply("seller-mismatch", "seller-b", "warehouse-a", "Ozon Express").isCompatibleWith(listOf(selected)))
++        assertFalse(supply("route-mismatch", "seller-a", "warehouse-a", "Other method").isCompatibleWith(listOf(selected)))
++    }
++
++    @Test fun `same create intent keeps its idempotency body after an ambiguous failure`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val bodies = mutableListOf<SupplyCreateBody>()
++        var calls = 0
++        coEvery { service.createSupply(capture(bodies)) } coAnswers {
++            calls += 1
++            if (calls == 1) throw IOException("lost response")
++            Response.success(workspace(listOf(fresh)))
++        }
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        vm.loadOrders(); advanceUntilIdle(); vm.toggle(fresh)
++        vm.create("Поставка 1", "warehouse_sc") { opened += it }; advanceUntilIdle()
++        assertNotNull(vm.state.value.error)
++        vm.dismissError()
++        vm.create("Поставка 1", "warehouse_sc") { opened += it }; advanceUntilIdle()
++        assertEquals(2, bodies.size)
++        assertEquals(bodies[0], bodies[1])
++        assertEquals(listOf("supply"), opened)
++    }
++
++    @Test fun `saved create intent is offered after a process restart and keeps its body`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val saved = SupplyCreateBody("Поставка после перезапуска", listOf("1"), "warehouse_sc", "same-key")
++        coEvery { provider.pendingFbsSupplyCreate() } returns saved
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val sent = mutableListOf<SupplyCreateBody>()
++        coEvery { service.createSupply(capture(sent)) } returns Response.success(workspace(listOf(fresh)))
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        assertEquals(saved, vm.state.value.restoredSupplyCreate)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
++        assertEquals(listOf(saved), sent)
++        assertEquals(listOf("supply"), opened)
++        coVerify { provider.saveFbsSupplyCreate(null) }
++    }
++
++    @Test fun `saved add intent is offered after a process restart and keeps its supply and body`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val saved = PendingFbsSupplyAdd("supply-before-restart", SupplyOrdersBody(listOf("1"), "same-key"))
++        coEvery { provider.pendingFbsSupplyAdd() } returns saved
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val sent = mutableListOf<SupplyOrdersBody>()
++        coEvery { service.addOrders("supply-before-restart", capture(sent)) } returns Response.success(workspace(listOf(fresh)))
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        assertEquals("supply-before-restart", vm.state.value.restoredSupplyAddId)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
++        assertEquals(listOf(saved.body), sent)
++        assertEquals(listOf("supply"), opened)
++        coVerify { provider.saveFbsSupplyAdd(null) }
++    }
++
+     @Test fun `Ozon secondary position scan sends its product and oldest posting`() = runTest {
+         val position = FbsPosition(productId = "second-product", name = "Second", sku = "222", quantity = 3, pickedQuantity = 1, id = "position", barcode = "222-bar")
+         val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "123-456-1", positions = listOf(position))
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 new file mode 100644
 index 0000000..1dc85f9
@@ -2537,6 +3974,448 @@ index 08af41f..fbecbf6 100644
              err(500, "Network error")
  
          val vm = InboundListViewModel(api)
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
+index 53a089e..5c39cef 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
+@@ -27,6 +27,9 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadLineOut
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestDetailOut
+ import ru.wms.tsd.core.api.generated.models.PackagingTaskLineOut
+ import ru.wms.tsd.core.api.generated.models.PackagingTaskOut
++import ru.wms.tsd.core.api.packaging.PackAttempt
++import ru.wms.tsd.core.api.packaging.PackProgressResult
++import ru.wms.tsd.core.api.packaging.PackagingApi
+ 
+ /**
+  * T-17. Юнит-тесты сборки отгрузки: двухшаговая загрузка упаковки (T-15b),
+@@ -40,15 +43,37 @@ class OutboundAssemblyViewModelTest {
+     private val PACK_LINE_ID = "11111111-2222-3333-4444-555555555555"
+ 
+     private lateinit var ops: OperationsApi
++    private lateinit var packing: PackagingApi
+     private lateinit var api: ApiProvider
++    private val attempts = mutableMapOf<String, PackAttempt>()
+ 
+     @Before
+     fun setUp() {
+         Dispatchers.setMain(UnconfinedTestDispatcher())
+         ops = mockk()
+-        api = mockk { every { operations() } returns ops }
++        packing = mockk()
++        attempts.clear()
++        api = mockk {
++            every { operations() } returns ops
++            every { packaging(any()) } returns packing
++            every { currentActor() } returns "packer@ff.ru"
++            every { packServer() } returns "http://test/"
++            every { pendingPackAttempt(any(), any()) } answers { attempts[slot(firstArg(), secondArg())] }
++            every { savePackAttempt(any(), any(), any()) } answers {
++                val at = slot(firstArg(), secondArg())
++                val attempt = thirdArg<PackAttempt?>()
++                if (attempt == null) attempts.remove(at) else attempts[at] = attempt
++                Unit
++            }
++            every { clearPackAttempt(any(), any(), any()) } answers {
++                attempts.remove("${firstArg<String>()}:${secondArg<String>()}")
++                Unit
++            }
++        }
+     }
+ 
++    private fun slot(taskId: String, lineId: String) = "$taskId:$lineId"
++
+     @After
+     fun tearDown() {
+         Dispatchers.resetMain()
+@@ -208,21 +233,19 @@ class OutboundAssemblyViewModelTest {
+ 
+         val packed = packagingTask(listOf(packagingLine(done = 1, printed = 1)))
+         coEvery {
+-            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(
+-                UUID.fromString(taskId), UUID.fromString(PACK_LINE_ID), match { it.quantity == 1 },
+-            )
+-        } returns Response.success(packed)
++            packing.pack(taskId, PACK_LINE_ID, match { it.quantity == 1 && it.idempotencyKey.isNotBlank() })
++        } returns Response.success(PackProgressResult(packed))
+ 
+         val vm = vm()
+         vm.openPackLine(PACK_LINE_ID)
+         vm.submitPack(1)
+ 
+-        coVerify(exactly = 1) {
+-            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(any(), any(), any())
+-        }
++        coVerify(exactly = 1) { packing.pack(any(), any(), any()) }
+         assertEquals(1, vm.state.value.packaging?.lines?.firstOrNull()?.qtyDone)
+         // строка выполнена — шторка закрывается
+         assertNull(vm.state.value.packLineId)
++        // работа записана — ключ снят, следующая упаковка получит новый
++        assertTrue(attempts.isEmpty())
+     }
+ 
+     @Test
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
+new file mode 100644
+index 0000000..8fe2661
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
+@@ -0,0 +1,356 @@
++package ru.wms.tsd.features.outbound
++
++import io.mockk.coEvery
++import io.mockk.coVerify
++import io.mockk.every
++import io.mockk.mockk
++import java.io.IOException
++import java.util.UUID
++import kotlinx.coroutines.CompletableDeferred
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.UnconfinedTestDispatcher
++import kotlinx.coroutines.test.resetMain
++import kotlinx.coroutines.test.runTest
++import kotlinx.coroutines.test.setMain
++import kotlinx.serialization.encodeToString
++import kotlinx.serialization.json.Json
++import okhttp3.MediaType.Companion.toMediaType
++import okhttp3.ResponseBody.Companion.toResponseBody
++import org.junit.After
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNotEquals
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Before
++import org.junit.Test
++import retrofit2.Response
++import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.generated.apis.OperationsApi
++import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadLineOut
++import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestDetailOut
++import ru.wms.tsd.core.api.generated.models.PackagingTaskLineOut
++import ru.wms.tsd.core.api.generated.models.PackagingTaskOut
++import ru.wms.tsd.core.api.packaging.PackAttempt
++import ru.wms.tsd.core.api.packaging.PackAttemptBody
++import ru.wms.tsd.core.api.packaging.PackProgressResult
++import ru.wms.tsd.core.api.packaging.PackagingApi
++import ru.wms.tsd.core.auth.AuthManager
++import ru.wms.tsd.core.auth.AuthSession
++import ru.wms.tsd.core.auth.AuthStore
++
++/**
++ * WMS-444 / D1. Одна физическая упаковка = один UUID, сохранённый до запроса.
++ * Проверяем, что потеря ответа, повтор и переоткрытие экрана не создают вторую
++ * единицу работы, а следующая законная упаковка получает новый ключ.
++ */
++@OptIn(ExperimentalCoroutinesApi::class)
++class OutboundPackAttemptTest {
++
++    private val requestId: UUID = UUID.fromString("3280dc0e-1871-41c9-a6c5-0f8c2a5f59ea")
++    private val taskId = "a6e0c1b7-097f-4a41-8aa4-b96bcad02825"
++    private val lineA = "11111111-2222-3333-4444-555555555555"
++    private val lineB = "99999999-8888-7777-6666-555555555555"
++
++    private lateinit var ops: OperationsApi
++    private lateinit var packing: PackagingApi
++    private lateinit var api: ApiProvider
++    private val attempts = mutableMapOf<String, PackAttempt>()
++
++    @Before
++    fun setUp() {
++        Dispatchers.setMain(UnconfinedTestDispatcher())
++        ops = mockk()
++        packing = mockk()
++        attempts.clear()
++        api = mockk {
++            every { operations() } returns ops
++            every { packaging(any()) } returns packing
++            every { currentActor() } returns "packer@ff.ru"
++            every { packServer() } returns "http://test/"
++            every { pendingPackAttempt(any(), any()) } answers { attempts["${firstArg<String>()}:${secondArg<String>()}"] }
++            every { savePackAttempt(any(), any(), any()) } answers {
++                val at = "${firstArg<String>()}:${secondArg<String>()}"
++                val attempt = thirdArg<PackAttempt?>()
++                if (attempt == null) attempts.remove(at) else attempts[at] = attempt
++                Unit
++            }
++            every { clearPackAttempt(any(), any(), any()) } answers {
++                attempts.remove("${firstArg<String>()}:${secondArg<String>()}")
++                Unit
++            }
++        }
++        stubDocument(task(line(lineA, done = 0, total = 3)))
++    }
++
++    @After
++    fun tearDown() = Dispatchers.resetMain()
++
++    // ---------- фикстуры ----------
++
++    private fun line(id: String, done: Int, total: Int) = PackagingTaskLineOut(
++        id = id,
++        productId = "prod-$id",
++        skuCode = "sku",
++        productName = "Товар",
++        storageLocationId = "loc-1",
++        storageLocationCode = "LOC-1",
++        packagingInstructions = null,
++        requiresHonestSign = false,
++        qtyTotal = total,
++        qtySuggestedPacked = 0,
++        qtyConfirmedPacked = 0,
++        qtyNeedPack = total,
++        qtyPackedInTask = done,
++        qtyDone = done,
++        qtyMarkingPrinted = done,
++        isComplete = done >= total,
++    )
++
++    private fun task(vararg lines: PackagingTaskLineOut) = PackagingTaskOut(
++        id = taskId,
++        warehouseId = "wh-1",
++        status = "in_progress",
++        marketplaceUnloadRequestId = requestId.toString(),
++        inboundIntakeRequestId = null,
++        isComplete = lines.all { it.isComplete },
++        lines = lines.toList(),
++    )
++
++    private fun <T> err(code: Int, detail: String): Response<T> = Response.error(
++        code,
++        """{"detail":"$detail"}""".toResponseBody("application/json".toMediaType()),
++    )
++
++    private fun stubDocument(packagingTask: PackagingTaskOut) {
++        coEvery { ops.getMarketplaceUnloadOperationsMarketplaceUnloadRequestsRequestIdGet(requestId) } returns
++            Response.success(
++                MarketplaceUnloadRequestDetailOut(
++                    id = requestId.toString(),
++                    warehouseId = "wh-1",
++                    warehouseName = "Склад",
++                    status = "collecting",
++                    createdAt = "2026-09-13T00:00:00Z",
++                    lines = listOf(
++                        MarketplaceUnloadLineOut(
++                            id = "unload-line-1",
++                            productId = "prod-1",
++                            skuCode = "sku",
++                            productName = "Товар",
++                            quantity = 3,
++                            pickedQty = 3,
++                        ),
++                    ),
++                    boxes = emptyList(),
++                ),
++            )
++        coEvery { ops.getPackagingTaskForUnloadOperationsPackagingTasksByUnloadUnloadIdGet(requestId) } returns
++            Response.success(packagingTask)
++        coEvery { ops.getPackagingTaskOperationsPackagingTasksTaskIdGet(UUID.fromString(taskId)) } returns
++            Response.success(packagingTask)
++    }
++
++    private fun openedVm(lineId: String = lineA) =
++        OutboundAssemblyViewModel(requestId, api).also { it.openPackLine(lineId) }
++
++    // ---------- сценарии ----------
++
++    @Test
++    fun `потерянный ответ сохраняет ключ, повтор уходит тем же телом и работа не удваивается`() = runTest {
++        val bodies = mutableListOf<PackAttemptBody>()
++        var call = 0
++        coEvery { packing.pack(taskId, lineA, any()) } answers {
++            bodies += thirdArg<PackAttemptBody>()
++            if (call++ == 0) throw IOException("ответ потерян")
++            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3))))
++        }
++
++        val vm = openedVm()
++        vm.submitPack(1)
++
++        // ответа нет — исход неизвестен, ключ обязан пережить попытку
++        assertEquals(1, attempts.size)
++        assertEquals(bodies[0].idempotencyKey, attempts["$taskId:$lineA"]?.key)
++
++        vm.submitPack(1)
++
++        assertEquals(2, bodies.size)
++        assertEquals(bodies[0], bodies[1])
++        assertEquals(1, vm.state.value.packaging?.lines?.first()?.qtyDone)
++        assertTrue(attempts.isEmpty())
++    }
++
++    @Test
++    fun `переоткрытие экрана повторяет ту же попытку, а не создаёт новую`() = runTest {
++        val bodies = mutableListOf<PackAttemptBody>()
++        var call = 0
++        coEvery { packing.pack(taskId, lineA, any()) } answers {
++            bodies += thirdArg<PackAttemptBody>()
++            if (call++ == 0) throw IOException("ответ потерян")
++            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3))))
++        }
++
++        openedVm().submitPack(1)
++        assertEquals(1, attempts.size)
++
++        // новый экран/процесс: ключ читается с диска
++        openedVm()
++
++        assertEquals(2, bodies.size)
++        assertEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
++        assertEquals(1, bodies[1].quantity)
++        assertTrue(attempts.isEmpty())
++    }
++
++    @Test
++    fun `следующая физическая упаковка получает новый ключ`() = runTest {
++        val bodies = mutableListOf<PackAttemptBody>()
++        var done = 0
++        coEvery { packing.pack(taskId, lineA, any()) } answers {
++            bodies += thirdArg<PackAttemptBody>()
++            Response.success(PackProgressResult(task(line(lineA, done = ++done, total = 3))))
++        }
++
++        val vm = openedVm()
++        vm.submitPack(1)
++        vm.submitPack(1)
++
++        assertEquals(2, bodies.size)
++        assertNotEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
++        assertEquals(2, vm.state.value.packaging?.lines?.first()?.qtyDone)
++        assertTrue(attempts.isEmpty())
++    }
++
++    @Test
++    fun `отказ сервера снимает ключ и не запирает следующую упаковку`() = runTest {
++        val bodies = mutableListOf<PackAttemptBody>()
++        coEvery { packing.pack(taskId, lineA, capture(bodies)) } returnsMany listOf(
++            err(409, "invalid_qty"),
++            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3)))),
++        )
++
++        val vm = openedVm()
++        vm.submitPack(9)
++
++        // сервер решил и ничего не записал — ключ отклонённой попытки не живёт дальше
++        assertTrue(attempts.isEmpty())
++
++        vm.submitPack(1)
++
++        assertEquals(2, bodies.size)
++        assertNotEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
++        assertEquals(1, vm.state.value.packaging?.lines?.first()?.qtyDone)
++    }
++
++    @Test
++    fun `ошибка сервера 5xx оставляет исход неизвестным и сохраняет ключ`() = runTest {
++        val bodies = mutableListOf<PackAttemptBody>()
++        coEvery { packing.pack(taskId, lineA, capture(bodies)) } returnsMany listOf(
++            err(502, "bad gateway"),
++            Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3)))),
++        )
++
++        val vm = openedVm()
++        vm.submitPack(1)
++        assertEquals(1, attempts.size)
++
++        vm.submitPack(1)
++
++        assertEquals(bodies[0], bodies[1])
++        assertTrue(attempts.isEmpty())
++    }
++
++    @Test
++    fun `сбой записи на устройстве не даёт отправить упаковку`() = runTest {
++        every { api.savePackAttempt(any(), any(), any()) } throws IllegalStateException("Не удалось сохранить попытку")
++
++        val vm = openedVm()
++        vm.submitPack(1)
++
++        coVerify(exactly = 0) { packing.pack(any(), any(), any()) }
++        assertFalse(vm.state.value.packBusy)
++    }
++
++    @Test
++    fun `ключ строки не переносится на другую строку документа`() = runTest {
++        stubDocument(task(line(lineA, done = 0, total = 3), line(lineB, done = 0, total = 3)))
++        val bodies = mutableListOf<PackAttemptBody>()
++        coEvery { packing.pack(taskId, any(), capture(bodies)) } answers { throw IOException("ответ потерян") }
++
++        val vm = OutboundAssemblyViewModel(requestId, api)
++        vm.openPackLine(lineA)
++        vm.submitPack(1)
++        vm.openPackLine(lineB)
++        vm.submitPack(1)
++
++        assertEquals(2, bodies.size)
++        assertNotEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
++        assertEquals(2, attempts.size)
++        assertNotEquals(attempts["$taskId:$lineA"]?.key, attempts["$taskId:$lineB"]?.key)
++    }
++
++    @Test
++    fun `двойное нажатие при неизвестном ответе шлёт один запрос`() = runTest {
++        val gate = CompletableDeferred<Response<PackProgressResult>>()
++        coEvery { packing.pack(taskId, lineA, any()) } coAnswers { gate.await() }
++
++        val vm = openedVm()
++        vm.submitPack(1)
++        vm.submitPack(1)
++
++        assertTrue(vm.state.value.packBusy)
++        coVerify(exactly = 1) { packing.pack(any(), any(), any()) }
++
++        gate.complete(Response.success(PackProgressResult(task(line(lineA, done = 1, total = 3)))))
++        assertFalse(vm.state.value.packBusy)
++        assertTrue(attempts.isEmpty())
++    }
++
++    @Test
++    fun `тело обычной упаковки несёт только количество и ключ`() {
++        val json = Json.encodeToString(PackAttemptBody(quantity = 2, idempotencyKey = "key-1"))
++        assertEquals("""{"quantity":2,"idempotency_key":"key-1"}""", json)
++    }
++
++    @Test
++    fun `сохранённые попытки разделены по серверу tenant и user`() {
++        val store: AuthStore = mockk()
++        val auth: AuthManager = mockk()
++        val tenant = UUID.randomUUID().toString()
++        val userA = UUID.randomUUID().toString()
++        val userB = UUID.randomUUID().toString()
++        fun token(t: String, u: String): String {
++            val claims = """{"tenant_id":"$t","sub":"$u"}"""
++            return "header." + java.util.Base64.getUrlEncoder().withoutPadding()
++                .encodeToString(claims.toByteArray()) + ".signature"
++        }
++        every { auth.getCurrentSession() } returns AuthSession(userId = "same@example.com", organizationSlug = "A", displayName = "A", jobTitle = null, token = token(tenant, userA))
++        every { store.getBaseUrl() } returns "https://api.test/"
++        val provider = ApiProvider(store, auth)
++        val saved = mutableMapOf<String, String>()
++        every { store.getPackAttempt(any(), any(), any(), any()) } answers {
++            saved["${firstArg<String>()}|${secondArg<String>()}|${thirdArg<String>()}|${arg<String>(3)}"]
++        }
++        every { store.savePackAttempt(any(), any(), any(), any(), any()) } answers {
++            val slot = "${firstArg<String>()}|${secondArg<String>()}|${thirdArg<String>()}|${arg<String>(3)}"
++            val value = arg<String?>(4)
++            if (value == null) saved.remove(slot) else saved[slot] = value
++            Unit
++        }
++        val a = PackAttempt(UUID.randomUUID().toString(), 1, provider.currentActor(), provider.packServer())
++        provider.savePackAttempt(taskId, lineA, a)
++        assertEquals(a, provider.pendingPackAttempt(taskId, lineA))
++        every { auth.getCurrentSession() } returns AuthSession(userId = "same@example.com", organizationSlug = "B", displayName = "B", jobTitle = null, token = token(tenant, userB))
++        assertNull(provider.pendingPackAttempt(taskId, lineA))
++        val b = PackAttempt(UUID.randomUUID().toString(), 2, provider.currentActor(), provider.packServer())
++        provider.savePackAttempt(taskId, lineA, b)
++        assertEquals(b, provider.pendingPackAttempt(taskId, lineA))
++        provider.clearPackAttempt(taskId, lineA, a)
++        assertEquals(b, provider.pendingPackAttempt(taskId, lineA))
++        every { auth.getCurrentSession() } returns AuthSession(userId = "same@example.com", organizationSlug = "B", displayName = "B", jobTitle = null, token = token(UUID.randomUUID().toString(), userB))
++        assertNull(provider.pendingPackAttempt(taskId, lineA))
++        every { store.getBaseUrl() } returns "https://other.test/"
++        assertNull(provider.pendingPackAttempt(taskId, lineA))
++    }
++}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt
 new file mode 100644
 index 0000000..2439a03
@@ -2637,7 +4516,7 @@ index 0000000..a31d263
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
-index 6203cc5..31b2313 100644
+index 6203cc5..6449815 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 @@ -1,9 +1,13 @@
@@ -2668,7 +4547,7 @@ index 6203cc5..31b2313 100644
  import org.junit.Assert.assertTrue
  import org.junit.Before
  import org.junit.Test
-@@ -22,31 +31,38 @@ import retrofit2.Response
+@@ -22,31 +31,43 @@ import retrofit2.Response
  import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
@@ -2689,6 +4568,11 @@ index 6203cc5..31b2313 100644
 +import ru.wms.tsd.core.api.sorting.SortingApi
 +import ru.wms.tsd.core.api.sorting.CargoPlacePutawayBody
 +import ru.wms.tsd.core.api.sorting.SortingObjectPlaceOut
++import ru.wms.tsd.core.api.sorting.PrintDestinationOut
++import ru.wms.tsd.core.api.sorting.PrintDestinationResponse
++import ru.wms.tsd.core.api.sorting.SortingLabelPreview
++import ru.wms.tsd.core.api.sorting.SortingPrintJobBody
++import ru.wms.tsd.core.api.sorting.SortingPrintJobOut
  
  /**
 - * T-17. Юнит-тесты сортировки. Главное — фикс гонки в confirmLoosePutaway:
@@ -2716,7 +4600,7 @@ index 6203cc5..31b2313 100644
      private lateinit var api: ApiProvider
  
      @Before
-@@ -54,9 +70,17 @@ class SortingViewModelTest {
+@@ -54,9 +75,19 @@ class SortingViewModelTest {
          Dispatchers.setMain(UnconfinedTestDispatcher())
          ops = mockk()
          whs = mockk()
@@ -2731,10 +4615,12 @@ index 6203cc5..31b2313 100644
 +            every { pendingCargoPutaway(any(), any()) } returns null
 +            every { pendingCargoPutawayWarehouseId(any(), any()) } returns null
 +            every { saveCargoPutaway(any(), any(), any(), any()) } just Runs
++            every { pendingSortingPrint(any(), any()) } returns null
++            every { saveSortingPrint(any(), any(), any()) } just Runs
          }
      }
  
-@@ -77,65 +101,325 @@ class SortingViewModelTest {
+@@ -77,65 +108,411 @@ class SortingViewModelTest {
          storageLocationCode = null,
      )
  
@@ -2743,6 +4629,7 @@ index 6203cc5..31b2313 100644
 +        status: String = "sorting",
 +        posted: Int = 0,
 +        cargoPlaces: List<SortingCargoPlaceOut> = emptyList(),
++        marketplace: String? = "wb",
 +    ) = SortingRequestOut(
          id = requestId.toString(),
          warehouseId = warehouseId,
@@ -2762,6 +4649,7 @@ index 6203cc5..31b2313 100644
 -        createdAt = "2026-07-06T00:00:00Z",
 +        cargoPlaces = cargoPlaces,
 +        sortingRemainingQty = 10 - posted,
++        marketplace = marketplace,
      )
  
      private fun locC() = LocationOut(id = locCId, code = "LOC-C", warehouseId = warehouseId, barcode = locCBarcode)
@@ -2786,7 +4674,23 @@ index 6203cc5..31b2313 100644
          } returns Response.success(listOf(locC()))
 +        every { api.pendingLoosePutaway(any(), requestId.toString()) } returns saved
 +        every { api.pendingCargoPutaway(any(), requestId.toString()) } returns savedCargo
++        coEvery { sortingApi.printDestination(warehouseId) } returns Response.success(
++            PrintDestinationResponse(
++                PrintDestinationOut("printer-442", "Synthetic_442", "darwin", warehouseId, true, true, null, true),
++            ),
++        )
 +    }
++
++    private fun printJob(body: SortingPrintJobBody, status: String = "pending") = SortingPrintJobOut(
++        id = body.jobId,
++        status = status,
++        statusText = if (status == "pending") "Ожидает передачи" else "Передано в очередь принтера",
++        queueName = "Synthetic_442",
++        copies = body.copies,
++        barcode = "4601234567893",
++        labelTitle = "Товар",
++        labelSubtitle = "WB · sku",
++    )
 +
 +    private fun errorResponse(code: Int, detail: String): Response<SortingRequestOut> =
 +        Response.error(code, """{"detail":"$detail"}""".toResponseBody("application/json".toMediaType()))
@@ -2963,11 +4867,7 @@ index 6203cc5..31b2313 100644
 -            Response.success(listOf(lineA, lineB))
 +        vm.confirmCargoPlacePutaway()
 +        advanceUntilIdle()
- 
--        val putSlot = slot<List<InboundDistributionLineIn>>()
--        coEvery {
--            ops.replaceDistributionLinesOperationsInboundIntakeRequestsRequestIdDistributionLinesPut(requestId, capture(putSlot))
--        } returns Response.success(listOf(lineA, lineB))
++
 +        assertEquals("cargo_place", bodySlot.captured.kind)
 +        assertEquals(cargo.id, bodySlot.captured.id)
 +        assertEquals(locCId, bodySlot.captured.cellId)
@@ -2975,8 +4875,7 @@ index 6203cc5..31b2313 100644
 +        assertTrue(UUID.fromString(bodySlot.captured.operationId).toString().isNotBlank())
 +        assertNull("успешное грузоместо снимается с цели", vm.state.value.target)
 +    }
- 
--        vm.confirmLoosePutaway(quantity = 3)
++
 +    @Test
 +    fun `cargo response loss and failed reread preserve one intent and do not accept another cell`() = runTest {
 +        val cargo = SortingCargoPlaceOut(
@@ -3034,19 +4933,13 @@ index 6203cc5..31b2313 100644
 +        // exact receipt deliberately, including after the request has left the
 +        // ordinary sorting queue.
 +        finalOpen.retryCargoPutaway()
-         advanceUntilIdle()
++        advanceUntilIdle()
 +        assertEquals(1, receipts.size)
 +        assertNull(saved)
 +        assertNull(finalOpen.state.value.unresolvedCargoPutaway)
 +    }
  
--        val sent = putSlot.captured
--        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
--        assertTrue("A сохранён", sent.any { it.productId.toString() == prodA })
--        assertTrue("B (параллельный) НЕ затёрт", sent.any { it.productId.toString() == prodB })
--        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
--        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
--        assertEquals("итого 3 строки", 3, sent.size)
+-        val putSlot = slot<List<InboundDistributionLineIn>>()
 +    @Test
 +    fun `incomplete response cannot be interpreted as empty completed sorting`() {
 +        assertTrue(runCatching { Json.decodeFromString<SortingRequestOut>("""{"id":"a","warehouse_id":"b","status":"done","lines":[]}""") }.isFailure)
@@ -3096,5 +4989,83 @@ index 6203cc5..31b2313 100644
 +        coEvery { sortingApi.loosePutaway(any(), any()) } returns errorResponse(401, "unauthorized")
 +        vm.aimAtCell(); runCurrent(); vm.confirmLoosePutaway(1); advanceUntilIdle()
 +        assertNotNull(vm.state.value.unresolvedPutaway)
++    }
++
++    @Test
++    fun `печать сохраняет один UUID и точное тело до POST без изменения цели сортировки`() = runTest {
++        stubLoad()
+         coEvery {
+-            ops.replaceDistributionLinesOperationsInboundIntakeRequestsRequestIdDistributionLinesPut(requestId, capture(putSlot))
+-        } returns Response.success(listOf(lineA, lineB))
++            sortingApi.printLabelPreview(requestId.toString(), "product", prodC, "wb")
++        } returns Response.success(
++            SortingLabelPreview("4601234567893", "Товар", "WB · sku", warehouseId, true),
++        )
++        val bodySlot = slot<SortingPrintJobBody>()
++        coEvery { sortingApi.createSortingPrintJob(requestId.toString(), capture(bodySlot)) } answers {
++            Response.success(printJob(bodySlot.captured))
++        }
+ 
+-        vm.confirmLoosePutaway(quantity = 3)
++        val vm = SortingViewModel(requestId, api)
++        advanceUntilIdle()
++        vm.selectLooseProduct(prodC)
++        vm.selectProductForPrint(prodC, "sku · Товар")
++        advanceUntilIdle()
++        vm.setPrintCopies(2)
++        vm.confirmPrint()
++        advanceUntilIdle()
++
++        assertEquals("product", bodySlot.captured.kind)
++        assertEquals(prodC, bodySlot.captured.objectId)
++        assertEquals("wb", bodySlot.captured.marketplace)
++        assertEquals(2, bodySlot.captured.copies)
++        assertEquals("printer-442", bodySlot.captured.connectionId)
++        assertEquals(SortTarget.Loose(prodC), vm.state.value.target)
++        assertEquals("Ожидает передачи", vm.state.value.printJob?.statusText)
++        assertEquals(bodySlot.captured, vm.state.value.unresolvedPrint)
++        verify { api.saveSortingPrint(any(), requestId.toString(), bodySlot.captured) }
++    }
++
++    @Test
++    fun `после потери ответа печать восстанавливается тем же телом только через 404`() = runTest {
++        var saved: SortingPrintJobBody? = null
++        every { api.saveSortingPrint(any(), requestId.toString(), any()) } answers { saved = thirdArg() }
++        every { api.pendingSortingPrint(any(), requestId.toString()) } answers { saved }
++        stubLoad()
++        coEvery {
++            sortingApi.printLabelPreview(requestId.toString(), "product", prodC, "wb")
++        } returns Response.success(SortingLabelPreview("4601234567893", "Товар", "WB · sku", warehouseId, true))
++        coEvery { sortingApi.createSortingPrintJob(requestId.toString(), any()) } throws IOException("lost after commit")
++
++        val first = SortingViewModel(requestId, api)
++        advanceUntilIdle()
++        first.selectProductForPrint(prodC, "sku · Товар")
++        advanceUntilIdle()
++        first.confirmPrint()
++        advanceUntilIdle()
++        val original = saved!!
++        assertTrue(first.state.value.printUnknown)
++
++        coEvery { sortingApi.sortingPrintJob(original.jobId) } returns Response.error(
++            404, """{"detail":"print_job_not_found"}""".toResponseBody("application/json".toMediaType()),
++        )
++        val retrySlot = slot<SortingPrintJobBody>()
++        coEvery { sortingApi.createSortingPrintJob(requestId.toString(), capture(retrySlot)) } answers {
++            Response.success(printJob(retrySlot.captured))
++        }
++        val reopened = SortingViewModel(requestId, api)
+         advanceUntilIdle()
+ 
+-        val sent = putSlot.captured
+-        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
+-        assertTrue("A сохранён", sent.any { it.productId.toString() == prodA })
+-        assertTrue("B (параллельный) НЕ затёрт", sent.any { it.productId.toString() == prodB })
+-        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
+-        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
+-        assertEquals("итого 3 строки", 3, sent.size)
++        assertEquals(original, retrySlot.captured)
++        assertEquals(original.jobId, reopened.state.value.printJob?.id)
++        assertFalse(reopened.state.value.printUnknown)
      }
  }
