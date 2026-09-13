@@ -1833,10 +1833,11 @@ async def _fail_ozon_deliver_operation(
     списанная наполовину. Состояния самой передачи это не теряет — все её шаги
     уже закоммичены снимками.
     """
+    operation_id = operation.id
     if discard_local_changes:
         with suppress(SQLAlchemyError):
             await session.rollback()
-        refreshed = await session.get(FbsWbOperation, operation.id)
+        refreshed = await session.get(FbsWbOperation, operation_id)
         if refreshed is None:
             return
         operation = refreshed
@@ -1858,7 +1859,7 @@ async def _fail_ozon_deliver_operation(
     # способ сохранить отказ — начать чистую и перечитать саму операцию.
     try:
         await session.rollback()
-        fresh = await session.get(FbsWbOperation, operation.id)
+        fresh = await session.get(FbsWbOperation, operation_id)
         if fresh is None:
             return
         await mark_operation_failed(

@@ -1,0 +1,30 @@
+{
+  "supply_id": "d72464d9-06f9-4642-85a2-be529dcdde96",
+  "status": "in_delivery",
+  "steps": [
+    {
+      "path": "/operations/fbs-supplies/from-orders",
+      "status": 201
+    },
+    {
+      "path": "/operations/fbs-supplies/d72464d9-06f9-4642-85a2-be529dcdde96/deliver",
+      "status": 200
+    },
+    {
+      "path": "/operations/fbs-supplies/d72464d9-06f9-4642-85a2-be529dcdde96/deliver",
+      "status": 200
+    },
+    {
+      "path": "/operations/fbs-supplies/d72464d9-06f9-4642-85a2-be529dcdde96/workspace",
+      "status": 200
+    }
+  ],
+  "progress": {
+    "picked": 3,
+    "packed": 3,
+    "metadata_ready": 3,
+    "stickers_ready": 3,
+    "total": 3
+  },
+  "route": "WMS445 пункт Ozon Садовая"
+}

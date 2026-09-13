@@ -1,0 +1,148 @@
+{
+  "tenant_id": "47d5f8ed-a90e-484b-a28d-a7be7dd94708",
+  "warehouse_id": "ce771982-bba3-4a80-a293-7148aa4ae32b",
+  "seller_ids": {
+    "a": "66aa43fc-4e07-473a-9ba8-69d2efb31708",
+    "b": "ab267411-7672-4236-958c-78fb182f5dcd",
+    "c": "407274a0-c300-42a9-b18f-29b109a9bfbf"
+  },
+  "source_ids": [
+    "8e586367-78f6-4683-872b-36ad8b843f23",
+    "3a1d492d-806e-4a8f-8951-e4a4cd0792b0"
+  ],
+  "source_codes": [
+    "WMS445-A",
+    "WMS445-B"
+  ],
+  "staff_id": "ea6d5f16-b257-40f5-bf97-86239a3de96a",
+  "active_wb_supply_id": "b38aab26-79d8-4e4c-b13f-e30dbab3d9e7",
+  "orders": [
+    {
+      "id": "13e76f28-1b36-4130-b20c-aba83d8c1303",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000002"
+    },
+    {
+      "id": "4860381f-28a6-491d-964c-4334497fa5bc",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000003"
+    },
+    {
+      "id": "535a0733-03ae-4023-b42e-c02f01561b0a",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000004"
+    },
+    {
+      "id": "367df108-b6c1-4cb3-9740-7c48b66d82ec",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000005"
+    },
+    {
+      "id": "73dbd02c-aad9-4ff3-9b5d-d2cf721746c1",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000100"
+    },
+    {
+      "id": "55c8d4a1-8361-48af-a677-12f20039341e",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000101"
+    },
+    {
+      "id": "e282e842-61d2-4f4c-8ec3-938f12ab99d2",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000102"
+    },
+    {
+      "id": "8fc990ec-3f4d-4ac0-b135-591d94e0ceff",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000103"
+    },
+    {
+      "id": "0f104e65-eefb-4561-89e0-0e636d9705c9",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000104"
+    },
+    {
+      "id": "3cab885f-0eef-4eff-adca-4724c080fadd",
+      "marketplace": "wb",
+      "status": "new",
+      "external_id": "445000105"
+    },
+    {
+      "id": "5d43bf30-aac3-483f-9c07-dfff41c1a0c3",
+      "marketplace": "ozon",
+      "status": "new",
+      "external_id": "445-a-1"
+    },
+    {
+      "id": "1211503f-111a-4471-b109-65c8c7d71fba",
+      "marketplace": "wb",
+      "status": "assembling",
+      "external_id": "445000000"
+    },
+    {
+      "id": "1c469d23-a407-46a8-88af-e24eb5e8de77",
+      "marketplace": "wb",
+      "status": "assembling",
+      "external_id": "445000001"
+    },
+    {
+      "id": "badf21c6-dbd9-440b-9d0d-c8becce7618d",
+      "marketplace": "ozon",
+      "status": "assembling",
+      "external_id": "445-a-0"
+    },
+    {
+      "id": "e9b15f78-48c9-4e9b-a68d-fe1e76dfe117",
+      "marketplace": "ozon",
+      "status": "new",
+      "external_id": "445-a-2"
+    },
+    {
+      "id": "752f77b8-ff17-427a-8da9-2b47ecfa497f",
+      "marketplace": "ozon",
+      "status": "new",
+      "external_id": "445-b-0"
+    },
+    {
+      "id": "24d8ba76-e53e-4030-9b49-5f4cb152e331",
+      "marketplace": "ozon",
+      "status": "new",
+      "external_id": "445-b-1"
+    },
+    {
+      "id": "a10a78ed-f3db-41dd-b32b-0dc96b59b612",
+      "marketplace": "ozon",
+      "status": "new",
+      "external_id": "445-b-2"
+    }
+  ],
+  "inbound_movement_ids": [
+    "fad410b5-0f5b-4fe7-9a3a-266a9164c49b",
+    "1593dd9e-40c7-48ce-98e7-e60d5d73fcd2",
+    "dfd12f2e-205a-48b7-b451-eb1d80cf5f7a",
+    "03cf5e9f-8872-4e82-8a55-858404f9adc5",
+    "b0a6a302-8a26-4d3d-972f-0075d49c1e20",
+    "157edf90-0d01-4197-9f98-2b7331b6604d",
+    "fe08d377-3717-4182-ba4f-8f0992af5201",
+    "ab8f9e30-a1a3-4328-b50d-29c1d0c8612b",
+    "a7a9a3f7-076f-40c7-8e7c-1b815bf6be98",
+    "0708547a-e28d-43b9-8e5c-38faf14eecd9",
+    "7b86a081-52d9-4695-85c0-e39cfaf0318f",
+    "b196dbc3-c33f-4436-9772-cafaad2584de",
+    "ef06d0d0-ece5-4006-9b7f-030dde09992d",
+    "7c8cff5d-71ca-495b-a376-b5725c346d13"
+  ],
+  "admin_email": "wms445-admin@example.com",
+  "staff_email": "wms445-staff@example.com",
+  "state_note": "No delivery is pre-set; complete it through the operator scenario."
+}
