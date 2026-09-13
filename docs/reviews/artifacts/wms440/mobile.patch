@@ -159,10 +159,10 @@ index 4243fa6..0a4d535 100644
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 new file mode 100644
-index 0000000..372cb8a
+index 0000000..6cb7c04
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
-@@ -0,0 +1,199 @@
+@@ -0,0 +1,204 @@
 +package ru.wms.tsd.features.inbound
 +
 +import androidx.compose.foundation.clickable
@@ -176,6 +176,7 @@ index 0000000..372cb8a
 +import androidx.compose.runtime.*
 +import androidx.compose.ui.Modifier
 +import androidx.compose.ui.text.input.KeyboardType
++import androidx.compose.ui.text.input.ImeAction
 +import androidx.compose.ui.unit.dp
 +import androidx.lifecycle.viewmodel.compose.viewModel
 +import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -344,7 +345,11 @@ index 0000000..372cb8a
 +}
 +
 +@Composable private fun QuantityField(value: String, onChange: (String) -> Unit, label: String, enabled: Boolean = true) {
-+    OutlinedTextField(value, onChange, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), isError = intakeQuantity(value) == null)
++    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
++    OutlinedTextField(value, onChange, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
++        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
++        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus() }),
++        isError = intakeQuantity(value) == null)
 +}
 +
 +@Composable private fun ChoiceField(label: String, choices: List<DraftChoice>, value: String, enabled: Boolean, onSelect: (String) -> Unit) {
