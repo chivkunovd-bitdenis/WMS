@@ -61,13 +61,21 @@ async def set_line_quantity(
     product_id: uuid.UUID,
     *,
     quantity: int,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeCargoPlace:
     """Create, replace, or remove one product row in an inbound cargo place."""
     if quantity < 0:
         raise InboundIntakeError("invalid_qty")
-    request = await intake_svc.get_request(session, tenant_id, request_id)
+    request = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
     if request is None:
         raise InboundIntakeError("request_not_found")
+    replay = await intake_svc._claim_intake_mutation(
+        session, tenant_id, request_id, mutation_id=mutation_id, action="cargo_quantity",
+        payload={"request_id": str(request_id), "place_id": str(place_id),
+                 "product_id": str(product_id), "quantity": quantity},
+    )
+    if replay is not None:
+        return await _load_cargo_place(session, tenant_id, request_id, place_id)
     if request.status in intake_svc.SORTING_STATUSES | intake_svc.DONE_STATUSES:
         raise InboundIntakeError("not_editable")
     place = await _load_cargo_place(session, tenant_id, request_id, place_id)
@@ -81,6 +89,9 @@ async def set_line_quantity(
     qty_before = int(line.quantity) if line is not None else 0
     if line is not None and quantity < line.posted_qty:
         raise InboundIntakeError("actual_below_posted")
+    await intake_svc.redistribute_ff_draft_container(
+        session, request, product_id, quantity - qty_before
+    )
     if quantity == 0:
         if line is not None:
             await session.delete(line)
@@ -172,12 +183,13 @@ async def scan_product(
     *,
     barcode: str,
     product_id_hint: uuid.UUID | None = None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeCargoPlace:
     """Resolve a product scan and add one unit to an inbound cargo place."""
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    request = await intake_svc.get_request(session, tenant_id, request_id)
+    request = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
     if request is None:
         raise InboundIntakeError("request_not_found")
     place = await _load_cargo_place(session, tenant_id, request_id, place_id)
@@ -187,6 +199,13 @@ async def scan_product(
         product_id = index.get(raw) or index.get(raw.upper())
         if product_id is None:
             raise InboundIntakeError("barcode_unknown")
+    replay = await intake_svc._claim_intake_mutation(
+        session, tenant_id, request_id, mutation_id=mutation_id, action="cargo_scan",
+        payload={"request_id": str(request_id), "place_id": str(place_id),
+                 "product_id": str(product_id), "barcode": raw},
+    )
+    if replay is not None:
+        return place
     line = next((row for row in place.lines if row.product_id == product_id), None)
     return await set_line_quantity(
         session,
