@@ -343,3 +343,114 @@ async def test_return_creation_keeps_existing_marketplace_path(
     begun = await async_client.post(f"{BASE}/{rid}/begin-receiving", headers=h)
     assert begun.status_code == 200, begun.text
     assert begun.json()["status"] == ("receiving" if marketplace == "ozon" else "sorting")
+
+
+@pytest.mark.asyncio
+async def test_old_ff_draft_displays_entered_fact_and_delete_removes_composition(
+    async_client: AsyncClient,
+) -> None:
+    h, wid, sid, pid = await _setup(async_client)
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    rid = created.json()["id"]
+    added = await async_client.post(
+        f"{BASE}/{rid}/lines", headers=h, json={"product_id": pid, "expected_qty": 3}
+    )
+    lid = added.json()["id"]
+    from app.models.inbound_intake import InboundIntakeLine
+
+    async with SessionLocal() as db:
+        line = await db.get(InboundIntakeLine, uuid.UUID(lid))
+        assert line is not None
+        line.actual_qty = None  # A draft authored before this release.
+        await db.commit()
+    old_draft = await async_client.get(f"{BASE}/{rid}", headers=h)
+    assert old_draft.json()["lines"][0]["effective_actual_qty"] == 3
+    box = await async_client.post(f"{BASE}/{rid}/boxes", headers=h)
+    bid = box.json()["id"]
+    put = await async_client.put(
+        f"{BASE}/{rid}/boxes/{bid}/lines/{pid}",
+        headers=h,
+        json={"quantity": 2, "mutation_id": str(uuid.uuid4())},
+    )
+    assert put.status_code == 200, put.text
+    removed = await async_client.delete(f"{BASE}/{rid}/lines/{lid}", headers=h)
+    assert removed.status_code == 204, removed.text
+    read = await async_client.get(f"{BASE}/{rid}", headers=h)
+    assert read.json()["lines"] == []
+    assert read.json()["boxes"][0]["lines"] == []
+
+
+@pytest.mark.asyncio
+async def test_new_ff_three_units_reach_cell_with_one_charge_and_fact(
+    async_client: AsyncClient,
+) -> None:
+    from datetime import date
+
+    from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+    from app.models.operation_fact import OperationFact
+    from app.models.tenant import Tenant
+    from app.services import inbound_sorting_service as sorting
+    from app.services.catalog_service import create_location
+    from tests.test_wms441_sorting import stock
+
+    h, wid, sid, pid = await _setup(async_client)
+    token = decode_access_token(h["Authorization"].split()[1])
+    tenant, actor = uuid.UUID(str(token["tenant_id"])), uuid.UUID(str(token["sub"]))
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    rid = uuid.UUID(created.json()["id"])
+    await async_client.post(
+        f"{BASE}/{rid}/lines", headers=h, json={"product_id": pid, "expected_qty": 3}
+    )
+    async with SessionLocal() as db:
+        location = await create_location(db, tenant, uuid.UUID(wid), code="WMS440-A")
+        location_id = location.id
+        org = await db.get(Tenant, tenant)
+        assert org is not None
+        org.billing_enabled_from = date(2020, 1, 1)
+        db.add(
+            BillingTariffVersion(
+                tenant_id=tenant,
+                service_code="inbound",
+                unit="item",
+                amount=100,
+                valid_from=date(2020, 1, 1),
+            )
+        )
+        await db.commit()
+    result = await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h)
+    assert result.status_code == 200, result.text
+    operation = uuid.uuid4()
+    for _ in range(2):
+        async with SessionLocal() as db:
+            result_doc = await sorting.apply_loose_putaway(
+                db,
+                tenant,
+                rid,
+                operation_id=operation,
+                product_id=uuid.UUID(pid),
+                storage_location_id=location_id,
+                quantity=3,
+                performer_id=actor,
+            )
+            assert result_doc.status == "done"
+            assert result_doc.lines[0].posted_qty == 3
+    repeated = await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h)
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["status"] == "done"
+    assert await stock(uuid.UUID(pid), location_id) == 3
+    async with SessionLocal() as db:
+        charges = list(
+            await db.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.source_type == "inbound_intake",
+                    BillingLedgerEntry.source_id == rid,
+                )
+            )
+        )
+        facts = list(
+            await db.scalars(select(OperationFact).where(OperationFact.document_id == rid))
+        )
+        assert len(charges) == len(facts) == 1
+        assert charges[0].quantity == 3
+        assert charges[0].performer_id == facts[0].actor_user_id == actor
+        assert facts[0].item_quantity == 3
