@@ -1,0 +1,4 @@
+{'first_http': 200, 'second_http': 200, 'posted': 2, 'status': 'done', 'cell_a': 0, 'cell_b': 2, 'movements': [('stock_transfer_in', 2), ('stock_transfer_out', -2), ('warehouse_map_move', -2), ('warehouse_map_move', 2)]}
+.{'probe': 'web_cargo_same_uuid', 'first_http': 200, 'replay_http': 200, 'confirmed_quantity': 1, 'actual_posted': 2, 'actual_cell': 2, 'movement_count': 4, 'distinct_transfer_groups': 2}
+.
+2 passed in 4.35s
