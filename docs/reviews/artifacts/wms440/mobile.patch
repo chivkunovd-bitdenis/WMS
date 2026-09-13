@@ -171,13 +171,15 @@ index 4243fa6..0a4d535 100644
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 new file mode 100644
-index 0000000..6f6b3ce
+index 0000000..2e6d2df
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,207 @@
 +package ru.wms.tsd.features.inbound
 +
 +import androidx.compose.foundation.clickable
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
 +import androidx.compose.foundation.layout.*
 +import androidx.compose.foundation.lazy.LazyColumn
 +import androidx.compose.foundation.lazy.items
@@ -290,7 +292,7 @@ index 0000000..6f6b3ce
 +    }
 +    if (catalogOpen) {
 +        ModalBottomSheet(onDismissRequest = { catalogOpen = false }) {
-+            Column(Modifier.fillMaxWidth().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 +                Text("Добавить товар", style = MaterialTheme.typography.titleLarge)
 +                OutlinedTextField(query, { query = it; vm.searchCatalog(it) }, label = { Text("Название, артикул или штрихкод") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 +                LazyColumn(Modifier.heightIn(max = 280.dp)) {
