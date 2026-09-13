@@ -511,7 +511,8 @@ async def _place_picked_into_box(
         session.add(line)
     else:
         line.quantity = int(line.quantity) + quantity
-        line.quantity_packed = int(line.quantity_packed) + packed_quantity
+        if line.quantity_packed is not None:
+            line.quantity_packed = int(line.quantity_packed) + packed_quantity
 
     from app.services import packaging_task_service as pkg_svc
 

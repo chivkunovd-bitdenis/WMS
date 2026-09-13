@@ -200,9 +200,7 @@ class MarketplaceUnloadBoxLine(Base):
     # Сколько из фактически положенных в этот короб единиц уже было упаковано
     # до подбора. Это часть состава короба, а не самостоятельный учёт: она
     # нужна, чтобы расчёт работы не пытался восстановить источник по остатку.
-    quantity_packed: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
+    quantity_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -260,9 +258,7 @@ class MarketplaceUnloadPickAllocation(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     # Фактическая готовая часть снятого количества. Значение фиксируется в
     # момент списания из ячейки и затем переносится в состав короба.
-    quantity_packed: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
+    quantity_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

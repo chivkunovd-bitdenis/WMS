@@ -671,6 +671,8 @@ async def sync_mp_task_packed_from_boxes(
             MarketplaceUnloadBoxLine.product_id,
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_packed), 0),
+            func.count(MarketplaceUnloadBoxLine.id),
+            func.count(MarketplaceUnloadBoxLine.quantity_packed),
         )
         .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
         .join(
@@ -684,8 +686,14 @@ async def sync_mp_task_packed_from_boxes(
         .group_by(MarketplaceUnloadBoxLine.product_id)
     )
     boxed_by_product = {
-        product_id: (int(quantity or 0), int(quantity_packed or 0))
-        for product_id, quantity, quantity_packed in (await session.execute(stmt)).all()
+        product_id: (
+            int(quantity or 0),
+            int(quantity_packed or 0),
+            int(line_count or 0) != int(source_count or 0),
+        )
+        for product_id, quantity, quantity_packed, line_count, source_count in (
+            await session.execute(stmt)
+        ).all()
     }
     if not boxed_by_product:
         return task
@@ -696,7 +704,12 @@ async def sync_mp_task_packed_from_boxes(
         boxed = boxed_by_product.get(line.product_id)
         if boxed is None:
             continue
-        boxed_qty, boxed_packed = boxed
+        boxed_qty, boxed_packed, source_unknown = boxed
+        if source_unknown:
+            # Rows created before WMS-444 do not carry a source split. Keep
+            # their persisted result rather than inventing new employee work
+            # from a default value or from the current stock remainder.
+            continue
         ready_from_source = min(int(line.qty_total), boxed_qty, boxed_packed)
         worker_packed = min(
             int(line.qty_total) - ready_from_source,
