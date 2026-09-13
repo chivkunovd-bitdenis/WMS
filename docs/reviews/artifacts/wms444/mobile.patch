@@ -20,7 +20,7 @@ index 6599df7..ed94c86 100644
 @@ -66,6 +72,42 @@ class ApiProvider(
          authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
      }
-
+ 
 +    /** Незавершённая попытка упаковки строки — только если её начал текущий сотрудник. */
 +    fun pendingPackAttempt(taskId: String, lineId: String): PackAttempt? {
 +        val server = packServer()
@@ -142,7 +142,7 @@ index 4243fa6..7230b17 100644
 @@ -55,6 +55,18 @@ class AuthStore(context: Context) {
          check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
      }
-
+ 
 +    // Identity of one physical pack attempt. Server, document and line are part of the
 +    // storage key, so a stored attempt can never be replayed against another of them.
 +    fun getPackAttempt(server: String, actor: String, taskId: String, lineId: String): String? =
@@ -158,8 +158,20 @@ index 4243fa6..7230b17 100644
      fun getSavedStaff(): List<SavedStaff> {
          val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
          return try {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
+index 63fc4e3..491ba60 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
+@@ -255,7 +255,6 @@ fun OutboundAssemblyScreen(
+         PackLineSheet(
+             line = packLine,
+             busy = state.packBusy,
+-            onConfirmFromShelf = vm::confirmPackedFromShelf,
+             onPack = vm::submitPack,
+             onDismiss = vm::dismissPackLine,
+         )
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
-index 687e378..07513cc 100644
+index 687e378..7424803 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
 @@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
@@ -170,7 +182,12 @@ index 687e378..07513cc 100644
  import kotlinx.coroutines.flow.MutableStateFlow
  import kotlinx.coroutines.flow.StateFlow
  import kotlinx.coroutines.launch
-@@ -19,9 +20,10 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadBoxCreate
+@@ -14,14 +15,14 @@ import ru.wms.tsd.core.api.ERROR_DISTRIBUTION_INCOMPLETE_RU
+ import ru.wms.tsd.core.api.networkErrorText
+ import ru.wms.tsd.core.api.readableError
+ import ru.wms.tsd.core.api.generated.models.CompletePackagingIn
+-import ru.wms.tsd.core.api.generated.models.ConfirmPackedIn
+ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadBoxCreate
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestDetailOut
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadScanBody
  import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadShipBody
@@ -180,9 +197,9 @@ index 687e378..07513cc 100644
 +import ru.wms.tsd.core.api.packaging.PackAttempt
 +import ru.wms.tsd.core.api.packaging.PackAttemptBody
  import ru.wms.tsd.ui.patterns.ScanFlash
-
+ 
  data class AssemblyUiState(
-@@ -115,7 +117,35 @@ class OutboundAssemblyViewModel(
+@@ -115,7 +116,35 @@ class OutboundAssemblyViewModel(
          runCatching {
              api.operations().getPackagingTaskOperationsPackagingTasksTaskIdGet(UUID.fromString(taskId))
          }.onSuccess { resp ->
@@ -218,23 +235,24 @@ index 687e378..07513cc 100644
 +            _state.value = _state.value.copy(packBusy = false)
          }
      }
-
-@@ -192,9 +222,11 @@ class OutboundAssemblyViewModel(
-         val task = _state.value.packaging ?: return
-         val line = _state.value.packLine ?: return
-         packagingMutation {
+ 
+@@ -187,27 +216,55 @@ class OutboundAssemblyViewModel(
+         _state.value = _state.value.copy(packLineId = null)
+     }
+ 
+-    /** Подтвердить «уже упаковано на полке» (серверный suggested). */
+-    fun confirmPackedFromShelf() {
+-        val task = _state.value.packaging ?: return
+-        val line = _state.value.packLine ?: return
+-        packagingMutation {
 -            api.operations().confirmPackedFromShelfOperationsPackagingTasksTaskIdLinesLineIdConfirmPackedPost(
 -                UUID.fromString(task.id), UUID.fromString(line.id), ConfirmPackedIn(),
 -            )
-+            apiCall {
-+                api.operations().confirmPackedFromShelfOperationsPackagingTasksTaskIdLinesLineIdConfirmPackedPost(
-+                    UUID.fromString(task.id), UUID.fromString(line.id), ConfirmPackedIn(),
-+                )
-+            }
-         }
-     }
-
-@@ -203,11 +235,50 @@ class OutboundAssemblyViewModel(
+-        }
+-    }
+-
+     /** Записать упакованное сейчас количество по строке. */
+     fun submitPack(qty: Int) {
          val task = _state.value.packaging ?: return
          val line = _state.value.packLine ?: return
          if (qty < 1) return
@@ -279,17 +297,17 @@ index 687e378..07513cc 100644
 +        if (response.isSuccessful && body != null) {
 +            api.clearPackAttempt(taskId, lineId, attempt)
 +            return ApiResult.Ok(body.packagingTask)
-         }
++        }
 +        // Сервер ответил отказом — значит, он ничего не записал. Держать ключ нельзя:
 +        // иначе следующая законная упаковка вечно повторяла бы отклонённую попытку.
 +        if (response.code() in 400..499 && response.code() !in listOf(401, 403)) {
 +            api.clearPackAttempt(taskId, lineId, attempt)
-+        }
+         }
 +        return ApiResult.Err(response.readableError())
      }
-
+ 
      fun requestCompletePackaging() {
-@@ -218,17 +289,27 @@ class OutboundAssemblyViewModel(
+@@ -218,17 +275,27 @@ class OutboundAssemblyViewModel(
          val task = _state.value.packaging ?: return
          _state.value = _state.value.copy(confirm = null)
          packagingMutation {
@@ -303,7 +321,7 @@ index 687e378..07513cc 100644
 +            }
          }
      }
-
+ 
 -    private fun packagingMutation(block: suspend () -> Response<PackagingTaskOut>) {
 +    private fun packagingMutation(block: suspend () -> ApiResult<PackagingTaskOut>) {
          if (_state.value.packBusy) return
@@ -322,6 +340,50 @@ index 687e378..07513cc 100644
                  is ApiResult.Ok -> {
                      val line = result.value.lines.firstOrNull { it.id == _state.value.packLineId }
                      _state.value = _state.value.copy(
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
+index 857e22b..20f6642 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
+@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.ExperimentalMaterial3Api
+-import androidx.compose.material3.FilledTonalButton
+ import androidx.compose.material3.LinearProgressIndicator
+ import androidx.compose.material3.ModalBottomSheet
+ import androidx.compose.material3.Surface
+@@ -173,14 +172,12 @@ private fun PackagingLineCard(
+ fun PackLineSheet(
+     line: PackagingTaskLineOut,
+     busy: Boolean,
+-    onConfirmFromShelf: () -> Unit,
+     onPack: (Int) -> Unit,
+     onDismiss: () -> Unit,
+ ) {
+     // Сколько ещё можно записать как «упаковано сейчас» (лимит сервера)
+     val packRemaining = (line.qtyNeedPack - line.qtyPackedInTask).coerceAtLeast(0)
+     var qty by remember(line.id, packRemaining) { mutableIntStateOf(packRemaining.coerceAtMost(1)) }
+-    val shelfAvailable = line.qtySuggestedPacked > line.qtyConfirmedPacked
+ 
+     ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }) {
+         Column(
+@@ -216,16 +213,6 @@ fun PackLineSheet(
+                 )
+             }
+ 
+-            if (shelfAvailable) {
+-                FilledTonalButton(
+-                    onClick = onConfirmFromShelf,
+-                    enabled = !busy,
+-                    modifier = Modifier.fillMaxWidth().height(WmsDimens.TouchTargetMin),
+-                ) {
+-                    Text("На полке уже упаковано ${line.qtySuggestedPacked} — подтвердить", fontSize = 17.sp)
+-                }
+-            }
+-
+             if (packRemaining > 0) {
+                 QtyInput(
+                     value = qty,
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
 index 53a089e..5c39cef 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
@@ -333,17 +395,17 @@ index 53a089e..5c39cef 100644
 +import ru.wms.tsd.core.api.packaging.PackAttempt
 +import ru.wms.tsd.core.api.packaging.PackProgressResult
 +import ru.wms.tsd.core.api.packaging.PackagingApi
-
+ 
  /**
   * T-17. Юнит-тесты сборки отгрузки: двухшаговая загрузка упаковки (T-15b),
 @@ -40,15 +43,37 @@ class OutboundAssemblyViewModelTest {
      private val PACK_LINE_ID = "11111111-2222-3333-4444-555555555555"
-
+ 
      private lateinit var ops: OperationsApi
 +    private lateinit var packing: PackagingApi
      private lateinit var api: ApiProvider
 +    private val attempts = mutableMapOf<String, PackAttempt>()
-
+ 
      @Before
      fun setUp() {
          Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -369,14 +431,14 @@ index 53a089e..5c39cef 100644
 +            }
 +        }
      }
-
+ 
 +    private fun slot(taskId: String, lineId: String) = "$taskId:$lineId"
 +
      @After
      fun tearDown() {
          Dispatchers.resetMain()
 @@ -208,21 +233,19 @@ class OutboundAssemblyViewModelTest {
-
+ 
          val packed = packagingTask(listOf(packagingLine(done = 1, printed = 1)))
          coEvery {
 -            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(
@@ -385,11 +447,11 @@ index 53a089e..5c39cef 100644
 -        } returns Response.success(packed)
 +            packing.pack(taskId, PACK_LINE_ID, match { it.quantity == 1 && it.idempotencyKey.isNotBlank() })
 +        } returns Response.success(PackProgressResult(packed))
-
+ 
          val vm = vm()
          vm.openPackLine(PACK_LINE_ID)
          vm.submitPack(1)
-
+ 
 -        coVerify(exactly = 1) {
 -            ops.recordPackProgressOperationsPackagingTasksTaskIdLinesLineIdPackPost(any(), any(), any())
 -        }
@@ -400,7 +462,7 @@ index 53a089e..5c39cef 100644
 +        // работа записана — ключ снят, следующая упаковка получит новый
 +        assertTrue(attempts.isEmpty())
      }
-
+ 
      @Test
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
 new file mode 100644
