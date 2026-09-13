@@ -81,6 +81,7 @@ from app.services.fbs_supply_validator_service import (
     FbsSupplyValidationError,
     SupplyPreflightResult,
     load_orders_for_validation,
+    order_delivery_route,
     preflight_to_dict,
     validate_supply_composition,
 )
@@ -1429,7 +1430,7 @@ async def list_supply_worklist(
         int(order.wb_warehouse_id)
         for supply in supplies
         for order in supply.orders
-        if order.wb_warehouse_id is not None
+        if order.wb_warehouse_id is not None and supply.marketplace != "ozon"
     }
     wb_names: dict[int, str | None] = {}
     if wb_ids:
@@ -1459,6 +1460,8 @@ async def list_supply_worklist(
                 "marketplace": supply.marketplace,
                 "wb_supply_id": supply.wb_supply_id,
                 "name": supply.display_number or supply.name,
+                "delivery_type": supply.delivery_type,
+                "delivery_route": order_delivery_route(first_order) if first_order else None,
                 "status": supply.status,
                 "seller": {
                     "id": str(supply.seller_id),

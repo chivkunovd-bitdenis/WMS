@@ -48,6 +48,7 @@ from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_picking_order_service import picking_list_order_key
+from app.services.fbs_supply_validator_service import order_delivery_route
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
     build_tracking_summary,
@@ -164,6 +165,7 @@ async def get_supply_workspace(
             "name": supply.name,
             "status": supply.status,
             "delivery_type": supply.delivery_type,
+            "delivery_route": order_delivery_route(orders[0]) if orders else None,
             "seller": {
                 "id": str(supply.seller_id),
                 "name": supply.seller.name if supply.seller else "Селлер не найден",
