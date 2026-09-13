@@ -356,6 +356,7 @@ class FbsWorklistPositionOut(BaseModel):
     quantity: int
     reserved_quantity: int
     picked_quantity: int
+    packed_quantity: int = 0
 
 
 class FbsWorklistOrderOut(BaseModel):
