@@ -1,0 +1,708 @@
+{
+  "wb": {
+    "total": null,
+    "items": [
+      {
+        "id": "0a8b1dca-9ccf-450c-bc50-e0aa81eaf6b4",
+        "marketplace": "wb",
+        "external_order_id": "FINAL-5da311-wb-in_supply",
+        "wb_order_id": 9440001,
+        "status": "in_supply",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Final native item 5da311",
+          "image_url": null,
+          "seller_article": "wb-in_supply",
+          "wb_article": 1,
+          "barcode": "FINAL-5da311",
+          "sku": "FINAL-SKU-5da311",
+          "chrt_id": 1,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-14T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете WB."
+          },
+          {
+            "code": "deadline_passed",
+            "message": "Срок сборки истёк."
+          }
+        ]
+      },
+      {
+        "id": "a2983230-54ca-4cde-bd01-14c69cb83087",
+        "marketplace": "wb",
+        "external_order_id": "FINAL-5da311-wb-packed",
+        "wb_order_id": 9440003,
+        "status": "packed",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Final native item 5da311",
+          "image_url": null,
+          "seller_article": "wb-packed",
+          "wb_article": 1,
+          "barcode": "FINAL-5da311",
+          "sku": "FINAL-SKU-5da311",
+          "chrt_id": 1,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-12T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете WB."
+          },
+          {
+            "code": "deadline_passed",
+            "message": "Срок сборки истёк."
+          }
+        ]
+      },
+      {
+        "id": "a7623139-a277-4707-9765-4bb15dc7ecc5",
+        "marketplace": "wb",
+        "external_order_id": "FINAL-5da311-wb-assembling",
+        "wb_order_id": 9440002,
+        "status": "assembling",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Final native item 5da311",
+          "image_url": null,
+          "seller_article": "wb-assembling",
+          "wb_article": 1,
+          "barcode": "FINAL-5da311",
+          "sku": "FINAL-SKU-5da311",
+          "chrt_id": 1,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-13T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете WB."
+          },
+          {
+            "code": "deadline_passed",
+            "message": "Срок сборки истёк."
+          }
+        ]
+      },
+      {
+        "id": "fcbc1815-2410-4a39-8da1-95f1a31a2d5b",
+        "marketplace": "wb",
+        "external_order_id": "FINAL-5da311-wb-new",
+        "wb_order_id": 9440000,
+        "status": "new",
+        "wb_status": null,
+        "supplier_status": "new",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Final native item 5da311",
+          "image_url": null,
+          "seller_article": "wb-new",
+          "wb_article": 1,
+          "barcode": "FINAL-5da311",
+          "sku": "FINAL-SKU-5da311",
+          "chrt_id": 1,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-15T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "deadline_passed",
+            "message": "Срок сборки истёк."
+          }
+        ]
+      }
+    ],
+    "next_cursor": null,
+    "server_now": "2026-09-13T20:33:20.039621+00:00",
+    "warehouse_options": [
+      {
+        "id": "501001",
+        "name": "WB 501001",
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "WB 501001"
+        }
+      }
+    ]
+  },
+  "ozon": {
+    "total": null,
+    "items": [
+      {
+        "id": "2b14f367-d357-4b9b-ab7f-8d72facd3000",
+        "marketplace": "ozon",
+        "external_order_id": "FINAL-5da311-ozon-in_supply",
+        "wb_order_id": 9440101,
+        "status": "in_supply",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Товар не сопоставлен",
+          "image_url": null,
+          "seller_article": null,
+          "wb_article": null,
+          "barcode": null,
+          "sku": null,
+          "chrt_id": null,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-14T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете Ozon."
+          },
+          {
+            "code": "product_not_mapped",
+            "message": "Товар не сопоставлен с карточкой."
+          }
+        ]
+      },
+      {
+        "id": "5be6f510-dd5a-4012-a94c-0b9a0de53a57",
+        "marketplace": "ozon",
+        "external_order_id": "FINAL-5da311-ozon-assembling",
+        "wb_order_id": 9440102,
+        "status": "assembling",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Товар не сопоставлен",
+          "image_url": null,
+          "seller_article": null,
+          "wb_article": null,
+          "barcode": null,
+          "sku": null,
+          "chrt_id": null,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-13T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете Ozon."
+          },
+          {
+            "code": "product_not_mapped",
+            "message": "Товар не сопоставлен с карточкой."
+          }
+        ]
+      },
+      {
+        "id": "c3dfb096-af77-4456-b9ac-bf405a6e2e32",
+        "marketplace": "ozon",
+        "external_order_id": "FINAL-5da311-ozon-new",
+        "wb_order_id": 9440100,
+        "status": "new",
+        "wb_status": null,
+        "supplier_status": "new",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Товар не сопоставлен",
+          "image_url": null,
+          "seller_article": null,
+          "wb_article": null,
+          "barcode": null,
+          "sku": null,
+          "chrt_id": null,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-15T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "product_not_mapped",
+            "message": "Товар не сопоставлен с карточкой."
+          }
+        ]
+      },
+      {
+        "id": "ff8d905e-918b-434d-aa89-2508cac8ef9a",
+        "marketplace": "ozon",
+        "external_order_id": "FINAL-5da311-ozon-packed",
+        "wb_order_id": 9440103,
+        "status": "packed",
+        "wb_status": null,
+        "supplier_status": "awaiting_deliver",
+        "seller": {
+          "id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "name": "Final seller 5da311"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        },
+        "product": {
+          "id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "name": "Товар не сопоставлен",
+          "image_url": null,
+          "seller_article": null,
+          "wb_article": null,
+          "barcode": null,
+          "sku": null,
+          "chrt_id": null,
+          "category": null,
+          "color": null,
+          "size": null,
+          "marketplace_bindings": []
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 3,
+          "locations": [
+            {
+              "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+              "code": "FINAL-CELL-5da311",
+              "available_unpacked": 3
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "unknown",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [],
+          "states": [],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": null,
+          "status": "not_requested",
+          "asset_url": null,
+          "applied_at": null
+        },
+        "pick": {
+          "status": "pending",
+          "location_code": null,
+          "picked_at": null
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-07-12T22:54:42.070299+03:00",
+        "deadline_at": "2026-09-12T22:54:42.070299+03:00",
+        "supply_id": null,
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете Ozon."
+          },
+          {
+            "code": "product_not_mapped",
+            "message": "Товар не сопоставлен с карточкой."
+          }
+        ]
+      }
+    ],
+    "next_cursor": null,
+    "server_now": "2026-09-13T20:33:20.098439+00:00",
+    "warehouse_options": [
+      {
+        "id": "501001",
+        "name": "WB 501001",
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "WB 501001"
+        }
+      }
+    ]
+  }
+}
