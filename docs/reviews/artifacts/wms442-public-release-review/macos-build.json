@@ -1,0 +1,16 @@
+{
+  "source_commit": "6c23c2bb544686fa5e2b85eba4f4afc1ff98d669",
+  "build_platform": "macOS-14.8.9-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "python": "3.13.15",
+  "target": "macOS arm64",
+  "supported_architecture": "arm64",
+  "windows_target_matrix": [
+    "Windows 10 22H2 x64",
+    "Windows 11 x64"
+  ],
+  "macos_target_matrix": [
+    "macOS arm64"
+  ],
+  "physical_print_verified": false
+}

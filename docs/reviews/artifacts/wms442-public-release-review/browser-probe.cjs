@@ -1,0 +1,16 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const fs=require('fs');
+(async()=>{
+const browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage({viewport:{width:900,height:760}});const results=[];let dest=null, mode='',posts=0;const errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/operations/print/**',async route=>{const req=route.request(),u=req.url();if(u.endsWith('/destination')){if(mode==='getfail')return route.abort('failed');return route.fulfill({json:{destination:dest}});}if(u.endsWith('/preview')){if(mode==='previewfail')return route.abort('failed');if(mode==='expired')return route.fulfill({status:404,json:{detail:'pairing_not_found_or_expired'}});if(mode==='used')return route.fulfill({status:409,json:{detail:'pairing_already_used'}});return route.fulfill({json:{connection_id:'new442',queue_name:'Принтер новый 442',platform:'win32'}});}if(u.endsWith('/pair')){posts++;if(mode==='pair403')return route.fulfill({status:403,json:{detail:'Forbidden'}});dest={connection_id:mode==='concurrent'?'later442':'new442',queue_name:mode==='concurrent'?'Более поздний принтер':'Принтер новый 442',platform:'win32',warehouse_id:'warehouse442',last_seen_at:null,online:false};if(mode==='lost'||mode==='concurrent')return route.abort('failed');return route.fulfill({json:dest});}return route.abort();});
+await page.goto('http://127.0.0.1:5203/app/ff/warehouse-map');await page.waitForTimeout(500);
+await page.evaluate(async()=>{const React=(await import('/node_modules/.vite/deps/react.js')).default;const {createRoot}=(await import('/node_modules/.vite/deps/react-dom_client.js')).default;const {ThemeProvider}=await import('/node_modules/.vite/deps/@mui_material_styles.js');const {muiTheme}=await import('/src/mui/theme.ts');const {WarehousePrinterDialog}=await import('/src/screens/ff/warehouse-map/WarehousePrinterDialog.tsx');const e=document.createElement('div');document.body.appendChild(e);const root=createRoot(e);window.mount442=(props={})=>root.render(React.createElement(ThemeProvider,{theme:muiTheme},React.createElement(WarehousePrinterDialog,{open:true,warehouseId:'warehouse442',warehouseName:'Склад приёмки 442',token:'synthetic-not-a-real-token',isAdmin:true,onClose:()=>root.render(null),...props})));window.mount442();});
+
+const links=await page.getByTestId('warehouse-printer-dialog').locator('a').evaluateAll(els=>els.map(e=>({text:e.textContent,url:e.href,rel:e.rel,target:e.target})));
+await page.screenshot({path:'.local-run/wms442-public/dialog-downloads.png'});
+for(const label of ['Windows x64','macOS arm64','инструкцию','SHA256']){
+ const pending=page.waitForEvent('download',{timeout:60000});await page.getByRole('link',{name:label,exact:true}).click();const download=await pending;await download.saveAs('.local-run/wms442-public/browser-'+download.suggestedFilename());results.push({label,file:download.suggestedFilename(),failure:await download.failure()});
+}
+fs.writeFileSync('.local-run/wms442-public/browser-results.json',JSON.stringify({links,downloads:results},null,2));console.log(JSON.stringify({links,downloads:results}));await browser.close();
+})().catch(e=>{console.error(e);process.exitCode=1});

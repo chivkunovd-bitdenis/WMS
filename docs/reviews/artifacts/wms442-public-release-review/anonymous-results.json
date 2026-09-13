@@ -1,0 +1,44 @@
+[
+  {
+    "file": "WMS-Print-Setup-Windows-x64.exe",
+    "status": 200,
+    "bytes": 43076125,
+    "sha256": "52769d8efc424fb6f14d5f2d94b4e9515cf1fc7fc6abea53fe7bd49c13667369",
+    "authentication": "none"
+  },
+  {
+    "file": "WMS-Print-macOS.zip",
+    "status": 200,
+    "bytes": 15289516,
+    "sha256": "2e2546cce714d20b8bf9e6c2950c494d498c89b9871b03f7a79d94e6ec9fb38a",
+    "authentication": "none"
+  },
+  {
+    "file": "WMS-Print-Installation.md",
+    "status": 200,
+    "bytes": 17408,
+    "sha256": "f490d2f569c72ace1ecb6182962275e22921cc02ef2f86b91f30c1c45e907347",
+    "authentication": "none"
+  },
+  {
+    "file": "WMS-Print-SHA256SUMS.txt",
+    "status": 200,
+    "bytes": 184,
+    "sha256": "d34f56613d61be11cc41924259c5f1d2025b29c9c20bcd5c4af26625b54099a8",
+    "authentication": "none"
+  },
+  {
+    "file": "WMS-Print-Setup-Windows-x64.exe.sha256",
+    "status": 200,
+    "bytes": 99,
+    "sha256": "3d4fcb6029f97b50e52f1daace9dc4c39685b412d28809b0d62176c9a675c974",
+    "authentication": "none"
+  },
+  {
+    "file": "WMS-Print-macOS.zip.sha256",
+    "status": 200,
+    "bytes": 86,
+    "sha256": "afba02b1c738642f0dbd8184d884da7c03ab7c0bb4f76171a72767e719dd8876",
+    "authentication": "none"
+  }
+]

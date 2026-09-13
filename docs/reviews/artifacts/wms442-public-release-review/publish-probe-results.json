@@ -1,0 +1,47 @@
+[
+  {
+    "scenario": "existing_success",
+    "exit": 0,
+    "commands": [
+      [
+        "release",
+        "view",
+        "wms-print-v2026.09.13.1"
+      ],
+      [
+        "release",
+        "upload",
+        "wms-print-v2026.09.13.1",
+        "release-assets/WMS-Print-SHA256SUMS.txt",
+        "release-assets/WMS-Print-Setup-Windows-x64.exe",
+        "--clobber"
+      ]
+    ],
+    "published_remaining": {
+      "WMS-Print-SHA256SUMS.txt": "new",
+      "WMS-Print-Setup-Windows-x64.exe": "new"
+    }
+  },
+  {
+    "scenario": "existing_upload_failure",
+    "exit": 1,
+    "commands": [
+      [
+        "release",
+        "view",
+        "wms-print-v2026.09.13.1"
+      ],
+      [
+        "release",
+        "upload",
+        "wms-print-v2026.09.13.1",
+        "release-assets/WMS-Print-SHA256SUMS.txt",
+        "release-assets/WMS-Print-Setup-Windows-x64.exe",
+        "--clobber"
+      ]
+    ],
+    "published_remaining": {
+      "WMS-Print-Setup-Windows-x64.exe": "previous"
+    }
+  }
+]
