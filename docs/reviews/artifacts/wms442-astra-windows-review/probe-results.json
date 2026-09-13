@@ -1,0 +1,78 @@
+{
+  "source_commit": "e76c5c4b67c768039decfbb419fc32027c36f335",
+  "task_restart_count": {
+    "value": 999,
+    "valid_unsigned_byte_1_255": false
+  },
+  "windows_ansi_json": {
+    "exception": "UnicodeEncodeError",
+    "encoding": "charmap"
+  },
+  "reconnect_with_active_worker_lock": {
+    "exit_code": 1,
+    "retained_config": true,
+    "generic_error": true
+  },
+  "reset_while_worker_owns_lock": {
+    "exit_code": 0,
+    "config_deleted": true,
+    "inflight_deleted": true
+  },
+  "windows_build_worker_console": {
+    "windowed_or_hide_option_present": false
+  },
+  "gdi_call_boundary": {
+    "receipt": "windows-442",
+    "calls": [
+      [
+        "CreatePrinterDC",
+        "Synthetic"
+      ],
+      [
+        "StartDoc"
+      ],
+      [
+        "GetDeviceCaps",
+        88
+      ],
+      [
+        "GetDeviceCaps",
+        90
+      ],
+      [
+        "StartPage"
+      ],
+      [
+        "draw",
+        [
+          0,
+          0,
+          464,
+          320
+        ]
+      ],
+      [
+        "EndPage"
+      ],
+      [
+        "StartPage"
+      ],
+      [
+        "draw",
+        [
+          0,
+          0,
+          464,
+          320
+        ]
+      ],
+      [
+        "EndPage"
+      ],
+      [
+        "EndDoc"
+      ]
+    ],
+    "native_driver_exercised": false
+  }
+}
