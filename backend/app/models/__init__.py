@@ -76,6 +76,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.ozon_return import InboundOzonReturnGiveout, InboundOzonReturnItem
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.pallet import Pallet
+from app.models.print_connection import PrintConnection
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -179,6 +180,7 @@ __all__ = [
     "PackagingTaskEvent",
     "PackagingTaskLine",
     "Pallet",
+    "PrintConnection",
     "PrintTemplate",
     "Product",
     "ProductDimensionEvent",
