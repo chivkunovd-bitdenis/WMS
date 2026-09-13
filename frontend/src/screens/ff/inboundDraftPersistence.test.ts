@@ -45,6 +45,18 @@ describe('durable FF intake attempts', () => {
     await sendIntakeMutations(credential, 'document', [correction])
     expect(readIntake(credential, 'document').totals).toEqual({})
   })
+  it('releases a rejected first item of a picker batch for correction without replaying its untouched tail', async () => {
+    const rejected = intakeMutation('POST', path, { product_id: 'wrong', expected_qty: 1, increment: true })
+    const untouched = intakeMutation('POST', path, { product_id: 'other', expected_qty: 1, increment: true })
+    const corrected = intakeMutation('POST', path, { product_id: 'right', expected_qty: 1, increment: true })
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{"detail":"product_not_in_seller_catalog"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(sendIntakeMutations(credential, 'document', [rejected, untouched])).rejects.toThrow('product_not_in_seller_catalog')
+    expect(readIntake(credential, 'document').pending).toBeUndefined()
+    await sendIntakeMutations(credential, 'document', [corrected])
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.mock.calls[1][1]).toEqual(expect.objectContaining({ body: JSON.stringify(corrected.body) }))
+  })
   it('isolates tenant, operator and document and never sends if persistence fails', async () => {
     expect(intakeStorageKey(credential, 'document')).not.toBe(intakeStorageKey(token('other'), 'document'))
     expect(intakeStorageKey(credential, 'document')).not.toBe(intakeStorageKey(token('tenant', 'other'), 'document'))
