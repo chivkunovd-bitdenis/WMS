@@ -300,7 +300,7 @@ async def test_tariff_matrix_api_persists_product_and_employee_rates_without_cro
     employee = await async_client.post(
         "/auth/staff-accounts",
         headers=headers,
-        json={"email": f"matrix-{uuid.uuid4().hex}@example.com"},
+        json={"full_name": "Иван Петров", "email": f"matrix-{uuid.uuid4().hex}@example.com"},
     )
     assert employee.status_code == 201, employee.text
     initial = await async_client.get("/billing/tariff-matrix", headers=headers)

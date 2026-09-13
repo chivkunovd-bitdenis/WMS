@@ -56,7 +56,10 @@ async def _main() -> None:
         for role_name, packaging in (("operator", True), ("operator_no_packaging", False)):
             email = f"fbs-e2e-{role_name}-{seed.tenant_id}@example.com"
             account = await _require(
-                await api.post("/auth/staff-accounts", headers=headers, json={"email": email}),
+                await api.post(
+                    "/auth/staff-accounts", headers=headers,
+                    json={"full_name": "Иван Петров", "email": email},
+                ),
                 expected=(201,),
             )
             await _require(

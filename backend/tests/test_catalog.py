@@ -39,7 +39,7 @@ async def _create_ff_staff_headers(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     assert created.status_code == 201, created.text
     patched = await async_client.patch(

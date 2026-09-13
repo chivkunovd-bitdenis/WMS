@@ -4,12 +4,13 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.user_profile import ProfilePatch, StaffIdentityCreate
 from app.services.seller_staff_permissions_service import (
     SellerPermissionsSnapshot,
     can_manage_seller_staff,
@@ -38,8 +39,7 @@ class SellerPermissionsBody(BaseModel):
         )
 
 
-class SellerStaffAccountCreate(BaseModel):
-    email: EmailStr
+class SellerStaffAccountCreate(StaffIdentityCreate):
     password: str | None = Field(default=None, max_length=128)
     permissions: SellerPermissionsBody = Field(default_factory=SellerPermissionsBody)
 
@@ -66,7 +66,10 @@ class SellerPermissionsOut(BaseModel):
 
 class SellerStaffAccountOut(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     role: str
     seller_id: str
     must_set_password: bool
@@ -96,6 +99,9 @@ def _account_out(
     return SellerStaffAccountOut(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         role=user.role,
         seller_id=str(user.seller_id),
         must_set_password=user.must_set_password,
@@ -131,7 +137,9 @@ async def post_seller_staff_account(
         created, perms = await create_seller_staff_user(
             session,
             acting_user=user,
-            email=str(body.email),
+            email=str(body.email) if body.email else None,
+            full_name=body.full_name,
+            job_title=body.job_title,
             password=body.password,
             permissions=body.permissions.to_snapshot(),
         )
@@ -183,3 +191,24 @@ async def patch_seller_staff_permissions(
             detail=code or "forbidden",
         ) from None
     return _account_out(updated, perms, is_owner=False)
+
+
+@router.patch("/{user_id}/profile", response_model=SellerStaffAccountOut)
+async def patch_seller_staff_profile(
+    user_id: uuid.UUID,
+    body: ProfilePatch,
+    actor: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SellerStaffAccountOut:
+    if actor.seller_id is None or not await can_manage_seller_staff(session, actor):
+        raise HTTPException(status_code=403, detail="forbidden")
+    rows = await list_seller_staff_users(
+        session, tenant_id=actor.tenant_id, seller_id=actor.seller_id,
+    )
+    for staff_user, perms, is_owner in rows:
+        if staff_user.id == user_id:
+            staff_user.full_name = body.full_name
+            staff_user.job_title = body.job_title
+            await session.commit()
+            return _account_out(staff_user, perms, is_owner=is_owner)
+    raise HTTPException(status_code=404, detail="user_not_found")
