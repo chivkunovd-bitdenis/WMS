@@ -92,9 +92,13 @@ const sectionLabels: Record<string, string> = {
 }
 
 /** Коды услуг с бэкенда сводим в разделы: `packing` и `packaging` — одно и то же. */
-function sectionKey(serviceCode: string): string {
+export function sectionKey(serviceCode: string): string {
   if (serviceCode === 'packing' || serviceCode === 'packaging') return 'packing'
-  if (serviceCode === 'fbs_pick' || serviceCode === 'fbs_order') return 'fbs'
+  // Подбор FBS — аудит действия сотрудника, а не передача заказа и не
+  // селлерская услуга. Если включить его в FBS-раздел, его штуки попадают в
+  // видимую детализацию рядом с ledger fbs_order и расходятся со сводкой.
+  if (serviceCode === 'fbs_order') return 'fbs'
+  if (serviceCode === 'fbs_pick') return 'other'
   if (serviceCode === 'storage' || serviceCode === 'storage_liter_day') return 'storage'
   if (sectionLabels[serviceCode]) return serviceCode
   return 'other'
@@ -181,7 +185,7 @@ function sectionRate(entries: SellerReportEntry[]): number | null {
   return rates.size === 1 ? ([...rates][0] ?? null) : null
 }
 
-function buildSections(details: SellerReportDetails | null): SectionRow[] {
+export function buildSections(details: SellerReportDetails | null): SectionRow[] {
   const grouped = new Map<string, SellerReportEntry[]>()
   for (const entry of details?.entries ?? []) {
     const key = sectionKey(entry.service_code)
