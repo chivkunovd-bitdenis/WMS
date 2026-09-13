@@ -2397,6 +2397,10 @@ export function FfSuppliesShipmentsPage({
         open={docModal !== null && docModalId !== null}
         onClose={closeDocModal}
         fullScreen
+        // WMS-433: окно помощника лежит поверх полноэкранного документа; без
+        // этого флага диалог возвращает себе фокус и в поле помощника нельзя
+        // печатать. Обход по Tab внутри документа флаг не меняет.
+        disableEnforceFocus
       >
         <DialogTitle>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>

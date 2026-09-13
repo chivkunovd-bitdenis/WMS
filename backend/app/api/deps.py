@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -194,6 +195,32 @@ async def require_ff_portal_member(
             detail="forbidden",
         )
     return user
+
+
+async def require_assistant_executor(
+    x_wms_assistant_secret: Annotated[
+        str | None, Header(alias="X-WMS-Assistant-Secret")
+    ] = None,
+) -> None:
+    """WMS-433/R10: доступ локального исполнителя к очереди помощника.
+
+    Один серверный секрет на все тенанты (В2 — владелец разрешил), не
+    пользовательский JWT. Сравнивается отдельным заголовком, а не
+    ``Authorization: Bearer`` — так обычный пользовательский токен (в том
+    числе администратора) не подходит к этим ручкам ни при каких обстоятельствах,
+    и наоборот: значение этого заголовка не проходит как JWT нигде в системе.
+    Секрет не настроен на сервере — очередь закрыта для всех (fail closed).
+    """
+    configured = (settings.assistant_executor_secret or "").strip()
+    if (
+        not configured
+        or not x_wms_assistant_secret
+        or not secrets.compare_digest(x_wms_assistant_secret, configured)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="assistant_executor_unauthorized",
+        )
 
 
 def require_ff_permission(
