@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { previewMatchesContext, refreshPrinterDestination, releasePrinterBusyRequest, type PrinterPreview } from './WarehousePrinterDialog'
+import { previewMatchesContext, printPackageDownloads, refreshPrinterDestination, releasePrinterBusyRequest, type PrinterPreview } from './WarehousePrinterDialog'
 
 describe('printer pairing preview', () => {
   const preview: PrinterPreview = {
@@ -43,5 +43,14 @@ describe('printer pairing preview', () => {
     )).resolves.toBe(false)
 
     expect(errors).toEqual(['Failed to fetch'])
+  })
+})
+
+describe('public print package links', () => {
+  it('uses permanent release assets rather than private Actions artifacts', () => {
+    expect(printPackageDownloads.windows).toBe('https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-Setup-Windows-x64.exe')
+    expect(printPackageDownloads.macos).toBe('https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-macOS.zip')
+    expect(printPackageDownloads.instruction).toBe('https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-Installation.md')
+    expect(printPackageDownloads.checksums).toBe('https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-SHA256SUMS.txt')
   })
 })

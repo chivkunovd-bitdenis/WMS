@@ -2,6 +2,8 @@ name: WMS print agent package
 on:
   workflow_dispatch:
   push:
+    tags:
+      - 'wms-print-v*'
     paths:
       - 'tools/print-agent/**'
       - '.github/workflows/print-agent-package.yml'
@@ -46,3 +48,38 @@ jobs:
           path: |
             tools/print-agent/dist/WMS-Print-Setup-Windows-x64.exe
             tools/print-agent/dist/WMS-Print-Setup-Windows-x64.exe.sha256
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/wms-print-v')
+    needs: [macos-package, windows-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: WMS-Print-*
+          path: release-assets
+          merge-multiple: true
+      - name: Prepare public installation instruction and checksums
+        run: |
+          cp tools/print-agent/README.md release-assets/WMS-Print-Installation.md
+          (cd release-assets && sha256sum WMS-Print-Setup-Windows-x64.exe WMS-Print-macOS.zip > WMS-Print-SHA256SUMS.txt)
+      - name: Publish public WMS Print release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          cat > release-notes.md <<EOF
+          WMS Print packages built from source commit \`${SOURCE_COMMIT}\`.
+
+          Download the Windows x64 installer or macOS arm64 ZIP below. Verify the adjacent \`.sha256\` file before installation; the same source commit is recorded in \`build.json\` inside each package.
+
+          \`WMS-Print-Installation.md\` describes one-time setup, the supported platform matrix, autostart, and the remaining physical-printer checks.
+          EOF
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" --title "WMS Print $RELEASE_TAG" --notes-file release-notes.md release-assets/*
+          fi

@@ -1,4 +1,4 @@
-import { Stack, Typography } from '@mui/material'
+import { Link, Stack, Typography } from '@mui/material'
 import { useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -7,6 +7,17 @@ import { ActionGroup, AppDialog, ErrorNotice, PrimaryAction, SecondaryAction, Te
 type Destination = { connection_id: string; queue_name: string; platform: string; warehouse_id: string; last_seen_at: string | null; online: boolean }
 export type PrinterPreview = Pick<Destination, 'connection_id' | 'queue_name' | 'platform'> & { pairingCode: string; warehouseId: string }
 type Preview = PrinterPreview
+const PRINT_PACKAGE_RELEASE_TAG = 'wms-print-v2026.09.13.1'
+const PRINT_PACKAGE_RELEASE_BASE = `https://github.com/chivkunovd-bitdenis/WMS/releases/download/${PRINT_PACKAGE_RELEASE_TAG}`
+
+/** Public release assets, deliberately not short-lived Actions artifacts. */
+export const printPackageDownloads = {
+  windows: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-Setup-Windows-x64.exe`,
+  macos: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-macOS.zip`,
+  instruction: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-Installation.md`,
+  checksums: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-SHA256SUMS.txt`,
+}
+
 export function previewMatchesContext(preview: PrinterPreview | null, code: string, warehouseId: string | null): preview is PrinterPreview {
   return preview !== null && warehouseId !== null && preview.warehouseId === warehouseId && preview.pairingCode === code.trim()
 }
@@ -170,7 +181,14 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
           <>
             <Typography variant="body2">Введите код из программы WMS Print на компьютере с принтером.</Typography>
             <Typography variant="body2" color="text.secondary">
-              Пакет передаётся вместе с проверяемой сборкой; опубликованной ссылки на скачивание пока нет.
+              Скачайте{' '}
+              <Link href={printPackageDownloads.windows} target="_blank" rel="noreferrer">Windows x64</Link>
+              {' '}или{' '}
+              <Link href={printPackageDownloads.macos} target="_blank" rel="noreferrer">macOS arm64</Link>
+              . Перед установкой откройте{' '}
+              <Link href={printPackageDownloads.instruction} target="_blank" rel="noreferrer">инструкцию</Link>
+              {' '}и{' '}
+              <Link href={printPackageDownloads.checksums} target="_blank" rel="noreferrer">SHA256</Link>.
             </Typography>
             <TextInput label="Код подключения" value={code} onChange={changeCode} testId="warehouse-printer-code" />
             <ActionGroup>
