@@ -8,6 +8,7 @@ import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
 import type { LabelSize } from '../../../utils/labelSize'
 import { ErrorNotice } from '../../../ui-kit'
 import { FfWarehouseMapScreen } from './FfWarehouseMapScreen'
+import { WarehousePrinterDialog } from './WarehousePrinterDialog'
 import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
 import { placeOf, targetTitle, type MapInventoryTarget } from '../inventory/fromWarehouseMap'
 import {
@@ -75,13 +76,14 @@ async function mapErrorMessage(res: Response): Promise<string> {
 type Props = {
   token: string
   warehouses: Array<{ id: string; name: string }>
+  isAdmin: boolean
 }
 
 type LoadOptions = {
   preserveOperationError?: boolean
 }
 
-export function FfWarehouseMapPage({ token, warehouses }: Props) {
+export function FfWarehouseMapPage({ token, warehouses, isAdmin }: Props) {
   const [warehouseId, setWarehouseId] = useState<string | null>(warehouses[0]?.id ?? null)
   const [data, setData] = useState<WarehouseMapData | null>(
     warehouses.length === 0 ? EMPTY_MAP : null,
@@ -96,6 +98,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
   // уходить со страницы, чтобы посчитать один короб.
   const [count, setCount] = useState<InventoryCount | null>(null)
   const [countTarget, setCountTarget] = useState<MapInventoryTarget | null>(null)
+  const [printerOpen, setPrinterOpen] = useState(false)
 
   // Список складов в App загружается отдельно и может приехать после первого
   // рендера страницы. Если выбранный склад исчез, переходим на первый доступный.
@@ -112,6 +115,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
     setLoading(next !== null)
     setLoadError(null)
     setOperationError(null)
+    setPrinterOpen(false)
   }, [warehouses])
 
   const load = useCallback(async (options: LoadOptions = {}) => {
@@ -401,6 +405,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
         onMove={move}
         onCreateCell={(code: string) => void createCell(code)}
         onCreateWarehouse={(name: string, code: string) => void createWarehouse(name, code)}
+        onPrinter={() => setPrinterOpen(true)}
         onPrintCell={printCell}
         onInventory={(row: MapRow) => void openInventory(row)}
         historyFor={(row: MapRow) =>
@@ -416,6 +421,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
           ) ?? []
         }
       />
+      <WarehousePrinterDialog open={printerOpen} warehouseId={warehouseId} warehouseName={data?.warehouses.find((warehouse) => warehouse.id === warehouseId)?.name ?? ''} token={token} isAdmin={isAdmin} onClose={() => setPrinterOpen(false)} />
       <InventoryCountDialog
         open={count !== null}
         title={countTarget?.title ?? ''}
