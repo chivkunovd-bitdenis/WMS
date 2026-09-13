@@ -21,6 +21,7 @@ from app.api.deps import (
     get_effective_seller_id,
     require_catalog_cells_read_access,
     require_fulfillment_admin,
+    require_reception_access,
     seller_line_product_scope,
 )
 from app.api.fbs_stock_rule_reset import router as fbs_stock_rule_reset_router
@@ -755,7 +756,7 @@ async def get_seller_wb_catalog(
 
 @router.get("/linked-wb-catalog", response_model=list[FfCatalogOut])
 async def get_linked_wb_catalog(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: uuid.UUID | None = _seller_id_query,
     search: Annotated[str | None, Query()] = None,

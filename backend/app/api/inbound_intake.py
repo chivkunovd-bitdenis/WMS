@@ -113,6 +113,7 @@ async def _refresh_completed_ozon_return(
 
 
 class InboundIntakeRequestCreate(BaseModel):
+    client_request_id: uuid.UUID | None = None
     warehouse_id: uuid.UUID
     seller_id: uuid.UUID | None = None
     planned_delivery_date: date | None = None
@@ -128,6 +129,8 @@ class InboundIntakeRequestPlannedPatch(BaseModel):
 
 
 class InboundIntakeLineCreate(BaseModel):
+    mutation_id: uuid.UUID | None = None
+    increment: bool = False
     product_id: uuid.UUID
     expected_qty: int = Field(ge=1, le=1_000_000_000)
     storage_location_id: uuid.UUID | None = None
@@ -138,6 +141,7 @@ class InboundIntakeLineStoragePatch(BaseModel):
 
 
 class InboundIntakeLineExpectedPatch(BaseModel):
+    mutation_id: uuid.UUID | None = None
     expected_qty: int = Field(ge=1, le=1_000_000_000)
 
 
@@ -195,6 +199,7 @@ class InboundBoxBarcodeBody(BaseModel):
 
 
 class InboundBoxScanBody(BaseModel):
+    mutation_id: uuid.UUID | None = None
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
 
@@ -220,6 +225,7 @@ class InboundCargoPlaceCreate(BaseModel):
 
 
 class InboundBoxLineQuantityBody(BaseModel):
+    mutation_id: uuid.UUID | None = None
     quantity: int = Field(ge=0, le=100_000)
 
 
@@ -384,6 +390,9 @@ def _cargo_place_out(place: InboundIntakeCargoPlace) -> InboundCargoPlaceOut:
 
 def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
     code = exc.code
+    if code in {"mutation_payload_mismatch", "mutation_result_deleted",
+                "actual_below_container_total"}:
+        return HTTPException(status_code=409, detail=code)
     if code == "request_not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
     if code in ("box_not_found", "barcode_unknown"):
@@ -416,6 +425,9 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
 
 def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
     code = exc.code
+    if code in {"mutation_payload_mismatch", "mutation_result_deleted",
+                "actual_below_container_total"}:
+        return HTTPException(status_code=409, detail=code)
     if code in ("request_not_found", "line_not_found", "cargo_place_not_found"):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
     if code in (
@@ -594,7 +606,7 @@ async def _line_out_for_request(
     product: Product,
 ) -> InboundIntakeLineOut:
     effective: int | None = None
-    if request_status in (svc.STATUS_SUBMITTED, svc.STATUS_RECEIVING):
+    if request_status in (svc.STATUS_DRAFT, svc.STATUS_SUBMITTED, svc.STATUS_RECEIVING):
         effective = await svc.effective_actual_qty(
             session, request_id, line, request_status=request_status
         )
@@ -761,8 +773,15 @@ async def create_inbound_request(
             waybill_number=body.waybill_number,
             operation_type=body.operation_type,
             marketplace=body.marketplace,
+            client_request_id=body.client_request_id,
         )
     except InboundIntakeError as exc:
+        if exc.code in {
+            "mutation_payload_mismatch",
+            "mutation_result_deleted",
+            "mutation_id_required",
+        }:
+            raise HTTPException(status_code=409, detail=exc.code) from None
         if exc.code == "warehouse_not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -779,7 +798,7 @@ async def create_inbound_request(
                 detail="invalid_operation_type",
             ) from None
         raise
-    return _request_out(r, lines=[], boxes=[])
+    return _request_out(r)
 
 
 @router.post(
@@ -1018,6 +1037,7 @@ async def scan_product_into_inbound_cargo_place(
             place_id,
             barcode=body.barcode,
             product_id_hint=body.product_id,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
@@ -1044,6 +1064,7 @@ async def set_inbound_cargo_place_line_quantity(
             place_id,
             product_id,
             quantity=body.quantity,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
@@ -1345,6 +1366,7 @@ async def scan_product_into_inbound_box(
             box_id,
             barcode=body.barcode,
             product_id_hint=body.product_id,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
@@ -1377,6 +1399,7 @@ async def set_inbound_box_line_quantity(
             box_id,
             product_id=product_id,
             quantity=body.quantity,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
@@ -1782,9 +1805,7 @@ async def add_inbound_line(
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeLineOut:
-    line_seller_scope: uuid.UUID | None = (
-        seller_scope if user.role == FULFILLMENT_SELLER else None
-    )
+    line_seller_scope: uuid.UUID | None = seller_scope if user.role == FULFILLMENT_SELLER else None
     try:
         line = await svc.add_line(
             session,
@@ -1794,8 +1815,16 @@ async def add_inbound_line(
             expected_qty=body.expected_qty,
             storage_location_id=body.storage_location_id,
             seller_product_owner_id=line_seller_scope,
+            mutation_id=body.mutation_id,
+            increment=body.increment,
         )
     except InboundIntakeError as exc:
+        if exc.code in {
+            "mutation_payload_mismatch",
+            "mutation_result_deleted",
+            "mutation_id_required",
+        }:
+            raise HTTPException(status_code=409, detail=exc.code) from None
         if exc.code == "request_not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1846,9 +1875,7 @@ async def add_inbound_line(
     await session.refresh(line, attribute_names=["storage_location"])
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
-    return await _line_out_for_request(
-        session, user.tenant_id, request_id, req.status, line, prod
-    )
+    return await _line_out_for_request(session, user.tenant_id, request_id, req.status, line, prod)
 
 
 @router.patch(
@@ -1863,9 +1890,7 @@ async def patch_inbound_line_expected(
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeLineOut:
-    line_seller_scope: uuid.UUID | None = (
-        seller_scope if user.role == FULFILLMENT_SELLER else None
-    )
+    line_seller_scope: uuid.UUID | None = seller_scope if user.role == FULFILLMENT_SELLER else None
     try:
         line = await svc.update_line_expected_qty(
             session,
@@ -1874,8 +1899,16 @@ async def patch_inbound_line_expected(
             line_id,
             expected_qty=body.expected_qty,
             seller_product_owner_id=line_seller_scope,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeError as exc:
+        if exc.code in {
+            "mutation_payload_mismatch",
+            "mutation_result_deleted",
+            "mutation_id_required",
+            "actual_below_container_total",
+        }:
+            raise HTTPException(status_code=409, detail=exc.code) from None
         if exc.code == "line_not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1906,9 +1939,7 @@ async def patch_inbound_line_expected(
     await session.refresh(line, attribute_names=["storage_location"])
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
-    return await _line_out_for_request(
-        session, user.tenant_id, request_id, req.status, line, prod
-    )
+    return await _line_out_for_request(session, user.tenant_id, request_id, req.status, line, prod)
 
 
 @router.delete(
