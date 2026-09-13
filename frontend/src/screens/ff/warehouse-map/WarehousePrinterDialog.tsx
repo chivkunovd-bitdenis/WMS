@@ -14,6 +14,19 @@ export function previewMatchesContext(preview: PrinterPreview | null, code: stri
 export function releasePrinterBusyRequest(activeRequest: number | null, finishedRequest: number): number | null {
   return activeRequest === finishedRequest ? null : activeRequest
 }
+export async function refreshPrinterDestination(
+  read: () => Promise<unknown>,
+  onError: (error: string | null) => void,
+): Promise<boolean> {
+  try {
+    await read()
+    onError(null)
+    return true
+  } catch (cause) {
+    onError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.')
+    return false
+  }
+}
 const headers = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
 function message(raw: string) {
   if (raw === 'pairing_not_found_or_expired') return 'Код не найден или истёк. Получите новый код в программе на ПК.'
@@ -56,6 +69,18 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
   // warehouseId resets all temporary pairing state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, warehouseId, token])
+  async function refreshDestination() {
+    const request = version.current
+    setBusyRequest(request); setDestination(null); setDestinationLoaded(false); setError(null); setNotice(null)
+    try {
+      await refreshPrinterDestination(
+        () => readDestination(request),
+        (nextError) => { if (request === version.current) setError(nextError) },
+      )
+    } finally {
+      setBusyRequest((active) => releasePrinterBusyRequest(active, request))
+    }
+  }
   function changeCode(next: string) { ++version.current; setBusyRequest(null); setCode(next); setPreview(null); setError(null); setNotice(null) }
   async function inspect() {
     if (!warehouseId || !code.trim()) return
@@ -105,7 +130,7 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
           <SecondaryAction onClick={onClose}>Закрыть</SecondaryAction>
           {isAdmin ? (
             <SecondaryAction
-              onClick={() => void readDestination()}
+              onClick={() => void refreshDestination()}
               disabledReason={busy ? 'Проверяем подключение' : undefined}
             >
               Проверить состояние

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { previewMatchesContext, releasePrinterBusyRequest, type PrinterPreview } from './WarehousePrinterDialog'
+import { previewMatchesContext, refreshPrinterDestination, releasePrinterBusyRequest, type PrinterPreview } from './WarehousePrinterDialog'
 
 describe('printer pairing preview', () => {
   const preview: PrinterPreview = {
@@ -21,5 +21,27 @@ describe('printer pairing preview', () => {
     expect(releasePrinterBusyRequest(previewA, previewA)).toBeNull()
     expect(releasePrinterBusyRequest(previewB, previewA)).toBe(previewB)
     expect(releasePrinterBusyRequest(previewB, previewB)).toBeNull()
+  })
+
+  it('clears a previous destination error after a successful state recovery', async () => {
+    const errors: Array<string | null> = ['Failed to fetch']
+
+    await expect(refreshPrinterDestination(
+      async () => ({ connection_id: 'connection-a' }),
+      (error) => errors.push(error),
+    )).resolves.toBe(true)
+
+    expect(errors).toEqual(['Failed to fetch', null])
+  })
+
+  it('contains a repeated destination failure instead of rejecting the click handler', async () => {
+    const errors: Array<string | null> = []
+
+    await expect(refreshPrinterDestination(
+      async () => { throw new TypeError('Failed to fetch') },
+      (error) => errors.push(error),
+    )).resolves.toBe(false)
+
+    expect(errors).toEqual(['Failed to fetch'])
   })
 })
