@@ -110,11 +110,11 @@ async def test_explicit_oldest_order_overrides_deadline_without_stock_effects(as
 
 
 @pytest.mark.parametrize("body", [{}, {"order_id": None}])
-async def test_web_without_order_keeps_earliest_deadline(async_client, case, body):
+async def test_web_without_order_uses_oldest_created_order(async_client, case, body):
     before = await warehouse_snapshot(case)
     response = await scan(async_client, case, **body)
     assert response.status_code == 200, response.text
-    assert await picked_order_ids(case) == {case.order_ids[1]}
+    assert await picked_order_ids(case) == {case.order_ids[0]}
     assert await warehouse_snapshot(case) == before
 
 

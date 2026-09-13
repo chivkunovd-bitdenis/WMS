@@ -13,6 +13,9 @@ from app.db.session import SessionLocal, engine
 from app.models.inbound_intake import InboundIntakeDistributionLine, InboundIntakeLine
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.storage_location import StorageLocation
+from app.models.user import User
+from app.models.warehouse_map_event import WarehouseMapEvent
 from app.services import inbound_intake_service as intake
 from app.services import inbound_sorting_service as sorting
 from app.services import warehouse_map_service as warehouse_map
@@ -75,6 +78,82 @@ async def test_split_repeat_new_scan_and_completion(async_client: AsyncClient):
             )
             == 3
         )
+
+
+@pytest.mark.asyncio
+async def test_loose_putaway_keeps_a_b_authors_in_existing_map_journal(
+    async_client: AsyncClient,
+):
+    tenant, first_actor = await _auth_ids(async_client)
+    req, product, _box, first_cell, second_cell = await _mixed_sorting_request(
+        async_client, tenant, first_actor, loose_qty=2, box_qty=0
+    )
+    async with SessionLocal() as session:
+        first_user = await session.get(User, first_actor)
+        assert first_user is not None
+        first_user.full_name = "Анна Размещение WMS443"
+        second_user = User(
+            tenant_id=tenant,
+            email=f"wms443-place-{uuid.uuid4()}@example.com",
+            full_name="Борис Размещение WMS443",
+            password_hash="test-no-login",
+            role="admin",
+        )
+        session.add(second_user)
+        await session.commit()
+        second_actor = second_user.id
+
+    first_operation = uuid.uuid4()
+    second_operation = uuid.uuid4()
+    assert await place(tenant, first_actor, req, product, first_cell, 1, first_operation) == (
+        "sorting", 1
+    )
+    assert await place(tenant, second_actor, req, product, second_cell, 1, second_operation) == (
+        "done", 2
+    )
+    # A lost client response may be replayed by whoever is currently signed in;
+    # it must preserve both the original placement and its original author.
+    assert await place(tenant, second_actor, req, product, first_cell, 1, first_operation) == (
+        "done", 2
+    )
+
+    async with SessionLocal() as session:
+        events = list(
+            await session.scalars(
+                select(WarehouseMapEvent)
+                .where(
+                    WarehouseMapEvent.tenant_id == tenant,
+                    WarehouseMapEvent.id.in_([first_operation, second_operation]),
+                )
+                .order_by(WarehouseMapEvent.id)
+            )
+        )
+        assert {(event.id, event.actor_user_id, event.quantity) for event in events} == {
+            (first_operation, first_actor, 1),
+            (second_operation, second_actor, 1),
+        }
+        assert len(events) == 2
+        document = await intake.get_request(session, tenant, req)
+        assert document is not None
+        locations = {
+            row.id: row.code
+            for row in await session.scalars(
+                select(StorageLocation).where(StorageLocation.id.in_([first_cell, second_cell]))
+            )
+        }
+        journal = (await warehouse_map.get_warehouse_map(
+            session, tenant, document.warehouse_id
+        ))["journal"]
+        operation_ids = {str(first_operation), str(second_operation)}
+        visible = [row for row in journal if row["id"] in operation_ids]
+        visible_values = {
+            (row["actor_name"], row["from_label"], row["to_label"], row["qty"])
+            for row in visible
+        }
+        assert visible_values == {
+            ("Анна Размещение WMS443", "Сортировка", locations[first_cell], 1),
+            ("Борис Размещение WMS443", "Сортировка", locations[second_cell], 1),
+        }
 
 
 @pytest.mark.asyncio
