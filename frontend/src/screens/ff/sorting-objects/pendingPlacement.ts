@@ -13,6 +13,15 @@ export function placementStorageKey(token: string, endpoint: string, documentId:
   return `wms:sorting-placement:${new URL(endpoint, location.origin).href}:${payload.sub}:${documentId}`
 }
 
+/** Only loose document stock has the server receipt used for automatic replay. */
+export function canRememberSortingPlacement(payload: {
+  kind: string
+  cellId: string | null
+  sourceHolder: string | null
+}): boolean {
+  return payload.kind === 'product' && payload.cellId !== null && payload.sourceHolder === null
+}
+
 export function pendingPlacement(storage: Storage, key: string): PlacementBody | null {
   const raw = storage.getItem(key)
   return raw ? JSON.parse(raw) as PlacementBody : null
