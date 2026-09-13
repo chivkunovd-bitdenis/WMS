@@ -1,5 +1,6 @@
 """Review-only reproduction; run from backend with PYTHONPATH=. Python."""
 import asyncio
+import sys
 import json
 import uuid
 
@@ -56,8 +57,23 @@ async def main():
             "explicit_seller_B_bypasses_A_scope": b_id in {x["id"] for x in explicit.json()["items"]},
             "default_active_supplies_leaks_B_into_A_scope": sb_id in {x["id"] for x in supplies.json()["items"]},
         }
+        if "--expect-fixed" in sys.argv:
+            async with SessionLocal() as session:
+                user = await session.get(User, uuid.UUID(me["id"]))
+                user.seller_id = None
+                await session.commit()
+            all_orders = await client.get("/operations/fbs-orders/worklist", headers=headers, params=base)
+            all_supplies = await client.get("/operations/fbs-supplies/worklist", headers=headers, params={"marketplace":"wb", "status_group":"active"})
+            narrow_orders = await client.get("/operations/fbs-orders/worklist", headers=headers, params={**base,"seller_id":str(seller_b)})
+            narrow_supplies = await client.get("/operations/fbs-supplies/worklist", headers=headers, params={"marketplace":"wb", "status_group":"active","seller_id":str(seller_b)})
+            assert {x["id"] for x in all_orders.json()["items"]} == {str(ids_a[0]),b_id}
+            assert {x["id"] for x in all_supplies.json()["items"]} == {str(sa.id),sb_id}
+            assert {x["id"] for x in narrow_orders.json()["items"]} == {b_id}
+            assert {x["id"] for x in narrow_supplies.json()["items"]} == {sb_id}
+            print("Unscoped fulfillment_staff: both sellers visible; explicit seller narrows both lists: PASS")
         print(json.dumps(result, indent=2))
-        assert all(result.values()), "Reproduction changed; inspect current behavior"
+        expected = [True, False, False] if "--expect-fixed" in sys.argv else [True, True, True]
+        assert list(result.values()) == expected, "Reproduction differs from requested expectation"
     await conftest._reset_database()
     await engine.dispose()
 
