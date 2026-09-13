@@ -8,6 +8,8 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeCargoPlaceLine, InboundIntakeLine
+from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.services.tokens import decode_access_token
 
 BASE = "/operations/inbound-intake-requests"
 
@@ -351,6 +353,41 @@ async def test_cargo_place_rejects_product_not_on_request(
     )
     assert barcode_scan.status_code == 404, barcode_scan.text
     assert barcode_scan.json()["detail"] == "barcode_unknown"
+
+
+@pytest.mark.asyncio
+async def test_cargo_place_scan_resolves_ozon_external_barcode(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "ozon-external")
+    request_id, place_id, product_id, _sku_code, seller_id = (
+        await _create_receiving_with_cargo_place(async_client, headers, "ozon-external")
+    )
+    tenant_id = uuid.UUID(
+        str(decode_access_token(headers["Authorization"].removeprefix("Bearer "))["tenant_id"])
+    )
+    barcode = f"OZN-CARGO-{uuid.uuid4().hex}"
+    async with SessionLocal() as session:
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                product_id=uuid.UUID(product_id),
+                marketplace="ozon",
+                external_barcodes=[barcode],
+            )
+        )
+        await session.commit()
+    scanned = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": barcode, "mutation_id": str(uuid.uuid4())},
+    )
+    assert scanned.status_code == 200, scanned.text
+    assert [
+        (line["product_id"], line["quantity"])
+        for line in scanned.json()["lines"]
+    ] == [(product_id, 1)]
 
 
 @pytest.mark.asyncio

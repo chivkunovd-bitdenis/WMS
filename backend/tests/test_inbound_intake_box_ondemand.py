@@ -11,6 +11,7 @@ from inbound_box_intake_helpers import set_planned_boxes
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeBoxLine
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as intake_svc
 from app.services.tokens import decode_access_token
@@ -152,6 +153,33 @@ async def test_box_two_scans_only_box_two(async_client: AsyncClient) -> None:
         assert by_number[3].lines == []
         assert len(by_number[2].lines) == 1
         assert by_number[2].lines[0].quantity == 2
+
+
+@pytest.mark.asyncio
+async def test_box_scan_resolves_ozon_external_barcode(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000) + 14)
+    _headers, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, _sku = await _submitted_request(async_client, _headers, suffix, expected_qty=2)
+    barcode = f"OZN-BOX-{suffix}"
+    async with SessionLocal() as session:
+        request = await intake_svc.get_request(session, tenant_id, rid)
+        assert request is not None and request.seller_id is not None
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=tenant_id,
+                seller_id=request.seller_id,
+                product_id=pid,
+                marketplace="ozon",
+                external_barcodes=[barcode],
+            )
+        )
+        await session.commit()
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        scanned = await box_svc.scan_product_into_box(
+            session, tenant_id, rid, box.id, barcode=barcode
+        )
+    assert scanned.product_id == pid
+    assert scanned.quantity == 1
 
 
 @pytest.mark.asyncio

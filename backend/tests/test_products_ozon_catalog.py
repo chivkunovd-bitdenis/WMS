@@ -867,3 +867,11 @@ async def test_catalog_print_exposes_imported_ozon_codes_without_replacing_wb(
                 "OZN1234567891",
             ]
         assert rows["missing"]["marketplace_bindings"][0]["external_barcodes"] == []
+
+    barcode_search = await async_client.get(
+        "/products/linked-wb-catalog",
+        headers=headers,
+        params={"search": "OZN1234567890"},
+    )
+    assert barcode_search.status_code == 200, barcode_search.text
+    assert {row["name"] for row in barcode_search.json()} == {"ozon", "both"}

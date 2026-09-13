@@ -1332,6 +1332,12 @@ async def _request_barcode_index(
                 if k:
                     idx[k] = row.product_id
                     idx[k.upper()] = row.product_id
+            for binding in row.marketplace_bindings:
+                for raw in binding.get("external_barcodes", []):
+                    key = str(raw).strip()
+                    if key:
+                        idx[key] = row.product_id
+                        idx[key.upper()] = row.product_id
     return idx
 
 
@@ -1357,6 +1363,12 @@ async def _seller_catalog_barcode_index(
             if k2:
                 idx[k2] = row.product_id
                 idx[k2.upper()] = row.product_id
+        for binding in row.marketplace_bindings:
+            for raw in binding.get("external_barcodes", []):
+                key = str(raw).strip()
+                if key:
+                    idx[key] = row.product_id
+                    idx[key.upper()] = row.product_id
     return idx
 
 
@@ -1558,11 +1570,24 @@ async def complete_receiving(
     request_id: uuid.UUID,
     *,
     actor_user_id: uuid.UUID | None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     # Serialize completion before reading status, including an already-loaded ORM instance.
     req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
+    # A client that did not receive the response must replay this exact attempt,
+    # not turn it into a new completion after the operator has reopened the document.
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="complete",
+        payload={"request_id": str(request_id)},
+    )
+    if replay is not None:
+        return req
     if req.status in SORTING_STATUSES | DONE_STATUSES:
         return req
     if req.status == STATUS_DRAFT and is_ff_inbound(req):
