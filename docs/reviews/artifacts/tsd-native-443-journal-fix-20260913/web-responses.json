@@ -1,0 +1,1611 @@
+[
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests",
+    "status": 200,
+    "body": [
+      {
+        "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+        "document_number": "ПРИЕМ-26-09-13-4",
+        "display_number": "№000004",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:58:24.676604+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "7fa09644-a979-4fbd-a782-08087596d3c1",
+        "document_number": "ПРИЕМ-26-09-13-3",
+        "display_number": "№000003",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:54:02.545612+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "cb6fca0b-0ff0-41d6-b64b-9ff659e99402",
+        "document_number": "ПРИЕМ-26-09-13-2",
+        "display_number": "№000002",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:37:23.769116+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+        "document_number": "ПРИЕМ-26-09-13-1",
+        "display_number": "№000001",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T22:54:40.336084+03:00",
+        "sorting_remaining_qty": 0
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests/7445ef2a-77fe-4206-9367-be562f0b0c36",
+    "status": 200,
+    "body": {
+      "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+      "document_number": "ПРИЕМ-26-09-13-4",
+      "display_number": "№000004",
+      "waybill_number": null,
+      "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+      "warehouse_name": "Final warehouse 5da311",
+      "status": "done",
+      "operation_type": "inbound",
+      "marketplace": null,
+      "marketplace_warning": null,
+      "planned_delivery_date": null,
+      "planned_box_count": null,
+      "actual_box_count": 0,
+      "boxes_discrepancy": false,
+      "has_discrepancy": false,
+      "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+      "seller_name": "Final seller 5da311",
+      "created_by_seller_id": null,
+      "created_at": "2026-09-13T23:58:24.676604+03:00",
+      "distribution_completed_at": "2026-09-14T00:01:18.877498+03:00",
+      "sorting_remaining_qty": 0,
+      "boxes": [],
+      "cargo_places": [],
+      "lines": [
+        {
+          "id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+          "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "sku_code": "FINAL-SKU-5da311",
+          "product_name": "Final native item 5da311",
+          "wb_barcode": null,
+          "requires_honest_sign": false,
+          "length_mm": 10,
+          "width_mm": 10,
+          "height_mm": 10,
+          "weight_g": null,
+          "volume_liters": 0.001,
+          "added_by_fulfillment": false,
+          "expected_qty": 3,
+          "actual_qty": 3,
+          "effective_actual_qty": null,
+          "defective_qty": 0,
+          "posted_qty": 3,
+          "storage_location_id": null,
+          "storage_location_code": null
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests/7445ef2a-77fe-4206-9367-be562f0b0c36",
+    "status": 200,
+    "body": {
+      "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+      "document_number": "ПРИЕМ-26-09-13-4",
+      "display_number": "№000004",
+      "waybill_number": null,
+      "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+      "warehouse_name": "Final warehouse 5da311",
+      "status": "done",
+      "operation_type": "inbound",
+      "marketplace": null,
+      "marketplace_warning": null,
+      "planned_delivery_date": null,
+      "planned_box_count": null,
+      "actual_box_count": 0,
+      "boxes_discrepancy": false,
+      "has_discrepancy": false,
+      "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+      "seller_name": "Final seller 5da311",
+      "created_by_seller_id": null,
+      "created_at": "2026-09-13T23:58:24.676604+03:00",
+      "distribution_completed_at": "2026-09-14T00:01:18.877498+03:00",
+      "sorting_remaining_qty": 0,
+      "boxes": [],
+      "cargo_places": [],
+      "lines": [
+        {
+          "id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+          "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "sku_code": "FINAL-SKU-5da311",
+          "product_name": "Final native item 5da311",
+          "wb_barcode": null,
+          "requires_honest_sign": false,
+          "length_mm": 10,
+          "width_mm": 10,
+          "height_mm": 10,
+          "weight_g": null,
+          "volume_liters": 0.001,
+          "added_by_fulfillment": false,
+          "expected_qty": 3,
+          "actual_qty": 3,
+          "effective_actual_qty": null,
+          "defective_qty": 0,
+          "posted_qty": 3,
+          "storage_location_id": null,
+          "storage_location_code": null
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests/7445ef2a-77fe-4206-9367-be562f0b0c36",
+    "status": 200,
+    "body": {
+      "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+      "document_number": "ПРИЕМ-26-09-13-4",
+      "display_number": "№000004",
+      "waybill_number": null,
+      "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+      "warehouse_name": "Final warehouse 5da311",
+      "status": "done",
+      "operation_type": "inbound",
+      "marketplace": null,
+      "marketplace_warning": null,
+      "planned_delivery_date": null,
+      "planned_box_count": null,
+      "actual_box_count": 0,
+      "boxes_discrepancy": false,
+      "has_discrepancy": false,
+      "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+      "seller_name": "Final seller 5da311",
+      "created_by_seller_id": null,
+      "created_at": "2026-09-13T23:58:24.676604+03:00",
+      "distribution_completed_at": "2026-09-14T00:01:18.877498+03:00",
+      "sorting_remaining_qty": 0,
+      "boxes": [],
+      "cargo_places": [],
+      "lines": [
+        {
+          "id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+          "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+          "sku_code": "FINAL-SKU-5da311",
+          "product_name": "Final native item 5da311",
+          "wb_barcode": null,
+          "requires_honest_sign": false,
+          "length_mm": 10,
+          "width_mm": 10,
+          "height_mm": 10,
+          "weight_g": null,
+          "volume_liters": 0.001,
+          "added_by_fulfillment": false,
+          "expected_qty": 3,
+          "actual_qty": 3,
+          "effective_actual_qty": null,
+          "defective_qty": 0,
+          "posted_qty": 3,
+          "storage_location_id": null,
+          "storage_location_code": null
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests/7445ef2a-77fe-4206-9367-be562f0b0c36/movements",
+    "status": 200,
+    "body": [
+      {
+        "id": "caa74698-3354-4e57-97c6-7f503dcc9da9",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "inbound_intake_line_id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "b227f3ee-bf18-4cc8-aa5a-4b6266b3c5df",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "storage_location_id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "inbound_intake_line_id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "3f081ad1-5a89-4644-bdae-036e41381a74",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "inbound_intake_line_id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "9c27b652-cd57-4835-ba0b-0d6146d595be",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "storage_location_id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "inbound_intake_line_id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "604f1c6c-f611-4c10-ac7f-5cce65d72b40",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "inbound_intake_line_id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "created_at": "2026-09-13T23:58:24.739100+03:00"
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests",
+    "status": 200,
+    "body": [
+      {
+        "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+        "document_number": "ПРИЕМ-26-09-13-4",
+        "display_number": "№000004",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:58:24.676604+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "7fa09644-a979-4fbd-a782-08087596d3c1",
+        "document_number": "ПРИЕМ-26-09-13-3",
+        "display_number": "№000003",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:54:02.545612+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "cb6fca0b-0ff0-41d6-b64b-9ff659e99402",
+        "document_number": "ПРИЕМ-26-09-13-2",
+        "display_number": "№000002",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:37:23.769116+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+        "document_number": "ПРИЕМ-26-09-13-1",
+        "display_number": "№000001",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T22:54:40.336084+03:00",
+        "sorting_remaining_qty": 0
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inventory-movements?limit=80",
+    "status": 200,
+    "body": [
+      {
+        "id": "b227f3ee-bf18-4cc8-aa5a-4b6266b3c5df",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "caa74698-3354-4e57-97c6-7f503dcc9da9",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "9c27b652-cd57-4835-ba0b-0d6146d595be",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "3f081ad1-5a89-4644-bdae-036e41381a74",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "604f1c6c-f611-4c10-ac7f-5cce65d72b40",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:58:24.739100+03:00"
+      },
+      {
+        "id": "a669d597-7170-4dce-91b1-4df416c6abc2",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "655829f5-da28-4656-b539-6c498eef5108",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "be93335c-171d-4200-b6e4-e8e91c84f7eb",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "c72a6381-aa7b-41be-8057-7d343f35b652",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "73b17bed-0d46-44ad-a206-890a1376b8d5",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "aec0997d-4be0-484b-b220-94ed84b96e62",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "71deb9e6-7fac-415e-a673-499a1c16df1a",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:54:02.876364+03:00"
+      },
+      {
+        "id": "f80baaad-670c-4373-b016-9aa81581b426",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "aca34bd9-e980-49c9-9cda-261a1419e226",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "7a92d238-7b4b-496a-9f85-acaa38bf4271",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "dc667096-5705-4937-9f3e-6281ef19d76f",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "46e17418-d6e5-433e-ba7c-764b3723184c",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:37:23.840085+03:00"
+      },
+      {
+        "id": "ad860002-3303-47c7-8b28-45597742b5a6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+        "quantity_delta": 3,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "e9d8f32c-603b-452c-a996-a747c16ed000",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -3,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "c8125791-6890-4070-bc12-eb774cfa83d6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T22:54:40.477016+03:00"
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inventory-movements?limit=80",
+    "status": 200,
+    "body": [
+      {
+        "id": "b227f3ee-bf18-4cc8-aa5a-4b6266b3c5df",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "caa74698-3354-4e57-97c6-7f503dcc9da9",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "9c27b652-cd57-4835-ba0b-0d6146d595be",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "3f081ad1-5a89-4644-bdae-036e41381a74",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "604f1c6c-f611-4c10-ac7f-5cce65d72b40",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:58:24.739100+03:00"
+      },
+      {
+        "id": "a669d597-7170-4dce-91b1-4df416c6abc2",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "655829f5-da28-4656-b539-6c498eef5108",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "be93335c-171d-4200-b6e4-e8e91c84f7eb",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "c72a6381-aa7b-41be-8057-7d343f35b652",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "73b17bed-0d46-44ad-a206-890a1376b8d5",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "aec0997d-4be0-484b-b220-94ed84b96e62",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "71deb9e6-7fac-415e-a673-499a1c16df1a",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:54:02.876364+03:00"
+      },
+      {
+        "id": "f80baaad-670c-4373-b016-9aa81581b426",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "aca34bd9-e980-49c9-9cda-261a1419e226",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "7a92d238-7b4b-496a-9f85-acaa38bf4271",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "dc667096-5705-4937-9f3e-6281ef19d76f",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "46e17418-d6e5-433e-ba7c-764b3723184c",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:37:23.840085+03:00"
+      },
+      {
+        "id": "ad860002-3303-47c7-8b28-45597742b5a6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+        "quantity_delta": 3,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "e9d8f32c-603b-452c-a996-a747c16ed000",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -3,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "c8125791-6890-4070-bc12-eb774cfa83d6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T22:54:40.477016+03:00"
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests",
+    "status": 200,
+    "body": [
+      {
+        "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+        "document_number": "ПРИЕМ-26-09-13-4",
+        "display_number": "№000004",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:58:24.676604+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "7fa09644-a979-4fbd-a782-08087596d3c1",
+        "document_number": "ПРИЕМ-26-09-13-3",
+        "display_number": "№000003",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:54:02.545612+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "cb6fca0b-0ff0-41d6-b64b-9ff659e99402",
+        "document_number": "ПРИЕМ-26-09-13-2",
+        "display_number": "№000002",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:37:23.769116+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+        "document_number": "ПРИЕМ-26-09-13-1",
+        "display_number": "№000001",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T22:54:40.336084+03:00",
+        "sorting_remaining_qty": 0
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inbound-intake-requests",
+    "status": 200,
+    "body": [
+      {
+        "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+        "document_number": "ПРИЕМ-26-09-13-4",
+        "display_number": "№000004",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:58:24.676604+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "7fa09644-a979-4fbd-a782-08087596d3c1",
+        "document_number": "ПРИЕМ-26-09-13-3",
+        "display_number": "№000003",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:54:02.545612+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "cb6fca0b-0ff0-41d6-b64b-9ff659e99402",
+        "document_number": "ПРИЕМ-26-09-13-2",
+        "display_number": "№000002",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T23:37:23.769116+03:00",
+        "sorting_remaining_qty": 0
+      },
+      {
+        "id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+        "document_number": "ПРИЕМ-26-09-13-1",
+        "display_number": "№000001",
+        "waybill_number": null,
+        "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+        "warehouse_name": "Final warehouse 5da311",
+        "status": "done",
+        "operation_type": "inbound",
+        "marketplace": null,
+        "line_count": 1,
+        "goods_qty_total": 3,
+        "planned_delivery_date": null,
+        "planned_box_count": null,
+        "actual_box_count": 0,
+        "boxes_discrepancy": false,
+        "has_discrepancy": false,
+        "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+        "seller_name": "Final seller 5da311",
+        "product_names": [
+          "Final native item 5da311",
+          "FINAL-SKU-5da311"
+        ],
+        "created_by_seller_id": null,
+        "created_at": "2026-09-13T22:54:40.336084+03:00",
+        "sorting_remaining_qty": 0
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/warehouses/6bfd8c96-3e29-411c-8017-1d5cdf4c95ae/map",
+    "status": 200,
+    "body": {
+      "warehouses": [
+        {
+          "id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+          "name": "Final warehouse 5da311"
+        }
+      ],
+      "sellers": [
+        "Final seller 5da311"
+      ],
+      "categories": [],
+      "cells": [
+        {
+          "id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+          "code": "FINAL-CELL-5da311",
+          "barcode": "LOC-4CB59ED2D1E6",
+          "qty": 3,
+          "children": [
+            {
+              "kind": "product",
+              "id": "cd796ce5-4722-494a-ae07-48e07c72fc2c",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 3
+            }
+          ]
+        },
+        {
+          "id": "73b17bed-0d46-44ad-a206-890a1376b8d5",
+          "code": "FINAL-JOURNAL-A-5da311",
+          "barcode": "LOC-9EECC2708C1D",
+          "qty": 1,
+          "children": [
+            {
+              "kind": "product",
+              "id": "fbfb57ad-37f6-4954-bdb2-9c9ab03c4c86",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 1
+            }
+          ]
+        },
+        {
+          "id": "655829f5-da28-4656-b539-6c498eef5108",
+          "code": "FINAL-JOURNAL-B-5da311",
+          "barcode": "LOC-7DBA1E839CA6",
+          "qty": 2,
+          "children": [
+            {
+              "kind": "product",
+              "id": "849528dc-f8f8-4e23-b002-25c20d5fd7e6",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 2
+            }
+          ]
+        },
+        {
+          "id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+          "code": "FINAL-JOURNAL2-A-5da311",
+          "barcode": "LOC-DAFCB148E94D",
+          "qty": 1,
+          "children": [
+            {
+              "kind": "product",
+              "id": "54490c3b-181d-4e3e-b669-7736ff656cc2",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 1
+            }
+          ]
+        },
+        {
+          "id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+          "code": "FINAL-JOURNAL2-B-5da311",
+          "barcode": "LOC-CB158065B8FA",
+          "qty": 2,
+          "children": [
+            {
+              "kind": "product",
+              "id": "5b13dcf1-5219-4e77-853b-1a94b1045a62",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 2
+            }
+          ]
+        },
+        {
+          "id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+          "code": "FINAL-SPLIT-A-5da311",
+          "barcode": "LOC-2A1650A5869E",
+          "qty": 1,
+          "children": [
+            {
+              "kind": "product",
+              "id": "d098be6c-7919-4a4b-98dd-6df6a666cf71",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 1
+            }
+          ]
+        },
+        {
+          "id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+          "code": "FINAL-SPLIT-B-5da311",
+          "barcode": "LOC-A4B1954C0199",
+          "qty": 2,
+          "children": [
+            {
+              "kind": "product",
+              "id": "80284828-6087-4a38-b77b-0000f0edd16e",
+              "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+              "name": "Final native item 5da311",
+              "seller_name": "Final seller 5da311",
+              "category": null,
+              "barcode": null,
+              "seller_article": null,
+              "photo_url": null,
+              "qty": 2
+            }
+          ]
+        }
+      ],
+      "unassigned": [],
+      "journal": [
+        {
+          "id": "aa6af49a-7595-4747-80f7-857d12c2ce59",
+          "at": "2026-09-13T21:01:18.841347Z",
+          "actor_name": "Final Boris Split 5da311",
+          "subject": "Final native item 5da311",
+          "qty": 2,
+          "from_label": "Сортировка",
+          "to_label": "FINAL-JOURNAL2-B-5da311"
+        },
+        {
+          "id": "187bf43f-b666-497a-9041-c43348ff8cb6",
+          "at": "2026-09-13T20:59:12.911144Z",
+          "actor_name": "Final Astra 5da311",
+          "subject": "Final native item 5da311",
+          "qty": 1,
+          "from_label": "Сортировка",
+          "to_label": "FINAL-JOURNAL2-A-5da311"
+        },
+        {
+          "id": "1c6d00ed-aaff-40d9-9026-a5996e007e78",
+          "at": "2026-09-13T20:56:22.378180Z",
+          "actor_name": "Final Astra 5da311",
+          "subject": "Final native item 5da311",
+          "qty": 2,
+          "from_label": "Сортировка",
+          "to_label": "FINAL-JOURNAL-B-5da311"
+        },
+        {
+          "id": "fd5f71c0-c196-40a5-abfd-cd03772f32fa",
+          "at": "2026-09-13T20:55:00.014474Z",
+          "actor_name": "Final Astra 5da311",
+          "subject": "Final native item 5da311",
+          "qty": 1,
+          "from_label": "Сортировка",
+          "to_label": "FINAL-JOURNAL-A-5da311"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inventory-movements?limit=80",
+    "status": 200,
+    "body": [
+      {
+        "id": "b227f3ee-bf18-4cc8-aa5a-4b6266b3c5df",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "caa74698-3354-4e57-97c6-7f503dcc9da9",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "9c27b652-cd57-4835-ba0b-0d6146d595be",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "3f081ad1-5a89-4644-bdae-036e41381a74",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "604f1c6c-f611-4c10-ac7f-5cce65d72b40",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:58:24.739100+03:00"
+      },
+      {
+        "id": "a669d597-7170-4dce-91b1-4df416c6abc2",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "655829f5-da28-4656-b539-6c498eef5108",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "be93335c-171d-4200-b6e4-e8e91c84f7eb",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "c72a6381-aa7b-41be-8057-7d343f35b652",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "73b17bed-0d46-44ad-a206-890a1376b8d5",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "aec0997d-4be0-484b-b220-94ed84b96e62",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "71deb9e6-7fac-415e-a673-499a1c16df1a",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:54:02.876364+03:00"
+      },
+      {
+        "id": "f80baaad-670c-4373-b016-9aa81581b426",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "aca34bd9-e980-49c9-9cda-261a1419e226",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "7a92d238-7b4b-496a-9f85-acaa38bf4271",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "dc667096-5705-4937-9f3e-6281ef19d76f",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "46e17418-d6e5-433e-ba7c-764b3723184c",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:37:23.840085+03:00"
+      },
+      {
+        "id": "ad860002-3303-47c7-8b28-45597742b5a6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+        "quantity_delta": 3,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "e9d8f32c-603b-452c-a996-a747c16ed000",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -3,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "c8125791-6890-4070-bc12-eb774cfa83d6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T22:54:40.477016+03:00"
+      }
+    ]
+  },
+  {
+    "url": "http://127.0.0.1:5204/api/operations/inventory-movements?limit=80",
+    "status": 200,
+    "body": [
+      {
+        "id": "b227f3ee-bf18-4cc8-aa5a-4b6266b3c5df",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "7706920a-6098-469b-9b65-7fe57cc3f624",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "caa74698-3354-4e57-97c6-7f503dcc9da9",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-14T00:01:18.841347+03:00"
+      },
+      {
+        "id": "9c27b652-cd57-4835-ba0b-0d6146d595be",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "84b3309e-8855-4ef6-8a25-fa257f97e898",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "3f081ad1-5a89-4644-bdae-036e41381a74",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:59:12.911144+03:00"
+      },
+      {
+        "id": "604f1c6c-f611-4c10-ac7f-5cce65d72b40",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:58:24.739100+03:00"
+      },
+      {
+        "id": "a669d597-7170-4dce-91b1-4df416c6abc2",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "655829f5-da28-4656-b539-6c498eef5108",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "be93335c-171d-4200-b6e4-e8e91c84f7eb",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:56:22.378180+03:00"
+      },
+      {
+        "id": "c72a6381-aa7b-41be-8057-7d343f35b652",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "73b17bed-0d46-44ad-a206-890a1376b8d5",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "aec0997d-4be0-484b-b220-94ed84b96e62",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:55:00.014474+03:00"
+      },
+      {
+        "id": "71deb9e6-7fac-415e-a673-499a1c16df1a",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:54:02.876364+03:00"
+      },
+      {
+        "id": "f80baaad-670c-4373-b016-9aa81581b426",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+        "quantity_delta": 2,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "aca34bd9-e980-49c9-9cda-261a1419e226",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -2,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+        "created_at": "2026-09-13T23:41:28.704101+03:00"
+      },
+      {
+        "id": "7a92d238-7b4b-496a-9f85-acaa38bf4271",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+        "quantity_delta": 1,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "dc667096-5705-4937-9f3e-6281ef19d76f",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -1,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:38:52.094414+03:00"
+      },
+      {
+        "id": "46e17418-d6e5-433e-ba7c-764b3723184c",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:37:23.840085+03:00"
+      },
+      {
+        "id": "ad860002-3303-47c7-8b28-45597742b5a6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+        "quantity_delta": 3,
+        "movement_type": "stock_transfer_in",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "e9d8f32c-603b-452c-a996-a747c16ed000",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": -3,
+        "movement_type": "stock_transfer_out",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T23:24:00.927486+03:00"
+      },
+      {
+        "id": "c8125791-6890-4070-bc12-eb774cfa83d6",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "storage_location_id": "12c4339a-c11d-42bf-9930-417a275b3ed8",
+        "quantity_delta": 3,
+        "movement_type": "inbound_intake",
+        "actor_user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+        "created_at": "2026-09-13T22:54:40.477016+03:00"
+      }
+    ]
+  }
+]

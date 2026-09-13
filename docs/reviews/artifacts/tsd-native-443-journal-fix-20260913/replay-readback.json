@@ -1,0 +1,127 @@
+{
+  "replay_status": 200,
+  "document": {
+    "id": "7445ef2a-77fe-4206-9367-be562f0b0c36",
+    "document_number": "ПРИЕМ-26-09-13-4",
+    "display_number": "№000004",
+    "waybill_number": null,
+    "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+    "warehouse_name": "Final warehouse 5da311",
+    "status": "done",
+    "operation_type": "inbound",
+    "marketplace": null,
+    "marketplace_warning": null,
+    "planned_delivery_date": null,
+    "planned_box_count": null,
+    "actual_box_count": 0,
+    "boxes_discrepancy": false,
+    "has_discrepancy": false,
+    "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+    "seller_name": "Final seller 5da311",
+    "created_by_seller_id": null,
+    "created_at": "2026-09-13T23:58:24.676604+03:00",
+    "distribution_completed_at": "2026-09-14T00:01:18.877498+03:00",
+    "sorting_remaining_qty": 0,
+    "boxes": [],
+    "cargo_places": [],
+    "lines": [
+      {
+        "id": "371c5666-4568-4f8b-b754-0ce927d376e5",
+        "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+        "sku_code": "FINAL-SKU-5da311",
+        "product_name": "Final native item 5da311",
+        "wb_barcode": null,
+        "requires_honest_sign": false,
+        "length_mm": 10,
+        "width_mm": 10,
+        "height_mm": 10,
+        "weight_g": null,
+        "volume_liters": 0.001,
+        "added_by_fulfillment": false,
+        "expected_qty": 3,
+        "actual_qty": 3,
+        "effective_actual_qty": null,
+        "defective_qty": 0,
+        "posted_qty": 3,
+        "storage_location_id": null,
+        "storage_location_code": null
+      }
+    ]
+  },
+  "journal_before": [
+    {
+      "id": "aa6af49a-7595-4747-80f7-857d12c2ce59",
+      "at": "2026-09-13T21:01:18.841347Z",
+      "actor_name": "Final Boris Split 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 2,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL2-B-5da311"
+    },
+    {
+      "id": "187bf43f-b666-497a-9041-c43348ff8cb6",
+      "at": "2026-09-13T20:59:12.911144Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 1,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL2-A-5da311"
+    },
+    {
+      "id": "1c6d00ed-aaff-40d9-9026-a5996e007e78",
+      "at": "2026-09-13T20:56:22.378180Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 2,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL-B-5da311"
+    },
+    {
+      "id": "fd5f71c0-c196-40a5-abfd-cd03772f32fa",
+      "at": "2026-09-13T20:55:00.014474Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 1,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL-A-5da311"
+    }
+  ],
+  "journal_after": [
+    {
+      "id": "aa6af49a-7595-4747-80f7-857d12c2ce59",
+      "at": "2026-09-13T21:01:18.841347Z",
+      "actor_name": "Final Boris Split 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 2,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL2-B-5da311"
+    },
+    {
+      "id": "187bf43f-b666-497a-9041-c43348ff8cb6",
+      "at": "2026-09-13T20:59:12.911144Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 1,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL2-A-5da311"
+    },
+    {
+      "id": "1c6d00ed-aaff-40d9-9026-a5996e007e78",
+      "at": "2026-09-13T20:56:22.378180Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 2,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL-B-5da311"
+    },
+    {
+      "id": "fd5f71c0-c196-40a5-abfd-cd03772f32fa",
+      "at": "2026-09-13T20:55:00.014474Z",
+      "actor_name": "Final Astra 5da311",
+      "subject": "Final native item 5da311",
+      "qty": 1,
+      "from_label": "Сортировка",
+      "to_label": "FINAL-JOURNAL-A-5da311"
+    }
+  ]
+}
