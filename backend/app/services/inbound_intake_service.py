@@ -136,12 +136,13 @@ async def _sorting_source_allocations(
     quantity: int,
     preferred_container_kind: ContainerKind | None,
     preferred_container_id: uuid.UUID | None,
+    loose_only: bool = False,
 ) -> list[tuple[ContainerKind | None, uuid.UUID | None, int]]:
     """Resolve only this intake line's physical sources, then legacy loose stock."""
     refs: list[tuple[ContainerKind, uuid.UUID]] = []
     if preferred_container_kind is not None and preferred_container_id is not None:
         refs.append((preferred_container_kind, preferred_container_id))
-    else:
+    elif not loose_only:
         box_ids = list(
             (
                 await session.scalars(
@@ -199,6 +200,9 @@ async def _sorting_source_allocations(
         if remaining == 0:
             return allocations
 
+    if preferred_container_kind is not None and preferred_container_id is not None:
+        raise ValueError("insufficient stock")
+
     loose_available = int(
         await session.scalar(
             select(sa.func.coalesce(sa.func.sum(InventoryBalance.quantity), 0)).where(
@@ -235,6 +239,7 @@ async def _apply_line_putaway(
     source_container_id: uuid.UUID | None = None,
     destination_container_kind: ContainerKind | None = None,
     destination_container_id: uuid.UUID | None = None,
+    loose_only: bool = False,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -255,6 +260,7 @@ async def _apply_line_putaway(
                 quantity=good_quantity,
                 preferred_container_kind=source_container_kind,
                 preferred_container_id=source_container_id,
+                loose_only=loose_only,
             )
             for from_kind, from_id, source_quantity in allocations:
                 await inv_svc.apply_putaway_from_sorting(
@@ -281,6 +287,7 @@ async def _apply_line_putaway(
             quantity=defective_quantity,
             preferred_container_kind=source_container_kind,
             preferred_container_id=source_container_id,
+            loose_only=loose_only,
         )
         for from_kind, from_id, source_quantity in allocations:
             await inv_svc.apply_return_defect_putaway(
@@ -1445,6 +1452,7 @@ async def receive_line(
     quantity: int,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
+    await get_request(session, tenant_id, request_id, for_update=True)
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
         raise InboundIntakeError("line_not_found")
@@ -1494,7 +1502,7 @@ async def post_all_remaining(
     *,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_DONE:
@@ -1630,7 +1638,7 @@ async def _get_box_for_putaway(
     if locked_request_id is None:
         raise InboundIntakeError("request_not_found")
 
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
@@ -1746,16 +1754,6 @@ async def apply_box_putaway(
             raise InboundIntakeError("product_not_accepted")
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
-
-        await _top_up_sorting_for_putaway(
-            session,
-            tenant_id,
-            sorting_loc.id,
-            line,
-            product_id,
-            qty,
-            actor_user_id=performer_id,
-        )
 
         # FOR UPDATE защищает PostgreSQL. Условные UPDATE ниже дополнительно
         # делают операцию идемпотентной в SQLite-тестах и при повторе запроса:
@@ -1908,7 +1906,7 @@ async def scan_distribution_barcode(
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
@@ -1970,6 +1968,16 @@ async def scan_distribution_barcode(
     )
     res = await session.execute(stmt)
     rows = list(res.scalars().all())
+
+    posted_in_containers = sum(
+        row.posted_qty for box in req.boxes for row in box.lines
+        if row.product_id == product_id
+    ) + sum(
+        row.posted_qty for cargo in req.cargo_places for row in cargo.lines
+        if row.product_id == product_id
+    )
+    if line.posted_qty > posted_in_containers:
+        raise InboundIntakeError("distribution_completed")
 
     current_total = sum(int(r.quantity) for r in rows if r.product_id == product_id)
     next_total = max(int(line.posted_qty), current_total) + 1
@@ -2041,13 +2049,24 @@ async def replace_distribution_lines(
 
     lines: список (box_id | None, product_id, storage_location_id, quantity).
     """
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
         raise InboundIntakeError("distribution_completed")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
+
+    containers: list[InboundIntakeBox | InboundIntakeCargoPlace] = [
+        *req.boxes, *req.cargo_places
+    ]
+    if any(
+        line.posted_qty > sum(
+            row.posted_qty for container in containers
+            for row in container.lines if row.product_id == line.product_id
+        ) for line in req.lines
+    ):
+        raise InboundIntakeError("distribution_completed")
 
     box_lines_by_key = _box_lines_by_key(req)
 
@@ -2145,7 +2164,7 @@ async def complete_distribution(
     *,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
@@ -2267,6 +2286,7 @@ async def complete_distribution(
                 actor_user_id=performer_id,
                 source_container_kind="box" if r.box_id is not None else None,
                 source_container_id=r.box_id,
+                loose_only=r.box_id is None,
             )
         except ValueError as exc:
             await session.rollback()

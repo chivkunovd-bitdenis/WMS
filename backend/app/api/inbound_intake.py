@@ -2183,6 +2183,41 @@ async def post_inbound_request(
     return await _request_out_after_completion(session, r2)
 
 
+class LoosePutawayBody(BaseModel):
+    operation_id: uuid.UUID
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(gt=0)
+
+
+@router.post("/{request_id}/loose-putaway", response_model=InboundIntakeRequestOut)
+async def loose_putaway(
+    request_id: uuid.UUID,
+    body: LoosePutawayBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    from app.services.inbound_sorting_service import apply_loose_putaway
+
+    try:
+        await apply_loose_putaway(
+            session, user.tenant_id, request_id,
+            operation_id=body.operation_id, product_id=body.product_id,
+            storage_location_id=body.storage_location_id, quantity=body.quantity,
+            performer_id=user.id,
+        )
+    except InboundIntakeError as exc:
+        await session.rollback()
+        if exc.code in {"operation_conflict", "qty_exceeds_accepted", "insufficient_sorting_stock"}:
+            raise HTTPException(status_code=409, detail=exc.code) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(status_code=404, detail=exc.code) from None
+        raise _map_inbound_svc_err(exc) from None
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _request_out_after_completion(session, req)
+
+
 @router.get(
     "/{request_id}/distribution-lines",
     response_model=list[InboundDistributionLineOut],
