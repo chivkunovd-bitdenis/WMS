@@ -88,6 +88,17 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     # раньше сваливались в "done" вместе с реально завершёнными — отвал был не виден.
     # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
     "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
+    # WMS-445: the first TSD screen is a warehouse work queue, rather than a
+    # history view.  It deliberately differs from the web's `new` (which
+    # splits WB by deadline) and `active` (which includes external processing).
+    "tsd_working": frozenset(
+        {
+            FBS_ORDER_STATUS_NEW,
+            FBS_ORDER_STATUS_IN_SUPPLY,
+            FBS_ORDER_STATUS_ASSEMBLING,
+            FBS_ORDER_STATUS_PACKED,
+        }
+    ),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
@@ -113,6 +124,23 @@ def _supplier_new_clause() -> ColumnElement[bool]:
     return or_(
         FbsOrder.supplier_status.is_(None),
         func.lower(FbsOrder.supplier_status) == FBS_ORDER_STATUS_NEW,
+    )
+
+
+def _tsd_working_clause() -> ColumnElement[bool]:
+    """Statuses that remain actionable from the TSD's initial FBS queue."""
+    return or_(
+        and_(
+            FbsOrder.status == FBS_ORDER_STATUS_NEW,
+            _supplier_new_clause(),
+        ),
+        FbsOrder.status.in_(
+            {
+                FBS_ORDER_STATUS_IN_SUPPLY,
+                FBS_ORDER_STATUS_ASSEMBLING,
+                FBS_ORDER_STATUS_PACKED,
+            }
+        ),
     )
 
 
@@ -318,6 +346,8 @@ async def _fetch_orders_page(
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
             stmt = stmt.where(_deadline_expired_clause(server_now))
+        elif status_group == "tsd_working":
+            stmt = stmt.where(_tsd_working_clause())
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
@@ -405,6 +435,8 @@ async def _fetch_warehouse_options(
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
             stmt = stmt.where(_deadline_expired_clause(server_now))
+        elif status_group == "tsd_working":
+            stmt = stmt.where(_tsd_working_clause())
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
