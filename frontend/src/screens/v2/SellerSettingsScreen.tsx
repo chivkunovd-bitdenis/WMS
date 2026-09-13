@@ -38,6 +38,8 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   permissions: SellerPermissions
+  me?: { display_name: string; full_name?: string | null; job_title?: string | null }
+  onProfileUpdated?: (profile: { full_name: string; job_title: string }) => Promise<unknown>
   onStaffChanged?: () => void | Promise<void>
 }
 
@@ -56,7 +58,10 @@ type MarkingCredentialsState = {
 
 type SellerStaffAccountRow = {
   id: string
-  email: string
+  email: string | null
+  full_name?: string | null
+  job_title?: string | null
+  display_name: string
   role: string
   seller_id: string
   must_set_password: boolean
@@ -145,6 +150,8 @@ export function SellerSettingsScreen({
   token,
   authHeaders,
   permissions,
+  me,
+  onProfileUpdated,
   onStaffChanged,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -183,6 +190,18 @@ export function SellerSettingsScreen({
   const [staffCreatePerms, setStaffCreatePerms] = useState<SellerPermissions>(
     DEFAULT_STAFF_PERMISSIONS,
   )
+  const [profileFullName, setProfileFullName] = useState(me?.full_name ?? '')
+  const [profileJobTitle, setProfileJobTitle] = useState(me?.job_title ?? '')
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [editingStaff, setEditingStaff] = useState<SellerStaffAccountRow | null>(null)
+  const [editingStaffName, setEditingStaffName] = useState('')
+  const [editingStaffTitle, setEditingStaffTitle] = useState('')
+  const [editingStaffBusy, setEditingStaffBusy] = useState(false)
+
+  useEffect(() => {
+    setProfileFullName(me?.full_name ?? '')
+    setProfileJobTitle(me?.job_title ?? '')
+  }, [me?.full_name, me?.job_title])
 
   useEffect(() => {
     if (!permissions.settings) {
@@ -532,9 +551,11 @@ export function SellerSettingsScreen({
     e.preventDefault()
     const form = e.currentTarget
     const fd = new FormData(form)
-    const email = String(fd.get('seller_staff_email') ?? '').trim()
-    if (!email) {
-      setStaffError('Укажите email сотрудника.')
+    const fullName = String(fd.get('seller_staff_full_name') ?? '').trim()
+    const jobTitle = String(fd.get('seller_staff_job_title') ?? '').trim()
+    const password = String(fd.get('seller_staff_password') ?? '')
+    if (!fullName || !password) {
+      setStaffError('Укажите ФИО и пароль сотрудника.')
       return
     }
     setStaffBusy(true)
@@ -547,7 +568,7 @@ export function SellerSettingsScreen({
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, permissions: staffCreatePerms }),
+        body: JSON.stringify({ full_name: fullName, job_title: jobTitle || null, password, permissions: staffCreatePerms }),
       })
       if (!res.ok) {
         setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
@@ -557,7 +578,7 @@ export function SellerSettingsScreen({
       setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
       await loadStaffRows()
       await onStaffChanged?.()
-      setStaffOk(`Сотрудник добавлен: ${email}`)
+      setStaffOk(`Сотрудник добавлен: ${fullName}`)
     } catch (e) {
       setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
     } finally {
@@ -601,6 +622,58 @@ export function SellerSettingsScreen({
     }
   }
 
+  async function saveOwnProfile(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!onProfileUpdated) return
+    const fullName = profileFullName.trim()
+    if (!fullName) {
+      setError('Укажите ФИО.')
+      return
+    }
+    setProfileBusy(true)
+    setError(null)
+    try {
+      await onProfileUpdated({ full_name: fullName, job_title: profileJobTitle.trim() })
+      setOkMsg('Профиль сохранён')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить профиль.')
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  function openStaffProfile(row: SellerStaffAccountRow) {
+    setEditingStaff(row)
+    setEditingStaffName(row.full_name ?? '')
+    setEditingStaffTitle(row.job_title ?? '')
+  }
+
+  async function saveStaffProfile() {
+    if (!editingStaff) return
+    const fullName = editingStaffName.trim()
+    if (!fullName) {
+      setStaffError('Укажите ФИО сотрудника.')
+      return
+    }
+    setEditingStaffBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/auth/seller-staff-accounts/${editingStaff.id}/profile`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName, job_title: editingStaffTitle.trim() || null }),
+      })
+      if (!res.ok) throw new Error(humanSellerStaffError(await readApiErrorMessage(res)))
+      const updated = (await res.json()) as SellerStaffAccountRow
+      setStaffRows((previous) => previous.map((row) => row.id === updated.id ? updated : row))
+      setEditingStaff(null)
+      setStaffOk('Данные сотрудника сохранены')
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : 'Не удалось сохранить сотрудника.')
+    } finally {
+      setEditingStaffBusy(false)
+    }
+  }
+
   const signingLabel =
     SIGNING_OPTIONS.find((o) => o.value === czCreds?.signing_method)?.label ?? '—'
 
@@ -619,6 +692,17 @@ export function SellerSettingsScreen({
         <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-settings-error">
           {error}
         </Alert>
+      ) : null}
+
+      {me ? (
+        <Paper variant="outlined" component="form" onSubmit={(e) => void saveOwnProfile(e)} sx={{ p: 2, maxWidth: 920, mb: 2 }} data-testid="seller-own-profile-panel">
+          <Typography variant="h6" gutterBottom>Мой профиль</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <TextField label="ФИО" required size="small" fullWidth value={profileFullName} onChange={(e) => setProfileFullName(e.target.value)} />
+            <TextField label="Должность" size="small" fullWidth value={profileJobTitle} onChange={(e) => setProfileJobTitle(e.target.value)} />
+            <Button type="submit" variant="contained" disabled={profileBusy}>{profileBusy ? 'Сохранение…' : 'Сохранить'}</Button>
+          </Stack>
+        </Paper>
       ) : null}
 
       {permissions.staff ? (
@@ -656,7 +740,7 @@ export function SellerSettingsScreen({
               <Table size="small" data-testid="seller-staff-table">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>Сотрудник</TableCell>
                     {SELLER_PERMISSION_BLOCKS.map((block) => (
                       <TableCell key={block.key} align="center" sx={{ minWidth: 104 }}>
                         {block.label}
@@ -673,7 +757,9 @@ export function SellerSettingsScreen({
                       data-staff-id={row.id}
                     >
                       <TableCell>
-                        <Typography variant="body2">{row.email}</Typography>
+                        <Typography variant="body2">{row.display_name}</Typography>
+                        {row.job_title ? <Typography variant="caption" color="text.secondary">{row.job_title}</Typography> : null}
+                        <Button size="small" variant="text" onClick={() => openStaffProfile(row)} sx={{ px: 0, minWidth: 0 }}>Изменить</Button>
                         <Typography
                           variant="caption"
                           color={row.is_owner ? 'text.secondary' : 'warning.main'}
@@ -696,7 +782,7 @@ export function SellerSettingsScreen({
                                 'data-testid': `seller-staff-perm-${row.id}-${block.key}`,
                               } as React.HTMLAttributes<HTMLSpanElement>,
                               input: {
-                                'aria-label': `${block.label} для ${row.email}`,
+                                'aria-label': `${block.label} для ${row.display_name}`,
                               } as React.InputHTMLAttributes<HTMLInputElement>,
                             }}
                             onChange={(e) =>
@@ -737,17 +823,17 @@ export function SellerSettingsScreen({
                   sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}
                 >
                   <TextField
-                    name="seller_staff_email"
-                    label="Email для входа"
-                    type="email"
+                    name="seller_staff_full_name"
+                    label="ФИО"
                     required
                     fullWidth
                     size="small"
                     autoComplete="off"
-                    helperText="Пароль задаётся при первом входе"
-                    slotProps={{ htmlInput: { 'data-testid': 'seller-staff-email' } }}
+                    slotProps={{ htmlInput: { 'data-testid': 'seller-staff-name' } }}
                     sx={{ flex: 1 }}
                   />
+                  <TextField name="seller_staff_job_title" label="Должность" fullWidth size="small" sx={{ flex: 1 }} />
+                  <TextField name="seller_staff_password" label="Пароль" type="password" required fullWidth size="small" autoComplete="new-password" sx={{ flex: 1 }} />
                   <Button
                     type="submit"
                     variant="contained"
@@ -1159,6 +1245,11 @@ export function SellerSettingsScreen({
       </Dialog>
         </>
       ) : null}
+      <Dialog open={editingStaff !== null} onClose={() => !editingStaffBusy && setEditingStaff(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Данные сотрудника</DialogTitle>
+        <DialogContent><Stack spacing={2} sx={{ pt: 1 }}><TextField autoFocus label="ФИО" required value={editingStaffName} onChange={(e) => setEditingStaffName(e.target.value)} /><TextField label="Должность" value={editingStaffTitle} onChange={(e) => setEditingStaffTitle(e.target.value)} /></Stack></DialogContent>
+        <DialogActions><Button onClick={() => setEditingStaff(null)} disabled={editingStaffBusy}>Отмена</Button><Button variant="contained" onClick={() => void saveStaffProfile()} disabled={editingStaffBusy}>Сохранить</Button></DialogActions>
+      </Dialog>
     </Box>
   )
 }

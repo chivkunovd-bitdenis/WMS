@@ -30,7 +30,7 @@ type TariffVersion = {
 type ProductOption = { id: string; seller_id: string | null; name: string; sku: string; seller_name: string | null; label: string }
 type SellerOption = { id: string; name: string }
 type TariffMatrix = { revision: number; services: TariffServiceState[]; versions: TariffVersion[]; products: ProductOption[]; sellers: SellerOption[]; storage: { mode: string; editable_in_matrix: boolean } }
-type Employee = { id: string; email: string; packaging_rate_rub?: string }
+type Employee = { id: string; display_name: string; packaging_rate_rub?: string }
 
 type Props = {
   token: string
@@ -273,7 +273,7 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
   const employeeRows = useMemo(() => {
     const known = new Map(employees.map((employee) => [employee.id, employee]))
     matrix?.versions.filter((item) => item.employee_user_id).forEach((item) => {
-      if (item.employee_user_id && !known.has(item.employee_user_id)) known.set(item.employee_user_id, { id: item.employee_user_id, email: item.employee_user_id })
+      if (item.employee_user_id && !known.has(item.employee_user_id)) known.set(item.employee_user_id, { id: item.employee_user_id, display_name: 'Сотрудник не указан' })
     })
     return [...known.values()]
   }, [employees, matrix?.versions])
@@ -287,7 +287,7 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
     { key: 'action', header: 'Действие', width: 145, render: (row) => <SecondaryAction aria-pressed={row.enabled} disabledReason={saving ? 'Матрица тарифов сохраняется' : undefined} onClick={() => setService(row, { enabled: !row.enabled })} data-testid={`ff-settings-tariff-${row.service_code}`}>{row.enabled ? 'Выключить' : 'Включить'}</SecondaryAction> },
   ]
   const employeeColumns: Column<Employee>[] = [
-    { key: 'employee', header: 'Сотрудник', width: 260, render: (row) => row.email },
+    { key: 'employee', header: 'Сотрудник', width: 260, render: (row) => row.display_name },
     ...employeeServices.map((serviceCode): Column<Employee> => ({ key: serviceCode, header: employeeServiceName[serviceCode], align: 'right', width: 160, render: (row) => <NumberInput label={employeeServiceName[serviceCode]} hideLabel value={matrix?.versions.find((item) => item.employee_user_id === row.id && item.service_code === serviceCode)?.rate ?? null} onChange={(value) => setEmployeeRate(row.id, serviceCode, value)} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId={`ff-settings-tariff-employee-${row.id}-${serviceCode}`} /> })),
     { key: 'packing', header: 'Упаковка', width: 200, render: (row) => row.packaging_rate_rub != null ? `Ставка сотрудника: ${row.packaging_rate_rub} ₽` : 'Ставка — в карточке сотрудника' },
   ]

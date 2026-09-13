@@ -3,7 +3,7 @@ import { Alert, Button, Typography } from '@mui/material'
 import { Card } from '../ui/Card'
 
 type Me = {
-  email: string
+  display_name: string
   organization_name: string
   role: string
   seller_name?: string | null
@@ -21,7 +21,7 @@ export function DashboardCard({ me, isFulfillmentAdmin, embedded = false }: Prop
     <Card className="card" data-testid={embedded ? undefined : 'dashboard'}>
       {embedded ? null : (
         <>
-          <p data-testid="user-email">{me.email}</p>
+          <p data-testid="user-name">{me.display_name}</p>
           <p data-testid="org-name">{me.organization_name}</p>
           <p data-testid="user-role">{me.role}</p>
           {me.seller_name ? (

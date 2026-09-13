@@ -77,6 +77,7 @@ type HistoryEvent = {
   event_type: string
   document_number: string | null
   actor_email: string | null
+  actor_name?: string | null
 }
 
 type LedgerRow = {
@@ -86,6 +87,7 @@ type LedgerRow = {
   cis_masked: string
   document_number: string | null
   actor_email: string | null
+  actor_name?: string | null
 }
 
 type TabKey = 'overview' | 'products' | 'codes' | 'ledger'
@@ -708,8 +710,8 @@ export function HonestSignPoolPage({
                   {ev.document_number ? (
                     <Typography variant="body2">Документ: {ev.document_number}</Typography>
                   ) : null}
-                  {ev.actor_email ? (
-                    <Typography variant="body2">{ev.actor_email}</Typography>
+                  {ev.actor_name ? (
+                    <Typography variant="body2">{ev.actor_name}</Typography>
                   ) : null}
                 </Paper>
               ))}

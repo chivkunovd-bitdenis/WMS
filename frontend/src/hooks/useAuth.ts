@@ -14,8 +14,13 @@ import {
 import type { SellerPermissions } from '../utils/sellerPermissions'
 
 export type Me = {
-  email: string
+  id: string
+  email: string | null
+  full_name?: string | null
+  job_title?: string | null
+  display_name: string
   organization_name: string
+  organization_slug?: string
   role: string
   seller_id?: string | null
   seller_name?: string | null
@@ -215,16 +220,18 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setAuthBusy(true)
       try {
         const fd = new FormData(e.currentTarget)
-        const email = String(fd.get('email') ?? '').trim()
+        const fullName = String(fd.get('full_name') ?? '').trim()
+        const legacyLogin = String(fd.get('legacy_login') ?? '').trim()
         const password = String(fd.get('password') ?? '')
-        if (!email) {
-          setError('Укажите email.')
+        if (!fullName && !legacyLogin) {
+          setError('Укажите ФИО.')
           return
         }
-        const res = await fetch(apiUrl('/auth/login'), {
+        const isLegacyLogin = Boolean(legacyLogin)
+        const res = await fetch(apiUrl(isLegacyLogin ? '/auth/login' : '/auth/login-by-name'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(isLegacyLogin ? { email: legacyLogin, password } : { full_name: fullName, password }),
         })
         if (res.status === 403) {
           const text = await res.text()
@@ -246,7 +253,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         }
         if (!res.ok) {
           if (res.status === 401) {
-            setError('Неверный email или пароль.')
+            setError('Неверные данные для входа.')
           } else {
             setError(await readApiErrorMessage(res))
           }
@@ -380,6 +387,26 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     [portal],
   )
 
+  const updateProfile = useCallback(
+    async (profile: { full_name: string; job_title: string }) => {
+      if (!token) {
+        throw new Error('Сессия не найдена. Войдите снова.')
+      }
+      const res = await fetch(apiUrl('/auth/me'), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      const next = (await res.json()) as Me
+      setMe(next)
+      return next
+    },
+    [token],
+  )
+
   const reloadMe = useCallback(
     async (overrideToken?: string | null) => {
       const t = overrideToken ?? token
@@ -407,6 +434,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     clearNotice,
     logout,
     applyToken,
+    updateProfile,
     reloadMe,
   }
 }

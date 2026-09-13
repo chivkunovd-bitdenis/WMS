@@ -35,6 +35,7 @@ type ReprintRequest = {
   reason: string | null
   created_at: string
   requested_by_email: string
+  requested_by_name?: string | null
   product_name: string
   product_sku: string
   cis_masked: string
@@ -49,6 +50,7 @@ type CodeHistoryEvent = {
   event_type: string
   document_number: string | null
   actor_email: string | null
+  actor_name?: string | null
 }
 
 type Props = {
@@ -229,7 +231,7 @@ export function FfHonestSignReprintsPage({
               {rows.map((row) => (
                 <TableRow key={row.id} data-testid={`${testId}-row-${row.id}`}>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                  <TableCell>{row.requested_by_email}</TableCell>
+                  <TableCell>{row.requested_by_name ?? 'Сотрудник не указан'}</TableCell>
                   <TableCell>
                     {row.product_name} ({row.product_sku})
                   </TableCell>
@@ -395,8 +397,8 @@ export function FfHonestSignReprintsPage({
                   {ev.document_number ? (
                     <Typography variant="body2">Документ: {ev.document_number}</Typography>
                   ) : null}
-                  {ev.actor_email ? (
-                    <Typography variant="body2">{ev.actor_email}</Typography>
+                  {ev.actor_name ? (
+                    <Typography variant="body2">{ev.actor_name}</Typography>
                   ) : null}
                 </Paper>
               ))}

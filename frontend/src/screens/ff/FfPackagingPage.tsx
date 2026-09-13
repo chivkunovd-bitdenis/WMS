@@ -99,6 +99,7 @@ export type PackagingTaskEvent = {
   note: string | null
   created_by_user_id: string | null
   created_by_user_email: string | null
+  created_by_user_name?: string | null
   created_at: string
   reversed_at: string | null
 }
@@ -1451,7 +1452,7 @@ export function FfPackagingTaskPanel({
             <Stack spacing={0.75}>
               {orderedEvents.slice().reverse().slice(0, 8).map((event) => (
                 <Typography key={event.id} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                  {packagingEventLabel(event.action, event.quantity)} · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
+                  {packagingEventLabel(event.action, event.quantity)} · {event.product_name ?? 'задание'} · {event.created_by_user_name ?? 'Сотрудник не указан'} ·{' '}
                   {new Date(event.created_at).toLocaleString('ru-RU')}
                 </Typography>
               ))}

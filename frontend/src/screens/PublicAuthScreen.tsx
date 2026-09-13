@@ -23,7 +23,7 @@ type Props = {
   clearNotice: () => void
 }
 
-type AuthMode = 'login' | 'forgot'
+type AuthMode = 'login' | 'legacy' | 'forgot'
 
 const fieldStackSx = { display: 'flex', flexDirection: 'column', gap: 2 } as const
 
@@ -108,8 +108,8 @@ export function PublicAuthScreen({
           Задайте пароль
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Вы перешли по ссылке из письма. Придумайте пароль — дальше вход по
-          email и паролю.
+          Вы перешли по ссылке из письма. Придумайте пароль — затем войдите по
+          ФИО и паролю.
         </Typography>
         <form
           data-testid="set-password-form"
@@ -205,6 +205,8 @@ export function PublicAuthScreen({
     )
   }
 
+  const legacyLogin = mode === 'legacy'
+
   return shell(
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -213,12 +215,12 @@ export function PublicAuthScreen({
       <form data-testid="login-form" noValidate onSubmit={onLogin}>
         <Box sx={fieldStackSx}>
           <TextField
-            name="email"
-            type="email"
-            label="Email"
+            name={legacyLogin ? 'legacy_login' : 'full_name'}
+            type="text"
+            label={legacyLogin ? 'Прежний логин' : 'ФИО'}
             required
             fullWidth
-            autoComplete="email"
+            autoComplete={legacyLogin ? 'username' : 'name'}
           />
           <TextField
             name="password"
@@ -228,9 +230,11 @@ export function PublicAuthScreen({
             fullWidth
             autoComplete="current-password"
             helperText={
-              isFf
-                ? 'Только сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).'
-                : 'Первый вход — по ссылке из письма-приглашения.'
+              legacyLogin
+                ? 'Для старой учётной записи без ФИО. После входа заполните профиль в настройках.'
+                : isFf
+                  ? 'Только сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).'
+                  : 'Вход по ФИО и паролю.'
             }
           />
           <Button
@@ -245,6 +249,20 @@ export function PublicAuthScreen({
           </Button>
         </Box>
       </form>
+      <Button
+        type="button"
+        variant="text"
+        color="primary"
+        data-testid="go-to-legacy-login"
+        onClick={() => {
+          clearNotice()
+          setMode(legacyLogin ? 'login' : 'legacy')
+        }}
+        sx={{ mt: 1.5 }}
+        fullWidth
+      >
+        {legacyLogin ? 'Вход по ФИО' : 'Вход по прежнему логину'}
+      </Button>
       <Button
         type="button"
         variant="text"

@@ -41,6 +41,7 @@ type LedgerRow = {
   seller_name: string | null
   document_number: string | null
   actor_email: string | null
+  actor_name?: string | null
   source_process_label: string | null
 }
 
@@ -395,7 +396,7 @@ export function HonestSignLedgerPage({
                     {row.event_type === 'imported' ? 'Загрузка КМ' : row.source_process_label ?? '—'}
                   </TableCell>
                   <TableCell>{row.document_number ?? '—'}</TableCell>
-                  <TableCell>{row.actor_email ?? '—'}</TableCell>
+                  <TableCell>{row.actor_name ?? 'Сотрудник не указан'}</TableCell>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
                     <Chip size="small" label={ledgerEventLabel(row.event_type)} />

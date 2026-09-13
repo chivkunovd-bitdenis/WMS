@@ -282,6 +282,7 @@ export default function App() {
     clearNotice,
     logout,
     reloadMe,
+    updateProfile,
   } = useAuth('fulfillment')
   const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
@@ -2933,7 +2934,7 @@ export default function App() {
       <AuthedAppLayout
         onLogout={onLogout}
         title="Портал ФФ"
-        userLabel={me.email}
+        userLabel={me.display_name}
         userRoleLabel={ffRoleLabel(me.role)}
         meRole={me.role}
         ffPermissions={ffPermissions}
@@ -3399,6 +3400,8 @@ export default function App() {
                 <FfSettingsScreen
                   token={token}
                   authHeaders={authHeaders}
+                  me={me}
+                  onProfileUpdated={updateProfile}
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   canManageStaff={canSettingsOps}
                   addressStorageEnabled={me.address_storage_enabled !== false}

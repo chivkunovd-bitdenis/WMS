@@ -65,6 +65,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     logout,
     applyToken,
     reloadMe,
+    updateProfile,
   } = useAuth('seller')
   const { subscription, reloadSubscription, syncPayment } = useSubscription(token)
 
@@ -334,7 +335,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       <SellerLayout
         onLogout={() => logout()}
         title="Портал селлера"
-        userLabel={me.email}
+        userLabel={me.display_name}
         userRoleLabel={
           me.active_seller_name && me.active_seller_name !== me.home_seller_name
             ? `Селлер · ${me.active_seller_name}`
@@ -528,6 +529,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   token={token}
                   authHeaders={authHeaders}
                   permissions={sellerPermissions}
+                  me={me}
+                  onProfileUpdated={updateProfile}
                   onStaffChanged={async () => {
                     await reloadMe()
                   }}
