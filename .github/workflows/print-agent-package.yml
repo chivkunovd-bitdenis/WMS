@@ -2,6 +2,8 @@ name: WMS print agent package
 on:
   workflow_dispatch:
   push:
+    branches:
+      - '**'
     tags:
       - 'wms-print-v*'
     paths:
@@ -78,8 +80,8 @@ jobs:
 
           \`WMS-Print-Installation.md\` describes one-time setup, the supported platform matrix, autostart, and the remaining physical-printer checks.
           EOF
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release-assets/* --clobber
-          else
-            gh release create "$RELEASE_TAG" --title "WMS Print $RELEASE_TAG" --notes-file release-notes.md release-assets/*
-          fi
+          python tools/print-agent/publish_release.py \
+            --tag "$RELEASE_TAG" \
+            --source-commit "$SOURCE_COMMIT" \
+            --assets-dir release-assets \
+            --notes-file release-notes.md
