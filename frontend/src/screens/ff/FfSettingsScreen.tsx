@@ -5,6 +5,10 @@ import {
   Button,
   Checkbox,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Paper,
   Snackbar,
@@ -36,7 +40,10 @@ type StaffPackagingBilling = {
 }
 type StaffAccountRow = {
   id: string
-  email: string
+  email: string | null
+  full_name?: string | null
+  job_title?: string | null
+  display_name: string
   role: string
   must_set_password: boolean
   permissions: FfPermissions
@@ -49,6 +56,8 @@ import { FfLabelTemplatePanel } from './FfLabelTemplatePanel'
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
+  me?: { display_name: string; full_name?: string | null; job_title?: string | null }
+  onProfileUpdated?: (profile: { full_name: string; job_title: string }) => Promise<unknown>
   isFulfillmentAdmin: boolean
   canManageStaff: boolean
   addressStorageEnabled?: boolean
@@ -86,6 +95,8 @@ function formatRubDisplay(value: string): string {
 export function FfSettingsScreen({
   token,
   authHeaders,
+  me,
+  onProfileUpdated,
   isFulfillmentAdmin,
   canManageStaff,
   addressStorageEnabled = true,
@@ -115,6 +126,18 @@ export function FfSettingsScreen({
   const [permSavedNotice, setPermSavedNotice] = useState<string | null>(null)
   const [rateSavedNotice, setRateSavedNotice] = useState<string | null>(null)
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
+  const [profileFullName, setProfileFullName] = useState(me?.full_name ?? '')
+  const [profileJobTitle, setProfileJobTitle] = useState(me?.job_title ?? '')
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [editingRow, setEditingRow] = useState<StaffAccountRow | null>(null)
+  const [editingFullName, setEditingFullName] = useState('')
+  const [editingJobTitle, setEditingJobTitle] = useState('')
+  const [editingBusy, setEditingBusy] = useState(false)
+
+  useEffect(() => {
+    setProfileFullName(me?.full_name ?? '')
+    setProfileJobTitle(me?.job_title ?? '')
+  }, [me?.full_name, me?.job_title])
 
   const loadRows = useCallback(async () => {
     if (!token || !canManageStaff) {
@@ -172,15 +195,17 @@ export function FfSettingsScreen({
     setBusy(true)
     try {
       const fd = new FormData(form)
-      const email = String(fd.get('staff_email') ?? '').trim()
-      if (!email) {
-        setError('Укажите email сотрудника.')
+      const fullName = String(fd.get('staff_full_name') ?? '').trim()
+      const jobTitle = String(fd.get('staff_job_title') ?? '').trim()
+      const password = String(fd.get('staff_password') ?? '')
+      if (!fullName || !password) {
+        setError('Укажите ФИО и пароль сотрудника.')
         return
       }
       const res = await fetch(apiUrl('/auth/staff-accounts'), {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ full_name: fullName, job_title: jobTitle || null, password }),
       })
       if (!res.ok) {
         setError(humanStaffError(await readApiErrorMessage(res)))
@@ -262,7 +287,7 @@ export function FfSettingsScreen({
       const updated = (await res.json()) as StaffAccountRow
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       setRateDrafts((prev) => ({ ...prev, [row.id]: updated.packaging_rate_rub ?? '0.00' }))
-      setRateSavedNotice(`${row.email}: ставка ${formatRubDisplay(updated.packaging_rate_rub ?? '0')} ₽`)
+      setRateSavedNotice(`${row.display_name}: ставка ${formatRubDisplay(updated.packaging_rate_rub ?? '0')} ₽`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить ставку.')
     } finally {
@@ -342,6 +367,59 @@ export function FfSettingsScreen({
     }
   }
 
+  async function saveOwnProfile(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!onProfileUpdated) return
+    const fullName = profileFullName.trim()
+    if (!fullName) {
+      setError('Укажите ФИО.')
+      return
+    }
+    setProfileBusy(true)
+    setError(null)
+    try {
+      await onProfileUpdated({ full_name: fullName, job_title: profileJobTitle.trim() })
+      setSuccess('Профиль сохранён')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить профиль.')
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  function openStaffProfile(row: StaffAccountRow) {
+    setEditingRow(row)
+    setEditingFullName(row.full_name ?? '')
+    setEditingJobTitle(row.job_title ?? '')
+  }
+
+  async function saveStaffProfile() {
+    if (!editingRow) return
+    const fullName = editingFullName.trim()
+    if (!fullName) {
+      setError('Укажите ФИО сотрудника.')
+      return
+    }
+    setEditingBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/auth/staff-accounts/${editingRow.id}/profile`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName, job_title: editingJobTitle.trim() || null }),
+      })
+      if (!res.ok) throw new Error(humanStaffError(await readApiErrorMessage(res)))
+      const updated = (await res.json()) as StaffAccountRow
+      setRows((previous) => previous.map((row) => row.id === updated.id ? updated : row))
+      setEditingRow(null)
+      setSuccess('Данные сотрудника сохранены')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить сотрудника.')
+    } finally {
+      setEditingBusy(false)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
@@ -352,6 +430,18 @@ export function FfSettingsScreen({
       </Typography>
 
       {isFulfillmentAdmin ? <FfLabelTemplatePanel token={token} /> : null}
+
+      {me ? (
+        <Paper variant="outlined" component="form" onSubmit={(e) => void saveOwnProfile(e)} sx={{ p: 2, mb: 3 }} data-testid="ff-own-profile-panel">
+          <Typography variant="subtitle1" gutterBottom>Мой профиль</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+            <TextField label="ФИО" required value={profileFullName} onChange={(e) => setProfileFullName(e.target.value)} size="small" fullWidth slotProps={{ htmlInput: { 'data-testid': 'ff-own-profile-name' } }} />
+            <TextField label="Должность" value={profileJobTitle} onChange={(e) => setProfileJobTitle(e.target.value)} size="small" fullWidth slotProps={{ htmlInput: { 'data-testid': 'ff-own-profile-title' } }} />
+            <Button type="submit" variant="contained" disabled={profileBusy} sx={{ minWidth: { sm: 130 } }}>{profileBusy ? 'Сохранение…' : 'Сохранить'}</Button>
+          </Stack>
+          {!me.full_name ? <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Заполните профиль, чтобы входить по ФИО.</Typography> : null}
+        </Paper>
+      ) : null}
 
       {isFulfillmentAdmin ? (
         <Paper
@@ -499,7 +589,7 @@ export function FfSettingsScreen({
                 <Table size="small" data-testid="ff-staff-table">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+                      <TableCell sx={{ minWidth: 220 }}>Сотрудник</TableCell>
                       {FF_STAFF_ACCESS_BLOCKS.map((block) => (
                         <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
                           <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
@@ -539,8 +629,10 @@ export function FfSettingsScreen({
                         >
                           <TableCell sx={{ maxWidth: 320 }}>
                             <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                              {row.email}
+                              {row.display_name}
                             </Typography>
+                            {row.job_title ? <Typography variant="caption" color="text.secondary">{row.job_title}</Typography> : null}
+                            <Button size="small" variant="text" onClick={() => openStaffProfile(row)} sx={{ px: 0, minWidth: 0 }}>Изменить</Button>
                             <Typography
                               variant="caption"
                               color={row.must_set_password ? 'warning.main' : 'text.secondary'}
@@ -559,7 +651,7 @@ export function FfSettingsScreen({
                                     'data-testid': `ff-staff-access-${row.id}-${block.key}`,
                                   } as React.HTMLAttributes<HTMLSpanElement>,
                                   input: {
-                                    'aria-label': `${block.label} для ${row.email}`,
+                                    'aria-label': `${block.label} для ${row.display_name}`,
                                   } as React.InputHTMLAttributes<HTMLInputElement>,
                                 }}
                                 onChange={(e) =>
@@ -639,17 +731,17 @@ export function FfSettingsScreen({
                 sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}
               >
                 <TextField
-                  name="staff_email"
-                  label="Email для входа"
-                  type="email"
+                  name="staff_full_name"
+                  label="ФИО"
                   required
                   fullWidth
                   size="small"
                   autoComplete="off"
-                  helperText="Пароль задаётся при первом входе"
-                  slotProps={{ htmlInput: { 'data-testid': 'ff-staff-email' } }}
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-staff-name' } }}
                   sx={{ flex: 1 }}
                 />
+                <TextField name="staff_job_title" label="Должность" fullWidth size="small" sx={{ flex: 1 }} />
+                <TextField name="staff_password" label="Пароль" type="password" required fullWidth size="small" autoComplete="new-password" sx={{ flex: 1 }} />
                 <Button
                   type="submit"
                   variant="contained"
@@ -700,7 +792,17 @@ export function FfSettingsScreen({
         </Box>
       )}
       <FfSubscriptionPanel token={token} isFulfillmentAdmin={isFulfillmentAdmin} />
-      {isFulfillmentAdmin ? <FfBillingTariffMatrixPanel token={token} authHeaders={authHeaders} focusTariffs={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'tariffs'} onSaved={() => setSuccess('Тарифы сохранены')} employees={rows.map((row) => ({ id: row.id, email: row.email, packaging_rate_rub: row.packaging_rate_rub }))} /> : null}
+      {isFulfillmentAdmin ? <FfBillingTariffMatrixPanel token={token} authHeaders={authHeaders} focusTariffs={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'tariffs'} onSaved={() => setSuccess('Тарифы сохранены')} employees={rows.map((row) => ({ id: row.id, display_name: row.display_name, packaging_rate_rub: row.packaging_rate_rub }))} /> : null}
+      <Dialog open={editingRow !== null} onClose={() => !editingBusy && setEditingRow(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Данные сотрудника</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField autoFocus label="ФИО" required value={editingFullName} onChange={(e) => setEditingFullName(e.target.value)} />
+            <TextField label="Должность" value={editingJobTitle} onChange={(e) => setEditingJobTitle(e.target.value)} />
+          </Stack>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setEditingRow(null)} disabled={editingBusy}>Отмена</Button><Button variant="contained" onClick={() => void saveStaffProfile()} disabled={editingBusy}>Сохранить</Button></DialogActions>
+      </Dialog>
     </Box>
   )
 }

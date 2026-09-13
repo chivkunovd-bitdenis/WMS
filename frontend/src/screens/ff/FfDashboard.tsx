@@ -38,7 +38,8 @@ export type FfOutboundSummary = {
 }
 
 type Me = {
-  email: string
+  email: string | null
+  display_name: string
   organization_name: string
   role: string
   seller_name?: string | null
