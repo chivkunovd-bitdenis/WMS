@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Box, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { randomId } from '../../../utils/randomId'
 import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
 import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
 import type { LabelSize } from '../../../utils/labelSize'
@@ -104,6 +105,13 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
           cell_id: payload.cellId,
           to_id: payload.toId,
           qty: payload.qty,
+          // Постановка внутри документа обязана нести его номер: без него сервер
+          // не знает, чей остаток уменьшать, и документ висит в очереди
+          // размещения с уже разложенным товаром.
+          ...(embedded && inboundRequestId ? { inbound_request_id: inboundRequestId } : {}),
+          // Один идентификатор на подтверждённую оператором постановку: повтор
+          // того же запроса после разрыва связи не должен двигать товар дважды.
+          operation_id: randomId(),
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
