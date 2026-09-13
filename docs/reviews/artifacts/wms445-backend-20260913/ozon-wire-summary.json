@@ -1,0 +1,40 @@
+{
+  "environment": "local only: API18084/PostgreSQL wms445_fixture/Ozon19093/WB19094",
+  "carriages": [
+    {
+      "carriage_id": 445001,
+      "status": "formed",
+      "posting_numbers": [
+        "445-a-0"
+      ],
+      "fixture_client": "445a"
+    }
+  ],
+  "calls": {
+    "/v4/posting/fbs/ship": 1,
+    "/v1/carriage/create": 1,
+    "/v1/carriage/approve": 1,
+    "/v1/carriage/get": 3,
+    "/v2/posting/fbs/act/get-barcode": 2
+  },
+  "stock": {
+    "inbound_movements": 8,
+    "inbound_quantity": 160,
+    "fbs_shipment_movements": 2,
+    "fbs_shipment_quantity": -3
+  },
+  "ledger": [
+    {
+      "service_code": "fbs_order",
+      "quantity": 3,
+      "rate_kopecks": 4000,
+      "amount_kopecks": 12000
+    },
+    {
+      "service_code": "packing",
+      "quantity": 3,
+      "rate_kopecks": 3000,
+      "amount_kopecks": 9000
+    }
+  ]
+}

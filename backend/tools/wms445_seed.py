@@ -119,7 +119,12 @@ async def seed(args: argparse.Namespace) -> dict[str, Any]:
                 "POST",
                 "/auth/staff-accounts",
                 headers=headers,
-                body={"email": STAFF_EMAIL, "password": PASSWORD},
+                body={
+                    "email": STAFF_EMAIL,
+                    "password": PASSWORD,
+                    "full_name": "Иван Учебный Сотрудник",
+                    "job_title": "Кладовщик",
+                },
             )
             staff_id = staff_data["id"]
             await request(
@@ -142,6 +147,13 @@ async def seed(args: argparse.Namespace) -> dict[str, Any]:
             )
         else:
             staff_id = str(staff.id)
+            async with SessionLocal() as session:
+                saved_staff = await session.get(User, staff.id)
+                assert saved_staff
+                if not saved_staff.full_name:
+                    saved_staff.full_name = "Иван Учебный Сотрудник"
+                    saved_staff.job_title = "Кладовщик"
+                    await session.commit()
         async with SessionLocal() as session:
             warehouse = await session.scalar(
                 select(Warehouse).where(
