@@ -1,0 +1,213 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/Navigation.kt b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+index 006264c..8f565fc 100644
+--- a/android/app/src/main/java/ru/wms/tsd/Navigation.kt
++++ b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+@@ -26,6 +26,7 @@ import ru.wms.tsd.features.fbs.FbsSupplyScreen
+ import ru.wms.tsd.features.fbs.FbsOperationScreen
+ import ru.wms.tsd.features.home.HomeSection
+ import ru.wms.tsd.features.inbound.InboundBoxesScreen
++import ru.wms.tsd.features.inbound.InboundDraftScreen
+ import ru.wms.tsd.features.inbound.InboundListScreen
+ import ru.wms.tsd.features.inbound.InboundReceivingScreen
+ import ru.wms.tsd.features.outbound.OutboundAssemblyScreen
+@@ -79,9 +80,12 @@ fun AppNavHost(
+ 
+         composable("inbound") {
+             InboundListScreen(
++                onCreate = { navController.navigate("inbound/create") },
+                 onBack = { navController.popBackStack() },
+                 onOpenRequest = { id, status ->
+-                    if (status == "submitted") {
++                    if (status == "draft") {
++                        navController.navigate("inbound/$id/draft")
++                    } else if (status == "submitted") {
+                         navController.navigate("inbound/$id/boxes")
+                     } else {
+                         navController.navigate("inbound/$id/receiving")
+@@ -90,6 +94,15 @@ fun AppNavHost(
+             )
+         }
+ 
++        composable("inbound/create") {
++            InboundDraftScreen(null, onBack = { navController.popBackStack() }, onCreated = { id ->
++                navController.navigate("inbound/$id/draft") { popUpTo("inbound/create") { inclusive = true } }
++            })
++        }
++        composable("inbound/{requestId}/draft") { entry ->
++            InboundDraftScreen(entry.arguments?.getString("requestId"), onBack = { navController.popBackStack() })
++        }
++
+         composable("inbound/{requestId}/boxes") { backStackEntry ->
+             val requestId = backStackEntry.arguments?.getString("requestId") ?: return@composable
+             InboundBoxesScreen(
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+index 6599df7..7b50f53 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+@@ -66,6 +66,18 @@ class ApiProvider(
+         authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
+     }
+ 
++    fun inboundDraft(): ru.wms.tsd.core.api.inbound.InboundDraftApi =
++        client().createService(ru.wms.tsd.core.api.inbound.InboundDraftApi::class.java)
++
++    fun inboundScope(): String {
++        val session = checkNotNull(authManager.getCurrentSession())
++        val claims = org.json.JSONObject(String(android.util.Base64.decode(session.token.split('.')[1], android.util.Base64.URL_SAFE)))
++        return "${baseUrl()}:${claims.optString("tenant_id")}:${claims.getString("sub")}"
++    }
++
++    fun pendingInbound(scope: String, document: String): String? = authStore.getInboundDraft(scope, document)
++    fun saveInbound(scope: String, document: String, value: String?) = authStore.saveInboundDraft(scope, document, value)
++
+     fun operations(): OperationsApi {
+         val client = client()
+         return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
+new file mode 100644
+index 0000000..2b73c09
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
+@@ -0,0 +1,67 @@
++package ru.wms.tsd.core.api.inbound
++
++import kotlinx.serialization.SerialName
++import kotlinx.serialization.Serializable
++import kotlinx.serialization.json.JsonElement
++import kotlinx.serialization.json.JsonObject
++import retrofit2.Response
++import retrofit2.http.*
++
++/** Additive intake API: the bundled client predates creator identity and cargo places. */
++interface InboundDraftApi {
++    @GET("operations/inbound-intake-requests") suspend fun list(): Response<List<DraftSummary>>
++    @GET("operations/inbound-intake-requests/{id}") suspend fun get(@Path("id") id: String): Response<DraftRequest>
++    @GET("sellers") suspend fun sellers(): Response<List<DraftChoice>>
++    @GET("warehouses") suspend fun warehouses(): Response<List<DraftChoice>>
++    @GET("products/linked-wb-catalog") suspend fun catalog(@Query("seller_id") sellerId: String, @Query("search") search: String = ""): Response<List<DraftProduct>>
++    @POST suspend fun post(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @PATCH suspend fun patch(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @PUT suspend fun put(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @DELETE suspend fun delete(@Url path: String): Response<JsonElement>
++}
++
++@Serializable data class DraftChoice(val id: String, val name: String = "", @SerialName("company_name") val companyName: String? = null) {
++    val label get() = companyName?.takeIf { it.isNotBlank() } ?: name
++}
++@Serializable data class DraftSummary(
++    val id: String, @SerialName("warehouse_id") val warehouseId: String, val status: String,
++    @SerialName("line_count") val lineCount: Int = 0, @SerialName("created_at") val createdAt: String = "",
++    @SerialName("operation_type") val operationType: String = "",
++    @SerialName("created_by_seller_id") val createdBySellerId: String? = null,
++    @SerialName("display_number") val displayNumber: String? = null,
++    @SerialName("document_number") val documentNumber: Int? = null,
++    @SerialName("seller_name") val sellerName: String? = null,
++    @SerialName("planned_delivery_date") val plannedDeliveryDate: String? = null,
++    @SerialName("planned_box_count") val plannedBoxCount: Int? = null,
++    @SerialName("actual_box_count") val actualBoxCount: Int? = null,
++    @SerialName("has_discrepancy") val hasDiscrepancy: Boolean? = null,
++    @SerialName("boxes_discrepancy") val boxesDiscrepancy: Boolean? = null,
++) { val isFfDraft get() = status == "draft" && operationType == "inbound" && createdBySellerId == null }
++@Serializable data class DraftRequest(
++    val id: String, val status: String, @SerialName("seller_id") val sellerId: String,
++    @SerialName("seller_name") val sellerName: String? = null,
++    @SerialName("display_number") val displayNumber: String? = null,
++    @SerialName("operation_type") val operationType: String,
++    @SerialName("created_by_seller_id") val createdBySellerId: String? = null,
++    val lines: List<DraftLine> = emptyList(), val boxes: List<DraftContainer> = emptyList(),
++    @SerialName("cargo_places") val cargoPlaces: List<DraftContainer> = emptyList(),
++) { val editable get() = status == "draft" && operationType == "inbound" && createdBySellerId == null }
++@Serializable data class DraftLine(
++    val id: String, @SerialName("product_id") val productId: String,
++    @SerialName("sku_code") val skuCode: String, @SerialName("product_name") val productName: String,
++    @SerialName("effective_actual_qty") val effectiveActualQty: Int = 0,
++)
++@Serializable data class DraftContainer(
++    val id: String, @SerialName("box_number") val boxNumber: Int? = null,
++    @SerialName("place_number") val placeNumber: Int? = null,
++    @SerialName("internal_barcode") val barcode: String = "", val lines: List<DraftContainerLine> = emptyList(),
++) { val label get() = if (boxNumber != null) "Короб №$boxNumber" else "Грузоместо №$placeNumber" }
++@Serializable data class DraftContainerLine(@SerialName("product_id") val productId: String, val quantity: Int)
++@Serializable data class DraftProduct(
++    val id: String, val name: String, @SerialName("sku_code") val skuCode: String,
++    @SerialName("wb_barcodes") val wbBarcodes: List<String> = emptyList(),
++    @SerialName("wb_primary_barcode") val wbPrimaryBarcode: String? = null,
++    @SerialName("marketplaces") val marketplaces: List<String> = emptyList(),
++    @SerialName("ozon_sku") val ozonSku: String? = null,
++    @SerialName("ozon_offer_id") val ozonOfferId: String? = null,
++) { val caption get() = (marketplaces.map { it.uppercase() } + listOfNotNull(ozonOfferId)).joinToString(" · ") }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+index 4243fa6..0a4d535 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+@@ -55,6 +55,16 @@ class AuthStore(context: Context) {
+         check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
+     }
+ 
++    fun getInboundDraft(scope: String, document: String): String? =
++        encryptedPrefs.getString("inbound_draft:$scope:$document", null)
++
++    fun saveInboundDraft(scope: String, document: String, value: String?) {
++        val key = "inbound_draft:$scope:$document"
++        val edit = encryptedPrefs.edit()
++        if (value == null) edit.remove(key) else edit.putString(key, value)
++        check(edit.commit()) { "Не удалось сохранить приёмку на устройстве. Повторите попытку." }
++    }
++
+     fun getSavedStaff(): List<SavedStaff> {
+         val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
+         return try {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
+index e7a3331..be6dbde 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
+@@ -17,7 +17,7 @@ import ru.wms.tsd.AppGraph
+ import ru.wms.tsd.core.api.ApiProvider
+ import ru.wms.tsd.core.api.networkErrorText
+ import ru.wms.tsd.core.api.readableError
+-import ru.wms.tsd.core.api.generated.models.InboundIntakeRequestSummaryOut
++import ru.wms.tsd.core.api.inbound.DraftSummary
+ import ru.wms.tsd.ui.patterns.FullScreenError
+ import ru.wms.tsd.ui.patterns.ListSkeleton
+ import ru.wms.tsd.ui.patterns.ScanFlash
+@@ -29,7 +29,7 @@ data class InboundListUiState(
+     val loading: Boolean = true,
+     val refreshing: Boolean = false,
+     val error: String? = null,
+-    val requests: List<InboundIntakeRequestSummaryOut> = emptyList(),
++    val requests: List<DraftSummary> = emptyList(),
+ )
+ 
+ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -41,12 +41,12 @@ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+     fun load(initial: Boolean = false) {
+         _state.value = _state.value.copy(loading = initial, refreshing = !initial, error = null)
+         viewModelScope.launch {
+-            runCatching { api.operations().listInboundRequestsOperationsInboundIntakeRequestsGet() }
++            runCatching { api.inboundDraft().list() }
+                 .onSuccess { resp ->
+                     if (resp.isSuccessful) {
+                         // Очередь приёмки: переданные на склад и находящиеся в пересчёте (как в вебе)
+                         val queue = resp.body().orEmpty()
+-                            .filter { it.status == "submitted" || isReceivingStatus(it.status) }
++                            .filter { it.isFfDraft || it.status == "submitted" || isReceivingStatus(it.status) }
+                             .sortedBy { it.plannedDeliveryDate ?: it.createdAt }
+                         _state.value = InboundListUiState(loading = false, requests = queue)
+                     } else {
+@@ -69,6 +69,7 @@ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+ @Composable
+ fun InboundListScreen(
+     onBack: () -> Unit,
++    onCreate: () -> Unit,
+     onOpenRequest: (id: String, status: String) -> Unit,
+ ) {
+     val vm: InboundListViewModel = viewModel(factory = InboundListViewModel.Factory(AppGraph.apiProvider))
+@@ -84,6 +85,8 @@ fun InboundListScreen(
+         title = "Приёмка",
+         flash = ScanFlash.None,
+         onExit = onBack,
++        primaryActionLabel = "Создать приёмку",
++        onPrimaryAction = onCreate,
+         cameraScanner = false, // список не принимает сканы
+     ) {
+         when {
