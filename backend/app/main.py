@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
+from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
@@ -152,6 +153,7 @@ def create_app() -> FastAPI:
     app.include_router(discrepancy_acts_router)
     app.include_router(document_events_router)
     app.include_router(background_jobs_router)
+    app.include_router(assistant_router)
     app.include_router(billing_router)
     app.include_router(billing_invoices_v2_router)
     app.include_router(chat_router)

@@ -100,6 +100,37 @@ class Settings(BaseSettings):
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
         "Unset: derive from jwt_secret_key (dev/tests only; set explicitly in prod).",
     )
+    assistant_executor_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WMS_ASSISTANT_EXECUTOR_SECRET", "ASSISTANT_EXECUTOR_SECRET"
+        ),
+        description=(
+            "WMS-433: единственный секрет очереди AI-помощника (R10, В2 — владелец "
+            "разрешил один серверный секрет на стенде и production, значение "
+            "генерирует и хранит владелец, в репозитории его нет). Не пользовательский "
+            "токен: обслуживает все тенанты, поэтому эндпоинты исполнителя "
+            "(/assistant/executor/*) сравнивают его отдельным заголовком "
+            "X-WMS-Assistant-Secret, а не через Authorization Bearer/JWT. Пусто — "
+            "эндпоинты исполнителя отказывают всем (fail closed), как и до включения "
+            "помощника."
+        ),
+    )
+    assistant_deploy_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_ASSISTANT_DEPLOY_VERSION", "WMS_DEPLOY_VERSION"),
+        description=(
+            "WMS-433/R9: версия сборки (git SHA), которую бэк сообщает исполнителю, "
+            "чтобы тот читал код именно этой версии. Бэк сам по себе версию не знает — "
+            "`scripts/deploy/prod-update.sh` вычисляет DEPLOY_SHA только как локальную "
+            "переменную выкладки и не передаёт её в окружение процесса; готового "
+            "Railway-параметра со сборочным SHA для стенда не проверено. Поэтому поле "
+            "пустое по умолчанию: как только ops явно прокинет эту переменную на "
+            "стенде/production, бэк начнёт её сообщать; до этого исполнитель сам "
+            "берёт вершину etalon и помечает это в служебном результате (R9), "
+            "пользователю это не показывается."
+        ),
+    )
     e2e_mock_wb_cards: bool = Field(
         default=False,
         description="Playwright/e2e: return stub WB cards JSON without calling the network.",
