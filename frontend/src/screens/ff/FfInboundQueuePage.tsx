@@ -42,6 +42,7 @@ import {
   type InboundSummaryRef,
 } from './inboundReceivingHelpers'
 import type { InboundOperationType } from '../../utils/inboundOperationType'
+import { randomId } from '../../utils/randomId'
 
 export type InboundWorkspace = 'reception' | 'sorting'
 export type ReturnMarketplace = '' | 'wildberries' | 'ozon'
@@ -53,7 +54,8 @@ type Props = {
   onCreateDraft?: (
     operationType: InboundOperationType,
     sellerId: string,
-    marketplace?: Exclude<ReturnMarketplace, ''>,
+    marketplace: Exclude<ReturnMarketplace, ''> | undefined,
+    clientRequestId: string,
   ) => { id: string } | null | void | Promise<{ id: string } | null | void>
   creatingDraft?: boolean
   sellers?: { id: string; name: string }[]
@@ -143,6 +145,8 @@ export function FfInboundQueuePage({
   const [draftOperationType, setDraftOperationType] = useState<InboundOperationType | null>(null)
   const [draftSellerId, setDraftSellerId] = useState('')
   const [draftMarketplace, setDraftMarketplace] = useState<ReturnMarketplace>('')
+  const [draftClientRequestId, setDraftClientRequestId] = useState<string | null>(null)
+  const [submittingDraft, setSubmittingDraft] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -213,20 +217,28 @@ export function FfInboundQueuePage({
     setDraftOperationType(operationType)
     setDraftSellerId(sellerOptions.length === 1 ? sellerOptions[0].id : '')
     setDraftMarketplace('')
+    // Один замысел оператора — один идентификатор. Он живёт до успешного
+    // создания, поэтому повтор после ошибки или обрыва связи не заводит
+    // второй документ: сервер узнаёт тот же client_request_id.
+    setDraftClientRequestId(randomId())
   }
 
   const closeCreateDialog = () => {
     setDraftOperationType(null)
     setDraftSellerId('')
     setDraftMarketplace('')
+    setDraftClientRequestId(null)
   }
 
   const submitCreateDialog = async () => {
-    if (!draftOperationType || !draftSellerId || !onCreateDraft) return
+    if (!draftOperationType || !draftSellerId || !onCreateDraft || !draftClientRequestId) return
+    if (submittingDraft) return
     setCreateError(null)
+    setSubmittingDraft(true)
     try {
       const created = await onCreateDraft(draftOperationType, draftSellerId,
-        draftOperationType === 'return' && draftMarketplace ? draftMarketplace : undefined,)
+        draftOperationType === 'return' && draftMarketplace ? draftMarketplace : undefined,
+        draftClientRequestId)
       if (created === null) {
         setCreateError('Документ не создан. Повторите попытку.')
         return
@@ -234,6 +246,8 @@ export function FfInboundQueuePage({
       closeCreateDialog()
     } catch (reason) {
       setCreateError(reason instanceof Error ? reason.message : 'Не удалось создать документ.')
+    } finally {
+      setSubmittingDraft(false)
     }
   }
 
@@ -392,7 +406,7 @@ export function FfInboundQueuePage({
             <Button
               variant="contained"
               onClick={() => void submitCreateDialog()}
-              disabled={creatingDraft || !draftSellerId}
+              disabled={creatingDraft || submittingDraft || !draftSellerId}
               data-testid="ff-inbound-create-confirm"
             >
               Создать
