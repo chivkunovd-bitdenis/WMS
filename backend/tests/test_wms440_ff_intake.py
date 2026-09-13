@@ -454,3 +454,58 @@ async def test_new_ff_three_units_reach_cell_with_one_charge_and_fact(
         assert charges[0].quantity == 3
         assert charges[0].performer_id == facts[0].actor_user_id == actor
         assert facts[0].item_quantity == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transition", ["begin-receiving", "submit"])
+@pytest.mark.parametrize("container_kind", ["boxes", "cargo-places"])
+async def test_explicit_legacy_recount_keeps_tare_without_duplicating_draft_fact(
+    async_client: AsyncClient, transition: str, container_kind: str
+) -> None:
+    h, wid, sid, pid = await _setup(async_client)
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    rid = created.json()["id"]
+    path = f"{BASE}/{rid}"
+    added = await async_client.post(
+        f"{path}/lines", headers=h, json={"product_id": pid, "expected_qty": 4}
+    )
+    lid = added.json()["id"]
+    container = await async_client.post(
+        f"{path}/{container_kind}", headers=h,
+        **({"json": {"quantity": 1}} if container_kind == "cargo-places" else {}),
+    )
+    assert container.status_code == 201, container.text
+    cid = (container.json()[0] if container_kind == "cargo-places" else container.json())["id"]
+    quantity_path = f"{path}/{container_kind}/{cid}/lines/{pid}"
+    filled = await async_client.put(quantity_path, headers=h, json={"quantity": 2})
+    assert filled.status_code == 200, filled.text
+    draft = (await async_client.get(path, headers=h)).json()
+    assert draft["lines"][0]["actual_qty"] == 2
+    assert draft["lines"][0]["effective_actual_qty"] == 4
+    if transition == "submit":
+        planned = await async_client.patch(path, headers=h, json={"planned_box_count": 1})
+        assert planned.status_code == 200, planned.text
+    started = await async_client.post(f"{path}/{transition}", headers=h)
+    assert started.status_code == 200, started.text
+    if transition == "submit":
+        started = await async_client.post(f"{path}/begin-receiving", headers=h)
+        assert started.status_code == 200, started.text
+    after = (await async_client.get(path, headers=h)).json()
+    assert after["status"] == "receiving"
+    assert after["lines"][0]["id"] == lid
+    assert after["lines"][0]["actual_qty"] is None
+    assert after["lines"][0]["expected_qty"] == 4
+    assert after["lines"][0]["effective_actual_qty"] == 2
+    containers = after["boxes" if container_kind == "boxes" else "cargo_places"]
+    assert containers[0]["id"] == cid
+    assert containers[0]["lines"][0]["quantity"] == 2
+    async with SessionLocal() as db:
+        assert await db.scalar(select(func.count()).select_from(InventoryMovement)) == 0
+    recounted = await async_client.put(quantity_path, headers=h, json={"quantity": 4})
+    assert recounted.status_code == 200, recounted.text
+    for _ in range(2):
+        completed = await async_client.post(f"{path}/complete-receiving", headers=h)
+        assert completed.status_code == 200, completed.text
+        assert completed.json()["lines"][0]["actual_qty"] == 4
+    async with SessionLocal() as db:
+        assert await db.scalar(select(func.sum(InventoryMovement.quantity_delta))) == 4
