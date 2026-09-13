@@ -47,6 +47,7 @@ from app.api.stock_transfer import router as stock_transfer_router
 from app.api.storage import router as storage_router
 from app.api.subscription import router as subscription_router
 from app.api.tenant_settings import router as tenant_settings_router
+from app.api.warehouse_print import router as warehouse_print_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
@@ -160,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(fbs_supplies_router)
     app.include_router(fbs_print_assets_router)
     app.include_router(fbs_print_jobs_router)
+    app.include_router(warehouse_print_router)
     app.include_router(wildberries_integration_router)
     app.include_router(ozon_integration_router)
     app.include_router(ozon_returns_router)
