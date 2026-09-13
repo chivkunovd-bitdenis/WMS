@@ -264,3 +264,37 @@ async def test_ozon_position_packing_counts_reread_retry_without_stock_change(
         )
         assert conflict.status_code == 409, conflict.text
         assert conflict.json()["detail"] == "idempotency_conflict"
+
+
+@pytest.mark.asyncio
+async def test_local_delivery_failure_retains_operation_identity_after_rollback(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.fbs_wb_operation import FbsWbOperation
+    from app.services.fbs_shipment_service import _fail_ozon_deliver_operation
+    from app.services.fbs_supply_reconcile_service import create_pending_deliver_operation
+
+    case = await _case(async_client, "ozon")
+    async with SessionLocal() as session:
+        operation = await create_pending_deliver_operation(
+            session,
+            tenant_id=case["tenant"],
+            seller_id=case["seller"],
+            idempotency_key="445-local-finish-failure",
+            request_hash="synthetic",
+            local_supply_id=case["supply"],
+            confirmed_preflight_version=None,
+        )
+        await session.commit()
+        operation_id = operation.id
+        await _fail_ozon_deliver_operation(
+            session,
+            operation,
+            error_code="invalid_content_type",
+            supply_id=case["supply"],
+            discard_local_changes=True,
+        )
+    async with SessionLocal() as session:
+        saved = await session.get(FbsWbOperation, operation_id)
+        assert saved and saved.state == "failed"
+        assert saved.error_code == "invalid_content_type"

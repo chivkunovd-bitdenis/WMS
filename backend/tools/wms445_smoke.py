@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from httpx import AsyncClient
 
@@ -29,7 +29,7 @@ async def smoke(api_base: str, manifest: dict[str, Any]) -> dict[str, Any]:
                 raise RuntimeError(
                     f"{path}: HTTP {response.status_code}: {response.json().get('detail')}"
                 )
-            return response.json()
+            return cast(dict[str, Any], response.json())
 
         order_id = next(row["id"] for row in manifest["orders"] if row["external_id"] == "445-a-0")
         workspace = await req(
@@ -44,7 +44,9 @@ async def smoke(api_base: str, manifest: dict[str, Any]) -> dict[str, Any]:
         )
         supply_id = workspace["supply"]["id"]
         base = f"/operations/fbs-supplies/{supply_id}"
-        if workspace["supply"]["status"] != "in_delivery":
+        if workspace["supply"]["status"] != "in_delivery" and not any(
+            box["ozon_assembled"] for box in workspace["boxes"]
+        ):
             workspace = await req("POST", base + "/start-work")
             positions = workspace["orders"][0]["positions"]
             for pos in positions:

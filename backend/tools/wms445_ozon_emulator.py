@@ -203,7 +203,15 @@ def dispatch(path: str, body: dict[str, Any], state: dict[str, Any], client: str
         return carriage
     if path == "/v2/posting/fbs/act/get-barcode/text":
         return {"result": f"OZON-ACT-{body.get('id') or body.get('carriage_id')}"}
-    if path in {"/v2/posting/fbs/act/get-pdf", "/v2/posting/fbs/act/get-barcode"}:
+    if path == "/v2/posting/fbs/act/get-barcode":
+        png = io.BytesIO()
+        qrcode.make(f"OZON-ACT-{body.get('id')}").save(png, format="PNG")
+        return {
+            "file_content": base64.b64encode(png.getvalue()).decode(),
+            "file_name": "act.png",
+            "content_type": "image/png",
+        }
+    if path == "/v2/posting/fbs/act/get-pdf":
         return {
             "file_content": base64.b64encode(label_pdf([f"ACT-{body.get('id')}"])).decode(),
             "file_name": "act.pdf",
