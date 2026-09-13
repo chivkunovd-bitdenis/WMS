@@ -25,9 +25,13 @@ def build_positive_balance_upsert(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity_delta: int,
+    quantity_packed_delta: int = 0,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> Insert:
+    if quantity_packed_delta < 0 or quantity_packed_delta > quantity_delta:
+        raise ValueError("invalid packed quantity")
+    quantity_unpacked_delta = quantity_delta - quantity_packed_delta
     values = {
         "id": uuid.uuid4(),
         "tenant_id": tenant_id,
@@ -36,12 +40,13 @@ def build_positive_balance_upsert(
         "container_kind": container_kind,
         "container_id": container_id,
         "quantity": quantity_delta,
-        "quantity_unpacked": quantity_delta,
-        "quantity_packed": 0,
+        "quantity_unpacked": quantity_unpacked_delta,
+        "quantity_packed": quantity_packed_delta,
         "updated_at": datetime.now(UTC),
     }
     update_values = {
-        "quantity_unpacked": InventoryBalance.quantity_unpacked + quantity_delta,
+        "quantity_unpacked": InventoryBalance.quantity_unpacked + quantity_unpacked_delta,
+        "quantity_packed": InventoryBalance.quantity_packed + quantity_packed_delta,
         "quantity": (
             InventoryBalance.quantity_unpacked
             + InventoryBalance.quantity_packed

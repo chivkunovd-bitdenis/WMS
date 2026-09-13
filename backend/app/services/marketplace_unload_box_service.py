@@ -455,6 +455,29 @@ async def boxed_qty_for_product(
     return int((await session.execute(stmt)).scalar_one() or 0)
 
 
+async def _packed_picked_not_yet_boxed(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    """Ready units already picked for this document but not yet placed in a box."""
+    picked_stmt = select(
+        func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity_packed), 0)
+    ).where(
+        MarketplaceUnloadPickAllocation.request_id == request_id,
+        MarketplaceUnloadPickAllocation.product_id == product_id,
+    )
+    boxed_stmt = (
+        select(func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_packed), 0))
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(
+            MarketplaceUnloadBox.request_id == request_id,
+            MarketplaceUnloadBoxLine.product_id == product_id,
+        )
+    )
+    picked_packed = int((await session.execute(picked_stmt)).scalar_one() or 0)
+    boxed_packed = int((await session.execute(boxed_stmt)).scalar_one() or 0)
+    return max(0, picked_packed - boxed_packed)
+
+
 async def _place_picked_into_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -469,6 +492,10 @@ async def _place_picked_into_box(
     трогать остатки нельзя — иначе одна и та же единица спишется дважды.
     Здесь только строка короба и пересчёт прогресса упаковки.
     """
+    packed_quantity = min(
+        quantity,
+        await _packed_picked_not_yet_boxed(session, box.request_id, product_id),
+    )
     stmt = select(MarketplaceUnloadBoxLine).where(
         MarketplaceUnloadBoxLine.box_id == box.id,
         MarketplaceUnloadBoxLine.product_id == product_id,
@@ -476,11 +503,15 @@ async def _place_picked_into_box(
     line = (await session.execute(stmt)).scalar_one_or_none()
     if line is None:
         line = MarketplaceUnloadBoxLine(
-            box_id=box.id, product_id=product_id, quantity=quantity
+            box_id=box.id,
+            product_id=product_id,
+            quantity=quantity,
+            quantity_packed=packed_quantity,
         )
         session.add(line)
     else:
         line.quantity = int(line.quantity) + quantity
+        line.quantity_packed = int(line.quantity_packed) + packed_quantity
 
     from app.services import packaging_task_service as pkg_svc
 

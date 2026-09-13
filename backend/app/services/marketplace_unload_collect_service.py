@@ -337,7 +337,7 @@ async def collect_into_box(
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:
-        await inventory_service.apply_marketplace_unload_pick(
+        packed_quantity = await inventory_service.apply_marketplace_unload_pick(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
@@ -365,10 +365,12 @@ async def collect_into_box(
             container_kind=container_kind,
             container_id=container_id,
             quantity=new_pick,
+            quantity_packed=packed_quantity,
         )
         session.add(alloc)
     else:
         alloc.quantity = new_pick
+        alloc.quantity_packed = int(alloc.quantity_packed) + packed_quantity
 
     box_line_stmt = select(MarketplaceUnloadBoxLine).where(
         MarketplaceUnloadBoxLine.box_id == box_id,
@@ -381,10 +383,12 @@ async def collect_into_box(
             box_id=box_id,
             product_id=product_id,
             quantity=quantity,
+            quantity_packed=packed_quantity,
         )
         session.add(box_line)
     else:
         box_line.quantity = int(box_line.quantity) + quantity
+        box_line.quantity_packed = int(box_line.quantity_packed) + packed_quantity
 
     mu_svc.enter_collecting_if_needed(req)
     await session.flush()
@@ -506,7 +510,7 @@ async def record_pick_allocation(
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:
-        await inventory_service.apply_marketplace_unload_pick(
+        packed_quantity = await inventory_service.apply_marketplace_unload_pick(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
@@ -534,10 +538,12 @@ async def record_pick_allocation(
             container_kind=container_kind,
             container_id=container_id,
             quantity=new_pick,
+            quantity_packed=packed_quantity,
         )
         session.add(alloc)
     else:
         alloc.quantity = new_pick
+        alloc.quantity_packed = int(alloc.quantity_packed) + packed_quantity
 
     mu_svc.enter_collecting_if_needed(req)
     await session.commit()
@@ -668,11 +674,13 @@ async def set_pick_allocation(
     assert alloc is not None
     alloc_id = alloc.id
     remove_qty = -diff
+    packed_removed = min(int(alloc.quantity_packed), remove_qty)
     new_qty = current_qty - remove_qty
     if new_qty < 1:
         await session.delete(alloc)
     else:
         alloc.quantity = new_qty
+        alloc.quantity_packed = int(alloc.quantity_packed) - packed_removed
 
     await inventory_service.reverse_marketplace_unload_pick(
         session,
@@ -684,6 +692,7 @@ async def set_pick_allocation(
         actor_user_id=actor_user_id,
         container_kind=container_kind,
         container_id=container_id,
+        quantity_packed=packed_removed,
     )
     await mu_svc.restore_reservation_for_remove(
         session,
@@ -718,7 +727,7 @@ async def _rollback_pick_allocations(
     request_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
-) -> list[tuple[uuid.UUID, int]]:
+) -> list[tuple[uuid.UUID, int, int]]:
     stmt = (
         select(MarketplaceUnloadPickAllocation)
         .where(
@@ -731,15 +740,17 @@ async def _rollback_pick_allocations(
     )
     res = await session.execute(stmt)
     remaining = quantity
-    chunks: list[tuple[uuid.UUID, int]] = []
+    chunks: list[tuple[uuid.UUID, int, int]] = []
     for alloc in res.scalars().all():
         if remaining < 1:
             break
         take = min(int(alloc.quantity), remaining)
+        packed_taken = min(int(alloc.quantity_packed), take)
         alloc.quantity = int(alloc.quantity) - take
+        alloc.quantity_packed = int(alloc.quantity_packed) - packed_taken
         if int(alloc.quantity) < 1:
             await session.delete(alloc)
-        chunks.append((alloc.storage_location_id, take))
+        chunks.append((alloc.storage_location_id, take, packed_taken))
         remaining -= take
     if remaining > 0:
         raise MarketplaceUnloadPickError("insufficient_picked")
@@ -786,7 +797,7 @@ async def remove_from_box(
     location_chunks = await _rollback_pick_allocations(
         session, request_id, line.product_id, remove_qty
     )
-    for loc_id, chunk_qty in location_chunks:
+    for loc_id, chunk_qty, packed_qty in location_chunks:
         await inventory_service.reverse_marketplace_unload_pick(
             session,
             tenant_id=tenant_id,
@@ -795,6 +806,7 @@ async def remove_from_box(
             quantity=chunk_qty,
             marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
+            quantity_packed=packed_qty,
         )
 
     await mu_svc.restore_reservation_for_remove(
@@ -806,12 +818,14 @@ async def remove_from_box(
         warehouse_id=req.warehouse_id,
     )
 
+    packed_removed = min(int(line.quantity_packed), remove_qty)
     new_qty = line_qty - remove_qty
     deleted_line_id = line.id
     if new_qty < 1:
         await session.delete(line)
     else:
         line.quantity = new_qty
+        line.quantity_packed = int(line.quantity_packed) - packed_removed
 
     await session.commit()
 
@@ -857,18 +871,22 @@ async def rollback_all_collected_for_cancel(
         .with_for_update()
     )
     alloc_res = await session.execute(alloc_stmt)
-    product_qty: dict[uuid.UUID, int] = {}
+    product_qty: dict[uuid.UUID, tuple[int, int]] = {}
     for alloc in alloc_res.scalars().all():
         qty = int(alloc.quantity)
         if qty > 0:
-            product_qty[alloc.product_id] = product_qty.get(alloc.product_id, 0) + qty
+            prior_qty, prior_packed = product_qty.get(alloc.product_id, (0, 0))
+            product_qty[alloc.product_id] = (
+                prior_qty + qty,
+                prior_packed + int(alloc.quantity_packed),
+            )
         await session.delete(alloc)
 
     if product_qty:
         sorting_loc = await sort_loc_svc.get_or_create_sorting_location(
             session, tenant_id, warehouse_id
         )
-        for product_id, qty in product_qty.items():
+        for product_id, (qty, packed_qty) in product_qty.items():
             await inventory_service.reverse_marketplace_unload_pick(
                 session,
                 tenant_id=tenant_id,
@@ -877,6 +895,7 @@ async def rollback_all_collected_for_cancel(
                 quantity=qty,
                 marketplace_unload_request_id=request_id,
                 actor_user_id=actor_user_id,
+                quantity_packed=packed_qty,
             )
 
     box_line_stmt = (

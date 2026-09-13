@@ -670,6 +670,7 @@ async def sync_mp_task_packed_from_boxes(
         select(
             MarketplaceUnloadBoxLine.product_id,
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_packed), 0),
         )
         .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
         .join(
@@ -683,34 +684,46 @@ async def sync_mp_task_packed_from_boxes(
         .group_by(MarketplaceUnloadBoxLine.product_id)
     )
     boxed_by_product = {
-        product_id: int(quantity or 0)
-        for product_id, quantity in (await session.execute(stmt)).all()
+        product_id: (int(quantity or 0), int(quantity_packed or 0))
+        for product_id, quantity, quantity_packed in (await session.execute(stmt)).all()
     }
     if not boxed_by_product:
         return task
-    changes: list[tuple[PackagingTaskLine, int]] = []
+    changes: list[tuple[PackagingTaskLine, int, int]] = []
     status_before = task.status
     changed = False
     for line in task.lines:
         boxed = boxed_by_product.get(line.product_id)
         if boxed is None:
             continue
-        target = min(int(line.qty_total) - int(line.qty_confirmed_packed), boxed)
-        if int(line.qty_packed_in_task) != target:
-            changes.append((line, int(line.qty_packed_in_task)))
-            line.qty_packed_in_task = target
+        boxed_qty, boxed_packed = boxed
+        ready_from_source = min(int(line.qty_total), boxed_qty, boxed_packed)
+        worker_packed = min(
+            int(line.qty_total) - ready_from_source,
+            max(0, boxed_qty - ready_from_source),
+        )
+        if (
+            int(line.qty_confirmed_packed) != ready_from_source
+            or int(line.qty_packed_in_task) != worker_packed
+        ):
+            changes.append((line, int(line.qty_confirmed_packed), int(line.qty_packed_in_task)))
+            line.qty_confirmed_packed = ready_from_source
+            line.qty_packed_in_task = worker_packed
             changed = True
     if changed:
         _touch_task(task)
     with system_document_events():
-        for line, qty_before in changes:
+        for line, confirmed_before, packed_before in changes:
             await record_document_mutation(
                 session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_PACKAGING_TASK,
                 document_id=task.id, event_type=EVENT_PACKED_RECALCULATED,
                 product_id=line.product_id,
-                before={"line_id": line.id, "qty_packed_in_task": qty_before,
+                before={"line_id": line.id, "qty_confirmed_packed": confirmed_before,
+                        "qty_packed_in_task": packed_before,
                         "status": status_before},
-                after={"line_id": line.id, "qty_packed_in_task": int(line.qty_packed_in_task),
+                after={"line_id": line.id,
+                       "qty_confirmed_packed": int(line.qty_confirmed_packed),
+                       "qty_packed_in_task": int(line.qty_packed_in_task),
                        "status": task.status, "reason": "mp_boxes_recalculation"},
             )
     return task
@@ -797,6 +810,16 @@ async def confirm_line_packed_from_shelf(
     line = next((ln for ln in task.lines if ln.id == line_id), None)
     if line is None:
         raise PackagingTaskServiceError("line_not_found")
+    if _is_mp_unload_task(task):
+        # Коробочная ФБО уже знает происхождение каждой собранной единицы. Старый
+        # клиент может прислать confirm-packed, но не вправе заменить это знание
+        # текущим готовым остатком в другой ячейке. Самостоятельная упаковка ниже
+        # сохраняет прежнее абсолютное подтверждение.
+        await sync_mp_task_packed_from_boxes(session, tenant_id, task)
+        await session.commit()
+        loaded = await get_task(session, tenant_id, task_id)
+        assert loaded is not None
+        return loaded
     confirmed = int(line.qty_suggested_packed if qty is None else qty)
     if confirmed < 0 or confirmed > line.qty_total:
         raise PackagingTaskServiceError("invalid_qty")
