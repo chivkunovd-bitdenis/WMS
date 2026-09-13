@@ -419,7 +419,7 @@ async def write_operation_fact(
         )
         if actor is None:
             raise OperationFactError("actor_tenant_mismatch")
-        resolved_actor_snapshot = actor.email
+        resolved_actor_snapshot = actor.display_name
     for line in materialized_lines:
         if line.product_id is None:
             continue

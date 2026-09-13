@@ -92,6 +92,8 @@ async def start_payment(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PaymentStartOut:
     """Создать платёж и вернуть адрес оплаты. Платит только администратор."""
+    # Administrators are still created with their billing contact email.
+    assert admin.email is not None
     tenant = await _tenant_of(session, admin)
     return_url = f"{public_base_url(request)}/ff/settings?tab=subscription"
     try:

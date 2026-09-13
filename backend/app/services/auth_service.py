@@ -201,7 +201,9 @@ async def create_staff_user(
     session: AsyncSession,
     *,
     acting_user: User,
-    email: str,
+    email: str | None,
+    full_name: str | None = None,
+    job_title: str | None = None,
     password: str | None,
 ) -> User:
     if acting_user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
@@ -215,7 +217,9 @@ async def create_staff_user(
     user = User(
         tenant_id=acting_user.tenant_id,
         seller_id=None,
-        email=email.strip().lower(),
+        email=email.strip().lower() if email else None,
+        full_name=full_name,
+        job_title=job_title,
         password_hash=password_hash,
         must_set_password=must_set_password,
         role=FULFILLMENT_STAFF,
@@ -318,6 +322,8 @@ async def send_auth_link(
     base_url: str,
 ) -> bool:
     """Отправить письмо со ссылкой. Возвращает True, если письмо ушло."""
+    if user.email is None:
+        return False
     token = create_auth_link_token(user, purpose=purpose)
     link = build_link(
         token,
@@ -387,3 +393,29 @@ async def set_password_by_link(
         seller_id=user.seller_id,
     )
     return user, access_token
+
+
+async def login_by_name(
+    session: AsyncSession, *, full_name: str, password: str, organization: str | None = None,
+) -> tuple[User, str]:
+    from app.schemas.user_profile import normalize_name
+
+    normalized = normalize_name(full_name).casefold()
+    stmt = select(User).where(User.full_name.is_not(None))
+    if organization:
+        stmt = stmt.join(Tenant, User.tenant_id == Tenant.id).where(
+            Tenant.slug == organization.strip().lower()
+        )
+    candidates = (await session.scalars(stmt)).all()
+    matches = [
+        user for user in candidates
+        if normalize_name(user.full_name or "").casefold() == normalized
+        and not user.must_set_password
+        and verify_password(password, user.password_hash)
+    ]
+    if not normalized or len(matches) != 1:
+        raise AuthError("invalid_credentials")
+    user = matches[0]
+    return user, create_access_token(
+        user_id=user.id, tenant_id=user.tenant_id, role=user.role, seller_id=user.seller_id,
+    )

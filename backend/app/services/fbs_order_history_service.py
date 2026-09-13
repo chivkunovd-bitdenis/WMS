@@ -83,7 +83,7 @@ def _event(
 async def _actor_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     if not ids:
         return {}
-    rows = (await session.execute(select(User.id, User.email).where(User.id.in_(ids)))).all()
+    rows = (await session.execute(select(User.id, User.display_name).where(User.id.in_(ids)))).all()
     return {row[0]: row[1] for row in rows}
 
 

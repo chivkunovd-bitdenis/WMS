@@ -761,7 +761,7 @@ async def get_warehouse_map(
         {
             "id": str(event.id),
             "at": event.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-            "actor_name": actor.email if actor is not None else "Система",
+            "actor_name": actor.display_name if actor is not None else "Система",
             "subject": event.subject,
             "qty": event.quantity,
             "from_label": event.from_label,

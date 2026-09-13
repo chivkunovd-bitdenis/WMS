@@ -1239,7 +1239,7 @@ async def get_product_dimension_history(
     author_names: dict[uuid.UUID, str] = {}
     if author_ids:
         result = await session.execute(
-            select(User.id, User.email).where(
+            select(User.id, User.display_name).where(
                 User.tenant_id == user.tenant_id,
                 User.id.in_(author_ids),
             )

@@ -78,7 +78,8 @@ async def _ff_staff_report_headers(
     suffix = str(time.time_ns())
     email = f"report-staff-{suffix}@example.com"
     created = await async_client.post(
-        "/auth/staff-accounts", headers=admin_headers, json={"email": email}
+        "/auth/staff-accounts", headers=admin_headers,
+        json={"full_name": "Иван Петров", "email": email}
     )
     assert created.status_code == 201, created.text
     permissions = await async_client.patch(

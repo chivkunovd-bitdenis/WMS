@@ -249,7 +249,7 @@ async def test_map_totals_moves_sorting_disband_and_tenant_scope(
     ).json()
     assert after_move["cells"][0]["qty"] == 10
     assert sum(node["qty"] for node in after_move["unassigned"]) == 5
-    assert after_move["journal"][0]["actor_name"] == user.email
+    assert after_move["journal"][0]["actor_name"] == user.display_name
     assert after_move["journal"][0]["from_label"] == "Ячейка А-01-01"
     assert after_move["journal"][0]["to_label"] == "Без ячеек"
     assert _tree_qty(after_move) == db_total

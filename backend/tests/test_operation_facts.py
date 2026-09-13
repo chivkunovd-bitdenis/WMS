@@ -47,7 +47,7 @@ async def test_writer_creates_immutable_fact_with_item_lines() -> None:
             None,
             SimpleNamespace(name="Seller"),
             SimpleNamespace(),
-            SimpleNamespace(email="picker@example.test"),
+            SimpleNamespace(display_name="Иван Петров"),
             SimpleNamespace(),
         ]
     )
@@ -86,7 +86,7 @@ async def test_writer_creates_immutable_fact_with_item_lines() -> None:
     assert isinstance(fact, OperationFact)
     assert fact.source == "user"
     assert fact.actor_user_id == actor_id
-    assert fact.actor_name_snapshot == "picker@example.test"
+    assert fact.actor_name_snapshot == "Иван Петров"
     assert fact.item_quantity == 1
     assert len(fact.lines) == 1
     assert fact.lines[0].product_id == product_id
@@ -185,7 +185,7 @@ async def test_marketplace_cancel_retry_returns_same_reversal_and_preserves_acto
             None,
             SimpleNamespace(name="Seller"),
             SimpleNamespace(),
-            SimpleNamespace(email="completed@example.test"),
+            SimpleNamespace(display_name="Анна Ли"),
             SimpleNamespace(),
         ]
     )
@@ -206,7 +206,7 @@ async def test_marketplace_cancel_retry_returns_same_reversal_and_preserves_acto
             shipped,
             SimpleNamespace(name="Seller"),
             SimpleNamespace(),
-            SimpleNamespace(email="cancelled@example.test"),
+            SimpleNamespace(display_name="Олег Ким"),
             SimpleNamespace(),
         ]
     )
@@ -270,7 +270,7 @@ async def test_packaging_event_source_tuple_does_not_create_duplicate() -> None:
             None,
             SimpleNamespace(name="Seller"),
             SimpleNamespace(),
-            SimpleNamespace(email="packer@example.test"),
+            SimpleNamespace(display_name="Умар"),
             SimpleNamespace(),
         ]
     )
@@ -306,6 +306,7 @@ async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_r
         actor_a = User(
             tenant_id=tenant_a.id,
             email=f"actor-a-{suffix}@example.test",
+            full_name="Иван Петров",
             password_hash="test",
             role="ff_admin",
         )
@@ -387,13 +388,13 @@ async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_r
             lines=[OperationFactLineInput(product_a.id, "A", "Product A", 0)],
         )
         fact_id = fact.id
-        original_email = actor_a.email
+        original_name = actor_a.full_name
         await session.commit()
-        actor_a.email = f"renamed-{suffix}@example.test"
+        actor_a.full_name = "Иван Иванов"
         await session.commit()
 
     async with SessionLocal() as session:
         fact = await session.get(OperationFact, fact_id)
         assert fact is not None
         assert fact.actor_user_id == actor_a.id
-        assert fact.actor_name_snapshot == original_email
+        assert fact.actor_name_snapshot == original_name
