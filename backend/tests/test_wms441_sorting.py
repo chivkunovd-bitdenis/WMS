@@ -505,3 +505,84 @@ async def test_http_contract_and_reopen_after_lost_response(async_client: AsyncC
     reread = await async_client.get(f"/operations/inbound-intake-requests/{req}", headers=headers)
     assert reread.json()["status"] == "done"
     assert await stock(product, a) == 1
+
+
+@pytest.mark.asyncio
+async def test_cargo_sorting_operation_replays_one_transfer_and_keeps_generic_move_legal(
+    async_client: AsyncClient,
+):
+    """A recovered mobile cargo intent owns one movement group, not two postings."""
+    from app.models.inbound_intake import InboundIntakeCargoPlace, InboundIntakeCargoPlaceLine
+
+    tenant, actor = await _auth_ids(async_client)
+    req, product, _box, first_cell, second_cell = await _mixed_sorting_request(
+        async_client, tenant, actor, loose_qty=2, box_qty=0
+    )
+    async with SessionLocal() as session:
+        document = await intake.get_request(session, tenant, req)
+        source = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == product,
+                InventoryBalance.quantity == 2,
+            )
+        )
+        cargo = InboundIntakeCargoPlace(
+            tenant_id=tenant,
+            request_id=req,
+            place_number=1,
+            internal_barcode=f"wms441-cargo-{uuid.uuid4()}",
+            storage_location_id=source.storage_location_id,
+        )
+        session.add(cargo)
+        await session.flush()
+        session.add(InboundIntakeCargoPlaceLine(
+            tenant_id=tenant, cargo_place_id=cargo.id, product_id=product, quantity=2
+        ))
+        source.container_kind, source.container_id = "cargo_place", cargo.id
+        cargo_id, warehouse_id = cargo.id, document.warehouse_id
+        await session.commit()
+
+    operation_id = uuid.uuid4()
+    for _ in range(2):
+        async with SessionLocal() as session:
+            result = await warehouse_map.place_sorting_object(
+                session,
+                tenant_id=tenant,
+                warehouse_id=warehouse_id,
+                actor_user_id=actor,
+                kind="cargo_place",
+                object_id=cargo_id,
+                cell_id=first_cell,
+                to_id=None,
+                quantity=None,
+                inbound_request_id=req,
+                operation_id=operation_id,
+            )
+            assert result == {"id": str(operation_id), "moved_qty": 2}
+
+    async with SessionLocal() as session:
+        document = await intake.get_request(session, tenant, req)
+        grouped = list((await session.scalars(select(InventoryMovement).where(
+            InventoryMovement.transfer_group_id == operation_id,
+        ))).all())
+        assert document.status == "done"
+        assert document.cargo_places[0].lines[0].posted_qty == 2
+        assert len(grouped) == 2
+        assert sum(-row.quantity_delta for row in grouped if row.quantity_delta < 0) == 2
+    assert await stock(product, first_cell) == 2
+
+    # A later ordinary warehouse transfer has no sorting receipt and remains legal.
+    async with SessionLocal() as session:
+        moved = await warehouse_map.move_object(
+            session,
+            tenant_id=tenant,
+            warehouse_id=warehouse_id,
+            actor_user_id=actor,
+            kind="cargo_place",
+            object_id=cargo_id,
+            to_kind="cell",
+            to_id=second_cell,
+            quantity=None,
+        )
+        assert moved["moved_qty"] == 2
+    assert await stock(product, second_cell) == 2

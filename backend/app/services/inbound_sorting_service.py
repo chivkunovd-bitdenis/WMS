@@ -440,6 +440,7 @@ async def apply_received_balance_putaway(
     quantity: int,
     performer_id: uuid.UUID,
     request_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None,
 ) -> bool:
     """Bridge physical cargo/pallet contents to their original accepted document."""
     from app.models.inventory_balance import InventoryBalance
@@ -521,6 +522,7 @@ async def apply_received_balance_putaway(
             source_container_id=balance.container_id,
             destination_container_kind=cast(ContainerKind | None, destination_container_kind),
             destination_container_id=destination_container_id,
+            transfer_group_id=transfer_group_id,
         )
     except ValueError as exc:
         if str(exc) == "insufficient stock":

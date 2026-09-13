@@ -991,6 +991,7 @@ async def _transfer_balance(
             destination_container_kind=destination_container_kind,
             destination_container_id=destination_container_id, quantity=quantity,
             performer_id=actor_user_id, request_id=inbound_request_id,
+            transfer_group_id=transfer_group_id,
         ):
             return
     except InboundIntakeError as exc:
@@ -1221,6 +1222,7 @@ async def move_object(
     quantity: int | None,
     commit: bool = True,
     inbound_request_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     await _lock_object_intakes(
@@ -1235,7 +1237,7 @@ async def move_object(
     destination_location_id, destination_kind, destination_id, to_label = await _destination(
         session, tenant_id, warehouse_id, to_kind, to_id
     )
-    transfer_group_id = uuid.uuid4()
+    transfer_group_id = transfer_group_id or uuid.uuid4()
 
     if kind == "product":
         initial_balance = await session.get(InventoryBalance, object_id)
@@ -1833,6 +1835,42 @@ async def _sorting_destination_kind(
     return found[0]
 
 
+async def _replayed_sorting_cargo_putaway(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    cargo_place_id: uuid.UUID,
+    destination_location_id: uuid.UUID,
+    operation_id: uuid.UUID,
+) -> int | None:
+    """Return a prior cargo placement only when this exact sorting intent owns it."""
+    from app.models.inventory_movement import InventoryMovement
+
+    cargo = await session.get(InboundIntakeCargoPlace, cargo_place_id)
+    if cargo is None or cargo.tenant_id != tenant_id or cargo.request_id != inbound_request_id:
+        raise WarehouseMapError("object_not_found")
+    rows = list((await session.scalars(select(InventoryMovement).where(
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.transfer_group_id == operation_id,
+    ))).all())
+    if not rows:
+        return None
+    outgoing = [row for row in rows if row.quantity_delta < 0]
+    incoming = [row for row in rows if row.quantity_delta > 0]
+    if not outgoing or any(
+        row.container_kind != "cargo_place" or row.container_id != cargo_place_id
+        for row in outgoing
+    ):
+        raise WarehouseMapError("operation_conflict")
+    # Defect-only cargo has no ordinary-cell receipt. For normal cargo, a reused
+    # operation id may only name the original target cell.
+    normal_destinations = {row.storage_location_id for row in incoming}
+    if normal_destinations and destination_location_id not in normal_destinations:
+        raise WarehouseMapError("operation_conflict")
+    return sum(-int(row.quantity_delta) for row in outgoing)
+
+
 async def place_sorting_object(
     session: AsyncSession,
     *,
@@ -1872,6 +1910,35 @@ async def place_sorting_object(
         )
         if request is None or request.warehouse_id != warehouse_id:
             raise WarehouseMapError("inbound_request_not_found")
+        if (
+            kind == "cargo_place"
+            and cell_id is not None
+            and operation_id is not None
+        ):
+            replayed = await _replayed_sorting_cargo_putaway(
+                session,
+                tenant_id=tenant_id,
+                inbound_request_id=inbound_request_id,
+                cargo_place_id=object_id,
+                destination_location_id=cell_id,
+                operation_id=operation_id,
+            )
+            if replayed is not None:
+                return {"id": str(operation_id), "moved_qty": replayed}
+            result = await move_object(
+                session,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                actor_user_id=actor_user_id,
+                kind=kind,
+                object_id=object_id,
+                to_kind=destination_kind,
+                to_id=destination_id,
+                quantity=quantity,
+                inbound_request_id=inbound_request_id,
+                transfer_group_id=operation_id,
+            )
+            return {"id": str(operation_id), "moved_qty": result["moved_qty"]}
         if kind == "product" and cell_id is not None:
             balance = await session.get(InventoryBalance, object_id)
             if balance is None or balance.tenant_id != tenant_id:
