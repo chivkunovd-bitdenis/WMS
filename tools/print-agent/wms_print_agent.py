@@ -36,7 +36,6 @@ from pathlib import Path
 from typing import Any
 
 MAX_BYTES = 16 * 1024 * 1024
-QUEUE_PATTERN = re.compile(r"[A-Za-z0-9_.-]{1,127}")
 CHECKSUM_PATTERN = re.compile(r"[0-9a-f]{64}")
 RECEIPT_PATTERN = re.compile(r"\brequest id is ([A-Za-z0-9_.-]+)")
 SUPPORTED_CONTENT_TYPES = {"application/pdf", "image/png"}
@@ -70,7 +69,18 @@ def check_base_url(base_url: str) -> str:
 
 
 def check_queue(queue: str) -> str:
-    if queue.startswith("-") or not QUEUE_PATTERN.fullmatch(queue):
+    # Windows exposes the queue's display name, which commonly contains spaces
+    # and Cyrillic characters.  The name is always passed as one subprocess/API
+    # argument, never interpolated into a shell command.  Control characters
+    # are nevertheless forbidden because they do not identify a usable queue.
+    if (
+        not isinstance(queue, str)
+        or not queue
+        or len(queue) > 127
+        or not queue.strip()
+        or queue.startswith("-")
+        or any(ord(character) < 32 or ord(character) == 127 for character in queue)
+    ):
         raise ValueError("Некорректное имя очереди ОС")
     return queue
 

@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,8 +96,23 @@ class PairBegin(BaseModel):
     connection_id: uuid.UUID
     # Generated and stored privately by the PC before its first HTTP request.
     device_token: str = Field(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-    queue_name: str = Field(min_length=1, max_length=127, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
-    platform: Literal["darwin", "linux"]
+    queue_name: str = Field(min_length=1, max_length=127)
+    platform: Literal["darwin", "linux", "win32"]
+
+    @field_validator("queue_name")
+    @classmethod
+    def queue_name_is_an_os_queue_name(cls, value: str) -> str:
+        """Allow the display names Windows gives real installed queues.
+
+        Queue names stay bounded and cannot carry controls into logs or a
+        native command invocation.  The agent never invokes a shell.
+        """
+        has_control = any(ord(character) < 32 or ord(character) == 127 for character in value)
+        if not value.strip() or has_control:
+            raise ValueError(
+                "queue_name must be a non-empty OS queue name without control characters"
+            )
+        return value
 
 
 @router.post("/pairing")

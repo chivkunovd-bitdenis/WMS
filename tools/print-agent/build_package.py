@@ -1,4 +1,4 @@
-"""Build on the target OS; the operator package includes its own Python runtime."""
+"""Build the WMS Print distribution on its target operating system."""
 
 from __future__ import annotations
 
@@ -11,52 +11,68 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+REPOSITORY = ROOT.parents[1]
 
 
-def main() -> None:
-    if sys.platform != "darwin":
-        raise SystemExit(
-            "This distribution is verified on macOS only. Do not label another OS supported."
-        )
-    dirty = subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--",
-            "tools/print-agent",
-            ".github/workflows/print-agent-package.yml",
-        ],
-        cwd=ROOT.parents[1],
-        text=True,
-    ).strip()
-    if dirty:
-        raise SystemExit(
-            "Commit the package sources before building a distributable artifact."
-        )
-    revision = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--noconfirm",
-            "--clean",
-            "--onedir",
-            "--name",
-            "wms-print",
-            "--distpath",
-            str(ROOT / "dist"),
-            "--workpath",
-            str(ROOT / "build"),
-            "--specpath",
-            str(ROOT / "build"),
-            str(ROOT / "wms_print_runtime.py"),
-        ],
-        check=True,
+def sha256(path: Path) -> Path:
+    checksum = path.with_name(path.name + ".sha256")
+    checksum.write_text(
+        hashlib.sha256(path.read_bytes()).hexdigest() + "  " + path.name + "\n"
     )
+    return checksum
+
+
+def build_metadata(revision: str, target: str) -> dict[str, object]:
+    return {
+        "source_commit": revision,
+        "build_platform": platform.platform(),
+        "architecture": platform.machine(),
+        "python": platform.python_version(),
+        "target": target,
+        "supported_architecture": "arm64" if target.startswith("macOS") else "x64",
+        "windows_target_matrix": ["Windows 10 22H2 x64", "Windows 11 x64"],
+        "macos_target_matrix": ["macOS arm64"],
+        "physical_print_verified": False,
+    }
+
+
+def build_executable() -> None:
+    command = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--onedir",
+        "--name",
+        "wms-print",
+        "--distpath",
+        str(ROOT / "dist"),
+        "--workpath",
+        str(ROOT / "build"),
+        "--specpath",
+        str(ROOT / "build"),
+        "--collect-all",
+        "certifi",
+    ]
+    if sys.platform == "win32":
+        command.extend(
+            [
+                "--collect-all",
+                "fitz",
+                "--collect-all",
+                "PIL",
+                "--collect-all",
+                "win32print",
+                "--collect-all",
+                "win32ui",
+            ]
+        )
+    command.append(str(ROOT / "wms_print_runtime.py"))
+    subprocess.run(command, check=True)
+
+
+def build_macos(revision: str) -> Path:
     target = ROOT / "dist" / "WMS-Print-macOS"
     if target.exists():
         shutil.rmtree(target)
@@ -73,24 +89,62 @@ def main() -> None:
     launcher.chmod(0o755)
     shutil.copy(ROOT / "README.md", target / "README.md")
     (target / "build.json").write_text(
-        json.dumps(
-            {
-                "source_commit": revision,
-                "platform": platform.platform(),
-                "architecture": platform.machine(),
-                "python": platform.python_version(),
-                "physical_print_verified": False,
-            },
-            indent=2,
+        json.dumps(build_metadata(revision, "macOS arm64"), indent=2)
+    )
+    return Path(shutil.make_archive(str(target), "zip", target))
+
+
+def build_windows(revision: str) -> Path:
+    target = ROOT / "dist" / "WMS-Print-Windows"
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir()
+    shutil.copytree(ROOT / "dist" / "wms-print", target / "wms-print")
+    shutil.copy(ROOT / "README.md", target / "wms-print" / "README.md")
+    (target / "wms-print" / "build.json").write_text(
+        json.dumps(build_metadata(revision, "Windows x64"), indent=2)
+    )
+    installer = ROOT / "dist" / "WMS-Print-Setup-Windows-x64.exe"
+    subprocess.run(
+        [
+            "makensis",
+            f"/DOUTFILE={installer}",
+            f"/DPAYLOAD={target / 'wms-print'}",
+            str(ROOT / "windows-installer.nsi"),
+        ],
+        check=True,
+    )
+    return installer
+
+
+def main() -> None:
+    if sys.platform not in {"darwin", "win32"}:
+        raise SystemExit("Build the operator package on macOS arm64 or Windows x64.")
+    dirty = subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--",
+            "tools/print-agent",
+            ".github/workflows/print-agent-package.yml",
+        ],
+        cwd=REPOSITORY,
+        text=True,
+    ).strip()
+    if dirty:
+        raise SystemExit(
+            "Commit the package sources before building a distributable artifact."
         )
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPOSITORY, text=True
+    ).strip()
+    build_executable()
+    artifact = (
+        build_macos(revision) if sys.platform == "darwin" else build_windows(revision)
     )
-    archive = Path(
-        shutil.make_archive(str(ROOT / "dist" / "WMS-Print-macOS"), "zip", target)
-    )
-    (archive.with_suffix(".zip.sha256")).write_text(
-        hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name + "\n"
-    )
-    print(archive)
+    sha256(artifact)
+    print(artifact)
 
 
 if __name__ == "__main__":

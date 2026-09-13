@@ -138,7 +138,7 @@ async def setup_print(async_client):
     )
 
 
-async def connect(fixture, warehouse=None, name="Synthetic_442"):
+async def connect(fixture, warehouse=None, name="Synthetic_442", platform="darwin"):
     client = fixture["client"]
     # Test-only opaque credential, never an employee JWT; values are not logged.
     device_token = hashlib.sha256(uuid.uuid4().bytes).hexdigest()
@@ -146,7 +146,7 @@ async def connect(fixture, warehouse=None, name="Synthetic_442"):
         "connection_id": str(uuid.uuid4()),
         "device_token": device_token,
         "queue_name": name,
-        "platform": "darwin",
+        "platform": platform,
     }
     begin = await client.post(BASE + "/pairing", json=body)
     assert begin.status_code == 200, begin.text
@@ -165,6 +165,34 @@ async def connect(fixture, warehouse=None, name="Synthetic_442"):
     assert replay.status_code == 200 and replay.json()["connection_id"] == body["connection_id"]
     headers = {"Authorization": "Bearer " + device_token}
     return {"id": body["connection_id"], "headers": headers, "pair_body": confirm_body}
+
+
+@pytest.mark.anyio
+async def test_windows_pairing_accepts_real_unicode_queue_name(setup_print):
+    connection = await connect(setup_print, name="Принтер склада 58 x 40", platform="win32")
+    destination = await setup_print["client"].get(
+        f"{BASE}/warehouses/{setup_print['warehouse'].id}/destination",
+        headers=auth(setup_print["worker"]),
+    )
+    assert destination.status_code == 200
+    assert destination.json()["destination"]["connection_id"] == connection["id"]
+    assert destination.json()["destination"]["queue_name"] == "Принтер склада 58 x 40"
+    assert destination.json()["destination"]["platform"] == "win32"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("queue_name", [" ", "Printer\n58"])
+async def test_pairing_rejects_blank_or_control_queue_name(setup_print, queue_name):
+    response = await setup_print["client"].post(
+        BASE + "/pairing",
+        json={
+            "connection_id": str(uuid.uuid4()),
+            "device_token": hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+            "queue_name": queue_name,
+            "platform": "win32",
+        },
+    )
+    assert response.status_code == 422
 
 
 def intent(f, connection, kind="product", marketplace="wb"):

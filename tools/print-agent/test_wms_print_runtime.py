@@ -1,6 +1,7 @@
 """Safe native queue substitute and crash/restart proof; never touches a real printer."""
 
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -59,8 +60,10 @@ class RuntimeTest(unittest.TestCase):
             def queues(self):
                 return [owner.config["queue_name"]]
 
-            def submit(self, data, mime, queue, copies):
-                owner.submissions.append((data, mime, queue, copies))
+            def submit(self, data, mime, queue, copies, width_mm, height_mm):
+                owner.submissions.append(
+                    (data, mime, queue, copies, width_mm, height_mm)
+                )
                 return "Synthetic_442-17"
 
         self.client, self.adapter = Client(), Adapter()
@@ -83,7 +86,7 @@ class RuntimeTest(unittest.TestCase):
         self.client.fail_ack = False
         self.assertIn("повторной передачи", self.run_once())
         self.assertEqual(len(self.submissions), 1)
-        self.assertEqual(self.submissions[0][-1], 3)
+        self.assertEqual(self.submissions[0][3], 3)
         self.assertEqual(self.acks[0]["queue_receipt"], "Synthetic_442-17")
         self.assertFalse((self.directory / "inflight.json").exists())
 
@@ -231,12 +234,124 @@ class RuntimeTest(unittest.TestCase):
             patch.object(runtime.sys, "platform", "darwin"),
             patch.object(runtime.sys, "frozen", True, create=True),
             patch.object(runtime.Path, "home", return_value=self.directory),
+            patch.object(
+                runtime.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ),
         ):
             path = runtime.enable_autostart(self.directory, executable)
         config = plistlib.loads(path.read_bytes())
         self.assertEqual(config["ProgramArguments"], [str(executable), "--run"])
         self.assertTrue(config["RunAtLoad"])
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_windows_adapter_uses_exact_unicode_queue_and_spooler_receipt(self):
+        calls = []
+
+        class FakePrint:
+            PRINTER_ENUM_LOCAL = 2
+            PRINTER_ENUM_CONNECTIONS = 4
+
+            @staticmethod
+            def EnumPrinters(flags):
+                self.assertEqual(flags, 6)
+                return [(0, "", "Принтер склада 58", "")]
+
+        class FakeDc:
+            def CreatePrinterDC(self, queue):
+                calls.append(("queue", queue))
+
+            def StartDoc(self, name):
+                calls.append(("document", name))
+                return 442
+
+            def GetDeviceCaps(self, index):
+                assert index in {88, 90}
+                return 203
+
+            def StartPage(self):
+                calls.append(("start-page",))
+
+            def GetHandleOutput(self):
+                return 17
+
+            def EndPage(self):
+                calls.append(("end-page",))
+
+            def EndDoc(self):
+                calls.append(("end-document",))
+
+            def AbortDoc(self):
+                calls.append(("abort",))
+
+            def DeleteDC(self):
+                calls.append(("delete",))
+
+        class FakeImage:
+            width = 464
+            height = 320
+            info = {"dpi": (203, 203)}
+
+            def convert(self, mode):
+                assert mode == "RGB"
+                return self
+
+        class FakeImageModule:
+            @staticmethod
+            def open(stream):
+                self.assertIsInstance(stream, io.BytesIO)
+                return FakeImage()
+
+        class FakeImageWin:
+            class Dib:
+                def __init__(self, image):
+                    self.image = image
+
+                def draw(self, handle, target):
+                    calls.append(("draw", handle, target))
+
+        adapter = runtime.WindowsAdapter(
+            {
+                "win32print": FakePrint,
+                "win32ui": SimpleNamespace(CreateDC=lambda: FakeDc()),
+                "Image": FakeImageModule,
+                "ImageWin": FakeImageWin,
+                "fitz": None,
+            }
+        )
+        receipt = adapter.submit(
+            b"\x89PNG\r\n\x1a\nsynthetic", "image/png", "Принтер склада 58", 2
+        )
+        self.assertEqual(receipt, "windows-442")
+        self.assertEqual(calls[0], ("queue", "Принтер склада 58"))
+        self.assertEqual(sum(call[0] == "draw" for call in calls), 2)
+        self.assertNotIn(("abort",), calls)
+
+    def test_windows_state_directory_and_task_do_not_put_token_in_autostart(self):
+        executable = self.directory / "wms-print.exe"
+        with (
+            patch.object(runtime.sys, "platform", "win32"),
+            patch.object(runtime.sys, "frozen", True, create=True),
+            patch.dict(os.environ, {"LOCALAPPDATA": str(self.directory)}),
+            patch.object(runtime, "restrict_private_directory"),
+            patch.object(runtime, "_windows_user_sid", return_value="S-1-5-21-442"),
+            patch.object(
+                runtime.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ) as run,
+        ):
+            self.assertEqual(runtime.state_directory(), self.directory / "WMS Print")
+            target = runtime.enable_autostart(self.directory, executable)
+        self.assertEqual(target, Path("schtasks://") / runtime.WINDOWS_TASK_NAME)
+        create = run.call_args_list[0].args[0]
+        self.assertEqual(
+            create[:4], ["schtasks", "/Create", "/TN", runtime.WINDOWS_TASK_NAME]
+        )
+        self.assertNotIn("device_token", " ".join(map(str, create)))
+
+    def test_queue_names_allow_windows_display_text_but_not_controls(self):
+        self.assertEqual(agent.check_queue("Принтер склада 58"), "Принтер склада 58")
+        for value in ("", "   ", "queue\nname", "-queue"):
+            with self.assertRaises(ValueError):
+                agent.check_queue(value)
 
     def test_fetch_rejects_checksum_mime_signature_and_oversize(self):
         expected = {
