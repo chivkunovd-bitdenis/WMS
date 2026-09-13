@@ -2931,6 +2931,7 @@ export default function App() {
         onLogout={onLogout}
         title="Портал ФФ"
         userLabel={me.display_name}
+        userJobTitle={me.job_title}
         userRoleLabel={ffRoleLabel(me.role)}
         meRole={me.role}
         ffPermissions={ffPermissions}

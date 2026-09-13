@@ -23,6 +23,7 @@ type Props = {
   onLogout: () => void
   title?: string
   userLabel?: string
+  userJobTitle?: string | null
   userRoleLabel?: string
   canManageSellerShops?: boolean
   homeSellerId?: string | null
@@ -41,6 +42,7 @@ export function SellerLayout({
   onLogout,
   title = 'Портал селлера',
   userLabel,
+  userJobTitle,
   userRoleLabel,
   canManageSellerShops = false,
   homeSellerId = null,
@@ -88,6 +90,7 @@ export function SellerLayout({
             {userLabel ? (
               <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
                 <span>{userLabel}</span>
+                {userJobTitle ? <span> · {userJobTitle}</span> : null}
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
