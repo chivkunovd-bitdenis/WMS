@@ -12,7 +12,7 @@ index 949796b..edfb539 100644
      "location_required" to "Сначала отсканируйте ячейку",
      "plan_limit_exceeded" to "Больше плана — товар уже собран",
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-index 6599df7..01220fb 100644
+index 6599df7..67b4d8e 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 @@ -1,11 +1,16 @@
@@ -32,7 +32,7 @@ index 6599df7..01220fb 100644
  import ru.wms.tsd.BuildConfig
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
-@@ -66,6 +71,26 @@ class ApiProvider(
+@@ -66,6 +71,39 @@ class ApiProvider(
          authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
      }
  
@@ -52,14 +52,27 @@ index 6599df7..01220fb 100644
 +        authStore.getCargoPutaway(context.server, context.user, requestId)
 +            ?.let { Json.decodeFromString<CargoPlacePutawayBody>(it) }
 +
-+    fun saveCargoPutaway(context: SortingContext, requestId: String, body: CargoPlacePutawayBody?) {
-+        authStore.saveCargoPutaway(context.server, context.user, requestId, body?.let { Json.encodeToString(it) })
++    fun pendingCargoPutawayRequestIds(context: SortingContext = sortingContext()): List<String> =
++        authStore.getCargoPutawayRequestIds(context.server, context.user)
++
++    fun pendingCargoPutawayWarehouseId(context: SortingContext, requestId: String): String? =
++        authStore.getCargoPutawayWarehouseId(context.server, context.user, requestId)
++
++    fun saveCargoPutaway(
++        context: SortingContext,
++        requestId: String,
++        body: CargoPlacePutawayBody?,
++        warehouseId: String? = null,
++    ) {
++        authStore.saveCargoPutaway(
++            context.server, context.user, requestId, body?.let { Json.encodeToString(it) }, warehouseId,
++        )
 +    }
 +
      fun operations(): OperationsApi {
          val client = client()
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
-@@ -79,4 +104,21 @@ class ApiProvider(
+@@ -79,4 +117,21 @@ class ApiProvider(
          val client = client()
          return cachedFbs ?: client.createService(FbsApi::class.java).also { cachedFbs = it }
      }
@@ -179,10 +192,10 @@ index 0000000..c24e2d0
 +    ): Response<SortingObjectPlaceOut>
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
-index 4243fa6..f20a521 100644
+index 4243fa6..f521fd4 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
-@@ -55,6 +55,28 @@ class AuthStore(context: Context) {
+@@ -55,6 +55,63 @@ class AuthStore(context: Context) {
          check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
      }
  
@@ -201,10 +214,45 @@ index 4243fa6..f20a521 100644
 +    fun getCargoPutaway(server: String, user: String, requestId: String): String? =
 +        encryptedPrefs.getString("cargo_putaway:$server:$user:$requestId", null)
 +
-+    fun saveCargoPutaway(server: String, user: String, requestId: String, body: String?) {
++    fun getCargoPutawayWarehouseId(server: String, user: String, requestId: String): String? =
++        encryptedPrefs.getString("cargo_putaway_warehouse:$server:$user:$requestId", null)
++
++    /** Current user's durable cargo receipts, so a completed document can still be reopened to reconcile one. */
++    fun getCargoPutawayRequestIds(server: String, user: String): List<String> {
++        val prefix = "cargo_putaway:$server:$user:"
++        val indexed = encryptedPrefs.getString("cargo_putaway_requests:$server:$user", null)?.let {
++            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
++        }.orEmpty()
++        // Receipts written before the index existed remain recoverable after an
++        // app update. EncryptedSharedPreferences exposes its logical keys here.
++        val legacy = encryptedPrefs.all.keys.mapNotNull { key ->
++            key.removePrefix(prefix).takeIf { key.startsWith(prefix) && it.isNotBlank() }
++        }
++        return (indexed + legacy).distinct()
++    }
++
++    fun saveCargoPutaway(
++        server: String,
++        user: String,
++        requestId: String,
++        body: String?,
++        warehouseId: String? = null,
++    ) {
 +        val key = "cargo_putaway:$server:$user:$requestId"
++        val warehouseKey = "cargo_putaway_warehouse:$server:$user:$requestId"
++        val indexKey = "cargo_putaway_requests:$server:$user"
++        val requestIds = getCargoPutawayRequestIds(server, user).toMutableSet()
 +        val edit = encryptedPrefs.edit()
-+        if (body == null) edit.remove(key) else edit.putString(key, body)
++        if (body == null) {
++            edit.remove(key)
++            edit.remove(warehouseKey)
++            requestIds.remove(requestId)
++        } else {
++            edit.putString(key, body)
++            warehouseId?.let { edit.putString(warehouseKey, it) }
++            requestIds.add(requestId)
++        }
++        if (requestIds.isEmpty()) edit.remove(indexKey) else edit.putString(indexKey, json.encodeToString(requestIds.toList()))
 +        check(edit.commit()) { "Не удалось сохранить размещение на устройстве. Повторите попытку." }
 +    }
 +
@@ -212,7 +260,7 @@ index 4243fa6..f20a521 100644
          val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
-index ee1e470..dfb9df7 100644
+index ee1e470..7c0a980 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
 @@ -10,10 +10,13 @@ import androidx.lifecycle.ViewModelProvider
@@ -229,7 +277,7 @@ index ee1e470..dfb9df7 100644
  import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.networkErrorText
  import ru.wms.tsd.core.api.readableError
-@@ -29,6 +32,19 @@ import ru.wms.tsd.ui.patterns.TaskCardData
+@@ -29,13 +32,34 @@ import ru.wms.tsd.ui.patterns.TaskCardData
  import ru.wms.tsd.ui.patterns.TaskList
  import ru.wms.tsd.ui.theme.WmsColors
  
@@ -249,7 +297,64 @@ index ee1e470..dfb9df7 100644
  data class SortingListUiState(
      val loading: Boolean = true,
      val refreshing: Boolean = false,
-@@ -101,7 +117,10 @@ fun SortingListScreen(
+     val error: String? = null,
+     val requests: List<InboundIntakeRequestSummaryOut> = emptyList(),
++    /** Durable receipt for this server and employee takes precedence over an empty live queue. */
++    val recoveryRequestId: String? = null,
+ )
+ 
++internal fun consumeRecoveryRequest(
++    state: SortingListUiState,
++    requestId: String,
++): SortingListUiState =
++    if (state.recoveryRequestId == requestId) state.copy(recoveryRequestId = null) else state
++
+ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
+     private val _state = MutableStateFlow(SortingListUiState())
+     val state: StateFlow<SortingListUiState> = _state
+@@ -52,7 +76,11 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
+                         val queue = resp.body().orEmpty()
+                             .filter { (it.status == "sorting" || it.status == "verified") && (it.sortingRemainingQty ?: 0) > 0 }
+                             .sortedBy { it.createdAt }
+-                        _state.value = SortingListUiState(loading = false, requests = queue)
++                        _state.value = SortingListUiState(
++                            loading = false,
++                            requests = queue,
++                            recoveryRequestId = api.pendingCargoPutawayRequestIds().firstOrNull(),
++                        )
+                     } else {
+                         _state.value = _state.value.copy(loading = false, refreshing = false, error = resp.readableError())
+                     }
+@@ -63,6 +91,11 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
+         }
+     }
+ 
++    /** Navigation is a one-time effect, not another queue item on recomposition. */
++    fun consumeRecoveryRequest(requestId: String) {
++        _state.value = consumeRecoveryRequest(_state.value, requestId)
++    }
++
+     class Factory(private val api: ApiProvider) : ViewModelProvider.Factory {
+         @Suppress("UNCHECKED_CAST")
+         override fun <T : ViewModel> create(modelClass: Class<T>): T = SortingListViewModel(api) as T
+@@ -78,6 +111,16 @@ fun SortingListScreen(
+     val vm: SortingListViewModel = viewModel(factory = SortingListViewModel.Factory(AppGraph.apiProvider))
+     val state by vm.state.collectAsState()
+ 
++    // Saved cargo is an already confirmed operator action, not a new queue item.
++    // Open its existing document so the same UUID can be reconciled even after the
++    // server has removed it from the normal sorting list.
++    androidx.compose.runtime.LaunchedEffect(state.recoveryRequestId) {
++        state.recoveryRequestId?.let { requestId ->
++            vm.consumeRecoveryRequest(requestId)
++            onOpenRequest(requestId)
++        }
++    }
++
+     // Данные меняются на детальных экранах — перечитываем список при каждом возврате
+     LifecycleResumeEffect(Unit) {
+         vm.load()
+@@ -101,7 +144,10 @@ fun SortingListScreen(
                              "Поставка ${r.displayNumber ?: r.documentNumber ?: ""}".trim(),
                              r.sellerName,
                          ).joinToString(" · "),
@@ -262,7 +367,7 @@ index ee1e470..dfb9df7 100644
                          statusColor = WmsColors.Primary,
                          hasDiscrepancy = false,
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
-index 833f3c3..9923ac7 100644
+index 833f3c3..894c36a 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 @@ -65,6 +65,12 @@ fun SortingScreen(
@@ -271,15 +376,20 @@ index 833f3c3..9923ac7 100644
  
 +    // Последнее размещение сервер приходует сам — держать оператора на пустом
 +    // документе ради ещё одного подтверждения незачем.
-+    LaunchedEffect(state.documentDone) {
-+        if (state.documentDone) onBack()
++    LaunchedEffect(state.documentDone, state.unresolvedPutaway, state.unresolvedCargoPutaway) {
++        if (state.documentDone && state.unresolvedPutaway == null && state.unresolvedCargoPutaway == null) onBack()
 +    }
 +
      val request = state.request
      val boxes = request?.boxes.orEmpty()
      val lines = request?.lines.orEmpty()
-@@ -93,6 +99,25 @@ fun SortingScreen(
-             state.loadError != null -> FullScreenError(state.loadError!!, onRetry = vm::load)
+@@ -90,9 +96,29 @@ fun SortingScreen(
+                 horizontalAlignment = Alignment.CenterHorizontally,
+             ) { CircularProgressIndicator() }
+ 
+-            state.loadError != null -> FullScreenError(state.loadError!!, onRetry = vm::load)
++            state.loadError != null && state.unresolvedPutaway == null && state.unresolvedCargoPutaway == null ->
++                FullScreenError(state.loadError!!, onRetry = vm::load)
  
              else -> Column(modifier = Modifier.fillMaxSize()) {
 +                val unresolved = state.unresolvedPutaway
@@ -304,7 +414,7 @@ index 833f3c3..9923ac7 100644
                  when (target) {
                      is SortTarget.Box -> {
                          val box = boxes.firstOrNull { it.id == target.boxId }
-@@ -103,6 +128,15 @@ fun SortingScreen(
+@@ -103,6 +129,15 @@ fun SortingScreen(
                              onAction = vm::clearTarget,
                          )
                      }
@@ -320,7 +430,7 @@ index 833f3c3..9923ac7 100644
                      is SortTarget.Loose -> {
                          val line = lines.firstOrNull { it.productId == target.productId }
                          ScanTargetBar(
-@@ -122,6 +156,7 @@ fun SortingScreen(
+@@ -122,6 +157,7 @@ fun SortingScreen(
                  SortingWorkList(
                      state = state,
                      onBoxClick = vm::selectBox,
@@ -328,7 +438,7 @@ index 833f3c3..9923ac7 100644
                      onLooseClick = vm::selectLooseProduct,
                  )
              }
-@@ -142,9 +177,22 @@ fun SortingScreen(
+@@ -142,9 +178,22 @@ fun SortingScreen(
              onDismiss = vm::dismissPending,
          )
      }
@@ -352,7 +462,7 @@ index 833f3c3..9923ac7 100644
          var qty by remember(pending, target) { mutableIntStateOf(maxQty) }
          ModalBottomSheet(onDismissRequest = vm::dismissPending) {
              Column(
-@@ -166,7 +214,9 @@ fun SortingScreen(
+@@ -166,7 +215,9 @@ fun SortingScreen(
                  )
                  Button(
                      onClick = { vm.confirmLoosePutaway(qty) },
@@ -363,7 +473,7 @@ index 833f3c3..9923ac7 100644
                      colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Success),
                      modifier = Modifier
                          .fillMaxWidth()
-@@ -188,19 +238,23 @@ fun SortingScreen(
+@@ -188,19 +239,23 @@ fun SortingScreen(
      }
  }
  
@@ -389,7 +499,7 @@ index 833f3c3..9923ac7 100644
  
      LazyColumn(
          modifier = Modifier.fillMaxSize(),
-@@ -218,6 +272,17 @@ private fun SortingWorkList(
+@@ -218,6 +273,17 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -407,7 +517,7 @@ index 833f3c3..9923ac7 100644
          if (loose.isNotEmpty()) {
              item { SectionHeader("Без короба") }
              items(loose, key = { it.first.productId }) { (line, rem) ->
-@@ -229,7 +294,7 @@ private fun SortingWorkList(
+@@ -229,7 +295,7 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -417,7 +527,7 @@ index 833f3c3..9923ac7 100644
                  Text(
                      "Всё размещено",
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
-index 2edffa0..a71e363 100644
+index 2edffa0..c68e9a8 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 @@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
@@ -430,7 +540,7 @@ index 2edffa0..a71e363 100644
  import kotlinx.coroutines.flow.MutableStateFlow
  import kotlinx.coroutines.flow.StateFlow
  import kotlinx.coroutines.launch
-@@ -15,44 +13,59 @@ import ru.wms.tsd.core.api.ApiProvider
+@@ -15,44 +13,61 @@ import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.networkErrorText
  import ru.wms.tsd.core.api.readableError
  import ru.wms.tsd.core.api.generated.models.InboundBoxPutawayBody
@@ -471,6 +581,8 @@ index 2edffa0..a71e363 100644
 +    val unresolvedPutaway: LoosePutawayBody? = null,
 +    /** Cargo placement uses the same durable receipt as loose stock. */
 +    val unresolvedCargoPutaway: CargoPlacePutawayBody? = null,
++    /** Route context for the existing cargo operation; it is not part of its idempotent body. */
++    val unresolvedCargoWarehouseId: String? = null,
      val flash: ScanFlash = ScanFlash.None,
      val confirmComplete: Boolean = false,
      val completing: Boolean = false,
@@ -499,7 +611,7 @@ index 2edffa0..a71e363 100644
   */
  class SortingViewModel(
      private val requestId: UUID,
-@@ -62,6 +75,10 @@ class SortingViewModel(
+@@ -62,6 +77,10 @@ class SortingViewModel(
      private val _state = MutableStateFlow(SortingUiState())
      val state: StateFlow<SortingUiState> = _state
  
@@ -510,9 +622,32 @@ index 2edffa0..a71e363 100644
      private val scanQueue = Channel<String>(capacity = 16)
      private var flashStamp = 0L
  
-@@ -76,26 +93,44 @@ class SortingViewModel(
+@@ -75,27 +94,54 @@ class SortingViewModel(
+     fun load() {
          _state.value = _state.value.copy(loading = true, loadError = null)
          viewModelScope.launch {
++            // Read the durable receipt before publishing a completed document.
++            // The normal queue no longer contains its request after the server
++            // commits the operation, but the operator still needs the same
++            // receipt until its result is reconciled.
++            val savedLoose = try { api.pendingLoosePutaway(context, requestId.toString()) } catch (_: Exception) {
++                _state.value = _state.value.copy(loading = false, loadError = "Не удалось прочитать сохранённое размещение. Повторите загрузку.")
++                return@launch
++            }
++            val savedCargo = try { api.pendingCargoPutaway(context, requestId.toString()) } catch (_: Exception) {
++                _state.value = _state.value.copy(loading = false, loadError = "Не удалось прочитать сохранённое размещение. Повторите загрузку.")
++                return@launch
++            }
++            val savedCargoWarehouseId = try {
++                api.pendingCargoPutawayWarehouseId(context, requestId.toString())
++            } catch (_: Exception) {
++                null
++            }
++            _state.value = _state.value.copy(
++                unresolvedPutaway = savedLoose,
++                unresolvedCargoPutaway = savedCargo,
++                unresolvedCargoWarehouseId = savedCargoWarehouseId,
++            )
              val ok = runCatching {
 -                coroutineScope {
 -                    val reqD = async { api.operations().getInboundRequestOperationsInboundIntakeRequestsRequestIdGet(requestId) }
@@ -544,36 +679,23 @@ index 2edffa0..a71e363 100644
 +                    request = request,
 +                    locations = locs.body().orEmpty(),
 +                    documentDone = isDoneStatus(request.status),
++                    unresolvedPutaway = savedLoose,
++                    unresolvedCargoPutaway = savedCargo,
 +                )
 +                null
              }.getOrElse { networkErrorText() }
              if (ok != null) _state.value = _state.value.copy(loading = false, loadError = ok)
 +
-+            // Экран мог быть пересоздан посреди отправки — тогда подтверждённая
-+            // попытка лежит на диске. Догоняем её тем же телом: сервер узнает
-+            // идентификатор и второй раз товар не двинет.
-+            val savedLoose = try { api.pendingLoosePutaway(context, requestId.toString()) } catch (_: Exception) {
-+                _state.value = _state.value.copy(loadError = "Не удалось прочитать сохранённое размещение. Повторите загрузку.")
-+                return@launch
-+            }
-+            val savedCargo = try { api.pendingCargoPutaway(context, requestId.toString()) } catch (_: Exception) {
-+                _state.value = _state.value.copy(loadError = "Не удалось прочитать сохранённое размещение. Повторите загрузку.")
-+                return@launch
-+            }
-+            when {
-+                savedLoose != null -> {
-+                    _state.value = _state.value.copy(unresolvedPutaway = savedLoose)
-+                    postPutaway(savedLoose)
-+                }
-+                savedCargo != null -> {
-+                    _state.value = _state.value.copy(unresolvedCargoPutaway = savedCargo)
-+                    postCargoPutaway(savedCargo)
-+                }
++            // Cargo requires an explicit retry after restart.  Sending it while
++            // the operator is only reopening the app would hide an unknown
++            // result and can race a still-unavailable server.
++            if (savedLoose != null) {
++                postPutaway(savedLoose)
 +            }
          }
      }
  
-@@ -104,13 +139,20 @@ class SortingViewModel(
+@@ -104,13 +150,20 @@ class SortingViewModel(
      }
  
      fun selectLooseProduct(productId: String) {
@@ -594,7 +716,7 @@ index 2edffa0..a71e363 100644
      fun clearTarget() {
          _state.value = _state.value.copy(target = null, pendingLocation = null)
      }
-@@ -150,59 +192,185 @@ class SortingViewModel(
+@@ -150,59 +203,188 @@ class SortingViewModel(
          }
      }
  
@@ -622,12 +744,13 @@ index 2edffa0..a71e363 100644
 +    /** Repeats the same cargo body: a lost response cannot turn into another move. */
 +    fun retryCargoPutaway() {
 +        val body = _state.value.unresolvedCargoPutaway ?: return
-+        val warehouseId = _state.value.request?.warehouseId ?: return
++        val warehouseId = _state.value.unresolvedCargoWarehouseId ?: _state.value.request?.warehouseId
++            ?: return
 +        viewModelScope.launch { postCargoPutaway(body, warehouseId) }
 +    }
 +
 +    private suspend fun sendCargoPutaway(body: CargoPlacePutawayBody, warehouseId: String) {
-+        val saved = runCatching { api.saveCargoPutaway(context, requestId.toString(), body) }
++        val saved = runCatching { api.saveCargoPutaway(context, requestId.toString(), body, warehouseId) }
 +        if (saved.isFailure) {
 +            _state.value = _state.value.copy(
 +                unresolvedCargoPutaway = null,
@@ -636,13 +759,13 @@ index 2edffa0..a71e363 100644
 +            )
 +            return
 +        }
-+        _state.value = _state.value.copy(unresolvedCargoPutaway = body)
++        _state.value = _state.value.copy(unresolvedCargoPutaway = body, unresolvedCargoWarehouseId = warehouseId)
 +        postCargoPutaway(body, warehouseId)
 +    }
 +
 +    private suspend fun postCargoPutaway(body: CargoPlacePutawayBody, warehouseId: String? = null) {
 +        if (sending) return
-+        val targetWarehouseId = warehouseId ?: _state.value.request?.warehouseId ?: return
++        val targetWarehouseId = warehouseId ?: _state.value.unresolvedCargoWarehouseId ?: _state.value.request?.warehouseId ?: return
 +        sending = true
 +        val response = runCatching {
 +            sortingApi.putawayCargoPlace(targetWarehouseId, body)
@@ -658,6 +781,7 @@ index 2edffa0..a71e363 100644
 +                        target = null,
 +                        pendingLocation = null,
 +                        unresolvedCargoPutaway = null,
++                        unresolvedCargoWarehouseId = null,
 +                        flash = successFlash(),
 +                    )
 +                } else {
@@ -670,6 +794,7 @@ index 2edffa0..a71e363 100644
 +                    target = null,
 +                    pendingLocation = null,
 +                    unresolvedCargoPutaway = null,
++                    unresolvedCargoWarehouseId = null,
 +                    flash = errorFlash(response.readableError()),
 +                )
 +                refresh()
@@ -820,7 +945,7 @@ index 2edffa0..a71e363 100644
      fun confirmComplete(onDone: () -> Unit) {
          _state.value = _state.value.copy(confirmComplete = false, completing = true)
          viewModelScope.launch {
-@@ -219,6 +387,10 @@ class SortingViewModel(
+@@ -219,6 +401,10 @@ class SortingViewModel(
  
      private suspend fun processScan(barcode: String) {
          val st = _state.value
@@ -831,7 +956,7 @@ index 2edffa0..a71e363 100644
          val request = st.request ?: return
  
          // 1) Скан закрытого короба с остатком?
-@@ -234,33 +406,50 @@ class SortingViewModel(
+@@ -234,33 +420,50 @@ class SortingViewModel(
              return
          }
  
@@ -895,7 +1020,7 @@ index 2edffa0..a71e363 100644
      private fun successFlash() = ScanFlash.Success(++flashStamp)
      private fun errorFlash(message: String) = ScanFlash.Error(message, ++flashStamp)
  
-@@ -288,14 +477,25 @@ class SortingViewModel(
+@@ -288,14 +491,25 @@ class SortingViewModel(
  fun boxRemaining(box: InboundIntakeBoxOut): Int =
      box.remainingQty ?: box.lines.orEmpty().sumOf { it.remainingQty ?: 0 }
  
@@ -923,9 +1048,31 @@ index 2edffa0..a71e363 100644
 +    }
 +    return (lineRemaining - inBoxes - inCargo).coerceAtLeast(0)
  }
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt
+new file mode 100644
+index 0000000..2439a03
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt
+@@ -0,0 +1,16 @@
++package ru.wms.tsd.features.sorting
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Test
++
++class SortingListRecoveryTest {
++    @Test
++    fun `recovery navigation is consumed before a recomposition can reopen it`() {
++        val pending = SortingListUiState(recoveryRequestId = "request")
++        val consumed = consumeRecoveryRequest(pending, "request")
++
++        assertNull(consumed.recoveryRequestId)
++        assertEquals(consumed, consumeRecoveryRequest(consumed, "request"))
++    }
++}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt
 new file mode 100644
-index 0000000..8b3600f
+index 0000000..709043f
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt
 @@ -0,0 +1,65 @@
@@ -961,7 +1108,7 @@ index 0000000..8b3600f
 +            every { store.saveLoosePutaway(any(), any(), any(), any()) } answers {
 +                disk[listOf("loose", firstArg(), secondArg(), thirdArg())] = arg(3)
 +            }
-+            every { store.saveCargoPutaway(any(), any(), any(), any()) } answers {
++            every { store.saveCargoPutaway(any(), any(), any(), any(), any()) } answers {
 +                disk[listOf("cargo", firstArg(), secondArg(), thirdArg())] = arg(3)
 +            }
 +            every { store.getCargoPutaway(any(), any(), any()) } answers { disk[listOf("cargo", firstArg(), secondArg(), thirdArg())] }
@@ -995,7 +1142,7 @@ index 0000000..8b3600f
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
-index 6203cc5..1211380 100644
+index 6203cc5..31b2313 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 @@ -1,9 +1,13 @@
@@ -1074,7 +1221,7 @@ index 6203cc5..1211380 100644
      private lateinit var api: ApiProvider
  
      @Before
-@@ -54,9 +70,16 @@ class SortingViewModelTest {
+@@ -54,9 +70,17 @@ class SortingViewModelTest {
          Dispatchers.setMain(UnconfinedTestDispatcher())
          ops = mockk()
          whs = mockk()
@@ -1087,11 +1234,12 @@ index 6203cc5..1211380 100644
 +            every { pendingLoosePutaway(any(), any()) } returns null
 +            every { saveLoosePutaway(any(), any(), any()) } just Runs
 +            every { pendingCargoPutaway(any(), any()) } returns null
-+            every { saveCargoPutaway(any(), any(), any()) } just Runs
++            every { pendingCargoPutawayWarehouseId(any(), any()) } returns null
++            every { saveCargoPutaway(any(), any(), any(), any()) } just Runs
          }
      }
  
-@@ -77,65 +100,316 @@ class SortingViewModelTest {
+@@ -77,65 +101,325 @@ class SortingViewModelTest {
          storageLocationCode = null,
      )
  
@@ -1160,13 +1308,15 @@ index 6203cc5..1211380 100644
 +        val bodySlot = slot<LoosePutawayBody>()
 +        coEvery { sortingApi.loosePutaway(requestId.toString(), capture(bodySlot)) } returns
 +            Response.success(request(posted = 3))
-+
-+        val vm = SortingViewModel(requestId, api)
-+        advanceUntilIdle()
+ 
+         val vm = SortingViewModel(requestId, api)
+         advanceUntilIdle()
 +        vm.aimAtCell()
 +        runCurrent()
 +        assertEquals(locCId, vm.state.value.pendingLocation?.id)
-+
+ 
+-        // Выбираем loose-товар C и сканируем ячейку C → pendingLocation
+-        vm.selectLooseProduct(prodC)
 +        vm.confirmLoosePutaway(quantity = 3)
 +        advanceUntilIdle()
 +
@@ -1227,9 +1377,9 @@ index 6203cc5..1211380 100644
 +    fun `пока прошлая отправка без ответа, новое размещение не начинается`() = runTest {
 +        stubLoad()
 +        coEvery { sortingApi.loosePutaway(requestId.toString(), any()) } throws IOException("timeout")
- 
-         val vm = SortingViewModel(requestId, api)
-         advanceUntilIdle()
++
++        val vm = SortingViewModel(requestId, api)
++        advanceUntilIdle()
 +        vm.aimAtCell()
 +        runCurrent()
 +        vm.confirmLoosePutaway(quantity = 2)
@@ -1256,9 +1406,7 @@ index 6203cc5..1211380 100644
 +        val bodySlot = slot<LoosePutawayBody>()
 +        coEvery { sortingApi.loosePutaway(requestId.toString(), capture(bodySlot)) } returns
 +            Response.success(request(posted = 4))
- 
--        // Выбираем loose-товар C и сканируем ячейку C → pendingLocation
--        vm.selectLooseProduct(prodC)
++
 +        val vm = SortingViewModel(requestId, api)
 +        advanceUntilIdle()
 +
@@ -1343,7 +1491,7 @@ index 6203cc5..1211380 100644
 +        val sortingDocument = request(posted = 1, cargoPlaces = listOf(cargo))
 +        stubLoad(document = sortingDocument)
 +        var saved: CargoPlacePutawayBody? = null
-+        every { api.saveCargoPutaway(any(), requestId.toString(), any()) } answers { saved = thirdArg() }
++        every { api.saveCargoPutaway(any(), requestId.toString(), any(), any()) } answers { saved = thirdArg() }
 +        every { api.pendingCargoPutaway(any(), requestId.toString()) } answers { saved }
 +        val receipts = mutableSetOf<String>()
 +        coEvery { sortingApi.putawayCargoPlace(warehouseId, any()) } answers {
@@ -1353,7 +1501,7 @@ index 6203cc5..1211380 100644
 +        }
 +
 +        val vm = SortingViewModel(requestId, api)
-         advanceUntilIdle()
++        advanceUntilIdle()
 +        vm.selectCargoPlace(cargo.id)
 +        vm.onScan(locCBarcode)
 +        runCurrent()
@@ -1362,14 +1510,7 @@ index 6203cc5..1211380 100644
 +        val first = saved!!
 +        assertEquals(first, vm.state.value.unresolvedCargoPutaway)
 +        assertNull(vm.state.value.target)
- 
--        val sent = putSlot.captured
--        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
--        assertTrue("A сохранён", sent.any { it.productId.toString() == prodA })
--        assertTrue("B (параллельный) НЕ затёрт", sent.any { it.productId.toString() == prodB })
--        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
--        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
--        assertEquals("итого 3 строки", 3, sent.size)
++
 +        // A scan while the outcome is unknown cannot turn the old cargo target
 +        // into another ordinary transfer.
 +        vm.selectCargoPlace(cargo.id)
@@ -1390,11 +1531,27 @@ index 6203cc5..1211380 100644
 +        val finalOpen = SortingViewModel(requestId, api)
 +        advanceUntilIdle()
 +        assertEquals(1, receipts.size)
++        assertEquals(first, saved)
++        assertEquals(first, finalOpen.state.value.unresolvedCargoPutaway)
++        assertTrue(finalOpen.state.value.documentDone)
++
++        // Reopening does not issue a hidden retry. The operator repeats the
++        // exact receipt deliberately, including after the request has left the
++        // ordinary sorting queue.
++        finalOpen.retryCargoPutaway()
+         advanceUntilIdle()
++        assertEquals(1, receipts.size)
 +        assertNull(saved)
 +        assertNull(finalOpen.state.value.unresolvedCargoPutaway)
-+        assertTrue(finalOpen.state.value.documentDone)
 +    }
-+
+ 
+-        val sent = putSlot.captured
+-        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
+-        assertTrue("A сохранён", sent.any { it.productId.toString() == prodA })
+-        assertTrue("B (параллельный) НЕ затёрт", sent.any { it.productId.toString() == prodB })
+-        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
+-        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
+-        assertEquals("итого 3 строки", 3, sent.size)
 +    @Test
 +    fun `incomplete response cannot be interpreted as empty completed sorting`() {
 +        assertTrue(runCatching { Json.decodeFromString<SortingRequestOut>("""{"id":"a","warehouse_id":"b","status":"done","lines":[]}""") }.isFailure)
