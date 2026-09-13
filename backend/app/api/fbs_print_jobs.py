@@ -273,4 +273,6 @@ async def get_fbs_print_job(
         job = await get_print_job(session, user.tenant_id, job_id)
     except FbsPrintAssetError as exc:
         _raise_print_job_http(exc)
+    if (job.payload_json or {}).get("request_id"):
+        raise HTTPException(404, "print_job_not_found")
     return _job_out(job)

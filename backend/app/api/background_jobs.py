@@ -13,6 +13,7 @@ from app.api.deps import (
     get_effective_seller_id,
     require_fbs_operator_access,
     require_fulfillment_admin,
+    require_reception_access,
 )
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
@@ -171,9 +172,7 @@ async def start_background_job(
 
             run_wildberries_marketplace_orders_sync_task.delay(str(job.id))
         else:
-            background_tasks.add_task(
-                job_svc.run_wildberries_marketplace_orders_sync_job, job.id
-            )
+            background_tasks.add_task(job_svc.run_wildberries_marketplace_orders_sync_job, job.id)
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -233,5 +232,18 @@ async def get_background_job(
             detail="job_not_found",
         )
     if job.job_type == JOB_TYPE_FBS_LABEL_PRINT:
-        await require_fbs_operator_access(user=user, session=session)
+        if (job.payload_json or {}).get("request_id"):
+            await require_reception_access(user=user, session=session)
+            if (job.payload_json or {}).get("requested_by_user_id") != str(user.id):
+                raise HTTPException(404, "job_not_found")
+        else:
+            await require_fbs_operator_access(user=user, session=session)
+        output = _job_out(job)
+        output.payload_json = {
+            k: v for k, v in (output.payload_json or {}).items() if k != "storage_path"
+        }
+        output.result_json = {
+            k: v for k, v in (output.result_json or {}).items() if k != "claim_id"
+        }
+        return output
     return _job_out(job)
