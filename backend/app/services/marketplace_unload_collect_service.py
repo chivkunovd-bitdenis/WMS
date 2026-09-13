@@ -873,6 +873,20 @@ async def _unknown_box_quantity(
     return max(0, int(boxed or 0) - int(known or 0))
 
 
+async def _boxed_quantity(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    stmt = (
+        select(func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0))
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(
+            MarketplaceUnloadBox.request_id == request_id,
+            MarketplaceUnloadBoxLine.product_id == product_id,
+        )
+    )
+    return int((await session.execute(stmt)).scalar_one() or 0)
+
+
 def _reduce_unambiguous_historical_baseline(
     line: PackagingTaskLine, *, historical_before: int, removed_unknown: int
 ) -> None:
@@ -991,11 +1005,19 @@ async def remove_from_box(
     if pkg_task is not None:
         task_line = next((ln for ln in pkg_task.lines if ln.product_id == line.product_id), None)
         if task_line is not None:
-            _reduce_unambiguous_historical_baseline(
-                task_line,
-                historical_before=historical_before,
-                removed_unknown=unknown_removed,
-            )
+            if await _boxed_quantity(session, request_id, line.product_id) == 0:
+                # The last physical box unit has been returned. Keep the plan
+                # line for recollection, but do not leave stale packed work.
+                task_line.qty_confirmed_packed = 0
+                task_line.qty_packed_in_task = 0
+                task_line.qty_legacy_confirmed_packed = 0
+                task_line.qty_legacy_packed_in_task = 0
+            else:
+                _reduce_unambiguous_historical_baseline(
+                    task_line,
+                    historical_before=historical_before,
+                    removed_unknown=unknown_removed,
+                )
 
     await session.commit()
 
