@@ -16,6 +16,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
+from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
@@ -854,6 +855,49 @@ async def _rollback_pick_allocations(
     return result
 
 
+async def _unknown_box_quantity(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    stmt = (
+        select(
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_source_known), 0),
+        )
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(
+            MarketplaceUnloadBox.request_id == request_id,
+            MarketplaceUnloadBoxLine.product_id == product_id,
+        )
+    )
+    boxed, known = (await session.execute(stmt)).one()
+    return max(0, int(boxed or 0) - int(known or 0))
+
+
+def _reduce_unambiguous_historical_baseline(
+    line: PackagingTaskLine, *, historical_before: int, removed_unknown: int
+) -> None:
+    """Keep a wholly-ready or wholly-work historical baseline with its units.
+
+    A partially confirmed historical batch has no per-unit source in the
+    pre-WMS-444 data.  Its removal is deliberately not attributed here: that
+    business choice needs the analyst's contract rather than a guessed split.
+    """
+    if removed_unknown < 1:
+        return
+    legacy_ready = line.qty_legacy_confirmed_packed
+    legacy_work = line.qty_legacy_packed_in_task
+    if legacy_ready is None or legacy_work is None:
+        return
+    ready = int(legacy_ready)
+    work = int(legacy_work)
+    if ready + work != historical_before:
+        return
+    if ready == historical_before:
+        line.qty_legacy_confirmed_packed = ready - removed_unknown
+    elif work == historical_before:
+        line.qty_legacy_packed_in_task = work - removed_unknown
+
+
 async def remove_from_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -891,8 +935,18 @@ async def remove_from_box(
     )
     await session.execute(lock_stmt)
 
+    from app.services import packaging_task_service as pkg_svc
+
+    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if pkg_task is not None:
+        # Capture the historic baseline before changing the box composition.
+        # A direct collect can reach this operation before a progress reread.
+        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, pkg_task)
+
+    historical_before = await _unknown_box_quantity(session, request_id, line.product_id)
     unknown_available = line_qty - int(line.quantity_source_known or 0)
     source_known_removed = max(0, remove_qty - unknown_available)
+    unknown_removed = remove_qty - source_known_removed
     packed_removed = min(int(line.quantity_packed or 0), source_known_removed)
     location_chunks = await _rollback_pick_allocations(
         session,
@@ -934,13 +988,21 @@ async def remove_from_box(
         if line.quantity_source_known is not None:
             line.quantity_source_known = int(line.quantity_source_known) - source_known_removed
 
+    if pkg_task is not None:
+        task_line = next((ln for ln in pkg_task.lines if ln.product_id == line.product_id), None)
+        if task_line is not None:
+            _reduce_unambiguous_historical_baseline(
+                task_line,
+                historical_before=historical_before,
+                removed_unknown=unknown_removed,
+            )
+
     await session.commit()
 
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
     if pkg_task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
+        synced = await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
+        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, synced.task)
+        await session.commit()
 
     if new_qty < 1:
         return None
