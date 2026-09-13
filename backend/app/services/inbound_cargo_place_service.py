@@ -131,11 +131,24 @@ async def set_line_quantity(
     return await _load_cargo_place(session, tenant_id, request_id, place_id)
 
 
+def _add_barcode_alias(
+    index: dict[str, uuid.UUID | None], raw: object, product_id: uuid.UUID
+) -> None:
+    key = str(raw or "").strip()
+    if not key:
+        return
+    for candidate in {key, key.upper()}:
+        if candidate not in index:
+            index[candidate] = product_id
+        elif index[candidate] != product_id:
+            index[candidate] = None
+
+
 async def _barcode_index_for_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request: InboundIntakeRequest,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     product_ids = {line.product_id for line in request.lines}
     if not product_ids:
         return {}
@@ -151,12 +164,9 @@ async def _barcode_index_for_request(
         .scalars()
         .all()
     )
-    index: dict[str, uuid.UUID] = {}
+    index: dict[str, uuid.UUID | None] = {}
     for product in products:
-        key = product.sku_code.strip()
-        if key:
-            index[key] = product.id
-            index[key.upper()] = product.id
+        _add_barcode_alias(index, product.sku_code, product.id)
     if request.seller_id is not None:
         rows = await list_seller_wb_catalog_rows(
             session,
@@ -168,16 +178,10 @@ async def _barcode_index_for_request(
             if row.product_id not in product_ids:
                 continue
             for raw in (row.sku_code, row.wb_primary_barcode, *row.wb_barcodes):
-                key = str(raw or "").strip()
-                if key:
-                    index[key] = row.product_id
-                    index[key.upper()] = row.product_id
+                _add_barcode_alias(index, raw, row.product_id)
             for binding in row.marketplace_bindings:
                 for raw in binding.get("external_barcodes", []):
-                    key = str(raw).strip()
-                    if key:
-                        index[key] = row.product_id
-                        index[key.upper()] = row.product_id
+                    _add_barcode_alias(index, raw, row.product_id)
     return index
 
 
@@ -202,8 +206,10 @@ async def scan_product(
     product_id = product_id_hint
     if product_id is None:
         index = await _barcode_index_for_request(session, tenant_id, request)
-        product_id = index.get(raw) or index.get(raw.upper())
+        product_id = index.get(raw) if raw in index else index.get(raw.upper())
         if product_id is None:
+            if raw in index or raw.upper() in index:
+                raise InboundIntakeError("barcode_ambiguous")
             raise InboundIntakeError("barcode_unknown")
     replay = await intake_svc._claim_intake_mutation(
         session, tenant_id, request_id, mutation_id=mutation_id, action="cargo_scan",

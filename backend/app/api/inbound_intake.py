@@ -397,7 +397,7 @@ def _cargo_place_out(place: InboundIntakeCargoPlace) -> InboundCargoPlaceOut:
 def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
     code = exc.code
     if code in {"mutation_payload_mismatch", "mutation_result_deleted",
-                "actual_below_container_total"}:
+                "actual_below_container_total", "barcode_ambiguous"}:
         return HTTPException(status_code=409, detail=code)
     if code == "request_not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
@@ -432,7 +432,7 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
 def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
     code = exc.code
     if code in {"mutation_payload_mismatch", "mutation_result_deleted",
-                "actual_below_container_total"}:
+                "actual_below_container_total", "barcode_ambiguous"}:
         return HTTPException(status_code=409, detail=code)
     if code in ("request_not_found", "line_not_found", "cargo_place_not_found"):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
