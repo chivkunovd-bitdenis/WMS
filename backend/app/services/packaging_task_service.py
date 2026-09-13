@@ -908,7 +908,9 @@ async def record_pack_progress(
     if fbs_supply is None:
         # The existing work event is the durable receipt. Keep the key tenant-wide
         # so reusing it for another document/line/actor cannot acknowledge new work.
-        if idempotency_key is not None:
+        # Blank values mean no identity, like the legacy caller without a key.
+        # Nonblank keys remain opaque: never trim their significant whitespace.
+        if idempotency_key is not None and idempotency_key.strip():
             event_id = uuid.uuid5(tenant_id, f"pack-progress:{idempotency_key}")
             if session.get_bind().dialect.name == "postgresql":
                 await session.execute(
