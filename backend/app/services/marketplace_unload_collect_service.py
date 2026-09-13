@@ -887,29 +887,37 @@ async def _boxed_quantity(
     return int((await session.execute(stmt)).scalar_one() or 0)
 
 
-def _reduce_unambiguous_historical_baseline(
+def _reduce_historical_baseline(
     line: PackagingTaskLine, *, historical_before: int, removed_unknown: int
 ) -> None:
-    """Keep a wholly-ready or wholly-work historical baseline with its units.
+    """Preserve the historic ready-first result when historic units are removed.
 
-    A partially confirmed historical batch has no per-unit source in the
-    pre-WMS-444 data.  Its removal is deliberately not attributed here: that
-    business choice needs the analyst's contract rather than a guessed split.
+    This corrects the recorded historic calculation; it never claims a source
+    for the removed physical unit or changes provenance fields on the box and
+    allocation.
     """
     if removed_unknown < 1:
         return
     legacy_ready = line.qty_legacy_confirmed_packed
     legacy_work = line.qty_legacy_packed_in_task
     if legacy_ready is None or legacy_work is None:
-        return
+        current_ready = int(line.qty_confirmed_packed)
+        current_work = int(line.qty_packed_in_task)
+        if current_ready + current_work != historical_before:
+            return
+        legacy_ready = current_ready
+        legacy_work = current_work
     ready = int(legacy_ready)
     work = int(legacy_work)
-    if ready + work != historical_before:
+    historical_total = ready + work
+    if historical_total != historical_before:
         return
-    if ready == historical_before:
-        line.qty_legacy_confirmed_packed = ready - removed_unknown
-    elif work == historical_before:
-        line.qty_legacy_packed_in_task = work - removed_unknown
+    remaining_historical = max(0, historical_total - removed_unknown)
+    remaining_ready = min(ready, remaining_historical)
+    line.qty_legacy_confirmed_packed = remaining_ready
+    line.qty_legacy_packed_in_task = remaining_historical - remaining_ready
+    line.qty_confirmed_packed = remaining_ready
+    line.qty_packed_in_task = remaining_historical - remaining_ready
 
 
 async def remove_from_box(
@@ -1013,7 +1021,7 @@ async def remove_from_box(
                 task_line.qty_legacy_confirmed_packed = 0
                 task_line.qty_legacy_packed_in_task = 0
             else:
-                _reduce_unambiguous_historical_baseline(
+                _reduce_historical_baseline(
                     task_line,
                     historical_before=historical_before,
                     removed_unknown=unknown_removed,
