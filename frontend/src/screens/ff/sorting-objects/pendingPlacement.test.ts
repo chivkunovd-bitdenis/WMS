@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement } from './pendingPlacement'
+import { canRememberSortingPlacement, pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement } from './pendingPlacement'
 
 const body = { kind: 'product', id: 'balance', cell_id: 'cell', to_id: null, qty: 1, inbound_request_id: 'document' }
 function storage(): Storage {
@@ -51,6 +51,13 @@ describe('WMS-441 confirmed web placement', () => {
     expect(key).not.toBe(placementStorageKey(token('a'), 'http://localhost:5204/api/place', 'one'))
     vi.unstubAllGlobals()
   })
+  it('remembers only loose document stock, never product nested in cargo or a box', () => {
+    expect(canRememberSortingPlacement({ kind: 'product', cellId: 'A', sourceHolder: null })).toBe(true)
+    expect(canRememberSortingPlacement({ kind: 'product', cellId: 'A', sourceHolder: 'obj:cargo-1' })).toBe(false)
+    expect(canRememberSortingPlacement({ kind: 'product', cellId: 'A', sourceHolder: 'obj:box-1' })).toBe(false)
+    expect(canRememberSortingPlacement({ kind: 'product', cellId: null, sourceHolder: null })).toBe(false)
+  })
+
   it('does not send when durable save fails', () => {
     const disk = storage()
     disk.setItem = () => { throw new Error('storage unavailable') }

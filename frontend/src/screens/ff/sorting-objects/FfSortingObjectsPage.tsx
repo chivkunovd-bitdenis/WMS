@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Box, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
-import { pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement, type PlacementBody } from './pendingPlacement'
+import { canRememberSortingPlacement, pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement, type PlacementBody } from './pendingPlacement'
 import { randomId } from '../../../utils/randomId'
 import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
 import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
@@ -125,6 +125,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     cellId: string | null
     toId: string | null
     qty: number
+    sourceHolder: string | null
   }) {
     if (!warehouseId) return
     setError(null)
@@ -133,8 +134,10 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
         kind: payload.kind, id: payload.id, cell_id: payload.cellId, to_id: payload.toId, qty: payload.qty,
         ...(embedded && inboundRequestId ? { inbound_request_id: inboundRequestId } : {}),
       }
-      // Only document loose putaway has the durable operation receipt contract.
-      const key = embedded && inboundRequestId && payload.kind === 'product' && payload.cellId
+      // The document receipt exists only for top-level loose stock. A product
+      // inside a box or cargo place uses the ordinary warehouse move, which a
+      // page reload must never replay physically.
+      const key = embedded && inboundRequestId && canRememberSortingPlacement(payload)
         ? placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/place`), inboundRequestId)
         : null
       const confirmed = key ? rememberPlacement(localStorage, key, body) : { ...body, operation_id: randomId() }
