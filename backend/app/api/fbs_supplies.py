@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fbs_operator_access
+from app.api.deps import get_effective_seller_id, require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
@@ -1230,6 +1230,7 @@ async def skip_fbs_supply_honest_sign(
 async def get_fbs_supplies_worklist(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
     status_group: Annotated[str, Query()] = "active",
@@ -1237,10 +1238,13 @@ async def get_fbs_supplies_worklist(
     search: Annotated[str | None, Query()] = None,
 ) -> FbsSupplyWorklistOut:
     try:
+        # Keep the active-supplies entry point in the same seller scope as the
+        # orders queue. A query parameter only narrows an unscoped employee.
+        filter_seller = effective_seller_id if effective_seller_id is not None else seller_id
         payload = await supply_svc.list_supply_worklist(
             session,
             user.tenant_id,
-            seller_id=seller_id,
+            seller_id=filter_seller,
             marketplace=marketplace,
             status_group=status_group,
             limit=limit,

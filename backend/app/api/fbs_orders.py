@@ -543,7 +543,9 @@ async def get_fbs_orders_worklist(
     cursor: Annotated[str | None, Query()] = None,
     sort: Annotated[Literal["deadline", "oldest"], Query()] = "deadline",
 ) -> FbsWorklistPageOut:
-    filter_seller = seller_id if seller_id is not None else effective_seller_id
+    # A seller-scoped employee cannot widen the current scope through a query
+    # parameter. Unscoped fulfillment employees may still select a seller.
+    filter_seller = effective_seller_id if effective_seller_id is not None else seller_id
     if filter_seller is not None:
         seller = await session.get(Seller, filter_seller)
         if seller is None or seller.tenant_id != user.tenant_id:
