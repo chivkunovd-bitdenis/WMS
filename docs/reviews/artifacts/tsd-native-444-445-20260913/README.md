@@ -26,7 +26,7 @@ APK: установленный versionCode12, versionName0.1.11-tsd-package; и
 
 - `inbound-before.png`, `inbound-after.png` — native действие3 и пустая очередь после завершения.
 - `ledger-readback.json` — точные document/fact/actor/ledger из PostgreSQL после действия.
-- `web-billing.png`, `web-details.png`, соответствующий текст — живой web5197 в отдельном Chrome-контексте. `web-responses.json` — ответы именно этих browser запросов, без токенов/паролей; содержит совпадающие идентификаторы.
+- `web-billing.png`, `web-details.png`, соответствующий текст (обрезаны конечные пробелы строк) — живой web5197 в отдельном Chrome-контексте. `web-responses.json` — ответы именно этих browser запросов, без токенов/паролей; содержит совпадающие идентификаторы.
 - `wb-top/bottom.png/.xml`, `ozon-top/bottom.png/.xml` — реальные native экраны; PNG просмотрены ревьюером. `queue-readback.json` — перечитанные ответы текущего backend.
 - `web-readback.cjs` — воспроизводимое read-only открытие web, пароль передаётся только через WMS_FINAL_PASSWORD. Кнопки выставления счёта не нажимались.
 
