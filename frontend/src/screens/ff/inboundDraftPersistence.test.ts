@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { intakeMutation, intakeStorageKey, readIntake, saveIntakeTotals, sendIntakeMutations } from './inboundDraftPersistence'
+import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, intakeStorageKey, readIntake, saveIntakeTotals, sendIntakeMutations } from './inboundDraftPersistence'
 
 const token = (tenant = 'tenant', sub = 'operator') => `header.${btoa(JSON.stringify({ tenant_id: tenant, sub }))}.signature`
 const credential = token()
@@ -64,6 +64,7 @@ describe('durable FF intake attempts', () => {
     const corrected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 2, increment: true })
     const fetch = vi.fn().mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{"detail":"invalid_qty"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
     vi.stubGlobal('fetch', fetch)
+    beginIntakePickerAttempt(credential, 'document')
     await expect(sendIntakeMutations(credential, 'document', [added, rejected])).rejects.toThrow('invalid_qty')
     await sendIntakeMutations(credential, 'document', [repeatedAdded, corrected])
     expect(fetch).toHaveBeenCalledTimes(3)
@@ -71,6 +72,48 @@ describe('durable FF intake attempts', () => {
       JSON.stringify(added.body), JSON.stringify(rejected.body), JSON.stringify(corrected.body),
     ])
     expect(readIntake(credential, 'document').pending).toBeUndefined()
+  })
+  it('finishes the same picker attempt without resending the applied prefix when the rejected item is removed', async () => {
+    const added = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const rejected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 1, increment: true })
+    const repeatedAdded = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{"detail":"invalid_qty"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
+    vi.stubGlobal('fetch', fetch)
+    beginIntakePickerAttempt(credential, 'document')
+    await expect(sendIntakeMutations(credential, 'document', [added, rejected])).rejects.toThrow('invalid_qty')
+    const completed = await sendIntakeMutations(credential, 'document', [repeatedAdded])
+    expect(completed.status).toBe(204)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    beginIntakePickerAttempt(credential, 'document')
+    await sendIntakeMutations(credential, 'document', [repeatedAdded])
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+  it('clears a cancelled picker attempt so a new conscious batch may add the same product', async () => {
+    const added = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const rejected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 1, increment: true })
+    const repeatedAdded = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{"detail":"invalid_qty"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
+    vi.stubGlobal('fetch', fetch)
+    beginIntakePickerAttempt(credential, 'document')
+    await expect(sendIntakeMutations(credential, 'document', [added, rejected])).rejects.toThrow('invalid_qty')
+    finishIntakePickerAttempt(credential, 'document')
+    beginIntakePickerAttempt(credential, 'document')
+    await sendIntakeMutations(credential, 'document', [repeatedAdded])
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+  it('continues with a replacement selected item after removing the rejected item', async () => {
+    const added = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const rejected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 1, increment: true })
+    const repeatedAdded = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const replacement = intakeMutation('POST', path, { product_id: 'replacement', expected_qty: 2, increment: true })
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{"detail":"invalid_qty"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
+    vi.stubGlobal('fetch', fetch)
+    beginIntakePickerAttempt(credential, 'document')
+    await expect(sendIntakeMutations(credential, 'document', [added, rejected])).rejects.toThrow('invalid_qty')
+    await sendIntakeMutations(credential, 'document', [repeatedAdded, replacement])
+    expect(fetch.mock.calls.map((call) => call[1].body)).toEqual([
+      JSON.stringify(added.body), JSON.stringify(rejected.body), JSON.stringify(replacement.body),
+    ])
   })
   it('isolates tenant, operator and document and never sends if persistence fails', async () => {
     expect(intakeStorageKey(credential, 'document')).not.toBe(intakeStorageKey(token('other'), 'document'))

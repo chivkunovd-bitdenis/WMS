@@ -6,6 +6,7 @@ export type IntakeMutation = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path
 type SavedIntake = {
   pending?: IntakeMutation[]
   totals?: Record<string, string>
+  pickerAttempt?: true
   applied?: IntakeMutation[]
   rejected?: IntakeMutation
 }
@@ -25,6 +26,20 @@ function writeIntake(token: string, document: string, value: SavedIntake) {
 export function saveIntakeTotals(token: string, document: string, totals: Record<string, string>) {
   writeIntake(token, document, { ...readIntake(token, document), totals })
 }
+export function beginIntakePickerAttempt(token: string, document: string) {
+  const saved = readIntake(token, document)
+  if (!saved.pending?.length) {
+    writeIntake(token, document, { ...saved, pickerAttempt: true, applied: undefined, rejected: undefined })
+  }
+}
+export function finishIntakePickerAttempt(token: string, document: string) {
+  const saved = readIntake(token, document)
+  writeIntake(token, document, {
+    ...saved,
+    pickerAttempt: undefined,
+    ...(saved.pending?.length ? {} : { applied: undefined, rejected: undefined }),
+  })
+}
 export function intakeMutation(method: IntakeMutation['method'], path: string, body?: Record<string, unknown>): IntakeMutation {
   return { method, path, ...(body ? { body: { ...body, mutation_id: randomId() } } : {}) }
 }
@@ -40,15 +55,21 @@ export async function sendIntakeMutations(token: string, document: string, mutat
   if (active.has(key)) throw new Error('Дождитесь сохранения предыдущего запроса.')
   const saved = readIntake(token, document)
   if (mutations && saved.pending?.length) throw new Error('Проверьте результат предыдущего запроса приёмки.')
-  const continuingRejectedPicker = mutations != null
-    && saved.rejected != null
-    && mutations.some((mutation) => samePickerProduct(mutation, saved.rejected!))
-  const previous = continuingRejectedPicker ? saved : { ...saved, applied: undefined, rejected: undefined }
+  const continuingPickerAttempt = mutations != null
+    && saved.pickerAttempt === true
+    && Boolean(saved.applied?.length)
+  const previous = continuingPickerAttempt ? saved : { ...saved, applied: undefined, rejected: undefined }
   let pending = mutations ?? saved.pending ?? []
-  if (continuingRejectedPicker) {
+  if (continuingPickerAttempt) {
     pending = pending.filter((mutation) => !saved.applied?.some((applied) => samePickerProduct(mutation, applied)))
   }
-  if (!pending.length) throw new Error('Нет запроса для повторения.')
+  if (!pending.length) {
+    if (continuingPickerAttempt) {
+      finishIntakePickerAttempt(token, document)
+      return new Response(null, { status: 204 })
+    }
+    throw new Error('Нет запроса для повторения.')
+  }
   active.add(key)
   try {
     writeIntake(token, document, { ...previous, pending }) // synchronous, before the first HTTP request
@@ -89,6 +110,7 @@ export async function sendIntakeMutations(token: string, document: string, mutat
         pending: pending.length ? pending : undefined,
         applied: pending.length ? [...(latest.applied ?? []), mutation] : undefined,
         rejected: undefined,
+        pickerAttempt: pending.length ? latest.pickerAttempt : undefined,
       })
     }
     return result!
