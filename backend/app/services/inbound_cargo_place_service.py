@@ -172,6 +172,12 @@ async def _barcode_index_for_request(
                 if key:
                     index[key] = row.product_id
                     index[key.upper()] = row.product_id
+            for binding in row.marketplace_bindings:
+                for raw in binding.get("external_barcodes", []):
+                    key = str(raw).strip()
+                    if key:
+                        index[key] = row.product_id
+                        index[key.upper()] = row.product_id
     return index
 
 

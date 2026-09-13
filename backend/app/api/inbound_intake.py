@@ -145,6 +145,12 @@ class InboundIntakeLineExpectedPatch(BaseModel):
     expected_qty: int = Field(ge=1, le=1_000_000_000)
 
 
+class InboundIntakeCompleteBody(BaseModel):
+    """Optional durable identity for a completion attempt from newer clients."""
+
+    mutation_id: uuid.UUID | None = None
+
+
 class InboundIntakeLineReceiveBody(BaseModel):
     quantity: int = Field(ge=1, le=1_000_000_000)
 
@@ -1227,6 +1233,7 @@ async def complete_inbound_receiving(
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: InboundIntakeCompleteBody | None = None,
 ) -> InboundIntakeRequestOut:
     tenant_id = user.tenant_id
     try:
@@ -1235,6 +1242,7 @@ async def complete_inbound_receiving(
             user.tenant_id,
             request_id,
             actor_user_id=user.id,
+            mutation_id=body.mutation_id if body is not None else None,
         )
         await schedule_after_posting(session, user.tenant_id, request_id, background_tasks)
     except InboundIntakeError as exc:
@@ -1759,6 +1767,7 @@ async def complete_inbound_verification(
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: InboundIntakeCompleteBody | None = None,
 ) -> InboundIntakeRequestOut:
     """Legacy alias for POST .../complete-receiving."""
     tenant_id = user.tenant_id
@@ -1768,6 +1777,7 @@ async def complete_inbound_verification(
             user.tenant_id,
             request_id,
             actor_user_id=user.id,
+            mutation_id=body.mutation_id if body is not None else None,
         )
         await schedule_after_posting(session, user.tenant_id, request_id, background_tasks)
     except InboundIntakeError as exc:

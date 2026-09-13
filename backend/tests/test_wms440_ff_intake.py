@@ -100,6 +100,47 @@ async def test_ff_single_fact_and_durable_attempts(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
+async def test_stale_completion_attempt_cannot_complete_after_reopen(
+    async_client: AsyncClient,
+) -> None:
+    h, wid, sid, pid = await _setup(async_client)
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    assert created.status_code == 201, created.text
+    rid = created.json()["id"]
+    added = await async_client.post(
+        f"{BASE}/{rid}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "expected_qty": 3,
+            "increment": True,
+            "mutation_id": str(uuid.uuid4()),
+        },
+    )
+    assert added.status_code == 201, added.text
+    original_attempt = {"mutation_id": str(uuid.uuid4())}
+    first = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json=original_attempt
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "sorting"
+    reopened = await async_client.post(f"{BASE}/{rid}/reopen-receiving", headers=h)
+    assert reopened.status_code == 200, reopened.text
+    stale_retry = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json=original_attempt
+    )
+    assert stale_retry.status_code == 200, stale_retry.text
+    assert stale_retry.json()["status"] == "receiving"
+    fresh = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json={"mutation_id": str(uuid.uuid4())}
+    )
+    assert fresh.status_code == 200, fresh.text
+    assert fresh.json()["status"] == "sorting"
+    async with SessionLocal() as db:
+        assert await db.scalar(select(func.sum(InventoryMovement.quantity_delta))) == 3
+
+
+@pytest.mark.asyncio
 async def test_retry_payload_and_scope_validation(async_client: AsyncClient) -> None:
     h, wid, sid, pid = await _setup(async_client)
     body = {"warehouse_id": wid, "seller_id": sid, "client_request_id": str(uuid.uuid4())}

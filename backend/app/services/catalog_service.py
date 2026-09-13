@@ -621,6 +621,9 @@ async def list_products(
                         or_(
                             ProductMarketplaceLink.external_sku.ilike(like),
                             ProductMarketplaceLink.external_offer_id.ilike(like),
+                            cast(ProductMarketplaceLink.external_barcodes, String).ilike(
+                                f'%"{needle}"%'
+                            ),
                         ),
                     )
                 ),

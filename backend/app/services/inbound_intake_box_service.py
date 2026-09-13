@@ -320,6 +320,12 @@ async def _barcode_index_for_request(
                 k = r.wb_primary_barcode.strip()
                 if k:
                     idx[k] = r.product_id
+            for binding in r.marketplace_bindings:
+                for raw in binding.get("external_barcodes", []):
+                    key = str(raw).strip()
+                    if key:
+                        idx[key] = r.product_id
+                        idx[key.upper()] = r.product_id
     return idx
 
 
