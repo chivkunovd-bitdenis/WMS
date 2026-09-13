@@ -1,0 +1,23 @@
+{
+  "id": "43681365-02e1-4e0a-bfe1-2dfc0987be95",
+  "status": "draft",
+  "lines": [
+    {
+      "id": "848a61f9-74be-46f8-a8d2-f573fc1b5f8c",
+      "expected": 3,
+      "loose": 1,
+      "total": 3
+    }
+  ],
+  "boxes": [
+    {
+      "id": "e06b780c-badd-4916-bd10-b5611bda5df4",
+      "lines": [
+        {
+          "product_id": "c16deead-98e6-4941-8652-df95ab5b7c79",
+          "quantity": 2
+        }
+      ]
+    }
+  ]
+}

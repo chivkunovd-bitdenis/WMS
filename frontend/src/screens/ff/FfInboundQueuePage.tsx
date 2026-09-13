@@ -1,3 +1,4 @@
+import { readIntake } from "./inboundDraftPersistence"
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -49,6 +50,7 @@ export type ReturnMarketplace = '' | 'wildberries' | 'ozon'
 
 type Props = {
   workspace: InboundWorkspace
+  draftToken?: string
   rows: InboundQueueRow[]
   onOpen: (id: string) => void
   onCreateDraft?: (
@@ -127,6 +129,7 @@ function rowMatchesSearch(row: InboundQueueRow & InboundSummaryRef, query: strin
 
 export function FfInboundQueuePage({
   workspace,
+  draftToken,
   rows,
   onOpen,
   onCreateDraft,
@@ -142,10 +145,11 @@ export function FfInboundQueuePage({
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
-  const [draftOperationType, setDraftOperationType] = useState<InboundOperationType | null>(null)
-  const [draftSellerId, setDraftSellerId] = useState('')
-  const [draftMarketplace, setDraftMarketplace] = useState<ReturnMarketplace>('')
-  const [draftClientRequestId, setDraftClientRequestId] = useState<string | null>(null)
+  const pendingCreate = draftToken ? readIntake(draftToken, 'create').pending?.[0]?.body : undefined
+  const [draftOperationType, setDraftOperationType] = useState<InboundOperationType | null>(() => pendingCreate?.operation_type as InboundOperationType ?? null)
+  const [draftSellerId, setDraftSellerId] = useState(() => String(pendingCreate?.seller_id ?? ''))
+  const [draftMarketplace, setDraftMarketplace] = useState<ReturnMarketplace>(() => pendingCreate?.marketplace as ReturnMarketplace ?? '')
+  const [draftClientRequestId, setDraftClientRequestId] = useState<string | null>(() => pendingCreate?.client_request_id as string ?? null)
   const [submittingDraft, setSubmittingDraft] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -213,6 +217,14 @@ export function FfInboundQueuePage({
   }
 
   const openCreateDialog = (operationType: InboundOperationType) => {
+    if (pendingCreate) {
+      setDraftOperationType(pendingCreate.operation_type as InboundOperationType)
+      setDraftSellerId(String(pendingCreate.seller_id))
+      setDraftMarketplace(pendingCreate.marketplace as ReturnMarketplace ?? '')
+      setDraftClientRequestId(String(pendingCreate.client_request_id))
+      setCreateError('Предыдущий запрос требует проверки. Повторите создание, чтобы получить его результат.')
+      return
+    }
     setCreateError(null)
     setDraftOperationType(operationType)
     setDraftSellerId(sellerOptions.length === 1 ? sellerOptions[0].id : '')
@@ -360,6 +372,7 @@ export function FfInboundQueuePage({
                 labelId="ff-inbound-create-seller-label"
                 label="Селлер"
                 value={draftSellerId}
+                disabled={submittingDraft || Boolean(pendingCreate)}
                 onChange={(event) => setDraftSellerId(String(event.target.value))}
                 data-testid="ff-inbound-create-seller"
               >
@@ -379,6 +392,7 @@ export function FfInboundQueuePage({
                   labelId="ff-inbound-create-marketplace-label"
                   label="Маркетплейс"
                   value={draftMarketplace}
+                  disabled={submittingDraft || Boolean(pendingCreate)}
                   onChange={(event) => setDraftMarketplace(event.target.value as ReturnMarketplace)}
                   displayEmpty
                   renderValue={(value) => {

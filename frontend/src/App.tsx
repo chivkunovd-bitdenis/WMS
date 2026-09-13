@@ -1,3 +1,4 @@
+import { readIntake, sendIntakeMutations } from "./screens/ff/inboundDraftPersistence"
 import { confirmDiscardChanges } from './utils/confirmDiscardChanges'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
@@ -2756,23 +2757,13 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
-      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
-        method: 'POST',
-        headers: {
-          ...authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          // Повтор после неизвестного ответа сети приходит с тем же
-          // client_request_id, и сервер возвращает уже созданный документ,
-          // а не заводит второй.
-          ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
-          warehouse_id: wid,
-          operation_type: operationType,
-          seller_id: sellerId,
+      const res = await sendIntakeMutations(token, 'create', readIntake(token, 'create').pending?.length ? undefined : [{
+        method: 'POST', path: '/operations/inbound-intake-requests', body: {
+          client_request_id: clientRequestId ?? crypto.randomUUID(),
+          warehouse_id: wid, operation_type: operationType, seller_id: sellerId,
           ...(operationType === 'return' && marketplace ? { marketplace } : {}),
-        }),
-      })
+        },
+      }])
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res))
       }
@@ -3061,6 +3052,7 @@ export default function App() {
             element={
               token && canReceptionOps ? (
                 <FfInboundQueuePage
+                  draftToken={token}
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="reception"
                   rows={inboundSummaries}
                   creatingDraft={opsBusy}

@@ -1,3 +1,4 @@
+import { intakeMutation, readIntake, sendIntakeMutations } from "./inboundDraftPersistence"
 import {
   memo,
   useCallback,
@@ -172,6 +173,7 @@ type Props = {
    */
   containerKind?: 'box' | 'cargo_place'
   readOnly: boolean
+  ffDraft?: boolean
   token: string
   requestLines: RequestLine[]
   boxLines: InboundBoxLine[]
@@ -188,6 +190,7 @@ export function FfInboundBoxAddDialog({
   boxLabel,
   containerKind,
   readOnly,
+  ffDraft = false,
   token,
   requestLines,
   boxLines,
@@ -266,8 +269,8 @@ export function FfInboundBoxAddDialog({
         return
       }
       const raw = rawOverride ?? draftQtyRef.current[productId] ?? '0'
-      const qty = Math.floor(Number(raw))
-      if (!Number.isFinite(qty) || qty < 0) {
+      const qty = Number(raw)
+      if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(qty) || qty < 0 || qty > 100000) {
         setError('Укажите целое количество ≥ 0.')
         return
       }
@@ -278,7 +281,7 @@ export function FfInboundBoxAddDialog({
       setBusy(true)
       setError(null)
       try {
-        const res = await fetch(
+        const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('PUT', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/lines/${productId}`, { quantity: qty })]) : await fetch(
           apiUrl(
             `/operations/inbound-intake-requests/${requestId}/${
               containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
@@ -301,7 +304,7 @@ export function FfInboundBoxAddDialog({
         setBusy(false)
       }
     },
-    [authHeaders, boxId, containerKind, onUpdated, qtyInBoxByProductId, readOnly, requestId],
+    [authHeaders, boxId, containerKind, ffDraft, token, onUpdated, qtyInBoxByProductId, readOnly, requestId],
   )
 
   // Стабильные обработчики — иначе memo у строки не срабатывает.
@@ -331,7 +334,9 @@ export function FfInboundBoxAddDialog({
     // Wait for the serialized scan request before reconciling the parent card,
     // otherwise the closed box can still render as empty until a page reload.
     await scanQueueRef.current
+    if (ffDraft && readIntake(token, requestId).pending?.length) { setError('Проверьте результат предыдущего запроса.'); return }
     await flushPendingQty()
+    if (ffDraft && readIntake(token, requestId).pending?.length) return
     await onUpdated()
     onClose()
   }
@@ -355,7 +360,7 @@ export function FfInboundBoxAddDialog({
       }
       lastProductLineId.current = null
       const productId = findInboundScanProductId(raw, scanProductByBarcode)
-      const res = await fetch(
+      const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/scan`, { barcode: raw, product_id: productId })]) : await fetch(
         apiUrl(
           `/operations/inbound-intake-requests/${requestId}/${
             containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
@@ -401,6 +406,7 @@ export function FfInboundBoxAddDialog({
       lastProductLineId.current = requestLines.find((line) => line.product_id === scannedLine.product_id)?.id ?? null
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
+      if (ffDraft) await onUpdated()
       // The POST response is authoritative for this box. Refresh the heavy parent
       // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
@@ -467,6 +473,12 @@ export function FfInboundBoxAddDialog({
           <CloseOutlined />
         </IconButton>
       </DialogTitle>
+      {ffDraft && readIntake(token, requestId).pending?.length ? <Alert severity="warning" action={<Button disabled={busy} onClick={async () => {
+        setBusy(true)
+        try { await sendIntakeMutations(token, requestId); await onUpdated(); setError(null) }
+        catch (e) { setError(e instanceof Error ? e.message : 'Не удалось проверить запрос.') }
+        finally { setBusy(false) }
+      }}>Проверить результат</Button>}>Предыдущий запрос требует проверки.</Alert> : null}
       <DialogContent dividers sx={boxFillDialogContentSx}>
         <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
           {readOnly ? (
@@ -521,7 +533,7 @@ export function FfInboundBoxAddDialog({
                 <TableRow>
                   <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={{ width: 80, whiteSpace: 'nowrap', px: 1 }}>
-                    Заявлено
+                    {ffDraft ? 'Всего принято' : 'Заявлено'}
                   </TableCell>
                   <TableCell align="right" sx={boxFillQtyCellSx}>
                     В коробе
