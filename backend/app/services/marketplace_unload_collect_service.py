@@ -65,6 +65,7 @@ class _AllocationRollback:
     allocation: MarketplaceUnloadPickAllocation
     quantity: int = 0
     quantity_packed: int = 0
+    quantity_source_known: int = 0
 
 
 async def picked_qty_by_product(
@@ -373,12 +374,16 @@ async def collect_into_box(
             container_id=container_id,
             quantity=new_pick,
             quantity_packed=packed_quantity,
+            quantity_source_known=quantity,
         )
         session.add(alloc)
     else:
         alloc.quantity = new_pick
-        if alloc.quantity_packed is not None:
-            alloc.quantity_packed = int(alloc.quantity_packed) + packed_quantity
+        alloc.quantity_packed = int(alloc.quantity_packed or 0) + packed_quantity
+        if alloc.quantity_source_known is None:
+            alloc.quantity_source_known = quantity
+        else:
+            alloc.quantity_source_known = int(alloc.quantity_source_known) + quantity
 
     box_line_stmt = select(MarketplaceUnloadBoxLine).where(
         MarketplaceUnloadBoxLine.box_id == box_id,
@@ -392,12 +397,16 @@ async def collect_into_box(
             product_id=product_id,
             quantity=quantity,
             quantity_packed=packed_quantity,
+            quantity_source_known=quantity,
         )
         session.add(box_line)
     else:
         box_line.quantity = int(box_line.quantity) + quantity
-        if box_line.quantity_packed is not None:
-            box_line.quantity_packed = int(box_line.quantity_packed) + packed_quantity
+        box_line.quantity_packed = int(box_line.quantity_packed or 0) + packed_quantity
+        if box_line.quantity_source_known is None:
+            box_line.quantity_source_known = quantity
+        else:
+            box_line.quantity_source_known = int(box_line.quantity_source_known) + quantity
 
     mu_svc.enter_collecting_if_needed(req)
     await session.flush()
@@ -548,12 +557,16 @@ async def record_pick_allocation(
             container_id=container_id,
             quantity=new_pick,
             quantity_packed=packed_quantity,
+            quantity_source_known=quantity,
         )
         session.add(alloc)
     else:
         alloc.quantity = new_pick
-        if alloc.quantity_packed is not None:
-            alloc.quantity_packed = int(alloc.quantity_packed) + packed_quantity
+        alloc.quantity_packed = int(alloc.quantity_packed or 0) + packed_quantity
+        if alloc.quantity_source_known is None:
+            alloc.quantity_source_known = quantity
+        else:
+            alloc.quantity_source_known = int(alloc.quantity_source_known) + quantity
 
     mu_svc.enter_collecting_if_needed(req)
     await session.commit()
@@ -684,7 +697,9 @@ async def set_pick_allocation(
     assert alloc is not None
     alloc_id = alloc.id
     remove_qty = -diff
-    packed_removed = min(int(alloc.quantity_packed or 0), remove_qty)
+    unknown_available = int(alloc.quantity) - int(alloc.quantity_source_known or 0)
+    source_known_removed = max(0, remove_qty - unknown_available)
+    packed_removed = min(int(alloc.quantity_packed or 0), source_known_removed)
     new_qty = current_qty - remove_qty
     if new_qty < 1:
         await session.delete(alloc)
@@ -692,6 +707,10 @@ async def set_pick_allocation(
         alloc.quantity = new_qty
         if alloc.quantity_packed is not None:
             alloc.quantity_packed = int(alloc.quantity_packed) - packed_removed
+        if alloc.quantity_source_known is not None:
+            alloc.quantity_source_known = (
+                int(alloc.quantity_source_known) - source_known_removed
+            )
 
     await inventory_service.reverse_marketplace_unload_pick(
         session,
@@ -739,8 +758,13 @@ async def _rollback_pick_allocations(
     product_id: uuid.UUID,
     quantity: int,
     quantity_packed: int,
+    quantity_source_known: int,
 ) -> list[tuple[uuid.UUID, int, int]]:
-    if quantity_packed < 0 or quantity_packed > quantity:
+    if (
+        quantity_packed < 0
+        or quantity_source_known < quantity_packed
+        or quantity_source_known > quantity
+    ):
         raise MarketplaceUnloadPickError("invalid_quantity")
     stmt = (
         select(MarketplaceUnloadPickAllocation)
@@ -756,42 +780,62 @@ async def _rollback_pick_allocations(
     allocations = list(res.scalars().all())
     chunks: dict[uuid.UUID, _AllocationRollback] = {}
 
-    def take_from(alloc: MarketplaceUnloadPickAllocation, qty: int, packed: int) -> None:
+    def take_from(
+        alloc: MarketplaceUnloadPickAllocation,
+        qty: int,
+        packed: int,
+        source_known: int,
+    ) -> None:
         chunk = chunks.setdefault(alloc.id, _AllocationRollback(alloc))
         chunk.quantity += qty
         chunk.quantity_packed += packed
+        chunk.quantity_source_known += source_known
 
     remaining_packed = quantity_packed
     for alloc in allocations:
         if remaining_packed < 1:
             break
         packed_available = int(alloc.quantity_packed or 0)
-        take = min(packed_available, remaining_packed)
+        already_taken = chunks.get(alloc.id, _AllocationRollback(alloc)).quantity_packed
+        take = min(max(0, packed_available - already_taken), remaining_packed)
         if take:
-            take_from(alloc, take, take)
+            take_from(alloc, take, take, take)
             remaining_packed -= take
     if remaining_packed > 0:
         raise MarketplaceUnloadPickError("insufficient_picked")
 
-    remaining_unpacked = quantity - quantity_packed
+    remaining_known_unpacked = quantity_source_known - quantity_packed
     for alloc in allocations:
-        if remaining_unpacked < 1:
+        if remaining_known_unpacked < 1:
             break
-        already_taken = chunks.get(alloc.id, _AllocationRollback(alloc)).quantity
-        unpacked_available = int(alloc.quantity) - int(alloc.quantity_packed or 0)
-        take = min(max(0, unpacked_available), remaining_unpacked)
+        chunk = chunks.get(alloc.id, _AllocationRollback(alloc))
+        known_available = int(alloc.quantity_source_known or 0) - int(
+            alloc.quantity_packed or 0
+        )
+        take = min(
+            max(0, known_available - (chunk.quantity_source_known - chunk.quantity_packed)),
+            remaining_known_unpacked,
+        )
         if take:
-            take_from(alloc, take, 0)
-            remaining_unpacked -= take
-        # A historical unknown allocation has no provable ready part. It can
-        # only satisfy an unpacked removal and retains that unknown state.
-        if alloc.quantity_packed is None and remaining_unpacked > 0:
-            unknown_available = int(alloc.quantity) - already_taken
-            take_unknown = min(max(0, unknown_available), remaining_unpacked)
-            if take_unknown:
-                take_from(alloc, take_unknown, 0)
-                remaining_unpacked -= take_unknown
-    if remaining_unpacked > 0:
+            take_from(alloc, take, 0, take)
+            remaining_known_unpacked -= take
+    if remaining_known_unpacked > 0:
+        raise MarketplaceUnloadPickError("insufficient_picked")
+
+    remaining_unknown = quantity - quantity_source_known
+    for alloc in allocations:
+        if remaining_unknown < 1:
+            break
+        chunk = chunks.get(alloc.id, _AllocationRollback(alloc))
+        unknown_available = int(alloc.quantity) - int(alloc.quantity_source_known or 0)
+        available_after_chunk = unknown_available - (
+            chunk.quantity - chunk.quantity_source_known
+        )
+        take = min(max(0, available_after_chunk), remaining_unknown)
+        if take:
+            take_from(alloc, take, 0, 0)
+            remaining_unknown -= take
+    if remaining_unknown > 0:
         raise MarketplaceUnloadPickError("insufficient_picked")
 
     result: list[tuple[uuid.UUID, int, int]] = []
@@ -800,6 +844,10 @@ async def _rollback_pick_allocations(
         alloc.quantity = int(alloc.quantity) - chunk.quantity
         if alloc.quantity_packed is not None:
             alloc.quantity_packed = int(alloc.quantity_packed) - chunk.quantity_packed
+        if alloc.quantity_source_known is not None:
+            alloc.quantity_source_known = (
+                int(alloc.quantity_source_known) - chunk.quantity_source_known
+            )
         if int(alloc.quantity) < 1:
             await session.delete(alloc)
         result.append((alloc.storage_location_id, chunk.quantity, chunk.quantity_packed))
@@ -843,9 +891,16 @@ async def remove_from_box(
     )
     await session.execute(lock_stmt)
 
-    packed_removed = min(int(line.quantity_packed or 0), remove_qty)
+    unknown_available = line_qty - int(line.quantity_source_known or 0)
+    source_known_removed = max(0, remove_qty - unknown_available)
+    packed_removed = min(int(line.quantity_packed or 0), source_known_removed)
     location_chunks = await _rollback_pick_allocations(
-        session, request_id, line.product_id, remove_qty, packed_removed
+        session,
+        request_id,
+        line.product_id,
+        remove_qty,
+        packed_removed,
+        source_known_removed,
     )
     for loc_id, chunk_qty, packed_qty in location_chunks:
         await inventory_service.reverse_marketplace_unload_pick(
@@ -876,6 +931,8 @@ async def remove_from_box(
         line.quantity = new_qty
         if line.quantity_packed is not None:
             line.quantity_packed = int(line.quantity_packed) - packed_removed
+        if line.quantity_source_known is not None:
+            line.quantity_source_known = int(line.quantity_source_known) - source_known_removed
 
     await session.commit()
 

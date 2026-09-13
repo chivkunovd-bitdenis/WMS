@@ -90,11 +90,30 @@ async def _inventory_at_location(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("ready_from_source", "expected_worker"), [(0, 3), (2, 1), (3, 0)])
+@pytest.mark.parametrize(
+    (
+        "ready_from_source",
+        "expected_worker",
+        "source_known",
+        "confirmed_before_sync",
+        "work_before_sync",
+    ),
+    [
+        (0, 3, 3, 0, 0),
+        (2, 1, 3, 0, 0),
+        (3, 0, 3, 0, 0),
+        # A historical ready unit stays confirmed while two later unpacked
+        # scans add employee work; only those new scans have known source.
+        (0, 2, 2, 1, 0),
+    ],
+)
 async def test_mp_box_packaging_uses_source_captured_in_box(
     db_session,
     ready_from_source: int,
     expected_worker: int,
+    source_known: int,
+    confirmed_before_sync: int,
+    work_before_sync: int,
 ) -> None:
     """WMS-444: the source captured in the box, not a later balance, sets work."""
     suffix = uuid.uuid4().hex[:8]
@@ -141,12 +160,15 @@ async def test_mp_box_packaging_uses_source_captured_in_box(
         storage_location_id=location.id,
         qty_total=3,
         qty_suggested_packed=3,
+        qty_confirmed_packed=confirmed_before_sync,
+        qty_packed_in_task=work_before_sync,
     )
     box_line = MarketplaceUnloadBoxLine(
         box_id=box.id,
         product_id=product.id,
         quantity=3,
         quantity_packed=ready_from_source,
+        quantity_source_known=source_known,
     )
     db_session.add_all((line, box_line))
     await db_session.commit()
@@ -154,7 +176,8 @@ async def test_mp_box_packaging_uses_source_captured_in_box(
     loaded = await pkg_svc.get_task(db_session, tenant.id, task.id)
     assert loaded is not None
     await pkg_svc.sync_mp_task_packed_from_boxes(db_session, tenant.id, loaded)
-    assert loaded.lines[0].qty_confirmed_packed == ready_from_source
+    expected_confirmed = confirmed_before_sync + ready_from_source
+    assert loaded.lines[0].qty_confirmed_packed == expected_confirmed
     assert loaded.lines[0].qty_packed_in_task == expected_worker
     assert pkg_svc.qty_done(loaded.lines[0]) == 3
 
@@ -164,7 +187,7 @@ async def test_mp_box_packaging_uses_source_captured_in_box(
         db_session, tenant.id, task.id, line.id
     )
     confirmed_line = confirmed.lines[0]
-    assert confirmed_line.qty_confirmed_packed == ready_from_source
+    assert confirmed_line.qty_confirmed_packed == expected_confirmed
     assert confirmed_line.qty_packed_in_task == expected_worker
 
 

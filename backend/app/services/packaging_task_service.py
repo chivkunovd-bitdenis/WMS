@@ -671,8 +671,7 @@ async def sync_mp_task_packed_from_boxes(
             MarketplaceUnloadBoxLine.product_id,
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_packed), 0),
-            func.count(MarketplaceUnloadBoxLine.id),
-            func.count(MarketplaceUnloadBoxLine.quantity_packed),
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_source_known), 0),
         )
         .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
         .join(
@@ -689,9 +688,10 @@ async def sync_mp_task_packed_from_boxes(
         product_id: (
             int(quantity or 0),
             int(quantity_packed or 0),
-            int(line_count or 0) != int(source_count or 0),
+            int(source_known or 0),
+            int(source_known or 0) < int(quantity or 0),
         )
-        for product_id, quantity, quantity_packed, line_count, source_count in (
+        for product_id, quantity, quantity_packed, source_known in (
             await session.execute(stmt)
         ).all()
     }
@@ -704,17 +704,31 @@ async def sync_mp_task_packed_from_boxes(
         boxed = boxed_by_product.get(line.product_id)
         if boxed is None:
             continue
-        boxed_qty, boxed_packed, source_unknown = boxed
+        boxed_qty, boxed_packed, source_known, source_unknown = boxed
         if source_unknown:
             # Rows created before WMS-444 do not carry a source split. Keep
             # their persisted result rather than inventing new employee work
             # from a default value or from the current stock remainder.
-            continue
-        ready_from_source = min(int(line.qty_total), boxed_qty, boxed_packed)
-        worker_packed = min(
-            int(line.qty_total) - ready_from_source,
-            max(0, boxed_qty - ready_from_source),
-        )
+            if source_known < 1:
+                continue
+            if line.qty_legacy_confirmed_packed is None:
+                line.qty_legacy_confirmed_packed = int(line.qty_confirmed_packed)
+                line.qty_legacy_packed_in_task = int(line.qty_packed_in_task)
+            legacy_confirmed = int(line.qty_legacy_confirmed_packed)
+            legacy_work = int(line.qty_legacy_packed_in_task or 0)
+            ready_from_source = min(
+                int(line.qty_total), legacy_confirmed + min(source_known, boxed_packed)
+            )
+            worker_packed = min(
+                int(line.qty_total) - ready_from_source,
+                legacy_work + max(0, source_known - boxed_packed),
+            )
+        else:
+            ready_from_source = min(int(line.qty_total), boxed_qty, boxed_packed)
+            worker_packed = min(
+                int(line.qty_total) - ready_from_source,
+                max(0, boxed_qty - ready_from_source),
+            )
         if (
             int(line.qty_confirmed_packed) != ready_from_source
             or int(line.qty_packed_in_task) != worker_packed
