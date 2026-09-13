@@ -4,8 +4,10 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, case, func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.elements import SQLColumnExpression
 
 from app.models.base import Base
 
@@ -32,7 +34,22 @@ class User(Base):
         nullable=True,
         index=True,
     )
-    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    @hybrid_property
+    def display_name(self) -> str:
+        return (self.full_name or "").strip() or "ФИО не указано"
+
+    @display_name.inplace.expression
+    @classmethod
+    def _display_name_expression(cls) -> SQLColumnExpression[str]:
+        return case(
+            (cls.id.is_(None), None),
+            else_=func.coalesce(func.nullif(func.trim(cls.full_name), ""), "ФИО не указано"),
+        )
+
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     must_set_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False

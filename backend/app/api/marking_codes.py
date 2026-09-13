@@ -329,6 +329,7 @@ class LedgerEventOut(BaseModel):
     seller_name: str | None
     document_number: str | None
     actor_email: str | None
+    actor_name: str | None = None
     source_process: str | None = None
     source_process_label: str | None = None
     aggregated_count: int | None = None
@@ -345,6 +346,7 @@ class CodeHistoryEventOut(BaseModel):
     event_type: str
     document_number: str | None
     actor_email: str | None
+    actor_name: str | None = None
     copies: int
     reason: str | None
 
@@ -1001,6 +1003,7 @@ async def list_marking_ledger(
                 seller_name=r.seller_name,
                 document_number=r.document_number,
                 actor_email=r.actor_email,
+                actor_name=r.actor_email,
                 source_process=r.source_process,
                 source_process_label=r.source_process_label,
                 aggregated_count=r.aggregated_count,
@@ -1073,6 +1076,7 @@ async def get_marking_code_history(
             event_type=r.event_type,
             document_number=r.document_number,
             actor_email=r.actor_email,
+            actor_name=r.actor_email,
             copies=r.copies,
             reason=r.reason,
         )
@@ -1673,6 +1677,7 @@ class MarkingReprintRequestOut(BaseModel):
     reason: str | None = None
     created_at: datetime
     requested_by_email: str
+    requested_by_name: str | None = None
     product_name: str
     product_sku: str
     cis_masked: str
@@ -1777,6 +1782,7 @@ async def list_marking_reprint_requests(
                 reason=row.reason,
                 created_at=row.created_at,
                 requested_by_email=row.requested_by_email,
+                requested_by_name=row.requested_by_email,
                 product_name=row.product_name,
                 product_sku=row.product_sku,
                 cis_masked=row.cis_masked,

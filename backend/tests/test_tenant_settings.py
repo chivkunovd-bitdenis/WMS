@@ -127,7 +127,7 @@ async def test_tenant_settings_forbidden_for_staff(async_client: AsyncClient) ->
     create_staff = await async_client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": "staff-tenant-settings@example.com"},
+        json={"full_name": "Иван Петров", "email": "staff-tenant-settings@example.com"},
     )
     assert create_staff.status_code == 201, create_staff.text
 

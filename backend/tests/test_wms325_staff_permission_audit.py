@@ -81,7 +81,7 @@ async def test_ff_staff_permissions_patch_writes_audit_with_before_after_and_act
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=ah,
-        json={"email": f"staff-{suffix}@example.com"},
+        json={"full_name": "Иван Петров", "email": f"staff-{suffix}@example.com"},
     )
     assert created.status_code == 201, created.text
     target_id = uuid.UUID(created.json()["id"])
@@ -144,7 +144,7 @@ async def test_ff_staff_permissions_patch_without_change_writes_no_extra_event(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=ah,
-        json={"email": f"staff-noop-{suffix}@example.com"},
+        json={"full_name": "Иван Петров", "email": f"staff-noop-{suffix}@example.com"},
     )
     assert created.status_code == 201, created.text
     target_id = uuid.UUID(created.json()["id"])
@@ -233,6 +233,7 @@ async def test_seller_staff_permission_mutations_write_audit_rows(
         "/auth/seller-staff-accounts",
         headers=owner_headers,
         json={
+                 "full_name": "Иван Петров",
             "email": f"seller-staff-{suffix}@example.com",
             "permissions": {
                 "documents": True,
@@ -291,7 +292,7 @@ async def test_staff_history_is_available_over_http_and_keeps_rate_changes(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=headers,
-        json={"email": f"rate-{suffix}@example.com"},
+        json={"full_name": "Иван Петров", "email": f"rate-{suffix}@example.com"},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]

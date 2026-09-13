@@ -206,7 +206,7 @@ async def test_inbound_status_chain_is_visible_through_document_events_api(
     assert [event["qty"] for event in status_events] == [0, 0, 5, 5]
     assert all(event["source"] == SOURCE_USER for event in status_events)
     assert all(event["actor"]["id"] == token_payload["sub"] for event in status_events)
-    assert all(event["actor"]["name"].startswith("journal-") for event in status_events)
+    assert all(event["actor"]["name"] == "ФИО не указано" for event in status_events)
     assert any(event["event_type"] == "line_added" for event in events)
     assert any(event["event_type"] == "planned_date_changed" for event in events)
     assert any(event["event_type"] == "line_qty_changed" for event in events)

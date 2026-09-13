@@ -168,6 +168,7 @@ async def post_seller_with_account(
             purpose="invite",
             base_url=public_base_url(request),
         )
+    assert account.email is not None  # This endpoint requires a contact address.
     return SellerWithAccountOut(
         seller_id=str(seller.id),
         seller_name=seller.name,

@@ -2642,7 +2642,7 @@ async def list_pool_codes(
 ) -> list[PoolCodeRow]:
     await _get_pool_or_error(session, tenant_id, pool_id)
     stmt = (
-        select(MarkingCode, MarkingCodeImport.document_number, User.email)
+        select(MarkingCode, MarkingCodeImport.document_number, User.display_name)
         .outerjoin(MarkingCodeImport, MarkingCode.import_batch_id == MarkingCodeImport.id)
         .outerjoin(User, MarkingCode.printed_by_user_id == User.id)
         .where(
@@ -2845,7 +2845,7 @@ def _ledger_filtered_stmt(
             Product.name,
             Product.sku_code,
             Seller.name,
-            User.email,
+            User.display_name,
             MarkingCode.import_batch_id,
             MarkingCodeImport.created_at,
         )
@@ -3006,7 +3006,7 @@ async def get_code_history(
     if code is None or code.tenant_id != tenant_id:
         raise MarkingCodeServiceError("code_not_found")
     stmt = (
-        select(MarkingCodeEvent, User.email)
+        select(MarkingCodeEvent, User.display_name)
         .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
         .where(
             MarkingCodeEvent.tenant_id == tenant_id,
@@ -3159,7 +3159,7 @@ async def list_pending_reprint_requests(
             MarkingReprintRequest,
             MarkingCode.cis_code,
             MarkingCode.pool_id,
-            User.email,
+            User.display_name,
             Product.name,
             Product.sku_code,
             PackagingTask.id,
