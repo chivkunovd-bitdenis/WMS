@@ -381,6 +381,21 @@ class WindowsAdapter:
                 devmode.Fields |= 0x00000100 | 0x00008000
                 if devmode.Copies != 1 or not devmode.Fields & 0x00000100:
                     raise ValueError("DEVMODE не сохранил число копий")
+                # Drivers may silently discard an invalid DEVMODE in CreateDC
+                # and replace it with their defaults. Ask the selected driver
+                # to merge its private data first, then inspect the returned
+                # DEVMODE before any StartDoc can accept a job.
+                result = self.modules["win32print"].DocumentProperties(
+                    0, printer, queue, devmode, devmode, 0x00000002 | 0x00000008
+                )
+                if result != 1:
+                    raise ValueError(
+                        "Драйвер не подтвердил параметры задания печати"
+                    )
+                if devmode.Copies != 1 or not devmode.Fields & 0x00000100:
+                    raise ValueError(
+                        "Драйвер не подтвердил одну копию для задания печати"
+                    )
                 handle = self.modules["win32gui"].CreateDC(
                     "WINSPOOL", queue, devmode
                 )

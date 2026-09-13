@@ -296,6 +296,16 @@ class RuntimeTest(unittest.TestCase):
                 return {"pDevMode": SimpleNamespace(Copies=2, Collate=1, Fields=0)}
 
             @staticmethod
+            def DocumentProperties(hwnd, handle, queue, output, input_, mode):
+                self.assertEqual(hwnd, 0)
+                self.assertEqual(handle, "Принтер склада 58")
+                self.assertEqual(queue, "Принтер склада 58")
+                self.assertIs(output, input_)
+                self.assertEqual(mode, 0x00000002 | 0x00000008)
+                calls.append(("document-properties", output.Copies, output.Fields))
+                return 1
+
+            @staticmethod
             def ClosePrinter(handle):
                 calls.append(("close", handle))
 
@@ -406,8 +416,117 @@ class RuntimeTest(unittest.TestCase):
                 for call in device_contexts
             )
         )
+        document_properties = [
+            call for call in calls if call[0] == "document-properties"
+        ]
+        self.assertGreaterEqual(len(document_properties), 4)
+        self.assertTrue(
+            all(call[1] == 1 and call[2] & 0x00000100 for call in document_properties)
+        )
         self.assertEqual(sum(call[0] == "draw" for call in calls), 2)
         self.assertNotIn(("abort",), calls)
+
+    def test_windows_adapter_rejects_driver_copy_fallback_before_startdoc(self):
+        calls = []
+
+        class FallbackPrint:
+            PRINTER_ENUM_LOCAL = 2
+            PRINTER_ENUM_CONNECTIONS = 4
+
+            @staticmethod
+            def EnumPrinters(flags):
+                return [(0, "", "Printer 442", "")]
+
+            @staticmethod
+            def OpenPrinter(queue):
+                return queue
+
+            @staticmethod
+            def GetPrinter(handle, level):
+                return {"pDevMode": SimpleNamespace(Copies=2, Collate=1, Fields=0)}
+
+            @staticmethod
+            def DocumentProperties(hwnd, handle, queue, output, input_, mode):
+                output.Copies = 2  # Driver's documented CreateDC fallback/default.
+                output.Fields |= 0x00000100
+                return 1
+
+            @staticmethod
+            def ClosePrinter(handle):
+                calls.append(("close", handle))
+
+        class Image:
+            width = 464
+            height = 320
+            info = {"dpi": (203, 203)}
+
+            def convert(self, mode):
+                return self
+
+        adapter = runtime.WindowsAdapter(
+            {
+                "win32print": FallbackPrint,
+                "win32gui": SimpleNamespace(
+                    CreateDC=lambda *_: calls.append(("create-dc",))
+                ),
+                "win32ui": SimpleNamespace(
+                    CreateDCFromHandle=lambda _: AssertionError("must not create DC")
+                ),
+                "Image": SimpleNamespace(open=lambda _: Image()),
+                "ImageWin": None,
+                "fitz": None,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "одну копию"):
+            adapter.submit(
+                b"\x89PNG\r\n\x1a\nsynthetic", "image/png", "Printer 442", 2, 58, 40
+            )
+        self.assertEqual(calls, [("close", "Printer 442")])
+
+    def test_windows_adapter_rejects_unconfirmed_devmode_before_startdoc(self):
+        calls = []
+
+        class RejectingPrint:
+            PRINTER_ENUM_LOCAL = 2
+            PRINTER_ENUM_CONNECTIONS = 4
+
+            @staticmethod
+            def EnumPrinters(flags):
+                return [(0, "", "Printer 442", "")]
+
+            @staticmethod
+            def OpenPrinter(queue):
+                return queue
+
+            @staticmethod
+            def GetPrinter(handle, level):
+                return {"pDevMode": SimpleNamespace(Copies=1, Collate=0, Fields=0)}
+
+            @staticmethod
+            def DocumentProperties(hwnd, handle, queue, output, input_, mode):
+                return -1
+
+            @staticmethod
+            def ClosePrinter(handle):
+                calls.append(("close", handle))
+
+        adapter = runtime.WindowsAdapter(
+            {
+                "win32print": RejectingPrint,
+                "win32gui": SimpleNamespace(
+                    CreateDC=lambda *_: calls.append(("create-dc",))
+                ),
+                "win32ui": SimpleNamespace(
+                    CreateDCFromHandle=lambda _: AssertionError("must not create DC")
+                ),
+                "Image": SimpleNamespace(),
+                "ImageWin": None,
+                "fitz": None,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "не подтвердил параметры"):
+            adapter._create_printer_dc("Printer 442")
+        self.assertEqual(calls, [("close", "Printer 442")])
 
     def test_windows_task_restart_count_is_in_scheduler_schema_range(self):
         namespace = {"task": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
