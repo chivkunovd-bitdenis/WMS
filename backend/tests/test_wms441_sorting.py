@@ -157,9 +157,7 @@ async def test_failure_rollback_and_tenant_isolation(async_client: AsyncClient):
         await place(uuid.uuid4(), actor, req, product, a, 1)
     assert await place(tenant, actor, req, product, a, 1) == ("sorting", 1)
     async with SessionLocal() as session:
-        with pytest.raises(intake.InboundIntakeError, match="distribution_completed"):
-            await intake.replace_distribution_lines(session, tenant, req, lines=[])
-        await session.rollback()
+        await intake.replace_distribution_lines(session, tenant, req, lines=[])
         assert (
             await session.scalar(
                 select(func.count())
@@ -263,7 +261,10 @@ async def test_reconcile_requires_linked_movements_and_does_not_move_again(
         async_client, tenant, actor, loose_qty=1, box_qty=0
     )
     async with SessionLocal() as session:
-        untouched = await sorting.reconcile_linked_putaway(session, tenant, req)
+        with pytest.raises(intake.InboundIntakeError, match="sorting_reconciliation_unproven"):
+            await sorting.reconcile_linked_putaway(session, tenant, req)
+        await session.rollback()
+        untouched = await intake.get_request(session, tenant, req)
         assert untouched.status == "sorting"
     await place(tenant, actor, req, product, a, 1)
     async with SessionLocal() as session:

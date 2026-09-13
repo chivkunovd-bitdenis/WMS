@@ -1347,6 +1347,7 @@ async def apply_putaway_from_sorting(
     actor_user_id: uuid.UUID | None,
     from_container_kind: ContainerKind | None = None,
     from_container_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None,
     to_container_kind: ContainerKind | None = None,
     to_container_id: uuid.UUID | None = None,
 ) -> None:
@@ -1379,7 +1380,7 @@ async def apply_putaway_from_sorting(
         msg = "insufficient stock"
         raise ValueError(msg)
 
-    group_id = uuid.uuid4()
+    group_id = transfer_group_id or uuid.uuid4()
     await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
@@ -1421,6 +1422,7 @@ async def apply_return_defect_putaway(
     actor_user_id: uuid.UUID | None,
     from_container_kind: ContainerKind | None = None,
     from_container_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None,
 ) -> None:
     """Move inspected defective return stock into the tenant's service warehouse."""
     if quantity < 1:
@@ -1441,7 +1443,7 @@ async def apply_return_defect_putaway(
     )
     if available < quantity:
         raise ValueError("insufficient stock")
-    group_id = uuid.uuid4()
+    group_id = transfer_group_id or uuid.uuid4()
     await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
