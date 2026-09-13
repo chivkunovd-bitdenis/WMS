@@ -900,12 +900,13 @@ async def record_pack_progress(
     from app.services.fbs_packaging_integration_service import (
         FbsPackagingIntegrationError,
         get_supply_for_packaging_task,
+        lock_packaging_rows,
         record_fbs_pack_progress,
     )
 
     fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
     event_id = None
-    if fbs_supply is None:
+    if (idempotency_key is not None and idempotency_key.strip()) or fbs_supply is None:
         # The existing work event is the durable receipt. Keep the key tenant-wide
         # so reusing it for another document/line/actor cannot acknowledge new work.
         # Blank values mean no identity, like the legacy caller without a key.
@@ -919,11 +920,14 @@ async def record_pack_progress(
                 )
         # Lock before reloading quantities: a second independent attempt must also
         # observe the first commit before checking the remaining physical units.
-        await session.execute(
-            select(PackagingTask.id)
-            .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
-            .with_for_update()
-        )
+        if fbs_supply is not None:
+            await lock_packaging_rows(session, tenant_id, supply_id=fbs_supply.id)
+        else:
+            await session.execute(
+                select(PackagingTask.id)
+                .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
+                .with_for_update()
+            )
         task = await get_task(session, tenant_id, task_id)
         if task is None:
             raise PackagingTaskServiceError("not_found")
@@ -936,14 +940,28 @@ async def record_pack_progress(
                 or previous.quantity != qty
                 or previous.created_by_user_id != acting_user_id
                 or previous.action != action
-                or order_id is not None
+                or (order_id is not None and fbs_supply is None)
             ):
                 raise PackagingTaskServiceError("idempotency_conflict")
             # Return current document state, including completion or later undo;
             # replay never reapplies the historical action.
+            fulfilled_order = None
+            if fbs_supply is not None:
+                replay_line = next((ln for ln in task.lines if ln.id == line_id), None)
+                if replay_line is None:
+                    raise PackagingTaskServiceError("line_not_found")
+                try:
+                    replay = await record_fbs_pack_progress(
+                        session, tenant_id, task, replay_line, qty,
+                        order_id=order_id, acting_user_id=acting_user_id,
+                        idempotency_key=idempotency_key, replay_only=True,
+                    )
+                except FbsPackagingIntegrationError as exc:
+                    raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
+                fulfilled_order = replay.units[-1].order if replay.units else None
             await session.commit()
-            return PackProgressResult(task=task)
-        if event_id is not None and order_id is not None:
+            return PackProgressResult(task=task, fulfilled_order=fulfilled_order)
+        if event_id is not None and order_id is not None and fbs_supply is None:
             raise PackagingTaskServiceError("order_not_in_supply")
     if task.status == STATUS_DONE:
         raise PackagingTaskServiceError("bad_status")
@@ -1001,6 +1019,7 @@ async def record_pack_progress(
                 quantity=packed_delta,
                 line=line,
                 acting_user_id=acting_user_id,
+                event_id=event_id,
             )
         if acting_user_id is not None:
             await billing_svc.finalize_task_billing(
