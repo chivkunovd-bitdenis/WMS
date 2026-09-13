@@ -35,3 +35,11 @@ export async function sendPlacement(storage: Storage, key: string | null, body: 
   }
   return response
 }
+
+/** A network failure says nothing about whether a durable placement reached the server. */
+export function placementFailureMessage(error: unknown): string {
+  if (!(error instanceof Error) || error.message === 'Failed to fetch') {
+    return 'Не удалось получить ответ от сервера. Результат размещения пока неизвестен.'
+  }
+  return error.message
+}
