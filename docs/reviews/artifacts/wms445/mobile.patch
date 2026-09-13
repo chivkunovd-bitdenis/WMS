@@ -532,7 +532,7 @@ index ce11620..ba2d225 100644
      fun loadSupply(supplyId: String) {
          if (openedSupplyId != supplyId) {
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
-index b0f4739..6470b03 100644
+index b0f4739..e8ebde8 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
 @@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
@@ -554,7 +554,7 @@ index b0f4739..6470b03 100644
      }
      @After fun teardown() { Dispatchers.resetMain() }
  
-@@ -60,6 +65,67 @@ class FbsViewModelTest {
+@@ -60,6 +65,87 @@ class FbsViewModelTest {
          coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
          coVerify(exactly = 1) { service.worklist(marketplace = "ozon", statusGroup = "active") }
      }
@@ -619,6 +619,26 @@ index b0f4739..6470b03 100644
 +        assertEquals(listOf("supply"), opened)
 +        coVerify { provider.saveFbsSupplyCreate(null) }
 +    }
++
++    @Test fun `saved add intent is offered after a process restart and keeps its supply and body`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val saved = PendingFbsSupplyAdd("supply-before-restart", SupplyOrdersBody(listOf("1"), "same-key"))
++        coEvery { provider.pendingFbsSupplyAdd() } returns saved
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val sent = mutableListOf<SupplyOrdersBody>()
++        coEvery { service.addOrders("supply-before-restart", capture(sent)) } returns Response.success(workspace(listOf(fresh)))
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        assertEquals("supply-before-restart", vm.state.value.restoredSupplyAddId)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
++        assertEquals(listOf(saved.body), sent)
++        assertEquals(listOf("supply"), opened)
++        coVerify { provider.saveFbsSupplyAdd(null) }
++    }
++
      @Test fun `Ozon secondary position scan sends its product and oldest posting`() = runTest {
          val position = FbsPosition(productId = "second-product", name = "Second", sku = "222", quantity = 3, pickedQuantity = 1, id = "position", barcode = "222-bar")
          val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "123-456-1", positions = listOf(position))
