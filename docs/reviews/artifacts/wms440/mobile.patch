@@ -377,10 +377,10 @@ index 0000000..e612381
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 new file mode 100644
-index 0000000..c51d803
+index 0000000..6b69ca8
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
-@@ -0,0 +1,215 @@
+@@ -0,0 +1,223 @@
 +package ru.wms.tsd.features.inbound
 +
 +import androidx.lifecycle.ViewModel
@@ -579,7 +579,15 @@ index 0000000..c51d803
 +        val container = request.boxes.firstOrNull { it.barcode == barcode } ?: request.cargoPlaces.firstOrNull { it.barcode == barcode }
 +        if (container != null) { selectContainer(if (container.boxNumber != null) "boxes" else "cargo-places", container.id); return }
 +        if (current.containerId != null) {
-+            execute(IntakeAttempt("POST", "$base/$id/${current.containerKind}/${current.containerId}/scan", buildJsonObject { put("barcode", barcode); put("mutation_id", UUID.randomUUID().toString()) }))
++            _state.update { it.copy(busy = true) }
++            try {
++                val response = api.inboundDraft().catalog(request.sellerId, barcode)
++                check(response.isSuccessful) { response.readableError() }
++                val matches = response.body().orEmpty().filter { barcode in it.barcodes }
++                val product = matches.singleOrNull() ?: return fail(if (matches.isEmpty()) "Товар не найден. Выберите товар в каталоге." else "Несколько товаров с этим кодом. Выберите товар в каталоге.")
++                execute(IntakeAttempt("POST", "$base/$id/${current.containerKind}/${current.containerId}/scan", buildJsonObject { put("barcode", barcode); put("product_id", product.id); put("mutation_id", UUID.randomUUID().toString()) }))
++            } catch (e: Exception) { if (e is CancellationException) throw e; fail(e.message ?: networkErrorText()) }
++            finally { _state.update { it.copy(busy = false) } }
 +        } else {
 +            _state.update { it.copy(busy = true) }
 +            try {
@@ -652,10 +660,10 @@ index e7a3331..be6dbde 100644
          when {
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 new file mode 100644
-index 0000000..3f22870
+index 0000000..72af870
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,187 @@
 +package ru.wms.tsd.features.inbound
 +
 +import io.mockk.*
@@ -754,6 +762,28 @@ index 0000000..3f22870
 +        val vm = InboundDraftViewModel("request", provider)
 +        vm.onScan("OZN-EXTERNAL"); advanceUntilIdle()
 +        assertEquals("product", bodies.single()["product_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun containerScanSendsTheSingleCatalogProductId() = runTest {
++        request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1)))
++        coEvery { service.catalog("seller", "OZN-EXTERNAL") } returns Response.success(listOf(
++            DraftProduct("product", "Ozon товар", "SKU", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("OZN-EXTERNAL"))))
++        ))
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/boxes/box/scan", capture(bodies)) } returns Response.success(buildJsonObject {})
++        val vm = InboundDraftViewModel("request", provider)
++        vm.selectContainer("boxes", "box"); vm.onScan("OZN-EXTERNAL"); advanceUntilIdle()
++        assertEquals("product", bodies.single()["product_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun ambiguousContainerScanKeepsTheTareUnchanged() = runTest {
++        request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1)))
++        coEvery { service.catalog("seller", "SHARED") } returns Response.success(listOf(
++            DraftProduct("first", "Первый", "SKU-1", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("SHARED")))),
++            DraftProduct("second", "Второй", "SKU-2", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("SHARED"))))
++        ))
++        val vm = InboundDraftViewModel("request", provider)
++        vm.selectContainer("boxes", "box"); vm.onScan("SHARED"); advanceUntilIdle()
++        coVerify(exactly = 0) { service.post("$prefix/boxes/box/scan", any()) }
++        assertTrue(vm.state.value.error!!.contains("Несколько товаров"))
 +    }
 +    @Test fun completionUsesDirectEndpointAndRestoresPendingCompletion() = runTest {
 +        coEvery { service.post("$prefix/complete-receiving", any()) } throws IOException("lost")
