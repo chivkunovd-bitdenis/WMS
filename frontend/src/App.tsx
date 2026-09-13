@@ -1,5 +1,7 @@
 import { readIntake, sendIntakeMutations } from "./screens/ff/inboundDraftPersistence"
 import { confirmDiscardChanges } from './utils/confirmDiscardChanges'
+import { ChatDocumentAction } from './components/chat/ChatDocumentAction'
+import { ChatDocumentScreen } from './screens/chat/ChatDocumentScreen'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
@@ -15,6 +17,7 @@ import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
+import { ChatScreen } from './screens/chat/ChatScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -337,6 +340,9 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  useEffect(() => {
+    if (pathname.startsWith('/app/ff/chat')) setFfDocModal(null)
+  }, [pathname])
   const [ffDocDirty, setFfDocDirtyState] = useState(false)
   const ffDocDirtyRef = useRef(false)
   const fbsDirtyRef = useRef(false)
@@ -3003,6 +3009,8 @@ export default function App() {
                   infoNotice={ffSuppliesNotice}
                   onDismissInfoNotice={() => setFfSuppliesNotice(null)}
                   token={token}
+                  chatAuthHeaders={authHeaders}
+                  currentUserId={me?.id ?? null}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                   productPicklist={products.map((p) => ({
@@ -3301,6 +3309,25 @@ export default function App() {
             }
           />
 
+          <Route path="ff/chat/documents/:kind/:documentId" element={token ?
+            <ChatDocumentScreen token={token} authHeaders={authHeaders} currentUserId={me.id ?? null} /> : ffAccessDenied} />
+          <Route
+            path="ff/chat"
+            element={
+              token ? (
+                <ChatScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  currentUserId={me.id ?? null}
+                  sellers={sellers}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
           {/* «Хранение» в меню ведёт сюда. Экран отвечает на один вопрос — сколько
               лежало и на сколько, — а обмеры, ставки и печать ведомостей с него
               убраны по прямому поручению владельца. */}
@@ -3572,6 +3599,8 @@ export default function App() {
             element={
               token && isFulfillmentAdmin ? (
                 <OutboundScreen
+                chatAction={token && selectedOutboundId ? <ChatDocumentAction token={token} authHeaders={authHeaders}
+                  currentUserId={me.id ?? null} kind="outbound_shipment" documentId={selectedOutboundId} /> : null}
                   opsError={opsError}
                   opsBusy={opsBusy}
                   isFulfillmentAdmin={isFulfillmentAdmin}
@@ -3713,6 +3742,8 @@ export default function App() {
                   addressStorageEnabled={me?.address_storage_enabled !== false}
                   onDirtyChange={setFfDocDirty}
                   onClose={closeFfDocument}
+                  chatAuthHeaders={authHeaders}
+                  currentUserId={me?.id ?? null}
                 />
               ) : (
                 <MuiTypography variant="body2" color="text.secondary">
@@ -3721,6 +3752,8 @@ export default function App() {
               )
             ) : ffDocModal === 'outbound' ? (
               <OutboundScreen
+                chatAction={token && selectedOutboundId ? <ChatDocumentAction token={token} authHeaders={authHeaders}
+                  currentUserId={me.id ?? null} kind="outbound_shipment" documentId={selectedOutboundId} /> : null}
                 opsError={opsError}
                 opsBusy={opsBusy}
                 isFulfillmentAdmin={isFulfillmentAdmin}
