@@ -1,0 +1,21 @@
+{'probe': 'cargo_same_uuid', 'http': [200, 200, 409], 'movements': 2}
+.{'probe': 'two_stale_sorting_clients', 'http': [200, 200], 'outgoing_movements': 2, 'posted': 2, 'cell_a': 0, 'cell_b': 2}
+F{'probe': 'defect_only_same_uuid', 'first': 200, 'replay': 409, 'detail': {'detail': 'operation_conflict'}}
+F
+=================================== FAILURES ===================================
+_________ test_two_stale_sorting_clients_cannot_move_last_cargo_twice __________
+../../wms441-tsd-ui/docs/reviews/artifacts/wms441-astra-review/test_cargo_replay_r2.py:87: in test_two_stale_sorting_clients_cannot_move_last_cargo_twice
+    assert len(rows) == 1, "Second sorting context became a new generic relocation"
+E   AssertionError: Second sorting context became a new generic relocation
+E   assert 2 == 1
+E    +  where 2 = len([<app.models.inventory_movement.InventoryMovement object at 0x11279d6d0>, <app.models.inventory_movement.InventoryMovement object at 0x11279d5e0>])
+________________ test_defect_only_cargo_replays_original_target ________________
+../../wms441-tsd-ui/docs/reviews/artifacts/wms441-astra-review/test_cargo_replay_r2.py:98: in test_defect_only_cargo_replays_original_target
+    assert replay.status_code == 200, replay.text
+E   AssertionError: {"detail":"operation_conflict"}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+=========================== short test summary info ============================
+FAILED ../../wms441-tsd-ui/docs/reviews/artifacts/wms441-astra-review/test_cargo_replay_r2.py::test_two_stale_sorting_clients_cannot_move_last_cargo_twice
+FAILED ../../wms441-tsd-ui/docs/reviews/artifacts/wms441-astra-review/test_cargo_replay_r2.py::test_defect_only_cargo_replays_original_target
+2 failed, 1 passed in 5.16s

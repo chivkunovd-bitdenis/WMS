@@ -1,0 +1,21 @@
+{
+  "failedState": {
+    "postCount": 1,
+    "body": {
+      "kind": "product",
+      "id": "balance",
+      "cell_id": "A",
+      "to_id": null,
+      "qty": 1,
+      "inbound_request_id": "D",
+      "operation_id": "d8ac6a7d-5587-4fab-a18f-7f0425b2719f"
+    },
+    "error": "Не удалось получить ответ от сервера. Результат размещения пока неизвестен. Обновите документ, чтобы проверить результат размещения.",
+    "workTreeCount": 0,
+    "pendingKeys": []
+  },
+  "recovered": {
+    "postCount": 1,
+    "workTree": "Содержимое\tУже лежит\tШК\tШтук\t\n\n\nГрузоместо C1\n\nвнутри 1\n\t\t\n\nCARGO\n\n\t2\t\n\n\n\nReview product\n\n\t\n\nновый\n\n\t\n\n123\n\n\t2\t"
+  }
+}
