@@ -1056,6 +1056,15 @@ async def set_line_storage_location(
     return line
 
 
+def _start_legacy_ff_recount(req: InboundIntakeRequest) -> None:
+    # Explicit legacy clients still start a fresh recount through submit/begin.
+    # Draft quantities are a total, not extra loose units beside that recount.
+    # Keep tare composition and expected quantities; direct completion bypasses this.
+    if req.status == STATUS_DRAFT and is_ff_inbound(req):
+        for line in req.lines:
+            line.actual_qty = None
+
+
 async def submit_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1068,6 +1077,7 @@ async def submit_request(
         tenant_id,
         request_id,
         seller_product_owner_id=seller_product_owner_id,
+        for_update=True,
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -1077,6 +1087,7 @@ async def submit_request(
         raise InboundIntakeError("submit_empty")
     if req.planned_box_count is None or req.planned_box_count < 1:
         raise InboundIntakeError("planned_boxes_missing")
+    _start_legacy_ff_recount(req)
     req.status = STATUS_SUBMITTED
     req.submitted_at = datetime.now(UTC)
     await session.commit()
@@ -1181,10 +1192,7 @@ async def begin_receiving(
             raise InboundIntakeError("not_submitted")
         if len(req.lines) == 0:
             raise InboundIntakeError("submit_empty")
-        if is_ff_inbound(req):
-            for line in req.lines:
-                if line.actual_qty is None:
-                    line.actual_qty = line.expected_qty
+        _start_legacy_ff_recount(req)
         req.status = STATUS_RECEIVING
         req.primary_accepted_at = datetime.now(UTC)
         await session.commit()
