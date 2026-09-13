@@ -96,9 +96,7 @@ async def test_concurrent_completion_posts_once(
             assert await asyncio.wait_for(first_task, 10) == (
                 "rolled_back" if rollback_first else "completed"
             )
-            assert await asyncio.wait_for(second_task, 10) == (
-                "completed" if rollback_first else "not_verifying"
-            )
+            assert await asyncio.wait_for(second_task, 10) == "completed"
         finally:
             release_first.set()
             await asyncio.gather(
