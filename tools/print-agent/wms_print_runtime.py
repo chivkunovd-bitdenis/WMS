@@ -788,9 +788,11 @@ def background_executable() -> Path:
     return worker
 
 
-def setup(directory: Path, adapter: Any) -> dict[str, Any]:
+def setup(
+    directory: Path, adapter: Any, *, force_new_connection: bool = False
+) -> dict[str, Any]:
     config_path = directory / "connection.json"
-    if config_path.exists():
+    if config_path.exists() and not force_new_connection:
         config = read_private(config_path)
     else:
         base = agent.check_base_url(input("HTTPS-адрес API WMS: ").strip())
@@ -812,7 +814,6 @@ def setup(directory: Path, adapter: Any) -> dict[str, Any]:
             "connection_id": str(uuid.uuid4()),
             "device_token": secrets.token_urlsafe(32),
         }
-        write_private(config_path, config)
     client = Client(config)
     paired = client.api(
         "/pairing",
@@ -832,6 +833,9 @@ def setup(directory: Path, adapter: Any) -> dict[str, Any]:
             if paired["paired"]:
                 break
     config["warehouse_id"] = paired["warehouse_id"]
+    # Do not replace an existing connection until a new queue/server/warehouse
+    # has completed pairing. A cancelled reconnect can then restart the worker
+    # with the previous credentials and destination intact.
     write_private(config_path, config)
     enable_autostart(directory, background_executable())
     return config
@@ -840,10 +844,11 @@ def setup(directory: Path, adapter: Any) -> dict[str, Any]:
 def reconfigure(directory: Path, adapter: Any, *, reconnect: bool) -> dict[str, Any]:
     """Run setup without leaving the previous background worker stopped.
 
-    A normal rerun uses the existing connection as R13 requires.  An explicit
-    reconnect may delete it only when no acknowledgement is waiting.  Both paths
-    stop the worker before taking its exclusive lock; a rejected reconnect or a
-    setup error starts the prior worker again after releasing that lock.
+    A normal rerun uses the existing connection as R13 requires. An explicit
+    reconnect keeps it until the new pairing succeeds and proceeds only when no
+    acknowledgement is waiting. Both paths stop the worker before taking its
+    exclusive lock; a rejected reconnect or a setup error starts the prior
+    worker again after releasing that lock.
     """
     had_connection = (directory / "connection.json").exists()
     if reconnect or had_connection:
@@ -854,10 +859,10 @@ def reconfigure(directory: Path, adapter: Any, *, reconnect: bool) -> dict[str, 
             if reconnect:
                 if (directory / "inflight.json").exists():
                     rejected_for_inflight = True
-                else:
-                    (directory / "connection.json").unlink(missing_ok=True)
             if not rejected_for_inflight:
-                return setup(directory, adapter)
+                return setup(
+                    directory, adapter, force_new_connection=reconnect
+                )
     except BaseException:
         if had_connection:
             start_registered_background(directory)

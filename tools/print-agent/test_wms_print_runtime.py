@@ -447,6 +447,56 @@ class RuntimeTest(unittest.TestCase):
             runtime.reconfigure(self.directory, self.adapter, reconnect=True)
         self.assertEqual(events, ["stop", "lock", "unlock", "start"])
 
+    def test_reconnect_cancel_keeps_previous_connection_and_restarts_worker(self):
+        previous = {"base_url": "https://previous.example", "connection_id": "old"}
+        path = self.directory / "connection.json"
+        path.write_text(json.dumps(previous), encoding="utf-8")
+        events = []
+
+        @contextmanager
+        def lock(directory):
+            events.append("lock")
+            try:
+                yield SimpleNamespace()
+            finally:
+                events.append("unlock")
+
+        with (
+            patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
+            patch.object(runtime, "single_instance", lock),
+            patch("builtins.input", side_effect=KeyboardInterrupt),
+            patch.object(runtime, "start_registered_background", lambda _: events.append("start")),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            runtime.reconfigure(self.directory, self.adapter, reconnect=True)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), previous)
+        self.assertEqual(events, ["stop", "lock", "unlock", "start"])
+
+    def test_reconnect_invalid_server_keeps_previous_connection_and_restarts_worker(self):
+        previous = {"base_url": "https://previous.example", "connection_id": "old"}
+        path = self.directory / "connection.json"
+        path.write_text(json.dumps(previous), encoding="utf-8")
+        events = []
+
+        @contextmanager
+        def lock(directory):
+            events.append("lock")
+            try:
+                yield SimpleNamespace()
+            finally:
+                events.append("unlock")
+
+        with (
+            patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
+            patch.object(runtime, "single_instance", lock),
+            patch("builtins.input", return_value="not a URL"),
+            patch.object(runtime, "start_registered_background", lambda _: events.append("start")),
+            self.assertRaises(ValueError),
+        ):
+            runtime.reconfigure(self.directory, self.adapter, reconnect=True)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), previous)
+        self.assertEqual(events, ["stop", "lock", "unlock", "start"])
+
     def test_existing_setup_stops_worker_before_lock_and_restores_it_on_error(self):
         (self.directory / "connection.json").write_text("{}")
         events = []
@@ -484,7 +534,7 @@ class RuntimeTest(unittest.TestCase):
         with (
             patch.object(runtime, "stop_background_before_mutation", lambda _: events.append("stop")),
             patch.object(runtime, "single_instance", lock),
-            patch.object(runtime, "setup", lambda *_: events.append("setup") or {}),
+            patch.object(runtime, "setup", lambda *_, **__: events.append("setup") or {}),
         ):
             self.assertEqual(
                 runtime.reconfigure(self.directory, self.adapter, reconnect=False), {}
