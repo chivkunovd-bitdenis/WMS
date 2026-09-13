@@ -1,0 +1,9 @@
+{
+  "versionCode": 12,
+  "versionName": "0.1.11-tsd-package",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.11-tsd-package-a776769fdb8e-debug.apk",
+  "sha256": "a776769fdb8e5352808f84528110e6e4ed07f8eeac4320e3b904122ed7df3003",
+  "sizeBytes": 45527649,
+  "minSdk": 24,
+  "notes": "WMS-440–445: приёмка, сортировка, профиль, упаковка и FBS-восстановление после потерянного ответа. Обновляйте между заданиями."
+}
