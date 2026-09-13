@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -30,7 +32,11 @@ EXPECTED_ASSET_NAMES = frozenset(
 
 def run_gh(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["gh", *arguments], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check
+        [*shlex.split(os.environ.get("WMS_PRINT_GH", "gh")), *arguments],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=check,
     )
 
 

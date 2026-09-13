@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -84,7 +85,7 @@ class PublishReleaseTest(unittest.TestCase):
         self.notes_file.write_text("notes")
         self.fake_bin = self.root / "bin"
         self.fake_bin.mkdir()
-        fake_gh = self.fake_bin / "gh"
+        fake_gh = self.fake_bin / "fake-gh.py"
         fake_gh.write_text(FAKE_GH)
         fake_gh.chmod(0o755)
         (self.root / "commands.jsonl").touch()
@@ -105,8 +106,8 @@ class PublishReleaseTest(unittest.TestCase):
         if not (self.root / "state.json").exists():
             (self.root / "state.json").write_text(json.dumps({"release": None}))
         environment = os.environ | {
-            "PATH": f"{self.fake_bin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_GH_ROOT": str(self.root),
+            "WMS_PRINT_GH": shlex.join([sys.executable, str(self.fake_bin / "fake-gh.py")]),
         }
         return subprocess.run(
             [
