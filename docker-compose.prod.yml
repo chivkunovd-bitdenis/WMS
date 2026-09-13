@@ -63,6 +63,15 @@ services:
       # спрашиваем сами.
       WMS_YOOKASSA_SHOP_ID: ${WMS_YOOKASSA_SHOP_ID:-}
       WMS_YOOKASSA_SECRET_KEY: ${WMS_YOOKASSA_SECRET_KEY:-}
+      # WMS-433. Единственный секрет очереди AI-помощника (R10, В2) — без него
+      # /assistant/executor/* отказывает всем (fail closed), это рабочее
+      # состояние до того, как владелец задаст значение в .env, а не поломка.
+      # Ревью Astra (дефект №13): значение раньше не пробрасывалось сюда вовсе,
+      # поэтому даже заданный в .env секрет не долетал до процесса API.
+      WMS_ASSISTANT_EXECUTOR_SECRET: ${WMS_ASSISTANT_EXECUTOR_SECRET:-}
+      # R9. Версия сборки для исполнителя; пусто — он берёт вершину etalon
+      # сам и помечает это в своём служебном результате (см. settings.py).
+      WMS_ASSISTANT_DEPLOY_VERSION: ${WMS_ASSISTANT_DEPLOY_VERSION:-}
     # Стикеры и QR от WB лежат файлами в /app/var. Без тома они живут внутри
     # контейнера и стираются при каждой выкатке: 27.08.2026 так пропало 1756
     # файлов, и печать на складе встала посреди сборки.

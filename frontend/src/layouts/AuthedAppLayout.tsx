@@ -16,6 +16,7 @@ import { alpha } from '@mui/material/styles'
 
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
+import { AssistantPanel } from '../components/assistant/AssistantPanel'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
@@ -323,6 +324,9 @@ export function AuthedAppLayout({
         sx={(theme) => ({
           flexGrow: 1,
           p: 3,
+          // WMS-433: снизу запас под кнопку помощника в углу — при прокрутке до
+          // конца последняя строка таблицы остаётся над ней (R1).
+          pb: 10,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}
         data-testid="app-content"
@@ -330,6 +334,9 @@ export function AuthedAppLayout({
         <Toolbar />
         {children}
       </Box>
+      {/* WMS-433: помощник доступен всем сотрудникам ФФ, как «База знаний» (R20);
+          селлерский каркас выше его не получает — это второй срез. */}
+      <AssistantPanel />
     </Box>
   )
 }
