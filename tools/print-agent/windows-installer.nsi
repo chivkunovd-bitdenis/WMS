@@ -27,14 +27,14 @@ fresh_install:
   IfErrors install_rollback
   WriteUninstaller "$INSTDIR\Uninstall WMS Print.exe"
   CreateDirectory "$SMPROGRAMS\WMS Print"
-  CreateShortcut "$SMPROGRAMS\WMS Print\Подключить WMS Print.lnk" "$INSTDIR\wms-print.exe"
+  CreateShortcut "$SMPROGRAMS\WMS Print\Подключить WMS Print.lnk" "$INSTDIR\wms-print-setup.exe"
   CreateShortcut "$SMPROGRAMS\WMS Print\Удалить WMS Print.lnk" "$INSTDIR\Uninstall WMS Print.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WMSPrint" "DisplayName" "WMS Print"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WMSPrint" "UninstallString" '"$INSTDIR\Uninstall WMS Print.exe"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WMSPrint" "DisplayVersion" "WMS-442"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WMSPrint" "NoModify" 1
   IfFileExists "$LOCALAPPDATA\WMS Print\connection.json" 0 +2
-  ExecWait '"$INSTDIR\wms-print.exe" --start' $0
+  ExecWait '"$INSTDIR\wms-print-setup.exe" --ensure-autostart' $0
   StrCmp $0 "0" start_succeeded
   RMDir /r "$INSTDIR"
   IfFileExists "$INSTDIR.previous\wms-print.exe" 0 +2
@@ -52,7 +52,7 @@ install_done:
 SectionEnd
 
 Section "Uninstall"
-  ExecWait '"$INSTDIR\wms-print.exe" --uninstall'
+  ExecWait '"$INSTDIR\wms-print-setup.exe" --uninstall'
   Delete "$SMPROGRAMS\WMS Print\Подключить WMS Print.lnk"
   Delete "$SMPROGRAMS\WMS Print\Удалить WMS Print.lnk"
   RMDir "$SMPROGRAMS\WMS Print"

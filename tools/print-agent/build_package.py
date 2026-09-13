@@ -36,7 +36,7 @@ def build_metadata(revision: str, target: str) -> dict[str, object]:
     }
 
 
-def build_executable() -> None:
+def build_executable(name: str = "wms-print", *, windowed: bool = False) -> None:
     command = [
         sys.executable,
         "-m",
@@ -45,7 +45,7 @@ def build_executable() -> None:
         "--clean",
         "--onedir",
         "--name",
-        "wms-print",
+        name,
         "--distpath",
         str(ROOT / "dist"),
         "--workpath",
@@ -55,6 +55,8 @@ def build_executable() -> None:
         "--collect-all",
         "certifi",
     ]
+    if windowed:
+        command.append("--windowed")
     if sys.platform == "win32":
         command.extend(
             [
@@ -102,7 +104,10 @@ def build_windows(revision: str) -> Path:
     if target.exists():
         shutil.rmtree(target)
     target.mkdir()
-    shutil.copytree(ROOT / "dist" / "wms-print", target / "wms-print")
+    payload = target / "wms-print"
+    payload.mkdir()
+    shutil.copytree(ROOT / "dist" / "wms-print-setup", payload, dirs_exist_ok=True)
+    shutil.copytree(ROOT / "dist" / "wms-print", payload, dirs_exist_ok=True)
     shutil.copy(ROOT / "README.md", target / "wms-print" / "README.md")
     (target / "wms-print" / "build.json").write_text(
         json.dumps(build_metadata(revision, "Windows x64"), indent=2)
@@ -142,10 +147,15 @@ def main() -> None:
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=REPOSITORY, text=True
     ).strip()
-    build_executable()
-    artifact = (
-        build_macos(revision) if sys.platform == "darwin" else build_windows(revision)
-    )
+    if sys.platform == "win32":
+        # The setup executable keeps the required terminal input; the worker is
+        # a separate windowless executable started only by Task Scheduler.
+        build_executable("wms-print-setup")
+        build_executable("wms-print", windowed=True)
+        artifact = build_windows(revision)
+    else:
+        build_executable()
+        artifact = build_macos(revision)
     sha256(artifact)
     print(artifact)
 

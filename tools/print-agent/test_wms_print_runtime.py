@@ -374,7 +374,7 @@ class RuntimeTest(unittest.TestCase):
         installer = (Path(__file__).parent / "windows-installer.nsi").read_text()
         self.assertIn("--stop --wait-stop", installer)
         self.assertIn("$INSTDIR.previous", installer)
-        self.assertIn("--start", installer)
+        self.assertIn("--ensure-autostart", installer)
         self.assertNotIn('wms-print.exe" --run', installer)
 
     def test_windows_state_directory_and_task_do_not_put_token_in_autostart(self):

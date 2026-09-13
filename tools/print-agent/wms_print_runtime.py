@@ -584,6 +584,15 @@ def _register_windows_task(directory: Path, executable: Path) -> Path:
         task_file.unlink(missing_ok=True)
     if result.returncode != 0:
         raise OSError("Windows не зарегистрировала фоновую программу печати")
+    result = subprocess.run(
+        ["schtasks", "/Query", "/TN", WINDOWS_TASK_NAME],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise OSError("Windows не подтвердила регистрацию фоновой программы печати")
     return Path("schtasks://") / WINDOWS_TASK_NAME
 
 
@@ -708,6 +717,26 @@ def wait_for_stop(directory: Path, timeout_seconds: int = 30) -> bool:
     return not running_instance(directory)
 
 
+def stop_background_before_mutation(directory: Path) -> None:
+    stopped = request_stop(directory)
+    if sys.platform == "darwin" and not stopped:
+        raise OSError("macOS не подтвердила остановку программы печати")
+    if not wait_for_stop(directory):
+        raise OSError(
+            "Программа печати не остановилась; настройка сохранена без изменений"
+        )
+
+
+def background_executable() -> Path:
+    executable = Path(sys.executable).resolve()
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return executable
+    worker = executable.with_name("wms-print.exe")
+    if not worker.exists():
+        raise OSError("В пакете отсутствует фоновая программа печати Windows")
+    return worker
+
+
 def setup(directory: Path, adapter: Any) -> dict[str, Any]:
     config_path = directory / "connection.json"
     if config_path.exists():
@@ -753,7 +782,7 @@ def setup(directory: Path, adapter: Any) -> dict[str, Any]:
                 break
     config["warehouse_id"] = paired["warehouse_id"]
     write_private(config_path, config)
-    enable_autostart(directory, Path(sys.executable).resolve())
+    enable_autostart(directory, background_executable())
     return config
 
 
@@ -842,6 +871,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Запустить зарегистрированную фоновую программу",
     )
     parser.add_argument(
+        "--ensure-autostart",
+        action="store_true",
+        help="Восстановить фоновый запуск с сохранённым подключением",
+    )
+    parser.add_argument(
         "--uninstall", action="store_true", help="Убрать автозапуск, сохранив настройку"
     )
     parser.add_argument(
@@ -868,8 +902,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.start:
             start_registered_background(directory)
             return 0
+        if args.ensure_autostart:
+            read_private(directory / "connection.json")
+            enable_autostart(directory, background_executable())
+            start_registered_background(directory)
+            return 0
         if args.uninstall:
-            request_stop(directory)
+            stop_background_before_mutation(directory)
             disable_autostart(directory)
             return 0
         if args.reset_state:
@@ -878,8 +917,8 @@ def main(argv: list[str] | None = None) -> int:
                     "Сброс удалит подключение и незавершённую квитанцию. "
                     "Повторите с --confirm-reset."
                 )
+            stop_background_before_mutation(directory)
             had_inflight = (directory / "inflight.json").exists()
-            request_stop(directory)
             disable_autostart(directory)
             (directory / "connection.json").unlink(missing_ok=True)
             (directory / "inflight.json").unlink(missing_ok=True)
@@ -900,6 +939,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         start_after_setup = False
+        if args.reconnect:
+            stop_background_before_mutation(directory)
         with single_instance(directory) as control:
             if args.reconnect:
                 if (directory / "inflight.json").exists():
