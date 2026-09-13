@@ -31,11 +31,31 @@ def upgrade() -> None:
         sa.Column("quantity_packed", sa.Integer(), nullable=True),
     )
     op.add_column(
+        "marketplace_unload_pick_allocations",
+        sa.Column("quantity_source_known", sa.Integer(), nullable=True),
+    )
+    op.add_column(
         "marketplace_unload_box_lines",
         sa.Column("quantity_packed", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "marketplace_unload_box_lines",
+        sa.Column("quantity_source_known", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "packaging_task_lines",
+        sa.Column("qty_legacy_confirmed_packed", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "packaging_task_lines",
+        sa.Column("qty_legacy_packed_in_task", sa.Integer(), nullable=True),
     )
 
 
 def downgrade() -> None:
+    op.drop_column("packaging_task_lines", "qty_legacy_packed_in_task")
+    op.drop_column("packaging_task_lines", "qty_legacy_confirmed_packed")
+    op.drop_column("marketplace_unload_box_lines", "quantity_source_known")
     op.drop_column("marketplace_unload_box_lines", "quantity_packed")
+    op.drop_column("marketplace_unload_pick_allocations", "quantity_source_known")
     op.drop_column("marketplace_unload_pick_allocations", "quantity_packed")

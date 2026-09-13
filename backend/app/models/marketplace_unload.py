@@ -201,6 +201,10 @@ class MarketplaceUnloadBoxLine(Base):
     # до подбора. Это часть состава короба, а не самостоятельный учёт: она
     # нужна, чтобы расчёт работы не пытался восстановить источник по остатку.
     quantity_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # NULL означает историческую строку, для которой происхождение не было
+    # записано. Новые добавления учитываются отдельно, не превращая NULL в
+    # догадку о происхождении всей строки.
+    quantity_source_known: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -259,6 +263,7 @@ class MarketplaceUnloadPickAllocation(Base):
     # Фактическая готовая часть снятого количества. Значение фиксируется в
     # момент списания из ячейки и затем переносится в состав короба.
     quantity_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity_source_known: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -507,12 +507,16 @@ async def _place_picked_into_box(
             product_id=product_id,
             quantity=quantity,
             quantity_packed=packed_quantity,
+            quantity_source_known=quantity,
         )
         session.add(line)
     else:
         line.quantity = int(line.quantity) + quantity
-        if line.quantity_packed is not None:
-            line.quantity_packed = int(line.quantity_packed) + packed_quantity
+        line.quantity_packed = int(line.quantity_packed or 0) + packed_quantity
+        if line.quantity_source_known is None:
+            line.quantity_source_known = quantity
+        else:
+            line.quantity_source_known = int(line.quantity_source_known) + quantity
 
     from app.services import packaging_task_service as pkg_svc
 

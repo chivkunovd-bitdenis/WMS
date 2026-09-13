@@ -158,6 +158,10 @@ class PackagingTaskLine(Base):
     qty_suggested_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_confirmed_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_packed_in_task: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Baseline of a pre-WMS-444 MP box line with unknown source. It preserves
+    # the already recorded result while later scans add only their known split.
+    qty_legacy_confirmed_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    qty_legacy_packed_in_task: Mapped[int | None] = mapped_column(Integer, nullable=True)
     qty_marking_printed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_marking_external: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
