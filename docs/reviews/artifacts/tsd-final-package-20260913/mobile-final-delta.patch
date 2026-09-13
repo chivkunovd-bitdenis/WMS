@@ -1,0 +1,146 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 08bcd5f..29e3d76 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -131,0 +132 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
++    private var ordersScope: FbsPendingScope? = null
+@@ -173,0 +175,15 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
++    private fun clearOrdersForScope(scope: FbsPendingScope?) {
++        ordersScope = scope
++        pendingSupplyCreate = null
++        pendingSupplyAdd = null
++        pendingSupplyCreateScope = null
++        pendingSupplyAddScope = null
++        mutable.value = state.value.copy(
++            orders = emptyList(),
++            cursor = null,
++            supplies = emptyList(),
++            selected = emptySet(),
++            restoredSupplyCreate = null,
++            restoredSupplyAddId = null,
++        )
++    }
+@@ -178,2 +193,0 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+-        val page = required { api.fbs().orders(marketplace = marketplace, group = null, cursor = if (append) state.value.cursor else null) }
+-        val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
+@@ -180,0 +195,17 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
++        val scopeChanged = scope != ordersScope
++        if (scopeChanged) clearOrdersForScope(scope)
++        // An appended page belongs only to the login which produced the first
++        // page. A tenant or employee switch must restart this queue.
++        val appendCurrentScope = append && scope != null && scope == ordersScope
++        val page = required {
++            api.fbs().orders(
++                marketplace = marketplace,
++                group = "tsd_working",
++                cursor = if (appendCurrentScope) state.value.cursor else null,
++            )
++        }
++        val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
++        if (scope != runCatching { api.currentFbsPendingScope() }.getOrNull()) {
++            clearOrdersForScope(null)
++            error("Учётный контекст изменился. Обновите список.")
++        }
+@@ -190,0 +222 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
++        ordersScope = scope
+@@ -192 +224,2 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+-            orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id },
++            orders = ((if (appendCurrentScope) state.value.orders else emptyList()) + page.items)
++                .distinctBy { it.id },
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 3f6041a..fe6eb81 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -57 +57 @@ class FbsViewModelTest {
+-        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(wb), "wb-cursor", "now"))
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returns Response.success(FbsOrderPage(listOf(wb), "wb-cursor", "now"))
+@@ -59 +59 @@ class FbsViewModelTest {
+-        coEvery { service.orders(marketplace = "ozon", group = null, cursor = null) } returns Response.success(FbsOrderPage(serverNow = "now"))
++        coEvery { service.orders(marketplace = "ozon", group = "tsd_working", cursor = null) } returns Response.success(FbsOrderPage(serverNow = "now"))
+@@ -69 +69 @@ class FbsViewModelTest {
+-        coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
++        coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = "tsd_working", cursor = null) }
+@@ -72,0 +73,74 @@ class FbsViewModelTest {
++    @Test fun `pagination after a different FBS scope restarts instead of mixing accounts`() = runTest {
++        val secondScope = pendingScope.copy(tenantId = "other-tenant", userId = "other-user", sessionToken = "other-token")
++        coEvery { provider.currentFbsPendingScope() } returnsMany listOf(
++            pendingScope, pendingScope, secondScope, secondScope,
++        )
++        val first = order("1", "2026-09-08T09:00:00Z")
++        val second = order("2", "2026-09-08T10:00:00Z")
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returnsMany listOf(
++            Response.success(FbsOrderPage(listOf(first), "old-cursor", "now")),
++            Response.success(FbsOrderPage(listOf(second), null, "now")),
++        )
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        vm.toggle(first)
++        vm.loadOrders(append = true); advanceUntilIdle()
++
++        assertEquals(listOf(second), vm.state.value.orders)
++        assertTrue(vm.state.value.selected.isEmpty())
++        coVerify(exactly = 2) { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) }
++        coVerify(exactly = 0) { service.orders(marketplace = "wb", group = "tsd_working", cursor = "old-cursor") }
++    }
++
++    @Test fun `failed orders reload after scope switch cannot display old account data`() = runTest {
++        val secondScope = pendingScope.copy(tenantId = "other-tenant", userId = "other-user")
++        coEvery { provider.currentFbsPendingScope() } returnsMany listOf(
++            pendingScope, pendingScope, secondScope,
++        )
++        val first = order("1", "2026-09-08T09:00:00Z")
++        var ordersCalls = 0
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } coAnswers {
++            if (ordersCalls++ == 0) Response.success(FbsOrderPage(listOf(first), "old-cursor", "now"))
++            else throw IOException("offline")
++        }
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle(); vm.toggle(first)
++        vm.loadOrders(append = true); advanceUntilIdle()
++
++        assertTrue(vm.state.value.orders.isEmpty())
++        assertTrue(vm.state.value.supplies.isEmpty())
++        assertTrue(vm.state.value.selected.isEmpty())
++        assertNotNull(vm.state.value.error)
++    }
++
++    @Test fun `failed active supplies reload after scope switch cannot display old account data`() = runTest {
++        val secondScope = pendingScope.copy(tenantId = "other-tenant", userId = "other-user")
++        coEvery { provider.currentFbsPendingScope() } returnsMany listOf(
++            pendingScope, pendingScope, secondScope,
++        )
++        val first = order("1", "2026-09-08T09:00:00Z")
++        val second = order("2", "2026-09-08T10:00:00Z")
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returnsMany listOf(
++            Response.success(FbsOrderPage(listOf(first), "old-cursor", "now")),
++            Response.success(FbsOrderPage(listOf(second), null, "now")),
++        )
++        var suppliesCalls = 0
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } coAnswers {
++            if (suppliesCalls++ == 0) Response.success(FbsWorklistResponse(serverNow = "now"))
++            else throw IOException("offline")
++        }
++
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle(); vm.toggle(first)
++        vm.loadOrders(append = true); advanceUntilIdle()
++
++        assertTrue(vm.state.value.orders.isEmpty())
++        assertTrue(vm.state.value.supplies.isEmpty())
++        assertTrue(vm.state.value.selected.isEmpty())
++        assertNotNull(vm.state.value.error)
++    }
++
+@@ -103 +177 @@ class FbsViewModelTest {
+-        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
+@@ -119 +193 @@ class FbsViewModelTest {
+-        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
+@@ -138 +212 @@ class FbsViewModelTest {
+-        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.orders(marketplace = "wb", group = "tsd_working", cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
