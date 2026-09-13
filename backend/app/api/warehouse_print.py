@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
-import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin, require_reception_access
@@ -21,6 +19,7 @@ from app.models.background_job import BackgroundJob
 from app.models.print_connection import PrintConnection
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import print_connection_service as connections
 from app.services.fbs_print_asset_service import FbsPrintAssetError
 from app.services.fbs_print_job_service import (
     claim_next_print_job,
@@ -28,6 +27,7 @@ from app.services.fbs_print_job_service import (
     get_print_job,
     load_print_job_content,
 )
+from app.services.print_connection_service import digest, utc
 from app.services.sorting_print_service import create_sorting_job, resolve_label
 
 router = APIRouter(prefix="/operations/print", tags=["operations"])
@@ -35,14 +35,6 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 Operator = Annotated[User, Depends(require_reception_access)]
 Admin = Annotated[User, Depends(require_fulfillment_admin)]
 bearer = HTTPBearer(auto_error=False)
-
-
-def digest(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 def connection_out(connection: PrintConnection) -> dict[str, Any]:
@@ -109,39 +101,13 @@ class PairBegin(BaseModel):
 
 
 @router.post("/pairing")
-async def begin_pairing(body: PairBegin, session: DB) -> dict[str, Any]:
-    connection = await session.get(PrintConnection, body.connection_id)
-    # Deterministic private code allows recovery of the first lost HTTP response.
-    code = digest(body.device_token + ":pair")[:16].upper()
-    if connection is not None:
-        if (
-            connection.token_hash != digest(body.device_token)
-            or connection.queue_name != body.queue_name
-            or connection.platform != body.platform
-        ):
-            raise HTTPException(409, "pairing_conflict")
-        if connection.tenant_id is not None:
-            return {"pairing_code": None, **connection_out(connection)}
-        if utc(connection.pairing_expires_at) <= datetime.now(UTC):
-            raise HTTPException(410, "pairing_expired")
-    else:
-        await session.execute(
-            delete(PrintConnection).where(
-                PrintConnection.tenant_id.is_(None),
-                PrintConnection.pairing_expires_at < datetime.now(UTC),
-            )
-        )
-        connection = PrintConnection(
-            id=body.connection_id,
-            token_hash=digest(body.device_token),
-            pairing_hash=digest(code),
-            pairing_expires_at=datetime.now(UTC) + timedelta(minutes=15),
-            queue_name=body.queue_name,
-            platform=body.platform,
-            is_default=False,
-        )
-        session.add(connection)
-        await session.commit()
+async def begin_pairing(body: PairBegin, request: Request, session: DB) -> dict[str, Any]:
+    try:
+        connections.check_pairing_rate(request.client.host if request.client else "unknown")
+        connection, code = await connections.begin_pairing(session, **body.model_dump())
+    except connections.ConnectionError as exc:
+        raise HTTPException(exc.status, exc.code) from None
+    await session.commit()
     return {
         "pairing_code": code,
         "expires_at": connection.pairing_expires_at.isoformat(),
@@ -153,37 +119,29 @@ class PairConfirm(BaseModel):
     pairing_code: str = Field(min_length=16, max_length=19)
 
 
+@router.post("/warehouses/{warehouse_id}/pair/preview")
+async def inspect_pairing(
+    warehouse_id: uuid.UUID, body: PairConfirm, user: Admin, session: DB
+) -> dict[str, Any]:
+    try:
+        connection = await connections.resolve_pairing(
+            session, user.tenant_id, warehouse_id, body.pairing_code
+        )
+    except connections.ConnectionError as exc:
+        raise HTTPException(exc.status, exc.code) from None
+    return connection_out(connection)
+
+
 @router.post("/warehouses/{warehouse_id}/pair")
 async def confirm_pairing(
     warehouse_id: uuid.UUID, body: PairConfirm, user: Admin, session: DB
 ) -> dict[str, Any]:
-    warehouse = await session.scalar(
-        select(Warehouse)
-        .where(Warehouse.id == warehouse_id, Warehouse.tenant_id == user.tenant_id)
-        .with_for_update()
-    )
-    if warehouse is None:
-        raise HTTPException(404, "warehouse_not_found")
-    code = re.sub(r"[\s-]", "", body.pairing_code).upper()
-    connection = await session.scalar(
-        select(PrintConnection)
-        .where(PrintConnection.pairing_hash == digest(code))
-        .with_for_update()
-    )
-    if connection is None or utc(connection.pairing_expires_at) <= datetime.now(UTC):
-        raise HTTPException(404, "pairing_not_found_or_expired")
-    if connection.tenant_id is not None:
-        raise HTTPException(409, "pairing_already_used")
-    await session.execute(
-        update(PrintConnection)
-        .where(PrintConnection.warehouse_id == warehouse.id, PrintConnection.is_default.is_(True))
-        .values(is_default=False)
-    )
-    connection.tenant_id = user.tenant_id
-    connection.warehouse_id = warehouse.id
-    connection.paired_by_user_id = user.id
-    connection.is_default = True
-    connection.pairing_hash = None
+    try:
+        connection = await connections.confirm_pairing(
+            session, user.tenant_id, warehouse_id, user.id, body.pairing_code
+        )
+    except connections.ConnectionError as exc:
+        raise HTTPException(exc.status, exc.code) from None
     await session.commit()
     return connection_out(connection)
 

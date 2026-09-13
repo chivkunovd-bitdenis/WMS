@@ -3,6 +3,7 @@
 The single inflight file is an acknowledgement outbox, not a print history.
 After submitting may have begun, it is NEVER used to resubmit a document.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +14,7 @@ import plistlib
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import uuid
@@ -28,8 +30,13 @@ def state_directory() -> Path:
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "WMS Print"
     if sys.platform.startswith("linux"):
-        return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "wms-print"
-    raise ValueError("Эта сборка поддерживает macOS/CUPS. Windows пока не поддерживается.")
+        return (
+            Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+            / "wms-print"
+        )
+    raise ValueError(
+        "Эта сборка поддерживает macOS/CUPS. Windows пока не поддерживается."
+    )
 
 
 def write_private(path: Path, value: dict[str, Any]) -> None:
@@ -54,7 +61,7 @@ def read_private(path: Path) -> dict[str, Any]:
     with path.open() as stream:
         value = json.load(stream)
     if not isinstance(value, dict):
-        raise ValueError("Неверный файл настройки программы")
+        raise ValueError("Неверный файл настройки программы")  # noqa: TRY004
     return value
 
 
@@ -84,8 +91,12 @@ class CupsAdapter:
 
     def queues(self) -> list[str]:
         result = self.run(
-            ["/usr/bin/lpstat", "-p"], capture_output=True, text=True, timeout=15,
-            check=False, env={**os.environ, "LC_ALL": "C"},
+            ["/usr/bin/lpstat", "-p"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            env={**os.environ, "LC_ALL": "C"},
         )
         names = []
         for line in result.stdout.splitlines():
@@ -97,9 +108,12 @@ class CupsAdapter:
     def submit(self, data: bytes, mime: str, queue: str, copies: int) -> str:
         agent.check_queue(queue)
         if queue not in self.queues():
-            raise ValueError("Назначенная очередь отсутствует в ОС. Проверьте установленный принтер.")
-        return agent.submit_to_queue(data, mime, queue, self.run, copies=copies,
-                                     executable="/usr/bin/lp")
+            raise ValueError(
+                "Назначенная очередь отсутствует в ОС. Проверьте установленный принтер."
+            )
+        return agent.submit_to_queue(
+            data, mime, queue, self.run, copies=copies, executable="/usr/bin/lp"
+        )
 
 
 class Client:
@@ -112,7 +126,11 @@ class Client:
 
     def fetch(self, job: dict[str, Any], expected: dict[str, Any]) -> bytes:
         return agent.fetch_label(
-            self.base, self.token, str(uuid.UUID(job["id"])), job["warehouse_id"], expected,
+            self.base,
+            self.token,
+            str(uuid.UUID(job["id"])),
+            job["warehouse_id"],
+            expected,
             claim_id=str(uuid.UUID(job["claim_id"])),
         )
 
@@ -120,7 +138,10 @@ class Client:
 def validate_destination(job: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     expected = agent.validate_job(job, config["warehouse_id"])
     uuid.UUID(job["claim_id"])
-    if job.get("connection_id") != config["connection_id"] or job.get("queue_name") != config["queue_name"]:
+    if (
+        job.get("connection_id") != config["connection_id"]
+        or job.get("queue_name") != config["queue_name"]
+    ):
         raise ValueError("Назначение задания отличается от сопряжённой очереди")
     copies = job.get("copies")
     if type(copies) is not int or not 1 <= copies <= 999:
@@ -133,11 +154,15 @@ def validate_destination(job: dict[str, Any], config: dict[str, Any]) -> dict[st
 
 
 def acknowledge(client: Client, inflight: dict[str, Any]) -> None:
-    client.api("/agent/jobs/" + str(uuid.UUID(inflight["job_id"])) + "/result", inflight["result"])
+    client.api(
+        "/agent/jobs/" + str(uuid.UUID(inflight["job_id"])) + "/result",
+        inflight["result"],
+    )
 
 
-def process_once(config: dict[str, Any], directory: Path, client: Client,
-                 adapter: CupsAdapter) -> str:
+def process_once(
+    config: dict[str, Any], directory: Path, client: Client, adapter: CupsAdapter
+) -> str:
     """Caller holds the profile lock. Server independently claims across profiles/PCs."""
     outbox = directory / "inflight.json"
     if outbox.exists():
@@ -155,7 +180,11 @@ def process_once(config: dict[str, Any], directory: Path, client: Client,
         return ""
     job_id = str(uuid.UUID(job["id"]))
     claim_id = str(uuid.UUID(job["claim_id"]))
-    marker: dict[str, Any] = {"phase": "preparing", "job_id": job_id, "claim_id": claim_id}
+    marker: dict[str, Any] = {
+        "phase": "preparing",
+        "job_id": job_id,
+        "claim_id": claim_id,
+    }
     write_private(outbox, marker)
     try:
         expected = validate_destination(job, config)
@@ -167,26 +196,42 @@ def process_once(config: dict[str, Any], directory: Path, client: Client,
             raise ValueError("Назначенная очередь отсутствует в ОС")
     except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError) as exc:
         marker["phase"] = "result"
-        marker["result"] = {"claim_id": claim_id, "queue_receipt": None,
-                            "handed_to_queue": False,
-                            "error_message": "Файл или очередь не прошли проверку: " + type(exc).__name__}
+        marker["result"] = {
+            "claim_id": claim_id,
+            "queue_receipt": None,
+            "handed_to_queue": False,
+            "error_message": (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else "Файл не получен до передачи в ОС: " + type(exc).__name__
+            ),
+        }
     else:
         marker["phase"] = "submitting"
         write_private(outbox, marker)
         try:
-            receipt = adapter.submit(content, expected["content_type"], job["queue_name"], job["copies"])
+            receipt = adapter.submit(
+                content, expected["content_type"], job["queue_name"], job["copies"]
+            )
         except (agent.UnknownPrintOutcome, OSError, ValueError):
             # Keep the boundary until next start/tick. Neither a retry nor a
             # negative receipt is justified if the native call might have run.
             return "Результат печати неизвестен. Автоматическая повторная отправка запрещена."
         marker["phase"] = "result"
-        marker["result"] = {"claim_id": claim_id, "queue_receipt": receipt,
-                            "handed_to_queue": True, "error_message": None}
+        marker["result"] = {
+            "claim_id": claim_id,
+            "queue_receipt": receipt,
+            "handed_to_queue": True,
+            "error_message": None,
+        }
     write_private(outbox, marker)
     acknowledge(client, marker)
     outbox.unlink()
-    return ("Передано в очередь принтера. Бумагу проверьте на принтере."
-            if marker["result"]["handed_to_queue"] else "Не передано в очередь принтера.")
+    return (
+        "Передано в очередь принтера. Бумагу проверьте на принтере."
+        if marker["result"]["handed_to_queue"]
+        else "Не передано в очередь принтера."
+    )
 
 
 def enable_autostart(directory: Path, executable: Path) -> Path:
@@ -196,10 +241,15 @@ def enable_autostart(directory: Path, executable: Path) -> Path:
         raise ValueError("Автозапуск включается из распространяемой сборки программы")
     target = Path.home() / "Library" / "LaunchAgents" / "ru.wms.print-agent.plist"
     target.parent.mkdir(parents=True, exist_ok=True)
-    value = {"Label": "ru.wms.print-agent", "ProgramArguments": [str(executable), "--run"],
-             "RunAtLoad": True, "KeepAlive": True, "ThrottleInterval": 15,
-             "StandardOutPath": str(directory / "runtime.log"),
-             "StandardErrorPath": str(directory / "runtime.log")}
+    value = {
+        "Label": "ru.wms.print-agent",
+        "ProgramArguments": [str(executable), "--run"],
+        "RunAtLoad": True,
+        "KeepAlive": True,
+        "ThrottleInterval": 15,
+        "StandardOutPath": str(directory / "runtime.log"),
+        "StandardErrorPath": str(directory / "runtime.log"),
+    }
     target.write_bytes(plistlib.dumps(value))
     target.chmod(0o600)
     return target
@@ -213,21 +263,35 @@ def setup(directory: Path, adapter: CupsAdapter) -> dict[str, Any]:
         base = agent.check_base_url(input("HTTPS-адрес API WMS: ").strip())
         queues = adapter.queues()
         if not queues:
-            raise ValueError("В ОС нет принтеров. Сначала установите драйвер и очередь через настройки ОС.")
+            raise ValueError(
+                "В ОС нет принтеров. Сначала установите драйвер и очередь через настройки ОС."
+            )
         print("Установленные очереди принтеров:")
         for index, queue in enumerate(queues, 1):
             print(f"{index}. {queue}")
         chosen = int(input("Номер принтера: "))
         if not 1 <= chosen <= len(queues):
             raise ValueError("Номер принтера отсутствует")
-        config = {"base_url": base, "queue_name": queues[chosen - 1], "platform": sys.platform,
-                  "connection_id": str(uuid.uuid4()), "device_token": secrets.token_urlsafe(32)}
+        config = {
+            "base_url": base,
+            "queue_name": queues[chosen - 1],
+            "platform": sys.platform,
+            "connection_id": str(uuid.uuid4()),
+            "device_token": secrets.token_urlsafe(32),
+        }
         write_private(config_path, config)
     client = Client(config)
-    paired = client.api("/pairing", {k: config[k] for k in
-                       ("connection_id", "device_token", "queue_name", "platform")})
+    paired = client.api(
+        "/pairing",
+        {
+            k: config[k]
+            for k in ("connection_id", "device_token", "queue_name", "platform")
+        },
+    )
     if not paired["paired"]:
-        print("В WMS выберите склад и введите код подключения: " + paired["pairing_code"])
+        print(
+            "В WMS выберите склад и введите код подключения: " + paired["pairing_code"]
+        )
         print("Код действует 15 минут. После подтверждения программа подключится сама.")
         while True:
             time.sleep(3)
@@ -244,20 +308,91 @@ def setup(directory: Path, adapter: CupsAdapter) -> dict[str, Any]:
     return config
 
 
+def self_test() -> None:
+    """Packaged executable can verify its own stdlib/queue boundary without Python installed."""
+    if getattr(sys, "frozen", False):
+        import ssl
+
+        import certifi
+
+        assert (
+            ssl.create_default_context(cafile=certifi.where()).cert_store_stats()[
+                "x509_ca"
+            ]
+            > 0
+        )
+    with tempfile.TemporaryDirectory(prefix="wms442-package-test-") as temp:
+        directory = Path(temp)
+        executable = directory / "synthetic-spooler"
+        accepted = directory / "accepted.bin"
+        executable.write_text(
+            '#!/bin/sh\ncat "$4" > "'
+            + str(accepted)
+            + '"\necho "request id is Synthetic_442-1 (1 file(s))"\n'
+        )
+        executable.chmod(0o700)
+        receipt = agent.submit_to_queue(
+            b"%PDF-synthetic-no-real-printer",
+            "application/pdf",
+            "Synthetic_442",
+            executable=str(executable),
+        )
+        assert accepted.read_bytes() == b"%PDF-synthetic-no-real-printer"
+        outbox = directory / "inflight.json"
+        write_private(outbox, {"phase": "result", "queue_receipt": receipt})
+        assert read_private(outbox)["queue_receipt"] == "Synthetic_442-1"
+        assert outbox.stat().st_mode & 0o777 == 0o600
+        with single_instance(directory):
+            pass
+    print(
+        "Package self-test passed: synthetic queue only; physical printing unverified."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="WMS: подключение ПК и печать этикеток")
-    parser.add_argument("--run", action="store_true", help="Работать с сохранённым подключением")
-    parser.add_argument("--once", action="store_true", help="Проверить соединение и одно задание")
-    parser.add_argument("--list-printers", action="store_true", help="Показать очереди ОС и выйти")
+    parser = argparse.ArgumentParser(
+        description="WMS: подключение ПК и печать этикеток"
+    )
+    parser.add_argument(
+        "--self-test", action="store_true", help="Проверка пакета без WMS/принтера"
+    )
+    parser.add_argument(
+        "--reconnect", action="store_true", help="Настроить новую очередь и подключение"
+    )
+    parser.add_argument(
+        "--run", action="store_true", help="Работать с сохранённым подключением"
+    )
+    parser.add_argument(
+        "--once", action="store_true", help="Проверить соединение и одно задание"
+    )
+    parser.add_argument(
+        "--list-printers", action="store_true", help="Показать очереди ОС и выйти"
+    )
     args = parser.parse_args(argv)
     try:
+        if args.self_test:
+            self_test()
+            return 0
         adapter = CupsAdapter()
         if args.list_printers:
-            print("\n".join(adapter.queues()) or "В ОС нет настроенных очередей принтеров.")
+            print(
+                "\n".join(adapter.queues())
+                or "В ОС нет настроенных очередей принтеров."
+            )
             return 0
         directory = state_directory()
         with single_instance(directory):
-            config = read_private(directory / "connection.json") if args.run else setup(directory, adapter)
+            if args.reconnect:
+                if (directory / "inflight.json").exists():
+                    raise ValueError(
+                        "Сначала восстановите квитанцию прежнего подключения"
+                    )
+                (directory / "connection.json").unlink(missing_ok=True)
+            config = (
+                read_private(directory / "connection.json")
+                if args.run
+                else setup(directory, adapter)
+            )
             client = Client(config)
             while True:
                 try:
@@ -267,9 +402,18 @@ def main(argv: list[str] | None = None) -> int:
                     message = process_once(config, directory, client, adapter)
                     if message:
                         print(message, flush=True)
-                except (OSError, ValueError, KeyError, urllib.error.URLError):
-                    print("Связь с WMS недоступна. Квитанция сохранена; передача в ОС не повторяется.",
-                          file=sys.stderr, flush=True)
+                except (
+                    OSError,
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                    urllib.error.URLError,
+                ):
+                    print(
+                        "Связь с WMS недоступна. Квитанция сохранена; передача в ОС не повторяется.",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     if args.once:
                         return 2
                 if args.once:
@@ -277,10 +421,12 @@ def main(argv: list[str] | None = None) -> int:
                 time.sleep(3)
     except KeyboardInterrupt:
         return 0
-    except (OSError, ValueError, KeyError, urllib.error.URLError):
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
         # Never dump HTTP bodies, URLs or credential-bearing configuration.
-        print("Программа не подключена. Проверьте адрес WMS, очередь ОС и срок кода подключения.",
-              file=sys.stderr)
+        print(
+            "Программа не подключена. Проверьте адрес WMS, очередь ОС и срок кода подключения.",
+            file=sys.stderr,
+        )
         return 1
 
 

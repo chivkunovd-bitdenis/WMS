@@ -1,0 +1,27 @@
+name: WMS print agent package
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/print-agent/**'
+      - '.github/workflows/print-agent-package.yml'
+jobs:
+  macos-package:
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tools/print-agent -v
+      - run: python -m pip install pyinstaller==6.20.0 certifi==2026.2.25
+      - run: python tools/print-agent/build_package.py
+      - run: tools/print-agent/dist/wms-print/wms-print --self-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WMS-Print-macOS
+          path: |
+            tools/print-agent/dist/WMS-Print-macOS.zip
+            tools/print-agent/dist/WMS-Print-macOS.zip.sha256

@@ -24,6 +24,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -75,7 +76,20 @@ def check_queue(queue: str) -> str:
 
 
 def _open(request: urllib.request.Request) -> tuple[bytes, str]:
-    with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
+    # Frozen packages carry a CA bundle; do not rely on a build-machine OpenSSL path.
+    try:
+        import certifi
+
+        context = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        if getattr(sys, "frozen", False):
+            raise RuntimeError(
+                "В пакете отсутствует хранилище доверенных сертификатов"
+            ) from None
+        context = ssl.create_default_context()
+    with urllib.request.build_opener(
+        NoRedirect, urllib.request.HTTPSHandler(context=context)
+    ).open(request, timeout=30) as response:
         return response.read(MAX_BYTES + 1), response.headers.get_content_type()
 
 
@@ -99,7 +113,7 @@ def _api(
     )
     parsed = json.loads(payload)
     if not isinstance(parsed, dict):
-        raise ValueError("Неожиданный ответ WMS")
+        raise ValueError("Неожиданный ответ WMS")  # noqa: TRY004
     return parsed
 
 
@@ -133,8 +147,13 @@ def validate_job(job: dict[str, Any], warehouse_id: str) -> dict[str, Any]:
 
 
 def fetch_label(
-    base_url: str, token: str, job_id: str, warehouse_id: str, expected: dict[str, Any],
-    *, claim_id: str | None = None,
+    base_url: str,
+    token: str,
+    job_id: str,
+    warehouse_id: str,
+    expected: dict[str, Any],
+    *,
+    claim_id: str | None = None,
 ) -> bytes:
     # Путь собираем из проверенного UUID, а не из ссылки внутри задания.
     path = "/operations/fbs-print-jobs/" + str(uuid.UUID(job_id)) + "/content"
@@ -156,8 +175,13 @@ def fetch_label(
 
 
 def submit_to_queue(
-    data: bytes, content_type: str, queue: str, run: Any = subprocess.run,
-    *, copies: int = 1, executable: str = "lp",
+    data: bytes,
+    content_type: str,
+    queue: str,
+    run: Any = subprocess.run,
+    *,
+    copies: int = 1,
+    executable: str = "lp",
 ) -> str:
     """Отдать файл в очередь ОС и вернуть её квитанцию.
 
@@ -174,8 +198,14 @@ def submit_to_queue(
         path.write_bytes(data)
         try:
             result = run(
-                [executable, "-d", queue, *(["-n", str(copies)] if copies != 1 else []),
-                 "--", str(path)],
+                [
+                    executable,
+                    "-d",
+                    queue,
+                    *(["-n", str(copies)] if copies != 1 else []),
+                    "--",
+                    str(path),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=60,
