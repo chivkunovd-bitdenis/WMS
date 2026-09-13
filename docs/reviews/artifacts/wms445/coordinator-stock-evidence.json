@@ -1,0 +1,34 @@
+{
+  "database": "local wms_tsd_20260913",
+  "read_only": true,
+  "method": "fbs_shipment_reversal_ledger plus Ozon position movement_id references joined to inventory_movements",
+  "results": [
+    {
+      "supply_id": "7354349e-645a-40ea-9b7c-45ff8676e790",
+      "movements": [
+        {
+          "id": "a0708f37-fa0d-4ea5-9f55-9672594f5678",
+          "type": "fbs_shipment",
+          "delta": -1
+        }
+      ],
+      "sum_delta": -1
+    },
+    {
+      "supply_id": "4095c41a-8333-41f6-8279-bbc5034b826b",
+      "movements": [
+        {
+          "id": "b249caea-3fda-4436-8c4e-48c3a7bb6a10",
+          "type": "fbs_shipment",
+          "delta": -2
+        },
+        {
+          "id": "eb6e5430-e4a4-44b7-b4c6-b8fbd748755c",
+          "type": "fbs_shipment",
+          "delta": -1
+        }
+      ],
+      "sum_delta": -3
+    }
+  ]
+}
