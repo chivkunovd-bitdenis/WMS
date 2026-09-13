@@ -275,6 +275,8 @@ class SortingObjectCreateIn(BaseModel):
 class SortingPlaceIn(BaseModel):
     kind: Literal["product", "pallet", "box", "cargo_place"]
     id: uuid.UUID
+    inbound_request_id: uuid.UUID | None = None
+    operation_id: uuid.UUID | None = None
     cell_id: uuid.UUID | None = None
     to_id: uuid.UUID | None = None
     # Как и у переноса: количество имеет смысл только у товара, тара едет вся.
@@ -297,6 +299,9 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "container_stock_missing",
         "invalid_container_destination",
         "insufficient_stock",
+        "qty_exceeds_accepted",
+        "insufficient_sorting_stock",
+        "operation_conflict",
         "not_distributable",
         "nothing_to_move",
         "pallet_disbanded",
@@ -521,6 +526,8 @@ async def place_sorting_object_route(
             cell_id=body.cell_id,
             to_id=body.to_id,
             quantity=body.qty,
+            inbound_request_id=body.inbound_request_id,
+            operation_id=body.operation_id,
         )
     except WarehouseMapError as exc:
         await session.rollback()
