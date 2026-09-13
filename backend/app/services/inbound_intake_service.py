@@ -123,6 +123,15 @@ async def effective_actual_qty(
         status = res.scalar_one_or_none()
     if status in SORTING_STATUSES | DONE_STATUSES:
         return raw
+    if status == STATUS_DRAFT and line.actual_qty is None:
+        # Compatibility for an untouched FF draft authored before WMS-440.
+        # Never infer actual quantities for submitted/receiving/historical arrivals.
+        source = (await session.execute(
+            select(InboundIntakeRequest.operation_type, InboundIntakeRequest.created_by_seller_id)
+            .where(InboundIntakeRequest.id == request_id)
+        )).one_or_none()
+        if source is not None and source[0] == OPERATION_TYPE_INBOUND and source[1] is None:
+            raw = line.expected_qty
     container_total = await container_total_for_product(session, request_id, line.product_id)
     return raw + container_total
 
@@ -863,6 +872,16 @@ async def delete_draft_line(
         raise InboundIntakeError("not_draft")
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
+    if is_ff_inbound(req):
+        # Removing the SKU removes its composition too, not the physical packages.
+        for box in req.boxes:
+            for contained in box.lines:
+                if contained.product_id == line.product_id:
+                    await session.delete(contained)
+        for place in req.cargo_places:
+            for cargo_line in place.lines:
+                if cargo_line.product_id == line.product_id:
+                    await session.delete(cargo_line)
     await session.delete(line)
     await session.commit()
 
