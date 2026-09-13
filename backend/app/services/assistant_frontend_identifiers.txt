@@ -4,6 +4,8 @@ appdialog
 appv2screens
 assistantpanel
 assistantpanelbody
+attacheddoccard
+attachmentcontent
 authedapplayout
 billingreportscreen
 billingscene
@@ -21,6 +23,16 @@ catalogscenes
 catalogscreen
 catalogsection
 cells
+chatapierror
+chatattachmentview
+chatcomposer
+chatdialog
+chatdocumentaction
+chatdocumentscreen
+chatfeed
+chatopenbutton
+chatparticipants
+chatscreen
 checkboxinput
 commentfield
 correctionactsplaceholderscreen
@@ -35,9 +47,12 @@ datatable
 deadlinepill
 deliveryroutechip
 deltacell
+documentaction
+documentscreen
 emptypanel
 emptystate
 errornotice
+extrachatcreatedialog
 fbsapierror
 fbscancelledafterpackdialog
 fbschips
@@ -316,6 +331,7 @@ warehousemapmovedialog
 warehousemapscene
 warehousemaptoolbar
 warehousemaptree
+warehouseprinterdialog
 warehousescenes
 warningnotice
 wbproductpickerdialog

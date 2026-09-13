@@ -336,7 +336,7 @@ async def build_executor_request(
         message=message,
         tenant_id=message.tenant_id,
         tenant_name=tenant.name if tenant is not None else "",
-        user_email=user.email if user is not None else "",
+        user_email=(user.email or "") if user is not None else "",
         user_role=user.role if user is not None else "",
         history=history,
         code_version=(settings.assistant_deploy_version or "").strip() or None,
