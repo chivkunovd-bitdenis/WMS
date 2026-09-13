@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Box, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
-import { pendingPlacement, placementStorageKey, rememberPlacement, sendPlacement, type PlacementBody } from './pendingPlacement'
+import { pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement, type PlacementBody } from './pendingPlacement'
 import { randomId } from '../../../utils/randomId'
 import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
 import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
@@ -82,8 +82,8 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
   }, [context, token, warehouseId])
 
 
-  const load = useCallback(async (recover = true) => {
-    if (!warehouseId) return
+  const load = useCallback(async (recover = true): Promise<boolean> => {
+    if (!warehouseId) return false
     try {
       if (recover && embedded && inboundRequestId) {
         const key = placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/place`), inboundRequestId)
@@ -102,12 +102,16 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const loaded = (await res.json()) as ApiSorting
-      if (activeContext.current !== context) return
+      if (activeContext.current !== context) return false
       setData(loaded)
       setVersion((current) => current + 1)
+      return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Не удалось загрузить раскладку'
-      setError((current) => current ? `${current} ${message}` : message)
+      const message = placementFailureMessage(err)
+      // A placement can have committed just before its reply or re-read failed.
+      // Keep that warning intact instead of appending a second transport error.
+      setError((current) => current ?? message)
+      return false
     }
   }, [context, embedded, inboundRequestId, token, warehouseId, send])
 
@@ -142,8 +146,8 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       // Экран уже переставил строку у себя. Показываем отказ и перечитываем
       // склад: иначе на экране будет одно, а в системе другое, и оператор
       // узнает об этом на инвентаризации.
-      setError(`${err instanceof Error ? err.message : 'Нет ответа сервера'}. Обновите документ, чтобы проверить результат размещения.`)
-      await load(false)
+      setError(`${placementFailureMessage(err)} Обновите документ, чтобы проверить результат размещения.`)
+      if (!await load(false)) setData(null)
     }
   }
 

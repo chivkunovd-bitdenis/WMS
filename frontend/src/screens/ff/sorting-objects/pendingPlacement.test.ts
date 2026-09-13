@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { pendingPlacement, placementStorageKey, rememberPlacement, sendPlacement } from './pendingPlacement'
+import { pendingPlacement, placementFailureMessage, placementStorageKey, rememberPlacement, sendPlacement } from './pendingPlacement'
 
 const body = { kind: 'product', id: 'balance', cell_id: 'cell', to_id: null, qty: 1, inbound_request_id: 'document' }
 function storage(): Storage {
@@ -55,5 +55,10 @@ describe('WMS-441 confirmed web placement', () => {
     const disk = storage()
     disk.setItem = () => { throw new Error('storage unavailable') }
     expect(() => rememberPlacement(disk, 'scope', body)).toThrow('storage unavailable')
+  })
+
+  it('calls an unanswered placement unknown instead of exposing the browser transport text', () => {
+    expect(placementFailureMessage(new TypeError('Failed to fetch')))
+      .toBe('Не удалось получить ответ от сервера. Результат размещения пока неизвестен.')
   })
 })
