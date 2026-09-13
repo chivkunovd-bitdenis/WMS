@@ -336,6 +336,7 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
         "undo_not_available",
         "undo_not_supported",
         "insufficient_packaging_stock",
+        "idempotency_conflict",
     }:
         status_code = status.HTTP_409_CONFLICT
     detail: object = code

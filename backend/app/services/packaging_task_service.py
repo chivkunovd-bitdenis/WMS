@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -82,6 +82,7 @@ PackagingTaskError = Literal[
     "undo_not_supported",
     "invalid_status_filter",
     "insufficient_packaging_stock",
+    "idempotency_conflict",
 ]
 
 REVERSIBLE_PACK_EVENTS = (PACKAGING_EVENT_SCAN_PACK, PACKAGING_EVENT_MANUAL_PACK)
@@ -208,6 +209,7 @@ async def _add_task_event(
     line: PackagingTaskLine | None = None,
     acting_user_id: uuid.UUID | None = None,
     note: str | None = None,
+    event_id: uuid.UUID | None = None,
 ) -> PackagingTaskEvent:
     await session.execute(
         select(PackagingTask.id)
@@ -221,6 +223,7 @@ async def _add_task_event(
         )
     )
     event = PackagingTaskEvent(
+        id=event_id or uuid.uuid4(),
         tenant_id=task.tenant_id,
         task_id=task.id,
         event_sequence=int(next_sequence or 1),
@@ -893,13 +896,6 @@ async def record_pack_progress(
     task = preloaded_task or await get_task(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
-    if task.status == STATUS_DONE:
-        raise PackagingTaskServiceError("bad_status")
-    line = next((ln for ln in task.lines if ln.id == line_id), None)
-    if line is None:
-        raise PackagingTaskServiceError("line_not_found")
-    need = qty_need_pack(line)
-    remaining = need - int(line.qty_packed_in_task)
 
     from app.services.fbs_packaging_integration_service import (
         FbsPackagingIntegrationError,
@@ -908,6 +904,52 @@ async def record_pack_progress(
     )
 
     fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    event_id = None
+    if fbs_supply is None:
+        # The existing work event is the durable receipt. Keep the key tenant-wide
+        # so reusing it for another document/line/actor cannot acknowledge new work.
+        if idempotency_key is not None:
+            event_id = uuid.uuid5(tenant_id, f"pack-progress:{idempotency_key}")
+            if session.get_bind().dialect.name == "postgresql":
+                await session.execute(
+                    text("SELECT pg_advisory_xact_lock(:key)"),
+                    {"key": int.from_bytes(event_id.bytes[:8], "big", signed=True)},
+                )
+        # Lock before reloading quantities: a second independent attempt must also
+        # observe the first commit before checking the remaining physical units.
+        await session.execute(
+            select(PackagingTask.id)
+            .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        task = await get_task(session, tenant_id, task_id)
+        if task is None:
+            raise PackagingTaskServiceError("not_found")
+        previous = await session.get(PackagingTaskEvent, event_id) if event_id else None
+        if previous is not None:
+            if (
+                previous.tenant_id != tenant_id
+                or previous.task_id != task_id
+                or previous.line_id != line_id
+                or previous.quantity != qty
+                or previous.created_by_user_id != acting_user_id
+                or previous.action != action
+                or order_id is not None
+            ):
+                raise PackagingTaskServiceError("idempotency_conflict")
+            # Return current document state, including completion or later undo;
+            # replay never reapplies the historical action.
+            await session.commit()
+            return PackProgressResult(task=task)
+        if event_id is not None and order_id is not None:
+            raise PackagingTaskServiceError("order_not_in_supply")
+    if task.status == STATUS_DONE:
+        raise PackagingTaskServiceError("bad_status")
+    line = next((ln for ln in task.lines if ln.id == line_id), None)
+    if line is None:
+        raise PackagingTaskServiceError("line_not_found")
+    need = qty_need_pack(line)
+    remaining = need - int(line.qty_packed_in_task)
     if fbs_supply is not None and order_id is not None:
         from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
         from app.services.fbs_cancelled_after_pack_service import (
@@ -982,6 +1024,7 @@ async def record_pack_progress(
         quantity=qty,
         line=line,
         acting_user_id=acting_user_id,
+        event_id=event_id,
     )
     if acting_user_id is not None:
         await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
