@@ -3341,6 +3341,7 @@ export default function App() {
                 <FfWarehouseMapPage
                   token={token}
                   warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                  isAdmin={isFulfillmentAdmin}
                 />
               ) : (
                 ffAccessDenied

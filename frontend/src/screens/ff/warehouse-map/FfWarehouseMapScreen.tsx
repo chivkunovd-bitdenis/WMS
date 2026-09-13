@@ -49,6 +49,7 @@ type Props = {
   onMove: (intent: MoveIntent, qty: number) => void
   onCreateCell: (code: string) => void
   onCreateWarehouse: (name: string, code: string) => void
+  onPrinter?: () => void
   onPrintCell: (row: MapRow, size: LabelSize) => void
   /** Пересчитать содержимое строки: открыть инвентаризацию по этому объекту. */
   onInventory: (row: MapRow) => void
@@ -65,6 +66,7 @@ export function FfWarehouseMapScreen({
   onMove,
   onCreateCell,
   onCreateWarehouse,
+  onPrinter = () => {},
   onPrintCell,
   onInventory,
   historyFor,
@@ -228,6 +230,7 @@ export function FfWarehouseMapScreen({
             }
             onCreateCell={() => setCellDialogOpen(true)}
             onCreateWarehouse={() => setWarehouseDialogOpen(true)}
+            onPrinter={onPrinter}
             createCellDisabledReason={currentWarehouse ? undefined : 'Сначала выберите склад'}
           />
 
