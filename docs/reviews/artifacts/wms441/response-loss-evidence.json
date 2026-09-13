@@ -1,0 +1,31 @@
+{
+  "events": [
+    {
+      "event": "response_dropped_after_upstream_success",
+      "document": "ac7151a9-43ed-4c3e-8249-e43871cd1a10",
+      "operation_id": "34b95681-89f6-4be2-ae8e-1815264ee1c1",
+      "status": 200
+    },
+    {
+      "event": "response_delivered",
+      "document": "ac7151a9-43ed-4c3e-8249-e43871cd1a10",
+      "operation_id": "34b95681-89f6-4be2-ae8e-1815264ee1c1",
+      "status": 200
+    }
+  ],
+  "verified_document": {
+    "id": "ac7151a9-43ed-4c3e-8249-e43871cd1a10",
+    "actual": 3,
+    "posted": 1,
+    "remaining": 2,
+    "status": "sorting"
+  },
+  "movement_deltas_for_operation": [
+    -1,
+    1
+  ],
+  "other_documents_posted": [
+    0,
+    0
+  ]
+}
