@@ -57,6 +57,21 @@ describe('durable FF intake attempts', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(fetch.mock.calls[1][1]).toEqual(expect.objectContaining({ body: JSON.stringify(corrected.body) }))
   })
+  it('submits only the corrected rejected item after a previous picker item was applied', async () => {
+    const added = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const rejected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 1000000001, increment: true })
+    const repeatedAdded = intakeMutation('POST', path, { product_id: 'added', expected_qty: 3, increment: true })
+    const corrected = intakeMutation('POST', path, { product_id: 'rejected', expected_qty: 2, increment: true })
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{"detail":"invalid_qty"}', { status: 422 })).mockResolvedValueOnce(new Response('{}'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(sendIntakeMutations(credential, 'document', [added, rejected])).rejects.toThrow('invalid_qty')
+    await sendIntakeMutations(credential, 'document', [repeatedAdded, corrected])
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(fetch.mock.calls.map((call) => call[1].body)).toEqual([
+      JSON.stringify(added.body), JSON.stringify(rejected.body), JSON.stringify(corrected.body),
+    ])
+    expect(readIntake(credential, 'document').pending).toBeUndefined()
+  })
   it('isolates tenant, operator and document and never sends if persistence fails', async () => {
     expect(intakeStorageKey(credential, 'document')).not.toBe(intakeStorageKey(token('other'), 'document'))
     expect(intakeStorageKey(credential, 'document')).not.toBe(intakeStorageKey(token('tenant', 'other'), 'document'))
