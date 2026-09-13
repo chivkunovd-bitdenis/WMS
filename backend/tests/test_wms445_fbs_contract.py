@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.packaging_task import PackagingTask
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
@@ -238,3 +240,27 @@ async def test_ozon_position_packing_counts_reread_retry_without_stock_change(
             int(index == 2),
         ]
         assert await stock_snapshot() == before
+
+    # Later document completion must not turn a successful saved attempt into
+    # a failure or a new unit. The transition is deliberately isolated here.
+    async with SessionLocal() as session:
+        saved_task = await session.get(PackagingTask, uuid.UUID(task_id))
+        assert saved_task
+        saved_task.status = "done"
+        await session.commit()
+    url = f"/operations/packaging-tasks/{task_id}/lines/{lines[str(other_id)]}/pack"
+    replay_body = {
+        "quantity": 1,
+        "order_id": str(case["orders"][0]),
+        "idempotency_key": "445-pack-2",
+    }
+    replay = await async_client.post(url, headers=case["headers"], json=replay_body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["packaging_task"]["status"] == "done"
+    assert await stock_snapshot() == before
+    for change in ({"quantity": 2}, {"order_id": str(case["orders"][1])}):
+        conflict = await async_client.post(
+            url, headers=case["headers"], json={**replay_body, **change}
+        )
+        assert conflict.status_code == 409, conflict.text
+        assert conflict.json()["detail"] == "idempotency_conflict"
