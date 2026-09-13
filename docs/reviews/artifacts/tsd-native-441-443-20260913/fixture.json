@@ -1,0 +1,22 @@
+{
+  "tenant_id": "769c84ea-649c-4c53-ba1a-8624b3f63d5c",
+  "organization": "final-review-5da311",
+  "user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+  "full_name": "Final Astra 5da311",
+  "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+  "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+  "cell_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+  "cell_barcode": "LOC-4CB59ED2D1E6",
+  "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+  "inbound_id": "cb6fca0b-0ff0-41d6-b64b-9ff659e99402",
+  "inbound_number": "ПРИЕМ-26-09-13-2",
+  "expected_units": 3,
+  "expected_amount_kopecks": 3000,
+  "actor_a_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+  "actor_b_id": "b1277336-0fec-468c-9ecc-eb143e665d4d",
+  "actor_b_name": "Final Boris Split 5da311",
+  "cell_a_id": "4ca21bc4-5dae-44a4-a88c-5e314772eff1",
+  "cell_a_barcode": "LOC-2A1650A5869E",
+  "cell_b_id": "a419c2f7-c524-4862-9567-27f10183ea8a",
+  "cell_b_barcode": "LOC-A4B1954C0199"
+}
