@@ -1,4 +1,4 @@
-import { intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
+import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
 import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
@@ -1410,6 +1410,7 @@ export function FfInboundRequestView({
       if (catalog == null) {
         await loadCatalog()
       }
+      if (ffDraft) beginIntakePickerAttempt(token, requestId)
       setPickerOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
@@ -1482,6 +1483,7 @@ export function FfInboundRequestView({
       if (ffDraft) {
         const mutations = Object.entries(pickerQtyByProduct).filter(([, qty]) => Number.isInteger(qty) && qty > 0).map(([productId, qty]) => intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/lines`, { product_id: productId, expected_qty: qty, increment: true }))
         if (mutations.length) await sendIntakeMutations(token, requestId, mutations)
+        else finishIntakePickerAttempt(token, requestId)
         setPickerOpen(false)
         await loadDetail()
         return
@@ -3716,7 +3718,7 @@ export function FfInboundRequestView({
         initialSearch={pickerInitialSearch}
         applyLabel={ffDraft ? 'Добавить товар' : detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
         emptyMessage="В каталоге селлера нет товаров по этому поиску."
-        onClose={() => setPickerOpen(false)}
+        onClose={() => { if (ffDraft) finishIntakePickerAttempt(token, requestId); setPickerOpen(false) }}
         onApply={applyPicker}
       />
 
