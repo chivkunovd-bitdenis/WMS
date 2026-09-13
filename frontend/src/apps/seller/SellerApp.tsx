@@ -336,6 +336,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         onLogout={() => logout()}
         title="Портал селлера"
         userLabel={me.display_name}
+        userJobTitle={me.job_title}
         userRoleLabel={
           me.active_seller_name && me.active_seller_name !== me.home_seller_name
             ? `Селлер · ${me.active_seller_name}`
