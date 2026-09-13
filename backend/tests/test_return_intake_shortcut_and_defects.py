@@ -11,7 +11,12 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services import inbound_intake_service as svc
-from app.services.catalog_service import create_location, create_product, create_warehouse
+from app.services.catalog_service import (
+    create_location,
+    create_product,
+    create_seller,
+    create_warehouse,
+)
 from app.services.defect_warehouse_service import DEFECT_WAREHOUSE_CODE
 from app.services.tokens import decode_access_token
 
@@ -77,7 +82,7 @@ async def test_manual_and_wb_returns_skip_separate_receiving(
 
 
 @pytest.mark.asyncio
-async def test_regular_inbound_keeps_expected_and_actual_separate(
+async def test_ff_inbound_draft_shows_plan_then_starts_a_fresh_recount(
     async_client: AsyncClient,
 ) -> None:
     tenant_id, actor_user_id = await _auth_ids(async_client)
@@ -102,13 +107,51 @@ async def test_regular_inbound_keeps_expected_and_actual_separate(
             product_id=product.id,
             expected_qty=4,
         )
-        assert line.actual_qty is None
+        assert line.actual_qty == 4
         request_id = request.id
     async with SessionLocal() as session:
         started = await svc.begin_receiving(
             session, tenant_id, request_id, actor_user_id=actor_user_id
         )
         assert started.status == svc.STATUS_RECEIVING
+        assert started.lines[0].actual_qty is None
+
+
+@pytest.mark.asyncio
+async def test_seller_inbound_draft_keeps_plan_and_fact_separate(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id, _actor_user_id = await _auth_ids(async_client)
+    async with SessionLocal() as session:
+        warehouse = await create_warehouse(
+            session, tenant_id, name="Seller", code=f"seller-{uuid.uuid4().hex[:6]}"
+        )
+        seller = await create_seller(session, tenant_id, name="Seller draft owner")
+        product = await create_product(
+            session,
+            tenant_id,
+            name="Seller inbound item",
+            sku_code=f"SELLER-IN-{uuid.uuid4().hex[:6]}",
+            length_mm=10,
+            width_mm=10,
+            height_mm=10,
+            seller_id=seller.id,
+        )
+        request = await svc.create_request(
+            session,
+            tenant_id,
+            warehouse_id=warehouse.id,
+            seller_id=seller.id,
+            created_by_seller_id=seller.id,
+        )
+        line = await svc.add_line(
+            session,
+            tenant_id,
+            request.id,
+            product_id=product.id,
+            expected_qty=4,
+        )
+        assert line.actual_qty is None
 
 
 @pytest.mark.asyncio

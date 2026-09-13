@@ -226,7 +226,7 @@ async def test_wb_only_admits_unbound_received_code(async_client: httpx.AsyncCli
 
 
 @pytest.mark.asyncio
-async def test_failed_check_scheduling_cannot_undo_posting(
+async def test_failed_check_scheduling_cannot_undo_posting_or_successful_replay(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -255,7 +255,10 @@ async def test_failed_check_scheduling_cannot_undo_posting(
     again = await async_client.post(
         f"/operations/inbound-intake-requests/{req}/complete-receiving", headers=headers
     )
-    assert again.status_code == 409, again.text
+    # Posting is already durable.  A repeated completion reads that successful
+    # state back even when the optional circulation-check scheduler failed.
+    assert again.status_code == 200, again.text
+    assert again.json()["status"] == "sorting"
     async with SessionLocal() as session:
         assert (
             await session.scalar(

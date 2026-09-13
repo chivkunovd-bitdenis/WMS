@@ -1120,7 +1120,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,
-                "packed_quantity": ctx["packed_positions"].get(position.id, 0),
+                # Lightweight callers that only project the worklist do not
+                # load Ozon packing facts.  They still describe an unpacked
+                # position rather than failing the complete response.
+                "packed_quantity": ctx.get("packed_positions", {}).get(position.id, 0),
             }
             for position in positions
         ],
