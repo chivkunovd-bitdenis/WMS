@@ -76,6 +76,48 @@ async def test_lost_response_replay_then_new_attempt(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("key", [None, "", " \t\r\n", "\u00a0"])
+async def test_blank_key_preserves_independent_operations(
+    async_client: AsyncClient, key: str | None,
+) -> None:
+    setup = await _tenant(async_client, "BlankPackKey")
+    task = await _task(async_client, setup)
+    payload = {"quantity": 1, "idempotency_key": key}
+    for expected in (1, 2, 3):
+        response = await async_client.post(_url(task), headers=setup.headers, json=payload)
+        assert response.status_code == 200, response.text
+        assert response.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == expected
+    await _assert_facts(task, 3, 3)
+    completed = await async_client.post(
+        f"/operations/packaging-tasks/{task['id']}/complete",
+        headers=setup.headers, json={"acknowledge_all_packed": False},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "done"
+    # A missing identity cannot reserve a tenant-wide receipt in another document.
+    other = await _task(async_client, setup)
+    response = await async_client.post(_url(other), headers=setup.headers, json=payload)
+    assert response.status_code == 200, response.text
+    await _assert_facts(other, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_nonblank_keys_are_opaque_and_uuid_replays(async_client: AsyncClient) -> None:
+    setup = await _tenant(async_client, "OpaquePackKey")
+    task = await _task(async_client, setup)
+    key = str(uuid.uuid4())
+    # Surrounding whitespace belongs to an opaque nonblank key. Trimming would
+    # incorrectly merge these three independent attempts into a single receipt.
+    for expected, attempt_key in enumerate((key, f" {key}", f"{key} "), start=1):
+        payload = {"quantity": 1, "idempotency_key": attempt_key}
+        for _ in range(2):
+            response = await async_client.post(_url(task), headers=setup.headers, json=payload)
+            assert response.status_code == 200, response.text
+            assert response.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == expected
+        await _assert_facts(task, expected, expected)
+
+
+@pytest.mark.asyncio
 async def test_payload_conflicts_and_tenant_boundary(async_client: AsyncClient) -> None:
     setup = await _tenant(async_client, "PackConflict")
     task = await _task(async_client, setup)
