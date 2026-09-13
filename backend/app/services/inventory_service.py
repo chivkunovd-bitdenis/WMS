@@ -763,11 +763,14 @@ async def record_movement_and_adjust_balance(
     container_id: uuid.UUID | None = None,
     _exact_source: bool = False,
     stock_deductions: list[StockDeduction] | None = None,
+    quantity_packed_delta: int = 0,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
         msg = "quantity_delta must be non-zero"
         raise ValueError(msg)
+    if quantity_packed_delta < 0 or quantity_packed_delta > max(quantity_delta, 0):
+        raise ValueError("invalid packed quantity")
     if (container_kind is None) != (container_id is None):
         msg = "container kind and id must be set together"
         raise ValueError(msg)
@@ -941,6 +944,7 @@ async def record_movement_and_adjust_balance(
                 product_id=product_id,
                 storage_location_id=storage_location_id,
                 quantity_delta=quantity_delta,
+                quantity_packed_delta=quantity_packed_delta,
                 container_kind=container_kind,
                 container_id=container_id,
             )
@@ -1704,7 +1708,7 @@ async def apply_marketplace_unload_pick(
     actor_user_id: uuid.UUID | None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
-) -> None:
+) -> int:
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
@@ -1719,6 +1723,7 @@ async def apply_marketplace_unload_pick(
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
+    packed_quantity = min(int(bal.quantity_packed), quantity)
     await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
@@ -1732,6 +1737,7 @@ async def apply_marketplace_unload_pick(
         container_kind=container_kind,
         container_id=container_id,
     )
+    return packed_quantity
 
 
 async def reverse_marketplace_unload_pick(
@@ -1745,6 +1751,7 @@ async def reverse_marketplace_unload_pick(
     actor_user_id: uuid.UUID | None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
+    quantity_packed: int = 0,
 ) -> None:
     """DEC-016: restore on_hand when removing qty from shipment box.
 
@@ -1764,6 +1771,7 @@ async def reverse_marketplace_unload_pick(
         actor_user_id=actor_user_id,
         container_kind=container_kind,
         container_id=container_id,
+        quantity_packed_delta=quantity_packed,
     )
 
 

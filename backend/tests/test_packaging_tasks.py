@@ -11,7 +11,23 @@ from inbound_box_intake_helpers import (
 )
 from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
 
-from app.models.packaging_task import STATUS_DONE, STATUS_IN_PROGRESS
+from app.models.marketplace_unload import (
+    MarketplaceUnloadBox,
+    MarketplaceUnloadBoxLine,
+    MarketplaceUnloadRequest,
+)
+from app.models.packaging_task import (
+    STATUS_DONE,
+    STATUS_IN_PROGRESS,
+    PackagingTask,
+    PackagingTaskLine,
+)
+from app.models.product import Product
+from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
+from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
+from app.services import packaging_task_service as pkg_svc
 
 
 async def _register_admin(async_client: AsyncClient) -> dict[str, str]:
@@ -71,6 +87,85 @@ async def _inventory_at_location(
     post = await async_client.post(f"{base_in}/{rid}/post", headers=h)
     assert post.status_code == 200, post.text
     return location_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("ready_from_source", "expected_worker"), [(0, 3), (2, 1), (3, 0)])
+async def test_mp_box_packaging_uses_source_captured_in_box(
+    db_session,
+    ready_from_source: int,
+    expected_worker: int,
+) -> None:
+    """WMS-444: the source captured in the box, not a later balance, sets work."""
+    suffix = uuid.uuid4().hex[:8]
+    tenant = Tenant(name="WMS-444", slug=f"wms444-{suffix}")
+    db_session.add(tenant)
+    await db_session.flush()
+    warehouse = Warehouse(tenant_id=tenant.id, name="WMS-444", code=f"w444-{suffix}")
+    seller = Seller(tenant_id=tenant.id, name="WMS-444 seller")
+    db_session.add_all((warehouse, seller))
+    await db_session.flush()
+    product = Product(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        name="WMS-444 product",
+        sku_code=f"wms444-{suffix}",
+    )
+    location = StorageLocation(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        code=f"W444-{suffix}",
+        barcode=f"W444-{suffix}",
+    )
+    request = MarketplaceUnloadRequest(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        seller_id=seller.id,
+        marketplace="wb",
+        status="collecting",
+    )
+    db_session.add_all((product, location, request))
+    await db_session.flush()
+    task = PackagingTask(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        marketplace_unload_request_id=request.id,
+        status="draft",
+    )
+    box = MarketplaceUnloadBox(request_id=request.id, box_preset="60_40_40")
+    db_session.add_all((task, box))
+    await db_session.flush()
+    line = PackagingTaskLine(
+        task_id=task.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        qty_total=3,
+        qty_suggested_packed=3,
+    )
+    box_line = MarketplaceUnloadBoxLine(
+        box_id=box.id,
+        product_id=product.id,
+        quantity=3,
+        quantity_packed=ready_from_source,
+    )
+    db_session.add_all((line, box_line))
+    await db_session.commit()
+
+    loaded = await pkg_svc.get_task(db_session, tenant.id, task.id)
+    assert loaded is not None
+    await pkg_svc.sync_mp_task_packed_from_boxes(db_session, tenant.id, loaded)
+    assert loaded.lines[0].qty_confirmed_packed == ready_from_source
+    assert loaded.lines[0].qty_packed_in_task == expected_worker
+    assert pkg_svc.qty_done(loaded.lines[0]) == 3
+
+    # A delayed old Android request cannot reclassify an unpacked box by a
+    # misleading ready remainder; it returns the same source-based result.
+    confirmed = await pkg_svc.confirm_line_packed_from_shelf(
+        db_session, tenant.id, task.id, line.id
+    )
+    confirmed_line = confirmed.lines[0]
+    assert confirmed_line.qty_confirmed_packed == ready_from_source
+    assert confirmed_line.qty_packed_in_task == expected_worker
 
 
 async def _inventory_in_sorting_zone(
