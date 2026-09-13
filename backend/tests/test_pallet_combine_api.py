@@ -40,7 +40,7 @@ async def _create_reception_staff(
     created = await client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": email},
+        json={"full_name": "Иван Петров", "email": email},
     )
     assert created.status_code == 201, created.text
     permissions = await client.patch(

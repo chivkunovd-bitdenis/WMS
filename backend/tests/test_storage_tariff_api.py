@@ -86,7 +86,7 @@ async def _create_inventory_staff(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": email},
+        json={"full_name": "Иван Петров", "email": email},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]

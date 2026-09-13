@@ -29,7 +29,7 @@ async def _create_ff_staff(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]
@@ -74,7 +74,7 @@ async def test_admin_creates_staff_user_first_login_and_permissions(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=ah,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]
@@ -131,7 +131,7 @@ async def test_admin_creates_staff_user_first_login_and_permissions(
     forbidden_staff_mgmt = await async_client.post(
         "/auth/staff-accounts",
         headers=sh,
-        json={"email": f"other-{suffix}@example.com"},
+        json={"full_name": "Иван Петров", "email": f"other-{suffix}@example.com"},
     )
     assert forbidden_staff_mgmt.status_code == 403
 

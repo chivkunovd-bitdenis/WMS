@@ -19,10 +19,12 @@ from app.core.settings import settings
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
+from app.schemas.user_profile import ProfilePatch
 from app.services.auth_service import (
     AuthError,
     create_seller_user,
     login,
+    login_by_name,
     register_fulfillment,
     request_password_reset,
     send_auth_link,
@@ -60,6 +62,12 @@ class LoginBody(BaseModel):
     password: str = Field(default="", max_length=128)
 
 
+class NameLoginBody(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    password: str = Field(default="", max_length=128)
+    organization: str | None = Field(default=None, max_length=64)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -92,10 +100,14 @@ class SellerShopOut(BaseModel):
 
 class UserMeResponse(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     tenant_id: str
     role: str
     organization_name: str
+    organization_slug: str
     seller_id: str | None = None
     seller_name: str | None = None
     home_seller_id: str | None = None
@@ -153,7 +165,10 @@ class ResendInviteBody(BaseModel):
 
 class SellerAccountOut(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     role: str
     seller_id: str
 
@@ -241,6 +256,9 @@ async def create_seller_account(
     return SellerAccountOut(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         role=user.role,
         seller_id=str(user.seller_id),
     )
@@ -423,9 +441,13 @@ async def me(
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         tenant_id=str(user.tenant_id),
         role=user.role,
         organization_name=tenant.name,
+        organization_slug=tenant.slug,
         seller_id=active_seller_id_str,
         seller_name=active_seller_name,
         home_seller_id=home_seller_id_str,
@@ -491,3 +513,35 @@ async def switch_seller(
         seller_id=target,
     )
     return TokenResponse(access_token=token)
+
+
+@router.post("/login-by-name", response_model=TokenResponse)
+async def login_by_name_route(
+    body: NameLoginBody,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> TokenResponse:
+    check_login_rate_limit(request=request, email=body.full_name)
+    try:
+        _user, token = await login_by_name(
+            session, full_name=body.full_name, password=body.password,
+            organization=body.organization,
+        )
+    except AuthError:
+        raise HTTPException(status_code=401, detail="invalid_credentials") from None
+    register_login_success(request=request, email=body.full_name)
+    return TokenResponse(access_token=token)
+
+
+@router.patch("/me", response_model=UserMeResponse)
+async def patch_me(
+    body: ProfilePatch,
+    user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserMeResponse:
+    user.full_name = body.full_name
+    user.job_title = body.job_title
+    await session.commit()
+    await session.refresh(user)
+    return await me(user, credentials, session)

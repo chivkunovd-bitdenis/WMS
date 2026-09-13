@@ -33,7 +33,9 @@ _SHOP_MANAGER_EMAIL_MARKERS = (
 )
 
 
-def is_test_user_email(email: str) -> bool:
+def is_test_user_email(email: str | None) -> bool:
+    if email is None:
+        return False
     normalized = email.strip().lower()
     if any(normalized.endswith(suffix) for suffix in _TEST_EMAIL_SUFFIXES):
         return True
@@ -47,7 +49,7 @@ def user_can_manage_seller_shops(user: User) -> bool:
         return False
     if user.can_manage_seller_shops:
         return True
-    email = user.email.strip().lower()
+    email = (user.email or "").strip().lower()
     if any(marker in email for marker in _SHOP_MANAGER_EMAIL_MARKERS):
         return True
     configured = settings.shop_manager_emails.strip().lower()

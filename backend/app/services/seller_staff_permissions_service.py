@@ -127,7 +127,9 @@ async def create_seller_staff_user(
     session: AsyncSession,
     *,
     acting_user: User,
-    email: str,
+    email: str | None,
+    full_name: str | None = None,
+    job_title: str | None = None,
     password: str | None,
     permissions: SellerPermissionsSnapshot,
 ) -> tuple[User, SellerPermissionsSnapshot]:
@@ -144,7 +146,9 @@ async def create_seller_staff_user(
     user = User(
         tenant_id=acting_user.tenant_id,
         seller_id=acting_user.seller_id,
-        email=email.strip().lower(),
+        email=email.strip().lower() if email else None,
+        full_name=full_name,
+        job_title=job_title,
         password_hash=password_hash,
         must_set_password=must_set_password,
         role=FULFILLMENT_SELLER,

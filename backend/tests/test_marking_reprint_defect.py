@@ -184,7 +184,7 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=h,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     staff_id = created.json()["id"]
     await set_password_via_link(async_client, staff_email, "password123")

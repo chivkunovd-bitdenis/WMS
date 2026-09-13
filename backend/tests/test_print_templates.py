@@ -285,7 +285,7 @@ async def test_two_users_get_different_last_layouts(async_client: AsyncClient) -
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=headers_a,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]

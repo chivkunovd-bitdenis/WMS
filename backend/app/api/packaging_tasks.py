@@ -121,6 +121,7 @@ class PackagingTaskEventOut(BaseModel):
     note: str | None = None
     created_by_user_id: str | None = None
     created_by_user_email: str | None = None
+    created_by_user_name: str | None = None
     created_at: str
     reversed_at: str | None = None
 
@@ -208,6 +209,9 @@ def _event_out(event: object, *, reveal_storage: bool) -> PackagingTaskEventOut:
         note=event.note,
         created_by_user_id=str(event.created_by_user_id) if event.created_by_user_id else None,
         created_by_user_email=event.created_by_user.email if event.created_by_user else None,
+        created_by_user_name=(
+            event.created_by_user.display_name if event.created_by_user else "Сотрудник не указан"
+        ),
         created_at=event.created_at.isoformat(),
         reversed_at=event.reversed_at.isoformat() if event.reversed_at else None,
     )
