@@ -97,7 +97,7 @@ def write_private(path: Path, value: dict[str, Any]) -> None:
     restrict_private_directory(path.parent)
     tmp = path.with_suffix(".new")
     descriptor = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w") as output:
+    with os.fdopen(descriptor, "w", encoding="utf-8") as output:
         json.dump(value, output, ensure_ascii=False)
         output.flush()
         os.fsync(output.fileno())
@@ -111,7 +111,7 @@ def write_private(path: Path, value: dict[str, Any]) -> None:
 
 
 def read_private(path: Path) -> dict[str, Any]:
-    with path.open() as stream:
+    with path.open(encoding="utf-8") as stream:
         value = json.load(stream)
     if not isinstance(value, dict):
         raise ValueError("Неверный файл настройки программы")  # noqa: TRY004
@@ -308,6 +308,36 @@ class WindowsAdapter:
             raise ValueError("PDF-этикетка не содержит страниц")
         return pages
 
+    @staticmethod
+    def _validate_page_size(
+        dc: Any, width_mm: int | None, height_mm: int | None
+    ) -> None:
+        if width_mm is None or height_mm is None:
+            return
+        dpi_x, dpi_y = dc.GetDeviceCaps(88), dc.GetDeviceCaps(90)  # LOGPIXELSX/Y
+        physical_width = dc.GetDeviceCaps(110) / dpi_x * 25.4  # PHYSICALWIDTH
+        physical_height = dc.GetDeviceCaps(111) / dpi_y * 25.4  # PHYSICALHEIGHT
+        if (
+            abs(physical_width - width_mm) > 1.5
+            or abs(physical_height - height_mm) > 1.5
+        ):
+            raise ValueError(
+                "В выбранной очереди не настроен размер этикетки "
+                f"{width_mm} x {height_mm} мм. Настройте формат в драйвере принтера."
+            )
+
+    def validate_layout(
+        self, queue: str, width_mm: int | None, height_mm: int | None
+    ) -> None:
+        if width_mm is None or height_mm is None:
+            return
+        dc = self.modules["win32ui"].CreateDC()
+        try:
+            dc.CreatePrinterDC(queue)
+            self._validate_page_size(dc, width_mm, height_mm)
+        finally:
+            dc.DeleteDC()
+
     def submit(
         self,
         data: bytes,
@@ -330,6 +360,7 @@ class WindowsAdapter:
             # CreatePrinterDC takes the queue name explicitly; it never falls
             # back to the default printer.
             dc.CreatePrinterDC(queue)
+            self._validate_page_size(dc, width_mm, height_mm)
             receipt = dc.StartDoc("WMS label")
             if not isinstance(receipt, int) or receipt <= 0:
                 raise agent.UnknownPrintOutcome(
@@ -462,6 +493,11 @@ def process_once(
         # Failures before the durable boundary below are known not to have spooled.
         if job["queue_name"] not in adapter.queues():
             raise ValueError("Назначенная очередь отсутствует в ОС")
+        validate_layout = getattr(adapter, "validate_layout", None)
+        if validate_layout is not None:
+            validate_layout(
+                job["queue_name"], expected.get("width_mm"), expected.get("height_mm")
+            )
     except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError) as exc:
         marker["phase"] = "result"
         marker["result"] = {
@@ -517,7 +553,7 @@ def _windows_task_xml(executable: Path, user_sid: str) -> str:
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>255</Count></RestartOnFailure>
   </Settings>
   <Actions Context="Author"><Exec><Command>{escape(str(executable))}</Command><Arguments>--run</Arguments></Exec></Actions>
 </Task>"""
@@ -623,7 +659,18 @@ def disable_autostart(directory: Path) -> None:
 
 
 def request_stop(directory: Path) -> bool:
-    """Tell the running Windows user task to stop before package replacement."""
+    """Tell the running background worker to stop before package replacement."""
+    if sys.platform == "darwin":
+        target = Path.home() / "Library" / "LaunchAgents" / "ru.wms.print-agent.plist"
+        result = subprocess.run(
+            ["launchctl", "bootout", f"gui/{os.getuid()}", str(target)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        # A missing already-stopped service is also safe for an update.
+        return result.returncode == 0 or not target.exists()
     if sys.platform != "win32":
         return False
     import ctypes
@@ -637,6 +684,28 @@ def request_stop(directory: Path) -> bool:
         return bool(ctypes.windll.kernel32.SetEvent(event))
     finally:
         ctypes.windll.kernel32.CloseHandle(event)
+
+
+def running_instance(directory: Path) -> bool:
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    mutex = ctypes.windll.kernel32.OpenMutexW(
+        0x00100000, False, "Local\\WMSPrint-" + _profile_key(directory)
+    )
+    if not mutex:
+        return False
+    ctypes.windll.kernel32.CloseHandle(mutex)
+    return True
+
+
+def wait_for_stop(directory: Path, timeout_seconds: int = 30) -> bool:
+    for _ in range(timeout_seconds * 10):
+        if not running_instance(directory):
+            return True
+        time.sleep(0.1)
+    return not running_instance(directory)
 
 
 def setup(directory: Path, adapter: Any) -> dict[str, Any]:
@@ -711,6 +780,7 @@ def self_test() -> None:
                 + str(accepted)
                 + '" >NUL\necho request id is Synthetic_442-1 (1 file(s))\n'
             )
+            command: str | list[str] = [os.environ["COMSPEC"], "/c", str(executable)]
         else:
             executable = directory / "synthetic-spooler"
             executable.write_text(
@@ -719,11 +789,12 @@ def self_test() -> None:
                 + '"\necho "request id is Synthetic_442-1 (1 file(s))"\n'
             )
             executable.chmod(0o700)
+            command = str(executable)
         receipt = agent.submit_to_queue(
             b"%PDF-synthetic-no-real-printer",
             "application/pdf",
             "Synthetic_442",
-            executable=str(executable),
+            executable=command,
         )
         assert accepted.read_bytes() == b"%PDF-synthetic-no-real-printer"
         outbox = directory / "inflight.json"
@@ -761,6 +832,16 @@ def main(argv: list[str] | None = None) -> int:
         "--stop", action="store_true", help="Остановить фоновую программу Windows"
     )
     parser.add_argument(
+        "--wait-stop",
+        action="store_true",
+        help="Подтвердить остановку перед обновлением",
+    )
+    parser.add_argument(
+        "--start",
+        action="store_true",
+        help="Запустить зарегистрированную фоновую программу",
+    )
+    parser.add_argument(
         "--uninstall", action="store_true", help="Убрать автозапуск, сохранив настройку"
     )
     parser.add_argument(
@@ -780,7 +861,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         directory = state_directory()
         if args.stop:
-            request_stop(directory)
+            stopped = request_stop(directory)
+            if args.wait_stop and sys.platform == "darwin" and not stopped:
+                return 2
+            return 0 if not args.wait_stop or wait_for_stop(directory) else 2
+        if args.start:
+            start_registered_background(directory)
             return 0
         if args.uninstall:
             request_stop(directory)

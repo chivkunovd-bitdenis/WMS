@@ -82,6 +82,9 @@ def build_macos(revision: str) -> Path:
     launcher.write_text(
         '#!/bin/sh\nset -eu\ncd "$(dirname "$0")"\n'
         'target="$HOME/Applications/WMS Print"\nmkdir -p "$target"\n'
+        'if [ -x "$target/wms-print/wms-print" ]; then\n'
+        '  "$target/wms-print/wms-print" --stop --wait-stop\n'
+        "fi\n"
         'ditto "wms-print" "$target/wms-print"\n'
         'exec "$target/wms-print/wms-print"\n',
         encoding="utf-8",

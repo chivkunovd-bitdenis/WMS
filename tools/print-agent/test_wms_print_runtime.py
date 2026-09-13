@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 import uuid
+from xml.etree import ElementTree
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -142,15 +143,15 @@ class RuntimeTest(unittest.TestCase):
                 text=True,
             )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("уже запущена", result.stderr)
+        if os.name != "nt":
+            self.assertIn("уже запущена", result.stderr)
 
     def test_private_state_survives_new_reader_and_is_not_world_readable(self):
         path = self.directory / "connection.json"
-        runtime.write_private(path, {"fixture": "local synthetic value"})
-        self.assertEqual(
-            runtime.read_private(path), {"fixture": "local synthetic value"}
-        )
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        runtime.write_private(path, {"fixture": "очередь склада 58"})
+        self.assertEqual(runtime.read_private(path), {"fixture": "очередь склада 58"})
+        if os.name != "nt":
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_native_adapter_exact_fixed_command_copies_and_receipt(self):
         calls = []
@@ -180,6 +181,10 @@ class RuntimeTest(unittest.TestCase):
             runtime.CupsAdapter(platform="win32")
 
     def test_safe_synthetic_queue_runs_real_child_process_once(self):
+        if os.name == "nt":
+            self.skipTest(
+                "Windows uses the .cmd synthetic queue in packaged --self-test"
+            )
         # Real subprocess/spooler boundary with a local synthetic queue executable.
         # No lp, OS queue, USB device or network printer can be reached here.
         executable = self.directory / "synthetic-spooler"
@@ -195,9 +200,30 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(receipt, "Synthetic_442-1")
         self.assertEqual(spool.read_bytes(), self.content)
 
+    def test_windows_cmd_synthetic_queue_receipt(self):
+        if os.name != "nt":
+            self.skipTest("Windows-only command invocation")
+        executable = self.directory / "synthetic-spooler.cmd"
+        spool = self.directory / "accepted.bin"
+        executable.write_text(
+            '@echo off\ncopy /Y "%4" "'
+            + str(spool)
+            + '" >NUL\necho request id is Synthetic_442-1 (1 file(s))\n'
+        )
+        receipt = agent.submit_to_queue(
+            self.content,
+            "application/pdf",
+            "Synthetic_442",
+            executable=[os.environ["COMSPEC"], "/c", str(executable)],
+        )
+        self.assertEqual(receipt, "Synthetic_442-1")
+        self.assertEqual(spool.read_bytes(), self.content)
+
     def test_actual_process_exit_after_spool_acceptance_recovers_without_second_submit(
         self,
     ):
+        if os.name == "nt":
+            self.skipTest("Windows recovery boundary is covered by process_once mocks")
         spooler = self.directory / "synthetic-spooler"
         accepted = self.directory / "accepted.txt"
         spooler.write_text(
@@ -242,7 +268,8 @@ class RuntimeTest(unittest.TestCase):
         config = plistlib.loads(path.read_bytes())
         self.assertEqual(config["ProgramArguments"], [str(executable), "--run"])
         self.assertTrue(config["RunAtLoad"])
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_windows_adapter_uses_exact_unicode_queue_and_spooler_receipt(self):
         calls = []
@@ -265,8 +292,7 @@ class RuntimeTest(unittest.TestCase):
                 return 442
 
             def GetDeviceCaps(self, index):
-                assert index in {88, 90}
-                return 203
+                return {88: 203, 90: 203, 110: 464, 111: 320}[index]
 
             def StartPage(self):
                 calls.append(("start-page",))
@@ -318,6 +344,9 @@ class RuntimeTest(unittest.TestCase):
                 "fitz": None,
             }
         )
+        adapter.validate_layout("Принтер склада 58", 58, 40)
+        with self.assertRaises(ValueError):
+            adapter.validate_layout("Принтер склада 58", 60, 40)
         receipt = adapter.submit(
             b"\x89PNG\r\n\x1a\nsynthetic", "image/png", "Принтер склада 58", 2
         )
@@ -325,6 +354,28 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(calls[0], ("queue", "Принтер склада 58"))
         self.assertEqual(sum(call[0] == "draw" for call in calls), 2)
         self.assertNotIn(("abort",), calls)
+
+    def test_windows_task_restart_count_is_in_scheduler_schema_range(self):
+        namespace = {"task": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+        task = ElementTree.fromstring(
+            runtime._windows_task_xml(
+                Path(r"C:\WMS Print\wms-print.exe"), "S-1-5-21-442"
+            )
+        )
+        count = int(
+            task.findtext(
+                "task:Settings/task:RestartOnFailure/task:Count", namespaces=namespace
+            )
+        )
+        self.assertGreaterEqual(count, 1)
+        self.assertLessEqual(count, 255)
+
+    def test_windows_installer_stops_and_restores_before_supervised_start(self):
+        installer = (Path(__file__).parent / "windows-installer.nsi").read_text()
+        self.assertIn("--stop --wait-stop", installer)
+        self.assertIn("$INSTDIR.previous", installer)
+        self.assertIn("--start", installer)
+        self.assertNotIn('wms-print.exe" --run', installer)
 
     def test_windows_state_directory_and_task_do_not_put_token_in_autostart(self):
         executable = self.directory / "wms-print.exe"

@@ -191,7 +191,7 @@ def submit_to_queue(
     run: Any = subprocess.run,
     *,
     copies: int = 1,
-    executable: str = "lp",
+    executable: str | list[str] = "lp",
 ) -> str:
     """Отдать файл в очередь ОС и вернуть её квитанцию.
 
@@ -207,9 +207,10 @@ def submit_to_queue(
         path = Path(directory) / ("label" + suffix)
         path.write_bytes(data)
         try:
+            command = [executable] if isinstance(executable, str) else executable
             result = run(
                 [
-                    executable,
+                    *command,
                     "-d",
                     queue,
                     *(["-n", str(copies)] if copies != 1 else []),
