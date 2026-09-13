@@ -1,0 +1,21 @@
+{
+  "task": "WMS-441",
+  "fixture": "private-local-second",
+  "operation_uuid": "b489dd46-a685-45b3-b41b-7ec24fa2c676",
+  "fault": {
+    "initial_post": "upstream 200 committed; response dropped",
+    "retry_while_gate_closed": "exact same request blocked by scoped proxy"
+  },
+  "device": {
+    "alternate_target": "blocked while pending",
+    "after_force_stop": "saved receipt reopened the existing done request with explicit Retry",
+    "after_gate_release": "same receipt reconciled; sorting queue empty",
+    "after_second_restart": "no saved receipt and no automatic reopen"
+  },
+  "database": {
+    "document_status": "done",
+    "cargo_remaining": 0,
+    "movement_group": {"rows": 2, "negative": 1, "positive": 1, "net_quantity": 0},
+    "cells": {"A": 2, "B": 0}
+  }
+}
