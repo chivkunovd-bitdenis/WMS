@@ -26,7 +26,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ from app.models.fbs_print_asset import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.models.print_connection import PrintConnection
 from app.models.warehouse import Warehouse
 from app.services.background_job_service import (
     JOB_STATUS_DONE,
@@ -79,6 +80,33 @@ PRINT_JOB_STATUS_TEXT: dict[str, str] = {
 
 def print_job_status_text(status: str) -> str:
     return PRINT_JOB_STATUS_TEXT.get(status, status)
+
+
+async def lock_print_intent(session: AsyncSession, job_id: uuid.UUID) -> None:
+    """Serialize UUID creation before reading/generating a file, without a lock table."""
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"), {"key": job_id.int % (2**63 - 1)}
+        )
+
+
+async def assigned_destination(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> dict[str, Any]:
+    connection = await session.scalar(
+        select(PrintConnection).where(
+            PrintConnection.tenant_id == tenant_id,
+            PrintConnection.warehouse_id == warehouse_id,
+            PrintConnection.is_default.is_(True),
+        )
+    )
+    return (
+        {"connection_id": str(connection.id), "queue_name": connection.queue_name}
+        if connection is not None
+        else {}
+    )
 
 
 def _payload_identity(payload: dict[str, Any] | None) -> tuple[str, str, str]:
@@ -187,6 +215,7 @@ async def create_print_job(
     Тот же ``job_id`` с тем же намерением возвращает прежнее задание — второго
     листа не появится. Тот же ``job_id`` с другим намерением отклоняется.
     """
+    await lock_print_intent(session, job_id)
     existing = await session.get(BackgroundJob, job_id)
     if existing is not None:
         return _existing_or_conflict(
@@ -211,7 +240,12 @@ async def create_print_job(
         )
     # Файл читаем целиком уже здесь: контрольная сумма и формат проверяются до
     # того, как задание попадёт в очередь, а не когда агент придёт за файлом.
-    _read_asset_bytes(asset)
+    content, mime = _read_asset_bytes(asset)
+    snapshot = operator_document_relative_path(job_id)
+    if mime != PDF_CONTENT_TYPE:
+        snapshot = snapshot.removesuffix(".pdf") + ".png"
+    snapshot = save_print_file(snapshot, content, content_type=mime)
+    destination = await assigned_destination(session, tenant_id, warehouse_id)
 
     job = BackgroundJob(
         id=job_id,
@@ -219,11 +253,15 @@ async def create_print_job(
         job_type=JOB_TYPE_FBS_LABEL_PRINT,
         status=JOB_STATUS_PENDING,
         payload_json={
+            **destination,
+            "copies": 1,
+            "storage_path": snapshot,
+            "content_bytes": len(content),
             "asset_id": str(asset_id),
             "asset_kind": asset.kind,
             "warehouse_id": str(warehouse_id),
             "content_type": asset.content_type or ORDER_STICKER_CONTENT_TYPE,
-            "checksum": asset.checksum,
+            "checksum": sha256_checksum(content),
             "width_mm": asset.width_mm,
             "height_mm": asset.height_mm,
             "requested_by_user_id": str(user_id),
@@ -320,6 +358,7 @@ async def create_document_print_job(
     задание: одно нажатие оператора — один лист.
     """
     checksum = sha256_checksum(document)
+    await lock_print_intent(session, job_id)
     existing = await session.get(BackgroundJob, job_id)
     if existing is not None:
         return _existing_document_or_conflict(
@@ -369,12 +408,17 @@ async def create_document_print_job(
             fbs_supply_id=supply.id,
         )
     )
+    destination = await assigned_destination(session, tenant_id, supply.warehouse_id)
     job = BackgroundJob(
         id=job_id,
         tenant_id=tenant_id,
         job_type=JOB_TYPE_FBS_LABEL_PRINT,
         status=JOB_STATUS_PENDING,
         payload_json={
+            **destination,
+            "copies": 1,
+            "storage_path": storage_path,
+            "content_bytes": len(document),
             "asset_id": str(asset_id),
             "asset_kind": PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
             "supply_id": str(supply_id),

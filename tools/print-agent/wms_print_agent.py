@@ -133,11 +133,16 @@ def validate_job(job: dict[str, Any], warehouse_id: str) -> dict[str, Any]:
 
 
 def fetch_label(
-    base_url: str, token: str, job_id: str, warehouse_id: str, expected: dict[str, Any]
+    base_url: str, token: str, job_id: str, warehouse_id: str, expected: dict[str, Any],
+    *, claim_id: str | None = None,
 ) -> bytes:
     # Путь собираем из проверенного UUID, а не из ссылки внутри задания.
     path = "/operations/fbs-print-jobs/" + str(uuid.UUID(job_id)) + "/content"
-    url = base_url + path + "?" + urllib.parse.urlencode({"warehouse_id": warehouse_id})
+    query = {"warehouse_id": warehouse_id}
+    if claim_id is not None:
+        path = "/operations/print/agent/jobs/" + str(uuid.UUID(job_id)) + "/content"
+        query = {"claim_id": str(uuid.UUID(claim_id))}
+    url = base_url + path + "?" + urllib.parse.urlencode(query)
     data, content_type = _open(
         urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
     )
@@ -151,13 +156,17 @@ def fetch_label(
 
 
 def submit_to_queue(
-    data: bytes, content_type: str, queue: str, run: Any = subprocess.run
+    data: bytes, content_type: str, queue: str, run: Any = subprocess.run,
+    *, copies: int = 1, executable: str = "lp",
 ) -> str:
     """Отдать файл в очередь ОС и вернуть её квитанцию.
 
     Без shell, без установки драйверов и без входящего слушателя. Один запуск —
     одна отправка: неизвестный исход наверх уходит как ``UnknownPrintOutcome``.
     """
+    check_queue(queue)
+    if type(copies) is not int or not 1 <= copies <= 999:
+        raise ValueError("Некорректное число копий")
     suffix = ".pdf" if content_type == "application/pdf" else ".png"
     directory = tempfile.mkdtemp(prefix="wms-print-")
     try:
@@ -165,7 +174,8 @@ def submit_to_queue(
         path.write_bytes(data)
         try:
             result = run(
-                ["lp", "-d", queue, "--", str(path)],
+                [executable, "-d", queue, *(["-n", str(copies)] if copies != 1 else []),
+                 "--", str(path)],
                 capture_output=True,
                 text=True,
                 timeout=60,

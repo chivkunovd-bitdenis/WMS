@@ -14,6 +14,7 @@ from app.models.print_connection import PrintConnection
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
+from app.services.background_job_service import JOB_TYPE_FBS_LABEL_PRINT
 from app.services.fbs_print_asset_service import FbsPrintAssetError
 from app.services.fbs_print_asset_storage import (
     PDF_CONTENT_TYPE,
@@ -21,7 +22,7 @@ from app.services.fbs_print_asset_storage import (
     save_print_file,
     sha256_checksum,
 )
-from app.services.fbs_print_job_service import JOB_TYPE_FBS_LABEL_PRINT
+from app.services.fbs_print_job_service import lock_print_intent
 
 
 def label_pdf(barcode: str, title: str, subtitle: str) -> bytes:
@@ -42,11 +43,11 @@ def label_pdf(barcode: str, title: str, subtitle: str) -> bytes:
         page.show_pdf_page(
             fitz.Rect(5, 34, page.rect.width - 5, 80), graphic_pdf, 0, keep_proportion=False
         )
-        page.insert_font(fontname="wms", fontbuffer=fitz.Font("cyrillic").buffer)
+        page.insert_font(fontname="wms", fontbuffer=fitz.Font("cjk").buffer)
         for text, rect, size in (
-            (title, fitz.Rect(5, 3, page.rect.width - 5, 31), 9),
-            (barcode, fitz.Rect(5, 82, page.rect.width - 5, 95), 8),
-            (subtitle, fitz.Rect(5, 97, page.rect.width - 5, 111), 7),
+            (title, fitz.Rect(5, 3, page.rect.width - 5, 31), 9.0),
+            (barcode, fitz.Rect(5, 82, page.rect.width - 5, 95), 8.0),
+            (subtitle, fitz.Rect(5, 97, page.rect.width - 5, 111), 7.0),
         ):
             while size > 3:
                 shape = page.new_shape()
@@ -54,7 +55,8 @@ def label_pdf(barcode: str, title: str, subtitle: str) -> bytes:
                     shape.commit()
                     break
                 size -= 0.5
-        return bytes(pdf.tobytes(no_new_id=True))
+        pdf.subset_fonts()
+        return bytes(pdf.tobytes(garbage=4, deflate=True, no_new_id=True))
 
 
 async def resolve_label(
@@ -133,14 +135,7 @@ async def create_sorting_job(
         "connection_id": str(connection_id),
         "requested_by_user_id": str(user_id),
     }
-    # Serialize by UUID before reading or rendering, including across processes.
-    # PostgreSQL transaction lock needs no lock table or attempt journal.
-    from sqlalchemy import text
-
-    if session.bind is not None and session.bind.dialect.name == "postgresql":
-        await session.execute(
-            text("SELECT pg_advisory_xact_lock(:key)"), {"key": job_id.int % (2**63 - 1)}
-        )
+    await lock_print_intent(session, job_id)
     existing = await session.get(BackgroundJob, job_id)
     if existing is not None:
         if (
