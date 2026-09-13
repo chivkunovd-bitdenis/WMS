@@ -222,6 +222,16 @@ export function PublicAuthScreen({
             fullWidth
             autoComplete={legacyLogin ? 'username' : 'name'}
           />
+          {!legacyLogin ? (
+            <TextField
+              name="organization"
+              type="text"
+              label="Код организации"
+              fullWidth
+              autoComplete="organization"
+              helperText="Укажите, если он известен: это помогает войти при совпадающих ФИО."
+            />
+          ) : null}
           <TextField
             name="password"
             type="password"

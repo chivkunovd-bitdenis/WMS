@@ -5,7 +5,11 @@ import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ActionGroup, AppDialog, ErrorNotice, PrimaryAction, SecondaryAction, TextInput } from '../../../ui-kit'
 
 type Destination = { connection_id: string; queue_name: string; platform: string; warehouse_id: string; last_seen_at: string | null; online: boolean }
-type Preview = Pick<Destination, 'connection_id' | 'queue_name' | 'platform'>
+export type PrinterPreview = Pick<Destination, 'connection_id' | 'queue_name' | 'platform'> & { pairingCode: string; warehouseId: string }
+type Preview = PrinterPreview
+export function previewMatchesContext(preview: PrinterPreview | null, code: string, warehouseId: string | null): preview is PrinterPreview {
+  return preview !== null && warehouseId !== null && preview.warehouseId === warehouseId && preview.pairingCode === code.trim()
+}
 const headers = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
 function message(raw: string) {
   if (raw === 'pairing_not_found_or_expired') return 'Код не найден или истёк. Получите новый код в программе на ПК.'
@@ -28,24 +32,26 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const version = useRef(0)
-  async function readDestination() {
+  async function readDestination(request = version.current) {
     if (!warehouseId) return null
     const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/destination`), { headers: headers(token) })
     if (!response.ok) throw new Error(message(await readApiErrorMessage(response)))
     const data = await response.json() as { destination: Destination | null }
-    setDestination(data.destination)
-    setDestinationLoaded(true)
+    if (request === version.current) {
+      setDestination(data.destination)
+      setDestinationLoaded(true)
+    }
     return data.destination
   }
   useEffect(() => {
-    if (!open || !warehouseId) return
+    if (!open || !warehouseId) { ++version.current; return }
     const request = ++version.current
     setDestination(null); setDestinationLoaded(false); setCode(''); setPreview(null); setError(null); setNotice(null)
-    void readDestination().catch((cause) => { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.') })
+    void readDestination(request).catch((cause) => { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.') })
   // warehouseId resets all temporary pairing state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, warehouseId, token])
-  function changeCode(next: string) { setCode(next); setPreview(null); setError(null); setNotice(null) }
+  function changeCode(next: string) { ++version.current; setCode(next); setPreview(null); setError(null); setNotice(null) }
   async function inspect() {
     if (!warehouseId || !code.trim()) return
     const request = ++version.current
@@ -54,28 +60,34 @@ export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token
       const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair/preview`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: code.trim() }) })
       if (!response.ok) throw new Error(message(await readApiErrorMessage(response)))
       const data = await response.json() as Destination
-      if (request === version.current) setPreview(data)
+      if (request === version.current) setPreview({ ...data, pairingCode: code.trim(), warehouseId })
     } catch (cause) { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось проверить код.') }
     finally { if (request === version.current) setBusy(false) }
   }
-  async function reconcile(checked: Preview) {
+  async function reconcile(checked: Preview, request: number) {
     try {
-      const current = await readDestination()
+      const current = await readDestination(request)
+      if (request !== version.current) return
       if (current?.connection_id === checked.connection_id) { setCode(''); setPreview(null); setNotice('Принтер подключён. Назначение подтверждено сервером.') }
       else if (current) { setPreview(null); setNotice(`Сейчас назначен принтер ${current.queue_name}. Предыдущее назначение не возвращали.`) }
       else setError('Не удалось подтвердить подключение. Проверьте состояние или повторите подключение тем же кодом.')
-    } catch { setError('Не удалось проверить подключение. Проверьте состояние перед повтором.') }
+    } catch { if (request === version.current) setError('Не удалось проверить подключение. Проверьте состояние перед повтором.') }
   }
   async function connect() {
-    if (!warehouseId || !preview || !code.trim()) return
+    if (!previewMatchesContext(preview, code, warehouseId)) return
     const checked = preview
+    const request = ++version.current
     setBusy(true); setError(null)
     try {
-      const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: code.trim() }) })
-      if (!response.ok) { setError(message(await readApiErrorMessage(response))); return }
-      await reconcile(checked)
-    } catch { await reconcile(checked) }
-    finally { setBusy(false) }
+      const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: checked.pairingCode }) })
+      if (!response.ok) {
+        const cause = message(await readApiErrorMessage(response))
+        if (request === version.current) setError(cause)
+        return
+      }
+      await reconcile(checked, request)
+    } catch { await reconcile(checked, request) }
+    finally { if (request === version.current) setBusy(false) }
   }
   return (
     <AppDialog

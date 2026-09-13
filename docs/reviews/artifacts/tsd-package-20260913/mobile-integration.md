@@ -1,6 +1,6 @@
 # WMS-440 / WMS-441 / WMS-442 / WMS-443 / WMS-444 / WMS-445: совместный мобильный checkpoint
 
-База patch — `af9693126d19d16918abd5cc7b7fbe99dfebc142`. Итоговая локальная история вложенного Android-репозитория — `4615af715213e328122d3798e2359b5e793d8968`; она не публикуется. Patch содержит только `android/app/src/main` и `android/app/src/test`. Его обратное применение к итоговому локальному SHA проверено командой `git apply --reverse --check`.
+База patch — `af9693126d19d16918abd5cc7b7fbe99dfebc142`. Итоговая локальная история вложенного Android-репозитория — `c60c236ca8cc6eba51d4cd529bfd62bf95f0f9a9`; она не публикуется. Patch содержит только `android/app/src/main` и `android/app/src/test`. Его обратное применение к итоговому локальному SHA повторно проверено командой `git apply --reverse --check`.
 
 ## Интегрированные изменения
 
@@ -13,9 +13,15 @@
 
 Конфликты были разрешены без изменения экранов или сценариев: сохранены identity/PIN, входящая приёмка, cargo recovery, compact print actions, восстановление упаковки и FBS work context.
 
+## Финальная дельта WMS-441…445
+
+Коммит `c60c236` закрывает findings финального Astra-review: FBS create/add receipt привязан к server/tenant/employee/session (F1); name/password login передаёт известный либо введённый код организации (F2); preview печати связан со сканированным кодом и складом (F3); у pending/unknown печати есть отдельное штатное `Проверить` без повторного POST (F4); сохранённая незавершённая печать остаётся доступна в текущем списке после автозавершения и перезапуска (F5); cargo recovery не открывает автоматически только что возвращённый документ повторно, оставляя его доступным для явного выбора (F6).
+
 ## Проверка
 
 Независимый финальный запуск после `4615af7` выполнил один объединённый Gradle-набор с лимитами `workers=2`, `Xmx1200m`, Kotlin in-process: `SortingViewModelTest`, `SortingSessionTest`, `SortingListRecoveryTest`, `OutboundAssemblyViewModelTest`, `OutboundPackAttemptTest`, `FbsViewModelTest`, `AuthManagerUrlPersistenceTest`, `AuthStoreCryptoConfigTest`, затем `:app:lintDebug` и `:app:assembleDebug`. Результат: `BUILD SUCCESSFUL`, 54 задачи.
+
+После финальной дельты выполнен целевой объединённый Gradle-запуск: `FbsPendingScopeTest`, `AuthManagerUrlPersistenceTest`, `FbsViewModelTest`, `SortingViewModelTest`, `SortingListRecoveryTest`, затем `:app:lintDebug` и `:app:assembleDebug`. Результат: `BUILD SUCCESSFUL` (54 задачи); lint сформировал HTML-отчёт без ошибок.
 
 Итоговый debug APK установлен на `emulator-5580`. Выполнены только четыре навигационные smoke-проверки: после обновления профиля в header показаны полные ФИО и должность `Анна Тестовая WMS / Администратор склада`; Sorting request `#15` открывается и показывает существующие компактные действия печати `Товар` и `Ячейка`; FBS открывается с экраном `FBS · Заказы` и выбором WB/Ozon; outbound `444001` показывает обычную упаковку и `Завершить упаковку`, без прежней кнопки полки FBO.
 

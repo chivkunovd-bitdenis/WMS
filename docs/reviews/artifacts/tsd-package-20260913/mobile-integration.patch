@@ -1,5 +1,5 @@
 diff --git a/android/app/src/main/java/ru/wms/tsd/Navigation.kt b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
-index 006264c..8f565fc 100644
+index 006264cdd846b8d583761cdd0b7d275f2fbbc0f8..8f565fcf9e8077f79fb9347c89f554498bb18828 100644
 --- a/android/app/src/main/java/ru/wms/tsd/Navigation.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
 @@ -26,6 +26,7 @@ import ru.wms.tsd.features.fbs.FbsSupplyScreen
@@ -41,7 +41,7 @@ index 006264c..8f565fc 100644
              val requestId = backStackEntry.arguments?.getString("requestId") ?: return@composable
              InboundBoxesScreen(
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiErrors.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiErrors.kt
-index 949796b..edfb539 100644
+index 949796b4a31730e9110ff8d307c08079a6e1f105..edfb53947e9285035a8c5bd33e933dac5b37207d 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiErrors.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiErrors.kt
 @@ -27,6 +27,8 @@ private val ERROR_CODES_RU = mapOf(
@@ -54,7 +54,7 @@ index 949796b..edfb539 100644
      "location_required" to "Сначала отсканируйте ячейку",
      "plan_limit_exceeded" to "Больше плана — товар уже собран",
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
-index 6599df7..fa3253e 100644
+index 6599df74971933901e7e92e6907e1e0769912ef8..079ff8d1baab3bb0b1be532aea767e24456f03d4 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
 @@ -1,11 +1,27 @@
@@ -85,60 +85,98 @@ index 6599df7..fa3253e 100644
  import ru.wms.tsd.BuildConfig
  import ru.wms.tsd.core.api.generated.apis.OperationsApi
  import ru.wms.tsd.core.api.generated.apis.WarehousesApi
-@@ -28,6 +44,8 @@ class ApiProvider(
+@@ -13,6 +29,18 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+ import ru.wms.tsd.core.auth.AuthManager
+ import ru.wms.tsd.core.auth.AuthStore
+ 
++/**
++ * One FBS create/add receipt is owned by the server, tenant, employee and the
++ * session that accepted it.  Keeping this alongside the immutable request
++ * prevents a normal employee switch from replaying it with another token.
++ */
++data class FbsPendingScope(
++    val server: String,
++    val tenantId: String,
++    val userId: String,
++    val sessionToken: String,
++)
++
+ /**
+  * Точка получения API-сервисов с авторизацией (T-05b).
+  * Токен активного сотрудника подставляется интерсептором на каждый запрос,
+@@ -28,6 +56,8 @@ class ApiProvider(
      private var cachedOperations: OperationsApi? = null
      private var cachedWarehouses: WarehousesApi? = null
      private var cachedFbs: FbsApi? = null
-+    private var cachedFbsPendingIdentity: FbsPendingIdentity? = null
++    private var cachedFbsPendingScope: FbsPendingScope? = null
 +    private var cachedPackaging: PackagingApi? = null
  
      private fun baseUrl(): String {
          return normalizeBaseUrl(authStore.getBaseUrl() ?: BuildConfig.DEFAULT_API_BASE_URL)
-@@ -56,9 +74,43 @@ class ApiProvider(
+@@ -56,9 +86,62 @@ class ApiProvider(
          cachedOperations = null
          cachedWarehouses = null
          cachedFbs = null
-+        cachedFbsPendingIdentity = null
++        cachedFbsPendingScope = null
 +        cachedPackaging = null
          return client
      }
  
-+    private suspend fun fbsPendingIdentity(): FbsPendingIdentity {
-+        cachedFbsPendingIdentity?.let { return it }
-+        val response = client().createService(FbsPendingIdentityApi::class.java).me()
++    suspend fun currentFbsPendingScope(): FbsPendingScope {
++        val session = checkNotNull(authManager.getCurrentSession()) { "Не удалось определить сотрудника для восстановления FBS. Войдите снова." }
++        val server = baseUrl()
++        cachedFbsPendingScope?.let {
++            if (it.server == server && it.userId == session.userId && it.sessionToken == session.token) return it
++        }
++        val response = fbsIdentityClient(server, session).createService(FbsPendingIdentityApi::class.java).me()
 +        val identity = response.body()
-+        require(response.isSuccessful && identity != null && identity.id.isNotBlank() && identity.tenantId.isNotBlank()) {
++        require(response.isSuccessful && identity != null && identity.id == session.userId && identity.tenantId.isNotBlank() && sameFbsSession(server, session)) {
 +            "Не удалось определить сотрудника для восстановления FBS. Войдите снова."
 +        }
-+        return identity.also { cachedFbsPendingIdentity = it }
++        return FbsPendingScope(server, identity.tenantId, identity.id, session.token).also { cachedFbsPendingScope = it }
 +    }
 +
-+    suspend fun pendingFbsSupplyCreate(): SupplyCreateBody? {
-+        val identity = fbsPendingIdentity()
-+        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create")
++    suspend fun pendingFbsSupplyCreate(scope: FbsPendingScope): SupplyCreateBody? {
++        requireCurrentFbsScope(scope)
++        return authStore.getFbsPendingMutation(scope.server, scope.tenantId, scope.userId, "supply_create")
 +            ?.let { Json.decodeFromString<SupplyCreateBody>(it) }
 +    }
 +
-+    suspend fun saveFbsSupplyCreate(body: SupplyCreateBody?) {
-+        val identity = fbsPendingIdentity()
-+        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create", body?.let { Json.encodeToString(it) })
++    fun saveFbsSupplyCreate(scope: FbsPendingScope, body: SupplyCreateBody?) {
++        authStore.saveFbsPendingMutation(scope.server, scope.tenantId, scope.userId, "supply_create", body?.let { Json.encodeToString(it) })
 +    }
 +
-+    suspend fun pendingFbsSupplyAdd(): PendingFbsSupplyAdd? {
-+        val identity = fbsPendingIdentity()
-+        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add")
++    suspend fun pendingFbsSupplyAdd(scope: FbsPendingScope): PendingFbsSupplyAdd? {
++        requireCurrentFbsScope(scope)
++        return authStore.getFbsPendingMutation(scope.server, scope.tenantId, scope.userId, "supply_add")
 +            ?.let { Json.decodeFromString<PendingFbsSupplyAdd>(it) }
 +    }
 +
-+    suspend fun saveFbsSupplyAdd(body: PendingFbsSupplyAdd?) {
-+        val identity = fbsPendingIdentity()
-+        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add", body?.let { Json.encodeToString(it) })
++    fun saveFbsSupplyAdd(scope: FbsPendingScope, body: PendingFbsSupplyAdd?) {
++        authStore.saveFbsPendingMutation(scope.server, scope.tenantId, scope.userId, "supply_add", body?.let { Json.encodeToString(it) })
 +    }
++
++    private fun sameFbsSession(server: String, session: ru.wms.tsd.core.auth.AuthSession): Boolean {
++        val current = authManager.getCurrentSession()
++        return baseUrl() == server && current?.userId == session.userId && current.token == session.token
++    }
++
++    private fun requireCurrentFbsScope(scope: FbsPendingScope) {
++        check(sameFbsSession(scope.server, ru.wms.tsd.core.auth.AuthSession(scope.userId, "", "", null, scope.sessionToken))) {
++            "Сотрудник или сервер изменился. Откройте FBS заново."
++        }
++    }
++
++    private fun fbsIdentityClient(server: String, session: ru.wms.tsd.core.auth.AuthSession): ApiClient =
++        ApiClient(baseUrl = server, okHttpClientBuilder = OkHttpClient.Builder().addInterceptor { chain ->
++            if (!sameFbsSession(server, session)) throw IOException("Сотрудник или сервер изменился. Откройте FBS заново.")
++            chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer ${session.token}").build())
++        })
 +
      fun pendingFbsDelivery(supplyId: String): DeliverBody? =
          authStore.getFbsDelivery(baseUrl(), supplyId)?.let { Json.decodeFromString<DeliverBody>(it) }
  
-@@ -66,6 +118,95 @@ class ApiProvider(
+@@ -66,6 +149,98 @@ class ApiProvider(
          authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
      }
  
@@ -195,6 +233,9 @@ index 6599df7..fa3253e 100644
 +        authStore.saveSortingPrint(context.server, context.user, requestId, body?.let { Json.encodeToString(it) })
 +    }
 +
++    fun pendingSortingPrintRequestIds(context: SortingContext = sortingContext()): List<String> =
++        authStore.getSortingPrintRequestIds(context.server, context.user)
++
 +    /** Незавершённая попытка упаковки строки — только если её начал текущий сотрудник. */
 +    fun pendingPackAttempt(taskId: String, lineId: String): PackAttempt? {
 +        val server = packServer()
@@ -234,10 +275,17 @@ index 6599df7..fa3253e 100644
      fun operations(): OperationsApi {
          val client = client()
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
-@@ -79,4 +220,37 @@ class ApiProvider(
+@@ -79,4 +254,44 @@ class ApiProvider(
          val client = client()
          return cachedFbs ?: client.createService(FbsApi::class.java).also { cachedFbs = it }
      }
++    fun fbs(scope: FbsPendingScope): FbsApi {
++        requireCurrentFbsScope(scope)
++        return ApiClient(baseUrl = scope.server, okHttpClientBuilder = OkHttpClient.Builder().addInterceptor { chain ->
++            requireCurrentFbsScope(scope)
++            chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer ${scope.sessionToken}").build())
++        }).createService(FbsApi::class.java)
++    }
 +    fun packaging(attempt: PackAttempt): PackagingApi {
 +        val session = checkNotNull(authManager.getCurrentSession())
 +        check(attempt.server == baseUrl() && attempt.actor == packActor(session.token))
@@ -273,7 +321,7 @@ index 6599df7..fa3253e 100644
 +    }
  }
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
-index 1442fba..a57387e 100644
+index 1442fba75277f2ffd27eaf5f816d22df2f8a9b26..a57387e1c17097a4dc1f358d56ef8daf218d6755 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
 @@ -2,6 +2,7 @@ package ru.wms.tsd.core.api.fbs
@@ -374,7 +422,7 @@ index 1442fba..a57387e 100644
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
 new file mode 100644
-index 0000000..8104300
+index 0000000000000000000000000000000000000000..81043001f5779eac9cfc18f6f891b65c0ada6234
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
 @@ -0,0 +1,30 @@
@@ -410,7 +458,7 @@ index 0000000..8104300
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
 new file mode 100644
-index 0000000..2ec1c2a
+index 0000000000000000000000000000000000000000..2ec1c2ad98dbfbabdbef26d8b9627648cb1b4ea0
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
 @@ -0,0 +1,79 @@
@@ -495,7 +543,7 @@ index 0000000..2ec1c2a
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
 new file mode 100644
-index 0000000..d6e6103
+index 0000000000000000000000000000000000000000..d6e6103ba3c383b8bc8200961ac07e44771e78f1
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/packaging/PackagingApi.kt
 @@ -0,0 +1,48 @@
@@ -549,7 +597,7 @@ index 0000000..d6e6103
 +)
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt
 new file mode 100644
-index 0000000..1c96402
+index 0000000000000000000000000000000000000000..1c964028487456a7872759043f04148601c58282
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/sorting/SortingApi.kt
 @@ -0,0 +1,165 @@
@@ -719,7 +767,7 @@ index 0000000..1c96402
 +    suspend fun sortingPrintJob(@Path("jobId") jobId: String): Response<SortingPrintJobOut>
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
-index 708a941..624bba4 100644
+index 708a941f05bb408b13e50756ffdfb35eb7862ecf..a1b88956f94ec2f55fe9a458d7e43b252d960398 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
 @@ -23,8 +23,10 @@ import kotlinx.coroutines.withContext
@@ -742,7 +790,7 @@ index 708a941..624bba4 100644
  ) {
      private var currentSession: AuthSession? = null
  
-@@ -58,21 +61,24 @@ class AuthManager(
+@@ -58,21 +61,25 @@ class AuthManager(
       */
      fun notifySessionExpired() {
          val session = currentSession ?: return
@@ -762,6 +810,7 @@ index 708a941..624bba4 100644
          email: String,
          password: String,
 +        legacyLogin: Boolean = true,
++        organization: String? = null,
      ): Result<AuthSession> = withContext(Dispatchers.IO) {
 -        val trimmedEmail = email.trim()
 +        // The public parameter name is retained for APK-11 caller source compatibility.
@@ -770,7 +819,7 @@ index 708a941..624bba4 100644
          val normalizedUrl = validateAndNormalizeBaseUrl(baseUrl, allowCleartext = BuildConfig.DEBUG)
              .getOrElse { throwable ->
                  val failure = (throwable as? ru.wms.tsd.core.api.BaseUrlValidationException)
-@@ -83,24 +89,34 @@ class AuthManager(
+@@ -83,24 +90,34 @@ class AuthManager(
  
          try {
              val apiClient = apiClientFactory(normalizedUrl)
@@ -784,7 +833,7 @@ index 708a941..624bba4 100644
 +                if (!response.isSuccessful) return@withContext Result.failure(classifyHttpStatus(response.code(), forLogin = true))
 +                response.body()?.accessToken
 +            } else {
-+                val response = identityApiFactory(apiClient).loginByName(NameLoginBody(trimmedName, password))
++                val response = identityApiFactory(apiClient).loginByName(NameLoginBody(trimmedName, password, organization?.trim()?.takeIf { it.isNotEmpty() }))
 +                if (!response.isSuccessful) return@withContext Result.failure(classifyHttpStatus(response.code(), forLogin = true))
 +                response.body()?.access_token
 +            }
@@ -816,7 +865,7 @@ index 708a941..624bba4 100644
                      authStore.saveStaff(it.copy(token = token))
                  }
              } catch (_: Exception) {
-@@ -138,28 +154,58 @@ class AuthManager(
+@@ -138,28 +155,58 @@ class AuthManager(
      }
  
      /**
@@ -890,7 +939,7 @@ index 708a941..624bba4 100644
  
      fun logout() {
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
-index 4243fa6..4ea6ca8 100644
+index 4243fa6c301defb242a59d5606f0a1e1069ad470..e64bb15400c49c018978d2b78b1c6d333d8263f1 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 @@ -13,11 +13,27 @@ import kotlinx.serialization.decodeFromString
@@ -923,7 +972,7 @@ index 4243fa6..4ea6ca8 100644
  
  /**
   * Хранилище авторизации на устройстве через EncryptedSharedPreferences.
-@@ -55,7 +71,106 @@ class AuthStore(context: Context) {
+@@ -55,7 +71,114 @@ class AuthStore(context: Context) {
          check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
      }
  
@@ -1027,11 +1076,19 @@ index 4243fa6..4ea6ca8 100644
 +        check(edit.commit()) { "Не удалось сохранить запрос печати на устройстве. Повторите попытку." }
 +    }
 +
++    /** Completed sorting is still reopenable while this employee's print receipt is unresolved. */
++    fun getSortingPrintRequestIds(server: String, user: String): List<String> {
++        val prefix = "sorting_print:$server:$user:"
++        return encryptedPrefs.all.keys.mapNotNull { key ->
++            key.removePrefix(prefix).takeIf { key.startsWith(prefix) && it.isNotBlank() }
++        }.distinct()
++    }
++
 +    private fun readSavedStaff(): List<SavedStaff> {
          val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
          return try {
              json.decodeFromString(jsonStr)
-@@ -64,23 +179,33 @@ class AuthStore(context: Context) {
+@@ -64,23 +187,33 @@ class AuthStore(context: Context) {
          }
      }
  
@@ -1074,7 +1131,7 @@ index 4243fa6..4ea6ca8 100644
      }
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt
 new file mode 100644
-index 0000000..a13f99d
+index 0000000000000000000000000000000000000000..e81b5ab051f28be5d766c6cb709205a466d8fcf5
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt
 @@ -0,0 +1,31 @@
@@ -1088,7 +1145,7 @@ index 0000000..a13f99d
 +import retrofit2.http.POST
 +
 +@Serializable
-+data class NameLoginBody(val full_name: String, val password: String)
++data class NameLoginBody(val full_name: String, val password: String, val organization: String? = null)
 +
 +@Serializable
 +data class NameLoginResponse(val access_token: String)
@@ -1110,7 +1167,7 @@ index 0000000..a13f99d
 +    suspend fun me(@Header("Authorization") authorization: String): Response<IdentityMeResponse>
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
-index ed1b90a..6841537 100644
+index ed1b90a2f5d312c226a3587b9d24364ed7d89acb..b4189bdfaa02533b868dbd472f9e1722885697bc 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
 @@ -88,7 +88,9 @@ fun LoginScreen(
@@ -1208,17 +1265,27 @@ index ed1b90a..6841537 100644
          }
      }
  
-@@ -305,7 +318,8 @@ private fun EmailPasswordLoginScreen(
+@@ -305,7 +318,18 @@ private fun EmailPasswordLoginScreen(
      onBackToStaff: (() -> Unit)?,
  ) {
      val coroutineScope = rememberCoroutineScope()
 -    var email by remember { mutableStateOf("") }
 +    var fullName by remember { mutableStateOf("") }
++    var organization by remember {
++        mutableStateOf(
++            authStore.getSavedStaff()
++                .filter { it.baseUrl == authManager.getWorkingBaseUrl() }
++                .map { it.organizationSlug }
++                .distinct()
++                .singleOrNull()
++                .orEmpty(),
++        )
++    }
 +    var legacyLogin by remember { mutableStateOf(false) }
      var password by remember { mutableStateOf("") }
      var baseUrl by remember { mutableStateOf(authManager.getWorkingBaseUrl()) }
      var showServerSettings by remember { mutableStateOf(false) }
-@@ -324,14 +338,14 @@ private fun EmailPasswordLoginScreen(
+@@ -324,14 +348,14 @@ private fun EmailPasswordLoginScreen(
      }
  
      fun submitLogin() {
@@ -1231,11 +1298,11 @@ index ed1b90a..6841537 100644
          errorMessage = ""
          coroutineScope.launch {
 -            val result = authManager.loginWithPassword(baseUrl, email, password)
-+            val result = authManager.loginWithPassword(baseUrl, fullName, password, legacyLogin)
++            val result = authManager.loginWithPassword(baseUrl, fullName, password, legacyLogin, organization)
              isLoading = false
              if (result.isSuccess) {
                  showPinSetup = true
-@@ -380,8 +394,11 @@ private fun EmailPasswordLoginScreen(
+@@ -380,8 +404,11 @@ private fun EmailPasswordLoginScreen(
          if (session != null) {
              authStore.saveStaff(
                  ru.wms.tsd.core.auth.SavedStaff(
@@ -1248,7 +1315,7 @@ index ed1b90a..6841537 100644
                      token = session.token,
                      pin = pin1,
                  )
-@@ -402,18 +419,22 @@ private fun EmailPasswordLoginScreen(
+@@ -402,18 +429,35 @@ private fun EmailPasswordLoginScreen(
                  Text("Вход", fontSize = 24.sp, modifier = Modifier.padding(top = 16.dp))
  
                  OutlinedTextField(
@@ -1268,6 +1335,19 @@ index ed1b90a..6841537 100644
                      ),
                  )
  
++                if (!legacyLogin) {
++                    OutlinedTextField(
++                        value = organization,
++                        onValueChange = { organization = it },
++                        label = { Text("Код организации") },
++                        supportingText = { Text("Укажите, если он известен") },
++                        modifier = Modifier.fillMaxWidth(),
++                        singleLine = true,
++                        enabled = !isLoading,
++                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
++                    )
++                }
++
 +                TextButton(onClick = { legacyLogin = !legacyLogin }, enabled = !isLoading) {
 +                    Text(if (legacyLogin) "Вход по ФИО" else "Вход по прежнему логину", fontSize = 14.sp, color = WmsColors.Primary)
 +                }
@@ -1275,7 +1355,7 @@ index ed1b90a..6841537 100644
                  OutlinedTextField(
                      value = password,
                      onValueChange = { password = it },
-@@ -512,7 +533,7 @@ private fun EmailPasswordLoginScreen(
+@@ -512,7 +556,7 @@ private fun EmailPasswordLoginScreen(
  
                  Button(
                      onClick = { submitLogin() },
@@ -1285,7 +1365,7 @@ index ed1b90a..6841537 100644
                          .fillMaxWidth()
                          .height(WmsDimens.PrimaryButtonHeight),
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
-index 1476576..dea98e5 100644
+index 1476576f527649b76fbb2f2a7a30a9a749926565..dea98e53c193e20b4f71ea3f5f5bfe1c68f82753 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
 @@ -47,9 +47,25 @@ internal fun displayTime(value: String): String = runCatching {
@@ -1467,10 +1547,18 @@ index 1476576..dea98e5 100644
                          }
                      }
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
-index ce11620..ba2d225 100644
+index ce11620db500cd273f0fc5cf04da3f457acd95bf..08bcd5fd3cd5a885e54f35392fda80d926338a2e 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
-@@ -44,6 +44,23 @@ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
+@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.launch
+ import retrofit2.Response
+ import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.FbsPendingScope
+ import ru.wms.tsd.core.api.fbs.*
+ import ru.wms.tsd.core.api.readableError
+ import ru.wms.tsd.ui.patterns.ScanFlash
+@@ -44,6 +45,23 @@ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
  fun sortedOperationOrders(orders: List<FbsOrder>): List<FbsOrder> =
      sortedOrders(orders).sortedBy { it.pick.status == "picked" }
  
@@ -1494,7 +1582,7 @@ index ce11620..ba2d225 100644
  fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
      runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
  
-@@ -72,6 +89,8 @@ data class FbsState(
+@@ -72,6 +90,8 @@ data class FbsState(
      val cursor: String? = null,
      val supplies: List<FbsSupplySummary> = emptyList(),
      val selected: Set<String> = emptySet(),
@@ -1503,22 +1591,33 @@ index ce11620..ba2d225 100644
      val workspace: FbsWorkspace? = null,
      val source: FbsScanResult? = null,
      val pickChoices: List<FbsPickChoice> = emptyList(),
-@@ -105,6 +124,8 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+@@ -105,6 +125,10 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
      private var openedSupplyId: String? = null
      private var retryAction: (suspend () -> Unit)? = null
      private var pickChoiceReply: CompletableDeferred<FbsScanResult?>? = null
 +    private var pendingSupplyCreate: SupplyCreateBody? = null
 +    private var pendingSupplyAdd: Pair<String, SupplyOrdersBody>? = null
++    private var pendingSupplyCreateScope: FbsPendingScope? = null
++    private var pendingSupplyAddScope: FbsPendingScope? = null
      init { viewModelScope.launch { for (scan in scans) {
          val key = UUID.randomUUID().toString()
          state.first { !it.busy && it.error == null }
-@@ -153,7 +174,16 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+@@ -153,7 +177,25 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
          val marketplace = state.value.marketplace
          val page = required { api.fbs().orders(marketplace = marketplace, group = null, cursor = if (append) state.value.cursor else null) }
          val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
 -        mutable.value = state.value.copy(orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id }, cursor = page.nextCursor, supplies = supplies.items)
-+        if (pendingSupplyCreate == null) pendingSupplyCreate = runCatching { api.pendingFbsSupplyCreate() }.getOrNull()
-+        if (pendingSupplyAdd == null) pendingSupplyAdd = runCatching { api.pendingFbsSupplyAdd() }.getOrNull()?.let { it.supplyId to it.body }
++        val scope = runCatching { api.currentFbsPendingScope() }.getOrNull()
++        if (scope != pendingSupplyCreateScope) {
++            pendingSupplyCreate = null
++            pendingSupplyCreateScope = null
++        }
++        if (scope != pendingSupplyAddScope) {
++            pendingSupplyAdd = null
++            pendingSupplyAddScope = null
++        }
++        if (pendingSupplyCreate == null && scope != null) pendingSupplyCreate = runCatching { api.pendingFbsSupplyCreate(scope) }.getOrNull()?.also { pendingSupplyCreateScope = scope }
++        if (pendingSupplyAdd == null && scope != null) pendingSupplyAdd = runCatching { api.pendingFbsSupplyAdd(scope) }.getOrNull()?.let { it.supplyId to it.body }?.also { pendingSupplyAddScope = scope }
 +        mutable.value = state.value.copy(
 +            orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id },
 +            cursor = page.nextCursor,
@@ -1530,7 +1629,7 @@ index ce11620..ba2d225 100644
      }
  
      /**
-@@ -172,12 +202,58 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+@@ -172,12 +214,66 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
      }
      fun create(name: String, delivery: String, onOpen: (String) -> Unit) {
          val ids = state.value.selected.toList(); if (ids.isEmpty() || name.isBlank()) return
@@ -1541,10 +1640,12 @@ index ce11620..ba2d225 100644
 +            it.name == requested.name && it.orderIds.toSet() == requested.orderIds.toSet() && it.deliveryType == requested.deliveryType
 +        } ?: requested.also { pendingSupplyCreate = it }
 +        launch {
-+            api.saveFbsSupplyCreate(body)
-+            val workspace = required { api.fbs().createSupply(body) }
-+            api.saveFbsSupplyCreate(null)
++            val scope = pendingSupplyCreateScope ?: api.currentFbsPendingScope().also { pendingSupplyCreateScope = it }
++            api.saveFbsSupplyCreate(scope, body)
++            val workspace = required { api.fbs(scope).createSupply(body) }
++            api.saveFbsSupplyCreate(scope, null)
 +            pendingSupplyCreate = null
++            pendingSupplyCreateScope = null
 +            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyCreate = null)
 +            onOpen(workspace.supply.id)
 +        }
@@ -1558,10 +1659,12 @@ index ce11620..ba2d225 100644
 +            savedSupply == supplyId && savedBody.orderIds.toSet() == requested.orderIds.toSet()
 +        }?.second ?: requested.also { pendingSupplyAdd = supplyId to it }
 +        launch {
-+            api.saveFbsSupplyAdd(PendingFbsSupplyAdd(supplyId, body))
-+            val workspace = required { api.fbs().addOrders(supplyId, body) }
-+            api.saveFbsSupplyAdd(null)
++            val scope = pendingSupplyAddScope ?: api.currentFbsPendingScope().also { pendingSupplyAddScope = it }
++            api.saveFbsSupplyAdd(scope, PendingFbsSupplyAdd(supplyId, body))
++            val workspace = required { api.fbs(scope).addOrders(supplyId, body) }
++            api.saveFbsSupplyAdd(scope, null)
 +            pendingSupplyAdd = null
++            pendingSupplyAddScope = null
 +            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyAddId = null)
 +            onOpen(workspace.supply.id)
 +        }
@@ -1572,15 +1675,19 @@ index ce11620..ba2d225 100644
 +        if (create == null && add == null) return
 +        launch {
 +            val workspace = if (create != null) {
-+                val result = required { api.fbs().createSupply(create) }
-+                api.saveFbsSupplyCreate(null)
++                val scope = requireNotNull(pendingSupplyCreateScope)
++                val result = required { api.fbs(scope).createSupply(create) }
++                api.saveFbsSupplyCreate(scope, null)
 +                pendingSupplyCreate = null
++                pendingSupplyCreateScope = null
 +                result
 +            } else {
 +                val (supplyId, body) = requireNotNull(add)
-+                val result = required { api.fbs().addOrders(supplyId, body) }
-+                api.saveFbsSupplyAdd(null)
++                val scope = requireNotNull(pendingSupplyAddScope)
++                val result = required { api.fbs(scope).addOrders(supplyId, body) }
++                api.saveFbsSupplyAdd(scope, null)
 +                pendingSupplyAdd = null
++                pendingSupplyAddScope = null
 +                result
 +            }
 +            mutable.value = state.value.copy(
@@ -1594,7 +1701,7 @@ index ce11620..ba2d225 100644
      fun loadSupply(supplyId: String) {
          if (openedSupplyId != supplyId) {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
-index cd65432..2110b7e 100644
+index cd65432d6cccb9ad2c6537f7b5ef7bf582656bd3..2110b7e2bb59a0a453e597284af349b084dc86ab 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
 @@ -149,11 +149,16 @@ fun HomeScreen(
@@ -1621,7 +1728,7 @@ index cd65432..2110b7e 100644
                      text = "Сменить",
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 new file mode 100644
-index 0000000..6f6b3ce
+index 0000000000000000000000000000000000000000..6f6b3cefa0135f099427f5a7dcb90c5ba4d988ef
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 @@ -0,0 +1,205 @@
@@ -1832,7 +1939,7 @@ index 0000000..6f6b3ce
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 new file mode 100644
-index 0000000..7483f1e
+index 0000000000000000000000000000000000000000..7483f1e707ce9adad6cb0757f56fdfe30f9f0446
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 @@ -0,0 +1,223 @@
@@ -2060,7 +2167,7 @@ index 0000000..7483f1e
 +    }
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
-index e7a3331..be6dbde 100644
+index e7a3331ceef299cfc9858c8c2ba57864aa57363a..be6dbde5a35ea91abeb27e4ffc8381153edcb394 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
 @@ -17,7 +17,7 @@ import ru.wms.tsd.AppGraph
@@ -2114,7 +2221,7 @@ index e7a3331..be6dbde 100644
      ) {
          when {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
-index 63fc4e3..491ba60 100644
+index 63fc4e3f5d6a99ac24da0c77aa130568e7858c57..491ba60a7d1670dd8af0da4fe66aeac7e8c1900e 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyScreen.kt
 @@ -255,7 +255,6 @@ fun OutboundAssemblyScreen(
@@ -2126,7 +2233,7 @@ index 63fc4e3..491ba60 100644
              onDismiss = vm::dismissPackLine,
          )
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
-index 687e378..7424803 100644
+index 687e3780984dc02f8a84f50b1d37fef5fb989db6..7424803d26c7037b20646f7cdb8dc56b8265fe1a 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModel.kt
 @@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
@@ -2296,7 +2403,7 @@ index 687e378..7424803 100644
                      val line = result.value.lines.firstOrNull { it.id == _state.value.packLineId }
                      _state.value = _state.value.copy(
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
-index 857e22b..20f6642 100644
+index 857e22b2601e7c64d038f4c82969fc9d758a6cd8..20f66422328ddfad2c2e3837b9d75b75f8090e15 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/outbound/PackagingPanel.kt
 @@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
@@ -2340,7 +2447,7 @@ index 857e22b..20f6642 100644
                  QtyInput(
                      value = qty,
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
-index ee1e470..7c0a980 100644
+index ee1e470c7b5b1513b3c7b24391a0887a1279369e..f176f20dbb3716aaf17186bb651499e0f5d517c2 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingListScreen.kt
 @@ -10,10 +10,13 @@ import androidx.lifecycle.ViewModelProvider
@@ -2357,7 +2464,7 @@ index ee1e470..7c0a980 100644
  import ru.wms.tsd.core.api.ApiProvider
  import ru.wms.tsd.core.api.networkErrorText
  import ru.wms.tsd.core.api.readableError
-@@ -29,13 +32,34 @@ import ru.wms.tsd.ui.patterns.TaskCardData
+@@ -29,16 +32,43 @@ import ru.wms.tsd.ui.patterns.TaskCardData
  import ru.wms.tsd.ui.patterns.TaskList
  import ru.wms.tsd.ui.theme.WmsColors
  
@@ -2379,7 +2486,9 @@ index ee1e470..7c0a980 100644
      val refreshing: Boolean = false,
      val error: String? = null,
      val requests: List<InboundIntakeRequestSummaryOut> = emptyList(),
-+    /** Durable receipt for this server and employee takes precedence over an empty live queue. */
++    /** Every durable receipt remains visible in this queue until it is reconciled. */
++    val recoveryRequestIds: List<String> = emptyList(),
++    /** One automatic recovery is allowed per visit to this queue. */
 +    val recoveryRequestId: String? = null,
  )
  
@@ -2389,39 +2498,49 @@ index ee1e470..7c0a980 100644
 +): SortingListUiState =
 +    if (state.recoveryRequestId == requestId) state.copy(recoveryRequestId = null) else state
 +
++internal fun nextRecoveryRequest(ids: List<String>, opened: Set<String>): String? =
++    ids.firstOrNull { it !in opened }
++
  class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
      private val _state = MutableStateFlow(SortingListUiState())
      val state: StateFlow<SortingListUiState> = _state
-@@ -52,7 +76,11 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
++    private val autoOpenedRecoveryIds = mutableSetOf<String>()
+ 
+     init { load(initial = true) }
+ 
+@@ -52,7 +82,13 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
                          val queue = resp.body().orEmpty()
                              .filter { (it.status == "sorting" || it.status == "verified") && (it.sortingRemainingQty ?: 0) > 0 }
                              .sortedBy { it.createdAt }
 -                        _state.value = SortingListUiState(loading = false, requests = queue)
++                        val recoveryIds = (api.pendingCargoPutawayRequestIds() + api.pendingSortingPrintRequestIds()).distinct()
 +                        _state.value = SortingListUiState(
 +                            loading = false,
 +                            requests = queue,
-+                            recoveryRequestId = api.pendingCargoPutawayRequestIds().firstOrNull(),
++                            recoveryRequestIds = recoveryIds,
++                            recoveryRequestId = nextRecoveryRequest(recoveryIds, autoOpenedRecoveryIds),
 +                        )
                      } else {
                          _state.value = _state.value.copy(loading = false, refreshing = false, error = resp.readableError())
                      }
-@@ -63,6 +91,11 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -63,6 +99,12 @@ class SortingListViewModel(private val api: ApiProvider) : ViewModel() {
          }
      }
  
 +    /** Navigation is a one-time effect, not another queue item on recomposition. */
 +    fun consumeRecoveryRequest(requestId: String) {
++        autoOpenedRecoveryIds += requestId
 +        _state.value = consumeRecoveryRequest(_state.value, requestId)
 +    }
 +
      class Factory(private val api: ApiProvider) : ViewModelProvider.Factory {
          @Suppress("UNCHECKED_CAST")
          override fun <T : ViewModel> create(modelClass: Class<T>): T = SortingListViewModel(api) as T
-@@ -78,6 +111,16 @@ fun SortingListScreen(
+@@ -78,6 +120,16 @@ fun SortingListScreen(
      val vm: SortingListViewModel = viewModel(factory = SortingListViewModel.Factory(AppGraph.apiProvider))
      val state by vm.state.collectAsState()
  
-+    // Saved cargo is an already confirmed operator action, not a new queue item.
++    // Saved cargo/print is an already confirmed operator action, not a new queue item.
 +    // Open its existing document so the same UUID can be reconciled even after the
 +    // server has removed it from the normal sorting list.
 +    androidx.compose.runtime.LaunchedEffect(state.recoveryRequestId) {
@@ -2434,7 +2553,7 @@ index ee1e470..7c0a980 100644
      // Данные меняются на детальных экранах — перечитываем список при каждом возврате
      LifecycleResumeEffect(Unit) {
          vm.load()
-@@ -101,7 +144,10 @@ fun SortingListScreen(
+@@ -101,11 +153,23 @@ fun SortingListScreen(
                              "Поставка ${r.displayNumber ?: r.documentNumber ?: ""}".trim(),
                              r.sellerName,
                          ).joinToString(" · "),
@@ -2446,8 +2565,21 @@ index ee1e470..7c0a980 100644
                          statusText = "В сортировке",
                          statusColor = WmsColors.Primary,
                          hasDiscrepancy = false,
+                     )
++                } + state.recoveryRequestIds.filterNot { id -> state.requests.any { it.id == id } }.map { id ->
++                    TaskCardData(
++                        id = id,
++                        title = "Восстановить размещение",
++                        subtitle = "Сохранённое действие ждёт проверки",
++                        statusText = "Требует восстановления",
++                        statusColor = WmsColors.Primary,
++                        hasDiscrepancy = false,
++                    )
+                 },
+                 isRefreshing = state.refreshing,
+                 onRefresh = { vm.load() },
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
-index 833f3c3..cf00cda 100644
+index 833f3c39907f586972e0066d0665916b7d3dc9de..cd62d60be29ac16cd5adfb316ace21d93f023ebc 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingScreen.kt
 @@ -14,13 +14,17 @@ import androidx.compose.foundation.lazy.items
@@ -2468,20 +2600,31 @@ index 833f3c3..cf00cda 100644
  import androidx.compose.runtime.Composable
  import androidx.compose.runtime.LaunchedEffect
  import androidx.compose.runtime.collectAsState
-@@ -65,6 +69,12 @@ fun SortingScreen(
+@@ -51,6 +55,10 @@ import ru.wms.tsd.ui.theme.WmsDimens
+  * Цикл: скан короба / тап по товару → скан ячейки → подтверждение → размещение.
+  */
+ @OptIn(ExperimentalMaterial3Api::class)
++internal fun canLeaveCompletedSorting(state: SortingUiState): Boolean =
++    state.documentDone && state.unresolvedPutaway == null && state.unresolvedCargoPutaway == null && state.unresolvedPrint == null
++
++@OptIn(ExperimentalMaterial3Api::class)
+ @Composable
+ fun SortingScreen(
+     requestId: String,
+@@ -65,6 +73,12 @@ fun SortingScreen(
          AppGraph.scannerManager.scans.collect { vm.onScan(it.barcode) }
      }
  
 +    // Последнее размещение сервер приходует сам — держать оператора на пустом
 +    // документе ради ещё одного подтверждения незачем.
-+    LaunchedEffect(state.documentDone, state.unresolvedPutaway, state.unresolvedCargoPutaway) {
-+        if (state.documentDone && state.unresolvedPutaway == null && state.unresolvedCargoPutaway == null) onBack()
++    LaunchedEffect(state.documentDone, state.unresolvedPutaway, state.unresolvedCargoPutaway, state.unresolvedPrint) {
++        if (canLeaveCompletedSorting(state)) onBack()
 +    }
 +
      val request = state.request
      val boxes = request?.boxes.orEmpty()
      val lines = request?.lines.orEmpty()
-@@ -90,9 +100,29 @@ fun SortingScreen(
+@@ -90,9 +104,29 @@ fun SortingScreen(
                  horizontalAlignment = Alignment.CenterHorizontally,
              ) { CircularProgressIndicator() }
  
@@ -2512,7 +2655,7 @@ index 833f3c3..cf00cda 100644
                  when (target) {
                      is SortTarget.Box -> {
                          val box = boxes.firstOrNull { it.id == target.boxId }
-@@ -103,6 +133,15 @@ fun SortingScreen(
+@@ -103,6 +137,15 @@ fun SortingScreen(
                              onAction = vm::clearTarget,
                          )
                      }
@@ -2528,7 +2671,7 @@ index 833f3c3..cf00cda 100644
                      is SortTarget.Loose -> {
                          val line = lines.firstOrNull { it.productId == target.productId }
                          ScanTargetBar(
-@@ -119,9 +158,35 @@ fun SortingScreen(
+@@ -119,9 +162,36 @@ fun SortingScreen(
                      )
                  }
  
@@ -2538,6 +2681,7 @@ index 833f3c3..cf00cda 100644
 +                )
 +                val job = state.printJob
 +                if (job != null) {
++                    val refreshable = state.unresolvedPrint != null && job.status in setOf("pending", "running")
 +                    ScanTargetBar(
 +                        text = job.statusText,
 +                        hint = buildString {
@@ -2545,8 +2689,8 @@ index 833f3c3..cf00cda 100644
 +                            job.queueReceipt?.let { append(" · квитанция $it") }
 +                            job.errorMessage?.let { append(" · $it") }
 +                        },
-+                        actionLabel = "Печать ещё раз",
-+                        onAction = { vm.openPrintPicker(SortingPrintKind.PRODUCT) },
++                        actionLabel = if (refreshable) "Проверить" else "Печать ещё раз",
++                        onAction = if (refreshable) vm::retryPrintRecovery else { { vm.openPrintPicker(SortingPrintKind.PRODUCT) } },
 +                    )
 +                } else if (state.printUnknown) {
 +                    ScanTargetBar(
@@ -2564,7 +2708,7 @@ index 833f3c3..cf00cda 100644
                      onLooseClick = vm::selectLooseProduct,
                  )
              }
-@@ -142,9 +207,22 @@ fun SortingScreen(
+@@ -142,9 +212,22 @@ fun SortingScreen(
              onDismiss = vm::dismissPending,
          )
      }
@@ -2588,7 +2732,7 @@ index 833f3c3..cf00cda 100644
          var qty by remember(pending, target) { mutableIntStateOf(maxQty) }
          ModalBottomSheet(onDismissRequest = vm::dismissPending) {
              Column(
-@@ -166,7 +244,9 @@ fun SortingScreen(
+@@ -166,7 +249,9 @@ fun SortingScreen(
                  )
                  Button(
                      onClick = { vm.confirmLoosePutaway(qty) },
@@ -2599,7 +2743,7 @@ index 833f3c3..cf00cda 100644
                      colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Success),
                      modifier = Modifier
                          .fillMaxWidth()
-@@ -186,21 +266,149 @@ fun SortingScreen(
+@@ -186,21 +271,149 @@ fun SortingScreen(
              onDismiss = vm::dismissComplete,
          )
      }
@@ -2751,7 +2895,7 @@ index 833f3c3..cf00cda 100644
  
      LazyColumn(
          modifier = Modifier.fillMaxSize(),
-@@ -218,6 +426,17 @@ private fun SortingWorkList(
+@@ -218,6 +431,17 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -2769,7 +2913,7 @@ index 833f3c3..cf00cda 100644
          if (loose.isNotEmpty()) {
              item { SectionHeader("Без короба") }
              items(loose, key = { it.first.productId }) { (line, rem) ->
-@@ -229,7 +448,7 @@ private fun SortingWorkList(
+@@ -229,7 +453,7 @@ private fun SortingWorkList(
                  )
              }
          }
@@ -2779,7 +2923,7 @@ index 833f3c3..cf00cda 100644
                  Text(
                      "Всё размещено",
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
-index 2edffa0..93747da 100644
+index 2edffa0d878be1366683f29938a90aac83a736b5..93747da370c997eb0723c54b64465586aabedd55 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/sorting/SortingViewModel.kt
 @@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
@@ -3499,11 +3643,74 @@ index 2edffa0..93747da 100644
 +    }
 +    return (lineRemaining - inBoxes - inCargo).coerceAtLeast(0)
  }
+diff --git a/android/app/src/test/java/ru/wms/tsd/core/api/FbsPendingScopeTest.kt b/android/app/src/test/java/ru/wms/tsd/core/api/FbsPendingScopeTest.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..fcdeaf31304a34541625cd36f02f7dbe998c729d
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/core/api/FbsPendingScopeTest.kt
+@@ -0,0 +1,49 @@
++package ru.wms.tsd.core.api
++
++import io.mockk.every
++import io.mockk.mockk
++import io.mockk.verify
++import kotlinx.coroutines.runBlocking
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Test
++import ru.wms.tsd.core.api.fbs.SupplyCreateBody
++import ru.wms.tsd.core.auth.AuthManager
++import ru.wms.tsd.core.auth.AuthSession
++import ru.wms.tsd.core.auth.AuthStore
++
++class FbsPendingScopeTest {
++    @Test
++    fun `employee switch on one server cannot read clear or send another employees FBS recovery`() = runBlocking {
++        val store = mockk<AuthStore>()
++        val auth = mockk<AuthManager>()
++        var session = AuthSession("employee-a", "org-a", "A", null, "token-a")
++        val disk = mutableMapOf<List<String>, String?>()
++        every { auth.getCurrentSession() } answers { session }
++        every { store.getBaseUrl() } returns "https://wms.example/api/"
++        every { store.getFbsPendingMutation(any(), any(), any(), any()) } answers {
++            disk[listOf(firstArg(), secondArg(), thirdArg(), arg(3))]
++        }
++        every { store.saveFbsPendingMutation(any(), any(), any(), any(), any()) } answers {
++            disk[listOf(firstArg(), secondArg(), thirdArg(), arg(3))] = arg(4)
++        }
++        val api = ApiProvider(store, auth)
++        val a = FbsPendingScope("https://wms.example/api/", "tenant-a", "employee-a", "token-a")
++        val b = FbsPendingScope("https://wms.example/api/", "tenant-b", "employee-b", "token-b")
++        val body = SupplyCreateBody("A", listOf("order-a"), "pvz", "key-a")
++
++        api.saveFbsSupplyCreate(a, body)
++        assertEquals(body, api.pendingFbsSupplyCreate(a))
++
++        session = AuthSession("employee-b", "org-b", "B", null, "token-b")
++        assertTrue(runCatching { api.pendingFbsSupplyCreate(a) }.isFailure)
++        api.saveFbsSupplyCreate(b, null)
++        assertNull(api.pendingFbsSupplyCreate(b))
++        assertTrue(runCatching { api.fbs(a) }.isFailure)
++
++        session = AuthSession("employee-a", "org-a", "A", null, "token-a")
++        assertEquals(body, api.pendingFbsSupplyCreate(a))
++        verify(exactly = 1) { store.saveFbsPendingMutation(a.server, a.tenantId, a.userId, "supply_create", any()) }
++    }
++}
 diff --git a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
-index a1d4fb7..96d8afd 100644
+index a1d4fb7af24610ee5bab684180fc001881c84626..e4fe8529992d2178ac04381f5a45a0c534109dcf 100644
 --- a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
-@@ -36,6 +36,7 @@ class AuthManagerUrlPersistenceTest {
+@@ -3,6 +3,7 @@ package ru.wms.tsd.core.auth
+ import androidx.security.crypto.EncryptedSharedPreferences
+ import androidx.security.crypto.MasterKey
+ import io.mockk.coEvery
++import io.mockk.coVerify
+ import io.mockk.every
+ import io.mockk.mockk
+ import io.mockk.verify
+@@ -36,6 +37,7 @@ class AuthManagerUrlPersistenceTest {
      private lateinit var authStore: AuthStore
      private lateinit var connectivityHint: ConnectivityHint
      private lateinit var authApi: AuthApi
@@ -3511,7 +3718,7 @@ index a1d4fb7..96d8afd 100644
      private lateinit var authManager: AuthManager
  
      @Before
-@@ -43,6 +44,10 @@ class AuthManagerUrlPersistenceTest {
+@@ -43,6 +45,10 @@ class AuthManagerUrlPersistenceTest {
          authStore = mockk(relaxed = true)
          connectivityHint = mockk()
          authApi = mockk()
@@ -3522,7 +3729,7 @@ index a1d4fb7..96d8afd 100644
          every { connectivityHint.hasActiveNetwork() } returns true
          authManager = AuthManager(
              authStore = authStore,
-@@ -53,6 +58,7 @@ class AuthManagerUrlPersistenceTest {
+@@ -53,6 +59,7 @@ class AuthManagerUrlPersistenceTest {
                      every { createService(AuthApi::class.java) } returns authApi
                  }
              },
@@ -3530,8 +3737,28 @@ index a1d4fb7..96d8afd 100644
          )
      }
  
-@@ -113,7 +119,15 @@ class AuthManagerUrlPersistenceTest {
+@@ -111,9 +118,35 @@ class AuthManagerUrlPersistenceTest {
+         verify(exactly = 1) { authStore.setBaseUrl("https://good.example/api/") }
+     }
  
++    @Test
++    fun `name login forwards known organization without switching to email login`() = runTest {
++        coEvery { identityApi.loginByName(any()) } returns Response.success(NameLoginResponse("token-organization"))
++        every { authStore.getSavedStaff() } returns emptyList()
++
++        val result = authManager.loginWithPassword(
++            baseUrl = "https://good.example/api/",
++            email = "Иван Иванов",
++            password = "password",
++            legacyLogin = false,
++            organization = "tenant-a",
++        )
++
++        assertTrue(result.isSuccess)
++        coVerify { identityApi.loginByName(NameLoginBody("Иван Иванов", "password", "tenant-a")) }
++        coVerify(exactly = 0) { authApi.loginRouteAuthLoginPost(any()) }
++    }
++
      @Test
      fun `explicit https login replaces old server while preserving staff pin`() = runTest {
 -        val oldStaff = SavedStaff("fixture@example.test", "Fixture", "old-test-token", "2468")
@@ -3547,7 +3774,7 @@ index a1d4fb7..96d8afd 100644
          var workingUrl = "http://fixture.example.test:8088/"
          var saved = oldStaff
          every { authStore.getBaseUrl() } answers { workingUrl }
-@@ -124,14 +138,37 @@ class AuthManagerUrlPersistenceTest {
+@@ -124,14 +157,37 @@ class AuthManagerUrlPersistenceTest {
              TokenResponse(accessToken = "new-test-token", tokenType = "bearer"),
          )
          assertEquals("http://fixture.example.test:8088/", authManager.getWorkingBaseUrl())
@@ -3588,10 +3815,10 @@ index a1d4fb7..96d8afd 100644
      fun `storage failure leaves session null and returns safe typed failure`() = runTest {
          coEvery { authApi.loginRouteAuthLoginPost(any()) } returns Response.success(
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
-index b0f4739..e8ebde8 100644
+index b0f4739ea702dac9c65f439079075db039613de0..3f6041a8a9c9cf45cd9578e72c0b8425272b7f93 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
-@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
+@@ -9,18 +9,21 @@ import kotlinx.coroutines.flow.first
  import kotlinx.coroutines.Dispatchers
  import kotlinx.coroutines.ExperimentalCoroutinesApi
  import kotlinx.coroutines.test.*
@@ -3599,18 +3826,37 @@ index b0f4739..e8ebde8 100644
  import okhttp3.ResponseBody.Companion.toResponseBody
  import okhttp3.MediaType.Companion.toMediaType
  import org.junit.*
-@@ -40,6 +41,10 @@ class FbsViewModelTest {
+ import org.junit.Assert.*
+ import retrofit2.Response
+ import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.FbsPendingScope
+ import ru.wms.tsd.core.api.fbs.*
+ 
+ @OptIn(ExperimentalCoroutinesApi::class)
+ class FbsViewModelTest {
+     private lateinit var service: FbsApi
+     private lateinit var provider: ApiProvider
++    private val pendingScope = FbsPendingScope("https://test.example/api/", "tenant", "employee", "token")
+     private fun order(id: String, created: String, picked: Boolean = false) = FbsOrder(
+         id = id, wbOrderId = id.toLong(), status = "assembling", createdAt = created,
+         product = FbsProduct(id = "product", name = "Товар", barcode = "4600000000001"),
+@@ -37,9 +40,15 @@ class FbsViewModelTest {
+         coEvery { service.pickOptions(any()) } returns Response.success(listOf(FbsPickOptionProduct("product", listOf(FbsPickOptionLocation("cell", "CELL", 10)))))
+         provider = mockk {
+             every { fbs() } returns service
++            every { fbs(pendingScope) } returns service
++            coEvery { currentFbsPendingScope() } returns pendingScope
              every { pendingFbsDelivery(any()) } returns null
              every { saveFbsDelivery(any(), any()) } just Runs
          }
-+        coEvery { provider.pendingFbsSupplyCreate() } returns null
-+        coEvery { provider.pendingFbsSupplyAdd() } returns null
-+        coEvery { provider.saveFbsSupplyCreate(any()) } just Runs
-+        coEvery { provider.saveFbsSupplyAdd(any()) } just Runs
++        coEvery { provider.pendingFbsSupplyCreate(pendingScope) } returns null
++        coEvery { provider.pendingFbsSupplyAdd(pendingScope) } returns null
++        every { provider.saveFbsSupplyCreate(any(), any()) } just Runs
++        every { provider.saveFbsSupplyAdd(any(), any()) } just Runs
      }
      @After fun teardown() { Dispatchers.resetMain() }
  
-@@ -60,6 +65,87 @@ class FbsViewModelTest {
+@@ -60,6 +69,87 @@ class FbsViewModelTest {
          coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
          coVerify(exactly = 1) { service.worklist(marketplace = "ozon", statusGroup = "active") }
      }
@@ -3660,7 +3906,7 @@ index b0f4739..e8ebde8 100644
 +    @Test fun `saved create intent is offered after a process restart and keeps its body`() = runTest {
 +        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
 +        val saved = SupplyCreateBody("Поставка после перезапуска", listOf("1"), "warehouse_sc", "same-key")
-+        coEvery { provider.pendingFbsSupplyCreate() } returns saved
++        coEvery { provider.pendingFbsSupplyCreate(pendingScope) } returns saved
 +        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
 +        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
 +        val sent = mutableListOf<SupplyCreateBody>()
@@ -3673,13 +3919,13 @@ index b0f4739..e8ebde8 100644
 +        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
 +        assertEquals(listOf(saved), sent)
 +        assertEquals(listOf("supply"), opened)
-+        coVerify { provider.saveFbsSupplyCreate(null) }
++        verify { provider.saveFbsSupplyCreate(pendingScope, null) }
 +    }
 +
 +    @Test fun `saved add intent is offered after a process restart and keeps its supply and body`() = runTest {
 +        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
 +        val saved = PendingFbsSupplyAdd("supply-before-restart", SupplyOrdersBody(listOf("1"), "same-key"))
-+        coEvery { provider.pendingFbsSupplyAdd() } returns saved
++        coEvery { provider.pendingFbsSupplyAdd(pendingScope) } returns saved
 +        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
 +        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
 +        val sent = mutableListOf<SupplyOrdersBody>()
@@ -3692,7 +3938,7 @@ index b0f4739..e8ebde8 100644
 +        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
 +        assertEquals(listOf(saved.body), sent)
 +        assertEquals(listOf("supply"), opened)
-+        coVerify { provider.saveFbsSupplyAdd(null) }
++        verify { provider.saveFbsSupplyAdd(pendingScope, null) }
 +    }
 +
      @Test fun `Ozon secondary position scan sends its product and oldest posting`() = runTest {
@@ -3700,7 +3946,7 @@ index b0f4739..e8ebde8 100644
          val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "123-456-1", positions = listOf(position))
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 new file mode 100644
-index 0000000..1dc85f9
+index 0000000000000000000000000000000000000000..1dc85f9279491f950b7a414c72d79cdb08f52862
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 @@ -0,0 +1,194 @@
@@ -3899,7 +4145,7 @@ index 0000000..1dc85f9
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
-index 08af41f..fbecbf6 100644
+index 08af41f3a14b9c8f884f96b1df2e40e7d3e4714d..fbecbf6982f0542b76fe3d330064c20a58f112fb 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
 @@ -21,8 +21,8 @@ import org.junit.Before
@@ -3975,7 +4221,7 @@ index 08af41f..fbecbf6 100644
  
          val vm = InboundListViewModel(api)
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
-index 53a089e..5c39cef 100644
+index 53a089e842c52a49d26155ad2c9eac9e5b54f8b6..5c39cef3972efbfb945cb4d8e7f05601ac70a063 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundAssemblyViewModelTest.kt
 @@ -27,6 +27,9 @@ import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadLineOut
@@ -4056,7 +4302,7 @@ index 53a089e..5c39cef 100644
      @Test
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
 new file mode 100644
-index 0000000..8fe2661
+index 0000000000000000000000000000000000000000..8fe2661cbd477aff6404d255443121e69cba3e6b
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/outbound/OutboundPackAttemptTest.kt
 @@ -0,0 +1,356 @@
@@ -4418,10 +4664,10 @@ index 0000000..8fe2661
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt
 new file mode 100644
-index 0000000..2439a03
+index 0000000000000000000000000000000000000000..998933e1eb70b4e906976735cd9bec03990cef6e
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingListRecoveryTest.kt
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,25 @@
 +package ru.wms.tsd.features.sorting
 +
 +import org.junit.Assert.assertEquals
@@ -4437,10 +4683,19 @@ index 0000000..2439a03
 +        assertNull(consumed.recoveryRequestId)
 +        assertEquals(consumed, consumeRecoveryRequest(consumed, "request"))
 +    }
++
++    @Test
++    fun `returning from a pending cargo recovery does not auto-open it again but keeps it selectable`() {
++        val pending = listOf("cargo-a", "print-b")
++        val opened = mutableSetOf("cargo-a")
++
++        assertEquals("print-b", nextRecoveryRequest(pending, opened))
++        assertEquals(pending, SortingListUiState(recoveryRequestIds = pending).recoveryRequestIds)
++    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt
 new file mode 100644
-index 0000000..a31d263
+index 0000000000000000000000000000000000000000..a31d263c40197599dd9b45127a71de191d04af5e
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingSessionTest.kt
 @@ -0,0 +1,71 @@
@@ -4516,7 +4771,7 @@ index 0000000..a31d263
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
-index 6203cc5..6449815 100644
+index 6203cc544a033a98f5ab42d1a8d1db2d82521e11..0b3d1a4f8d6c4b005bc76315b5d37a85f30997d3 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/sorting/SortingViewModelTest.kt
 @@ -1,9 +1,13 @@
@@ -4620,7 +4875,7 @@ index 6203cc5..6449815 100644
          }
      }
  
-@@ -77,65 +108,411 @@ class SortingViewModelTest {
+@@ -77,65 +108,446 @@ class SortingViewModelTest {
          storageLocationCode = null,
      )
  
@@ -4938,8 +5193,7 @@ index 6203cc5..6449815 100644
 +        assertNull(saved)
 +        assertNull(finalOpen.state.value.unresolvedCargoPutaway)
 +    }
- 
--        val putSlot = slot<List<InboundDistributionLineIn>>()
++
 +    @Test
 +    fun `incomplete response cannot be interpreted as empty completed sorting`() {
 +        assertTrue(runCatching { Json.decodeFromString<SortingRequestOut>("""{"id":"a","warehouse_id":"b","status":"done","lines":[]}""") }.isFailure)
@@ -4990,7 +5244,8 @@ index 6203cc5..6449815 100644
 +        vm.aimAtCell(); runCurrent(); vm.confirmLoosePutaway(1); advanceUntilIdle()
 +        assertNotNull(vm.state.value.unresolvedPutaway)
 +    }
-+
+ 
+-        val putSlot = slot<List<InboundDistributionLineIn>>()
 +    @Test
 +    fun `печать сохраняет один UUID и точное тело до POST без изменения цели сортировки`() = runTest {
 +        stubLoad()
@@ -5041,7 +5296,7 @@ index 6203cc5..6449815 100644
 +        val first = SortingViewModel(requestId, api)
 +        advanceUntilIdle()
 +        first.selectProductForPrint(prodC, "sku · Товар")
-+        advanceUntilIdle()
+         advanceUntilIdle()
 +        first.confirmPrint()
 +        advanceUntilIdle()
 +        val original = saved!!
@@ -5055,7 +5310,32 @@ index 6203cc5..6449815 100644
 +            Response.success(printJob(retrySlot.captured))
 +        }
 +        val reopened = SortingViewModel(requestId, api)
-         advanceUntilIdle()
++        advanceUntilIdle()
++
++        assertEquals(original, retrySlot.captured)
++        assertEquals(original.jobId, reopened.state.value.printJob?.id)
++        assertFalse(reopened.state.value.printUnknown)
++    }
++
++    @Test
++    fun `known pending print can be refreshed without opening a duplicate print`() = runTest {
++        var saved: SortingPrintJobBody? = null
++        every { api.saveSortingPrint(any(), requestId.toString(), any()) } answers { saved = thirdArg() }
++        every { api.pendingSortingPrint(any(), requestId.toString()) } answers { saved }
++        stubLoad()
++        coEvery { sortingApi.printLabelPreview(requestId.toString(), "product", prodC, "wb") } returns
++            Response.success(SortingLabelPreview("4601234567893", "Товар", "WB · sku", warehouseId, true))
++        coEvery { sortingApi.createSortingPrintJob(requestId.toString(), any()) } answers {
++            Response.success(printJob(secondArg(), "pending"))
++        }
++        val vm = SortingViewModel(requestId, api)
++        advanceUntilIdle()
++        vm.selectProductForPrint(prodC, "sku · Товар")
++        advanceUntilIdle()
++        vm.confirmPrint()
++        advanceUntilIdle()
++        val body = requireNotNull(saved)
++        coEvery { sortingApi.sortingPrintJob(body.jobId) } returns Response.success(printJob(body, "done"))
  
 -        val sent = putSlot.captured
 -        // Должны присутствовать A, B (свежие) И новая строка C=3 — B не потеряна
@@ -5064,8 +5344,18 @@ index 6203cc5..6449815 100644
 -        val cLine = sent.firstOrNull { it.productId.toString() == prodC }
 -        assertEquals("C добавлен с qty=3", 3, cLine?.quantity)
 -        assertEquals("итого 3 строки", 3, sent.size)
-+        assertEquals(original, retrySlot.captured)
-+        assertEquals(original.jobId, reopened.state.value.printJob?.id)
-+        assertFalse(reopened.state.value.printUnknown)
++        vm.retryPrintRecovery()
++        advanceUntilIdle()
++
++        assertNull(vm.state.value.unresolvedPrint)
++        assertEquals("done", vm.state.value.printJob?.status)
++        coVerify(exactly = 1) { sortingApi.createSortingPrintJob(requestId.toString(), any()) }
++    }
++
++    @Test
++    fun `completed document stays open while a saved print still needs recovery`() {
++        val pending = SortingPrintJobBody("job", "product", prodC, "wb", 1, "printer")
++        assertFalse(canLeaveCompletedSorting(SortingUiState(documentDone = true, unresolvedPrint = pending)))
++        assertTrue(canLeaveCompletedSorting(SortingUiState(documentDone = true)))
      }
  }

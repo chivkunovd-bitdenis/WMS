@@ -52,6 +52,10 @@ export type AuthPortal = 'fulfillment' | 'seller'
 
 type RegisterFormEvent = React.FormEvent<HTMLFormElement>
 
+export function nameLoginPayload(fullName: string, password: string, organization: string) {
+  return { full_name: fullName, password, organization: organization.trim() || undefined }
+}
+
 export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [token, setToken] = useState<string | null>(() => getStoredToken(portal))
   const [portalMismatch, setPortalMismatch] = useState<string | null>(null)
@@ -222,6 +226,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const fd = new FormData(e.currentTarget)
         const fullName = String(fd.get('full_name') ?? '').trim()
         const legacyLogin = String(fd.get('legacy_login') ?? '').trim()
+        const organization = String(fd.get('organization') ?? '').trim()
         const password = String(fd.get('password') ?? '')
         if (!fullName && !legacyLogin) {
           setError('Укажите ФИО.')
@@ -231,7 +236,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const res = await fetch(apiUrl(isLegacyLogin ? '/auth/login' : '/auth/login-by-name'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(isLegacyLogin ? { email: legacyLogin, password } : { full_name: fullName, password }),
+          body: JSON.stringify(isLegacyLogin ? { email: legacyLogin, password } : nameLoginPayload(fullName, password, organization)),
         })
         if (res.status === 403) {
           const text = await res.text()
