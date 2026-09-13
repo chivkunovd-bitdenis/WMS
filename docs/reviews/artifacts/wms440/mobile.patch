@@ -65,10 +65,10 @@ index 6599df7..7b50f53 100644
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
 new file mode 100644
-index 0000000..6fdc8a3
+index 0000000..4b16325
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,75 @@
 +package ru.wms.tsd.core.api.inbound
 +
 +import kotlinx.serialization.SerialName
@@ -128,14 +128,22 @@ index 0000000..6fdc8a3
 +    @SerialName("internal_barcode") val barcode: String = "", val lines: List<DraftContainerLine> = emptyList(),
 +) { val label get() = if (boxNumber != null) "Короб №$boxNumber" else "Грузоместо №$placeNumber" }
 +@Serializable data class DraftContainerLine(@SerialName("product_id") val productId: String, val quantity: Int)
++@Serializable data class DraftMarketplaceBinding(
++    val marketplace: String,
++    @SerialName("external_barcodes") val externalBarcodes: List<String> = emptyList(),
++)
 +@Serializable data class DraftProduct(
 +    val id: String, val name: String, @SerialName("sku_code") val skuCode: String,
 +    @SerialName("wb_barcodes") val wbBarcodes: List<String> = emptyList(),
 +    @SerialName("wb_primary_barcode") val wbPrimaryBarcode: String? = null,
 +    @SerialName("marketplaces") val marketplaces: List<String> = emptyList(),
++    @SerialName("marketplace_bindings") val marketplaceBindings: List<DraftMarketplaceBinding> = emptyList(),
 +    @SerialName("ozon_sku") val ozonSku: String? = null,
 +    @SerialName("ozon_offer_id") val ozonOfferId: String? = null,
-+) { val caption get() = (marketplaces.map { it.uppercase() } + listOfNotNull(ozonOfferId)).joinToString(" · ") }
++) {
++    val caption get() = (marketplaces.map { it.uppercase() } + listOfNotNull(ozonOfferId)).joinToString(" · ")
++    val barcodes get() = wbBarcodes + listOfNotNull(wbPrimaryBarcode, skuCode, ozonSku, ozonOfferId) + marketplaceBindings.flatMap { it.externalBarcodes }
++}
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
 index 4243fa6..0a4d535 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
@@ -159,7 +167,7 @@ index 4243fa6..0a4d535 100644
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 new file mode 100644
-index 0000000..6cb7c04
+index 0000000..e612381
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 @@ -0,0 +1,204 @@
@@ -246,7 +254,7 @@ index 0000000..6cb7c04
 +                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
 +                        items(request.lines, key = { it.id }) { line ->
 +                            Surface(shape = MaterialTheme.shapes.medium, color = WmsColors.Surface, shadowElevation = 1.dp,
-+                                modifier = Modifier.fillMaxWidth().clickable(enabled = editable) { editLine = line.id; if (state.local.totals[line.id] == null) vm.editTotal(line.id, line.effectiveActualQty.toString()) }) {
++                                modifier = Modifier.fillMaxWidth().clickable(enabled = editable) { editLine = line.id }) {
 +                                Row(Modifier.padding(12.dp)) {
 +                                    Column(Modifier.weight(1f)) {
 +                                        Text(line.skuCode, style = MaterialTheme.typography.titleMedium)
@@ -369,10 +377,10 @@ index 0000000..6cb7c04
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 new file mode 100644
-index 0000000..6bdcb9c
+index 0000000..c51d803
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,215 @@
 +package ru.wms.tsd.features.inbound
 +
 +import androidx.lifecycle.ViewModel
@@ -444,7 +452,13 @@ index 0000000..6bdcb9c
 +        runCatching { persist(state.value.local.copy(warehouseId = warehouse, sellerId = seller)) }.onFailure { fail(it.message ?: networkErrorText()) }
 +    }
 +    fun editTotal(lineId: String, value: String) {
-+        runCatching { persist(state.value.local.copy(totals = state.value.local.totals + (lineId to value))) }.onFailure { fail(it.message ?: networkErrorText()) }
++        val current = state.value.request?.lines?.firstOrNull { it.id == lineId }?.effectiveActualQty
++        val totals = if (current != null && intakeQuantity(value) == current) {
++            state.value.local.totals - lineId
++        } else {
++            state.value.local.totals + (lineId to value)
++        }
++        runCatching { persist(state.value.local.copy(totals = totals)) }.onFailure { fail(it.message ?: networkErrorText()) }
 +    }
 +    fun selectContainer(kind: String?, containerId: String?) { _state.update { it.copy(containerKind = kind, containerId = containerId, error = null) } }
 +    fun load() {
@@ -554,7 +568,7 @@ index 0000000..6bdcb9c
 +    }
 +    fun complete() {
 +        if (state.value.local.totals.isNotEmpty()) { fail("Сохраните введённое количество перед завершением приёмки."); return }
-+        attempt("POST", "$base/$id/complete-receiving", kind = "complete")
++        attempt("POST", "$base/$id/complete-receiving", buildJsonObject { put("mutation_id", UUID.randomUUID().toString()) }, "complete")
 +    }
 +    fun onScan(barcode: String) { if (!scans.trySend(barcode.trim()).isSuccess) fail("Дождитесь обработки сканов и повторите сканирование.") }
 +    private suspend fun scan(barcode: String) {
@@ -571,7 +585,7 @@ index 0000000..6bdcb9c
 +            try {
 +                val response = api.inboundDraft().catalog(request.sellerId, barcode)
 +                check(response.isSuccessful) { response.readableError() }
-+                val matches = response.body().orEmpty().filter { barcode in it.wbBarcodes || barcode == it.wbPrimaryBarcode || barcode == it.skuCode || barcode == it.ozonSku || barcode == it.ozonOfferId }
++                val matches = response.body().orEmpty().filter { barcode in it.barcodes }
 +                val product = matches.singleOrNull() ?: return fail(if (matches.isEmpty()) "Товар не найден. Выберите товар в каталоге." else "Несколько товаров с этим кодом. Выберите товар в каталоге.")
 +                execute(IntakeAttempt("POST", "$base/$id/lines", buildJsonObject { put("product_id", product.id); put("expected_qty", 1); put("increment", true); put("mutation_id", UUID.randomUUID().toString()) }))
 +            } catch (e: Exception) { if (e is CancellationException) throw e; fail(e.message ?: networkErrorText()) }
@@ -638,10 +652,10 @@ index e7a3331..be6dbde 100644
          when {
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 new file mode 100644
-index 0000000..425c83e
+index 0000000..3f22870
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,165 @@
 +package ru.wms.tsd.features.inbound
 +
 +import io.mockk.*
@@ -731,15 +745,36 @@ index 0000000..425c83e
 +        assertNotEquals(bodies[0]["mutation_id"], bodies[1]["mutation_id"])
 +        assertEquals(JsonPrimitive(true), bodies[0]["increment"])
 +    }
++    @Test fun ozonExternalBarcodeIsResolvedFromTheDraftCatalog() = runTest {
++        coEvery { service.catalog("seller", "OZN-EXTERNAL") } returns Response.success(listOf(
++            DraftProduct("product", "Ozon товар", "SKU", marketplaces = listOf("ozon"), marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("OZN-EXTERNAL"))))
++        ))
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/lines", capture(bodies)) } returns Response.success(buildJsonObject {})
++        val vm = InboundDraftViewModel("request", provider)
++        vm.onScan("OZN-EXTERNAL"); advanceUntilIdle()
++        assertEquals("product", bodies.single()["product_id"]!!.jsonPrimitive.content)
++    }
 +    @Test fun completionUsesDirectEndpointAndRestoresPendingCompletion() = runTest {
 +        coEvery { service.post("$prefix/complete-receiving", any()) } throws IOException("lost")
 +        val vm = InboundDraftViewModel("request", provider)
 +        vm.complete(); advanceUntilIdle()
 +        assertEquals("$prefix/complete-receiving", vm.state.value.local.pending!!.path)
++        assertNotNull(vm.state.value.local.pending!!.body["mutation_id"])
 +        coEvery { service.post("$prefix/complete-receiving", any()) } answers { request = request.copy(status = "sorting"); Response.success(buildJsonObject {}) }
 +        val restored = InboundDraftViewModel("request", provider)
 +        restored.retry(); advanceUntilIdle()
 +        assertEquals("sorting", restored.state.value.request!!.status)
++    }
++    @Test fun unchangedTotalDoesNotBlockCompletion() = runTest {
++        coEvery { service.post("$prefix/complete-receiving", any()) } answers {
++            request = request.copy(status = "sorting"); Response.success(buildJsonObject {})
++        }
++        val vm = InboundDraftViewModel("request", provider)
++        vm.editTotal("line", "4")
++        assertTrue(vm.state.value.local.totals.isEmpty())
++        vm.complete(); advanceUntilIdle()
++        coVerify(exactly = 1) { service.post("$prefix/complete-receiving", any()) }
 +    }
 +    @Test fun createPersistsUuidBeforeRequestAndRecoversDocument() = runTest {
 +        val bodies = mutableListOf<JsonObject>()

@@ -24,6 +24,7 @@ export type MarketplaceProductCatalogRow = {
   wb_brand?: string | null
   wb_composition?: string | null
   packaging_instructions?: string | null
+  marketplaces?: string[]
   marketplace_bindings?: MarketplaceProductBinding[]
 }
 

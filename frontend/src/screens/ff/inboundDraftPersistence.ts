@@ -44,8 +44,9 @@ export async function sendIntakeMutations(token: string, document: string, mutat
       })
       if (!result.ok && !(mutation.method === 'DELETE' && result.status === 404)) {
         const error = await readApiErrorMessage(result.clone())
-        // D6 has a separate durable total; the rejected mutation must not prevent tare correction.
-        if (result.status >= 400 && result.status < 500 && ![408, 429].includes(result.status) && pending.length === 1) {
+        // A definite refusal did not apply this item or the untouched tail. Clear only the
+        // retry receipt so the open picker can submit the operator's corrected set.
+        if (result.status >= 400 && result.status < 500 && ![408, 429].includes(result.status)) {
           writeIntake(token, document, { ...readIntake(token, document), pending: undefined })
         }
         throw new Error(error)

@@ -1,4 +1,5 @@
 import { intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
+import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
 import {
@@ -1968,7 +1969,7 @@ export function FfInboundRequestView({
       receivingScanReconciler.cancel()
       ++loadDetailSeq.current
       const res = ffDraft
-        ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/complete-receiving`)])
+        ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/complete-receiving`, {})])
         : await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`), { method: 'POST', headers: authHeaders })
       if (!res.ok) {
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
@@ -3710,7 +3711,7 @@ export function FfInboundRequestView({
         testIdPrefix="ff-inbound-picker"
         variant="ff"
         renderTrailingHeadCells={ffDraft ? <TableCell sx={{ width: 90 }}>Площадка</TableCell> : undefined}
-        renderTrailingBodyCells={ffDraft ? (row) => <TableCell>{catalogById.get(row.id)?.marketplace_bindings?.map((binding) => binding.marketplace === 'ozon' ? 'Ozon' : 'WB').join(' / ') || '—'}</TableCell> : undefined}
+        renderTrailingBodyCells={ffDraft ? (row) => <TableCell>{inboundMarketplaceLabel(catalogById.get(row.id))}</TableCell> : undefined}
         qtyColumnLabel={ffDraft ? 'Принято' : detail?.status === 'draft' ? 'Кол-во в заявку' : 'Факт'}
         initialSearch={pickerInitialSearch}
         applyLabel={ffDraft ? 'Добавить товар' : detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
