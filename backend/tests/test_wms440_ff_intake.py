@@ -13,6 +13,7 @@ from app.models.document_event import DocumentEvent
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_movement import InventoryMovement
 from app.services import inbound_intake_service as svc
+from app.services import inbound_marking_service
 from app.services.tokens import decode_access_token
 from tests.test_staff_reception_inbound_draft import _create_staff, _register_admin
 
@@ -138,6 +139,60 @@ async def test_stale_completion_attempt_cannot_complete_after_reopen(
     assert fresh.json()["status"] == "sorting"
     async with SessionLocal() as db:
         assert await db.scalar(select(func.sum(InventoryMovement.quantity_delta))) == 3
+
+
+@pytest.mark.asyncio
+async def test_sorting_completion_receipt_survives_marking_schedule_failure(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h, wid, sid, pid = await _setup(async_client)
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    rid = created.json()["id"]
+    added = await async_client.post(
+        f"{BASE}/{rid}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "expected_qty": 3,
+            "increment": True,
+            "mutation_id": str(uuid.uuid4()),
+        },
+    )
+    assert added.status_code == 201, added.text
+    first_attempt = {"mutation_id": str(uuid.uuid4())}
+    assert (
+        await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h, json=first_attempt)
+    ).status_code == 200
+
+    async def fail_schedule(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("marking unavailable")
+
+    original_schedule = inbound_marking_service.schedule_check
+    monkeypatch.setattr(inbound_marking_service, "schedule_check", fail_schedule)
+    second_attempt = {"mutation_id": str(uuid.uuid4())}
+    repeated = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json=second_attempt
+    )
+    assert repeated.status_code == 200, repeated.text
+    async with SessionLocal() as db:
+        receipt = await db.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.idempotency_key == f"inbound:complete:{second_attempt['mutation_id']}"
+            )
+        )
+        assert receipt is not None
+
+    monkeypatch.setattr(inbound_marking_service, "schedule_check", original_schedule)
+    reopened = await async_client.post(f"{BASE}/{rid}/reopen-receiving", headers=h)
+    assert reopened.json()["status"] == "receiving"
+    stale = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json=second_attempt
+    )
+    assert stale.json()["status"] == "receiving"
+    fresh = await async_client.post(
+        f"{BASE}/{rid}/complete-receiving", headers=h, json={"mutation_id": str(uuid.uuid4())}
+    )
+    assert fresh.json()["status"] == "sorting"
 
 
 @pytest.mark.asyncio

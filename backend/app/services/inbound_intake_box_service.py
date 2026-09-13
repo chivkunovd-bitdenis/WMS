@@ -283,11 +283,24 @@ async def _close_open_boxes(session: AsyncSession, request_id: uuid.UUID) -> Non
     await session.flush()
 
 
+def _add_barcode_alias(
+    index: dict[str, uuid.UUID | None], raw: object, product_id: uuid.UUID
+) -> None:
+    key = str(raw or "").strip()
+    if not key:
+        return
+    for candidate in {key, key.upper()}:
+        if candidate not in index:
+            index[candidate] = product_id
+        elif index[candidate] != product_id:
+            index[candidate] = None
+
+
 async def _barcode_index_for_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     req: InboundIntakeRequest,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     product_ids = {ln.product_id for ln in req.lines}
     if not product_ids:
         return {}
@@ -297,11 +310,9 @@ async def _barcode_index_for_request(
     )
     res = await session.execute(stmt)
     products = list(res.scalars().all())
-    idx: dict[str, uuid.UUID] = {}
+    idx: dict[str, uuid.UUID | None] = {}
     for p in products:
-        key = p.sku_code.strip()
-        if key:
-            idx[key] = p.id
+        _add_barcode_alias(idx, p.sku_code, p.id)
     if req.seller_id is not None:
         rows = await list_seller_wb_catalog_rows(
             session,
@@ -313,19 +324,11 @@ async def _barcode_index_for_request(
             if r.product_id not in product_ids:
                 continue
             for b in r.wb_barcodes:
-                key = str(b).strip()
-                if key:
-                    idx[key] = r.product_id
-            if r.wb_primary_barcode:
-                k = r.wb_primary_barcode.strip()
-                if k:
-                    idx[k] = r.product_id
+                _add_barcode_alias(idx, b, r.product_id)
+            _add_barcode_alias(idx, r.wb_primary_barcode, r.product_id)
             for binding in r.marketplace_bindings:
                 for raw in binding.get("external_barcodes", []):
-                    key = str(raw).strip()
-                    if key:
-                        idx[key] = r.product_id
-                        idx[key.upper()] = r.product_id
+                    _add_barcode_alias(idx, raw, r.product_id)
     return idx
 
 
@@ -481,8 +484,10 @@ async def scan_product_into_box(
     product_id = product_id_hint
     if product_id is None:
         index = await _barcode_index_for_request(session, tenant_id, req)
-        product_id = index.get(raw) or index.get(raw.upper())
+        product_id = index.get(raw) if raw in index else index.get(raw.upper())
         if product_id is None:
+            if raw in index or raw.upper() in index:
+                raise InboundIntakeBoxError("barcode_ambiguous")
             raise InboundIntakeBoxError("barcode_unknown")
     request_line = next((ln for ln in req.lines if ln.product_id == product_id), None)
     if request_line is None or request_line.expected_qty <= 0:

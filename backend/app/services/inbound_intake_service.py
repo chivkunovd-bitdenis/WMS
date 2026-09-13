@@ -1292,11 +1292,22 @@ async def _request_barcode_index(
     req: InboundIntakeRequest,
     *,
     include_seller_catalog: bool = False,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     product_ids = {ln.product_id for ln in req.lines}
     if not product_ids and not include_seller_catalog:
         return {}
-    idx: dict[str, uuid.UUID] = {}
+    idx: dict[str, uuid.UUID | None] = {}
+
+    def add_alias(raw: object, product_id: uuid.UUID) -> None:
+        key = str(raw or "").strip()
+        if not key:
+            return
+        for candidate in {key, key.upper()}:
+            if candidate not in idx:
+                idx[candidate] = product_id
+            elif idx[candidate] != product_id:
+                idx[candidate] = None
+
     if product_ids:
         stmt = select(Product).where(
             Product.tenant_id == tenant_id,
@@ -1305,9 +1316,7 @@ async def _request_barcode_index(
         res = await session.execute(stmt)
         products = list(res.scalars().all())
         for p in products:
-            key = p.sku_code.strip()
-            if key:
-                idx[key] = p.id
+            add_alias(p.sku_code, p.id)
     if req.seller_id is not None:
         rows = await list_seller_wb_catalog_rows(
             session,
@@ -1318,26 +1327,13 @@ async def _request_barcode_index(
         for row in rows:
             if not include_seller_catalog and row.product_id not in product_ids:
                 continue
-            sku_key = row.sku_code.strip()
-            if sku_key:
-                idx[sku_key] = row.product_id
-                idx[sku_key.upper()] = row.product_id
+            add_alias(row.sku_code, row.product_id)
             for b in row.wb_barcodes:
-                key = str(b).strip()
-                if key:
-                    idx[key] = row.product_id
-                    idx[key.upper()] = row.product_id
-            if row.wb_primary_barcode:
-                k = row.wb_primary_barcode.strip()
-                if k:
-                    idx[k] = row.product_id
-                    idx[k.upper()] = row.product_id
+                add_alias(b, row.product_id)
+            add_alias(row.wb_primary_barcode, row.product_id)
             for binding in row.marketplace_bindings:
                 for raw in binding.get("external_barcodes", []):
-                    key = str(raw).strip()
-                    if key:
-                        idx[key] = row.product_id
-                        idx[key.upper()] = row.product_id
+                    add_alias(raw, row.product_id)
     return idx
 
 
@@ -1345,30 +1341,28 @@ async def _seller_catalog_barcode_index(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
-    idx: dict[str, uuid.UUID] = {}
+    idx: dict[str, uuid.UUID | None] = {}
+
+    def add_alias(raw: object, product_id: uuid.UUID) -> None:
+        key = str(raw or "").strip()
+        if not key:
+            return
+        for candidate in {key, key.upper()}:
+            if candidate not in idx:
+                idx[candidate] = product_id
+            elif idx[candidate] != product_id:
+                idx[candidate] = None
+
     for row in rows:
-        key = row.sku_code.strip()
-        if key:
-            idx[key] = row.product_id
-            idx[key.upper()] = row.product_id
+        add_alias(row.sku_code, row.product_id)
         for b in row.wb_barcodes:
-            k = str(b).strip()
-            if k:
-                idx[k] = row.product_id
-                idx[k.upper()] = row.product_id
-        if row.wb_primary_barcode:
-            k2 = row.wb_primary_barcode.strip()
-            if k2:
-                idx[k2] = row.product_id
-                idx[k2.upper()] = row.product_id
+            add_alias(b, row.product_id)
+        add_alias(row.wb_primary_barcode, row.product_id)
         for binding in row.marketplace_bindings:
             for raw in binding.get("external_barcodes", []):
-                key = str(raw).strip()
-                if key:
-                    idx[key] = row.product_id
-                    idx[key.upper()] = row.product_id
+                add_alias(raw, row.product_id)
     return idx
 
 
@@ -1491,8 +1485,10 @@ async def scan_barcode_to_loose_intake(
         req,
         include_seller_catalog=False,
     )
-    product_id = idx.get(raw) or idx.get(raw.upper())
+    product_id = idx.get(raw) if raw in idx else idx.get(raw.upper())
     if product_id is None:
+        if raw in idx or raw.upper() in idx:
+            raise InboundIntakeError("barcode_ambiguous")
         raise InboundIntakeError("product_not_on_request")
     return await add_or_increment_received_product(
         session,
@@ -1589,6 +1585,10 @@ async def complete_receiving(
     if replay is not None:
         return req
     if req.status in SORTING_STATUSES | DONE_STATUSES:
+        # This UUID is a successful completion response too. Commit its existing
+        # audit receipt before the optional marking scheduler can roll back.
+        await session.commit()
+        await session.refresh(req)
         return req
     if req.status == STATUS_DRAFT and is_ff_inbound(req):
         if not req.lines:
@@ -2262,8 +2262,10 @@ async def scan_distribution_barcode(
         req,
         include_seller_catalog=False,
     )
-    product_id = idx.get(raw) or idx.get(raw.upper())
+    product_id = idx.get(raw) if raw in idx else idx.get(raw.upper())
     if product_id is None:
+        if raw in idx or raw.upper() in idx:
+            raise InboundIntakeError("barcode_ambiguous")
         raise InboundIntakeError("scan_not_found")
     if active_storage_location_id is None:
         raise InboundIntakeError("active_location_required")
