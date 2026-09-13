@@ -1223,6 +1223,7 @@ async def move_object(
     commit: bool = True,
     inbound_request_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
+    event_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     await _lock_object_intakes(
@@ -1361,6 +1362,7 @@ async def move_object(
         moved_quantity = moved_total or None
 
     event = WarehouseMapEvent(
+        id=event_id or uuid.uuid4(),
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         actor_user_id=actor_user_id,
@@ -1857,18 +1859,38 @@ async def _replayed_sorting_cargo_putaway(
     if not rows:
         return None
     outgoing = [row for row in rows if row.quantity_delta < 0]
-    incoming = [row for row in rows if row.quantity_delta > 0]
     if not outgoing or any(
         row.container_kind != "cargo_place" or row.container_id != cargo_place_id
         for row in outgoing
     ):
         raise WarehouseMapError("operation_conflict")
-    # Defect-only cargo has no ordinary-cell receipt. For normal cargo, a reused
-    # operation id may only name the original target cell.
-    normal_destinations = {row.storage_location_id for row in incoming}
-    if normal_destinations and destination_location_id not in normal_destinations:
+    # The existing warehouse-map event is the one-per-container receipt for the
+    # requested cell. Inventory movements can rightly point only to the defect
+    # zone, so they cannot tell a defect-only replay which cell the operator chose.
+    event = await session.get(WarehouseMapEvent, operation_id)
+    expected_label = await _location_label(session, destination_location_id)
+    if event is None or event.to_label != expected_label:
         raise WarehouseMapError("operation_conflict")
     return sum(-int(row.quantity_delta) for row in outgoing)
+
+
+async def _pending_sorting_cargo_quantity(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    cargo_place_id: uuid.UUID,
+) -> int:
+    cargo = await session.get(InboundIntakeCargoPlace, cargo_place_id)
+    if cargo is None or cargo.tenant_id != tenant_id or cargo.request_id != inbound_request_id:
+        raise WarehouseMapError("object_not_found")
+    lines = list((await session.scalars(
+        select(InboundIntakeCargoPlaceLine).where(
+            InboundIntakeCargoPlaceLine.cargo_place_id == cargo_place_id,
+            InboundIntakeCargoPlaceLine.tenant_id == tenant_id,
+        ).with_for_update()
+    )).all())
+    return sum(int(line.quantity) - int(line.posted_qty) for line in lines)
 
 
 async def place_sorting_object(
@@ -1925,6 +1947,15 @@ async def place_sorting_object(
             )
             if replayed is not None:
                 return {"id": str(operation_id), "moved_qty": replayed}
+            if await _pending_sorting_cargo_quantity(
+                session,
+                tenant_id=tenant_id,
+                inbound_request_id=inbound_request_id,
+                cargo_place_id=object_id,
+            ) <= 0:
+                # This request still carries sorting context, so it is a stale
+                # placement intent rather than a new general warehouse move.
+                raise WarehouseMapError("nothing_to_move")
             result = await move_object(
                 session,
                 tenant_id=tenant_id,
@@ -1937,6 +1968,7 @@ async def place_sorting_object(
                 quantity=quantity,
                 inbound_request_id=inbound_request_id,
                 transfer_group_id=operation_id,
+                event_id=operation_id,
             )
             return {"id": str(operation_id), "moved_qty": result["moved_qty"]}
         if kind == "product" and cell_id is not None:
