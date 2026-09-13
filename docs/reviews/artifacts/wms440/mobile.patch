@@ -65,10 +65,10 @@ index 6599df7..7b50f53 100644
          return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
 new file mode 100644
-index 0000000..4b16325
+index 0000000..2ec1c2a
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,79 @@
 +package ru.wms.tsd.core.api.inbound
 +
 +import kotlinx.serialization.SerialName
@@ -120,8 +120,12 @@ index 0000000..4b16325
 +@Serializable data class DraftLine(
 +    val id: String, @SerialName("product_id") val productId: String,
 +    @SerialName("sku_code") val skuCode: String, @SerialName("product_name") val productName: String,
-+    @SerialName("effective_actual_qty") val effectiveActualQty: Int = 0,
-+)
++    @SerialName("effective_actual_qty") val effectiveActualQty: Int? = null,
++    @SerialName("actual_qty") val actualQty: Int? = null,
++) {
++    /** After completion the server reports the persisted total as actual_qty. */
++    val acceptedQty get() = effectiveActualQty ?: actualQty ?: 0
++}
 +@Serializable data class DraftContainer(
 +    val id: String, @SerialName("box_number") val boxNumber: Int? = null,
 +    @SerialName("place_number") val placeNumber: Int? = null,
@@ -167,10 +171,10 @@ index 4243fa6..0a4d535 100644
          return try {
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
 new file mode 100644
-index 0000000..e612381
+index 0000000..6f6b3ce
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,205 @@
 +package ru.wms.tsd.features.inbound
 +
 +import androidx.compose.foundation.clickable
@@ -246,7 +250,7 @@ index 0000000..e612381
 +                ChoiceField("Селлер", state.sellers, state.local.sellerId, enabled = !state.busy && state.local.pending == null) { vm.setSelection(seller = it) }
 +            } else if (request != null) {
 +                if (activeContainer == null) {
-+                    Text("Принято: ${request.lines.sumOf { it.effectiveActualQty }}", style = MaterialTheme.typography.titleMedium)
++                    Text("Принято: ${request.lines.sumOf { it.acceptedQty }}", style = MaterialTheme.typography.titleMedium)
 +                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 +                        FilledTonalButton(onClick = { catalogOpen = true; vm.searchCatalog("") }, enabled = editable, modifier = Modifier.weight(1f)) { Text("Добавить товар") }
 +                        OutlinedButton(onClick = { containersOpen = true }, modifier = Modifier.weight(1f)) { Text("Короба и грузоместа") }
@@ -259,7 +263,7 @@ index 0000000..e612381
 +                                    Column(Modifier.weight(1f)) {
 +                                        Text(line.skuCode, style = MaterialTheme.typography.titleMedium)
 +                                        Text(line.productName)
-+                                        Text("Принято: ${line.effectiveActualQty}", color = WmsColors.Primary)
++                                        Text("Принято: ${line.acceptedQty}", color = WmsColors.Primary)
 +                                        state.local.totals[line.id]?.let { Text("Введено: $it", color = WmsColors.Primary) }
 +                                    }
 +                                    IconButton(onClick = { vm.deleteLine(line.id) }, enabled = editable) { Icon(Icons.Default.DeleteOutline, "Удалить товар ${line.skuCode}") }
@@ -276,7 +280,7 @@ index 0000000..e612381
 +                            val qty = activeContainer.lines.firstOrNull { it.productId == line.productId }?.quantity ?: 0
 +                            Surface(shape = MaterialTheme.shapes.medium, color = WmsColors.Surface, shadowElevation = 1.dp,
 +                                modifier = Modifier.fillMaxWidth().clickable(enabled = editable) { containerProduct = line.productId; containerQty = qty.toString() }) {
-+                                Column(Modifier.padding(12.dp)) { Text(line.skuCode, style = MaterialTheme.typography.titleMedium); Text(line.productName); Text("В таре: $qty · Всего принято: ${line.effectiveActualQty}") }
++                                Column(Modifier.padding(12.dp)) { Text(line.skuCode, style = MaterialTheme.typography.titleMedium); Text(line.productName); Text("В таре: $qty · Всего принято: ${line.acceptedQty}") }
 +                            }
 +                        }
 +                    }
@@ -328,7 +332,7 @@ index 0000000..e612381
 +            Column(Modifier.fillMaxWidth().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 +                Text(line.skuCode, style = MaterialTheme.typography.titleLarge)
 +                Text(line.productName)
-+                QuantityField(state.local.totals[lineId] ?: line.effectiveActualQty.toString(), { vm.editTotal(lineId, it) }, "Всего принято", editable)
++                QuantityField(state.local.totals[lineId] ?: line.acceptedQty.toString(), { vm.editTotal(lineId, it) }, "Всего принято", editable)
 +                state.error?.let { Text(it, color = WmsColors.Error) }
 +                if (state.local.pending != null) TextButton(onClick = vm::retry, enabled = !state.busy) { Text("Проверить результат") }
 +                Button(onClick = { vm.saveTotal(lineId) }, enabled = editable && state.local.totals[lineId] != null, modifier = Modifier.fillMaxWidth().height(WmsDimens.PrimaryButtonHeight)) { Text("Сохранить") }
@@ -354,9 +358,10 @@ index 0000000..e612381
 +
 +@Composable private fun QuantityField(value: String, onChange: (String) -> Unit, label: String, enabled: Boolean = true) {
 +    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
++    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
 +    OutlinedTextField(value, onChange, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
 +        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus() }),
++        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus(); keyboard?.hide() }),
 +        isError = intakeQuantity(value) == null)
 +}
 +
@@ -377,7 +382,7 @@ index 0000000..e612381
 +}
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 new file mode 100644
-index 0000000..6b69ca8
+index 0000000..7483f1e
 --- /dev/null
 +++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
 @@ -0,0 +1,223 @@
@@ -452,7 +457,7 @@ index 0000000..6b69ca8
 +        runCatching { persist(state.value.local.copy(warehouseId = warehouse, sellerId = seller)) }.onFailure { fail(it.message ?: networkErrorText()) }
 +    }
 +    fun editTotal(lineId: String, value: String) {
-+        val current = state.value.request?.lines?.firstOrNull { it.id == lineId }?.effectiveActualQty
++        val current = state.value.request?.lines?.firstOrNull { it.id == lineId }?.acceptedQty
 +        val totals = if (current != null && intakeQuantity(value) == current) {
 +            state.value.local.totals - lineId
 +        } else {
@@ -660,10 +665,10 @@ index e7a3331..be6dbde 100644
          when {
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
 new file mode 100644
-index 0000000..72af870
+index 0000000..1dc85f9
 --- /dev/null
 +++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,194 @@
 +package ru.wms.tsd.features.inbound
 +
 +import io.mockk.*
@@ -671,6 +676,7 @@ index 0000000..72af870
 +import kotlinx.coroutines.Dispatchers
 +import kotlinx.coroutines.ExperimentalCoroutinesApi
 +import kotlinx.coroutines.test.*
++import kotlinx.serialization.decodeFromString
 +import kotlinx.serialization.encodeToString
 +import kotlinx.serialization.json.*
 +import okhttp3.ResponseBody.Companion.toResponseBody
@@ -849,6 +855,12 @@ index 0000000..72af870
 +        vm.addProduct("product", "1"); advanceUntilIdle()
 +        coVerify(exactly = 0) { service.post(any(), any()) }
 +        assertEquals("pending", vm.state.value.local.pending!!.body["mutation_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun completedResponseUsesActualQtyWhenEffectiveQtyIsNull() {
++        val response = Json { ignoreUnknownKeys = true }.decodeFromString<DraftRequest>(
++            """{"id":"request","status":"sorting","seller_id":"seller","operation_type":"inbound","lines":[{"id":"line","product_id":"product","sku_code":"SKU","product_name":"Товар","actual_qty":3,"effective_actual_qty":null,"defective_qty":0,"posted_qty":3}]}"""
++        )
++        assertEquals(3, response.lines.single().acceptedQty)
 +    }
 +}
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
