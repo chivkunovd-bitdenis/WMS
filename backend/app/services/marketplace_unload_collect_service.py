@@ -956,22 +956,25 @@ async def _trim_box_lines_to_remaining_pick(
     boxed_total = sum(int(line.quantity) for line in box_lines)
     boxed_packed = sum(int(line.quantity_packed or 0) for line in box_lines)
     boxed_known = sum(int(line.quantity_source_known or 0) for line in box_lines)
-    if boxed_total <= picked_total:
-        return _BoxReduction(unknown_removed=0, boxed_remaining=boxed_total)
-
-    remove_total = boxed_total - picked_total
-    remove_packed = max(0, boxed_packed - picked_packed)
-    remove_known_unpacked = max(
-        0, boxed_known - remove_packed - picked_known
-    )
-    remove_unknown = remove_total - remove_packed - remove_known_unpacked
-    if (
-        remove_unknown < 0
-        or remove_packed > boxed_packed
-        or remove_known_unpacked > boxed_known - boxed_packed
-        or remove_unknown > boxed_total - boxed_known
-    ):
+    boxed_known_unpacked = boxed_known - boxed_packed
+    picked_known_unpacked = picked_known - picked_packed
+    boxed_unknown = boxed_total - boxed_known
+    picked_unknown = picked_total - picked_known
+    if min(
+        boxed_known_unpacked,
+        picked_known_unpacked,
+        boxed_unknown,
+        picked_unknown,
+    ) < 0:
         raise MarketplaceUnloadPickError("insufficient_picked")
+
+    # A box is covered only by allocations with the same proven source class.
+    # An unpacked allocation waiting outside a box cannot keep a packed (or
+    # historical unknown) unit in that box after its own allocation is removed.
+    remove_packed = max(0, boxed_packed - picked_packed)
+    remove_known_unpacked = max(0, boxed_known_unpacked - picked_known_unpacked)
+    remove_unknown = max(0, boxed_unknown - picked_unknown)
+    remove_total = remove_packed + remove_known_unpacked + remove_unknown
 
     removed: dict[uuid.UUID, list[int]] = {}
 
@@ -1045,6 +1048,15 @@ def _reconcile_task_after_box_reduction(
         historical_before=historical_before,
         removed_unknown=unknown_removed,
     )
+    # The box synchronizer deliberately preserves a task fact for a fully
+    # unknown historical box. Reset the fact to its historic baseline first so
+    # source-known units removed by this set do not remain as stale ready/work.
+    if (
+        line.qty_legacy_confirmed_packed is not None
+        and line.qty_legacy_packed_in_task is not None
+    ):
+        line.qty_confirmed_packed = int(line.qty_legacy_confirmed_packed)
+        line.qty_packed_in_task = int(line.qty_legacy_packed_in_task)
 
 
 def _reduce_historical_baseline(

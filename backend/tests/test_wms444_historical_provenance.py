@@ -24,7 +24,9 @@ from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import packaging_task_service as pkg_svc
 
 
-async def _historical_fixture(db_session, *, fresh_unpacked: int):
+async def _historical_fixture(
+    db_session, *, fresh_unpacked: int, plan_quantity: int = 3
+):
     suffix = uuid.uuid4().hex[:8]
     tenant = Tenant(name="WMS-444", slug=f"wms444-history-{suffix}")
     db_session.add(tenant)
@@ -71,7 +73,9 @@ async def _historical_fixture(db_session, *, fresh_unpacked: int):
                 quantity_unpacked=fresh_unpacked,
                 quantity_packed=0,
             ),
-            MarketplaceUnloadLine(request_id=request.id, product_id=product.id, quantity=3),
+            MarketplaceUnloadLine(
+                request_id=request.id, product_id=product.id, quantity=plan_quantity
+            ),
         )
     )
     task = PackagingTask(
@@ -87,8 +91,8 @@ async def _historical_fixture(db_session, *, fresh_unpacked: int):
         task_id=task.id,
         product_id=product.id,
         storage_location_id=location.id,
-        qty_total=3,
-        qty_suggested_packed=3,
+        qty_total=plan_quantity,
+        qty_suggested_packed=plan_quantity,
         qty_confirmed_packed=1,
         qty_packed_in_task=1,
     )
@@ -522,7 +526,7 @@ async def test_pick_set_keeps_boxed_coverage_and_other_known_source(db_session) 
 
 
 @pytest.mark.asyncio
-async def test_pick_set_does_not_trim_a_box_already_covered_by_incomplete_pick(db_session) -> None:
+async def test_pick_set_trims_unknown_box_units_not_covered_by_unpacked_pick(db_session) -> None:
     (
         tenant,
         _warehouse,
@@ -530,13 +534,14 @@ async def test_pick_set_does_not_trim_a_box_already_covered_by_incomplete_pick(d
         product,
         location,
         request,
-        _task,
+        task,
         _task_line_before,
         _box,
         historical_box,
     ) = await _historical_fixture(db_session, fresh_unpacked=1)
 
-    # Add a third picked unit without placing it into the existing two-unit box.
+    # The known-unpacked pick remains outside the box and cannot cover an
+    # unknown historical unit returned by the absolute quantity change.
     await collect_svc.record_pick_allocation(
         db_session,
         tenant.id,
@@ -571,6 +576,285 @@ async def test_pick_set_does_not_trim_a_box_already_covered_by_incomplete_pick(d
             )
         )
     ).scalar_one()
-    assert box_line is not None and box_line.quantity == 2
+    assert box_line is not None and box_line.quantity == 1
     assert allocation.quantity == 2
     assert int(balance) == 1
+    line = await _task_line(db_session, tenant.id, task.id)
+    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
+    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
+
+
+async def _source_location(
+    db_session,
+    tenant: Tenant,
+    warehouse: Warehouse,
+    product: Product,
+    *,
+    quantity: int,
+    packed: int,
+) -> StorageLocation:
+    suffix = uuid.uuid4().hex[:8]
+    location = StorageLocation(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        code=f"W444S-{suffix}",
+        barcode=f"W444S-{suffix}",
+    )
+    db_session.add(location)
+    await db_session.flush()
+    db_session.add(
+        InventoryBalance(
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            quantity=quantity,
+            quantity_unpacked=quantity - packed,
+            quantity_packed=packed,
+        )
+    )
+    await db_session.commit()
+    return location
+
+
+@pytest.mark.asyncio
+async def test_pick_set_removes_boxed_packed_not_covered_by_unboxed_unpacked(db_session) -> None:
+    (
+        tenant,
+        warehouse,
+        actor,
+        product,
+        packed_location,
+        request,
+        task,
+        task_line,
+        box,
+        historical_box,
+    ) = await _historical_fixture(db_session, fresh_unpacked=0, plan_quantity=4)
+    historical_box.quantity_packed = 2
+    historical_box.quantity_source_known = 2
+    allocation = (
+        await db_session.execute(
+            select(MarketplaceUnloadPickAllocation).where(
+                MarketplaceUnloadPickAllocation.request_id == request.id
+            )
+        )
+    ).scalar_one()
+    allocation.quantity_packed = 2
+    allocation.quantity_source_known = 2
+    task_line.qty_confirmed_packed = 2
+    task_line.qty_packed_in_task = 0
+    await db_session.commit()
+
+    unpacked_location = await _source_location(
+        db_session, tenant, warehouse, product, quantity=2, packed=0
+    )
+    await collect_svc.record_pick_allocation(
+        db_session,
+        tenant.id,
+        request.id,
+        storage_location_id=unpacked_location.id,
+        product_id=product.id,
+        quantity=2,
+        actor_user_id=actor.id,
+    )
+    await collect_svc.set_pick_allocation(
+        db_session,
+        tenant.id,
+        request.id,
+        product_id=product.id,
+        storage_location_id=packed_location.id,
+        quantity=0,
+        actor_user_id=actor.id,
+    )
+
+    assert (
+        await db_session.scalar(
+            select(func.count())
+            .select_from(MarketplaceUnloadBoxLine)
+            .where(MarketplaceUnloadBoxLine.box_id == box.id)
+        )
+    ) == 0
+    remaining = (
+        await db_session.execute(
+            select(MarketplaceUnloadPickAllocation).where(
+                MarketplaceUnloadPickAllocation.request_id == request.id
+            )
+        )
+    ).scalar_one()
+    assert (
+        remaining.storage_location_id,
+        remaining.quantity,
+        remaining.quantity_packed,
+        remaining.quantity_source_known,
+    ) == (unpacked_location.id, 2, 0, 2)
+    line = await _task_line(db_session, tenant.id, task.id)
+    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
+    balance = (
+        await db_session.execute(
+            select(
+                func.sum(InventoryBalance.quantity),
+                func.sum(InventoryBalance.quantity_packed),
+            ).where(InventoryBalance.product_id == product.id)
+        )
+    ).one()
+    assert tuple(map(int, balance)) == (2, 2)
+
+
+@pytest.mark.asyncio
+async def test_pick_set_keeps_unknown_box_when_only_packed_source_is_removed(db_session) -> None:
+    (
+        tenant,
+        warehouse,
+        actor,
+        product,
+        _historical_location,
+        request,
+        task,
+        task_line,
+        box,
+        historical_box,
+    ) = await _historical_fixture(db_session, fresh_unpacked=0, plan_quantity=4)
+    historical_box.quantity = 1
+    allocation = (
+        await db_session.execute(
+            select(MarketplaceUnloadPickAllocation).where(
+                MarketplaceUnloadPickAllocation.request_id == request.id
+            )
+        )
+    ).scalar_one()
+    allocation.quantity = 1
+    task_line.qty_confirmed_packed = 1
+    task_line.qty_packed_in_task = 0
+    await db_session.commit()
+
+    packed_location = await _source_location(
+        db_session, tenant, warehouse, product, quantity=2, packed=2
+    )
+    unpacked_location = await _source_location(
+        db_session, tenant, warehouse, product, quantity=1, packed=0
+    )
+    await collect_svc.collect_into_box(
+        db_session,
+        tenant.id,
+        request.id,
+        box_id=box.id,
+        storage_location_id=packed_location.id,
+        product_id=product.id,
+        quantity=2,
+        actor_user_id=actor.id,
+    )
+    await collect_svc.record_pick_allocation(
+        db_session,
+        tenant.id,
+        request.id,
+        storage_location_id=unpacked_location.id,
+        product_id=product.id,
+        quantity=1,
+        actor_user_id=actor.id,
+    )
+    await collect_svc.set_pick_allocation(
+        db_session,
+        tenant.id,
+        request.id,
+        product_id=product.id,
+        storage_location_id=packed_location.id,
+        quantity=0,
+        actor_user_id=actor.id,
+    )
+
+    box_line = await db_session.get(MarketplaceUnloadBoxLine, historical_box.id)
+    assert box_line is not None
+    assert (box_line.quantity, box_line.quantity_packed, box_line.quantity_source_known) == (
+        1,
+        0,
+        0,
+    )
+    line = await _task_line(db_session, tenant.id, task.id)
+    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
+    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
+    balance = (
+        await db_session.execute(
+            select(
+                func.sum(InventoryBalance.quantity),
+                func.sum(InventoryBalance.quantity_packed),
+            ).where(InventoryBalance.product_id == product.id)
+        )
+    ).one()
+    assert tuple(map(int, balance)) == (2, 2)
+
+
+@pytest.mark.asyncio
+async def test_pick_set_removes_boxed_known_unpacked_not_covered_by_unknown(db_session) -> None:
+    (
+        tenant,
+        warehouse,
+        actor,
+        product,
+        historical_location,
+        request,
+        task,
+        task_line,
+        box,
+        historical_box,
+    ) = await _historical_fixture(db_session, fresh_unpacked=0, plan_quantity=4)
+    await db_session.delete(historical_box)
+    task_line.qty_confirmed_packed = 0
+    task_line.qty_packed_in_task = 0
+    task_line.qty_legacy_confirmed_packed = 0
+    task_line.qty_legacy_packed_in_task = 0
+    await db_session.commit()
+
+    unpacked_location = await _source_location(
+        db_session, tenant, warehouse, product, quantity=2, packed=0
+    )
+    await collect_svc.collect_into_box(
+        db_session,
+        tenant.id,
+        request.id,
+        box_id=box.id,
+        storage_location_id=unpacked_location.id,
+        product_id=product.id,
+        quantity=2,
+        actor_user_id=actor.id,
+    )
+    await collect_svc.set_pick_allocation(
+        db_session,
+        tenant.id,
+        request.id,
+        product_id=product.id,
+        storage_location_id=unpacked_location.id,
+        quantity=0,
+        actor_user_id=actor.id,
+    )
+
+    assert (
+        await db_session.scalar(
+            select(func.count())
+            .select_from(MarketplaceUnloadBoxLine)
+            .where(MarketplaceUnloadBoxLine.box_id == box.id)
+        )
+    ) == 0
+    remaining = (
+        await db_session.execute(
+            select(MarketplaceUnloadPickAllocation).where(
+                MarketplaceUnloadPickAllocation.request_id == request.id
+            )
+        )
+    ).scalar_one()
+    assert (
+        remaining.storage_location_id,
+        remaining.quantity,
+        remaining.quantity_packed,
+        remaining.quantity_source_known,
+    ) == (historical_location.id, 2, None, None)
+    line = await _task_line(db_session, tenant.id, task.id)
+    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
+    balance = (
+        await db_session.execute(
+            select(
+                func.sum(InventoryBalance.quantity),
+                func.sum(InventoryBalance.quantity_packed),
+            ).where(InventoryBalance.product_id == product.id)
+        )
+    ).one()
+    assert tuple(map(int, balance)) == (2, 0)
