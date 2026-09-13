@@ -1,0 +1,118 @@
+{
+  "sha": "e37d21925a4fc614a4843ecf3c95daee0b98e1af",
+  "boundary": "Mock Windows APIs; no physical print",
+  "results": [
+    {
+      "case": "accepted",
+      "copies": 1,
+      "outcome": "windows-442",
+      "events": [
+        "DocumentProperties",
+        "CreateDC",
+        "ClosePrinter",
+        "StartDoc",
+        "StartPage",
+        "draw",
+        "EndDoc",
+        "DeleteDC"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "accepted",
+      "copies": 2,
+      "outcome": "windows-442",
+      "events": [
+        "DocumentProperties",
+        "CreateDC",
+        "ClosePrinter",
+        "StartDoc",
+        "StartPage",
+        "draw",
+        "StartPage",
+        "draw",
+        "EndDoc",
+        "DeleteDC"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "result_minus_one",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "result_zero",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "result_cancel",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "copies_two",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "missing_copies_bit",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "missing_devmode",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "missing_api",
+      "copies": 1,
+      "outcome": "ValueError",
+      "events": [
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    },
+    {
+      "case": "api_error",
+      "copies": 1,
+      "outcome": "OSError",
+      "events": [
+        "DocumentProperties",
+        "ClosePrinter"
+      ],
+      "global_defaults_unchanged": true
+    }
+  ]
+}
