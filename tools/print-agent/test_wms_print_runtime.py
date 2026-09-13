@@ -292,7 +292,16 @@ class RuntimeTest(unittest.TestCase):
                 return 442
 
             def GetDeviceCaps(self, index):
-                return {88: 203, 90: 203, 110: 464, 111: 320}[index]
+                return {
+                    8: 464,
+                    10: 320,
+                    88: 203,
+                    90: 203,
+                    110: 464,
+                    111: 320,
+                    112: 0,
+                    113: 0,
+                }[index]
 
             def StartPage(self):
                 calls.append(("start-page",))
@@ -347,8 +356,15 @@ class RuntimeTest(unittest.TestCase):
         adapter.validate_layout("Принтер склада 58", 58, 40)
         with self.assertRaises(ValueError):
             adapter.validate_layout("Принтер склада 58", 60, 40)
+        with self.assertRaises(ValueError):
+            adapter.validate_layout("Принтер склада 58", None, None)
         receipt = adapter.submit(
-            b"\x89PNG\r\n\x1a\nsynthetic", "image/png", "Принтер склада 58", 2
+            b"\x89PNG\r\n\x1a\nsynthetic",
+            "image/png",
+            "Принтер склада 58",
+            2,
+            58,
+            40,
         )
         self.assertEqual(receipt, "windows-442")
         self.assertEqual(calls[0], ("queue", "Принтер склада 58"))
@@ -375,6 +391,9 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn("--stop --wait-stop", installer)
         self.assertIn("$INSTDIR.previous", installer)
         self.assertIn("--ensure-autostart", installer)
+        self.assertIn("have_connection no_connection", installer)
+        self.assertIn("no_connection:", installer)
+        self.assertIn("--uninstall' $0", installer)
         self.assertNotIn('wms-print.exe" --run', installer)
 
     def test_windows_state_directory_and_task_do_not_put_token_in_autostart(self):

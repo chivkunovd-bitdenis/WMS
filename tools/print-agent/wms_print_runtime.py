@@ -313,10 +313,19 @@ class WindowsAdapter:
         dc: Any, width_mm: int | None, height_mm: int | None
     ) -> None:
         if width_mm is None or height_mm is None:
-            return
+            raise ValueError(
+                "WMS не передала размер этикетки. Windows не отправит файл без "
+                "проверяемого формата."
+            )
         dpi_x, dpi_y = dc.GetDeviceCaps(88), dc.GetDeviceCaps(90)  # LOGPIXELSX/Y
-        physical_width = dc.GetDeviceCaps(110) / dpi_x * 25.4  # PHYSICALWIDTH
-        physical_height = dc.GetDeviceCaps(111) / dpi_y * 25.4  # PHYSICALHEIGHT
+        physical_width_px = dc.GetDeviceCaps(110)  # PHYSICALWIDTH
+        physical_height_px = dc.GetDeviceCaps(111)  # PHYSICALHEIGHT
+        printable_width_px = dc.GetDeviceCaps(8)  # HORZRES
+        printable_height_px = dc.GetDeviceCaps(10)  # VERTRES
+        offset_x = dc.GetDeviceCaps(112)  # PHYSICALOFFSETX
+        offset_y = dc.GetDeviceCaps(113)  # PHYSICALOFFSETY
+        physical_width = physical_width_px / dpi_x * 25.4
+        physical_height = physical_height_px / dpi_y * 25.4
         if (
             abs(physical_width - width_mm) > 1.5
             or abs(physical_height - height_mm) > 1.5
@@ -325,12 +334,20 @@ class WindowsAdapter:
                 "В выбранной очереди не настроен размер этикетки "
                 f"{width_mm} x {height_mm} мм. Настройте формат в драйвере принтера."
             )
+        target_width_px = round(width_mm / 25.4 * dpi_x)
+        target_height_px = round(height_mm / 25.4 * dpi_y)
+        if (
+            target_width_px > printable_width_px
+            or target_height_px > printable_height_px
+        ):
+            raise ValueError(
+                "Печатаемая область выбранной очереди меньше размера этикетки "
+                f"(поля драйвера: {offset_x}px, {offset_y}px). Настройте драйвер."
+            )
 
     def validate_layout(
         self, queue: str, width_mm: int | None, height_mm: int | None
     ) -> None:
-        if width_mm is None or height_mm is None:
-            return
         dc = self.modules["win32ui"].CreateDC()
         try:
             dc.CreatePrinterDC(queue)
