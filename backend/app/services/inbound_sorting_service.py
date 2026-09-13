@@ -18,6 +18,7 @@ from app.models.inventory_movement import (
     MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
     InventoryMovement,
 )
+from app.models.warehouse_map_event import WarehouseMapEvent
 from app.services import inbound_intake_service as intake
 from app.services import inventory_service as inventory
 from app.services import sorting_location_service as sorting
@@ -114,6 +115,21 @@ async def apply_loose_putaway(
         if str(exc) == "insufficient stock":
             raise intake.InboundIntakeError("insufficient_sorting_stock") from exc
         raise
+    # The map journal is the existing visible history of a placement.  Keep its
+    # id equal to the durable placement operation so a replay exits above before
+    # it can add a second row or replace the original server-authenticated actor.
+    session.add(
+        WarehouseMapEvent(
+            id=operation_id,
+            tenant_id=tenant_id,
+            warehouse_id=req.warehouse_id,
+            actor_user_id=performer_id,
+            subject=line.product.name,
+            quantity=quantity,
+            from_label=sorting.SORTING_LOCATION_LABEL,
+            to_label=loc.code,
+        )
+    )
     session.add(
         InboundIntakeDistributionLine(
             id=operation_id,
