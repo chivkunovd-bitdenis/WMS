@@ -1,0 +1,37 @@
+{
+  "warehouse": "8969e470-d992-4046-9c78-aac79e6abc58",
+  "seller": "5e8962b7-29c2-436a-a7dc-689c7fd3a963",
+  "product": "163a5f8b-cd15-482f-94b8-c633ef64dac9",
+  "a": {
+    "id": "786a465a-840e-4f74-b3e1-d973ef1b9b0c",
+    "code": "W441-A",
+    "warehouse_id": "8969e470-d992-4046-9c78-aac79e6abc58",
+    "barcode": "LOC-97AB73883DCB"
+  },
+  "b": {
+    "id": "4f2e28c2-ae2a-48f2-b481-350afba177d7",
+    "code": "W441-B",
+    "warehouse_id": "8969e470-d992-4046-9c78-aac79e6abc58",
+    "barcode": "LOC-4688575B1B2C"
+  },
+  "documents": [
+    {
+      "id": "ac7151a9-43ed-4c3e-8249-e43871cd1a10",
+      "number": "№000007",
+      "quantity": 3,
+      "status": "sorting"
+    },
+    {
+      "id": "762bba77-e89e-4fff-a959-de1c1e7beb7d",
+      "number": "№000008",
+      "quantity": 1,
+      "status": "sorting"
+    },
+    {
+      "id": "cf99bbd0-c9ac-4fe5-a05a-4f96323e8805",
+      "number": "№000009",
+      "quantity": 2,
+      "status": "sorting"
+    }
+  ]
+}

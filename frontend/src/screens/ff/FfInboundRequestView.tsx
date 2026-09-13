@@ -2513,6 +2513,7 @@ export function FfInboundRequestView({
                     // Раскладка внутри документа показывает тару и товар ЭТОЙ приёмки,
                     // а не всего склада: без идентификатора она тянула весь склад.
                     inboundRequestId={requestId}
+                    onPlaced={loadDetail}
                   />
                 </Box>
               ) : null}
