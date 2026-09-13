@@ -2740,6 +2740,7 @@ export default function App() {
 
   const onCreateFfInboundDraft = useCallback(async (
     operationType: InboundOperationType, sellerId: string, marketplace?: 'wildberries' | 'ozon',
+    clientRequestId?: string,
   ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
@@ -2762,6 +2763,10 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          // Повтор после неизвестного ответа сети приходит с тем же
+          // client_request_id, и сервер возвращает уже созданный документ,
+          // а не заводит второй.
+          ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
           warehouse_id: wid,
           operation_type: operationType,
           seller_id: sellerId,
@@ -3067,8 +3072,10 @@ export default function App() {
                       await refreshInboundList(token)
                     }
                   }}
-                  onCreateDraft={async (operationType, sellerId, marketplace) => {
-                    const created = await onCreateFfInboundDraft(operationType, sellerId, marketplace)
+                  onCreateDraft={async (operationType, sellerId, marketplace, clientRequestId) => {
+                    const created = await onCreateFfInboundDraft(
+                      operationType, sellerId, marketplace, clientRequestId,
+                    )
                     if (!created?.id) {
                       return null
                     }
