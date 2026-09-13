@@ -74,6 +74,8 @@ class FbsSupplyPreflightIssueOut(BaseModel):
 
 
 class FbsSupplyPreflightSummaryOut(BaseModel):
+    marketplace: Literal["wb", "ozon"] = "wb"
+    delivery_route: str | None = None
     seller: dict[str, str]
     wb_warehouse: dict[str, str | int | None]
     wms_warehouse: dict[str, str]
@@ -145,6 +147,8 @@ class FbsSupplyOut(BaseModel):
 
 
 class FbsSupplyWorklistItemOut(BaseModel):
+    delivery_type: str
+    delivery_route: str | None = None
     id: str
     # WMS-363: маркетплейс проставляется из FbsSupply.marketplace. Literal
     # фиксирует контракт TSD/веба: только "wb" или "ozon".
@@ -431,6 +435,7 @@ class FbsWorkspacePrintAssetOut(BaseModel):
 
 
 class FbsWorkspaceSupplyOut(BaseModel):
+    delivery_route: str | None = None
     id: str
     # WMS-363: маркетплейс проставляет сервис workspace из FbsSupply.marketplace.
     # Literal фиксирует контракт TSD/веба: только "wb" или "ozon".

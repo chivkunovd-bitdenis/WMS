@@ -84,7 +84,7 @@ def _buyer_type(order: FbsOrder) -> str:
     return "legal" if order.is_legal else "individual"
 
 
-def _delivery_route(order: FbsOrder) -> str | None:
+def order_delivery_route(order: FbsOrder) -> str | None:
     if order.marketplace != "ozon":
         return None
     details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
@@ -309,7 +309,7 @@ async def _build_summary(
         wms_warehouse_name=warehouse.name if warehouse else "Склад не найден",
         buyer_type=_buyer_type(first),
         cargo_type=first.cargo_type or "unknown",
-        delivery_route=_delivery_route(first),
+        delivery_route=order_delivery_route(first),
         orders_count=len(orders),
         required_marking_count=required_marking,
         pvz_allowed_count=len(orders),

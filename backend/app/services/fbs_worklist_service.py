@@ -33,6 +33,7 @@ from app.models.fbs_order import (
     current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_ORDER_STICKER,
     PRINT_ASSET_STATUS_READY,
@@ -472,6 +473,28 @@ async def _load_worklist_context(
     warehouses = await _load_warehouses(session, tenant_id, warehouse_ids)
     wb_names = await _load_wb_warehouse_names(session, tenant_id, wb_wh_ids)
     positions = await _load_order_positions(session, order_ids)
+    packed_positions: dict[uuid.UUID, int] = {}
+    ozon_order_ids = [order.id for order in orders if order.marketplace == "ozon"]
+    if ozon_order_ids:
+        fulfillments = (await session.scalars(
+            select(FbsPackagingFulfillment).where(
+                FbsPackagingFulfillment.tenant_id == tenant_id,
+                FbsPackagingFulfillment.fbs_order_id.in_(ozon_order_ids),
+                FbsPackagingFulfillment.undone_at.is_(None),
+            )
+        )).all()
+        for fulfillment in fulfillments:
+            remaining: dict[str, int] = {}
+            for unit in fulfillment.ozon_packed_units_json or []:
+                key = unit.get("product_id", "")
+                remaining[key] = remaining.get(key, 0) + 1
+            # Existing packing facts identify the product. Distribute its units
+            # across positions once, without duplicating counts for repeated SKUs.
+            for position in positions.get(fulfillment.fbs_order_id, []):
+                key = str(position.product_id)
+                quantity = min(position.quantity, remaining.get(key, 0))
+                packed_positions[position.id] = quantity
+                remaining[key] = remaining.get(key, 0) - quantity
     # Reuse the positions already fetched for the projection; metadata must not
     # trigger lazy SQL from its synchronous Ozon serializer.
     from sqlalchemy.orm.attributes import set_committed_value
@@ -505,6 +528,7 @@ async def _load_worklist_context(
         "products": products,
         "marketplace_bindings": marketplace_bindings,
         "positions": positions,
+        "packed_positions": packed_positions,
         "cards": cards,
         "ozon_photos": ozon_photos,
         "availability": availability,
@@ -1064,6 +1088,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,
+                "packed_quantity": ctx["packed_positions"].get(position.id, 0),
             }
             for position in positions
         ],

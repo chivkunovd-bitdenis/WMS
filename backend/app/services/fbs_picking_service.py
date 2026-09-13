@@ -965,6 +965,14 @@ async def _pick_location_payload(
     }
 
 
+def _scan_order_key(order: FbsOrder) -> tuple[datetime, datetime, uuid.UUID]:
+    # Source is chosen by the operator; automatic order selection is oldest-first.
+    def utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    return utc(order.created_at_wb), utc(order.deadline_at), order.id
+
+
 async def scan_pick_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1093,7 +1101,7 @@ async def scan_pick_product(
             target_order, target_position = matched
         else:
             target_order, target_position = min(
-                eligible_positions, key=lambda row: row[0].deadline_at
+                eligible_positions, key=lambda row: _scan_order_key(row[0])
             )
     elif order_id is not None:
         target_order = next((o for o in eligible_orders if o.id == order_id), None)
@@ -1113,7 +1121,7 @@ async def scan_pick_product(
                 context={"order_id": str(order_id), "product_id": str(product.id)},
             )
     else:
-        target_order = min(eligible_orders, key=lambda o: o.deadline_at)
+        target_order = min(eligible_orders, key=_scan_order_key)
 
     assert target_order is not None
     sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
