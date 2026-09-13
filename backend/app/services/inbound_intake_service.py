@@ -28,7 +28,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE
+from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE, InventoryMovement
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
@@ -150,14 +150,14 @@ async def _sorting_source_allocations(
     quantity: int,
     preferred_container_kind: ContainerKind | None,
     preferred_container_id: uuid.UUID | None,
-    loose_only: bool = False,
+    legacy_non_box_source: bool = False,
 ) -> list[tuple[ContainerKind | None, uuid.UUID | None, int]]:
     """Resolve only this intake line's physical sources, then legacy loose stock."""
     refs: list[tuple[ContainerKind, uuid.UUID]] = []
     if preferred_container_kind is not None and preferred_container_id is not None:
         refs.append((preferred_container_kind, preferred_container_id))
-    elif not loose_only:
-        box_ids = list(
+    else:
+        box_ids = [] if legacy_non_box_source else list(
             (
                 await session.scalars(
                     select(InboundIntakeBox.id)
@@ -253,7 +253,9 @@ async def _apply_line_putaway(
     source_container_id: uuid.UUID | None = None,
     destination_container_kind: ContainerKind | None = None,
     destination_container_id: uuid.UUID | None = None,
-    loose_only: bool = False,
+    legacy_non_box_source: bool = False,
+    transfer_group_id: uuid.UUID | None = None,
+    update_cargo_posted: bool = False,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -274,7 +276,7 @@ async def _apply_line_putaway(
                 quantity=good_quantity,
                 preferred_container_kind=source_container_kind,
                 preferred_container_id=source_container_id,
-                loose_only=loose_only,
+                legacy_non_box_source=legacy_non_box_source,
             )
             for from_kind, from_id, source_quantity in allocations:
                 await inv_svc.apply_putaway_from_sorting(
@@ -288,9 +290,15 @@ async def _apply_line_putaway(
                     actor_user_id=actor_user_id,
                     from_container_kind=from_kind,
                     from_container_id=from_id,
+                    transfer_group_id=transfer_group_id,
                     to_container_kind=destination_container_kind,
                     to_container_id=destination_container_id,
                 )
+                if update_cargo_posted and from_kind == "cargo_place":
+                    await session.execute(sa.update(InboundIntakeCargoPlaceLine).where(
+                        InboundIntakeCargoPlaceLine.cargo_place_id == from_id,
+                        InboundIntakeCargoPlaceLine.product_id == line.product_id,
+                    ).values(posted_qty=InboundIntakeCargoPlaceLine.posted_qty + source_quantity))
     if defective_quantity:
         defect_location = await get_or_create_defect_location(session, tenant_id)
         allocations = await _sorting_source_allocations(
@@ -301,7 +309,7 @@ async def _apply_line_putaway(
             quantity=defective_quantity,
             preferred_container_kind=source_container_kind,
             preferred_container_id=source_container_id,
-            loose_only=loose_only,
+            legacy_non_box_source=legacy_non_box_source,
         )
         for from_kind, from_id, source_quantity in allocations:
             await inv_svc.apply_return_defect_putaway(
@@ -315,7 +323,13 @@ async def _apply_line_putaway(
                 actor_user_id=actor_user_id,
                 from_container_kind=from_kind,
                 from_container_id=from_id,
+                transfer_group_id=transfer_group_id,
             )
+            if update_cargo_posted and from_kind == "cargo_place":
+                await session.execute(sa.update(InboundIntakeCargoPlaceLine).where(
+                    InboundIntakeCargoPlaceLine.cargo_place_id == from_id,
+                    InboundIntakeCargoPlaceLine.product_id == line.product_id,
+                ).values(posted_qty=InboundIntakeCargoPlaceLine.posted_qty + source_quantity))
 
 
 async def sync_request_actuals_from_boxes(
@@ -2099,6 +2113,75 @@ async def list_distribution_lines(
     return list(res.scalars().all())
 
 
+async def _distribution_posted_quantities(
+    session: AsyncSession, req: InboundIntakeRequest,
+    rows: list[InboundIntakeDistributionLine],
+) -> dict[uuid.UUID, int]:
+    grouped: dict[uuid.UUID | None, int] = {
+        key: int(qty) for key, qty in (await session.execute(select(
+        InventoryMovement.transfer_group_id, -sa.func.sum(InventoryMovement.quantity_delta),
+    ).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+        InventoryMovement.quantity_delta < 0,
+    ).group_by(InventoryMovement.transfer_group_id))).all()}
+    # Recovery rows refer directly to an existing positive movement's ID.
+    for movement_id, qty in (await session.execute(select(
+        InventoryMovement.id, InventoryMovement.quantity_delta,
+    ).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+        InventoryMovement.quantity_delta > 0,
+    ))).all():
+        grouped[movement_id] = int(qty)
+    budgets: dict[tuple[uuid.UUID | None, uuid.UUID], int] = {}
+    for line in req.lines:
+        boxed = sum(row.posted_qty for box in req.boxes for row in box.lines
+                    if row.product_id == line.product_id)
+        budgets[(None, line.product_id)] = max(0, line.posted_qty - boxed)
+    for box in req.boxes:
+        for box_line in box.lines:
+            budgets[(box.id, box_line.product_id)] = box_line.posted_qty
+    posted: dict[uuid.UUID, int] = {}
+    for row in rows:
+        qty = min(row.quantity, int(grouped.get(row.id, 0)))
+        if qty:
+            posted[row.id] = qty
+            key = (row.box_id, row.product_id)
+            budgets[key] = max(0, budgets.get(key, 0) - qty)
+    # Compatibility with the first mobile implementation: receipt and movements
+    # share the database transaction timestamp, but used separate random group IDs.
+    # Preserve that receipt before considering older drafts for the legacy budget.
+    movement_rows = list((await session.scalars(select(InventoryMovement).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+    ))).all())
+    for row in rows:
+        if row.id in posted:
+            continue
+        same_transaction = [movement for movement in movement_rows
+                            if movement.product_id == row.product_id
+                            and movement.created_at == row.created_at]
+        withdrawn = sum(-movement.quantity_delta for movement in same_transaction
+                        if movement.quantity_delta < 0
+                        and movement.movement_type == "stock_transfer_out")
+        matching_target = any(movement.quantity_delta > 0
+                              and movement.storage_location_id == row.storage_location_id
+                              for movement in same_transaction)
+        key = (row.box_id, row.product_id)
+        if matching_target and withdrawn >= row.quantity and budgets.get(key, 0) >= row.quantity:
+            posted[row.id] = row.quantity
+            budgets[key] -= row.quantity
+    # Older legacy drafts had no operation key. Preserve their conducted part
+    # in stable order; newly created receipts are matched exactly above.
+    for row in sorted(rows, key=lambda row: (row.created_at, str(row.id))):
+        if row.id in posted:
+            continue
+        key = (row.box_id, row.product_id)
+        qty = min(row.quantity, budgets.get(key, 0))
+        if qty:
+            posted[row.id] = qty
+            budgets[key] -= qty
+    return posted
+
+
 async def scan_distribution_barcode(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -2173,15 +2256,7 @@ async def scan_distribution_barcode(
     res = await session.execute(stmt)
     rows = list(res.scalars().all())
 
-    posted_in_containers = sum(
-        row.posted_qty for box in req.boxes for row in box.lines
-        if row.product_id == product_id
-    ) + sum(
-        row.posted_qty for cargo in req.cargo_places for row in cargo.lines
-        if row.product_id == product_id
-    )
-    if line.posted_qty > posted_in_containers:
-        raise InboundIntakeError("distribution_completed")
+    posted_rows = await _distribution_posted_quantities(session, req, rows)
 
     current_total = sum(int(r.quantity) for r in rows if r.product_id == product_id)
     next_total = max(int(line.posted_qty), current_total) + 1
@@ -2216,6 +2291,7 @@ async def scan_distribution_barcode(
             if r.product_id == product_id
             and r.storage_location_id == active_loc.id
             and r.box_id == source_box_id
+            and r.id not in posted_rows
         ),
         None,
     )
@@ -2261,52 +2337,36 @@ async def replace_distribution_lines(
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
 
-    containers: list[InboundIntakeBox | InboundIntakeCargoPlace] = [
-        *req.boxes, *req.cargo_places
-    ]
-    if any(
-        line.posted_qty > sum(
-            row.posted_qty for container in containers
-            for row in container.lines if row.product_id == line.product_id
-        ) for line in req.lines
-    ):
-        raise InboundIntakeError("distribution_completed")
-
     box_lines_by_key = _box_lines_by_key(req)
-
-    # Whole-box putaway is already committed when the operator later saves the
-    # loose draft. Keep only the part of existing box rows that is backed by
-    # box_line.posted_qty; discard old, unapplied box drafts from the former UI.
-    existing_stmt = (
-        select(InboundIntakeDistributionLine)
-        .where(InboundIntakeDistributionLine.request_id == request_id)
-        .order_by(
-            InboundIntakeDistributionLine.created_at.desc(),
-            InboundIntakeDistributionLine.id.desc(),
-        )
-    )
-    existing_rows = list((await session.execute(existing_stmt)).scalars().all())
-    preserved_box_rows: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, int]] = []
-    preserved_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
-    for row in existing_rows:
-        if row.box_id is None:
-            continue
-        key = (row.box_id, row.product_id)
-        box_line = box_lines_by_key.get(key)
-        if box_line is None:
-            continue
-        already_preserved = preserved_by_key.get(key, 0)
-        keep_qty = min(int(row.quantity), max(0, int(box_line.posted_qty) - already_preserved))
-        if keep_qty < 1:
-            continue
-        preserved_box_rows.append((row.box_id, row.product_id, row.storage_location_id, keep_qty))
-        preserved_by_key[key] = already_preserved + keep_qty
+    existing_rows = list((await session.scalars(select(InboundIntakeDistributionLine).where(
+        InboundIntakeDistributionLine.request_id == request_id,
+    ))).all())
+    posted = await _distribution_posted_quantities(session, req, existing_rows)
+    preserved = [row for row in existing_rows if posted.get(row.id, 0)]
+    preserved_by_key: dict[tuple[uuid.UUID | None, uuid.UUID, uuid.UUID], int] = {}
+    for row in preserved:
+        key = (row.box_id, row.product_id, row.storage_location_id)
+        preserved_by_key[key] = preserved_by_key.get(key, 0) + posted[row.id]
+    # PUT is a snapshot of assignments. Echoes of conducted rows are subtracted;
+    # omitted conducted rows remain immutable, while the pending draft is replaced.
+    normalized = []
+    for box_id, product_id, storage_location_id, qty in lines:
+        if qty < 1:
+            raise InboundIntakeError("invalid_qty")
+        key = (box_id, product_id, storage_location_id)
+        echoed = min(qty, preserved_by_key.get(key, 0))
+        preserved_by_key[key] = preserved_by_key.get(key, 0) - echoed
+        if qty > echoed:
+            normalized.append((box_id, product_id, storage_location_id, qty - echoed))
+    lines = normalized
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
         accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
 
     sum_by_product: dict[uuid.UUID, int] = {}
+    for row in preserved:
+        sum_by_product[row.product_id] = sum_by_product.get(row.product_id, 0) + posted[row.id]
     sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
     sum_loose_by_product: dict[uuid.UUID, int] = {}
     for box_id, product_id, storage_location_id, qty in lines:
@@ -2342,12 +2402,12 @@ async def replace_distribution_lines(
             raise InboundIntakeError("qty_exceeds_accepted")
         sum_by_product[product_id] = next_sum
 
-    await session.execute(
-        sa.delete(InboundIntakeDistributionLine).where(
-            InboundIntakeDistributionLine.request_id == request_id
-        )
-    )
-    for box_id, product_id, storage_location_id, qty in [*preserved_box_rows, *lines]:
+    for row in existing_rows:
+        if row.id in posted:
+            row.quantity = posted[row.id]
+        else:
+            await session.delete(row)
+    for box_id, product_id, storage_location_id, qty in lines:
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
@@ -2436,42 +2496,10 @@ async def complete_distribution(
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-    initial_box_posted_by_key = {
-        key: int(box_line.posted_qty) for key, box_line in box_lines_by_key.items()
-    }
-    initial_box_posted_by_product: dict[uuid.UUID, int] = {}
-    for (_box_id, product_id), posted_qty in initial_box_posted_by_key.items():
-        initial_box_posted_by_product[product_id] = (
-            initial_box_posted_by_product.get(product_id, 0) + posted_qty
-        )
-    initial_loose_posted_by_product = {
-        product_id: max(
-            0,
-            int(line.posted_qty) - initial_box_posted_by_product.get(product_id, 0),
-        )
-        for product_id, line in lines_by_product.items()
-    }
-    distributed_loose_by_product: dict[uuid.UUID, int] = {}
-    distributed_box_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    posted_rows = await _distribution_posted_quantities(session, req, rows)
     for r in rows:
         line = lines_by_product[r.product_id]
-        if r.box_id is None:
-            distributed_before = distributed_loose_by_product.get(r.product_id, 0)
-            distributed_after = distributed_before + r.quantity
-            distributed_loose_by_product[r.product_id] = distributed_after
-            quantity_to_post = min(
-                r.quantity,
-                max(0, distributed_after - initial_loose_posted_by_product.get(r.product_id, 0)),
-            )
-        else:
-            key = (r.box_id, r.product_id)
-            distributed_before = distributed_box_by_key.get(key, 0)
-            distributed_after = distributed_before + r.quantity
-            distributed_box_by_key[key] = distributed_after
-            quantity_to_post = min(
-                r.quantity,
-                max(0, distributed_after - initial_box_posted_by_key.get(key, 0)),
-            )
+        quantity_to_post = r.quantity - posted_rows.get(r.id, 0)
         if quantity_to_post < 1:
             continue
         if r.box_id is not None:
@@ -2490,7 +2518,9 @@ async def complete_distribution(
                 actor_user_id=performer_id,
                 source_container_kind="box" if r.box_id is not None else None,
                 source_container_id=r.box_id,
-                loose_only=r.box_id is None,
+                legacy_non_box_source=r.box_id is None,
+                update_cargo_posted=True,
+                transfer_group_id=r.id,
             )
         except ValueError as exc:
             await session.rollback()

@@ -1572,6 +1572,27 @@ async def putaway_inbound_box(
     return await _request_out_after_completion(session, r)
 
 
+@router.post("/{request_id}/reconcile-sorting", response_model=InboundIntakeRequestOut)
+async def reconcile_inbound_sorting(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    from app.services.inbound_sorting_service import reconcile_linked_putaway
+
+    try:
+        await reconcile_linked_putaway(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        await session.rollback()
+        if exc.code in {"sorting_reconciliation_unproven", "qty_exceeds_accepted",
+                        "qty_exceeds_box_remaining"}:
+            raise HTTPException(status_code=409, detail=exc.code) from None
+        raise _map_inbound_svc_err(exc) from None
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _request_out_after_completion(session, req)
+
+
 @router.post(
     "/{request_id}/resync-sorting-stock",
     response_model=InboundIntakeRequestOut,
