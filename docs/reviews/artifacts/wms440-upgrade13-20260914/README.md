@@ -24,3 +24,12 @@ Astra выполнила один адресный native проход на от
 Реальный Android7/OEM не проверен; гипотеза archive parser физического отказа не считается воспроизведённой. C23 остаётся владельцу. Очередь, дубли операций/начислений и физическая печать в этом delivery проходе не проверялись. Складские проверки пакета не повторялись.
 
 C21: по XML Terra UpdateTest12/0 failures/0 errors, `./gradlew testDebugUnitTest lintDebug` PASS. Тест `apk must match package signing certificate manifest version and Android support` отвергает empty/other signer наAPI24/35. Координатор оставил manifest13: signature fix доступен, legacy/PIN исправляется отдельным минимальным R17 в14; откат manifest по этому отличному от подписи пробелу не выполняется.
+
+
+## Checkpoint APK14 и внешний отказ публикации
+
+R17 сохранён в локальном mobile commit `31edf67d0c4fb99a96ef6e54c508677eeaabb583`; Terra сообщил единый unit/lint/assemble PASS и AuthManagerUrlPersistenceTest11/11. Astra лично проверила локальный APK14: SHA256 `29327127f27aee63bc10c6189ef74691978adb06c8518ea4d35835c195632945`; apksigner API18–23 Verifies/v1=true и API24–35 Verifies/v2=true, в обоих прежний certificate e343…aeb6.
+
+По отдельному разрешению координатора **только как подготовка synthetic среды**, один `adb install -r -d` вернул PUBLIC11 на owned5582 без очистки данных. Это не предлагаемый способ обновления пользователю. PackageManager снова code11; auth_store SHA `fa6aa68d0294a49a4c19d84dbac183de9aa6a9753103a605e0375ee0d1f7562c` неизменный. UI показал старый профиль a@b.co, прежний PIN фактически открыл Home. Baseline для11→14 готов.
+
+Перед публичным14 GitHub вернул Terra HTTP401 Bad credentials; asset14/manifest14 не подтверждены, UI upgrade14 **не запускался**. R17/C24 пока не имеют native PASS, несмотря на готовый baseline и локальный artifact proof. C25 имеет только адресные тесты Terra, не физическую проверку. Авторизационные материалы не читались и не менялись. Отдельный docs commit ce562ca1 также не удалось отправить в GitHub из-за отказа авторизации; предыдущий native evidence c596ca4b уже опубликован.
