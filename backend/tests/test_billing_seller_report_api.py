@@ -17,11 +17,14 @@ from app.models.billing import (
     BillingTariffVersionV2,
 )
 from app.models.fbs_order import FbsOrder
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
+from app.services.storage_measurement_service import MOSCOW
 
 
 async def _admin(async_client):
@@ -652,3 +655,148 @@ async def test_reversal_money_lands_on_its_own_document(async_client) -> None:
     assert reversal_row["billing_ledger_entry_id"] == str(reversal_id)
     # Плюс и минус гасят друг друга, а не остаются половиной суммы.
     assert details.json()["totals"]["net_total_kopecks"] == 0
+
+
+async def _seed_fbs_supply_with_boxes(
+    session, *, tenant_id, seller_id, warehouse_id, name, marketplace, delivered_at, status, source, box_count,
+):
+    """Поставка плюс сколько нужно коробов — напрямую моделями, как в test_fbs_cancelled_after_pack.py."""
+    supply = FbsSupply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, name=name,
+        wb_supply_id=f"WB-{name}" if marketplace == "wb" else None,
+        marketplace=marketplace, delivery_type="warehouse_sc",
+        status=status, source=source, delivered_at=delivered_at,
+    )
+    session.add(supply)
+    await session.flush()
+    for index in range(box_count):
+        box = WarehouseBox(
+            tenant_id=tenant_id, warehouse_id=warehouse_id, internal_barcode=f"WMS447-{name}-{index}",
+        )
+        session.add(box)
+        await session.flush()
+        session.add(FbsPackingBox(
+            tenant_id=tenant_id, supply_id=supply.id, warehouse_box_id=box.id, box_number=index + 1,
+        ))
+    await session.flush()
+    return supply
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("include_finance", [False, True])
+async def test_wms447_fbs_box_count_lands_in_totals_by_delivered_supply(async_client, include_finance) -> None:
+    """R2/R3/R6/R7: короба считаются по проведённым (delivered_at) поставкам своего тенанта/селлера.
+
+    Покрывает C6: внутри/вне периода, непроведённая с коробами, `done` без
+    `delivered_at`, чужой селлер, чужой тенант, Ozon с коробами, проведённая
+    без коробов, граница московских суток.
+    """
+    headers, seller_a_id, email = await _admin(async_client)
+    seller_b_response = await async_client.post("/sellers", headers=headers, json={"name": "Селлер Б (447)"})
+    assert seller_b_response.status_code == 201, seller_b_response.text
+    seller_b_id = uuid.UUID(seller_b_response.json()["id"])
+
+    other_headers, other_seller_id, other_email = await _admin(async_client)
+
+    # 10.09 00:30 МСК = 09.09 21:30 UTC — попадает в сутки 10.09, а не 09.09.
+    boundary_in_period = datetime(2026, 9, 10, 0, 30, tzinfo=MOSCOW)
+    previous_day = datetime(2026, 9, 9, 12, 0, tzinfo=MOSCOW)
+    ozon_in_period = datetime(2026, 9, 10, 15, 0, tzinfo=MOSCOW)
+    no_boxes_in_period = datetime(2026, 9, 10, 18, 0, tzinfo=MOSCOW)
+    seller_b_in_period = datetime(2026, 9, 10, 10, 0, tzinfo=MOSCOW)
+    other_tenant_in_period = datetime(2026, 9, 10, 9, 0, tzinfo=MOSCOW)
+
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        other_user = await session.scalar(select(User).where(User.email == other_email))
+        assert other_user is not None
+        warehouse = Warehouse(tenant_id=user.tenant_id, name="Склад 447", code=f"WMS447-{uuid.uuid4().hex[:8]}")
+        other_warehouse = Warehouse(
+            tenant_id=other_user.tenant_id, name="Чужой склад 447", code=f"WMS447-OTHER-{uuid.uuid4().hex[:8]}"
+        )
+        session.add_all([warehouse, other_warehouse])
+        await session.flush()
+
+        # Проведена, внутри периода, граница московских суток — 3 короба.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A1", marketplace="wb", delivered_at=boundary_in_period, status="in_delivery",
+            source="wms", box_count=3,
+        )
+        # Проведена, но вне периода (предыдущие сутки) — не должна попасть в 10.09.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A2", marketplace="wb", delivered_at=previous_day, status="in_delivery",
+            source="wms", box_count=2,
+        )
+        # Не проведена (нет delivered_at) — короба есть, но не считаются.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A3", marketplace="wb", delivered_at=None, status="packed",
+            source="wms", box_count=2,
+        )
+        # status=done, полученный из кабинета WB без проведения через WMS — delivered_at пуст.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A4", marketplace="wb", delivered_at=None, status="done",
+            source="wb", box_count=1,
+        )
+        # Ozon, проведена внутри периода — короба Ozon считаются наравне с WB.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A5", marketplace="ozon", delivered_at=ozon_in_period, status="in_delivery",
+            source="wms", box_count=2,
+        )
+        # Проведена внутри периода, но без коробов — вклад 0, а не отсутствие строки.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
+            name="A6", marketplace="wb", delivered_at=no_boxes_in_period, status="in_delivery",
+            source="wms", box_count=0,
+        )
+        # Другой селлер того же тенанта — считается отдельно и не подмешивается в фильтр по А.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=user.tenant_id, seller_id=seller_b_id, warehouse_id=warehouse.id,
+            name="B1", marketplace="wb", delivered_at=seller_b_in_period, status="in_delivery",
+            source="wms", box_count=4,
+        )
+        # Чужой тенант — не должен влиять на числа этого тенанта.
+        await _seed_fbs_supply_with_boxes(
+            session, tenant_id=other_user.tenant_id, seller_id=other_seller_id, warehouse_id=other_warehouse.id,
+            name="X1", marketplace="wb", delivered_at=other_tenant_in_period, status="in_delivery",
+            source="wms", box_count=7,
+        )
+        await session.commit()
+
+    params = f"date_from=2026-09-10&date_to=2026-09-10&include_finance={str(include_finance).lower()}"
+
+    summary_all = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    assert summary_all.status_code == 200, summary_all.text
+    # 3 (A1) + 2 (A5, Ozon) + 0 (A6) + 4 (B1) = 9. A2/A3/A4 не проведены в этот период.
+    assert summary_all.json()["totals"]["fbs_boxes"] == 9
+
+    summary_a = await async_client.get(f"/billing/seller-report/summary?{params}&seller_id={seller_a_id}", headers=headers)
+    assert summary_a.status_code == 200, summary_a.text
+    assert summary_a.json()["totals"]["fbs_boxes"] == 5  # 3 + 2 + 0
+
+    summary_b = await async_client.get(f"/billing/seller-report/summary?{params}&seller_id={seller_b_id}", headers=headers)
+    assert summary_b.status_code == 200, summary_b.text
+    assert summary_b.json()["totals"]["fbs_boxes"] == 4
+
+    prev_day_params = f"date_from=2026-09-09&date_to=2026-09-09&include_finance={str(include_finance).lower()}"
+    summary_prev_day = await async_client.get(f"/billing/seller-report/summary?{prev_day_params}", headers=headers)
+    assert summary_prev_day.status_code == 200, summary_prev_day.text
+    # Только A2 (12:00 МСК 09.09). A1 (00:30 МСК 10.09) сюда не попадает — граница суток.
+    assert summary_prev_day.json()["totals"]["fbs_boxes"] == 2
+
+    summary_other_tenant = await async_client.get(f"/billing/seller-report/summary?{params}", headers=other_headers)
+    assert summary_other_tenant.status_code == 200, summary_other_tenant.text
+    assert summary_other_tenant.json()["totals"]["fbs_boxes"] == 7
+
+    details_a = await async_client.get(f"/billing/seller-report/sellers/{seller_a_id}/details?{params}", headers=headers)
+    assert details_a.status_code == 200, details_a.text
+    assert details_a.json()["totals"]["fbs_boxes"] == 5
+
+    details_b = await async_client.get(f"/billing/seller-report/sellers/{seller_b_id}/details?{params}", headers=headers)
+    assert details_b.status_code == 200, details_b.text
+    assert details_b.json()["totals"]["fbs_boxes"] == 4
