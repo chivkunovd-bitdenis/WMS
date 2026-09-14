@@ -1,0 +1,9 @@
+# WMS-440: восстановление physical ATOL7 update
+
+Скриншот владельца зафиксировал, что физический ТСД уже читает manifest версии 15, но штатная проверка обновления прекращает установку с текстом «Подпись обновления не совпадает с установленным приложением». Это исключило устаревший manifest как причину и оставило проверку подписанта до запуска нового APK.
+
+Для воспроизводимого исправления сохранён перенос двух mobile-коммитов в `mobile-code16-atol7-recovery.patch`: `36f3552` добавляет code 16 и автоматическую проверку двойной подписи, а `38d85f9` делает release-подпись явным параметром среды. В исходниках нет пути к хранилищу ключа, паролей или иных учётных данных. Release получает конфигурацию только при одновременной передаче `WMS_TSD_SIGNING_STORE_FILE`, `WMS_TSD_SIGNING_STORE_PASSWORD` и `WMS_TSD_SIGNING_KEY_PASSWORD`; debug остаётся стандартной debug-сборкой.
+
+Публичный org-asset code 16 проверен анонимным полным скачиванием: [WMS-TSD-0.1.15-atol7-code16.apk](https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/WMS-TSD-0.1.15-atol7-code16.apk). Его SHA-256 — `0670c318eea594b2b82358d454a5e22f82820e95da68d697f91750c247ac2981`, размер — `37390781` bytes, пакет — `ru.wms.tsd`, versionCode — `16`, versionName — `0.1.15-android7-dualsign-verified`, minSdk — `24`. `apksigner` с диапазоном API 18–35 подтвердил v1 и v2; SHA-256 сертификата подписанта — `e873450b1acd50e2f686b048c8649d157907c34fd19cf43a7d81af3c864b55fd`.
+
+Оба публичных manifest сейчас отдают эти же code, URL, SHA и размер: [org manifest](https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/update.json) и [personal manifest](https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json). Фактический результат на физическом ТСД остаётся ожидаемым: только он покажет, совпадает ли certificate установленного vendor APK с `e873…b55fd` и проходит ли штатное обновление без удаления данных.
