@@ -224,19 +224,16 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setAuthBusy(true)
       try {
         const fd = new FormData(e.currentTarget)
-        const fullName = String(fd.get('full_name') ?? '').trim()
-        const legacyLogin = String(fd.get('legacy_login') ?? '').trim()
-        const organization = String(fd.get('organization') ?? '').trim()
+        const email = String(fd.get('email') ?? '').trim()
         const password = String(fd.get('password') ?? '')
-        if (!fullName && !legacyLogin) {
-          setError('Укажите ФИО.')
+        if (!email) {
+          setError('Укажите email.')
           return
         }
-        const isLegacyLogin = Boolean(legacyLogin)
-        const res = await fetch(apiUrl(isLegacyLogin ? '/auth/login' : '/auth/login-by-name'), {
+        const res = await fetch(apiUrl('/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(isLegacyLogin ? { email: legacyLogin, password } : nameLoginPayload(fullName, password, organization)),
+          body: JSON.stringify({ email, password }),
         })
         if (res.status === 403) {
           const text = await res.text()
