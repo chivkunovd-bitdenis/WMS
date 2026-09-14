@@ -110,6 +110,7 @@ export function DeadlinePill({
     )
   }
   const msLeft = new Date(deadlineAt).getTime() - now
+  if (marketplace === 'ozon' && msLeft <= 0) return null
   const hoursLeft = Math.floor(msLeft / 3_600_000)
   let color: ChipProps['color'] = 'success'
   let label = `${hoursLeft} ч`

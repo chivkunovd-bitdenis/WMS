@@ -23,7 +23,7 @@ type Props = {
   clearNotice: () => void
 }
 
-type AuthMode = 'login' | 'legacy' | 'forgot'
+type AuthMode = 'login' | 'forgot'
 
 const fieldStackSx = { display: 'flex', flexDirection: 'column', gap: 2 } as const
 
@@ -109,7 +109,7 @@ export function PublicAuthScreen({
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Вы перешли по ссылке из письма. Придумайте пароль — затем войдите по
-          ФИО и паролю.
+          прежнему логину и паролю.
         </Typography>
         <form
           data-testid="set-password-form"
@@ -205,8 +205,6 @@ export function PublicAuthScreen({
     )
   }
 
-  const legacyLogin = mode === 'legacy'
-
   return shell(
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -215,23 +213,13 @@ export function PublicAuthScreen({
       <form data-testid="login-form" noValidate onSubmit={onLogin}>
         <Box sx={fieldStackSx}>
           <TextField
-            name={legacyLogin ? 'legacy_login' : 'full_name'}
-            type="text"
-            label={legacyLogin ? 'Прежний логин' : 'ФИО'}
+            name="email"
+            type="email"
+            label="Email"
             required
             fullWidth
-            autoComplete={legacyLogin ? 'username' : 'name'}
+            autoComplete="email"
           />
-          {!legacyLogin ? (
-            <TextField
-              name="organization"
-              type="text"
-              label="Код организации"
-              fullWidth
-              autoComplete="organization"
-              helperText="Укажите, если он известен: это помогает войти при совпадающих ФИО."
-            />
-          ) : null}
           <TextField
             name="password"
             type="password"
@@ -240,11 +228,9 @@ export function PublicAuthScreen({
             fullWidth
             autoComplete="current-password"
             helperText={
-              legacyLogin
-                ? 'Для старой учётной записи без ФИО. После входа заполните профиль в настройках.'
-                : isFf
-                  ? 'Только сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).'
-                  : 'Вход по ФИО и паролю.'
+              isFf
+                ? 'Только сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).'
+                : 'Первый вход — по ссылке из письма-приглашения.'
             }
           />
           <Button
@@ -259,20 +245,6 @@ export function PublicAuthScreen({
           </Button>
         </Box>
       </form>
-      <Button
-        type="button"
-        variant="text"
-        color="primary"
-        data-testid="go-to-legacy-login"
-        onClick={() => {
-          clearNotice()
-          setMode(legacyLogin ? 'login' : 'legacy')
-        }}
-        sx={{ mt: 1.5 }}
-        fullWidth
-      >
-        {legacyLogin ? 'Вход по ФИО' : 'Вход по прежнему логину'}
-      </Button>
       <Button
         type="button"
         variant="text"
