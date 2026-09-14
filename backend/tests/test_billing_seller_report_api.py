@@ -4,10 +4,13 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
+import httpx
 import pytest
 from sqlalchemy import select
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.billing import (
@@ -17,14 +20,13 @@ from app.models.billing import (
     BillingTariffVersionV2,
 )
 from app.models.fbs_order import FbsOrder
-from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.user import User
 from app.models.warehouse import Warehouse
-from app.models.warehouse_box import WarehouseBox
-from app.services.storage_measurement_service import MOSCOW
+from app.services import fbs_packing_box_service as packing_box_svc
+from app.services import fbs_shipment_service as fbs_shipment_svc
 
 
 async def _admin(async_client):
@@ -657,54 +659,81 @@ async def test_reversal_money_lands_on_its_own_document(async_client) -> None:
     assert details.json()["totals"]["net_total_kopecks"] == 0
 
 
-async def _seed_fbs_supply_with_boxes(
-    session, *, tenant_id, seller_id, warehouse_id, name, marketplace, delivered_at, status, source, box_count,
+async def _seed_boxed_supply(
+    session, *, tenant_id, seller_id, warehouse_id, name, marketplace, box_count, actor_user_id, http_client=None,
 ):
-    """Поставка плюс сколько нужно коробов — напрямую моделями, как в test_fbs_cancelled_after_pack.py."""
+    """Поставка плюс короба штатным `fbs_packing_box_service.create_boxes` (C6, WMS-447).
+
+    Для WB короб дополнительно регистрирует грузоместо WB и требует http_client
+    (реальный HTTP не уходит — settings.e2e_mock_wb_marketplace_supplies включён
+    фикстурой теста). Для Ozon http_client не нужен: сервис возвращается раньше.
+    """
     supply = FbsSupply(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, name=name,
         wb_supply_id=f"WB-{name}" if marketplace == "wb" else None,
         marketplace=marketplace, delivery_type="warehouse_sc",
-        status=status, source=source, delivered_at=delivered_at,
     )
     session.add(supply)
     await session.flush()
-    for index in range(box_count):
-        box = WarehouseBox(
-            tenant_id=tenant_id, warehouse_id=warehouse_id, internal_barcode=f"WMS447-{name}-{index}",
+    if box_count:
+        await packing_box_svc.create_boxes(
+            session, tenant_id, supply.id, box_count, f"boxes-{name}",
+            http_client, actor_user_id=actor_user_id, without_distribution=False,
         )
-        session.add(box)
-        await session.flush()
-        session.add(FbsPackingBox(
-            tenant_id=tenant_id, supply_id=supply.id, warehouse_box_id=box.id, box_number=index + 1,
-        ))
-    await session.flush()
     return supply
+
+
+async def _deliver_supply(session, supply, *, delivered_at):
+    """Провести поставку штатным `fbs_shipment_service._apply_local_delivered`.
+
+    Момент передачи задаётся через `confirmed_at` подтверждённой операции — тем
+    же полем, которым сама `_apply_local_delivered` пользуется раньше, чем
+    `datetime.now(UTC)` (`now = supply.delivered_at or getattr(operation,
+    "confirmed_at", None) or datetime.now(UTC)`), и тем же полем, которым
+    WMS-406 определяет момент подтверждённой передачи для отчёта — так время
+    контролируется детерминированно, без sleep и без подмены глобальных часов.
+    Пустой список заказов: поставка без заказов не требует физического
+    списания (`_write_off_delivered_orders_once` не выполняет ничего для
+    пустого списка) — короб и момент проведения от состава заказов не зависят
+    (R2 «на счёт не влияют состав заказов в коробах»), поэтому для этой
+    проверки они не нужны.
+    """
+    operation = SimpleNamespace(confirmed_at=delivered_at)
+    await fbs_shipment_svc._apply_local_delivered(session, supply, [], None, None, operation)
+    await session.flush()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("include_finance", [False, True])
-async def test_wms447_fbs_box_count_lands_in_totals_by_delivered_supply(async_client, include_finance) -> None:
-    """R2/R3/R6/R7: короба считаются по проведённым (delivered_at) поставкам своего тенанта/селлера.
-
-    Покрывает C6: внутри/вне периода, непроведённая с коробами, `done` без
-    `delivered_at`, чужой селлер, чужой тенант, Ozon с коробами, проведённая
-    без коробов, граница московских суток.
+async def test_wms447_fbs_box_count_lands_in_totals_by_delivered_supply(
+    async_client, include_finance, monkeypatch,
+) -> None:
+    """C6 (R2/R3/R6/R7): короба считаются только у поставок, проведённых штатным
+    `_apply_local_delivered`, и только за короба, созданные штатным
+    `create_boxes` — не за напрямую вставленные строки моделей. Отчёт проверен
+    ДО проведения (0, хотя короб уже есть) и ПОСЛЕ (число появилось в сутках
+    проведения без отдельного пересчёта — тот же `build_seller_report`), плюс
+    соседние сутки (0), полностью пустой период (0), чужой селлер и чужой
+    тенант не подмешиваются, короба Ozon считаются наравне с WB, непустая
+    строка селлера (есть факт операции) получает верное число, а не
+    нуль-заглушку, и граница московских суток — честная (проверяется по
+    реальному хранению `delivered_at` как `datetime` c `tzinfo=UTC`, как пишет
+    прод через `operation.confirmed_at`/`datetime.now(UTC)`, а не по
+    заранее московским значениям).
     """
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
     headers, seller_a_id, email = await _admin(async_client)
     seller_b_response = await async_client.post("/sellers", headers=headers, json={"name": "Селлер Б (447)"})
     assert seller_b_response.status_code == 201, seller_b_response.text
     seller_b_id = uuid.UUID(seller_b_response.json()["id"])
+    token = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_a_id}/tokens",
+        headers=headers, json={"marketplace_api_token": "wms447-wb-token"},
+    )
+    assert token.status_code == 200, token.text
 
     other_headers, other_seller_id, other_email = await _admin(async_client)
-
-    # 10.09 00:30 МСК = 09.09 21:30 UTC — попадает в сутки 10.09, а не 09.09.
-    boundary_in_period = datetime(2026, 9, 10, 0, 30, tzinfo=MOSCOW)
-    previous_day = datetime(2026, 9, 9, 12, 0, tzinfo=MOSCOW)
-    ozon_in_period = datetime(2026, 9, 10, 15, 0, tzinfo=MOSCOW)
-    no_boxes_in_period = datetime(2026, 9, 10, 18, 0, tzinfo=MOSCOW)
-    seller_b_in_period = datetime(2026, 9, 10, 10, 0, tzinfo=MOSCOW)
-    other_tenant_in_period = datetime(2026, 9, 10, 9, 0, tzinfo=MOSCOW)
 
     async with SessionLocal() as session:
         user = await session.scalar(select(User).where(User.email == email))
@@ -713,90 +742,145 @@ async def test_wms447_fbs_box_count_lands_in_totals_by_delivered_supply(async_cl
         assert other_user is not None
         warehouse = Warehouse(tenant_id=user.tenant_id, name="Склад 447", code=f"WMS447-{uuid.uuid4().hex[:8]}")
         other_warehouse = Warehouse(
-            tenant_id=other_user.tenant_id, name="Чужой склад 447", code=f"WMS447-OTHER-{uuid.uuid4().hex[:8]}"
+            tenant_id=other_user.tenant_id, name="Чужой склад 447", code=f"WMS447-OTHER-{uuid.uuid4().hex[:8]}",
         )
         session.add_all([warehouse, other_warehouse])
         await session.flush()
+        tenant_id, other_tenant_id = user.tenant_id, other_user.tenant_id
+        warehouse_id, other_warehouse_id, actor_id = warehouse.id, other_warehouse.id, user.id
 
-        # Проведена, внутри периода, граница московских суток — 3 короба.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A1", marketplace="wb", delivered_at=boundary_in_period, status="in_delivery",
-            source="wms", box_count=3,
+        async with httpx.AsyncClient() as http_client:
+            # A1 — WB, граница московских суток: 10.09 00:30 МСК = 09.09 21:30 UTC.
+            a1 = await _seed_boxed_supply(
+                session, tenant_id=tenant_id, seller_id=seller_a_id, warehouse_id=warehouse_id,
+                name="A1", marketplace="wb", box_count=1, actor_user_id=actor_id, http_client=http_client,
+            )
+            await session.commit()
+
+            # ДО проведения: короб реально создан штатным create_boxes, но
+            # delivered_at ещё нет — 0 (C6 «непроведённая поставка с коробами»).
+            before = await async_client.get(
+                "/billing/seller-report/summary?date_from=2026-09-10&date_to=2026-09-10"
+                f"&include_finance={str(include_finance).lower()}",
+                headers=headers,
+            )
+            assert before.status_code == 200, before.text
+            assert before.json()["totals"]["fbs_boxes"] == 0
+
+            await _deliver_supply(session, a1, delivered_at=datetime(2026, 9, 9, 21, 30, tzinfo=UTC))
+            await session.commit()
+
+            # A2 — WB, проведена накануне (09.09 12:00 МСК = 09:00 UTC) — не в 10.09.
+            a2 = await _seed_boxed_supply(
+                session, tenant_id=tenant_id, seller_id=seller_a_id, warehouse_id=warehouse_id,
+                name="A2", marketplace="wb", box_count=1, actor_user_id=actor_id, http_client=http_client,
+            )
+            await session.commit()
+            await _deliver_supply(session, a2, delivered_at=datetime(2026, 9, 9, 9, 0, tzinfo=UTC))
+            await session.commit()
+
+            # A4 — короб создан штатно, пока поставка ещё редактируема (status=draft),
+            # затем status выставлен done напрямую, delivered_at не тронут — так
+            # выглядит поставка, закрытая в кабинете WB мимо WMS (R3, D2).
+            a4 = await _seed_boxed_supply(
+                session, tenant_id=tenant_id, seller_id=seller_a_id, warehouse_id=warehouse_id,
+                name="A4", marketplace="wb", box_count=1, actor_user_id=actor_id, http_client=http_client,
+            )
+            a4.status = "done"
+            await session.commit()
+
+        # A5 — Ozon, без http_client (create_boxes не требует его для Ozon).
+        a5 = await _seed_boxed_supply(
+            session, tenant_id=tenant_id, seller_id=seller_a_id, warehouse_id=warehouse_id,
+            name="A5", marketplace="ozon", box_count=1, actor_user_id=actor_id,
         )
-        # Проведена, но вне периода (предыдущие сутки) — не должна попасть в 10.09.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A2", marketplace="wb", delivered_at=previous_day, status="in_delivery",
-            source="wms", box_count=2,
+        await session.commit()
+        await _deliver_supply(session, a5, delivered_at=datetime(2026, 9, 10, 12, 0, tzinfo=UTC))
+        await session.commit()
+
+        # A6 — проведена внутри периода, но без коробов: вклад 0, а не пропавшая строка.
+        a6 = await _seed_boxed_supply(
+            session, tenant_id=tenant_id, seller_id=seller_a_id, warehouse_id=warehouse_id,
+            name="A6", marketplace="wb", box_count=0, actor_user_id=actor_id,
         )
-        # Не проведена (нет delivered_at) — короба есть, но не считаются.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A3", marketplace="wb", delivered_at=None, status="packed",
-            source="wms", box_count=2,
+        await session.commit()
+        await _deliver_supply(session, a6, delivered_at=datetime(2026, 9, 10, 15, 0, tzinfo=UTC))
+        await session.commit()
+
+        # B1 — другой селлер того же тенанта, Ozon (не подмешивается в фильтр по А).
+        b1 = await _seed_boxed_supply(
+            session, tenant_id=tenant_id, seller_id=seller_b_id, warehouse_id=warehouse_id,
+            name="B1", marketplace="ozon", box_count=1, actor_user_id=actor_id,
         )
-        # status=done, полученный из кабинета WB без проведения через WMS — delivered_at пуст.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A4", marketplace="wb", delivered_at=None, status="done",
-            source="wb", box_count=1,
+        await session.commit()
+        await _deliver_supply(session, b1, delivered_at=datetime(2026, 9, 10, 7, 0, tzinfo=UTC))
+        await session.commit()
+
+        # X1 — чужой тенант, Ozon (не должен влиять на числа этого тенанта).
+        x1 = await _seed_boxed_supply(
+            session, tenant_id=other_tenant_id, seller_id=other_seller_id, warehouse_id=other_warehouse_id,
+            name="X1", marketplace="ozon", box_count=1, actor_user_id=None,
         )
-        # Ozon, проведена внутри периода — короба Ozon считаются наравне с WB.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A5", marketplace="ozon", delivered_at=ozon_in_period, status="in_delivery",
-            source="wms", box_count=2,
-        )
-        # Проведена внутри периода, но без коробов — вклад 0, а не отсутствие строки.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_a_id, warehouse_id=warehouse.id,
-            name="A6", marketplace="wb", delivered_at=no_boxes_in_period, status="in_delivery",
-            source="wms", box_count=0,
-        )
-        # Другой селлер того же тенанта — считается отдельно и не подмешивается в фильтр по А.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=user.tenant_id, seller_id=seller_b_id, warehouse_id=warehouse.id,
-            name="B1", marketplace="wb", delivered_at=seller_b_in_period, status="in_delivery",
-            source="wms", box_count=4,
-        )
-        # Чужой тенант — не должен влиять на числа этого тенанта.
-        await _seed_fbs_supply_with_boxes(
-            session, tenant_id=other_user.tenant_id, seller_id=other_seller_id, warehouse_id=other_warehouse.id,
-            name="X1", marketplace="wb", delivered_at=other_tenant_in_period, status="in_delivery",
-            source="wms", box_count=7,
-        )
+        await session.commit()
+        await _deliver_supply(session, x1, delivered_at=datetime(2026, 9, 10, 8, 0, tzinfo=UTC))
+        await session.commit()
+
+        # Непустая строка селлера (review N2/п.3): факт операции селлера А в том же
+        # периоде — тогда его строка попадёт в rows, и там тоже нужно верное число
+        # коробов, а не нуль-заглушка (R7).
+        session.add(OperationFact(
+            tenant_id=tenant_id, seller_id=seller_a_id, operation_code="marketplace_outbound_completed",
+            billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+            source_event_id=uuid.uuid4(), seller_name_snapshot="Селлер А (447)",
+            document_type="marketplace_unload", document_id=uuid.uuid4(), source="system",
+            occurred_at=datetime(2026, 9, 10, 10, 0, tzinfo=UTC), item_quantity=1,
+        ))
         await session.commit()
 
     params = f"date_from=2026-09-10&date_to=2026-09-10&include_finance={str(include_finance).lower()}"
 
     summary_all = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
     assert summary_all.status_code == 200, summary_all.text
-    # 3 (A1) + 2 (A5, Ozon) + 0 (A6) + 4 (B1) = 9. A2/A3/A4 не проведены в этот период.
-    assert summary_all.json()["totals"]["fbs_boxes"] == 9
+    payload = summary_all.json()
+    # A1(1) + A5(1) + A6(0) + B1(1) = 3. A2 (накануне) и A4 (done без delivered_at) не считаются.
+    assert payload["totals"]["fbs_boxes"] == 3
+    seller_a_row = next(row for row in payload["rows"] if row["seller_id"] == str(seller_a_id))
+    # Непустая строка (есть факт операции) — тоже верное число, а не нуль-заглушка.
+    assert seller_a_row["fbs_boxes"] == 2  # A1 + A5; A6 = 0
 
-    summary_a = await async_client.get(f"/billing/seller-report/summary?{params}&seller_id={seller_a_id}", headers=headers)
+    summary_a = await async_client.get(
+        f"/billing/seller-report/summary?{params}&seller_id={seller_a_id}", headers=headers
+    )
     assert summary_a.status_code == 200, summary_a.text
-    assert summary_a.json()["totals"]["fbs_boxes"] == 5  # 3 + 2 + 0
+    assert summary_a.json()["totals"]["fbs_boxes"] == 2
 
-    summary_b = await async_client.get(f"/billing/seller-report/summary?{params}&seller_id={seller_b_id}", headers=headers)
+    summary_b = await async_client.get(
+        f"/billing/seller-report/summary?{params}&seller_id={seller_b_id}", headers=headers
+    )
     assert summary_b.status_code == 200, summary_b.text
-    assert summary_b.json()["totals"]["fbs_boxes"] == 4
+    assert summary_b.json()["totals"]["fbs_boxes"] == 1
 
     prev_day_params = f"date_from=2026-09-09&date_to=2026-09-09&include_finance={str(include_finance).lower()}"
     summary_prev_day = await async_client.get(f"/billing/seller-report/summary?{prev_day_params}", headers=headers)
     assert summary_prev_day.status_code == 200, summary_prev_day.text
-    # Только A2 (12:00 МСК 09.09). A1 (00:30 МСК 10.09) сюда не попадает — граница суток.
-    assert summary_prev_day.json()["totals"]["fbs_boxes"] == 2
+    # Только A2 (09:00 UTC = 12:00 МСК 09.09). A1 (21:30 UTC = 00:30 МСК 10.09) сюда не попадает — граница суток.
+    assert summary_prev_day.json()["totals"]["fbs_boxes"] == 1
+
+    # Полностью пустой период (п.3 замечания ревью): ни поставок, ни фактов.
+    empty_params = f"date_from=2026-09-01&date_to=2026-09-01&include_finance={str(include_finance).lower()}"
+    summary_empty = await async_client.get(f"/billing/seller-report/summary?{empty_params}", headers=headers)
+    assert summary_empty.status_code == 200, summary_empty.text
+    assert summary_empty.json()["totals"]["fbs_boxes"] == 0
+    assert summary_empty.json()["rows"] == []
 
     summary_other_tenant = await async_client.get(f"/billing/seller-report/summary?{params}", headers=other_headers)
     assert summary_other_tenant.status_code == 200, summary_other_tenant.text
-    assert summary_other_tenant.json()["totals"]["fbs_boxes"] == 7
+    assert summary_other_tenant.json()["totals"]["fbs_boxes"] == 1
 
     details_a = await async_client.get(f"/billing/seller-report/sellers/{seller_a_id}/details?{params}", headers=headers)
     assert details_a.status_code == 200, details_a.text
-    assert details_a.json()["totals"]["fbs_boxes"] == 5
+    assert details_a.json()["totals"]["fbs_boxes"] == 2
 
     details_b = await async_client.get(f"/billing/seller-report/sellers/{seller_b_id}/details?{params}", headers=headers)
     assert details_b.status_code == 200, details_b.text
-    assert details_b.json()["totals"]["fbs_boxes"] == 4
+    assert details_b.json()["totals"]["fbs_boxes"] == 1

@@ -821,6 +821,16 @@ async def _fbs_box_counts(
     полем); короб — строка `fbs_packing_boxes`, её состав после проведения не
     меняется (`_assert_supply_mutable` отвергает правки короба у `in_delivery`
     и `done`), поэтому её можно посчитать в любой момент без снимков и журналов.
+
+    Границы приводим к UTC перед сравнением: на PostgreSQL (`timestamptz`)
+    момент от этого не меняется — `astimezone(UTC)` не сдвигает абсолютное
+    время, только его отображение. Но `delivered_at` в проде всегда пишется
+    как `datetime.now(UTC)`, а SQLite (тесты и CI) при сохранении обрезает
+    смещение и хранит голые цифры настенных часов как есть, без нормализации.
+    Если сравнивать с этим UTC-хранением московскими цифрами `start`/`end`
+    напрямую, короб на границе московских суток на SQLite потерялся бы —
+    цифры разных часовых поясов сравнивались бы как одинаковые. Приведение
+    обеих сторон к UTC делает голые цифры честными в обеих СУБД.
     """
     query = (
         select(FbsSupply.seller_id, func.count(FbsPackingBox.id))
@@ -829,8 +839,8 @@ async def _fbs_box_counts(
         .where(
             FbsSupply.tenant_id == tenant_id,
             FbsSupply.delivered_at.is_not(None),
-            FbsSupply.delivered_at >= start,
-            FbsSupply.delivered_at < end,
+            FbsSupply.delivered_at >= start.astimezone(UTC),
+            FbsSupply.delivered_at < end.astimezone(UTC),
         )
         .group_by(FbsSupply.seller_id)
     )
