@@ -24,6 +24,7 @@ from app.models.billing import (
     BillingTariffVersionV2,
 )
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.product import Product
@@ -811,6 +812,33 @@ async def _storage_row(
     return row
 
 
+async def _fbs_box_counts(
+    session: AsyncSession, *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None,
+) -> dict[uuid.UUID, int]:
+    """Короба FBS проведённых за период поставок, по одному агрегату на селлера (WMS-447).
+
+    Проведена — поставка с непустым `delivered_at` (WB и Ozon одним и тем же
+    полем); короб — строка `fbs_packing_boxes`, её состав после проведения не
+    меняется (`_assert_supply_mutable` отвергает правки короба у `in_delivery`
+    и `done`), поэтому её можно посчитать в любой момент без снимков и журналов.
+    """
+    query = (
+        select(FbsSupply.seller_id, func.count(FbsPackingBox.id))
+        .select_from(FbsPackingBox)
+        .join(FbsSupply, FbsSupply.id == FbsPackingBox.supply_id)
+        .where(
+            FbsSupply.tenant_id == tenant_id,
+            FbsSupply.delivered_at.is_not(None),
+            FbsSupply.delivered_at >= start,
+            FbsSupply.delivered_at < end,
+        )
+        .group_by(FbsSupply.seller_id)
+    )
+    if seller_id is not None:
+        query = query.where(FbsSupply.seller_id == seller_id)
+    return {row[0]: int(row[1] or 0) for row in (await session.execute(query)).all()}
+
+
 async def build_seller_report(
     session: AsyncSession, *, tenant_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, seller_id: uuid.UUID | None = None, search: str | None = None,
 ) -> dict[str, Any]:
@@ -819,6 +847,7 @@ async def build_seller_report(
     entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance, exclude_documents=covered))
     entries.extend(await _fbs_handed_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance))
     entries.sort(key=lambda row: (row["occurred_at"], row["kind"], row["id"]), reverse=True)
+    box_counts = await _fbs_box_counts(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id)
     sellers = list((await session.scalars(select(Seller).where(Seller.tenant_id == tenant_id).order_by(Seller.name))).all())
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for entry in entries:
@@ -864,12 +893,14 @@ async def build_seller_report(
         if not seller_entries and seller.id not in storage_money:
             continue
         total = _totals(seller_entries, include_finance=include_finance)
+        total["fbs_boxes"] = box_counts.get(seller.id, 0)
         if include_finance and seller_storage:
             total["gross_total_kopecks"] += seller_storage
             total["net_total_kopecks"] += seller_storage
             tenant_storage_money += seller_storage
         rows.append({"seller_id": str(seller.id), "seller_name": seller.name, **total, "details_target": f"/api/billing/seller-report/sellers/{seller.id}/details"})
     totals = _totals(entries, include_finance=include_finance)
+    totals["fbs_boxes"] = sum(box_counts.values())
     if include_finance and tenant_storage_money:
         totals["gross_total_kopecks"] += tenant_storage_money
         totals["net_total_kopecks"] += tenant_storage_money
@@ -931,6 +962,9 @@ async def seller_details(
     report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance)
     entries = report["entries"]
     totals = _totals(entries, include_finance=include_finance)
+    # Тот же агрегат, что и в сводке (уже посчитан build_seller_report для
+    # этого же seller_id): второй запрос дублировал бы число зря.
+    totals["fbs_boxes"] = report["totals"]["fbs_boxes"]
     # Stable multi-key ordering: occurrence desc, source kind asc, UUID desc.
     entries.sort(key=lambda row: row["id"], reverse=True)
     entries.sort(key=lambda row: row["kind"])
