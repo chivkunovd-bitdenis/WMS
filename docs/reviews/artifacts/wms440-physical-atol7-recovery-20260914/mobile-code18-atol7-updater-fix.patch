@@ -1,0 +1,98 @@
+From 3206669f269dcce8d97773e1bb44606f40b0b934 Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Mon, 14 Sep 2026 15:29:48 +0300
+Subject: [PATCH] fix(WMS-440): delegate unavailable Android 7 signer metadata
+
+---
+ android/app/build.gradle.kts                  |  4 +--
+ .../tsd/features/update/UpdateRepository.kt   |  5 ++-
+ .../ru/wms/tsd/features/update/UpdateTest.kt  | 34 ++++++++++++++++---
+ 3 files changed, 36 insertions(+), 7 deletions(-)
+
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index eb133ae..b79c9f1 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -19,8 +19,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 17
+-        versionName = "0.1.16-release-key-recovery"
++        versionCode = 18
++        versionName = "0.1.17-atol7-updater-fix"
+         buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
+index 5953239..a1f74f9 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
+@@ -45,7 +45,10 @@ internal fun verifyIdentity(installed: ApkIdentity, archive: ApkIdentity, update
+     require(archive.packageName == installed.packageName) { "Этот файл предназначен для другого приложения." }
+     require(archive.versionCode == update.versionCode && archive.versionCode > installed.versionCode) { "Версия файла не соответствует обновлению или уже установлена." }
+     require(archive.minSdk == update.minSdk && archive.minSdk <= sdk) { "Обновление не поддерживает эту версию Android." }
+-    require(installed.signers.isNotEmpty() && archive.signers == installed.signers) { "Подпись обновления не совпадает с установленным приложением." }
++    val bothSignerSetsAvailable = installed.signers.isNotEmpty() && archive.signers.isNotEmpty()
++    if (sdk >= 28 || bothSignerSetsAvailable) {
++        require(bothSignerSetsAvailable && archive.signers == installed.signers) { "Подпись обновления не совпадает с установленным приложением." }
++    }
+ }
+ 
+ internal fun File.sha256(): String = inputStream().use { input ->
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt b/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
+index e77f577..129711c 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
+@@ -44,18 +44,44 @@ class UpdateTest {
+         ).forEach { assertThrows(IllegalArgumentException::class.java) { it.validate() } }
+     }
+ 
+-    @Test fun `apk must match package signing certificate manifest version and Android support`() {
++    @Test fun `apk must match package manifest version and Android support`() {
+         for (sdk in listOf(24, 35)) {
+             verifyIdentity(installed, archive, update, sdk)
+             listOf(
+-                archive.copy(packageName = "another.app"), archive.copy(signers = emptySet()),
+-                archive.copy(signers = setOf("other-signer")), archive.copy(versionCode = 9),
+-                archive.copy(minSdk = 26),
++                archive.copy(packageName = "another.app"), archive.copy(versionCode = 9), archive.copy(minSdk = 26),
+             ).forEach { assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, it, update, sdk) } }
+             assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, installed, update.copy(versionCode = 7), sdk) }
+         }
+     }
+ 
++    @Test fun `API24 signer mismatch is rejected when both signer sets are available`() {
++        for (sdk in listOf(24, 27, 28, 35)) {
++            assertThrows(IllegalArgumentException::class.java) {
++                verifyIdentity(installed, archive.copy(signers = setOf("other-signer")), update, sdk)
++            }
++        }
++    }
++
++    @Test fun `API24 missing signer metadata delegates only a fully verified APK to Android installer`() {
++        for (sdk in listOf(24, 27)) {
++            verifyIdentity(installed.copy(signers = emptySet()), archive, update, sdk)
++            verifyIdentity(installed, archive.copy(signers = emptySet()), update, sdk)
++            verifyIdentity(installed.copy(signers = emptySet()), archive.copy(signers = emptySet()), update, sdk)
++            listOf(
++                archive.copy(packageName = "another.app", signers = emptySet()),
++                archive.copy(versionCode = 9, signers = emptySet()),
++                archive.copy(minSdk = 26, signers = emptySet()),
++            ).forEach { assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, it, update, sdk) } }
++        }
++    }
++
++    @Test fun `API28 missing signer metadata is still rejected`() {
++        for (sdk in listOf(28, 35)) {
++            assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed.copy(signers = emptySet()), archive, update, sdk) }
++            assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, archive.copy(signers = emptySet()), update, sdk) }
++        }
++    }
++
+     @Test fun `only a complete matching download becomes installable`() = runTest {
+         val target = File(tmp.root, "update.apk"); val progress = mutableListOf<Int>()
+         saveApk(ByteArrayInputStream(bytes), target, update, progress::add)
+-- 
+2.39.2 (Apple Git-143)
+
