@@ -541,6 +541,11 @@ async def _load_worklist_context(
         if position.product_id is not None
     )
     products = await _load_products(session, tenant_id, product_ids)
+    seller_nm_pairs.update(
+        (product.seller_id, int(product.wb_nm_id))
+        for product in products.values()
+        if product.seller_id is not None and product.wb_nm_id is not None
+    )
     marketplace_bindings = await _load_product_marketplace_bindings(
         session, tenant_id, product_ids
     )
@@ -968,6 +973,31 @@ def _position_barcode(
     return product.wb_barcode if product is not None else None
 
 
+def _card_raw_for_product(product: Product | None, ctx: dict[str, Any]) -> dict[str, Any] | None:
+    if product is None or product.seller_id is None or product.wb_nm_id is None:
+        return None
+    card = ctx["cards"].get((product.seller_id, int(product.wb_nm_id)))
+    return card.raw_json if card and isinstance(card.raw_json, dict) else None
+
+
+def _product_label_metadata(product: Product | None, ctx: dict[str, Any]) -> dict[str, str | None]:
+    """Existing catalog characteristics for one exact WMS product."""
+    card_raw = _card_raw_for_product(product, ctx)
+    catalog_barcode = product.wb_barcode if product is not None else None
+    return {
+        "size": (
+            product.wb_size
+            if product is not None and product.wb_size
+            else size_from_card_for_barcode(card_raw, catalog_barcode)
+            if card_raw
+            else None
+        ),
+        "color": color_from_card(card_raw) if card_raw else None,
+        "brand": brand_from_card(card_raw) if card_raw else None,
+        "composition": composition_from_card(card_raw) if card_raw else None,
+    }
+
+
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
     is_ozon = order.marketplace == "ozon"
     positions = ctx["positions"].get(order.id, [])
@@ -1037,6 +1067,13 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             product.wb_vendor_code if product and product.wb_vendor_code else order.wb_article
         )
         sku = product.sku_code if product else None
+    # An Ozon posting can have several independently linked WMS products.  Its
+    # compact compatibility product is only the first position, so derive the
+    # product-card details for every position below instead of reusing it.
+    root_label_metadata = _product_label_metadata(
+        ctx["products"].get(first_position.product_id) if is_ozon and first_position else product,
+        ctx,
+    )
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -1075,10 +1112,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 else None
             ),
             "category": category,
-            "color": color,
-            "brand": brand,
-            "composition": composition,
-            "size": size,
+            "color": root_label_metadata["color"] if is_ozon else color,
+            "brand": root_label_metadata["brand"] if is_ozon else brand,
+            "composition": root_label_metadata["composition"] if is_ozon else composition,
+            "size": root_label_metadata["size"] if is_ozon else size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(
                 product
@@ -1117,6 +1154,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                     else position.offer_id
                 ),
                 "sku": str(position.ozon_sku) if position.ozon_sku is not None else None,
+                **_product_label_metadata(ctx["products"].get(position.product_id), ctx),
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,

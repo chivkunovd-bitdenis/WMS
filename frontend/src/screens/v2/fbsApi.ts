@@ -222,6 +222,8 @@ export type FbsWorklistOrder = {
     chrt_id: number | null
     category: string | null
     color: string | null
+    brand?: string | null
+    composition?: string | null
     size: string | null
     marketplace_bindings?: Array<{
       marketplace: 'wb' | 'ozon'
@@ -242,6 +244,10 @@ export type FbsWorklistOrder = {
     name: string
     seller_article: string | null
     sku: string | null
+    size?: string | null
+    color?: string | null
+    brand?: string | null
+    composition?: string | null
     quantity: number
     reserved_quantity: number
     picked_quantity: number

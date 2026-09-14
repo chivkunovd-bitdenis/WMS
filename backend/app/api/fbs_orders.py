@@ -286,6 +286,8 @@ class FbsWorklistProductOut(BaseModel):
     chrt_id: int | None = None
     category: str | None = None
     color: str | None = None
+    brand: str | None = None
+    composition: str | None = None
     size: str | None
     marketplace_bindings: list[FbsWorklistMarketplaceBindingOut] = Field(default_factory=list)
 
@@ -353,6 +355,10 @@ class FbsWorklistPositionOut(BaseModel):
     name: str
     seller_article: str | None
     sku: str | None
+    size: str | None = None
+    color: str | None = None
+    brand: str | None = None
+    composition: str | None = None
     quantity: int
     reserved_quantity: int
     picked_quantity: int
