@@ -1,0 +1,30 @@
+{
+  "command": "ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew :app:testDebugUnitTest --rerun --tests ru.wms.tsd.features.update.UpdateTest --console=plain",
+  "result": "BUILD SUCCESSFUL; 1 executed, 23 up-to-date; test task actually rerun",
+  "suite": {
+    "name": "ru.wms.tsd.features.update.UpdateTest",
+    "tests": "15",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-09-14T12:37:03",
+    "time": "1.077"
+  },
+  "tests": [
+    "returning from denied permission or cancelled install keeps file and revalidates on next tap",
+    "changed or deleted cached file cannot reach installer",
+    "manifest rejects insecure authenticated oversized or malformed files",
+    "apk must match package manifest version and Android support",
+    "incompatible Android cannot download update",
+    "only a complete matching download becomes installable",
+    "check failure stays retryable and does not report latest installed",
+    "API24 missing signer metadata delegates only a fully verified APK to Android installer",
+    "truncated corrupted and oversized downloads leave no installable or partial file",
+    "API28 missing signer metadata is still rejected",
+    "API24 signer mismatch is rejected when both signer sets are available",
+    "double download tap does not start duplicate download",
+    "current or older version never offers download",
+    "network interruption cleans partial download and retry succeeds",
+    "cancelled download is not left ready to install"
+  ]
+}

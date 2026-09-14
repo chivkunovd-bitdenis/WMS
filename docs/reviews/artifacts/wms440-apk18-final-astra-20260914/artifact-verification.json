@@ -1,0 +1,19 @@
+{
+  "main_source": "a4ed3b5fcc02f0c32dd0e805d7992f2d8b6cbd12",
+  "mobile_source": "3206669f269dcce8d97773e1bb44606f40b0b934",
+  "main_patch_matches_mobile_diff": true,
+  "apk_sha256": "7306a8c1efd0f521301818be7213a8421cd4b8c9ad54b4d5f9327d783321eddf",
+  "apk_size_bytes": 45576204,
+  "package": "ru.wms.tsd",
+  "versionCode": 18,
+  "versionName": "0.1.17-atol7-updater-fix",
+  "minSdk": 24,
+  "targetSdk": 35,
+  "certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "v1_verified_api18_23": true,
+  "v2_verified_api24_35": true,
+  "both_verified_api18_35": true,
+  "published_by_reviewer": false,
+  "manifest_changed_by_reviewer": false,
+  "physical_ATOL_tested": false
+}
