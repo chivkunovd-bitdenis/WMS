@@ -113,9 +113,13 @@ async def _setup_ff_admin_with_stock(
                 title="футболка",
                 raw_json={
                     "nmID": 900_100,
+                    "brand": "FBS Brand",
                     "subjectName": "Бомберы",
                     "photos": [{"big": "https://images.example/wb.jpg"}],
-                    "characteristics": [{"name": "Цвет", "value": "синий"}],
+                    "characteristics": [
+                        {"name": "Цвет", "value": "синий"},
+                        {"name": "Состав", "value": "хлопок 100%"},
+                    ],
                     "sizes": [
                         {
                             "chrtID": 777001,
@@ -213,6 +217,8 @@ async def test_fbs_worklist_happy_path(
     assert item["product"]["chrt_id"] == 777001
     assert item["product"]["category"] == "Бомберы"
     assert item["product"]["color"] == "синий"
+    assert item["product"]["brand"] == "FBS Brand"
+    assert item["product"]["composition"] == "хлопок 100%"
     assert item["product"]["size"] == "L"
     assert item["inventory"]["available_unpacked"] >= 0
     assert len(item["inventory"]["locations"]) == 1

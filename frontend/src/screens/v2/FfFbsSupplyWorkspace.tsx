@@ -305,9 +305,11 @@ function productLabelFromPosition(
     product_name: position.name,
     sku_code: position.sku ?? position.seller_article ?? order.product.sku ?? `WMS-${order.id}`,
     wb_vendor_code: position.seller_article,
-    // Ozon position DTO does not carry a size.  The compatibility product can
-    // describe another position, so an absent position size stays blank.
-    wb_size: null,
+    wb_size: position.size,
+    wb_color: position.color,
+    wb_brand: position.brand,
+    wb_composition: position.composition,
+    seller_name: order.seller.name,
     barcode,
   }
 }
@@ -340,7 +342,11 @@ function productLabelFromOrder(
     wb_vendor_code: marketplace === 'ozon'
       ? position?.seller_article ?? null
       : position?.seller_article ?? order.product.seller_article,
-    wb_size: order.product.size,
+    wb_size: position?.size ?? order.product.size,
+    wb_color: position?.color ?? order.product.color,
+    wb_brand: position?.brand ?? order.product.brand,
+    wb_composition: position?.composition ?? order.product.composition,
+    seller_name: order.seller.name,
     barcode,
   }
 }
