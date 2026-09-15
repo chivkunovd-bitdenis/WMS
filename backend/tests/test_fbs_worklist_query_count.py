@@ -118,7 +118,7 @@ async def _setup_ff_admin_with_stock(
                     "photos": [{"big": "https://images.example/wb.jpg"}],
                     "characteristics": [
                         {"name": "Цвет", "value": "синий"},
-                        {"name": "Состав", "value": "хлопок 100%"},
+                        {"name": "Состав", "value": "хлопок"},
                     ],
                     "sizes": [
                         {
@@ -218,7 +218,7 @@ async def test_fbs_worklist_happy_path(
     assert item["product"]["category"] == "Бомберы"
     assert item["product"]["color"] == "синий"
     assert item["product"]["brand"] == "FBS Brand"
-    assert item["product"]["composition"] == "хлопок 100%"
+    assert item["product"]["composition"] == "хлопок"
     assert item["product"]["size"] == "L"
     assert item["inventory"]["available_unpacked"] >= 0
     assert len(item["inventory"]["locations"]) == 1
