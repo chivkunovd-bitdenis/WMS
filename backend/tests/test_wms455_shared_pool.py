@@ -641,6 +641,52 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     )
 
 
+@pytest.mark.asyncio
+async def test_r6_turning_the_mode_off_restores_the_hundred_percent_ceiling(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-455 R6: выключение режима — доли снова проверяются, потолок снова 100%."""
+    seed = await _seed(db_session, on_hand=100)
+    await _ozon_binding(db_session, seed, wb_warehouse_id=OZON_WB_WAREHOUSE_ID)
+    await rules.set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id],
+        rules.FbsRule(
+            publish=True, publish_ozon=True, same_everywhere=False, percent=0,
+            by_warehouse={WB_WAREHOUSE_ID: 60, OZON_WB_WAREHOUSE_ID: 40}, shared_pool=True,
+        ),
+    )
+    view = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.rule.shared_pool is True
+
+    # Тот самый перебор, который отвергается вне режима (сумма 200%).
+    with pytest.raises(rules.FbsStockRuleError) as exc:
+        await rules.set_rule_for_products(
+            db_session, seed.tenant.id, [seed.product.id],
+            rules.FbsRule(
+                publish=True, publish_ozon=True, same_everywhere=False, percent=0,
+                by_warehouse={WB_WAREHOUSE_ID: 100, OZON_WB_WAREHOUSE_ID: 100},
+                shared_pool=False,
+            ),
+        )
+    assert exc.value.code == "percent_sum_exceeded"
+    # Правило не изменилось: режим остался включённым.
+    view_unchanged = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view_unchanged.rule.shared_pool is True
+
+    # A valid 60/40 turns the mode off normally and is recorded as usual.
+    await rules.set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id],
+        rules.FbsRule(
+            publish=True, publish_ozon=True, same_everywhere=False, percent=0,
+            by_warehouse={WB_WAREHOUSE_ID: 60, OZON_WB_WAREHOUSE_ID: 40}, shared_pool=False,
+        ),
+    )
+    view_off = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view_off.rule.shared_pool is False
+    assert dict(view_off.rule.by_warehouse) == {WB_WAREHOUSE_ID: 60, OZON_WB_WAREHOUSE_ID: 40}
+    assert view_off.published_now == 100  # 60 + 40
+
+
 async def _linked_shared_pool_seed(db_session: AsyncSession):
     seed = await _seed(db_session, on_hand=100)
     ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=OZON_WB_WAREHOUSE_ID)
