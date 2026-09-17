@@ -13,6 +13,10 @@ import {
   WarningNotice,
 } from '../../../ui-kit'
 import {
+  WAREHOUSE_NAME_ISSUE_LABELS,
+  warehouseNameIssueHint,
+} from './fbsSellerWarehouseRows'
+import {
   dialogShowsOzon,
   freeStock,
   initialDraft,
@@ -66,6 +70,7 @@ export function FbsStockDialog({
   onBind,
   onServedChange,
   saveError,
+  wbWarehousesError,
   ozonWarehousesError,
 }: {
   open: boolean
@@ -80,6 +85,12 @@ export function FbsStockDialog({
   onServedChange?: (warehouseId: string, served: boolean) => void
   /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
   saveError?: string | null
+  /**
+   * Почему кабинет Wildberries не отдал список складов — плашка сверху окна.
+   * Живёт всё время, пока окно открыто: на неё ссылается чип «название
+   * недоступно» у строк без названия (WMS-457).
+   */
+  wbWarehousesError?: string | null
   /** Почему не приехал справочник складов Ozon — текст в озоновском блоке. */
   ozonWarehousesError?: string | null
 }) {
@@ -94,6 +105,7 @@ export function FbsStockDialog({
       onBind={onBind}
       onServedChange={onServedChange}
       saveError={saveError}
+      wbWarehousesError={wbWarehousesError}
       ozonWarehousesError={ozonWarehousesError}
     />
   )
@@ -108,6 +120,7 @@ function FbsStockDialogBody({
   onBind,
   onServedChange,
   saveError,
+  wbWarehousesError,
   ozonWarehousesError,
 }: {
   products: DialogProduct[]
@@ -118,6 +131,7 @@ function FbsStockDialogBody({
   onBind: (warehouseId: string, wbWarehouseId: string) => void
   onServedChange?: (warehouseId: string, served: boolean) => void
   saveError?: string | null
+  wbWarehousesError?: string | null
   ozonWarehousesError?: string | null
 }) {
   // Ozon в окне есть только у товара с карточкой Ozon (WMS-454). У остального
@@ -239,6 +253,9 @@ function FbsStockDialogBody({
         {/* Отказ сервера показываем здесь, а не наверху страницы: оператор
             смотрит в это окно и должен видеть, что именно не сошлось, не теряя
             уже введённого. */}
+        {wbWarehousesError ? (
+          <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
+        ) : null}
         {saveError ? <ErrorNotice testId="fbs-stock-error">{saveError}</ErrorNotice> : null}
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">
@@ -444,6 +461,17 @@ function FbsStockDialogBody({
                     label="склад не сопоставлен"
                     tone="warn"
                     hint={`Пока направление ${MARKETPLACE_NAMES[warehouseMarketplace(warehouse)]} не сопоставлено с физическим складом WMS, остаток по нему не уйдёт`}
+                  />
+                ) : null}
+                {/* Номер вместо названия — не название (WMS-457). Чип говорит,
+                    почему имени нет: склада нет в кабинете либо список кабинета
+                    не получен, и причина — в сообщении выше. */}
+                {warehouse.nameIssue ? (
+                  <StatusChip
+                    label={WAREHOUSE_NAME_ISSUE_LABELS[warehouse.nameIssue]}
+                    tone="warn"
+                    hint={warehouseNameIssueHint(warehouse.nameIssue, warehouseMarketplace(warehouse))}
+                    testId={`fbs-stock-name-issue-${warehouse.id}`}
                   />
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />

@@ -31,7 +31,17 @@ export type SellerWarehouse = {
    * все прежние источники данных этого поля не присылают (WMS-350).
    */
   marketplace?: MarketplaceCode
+  /**
+   * Почему у строки нет названия из кабинета (WMS-457). Не задано — название
+   * пришло из кабинета. `not_in_cabinet` — список кабинета получен, но такого
+   * склада в нём нет: он удалён или принадлежит другому продавцу.
+   * `list_unavailable` — список кабинета не получен (ключ, права, сеть), и
+   * имени взять неоткуда. В обоих случаях `name` — это «№ <номер>».
+   */
+  nameIssue?: WarehouseNameIssue
 }
+
+export type WarehouseNameIssue = 'not_in_cabinet' | 'list_unavailable'
 
 /** Площадка склада с умолчанием. Отсутствие поля означает Wildberries. */
 export function warehouseMarketplace(warehouse: SellerWarehouse): MarketplaceCode {
