@@ -47,6 +47,7 @@ import {
   type WarehouseRuleBinding,
 } from '../ff/products-fbs/fbsWarehouseRuleKeys'
 import {
+  fbsRuleBody,
   toProduct as toFbsProduct,
   toRule as toFbsRule,
   type ApiRule as FbsApiRule,
@@ -2145,24 +2146,7 @@ export function FfProductsCatalogScreen({
                     // PUT /products/fbs-rule ждёт правило вложенным в rule
                     // (ProductsFbsRuleBulkBody, extra="forbid"). Плоское тело
                     // отбивалось как «rule: Field required».
-                    body: JSON.stringify({
-                      product_ids: ids,
-                      rule: {
-                        publish: rule.changedPublication && !rule.changedPublication.includes("wb")
-                          ? undefined : rule.publish,
-                        publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
-                          ? undefined : (rule.publishOzon ?? rule.publish),
-                        same_everywhere: rule.sameEverywhere,
-                        percent: rule.percent,
-                        by_warehouse: rule.byWarehouse,
-                        units_mode: rule.unitsMode,
-                        // Что оператор видел в поле, то и записывается как новое
-                        // выделение: сервер сдвинет точку отсчёта расхода на
-                        // «сейчас», и съеденное до этой секунды уже учтено в том,
-                        // что было показано.
-                        units_by_warehouse: rule.unitsByWarehouse,
-                      },
-                    }),
+                    body: JSON.stringify({ product_ids: ids, rule: fbsRuleBody(rule) }),
                   })
                   if (!res.ok) {
                     setFbsDialogError(await readApiErrorMessage(res))

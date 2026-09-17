@@ -200,6 +200,49 @@ export function servedWarehouses(seller: Seller): SellerWarehouse[] {
     .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
 }
 
+/**
+ * Показывать ли в окне остатка Ozon: галку передачи, заголовки площадок и
+ * склады Ozon. Решает карточка товара, а не склады продавца: у товара без
+ * карточки Ozon передавать туда нечего, и его окно совпадает с окном того же
+ * товара у продавца без Ozon-складов (WMS-454). Признак тот же, что у значка
+ * площадки в строке каталога. Пустой список площадок — источник данных этого
+ * не знает; тогда, как и до Ozon, товар считается вайлдберрисовским.
+ */
+export function dialogShowsOzon(products: Array<Pick<Product, 'marketplaces'>>): boolean {
+  return products.some((one) => (one.marketplaces ?? []).includes('ozon'))
+}
+
+/** Склады продавца, которые видны в окне: без Ozon, если Ozon в окне нет. */
+export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWarehouse[] {
+  return ozonShown
+    ? seller.warehouses
+    : seller.warehouses.filter((one) => warehouseMarketplace(one) === 'wb')
+}
+
+/**
+ * Черновик, с которого окно начинает.
+ *
+ * Единственный обслуживаемый склад — особый случай: галку «одинаково по всем
+ * складам» в этом режиме не показывают (делить не с кем), поэтому черновик
+ * всегда считается по общему проценту — что оператор видит на ползунке, то и
+ * уезжает.
+ *
+ * У товара без карточки Ozon флаг Ozon в окне не показывается и при каждом
+ * сохранении уходит выключенным: иначе унаследованное «как у Wildberries»
+ * держит Ozon-привязку продавца в общих ста процентах (WMS-454). «ozon» в
+ * списке тронутых флагов и есть команда сохранению отправить поле, а не
+ * оставить прежнее значение.
+ */
+export function initialDraft(rule: FbsRule, single: boolean, ozonShown: boolean): FbsRule {
+  return {
+    ...rule,
+    ...(single ? { sameEverywhere: true } : {}),
+    ...(ozonShown
+      ? { changedPublication: [] }
+      : { publishOzon: false, changedPublication: ['ozon' as const] }),
+  }
+}
+
 export function sellerById(id: string): Seller {
   return SELLERS.find((one) => one.id === id)!
 }
