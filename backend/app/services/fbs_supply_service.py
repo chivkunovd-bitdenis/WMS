@@ -91,7 +91,11 @@ from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
-from app.services.marketplace_scope import is_wildberries, wrong_marketplace_message
+from app.services.marketplace_scope import (
+    MARKETPLACE_NAMES,
+    is_wildberries,
+    wrong_marketplace_message,
+)
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -702,8 +706,10 @@ async def create_supply_from_orders(
             raise FbsSupplyError(
                 "operation_in_progress",
                 message=(
-                    f"Синхронизация {marketplace.upper()} по селлеру ещё идёт — "
-                    "повторите через несколько секунд."
+                    "По этому селлеру идёт фоновый обмен с "
+                    f"{MARKETPLACE_NAMES.get(marketplace, marketplace)} — создание "
+                    f"поставки ждало его {int(WB_LOCK_WAIT_FOR_OPERATOR_SEC)} с и не "
+                    "дождалось. Повторите попытку позже."
                 ),
                 retryable=True,
                 http_status=503,
@@ -1971,7 +1977,11 @@ async def add_orders_to_existing_supply(
         if not wb_lock_acquired:
             raise FbsSupplyError(
                 "operation_in_progress",
-                message="WB-синхронизация по селлеру ещё идёт — повторите через несколько секунд.",
+                message=(
+                    "По этому селлеру идёт фоновый обмен с WB — добавление "
+                    f"заказов ждало его {int(WB_LOCK_WAIT_FOR_OPERATOR_SEC)} с и не "
+                    "дождалось. Повторите попытку позже."
+                ),
                 retryable=True,
                 http_status=503,
             )
