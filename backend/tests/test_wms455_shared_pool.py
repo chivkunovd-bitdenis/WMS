@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -566,7 +567,19 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     SELECT ... FOR UPDATE — no-op на SQLite, см. marketplace_seller_lock_service
     и _session_uses_postgresql). Тест пропускается на SQLite по тому же
     принципу, что test_concurrent_orders_reserve_last_unit_once в
-    test_inventory_stock_cap_wms338.py — на SQLite нечего доказывать.
+    test_inventory_stock_cap_wms338.py — на SQLite нечего доказывать по замку.
+
+    Барьер привязан к вызывающей ЗАДАЧЕ (contextvar), а не к сессии, которую
+    видит marketplace_seller_lock: set_rule_for_products открывает СВОЙ
+    отдельный lock_session = AsyncSession(bind=session.bind) и передаёт в лок
+    именно его, а не сессию вызывающего кода (см. fbs_stock_rule_service.py,
+    set_rule_for_products, блок AsyncExitStack). Раньше барьер читал
+    session.info вот этой чужой lock_session — там маркера никогда не было
+    (F3 кросс-ревью Astra 17.09.2026), first_locked не выставлялся, и второе
+    сохранение не стартовало вовсе. contextvar живёт в контексте asyncio-задачи
+    (asyncio.create_task копирует контекст один раз при создании, поэтому
+    вызовы из разных задач не видят чужих присвоений) и не зависит от того,
+    какой объект AsyncSession дошёл до замка.
     """
     assert db_session.bind is not None
     if db_session.bind.dialect.name != "postgresql":
@@ -582,18 +595,30 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
         ),
     )
 
-    first_locked, release_first, second_started = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    caller_role: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+        "wms455_c16_caller_role", default=None,
+    )
+    first_locked = asyncio.Event()
+    release_first = asyncio.Event()
+    second_started = asyncio.Event()
+    # Доказывает «второй стартует до освобождения первого» напрямую: второй
+    # вызов должен реально дойти до обёртки замка (не только начать корутину)
+    # раньше, чем тест отпускает первый вызов.
+    second_lock_reached = asyncio.Event()
     original_lock = rules.marketplace_seller_lock
 
     def observed_lock(session, seller_id, marketplace, **kwargs):
         cm = original_lock(session, seller_id, marketplace, **kwargs)
+        role = caller_role.get()
 
         class _Wrapped:
             async def __aenter__(self) -> bool:
                 acquired = await cm.__aenter__()
-                if session.info.get("first") and marketplace == "wb":
+                if role == "first" and marketplace == "wb":
                     first_locked.set()
                     await asyncio.wait_for(release_first.wait(), 10)
+                if role == "second":
+                    second_lock_reached.set()
                 return acquired
 
             async def __aexit__(self, *exc: object) -> None:
@@ -604,8 +629,8 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     monkeypatch.setattr(rules, "marketplace_seller_lock", observed_lock)
 
     async def enable_shared_pool() -> None:
+        caller_role.set("first")
         async with AsyncSession(bind=db_session.bind, expire_on_commit=False) as session:
-            session.info["first"] = True
             await rules.set_rule_for_products(
                 session, seed.tenant.id, [seed.product.id],
                 rules.FbsRule(
@@ -615,9 +640,9 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
             )
 
     async def disable_with_shares() -> None:
+        caller_role.set("second")
+        second_started.set()
         async with AsyncSession(bind=db_session.bind, expire_on_commit=False) as session:
-            session.info["first"] = False
-            second_started.set()
             await rules.set_rule_for_products(
                 session, seed.tenant.id, [seed.product.id],
                 rules.FbsRule(
@@ -630,14 +655,18 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     await asyncio.wait_for(first_locked.wait(), 10)
     second_task = asyncio.create_task(disable_with_shares())
     await asyncio.wait_for(second_started.wait(), 10)
+    # Второй вызов реально дошёл до замка (не только запустил корутину) —
+    # проверяем это ДО release_first, иначе порядок не доказан.
+    await asyncio.wait_for(second_lock_reached.wait(), 10)
     release_first.set()
     await asyncio.wait_for(asyncio.gather(first_task, second_task), 10)
 
     view = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    # Одно из двух целиком, без частичной записи.
+    # Одно из двух целиком, без частичной записи. Если победил режим — доли
+    # 60/40 из постановки не тронуты (R4: включение режима их не трогает).
     assert (view.rule.shared_pool, dict(view.rule.by_warehouse)) in (
-        (True, {}),
-        (False, {f"wb:{WB_WAREHOUSE_ID}": 60, f"ozon:{OZON_WB_WAREHOUSE_ID}": 40}),
+        (True, {WB_WAREHOUSE_ID: 60, OZON_WB_WAREHOUSE_ID: 40}),
+        (False, {WB_WAREHOUSE_ID: 60, OZON_WB_WAREHOUSE_ID: 40}),
     )
 
 
