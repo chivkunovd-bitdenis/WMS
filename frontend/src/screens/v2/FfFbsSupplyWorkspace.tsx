@@ -409,10 +409,11 @@ export function FfFbsSupplyWorkspace({
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
   // Незавершённая отправка Ozon-модалки «Добавить товары в короб» (WMS-453, R6):
-  // ключ идемпотентности вместе с телом, которое под ним ушло, и снимком короба.
-  // Живёт от отправки с неизвестным исходом (обрыв, таймаут) до ответа сервера;
-  // повтор уходит с тем же телом и ключом, изменённый ввод под старый ключ не
-  // попадает (см. sendFbsBoxShipment). Открытие модалки — новое действие.
+  // ключ идемпотентности вместе с телом, которое под ним ушло. Живёт от отправки
+  // с неизвестным исходом (обрыв, таймаут) до ответа сервера на повтор того же
+  // тела с тем же ключом — единственного надёжного подтверждения; изменённый
+  // ввод под старый ключ не попадает (см. sendFbsBoxShipment). Открытие
+  // модалки — новое действие.
   const boxAssignShipmentRef = useRef<FbsBoxShipment | null>(null)
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
@@ -1013,8 +1014,9 @@ export function FfFbsSupplyWorkspace({
     if (boxOperationsDisabled || !workspace || !boxAssignTarget || boxAssignSubmitDisabled) return
     const supplyId = workspace.supply.id
     const boxId = boxAssignTarget
-    // Прежняя отправка применилась, а ввод уже другой: ничего не отправлено,
-    // модалка остаётся открытой со свежими остатками и вводом оператора.
+    // Прежняя незавершённая отправка подтверждена повтором, а ввод уже другой:
+    // изменённый ввод не отправлен, модалка остаётся открытой со свежими
+    // остатками из ответа и вводом оператора.
     let resolvedWithoutSending = false
     const operation = isOzonSupply
       ? async () => {
@@ -1024,12 +1026,10 @@ export function FfFbsSupplyWorkspace({
           pending: boxAssignShipmentRef.current,
           boxId,
           positions: boxAssignSelectedPositions,
-          boxes: workspace.boxes,
           send: (shipment) => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [], {
             positions: shipment.positions,
             idempotency_key: shipment.key,
           }),
-          reload: () => fetchFbsWorkspace(token, authHeaders, supplyId),
           createKey: createFbsIdempotencyKey,
           // Окончательный отказ — структурный ответ 4xx без просьбы повторить:
           // сервер ничего не записал (ключ он занимает только на пути записи).
