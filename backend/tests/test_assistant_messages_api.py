@@ -22,6 +22,12 @@ from app.models.assistant_message import SCREEN_TEXT_MAX_CHARS
 def _assistant_secret(monkeypatch: pytest.MonkeyPatch) -> str:
     secret = "test-assistant-secret-value"
     monkeypatch.setattr(settings, "assistant_executor_secret", secret)
+    # WMS-433/R23: эти тесты проверяют R1-R22 (сама переписка), а не
+    # поэтапное включение — по умолчанию помощник выключен у всех
+    # (assistant_enabled_tenants=""), поэтому здесь явно включаем его всем
+    # тенантам через "*". Тесты именно R23 (assist-rollout-* ниже)
+    # переопределяют это значение под свой сценарий.
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "*")
     return secret
 
 
@@ -406,3 +412,252 @@ async def test_repeated_result_submission_is_idempotent_not_duplicated(
         json={"answer_text": "Другой ответ"},
     )
     assert different.status_code == 409
+
+
+# --- WMS-433/R23: поэтапное включение по тенантам (уточнение владельца 17.09) ---
+
+
+@pytest.mark.asyncio
+async def test_disabled_tenant_by_default_gets_forbidden_and_auth_me_false(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C25/C26: пустая WMS_ASSISTANT_ENABLED_TENANTS — помощник выключен у всех.
+
+    /auth/me отдаёт assistant_enabled=false, POST/GET /assistant/messages
+    отвечают 403 с detail.code=assistant_disabled; ничего не сохраняется —
+    после включения тенанта переписка всё ещё пуста.
+    """
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "")
+    admin = await _register_tenant(async_client, slug_prefix="assist-rollout-off")
+    headers = _auth(admin["access_token"])
+
+    me = await async_client.get("/auth/me", headers=headers)
+    assert me.status_code == 200, me.text
+    assert me.json()["assistant_enabled"] is False
+
+    send = await async_client.post(
+        "/assistant/messages",
+        headers=headers,
+        json={"client_message_id": "off-1", "message_text": "Вопрос при выключенном"},
+    )
+    assert send.status_code == 403, send.text
+    assert send.json()["detail"]["code"] == "assistant_disabled"
+
+    read = await async_client.get("/assistant/messages", headers=headers)
+    assert read.status_code == 403, read.text
+    assert read.json()["detail"]["code"] == "assistant_disabled"
+
+    # Ничего не сохранилось: включаем тенанта и убеждаемся, что лента пуста.
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "*")
+    read_after_enable = await async_client.get("/assistant/messages", headers=headers)
+    assert read_after_enable.status_code == 200, read_after_enable.text
+    assert read_after_enable.json()["messages"] == []
+
+
+@pytest.mark.asyncio
+async def test_wildcard_enables_every_tenant(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C27 (часть про «*»): значение «*» включает помощника всем тенантам."""
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "*")
+    admin = await _register_tenant(async_client, slug_prefix="assist-rollout-star")
+    headers = _auth(admin["access_token"])
+
+    me = await async_client.get("/auth/me", headers=headers)
+    assert me.status_code == 200, me.text
+    assert me.json()["assistant_enabled"] is True
+
+    send = await async_client.post(
+        "/assistant/messages",
+        headers=headers,
+        json={"client_message_id": "star-1", "message_text": "Вопрос при *"},
+    )
+    assert send.status_code == 201, send.text
+
+
+@pytest.mark.asyncio
+async def test_tenant_slug_list_enables_only_matching_tenant_with_whitespace_and_case(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C25/C26: список конкретных slug включает только перечисленный тенант.
+
+    Регистр и пробелы вокруг элементов переменной окружения роли не играют —
+    сравнение идёт по нормализованному (lower+strip) значению; сам slug
+    тенанта и так всегда в нижнем регистре (ограничение на регистрации), а
+    вот значение переменной такого ограничения не имеет.
+    """
+    suffix = f"{int(time.time() * 1_000_000)}"
+    enabled_slug = f"assist-rollout-on-{suffix}"
+    disabled_slug = f"assist-rollout-out-{suffix}"
+    monkeypatch.setattr(
+        settings,
+        "assistant_enabled_tenants",
+        f"  {enabled_slug.upper()} , some-other-tenant  ",
+    )
+
+    enabled_reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Assistant Rollout On",
+            "slug": enabled_slug,
+            "admin_email": f"{enabled_slug}@mail.ru",
+            "password": "password123",
+        },
+    )
+    assert enabled_reg.status_code == 200, enabled_reg.text
+    enabled_headers = _auth(enabled_reg.json()["access_token"])
+
+    disabled_reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Assistant Rollout Out",
+            "slug": disabled_slug,
+            "admin_email": f"{disabled_slug}@mail.ru",
+            "password": "password123",
+        },
+    )
+    assert disabled_reg.status_code == 200, disabled_reg.text
+    disabled_headers = _auth(disabled_reg.json()["access_token"])
+
+    me_enabled = await async_client.get("/auth/me", headers=enabled_headers)
+    assert me_enabled.json()["assistant_enabled"] is True
+    me_disabled = await async_client.get("/auth/me", headers=disabled_headers)
+    assert me_disabled.json()["assistant_enabled"] is False
+
+    send_enabled = await async_client.post(
+        "/assistant/messages",
+        headers=enabled_headers,
+        json={"client_message_id": "list-on-1", "message_text": "Вопрос включённого тенанта"},
+    )
+    assert send_enabled.status_code == 201, send_enabled.text
+
+    send_disabled = await async_client.post(
+        "/assistant/messages",
+        headers=disabled_headers,
+        json={"client_message_id": "list-off-1", "message_text": "Вопрос выключенного тенанта"},
+    )
+    assert send_disabled.status_code == 403, send_disabled.text
+    assert send_disabled.json()["detail"]["code"] == "assistant_disabled"
+
+    read_disabled = await async_client.get("/assistant/messages", headers=disabled_headers)
+    assert read_disabled.status_code == 403, read_disabled.text
+
+
+@pytest.mark.asyncio
+async def test_executor_works_when_tenant_list_is_empty(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """«Исполнитель работает при пустом списке»: очередь ``/assistant/executor/*``
+
+    не зависит от ``WMS_ASSISTANT_ENABLED_TENANTS`` вовсе, только
+    пользовательские ручки. Сообщение создаётся напрямую сервисом (в обход
+    выключенных пользовательских ручек — они бы отказали при пустом списке),
+    чтобы проверить именно то, что очередь исполнителя работает.
+    """
+    from app.db.session import SessionLocal
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services import assistant_service as svc
+    from app.services.passwords import hash_password
+
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "")
+
+    async with SessionLocal() as session:
+        tenant = Tenant(name="Executor Empty List Tenant", slug=f"exec-empty-{uuid.uuid4().hex}")
+        session.add(tenant)
+        await session.flush()
+        user = User(
+            tenant_id=tenant.id,
+            email=f"{uuid.uuid4().hex}@mail.ru",
+            password_hash=hash_password("password123"),
+            role="fulfillment_staff",
+        )
+        session.add(user)
+        await session.flush()
+        message = await svc.create_or_get_message(
+            session,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            client_message_id="empty-list-1",
+            message_text="Вопрос без включённого тенанта",
+            screen_path="",
+            screen_title="",
+            screen_text="",
+        )
+        await session.commit()
+        message_id = str(message.id)
+
+    secret_headers = {"X-WMS-Assistant-Secret": "test-assistant-secret-value"}
+    claim = await async_client.post("/assistant/executor/next", headers=secret_headers)
+    assert claim.status_code == 200, claim.text
+    request = claim.json()["request"]
+    assert request is not None
+    assert request["id"] == message_id
+
+    result = await async_client.post(
+        f"/assistant/executor/{message_id}/result",
+        headers=secret_headers,
+        json={"answer_text": "Ответ несмотря на пустой список тенантов"},
+    )
+    assert result.status_code == 200, result.text
+
+
+@pytest.mark.asyncio
+async def test_executor_completes_message_after_tenant_is_disabled_mid_flight(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C27: сообщение отправлено, пока тенант включён по списку; тенант
+
+    выключается ДО ответа исполнителя (переменная становится пустой) —
+    очередь всё равно дорабатывает уже принятое сообщение, а пользователь
+    видит сохранённый ответ после повторного включения того же тенанта.
+    """
+    slug = f"assist-rollout-midflight-{uuid.uuid4().hex}"
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", slug)
+
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Assistant Rollout Midflight",
+            "slug": slug,
+            "admin_email": f"{slug}@mail.ru",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    headers = _auth(reg.json()["access_token"])
+
+    send = await async_client.post(
+        "/assistant/messages",
+        headers=headers,
+        json={"client_message_id": "midflight-1", "message_text": "Вопрос до выключения"},
+    )
+    assert send.status_code == 201, send.text
+    message_id = send.json()["id"]
+
+    # Тенант выключается посреди обработки — «пусто» означает «выключен у всех».
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "")
+
+    blocked = await async_client.get("/assistant/messages", headers=headers)
+    assert blocked.status_code == 403, blocked.text
+
+    secret_headers = {"X-WMS-Assistant-Secret": "test-assistant-secret-value"}
+    claim = await async_client.post("/assistant/executor/next", headers=secret_headers)
+    assert claim.status_code == 200, claim.text
+    assert claim.json()["request"]["id"] == message_id
+
+    result = await async_client.post(
+        f"/assistant/executor/{message_id}/result",
+        headers=secret_headers,
+        json={"answer_text": "Ответ, пришедший во время выключения"},
+    )
+    assert result.status_code == 200, result.text
+
+    # Тенант снова включён — пользователь видит прежнюю переписку целиком,
+    # включая ответ, пришедший во время выключения.
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", slug)
+    conv = await async_client.get("/assistant/messages", headers=headers)
+    assert conv.status_code == 200, conv.text
+    messages = conv.json()["messages"]
+    assert len(messages) == 1
+    assert messages[0]["answer_text"] == "Ответ, пришедший во время выключения"

@@ -2,6 +2,7 @@ actiongroup
 actions
 appdialog
 appv2screens
+assistantdisablederror
 assistantpanel
 assistantpanelbody
 authedapplayout

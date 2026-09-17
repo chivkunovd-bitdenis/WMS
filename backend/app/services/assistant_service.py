@@ -80,6 +80,24 @@ _CLAIM_SCAN_LIMIT = 100
 EXECUTOR_HISTORY_LIMIT = 10
 
 
+def tenant_assistant_enabled(tenant_slug: str | None) -> bool:
+    """WMS-433/R23: включён ли AI-помощник тенанту с этим slug.
+
+    Источник истины — один: список ``settings.assistant_enabled_tenant_slugs``
+    (переменная окружения ``WMS_ASSISTANT_ENABLED_TENANTS``). Используется и
+    здесь (гейт пользовательских ручек ``/assistant/messages`` в ``deps.py``),
+    и в ``/auth/me`` (поле ``assistant_enabled``) — второго источника истины
+    на фронте нет, признак повторяет уже существующий образец тенантских
+    флагов (``address_storage_enabled`` и т.п.).
+    """
+    enabled_slugs = settings.assistant_enabled_tenant_slugs
+    if enabled_slugs is None:
+        return True
+    if not tenant_slug:
+        return False
+    return tenant_slug.strip().lower() in enabled_slugs
+
+
 class AssistantMessageError(RuntimeError):
     def __init__(self, code: str, *, message: str) -> None:
         super().__init__(message)

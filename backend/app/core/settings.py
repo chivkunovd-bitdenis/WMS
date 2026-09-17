@@ -116,6 +116,27 @@ class Settings(BaseSettings):
             "помощника."
         ),
     )
+    assistant_enabled_tenants: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "WMS_ASSISTANT_ENABLED_TENANTS", "ASSISTANT_ENABLED_TENANTS"
+        ),
+        description=(
+            "WMS-433/R23 (уточнение владельца 17.09 «включать плавно»): список "
+            "slug тенантов через запятую, которым включён AI-помощник в "
+            "пользовательских ручках (POST/GET /assistant/messages) и в "
+            "признаке /auth/me.assistant_enabled. Пусто (по умолчанию) или "
+            "переменная не задана — помощник выключен у всех: так выкладка "
+            "production без явной настройки никого не включает сама по себе. "
+            "Значение «*» — включён у всех (используется на стенде). Регистр "
+            "и пробелы вокруг элементов списка не имеют значения — сравнение "
+            "идёт по нормализованному (lower + strip) slug. Ручки исполнителя "
+            "(/assistant/executor/*, общий секрет WMS_ASSISTANT_EXECUTOR_SECRET "
+            "выше) от этого списка не зависят — исполнитель дорабатывает уже "
+            "принятые сообщения независимо от того, выключен тенант позже "
+            "или нет."
+        ),
+    )
     assistant_deploy_version: str | None = Field(
         default=None,
         validation_alias=AliasChoices("WMS_ASSISTANT_DEPLOY_VERSION", "WMS_DEPLOY_VERSION"),
@@ -422,6 +443,22 @@ class Settings(BaseSettings):
         ]
         extras = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
         return list(dict.fromkeys([*defaults, *extras]))
+
+    @property
+    def assistant_enabled_tenant_slugs(self) -> frozenset[str] | None:
+        """WMS-433/R23: разобранный список slug из ``assistant_enabled_tenants``.
+
+        ``None`` — особое значение «включено у всех» (значение переменной
+        ровно ``*`` после обрезки пробелов). Иначе — normalised (нижний
+        регистр, без пустых элементов) набор slug; пустая переменная даёт
+        пустой ``frozenset`` — «выключено у всех», а не «включено у всех»,
+        как и требует R23 (production без настройки не открывает помощника
+        никому).
+        """
+        raw = self.assistant_enabled_tenants.strip()
+        if raw == "*":
+            return None
+        return frozenset(slug.strip().lower() for slug in raw.split(",") if slug.strip())
 
 
 settings = Settings()

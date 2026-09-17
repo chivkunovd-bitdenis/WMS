@@ -30,6 +30,9 @@ async def test_register_login_me(async_client: AsyncClient) -> None:
     assert body["role"] == "fulfillment_admin"
     assert body["address_storage_enabled"] is True
     assert body["separate_marking_print_enabled"] is False
+    # WMS-433/R23: тестовое окружение не задаёт WMS_ASSISTANT_ENABLED_TENANTS,
+    # поэтому пустая переменная по умолчанию выключает помощника у всех.
+    assert body["assistant_enabled"] is False
 
     login = await async_client.post(
         "/auth/login",
@@ -86,3 +89,71 @@ async def test_register_duplicate_slug(async_client: AsyncClient) -> None:
         },
     )
     assert r2.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_assistant_enabled_reflects_tenant_list_and_false_for_seller_role(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WMS-433/R23: /auth/me.assistant_enabled — true только для роли портала ФФ
+
+    тенанта из списка (здесь «*» — включено всем); селлерская роль всегда
+    false (R20: помощник в первом срезе — только портал ФФ), даже когда
+    тенант включён.
+    """
+    from sqlalchemy import select
+
+    from app.core.settings import settings
+    from app.db.session import SessionLocal
+    from app.models.seller import Seller
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services.passwords import hash_password
+    from app.services.tokens import create_access_token
+
+    slug = "assist-me-role-check"
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "*")
+
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Assistant Me Role Check",
+            "slug": slug,
+            "admin_email": "assist-me-admin@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    admin_me = await async_client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {reg.json()['access_token']}"}
+    )
+    assert admin_me.status_code == 200, admin_me.text
+    assert admin_me.json()["assistant_enabled"] is True
+
+    async with SessionLocal() as session:
+        tenant = (await session.scalars(select(Tenant).where(Tenant.slug == slug))).one()
+        seller = Seller(tenant_id=tenant.id, name="Assist Seller")
+        session.add(seller)
+        await session.flush()
+        seller_user = User(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            email="assist-me-seller@example.com",
+            password_hash=hash_password("password123"),
+            role="fulfillment_seller",
+        )
+        session.add(seller_user)
+        await session.flush()
+        seller_token = create_access_token(
+            user_id=seller_user.id,
+            tenant_id=tenant.id,
+            role=seller_user.role,
+            seller_id=seller.id,
+        )
+        await session.commit()
+
+    seller_me = await async_client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {seller_token}"}
+    )
+    assert seller_me.status_code == 200, seller_me.text
+    assert seller_me.json()["assistant_enabled"] is False

@@ -15,6 +15,7 @@ from app.core.settings import settings
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.assistant_service import tenant_assistant_enabled
 from app.services.auth_service import get_user_by_id
 from app.services.seller_shop_service import (
     SellerShopError,
@@ -193,6 +194,38 @@ async def require_ff_portal_member(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="forbidden",
+        )
+    return user
+
+
+async def require_assistant_enabled_ff_member(
+    user: Annotated[User, Depends(require_ff_portal_member)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """WMS-433/R23: доступ к пользовательским ручкам помощника (``/assistant/messages``).
+
+    Тот же уровень доступа, что и раньше (``require_ff_portal_member`` — R20),
+    плюс проверка, что тенант вошедшего пользователя есть в
+    ``WMS_ASSISTANT_ENABLED_TENANTS`` (или там ``*``). Выключенный тенант
+    получает 403 с понятным кодом ``assistant_disabled`` — тем же кодом,
+    который сервер отдаёт во ``/auth/me`` как ``assistant_enabled: false``,
+    так что фронт может ни разу не показать кнопку и всё равно получить
+    согласованный отказ на прямой запрос (C26).
+
+    Ручки исполнителя (``/assistant/executor/*``) используют отдельную
+    зависимость (``require_assistant_executor`` ниже) и эту проверку не
+    проходят — они не привязаны к тенанту и обязаны дорабатывать уже принятые
+    сообщения даже после выключения тенанта (R23).
+    """
+    tenant = await session.get(Tenant, user.tenant_id)
+    tenant_slug = tenant.slug if tenant is not None else None
+    if not tenant_assistant_enabled(tenant_slug):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "assistant_disabled",
+                "message": "Помощник ИИ выключен для вашей организации.",
+            },
         )
     return user
 

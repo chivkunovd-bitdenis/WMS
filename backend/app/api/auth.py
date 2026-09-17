@@ -14,11 +14,12 @@ from app.api.deps import (
     require_fulfillment_admin,
     resolve_effective_seller_id,
 )
-from app.core.roles import FULFILLMENT_SELLER
+from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
+from app.services.assistant_service import tenant_assistant_enabled
 from app.services.auth_service import (
     AuthError,
     create_seller_user,
@@ -110,6 +111,13 @@ class UserMeResponse(BaseModel):
     address_storage_enabled: bool = True
     separate_marking_print_enabled: bool = False
     fbs_shipment_cutoff_time: str | None = None
+    # WMS-433/R23 (уточнение владельца 17.09 «включать плавно»): признак
+    # включённости AI-помощника для этого пользователя. Повторяет образец
+    # address_storage_enabled/separate_marking_print_enabled — вычисляется
+    # сервером по slug тенанта и роли, второго источника истины на фронте нет.
+    # У селлерского портала и не-ФФ ролей всегда false (помощник в первом
+    # срезе — только портал ФФ, R20).
+    assistant_enabled: bool = False
 
 
 class SwitchSellerBody(BaseModel):
@@ -420,6 +428,10 @@ async def me(
         if user.role == FULFILLMENT_SELLER
         else None
     )
+    # WMS-433/R23: помощник в первом срезе — только портал ФФ (R20), поэтому
+    # роль вне FF_PORTAL_ROLES (включая селлера) не проверяется по списку
+    # тенантов вовсе и сразу даёт false.
+    assistant_enabled = user.role in FF_PORTAL_ROLES and tenant_assistant_enabled(tenant.slug)
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
@@ -444,6 +456,7 @@ async def me(
             if tenant.fbs_shipment_cutoff_time is not None
             else None
         ),
+        assistant_enabled=assistant_enabled,
     )
 
 

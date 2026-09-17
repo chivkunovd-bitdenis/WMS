@@ -1,11 +1,15 @@
 """WMS-433: чат с AI-помощником — пользовательские ручки и очередь исполнителя.
 
 Пользовательские ручки (``/assistant/messages``) требуют обычный JWT портала
-ФФ (``require_ff_portal_member`` — тот же уровень доступа, что и у «Базы
-знаний»: любой сотрудник тенанта, без отдельной настройки прав, R20). Ручки
-исполнителя (``/assistant/executor/*``) требуют серверный секрет
-(``require_assistant_executor``) и не принимают пользовательский JWT — они не
-привязаны к тенанту, потому что один исполнитель обслуживает все тенанты.
+ФФ (``require_assistant_enabled_ff_member`` — тот же уровень доступа, что и у
+«Базы знаний»: любой сотрудник тенанта, без отдельной настройки прав, R20),
+плюс проверку поэтапного включения по тенанту (WMS-433/R23, уточнение
+владельца 17.09): тенант вне ``WMS_ASSISTANT_ENABLED_TENANTS`` получает 403 с
+``detail.code = "assistant_disabled"``. Ручки исполнителя
+(``/assistant/executor/*``) требуют серверный секрет
+(``require_assistant_executor``), не принимают пользовательский JWT и от
+списка тенантов не зависят — один исполнитель обслуживает все тенанты и
+дорабатывает уже принятые сообщения даже после выключения тенанта.
 
 Контракт для фронта: ``POST /assistant/messages`` отправляет сообщение
 (идемпотентно по ``client_message_id``), ``GET /assistant/messages`` отдаёт
@@ -25,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_assistant_executor, require_ff_portal_member
+from app.api.deps import require_assistant_enabled_ff_member, require_assistant_executor
 from app.db.session import get_db
 from app.models.assistant_message import (
     CLIENT_MESSAGE_ID_MAX_CHARS,
@@ -87,7 +91,7 @@ class AssistantConversationOut(BaseModel):
 @router.post("/messages", response_model=AssistantMessageOut, status_code=status.HTTP_201_CREATED)
 async def send_assistant_message(
     body: AssistantMessageCreateBody,
-    user: Annotated[User, Depends(require_ff_portal_member)],
+    user: Annotated[User, Depends(require_assistant_enabled_ff_member)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssistantMessageOut:
     try:
@@ -109,7 +113,7 @@ async def send_assistant_message(
 
 @router.get("/messages", response_model=AssistantConversationOut)
 async def get_assistant_conversation(
-    user: Annotated[User, Depends(require_ff_portal_member)],
+    user: Annotated[User, Depends(require_assistant_enabled_ff_member)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssistantConversationOut:
     rows = await svc.list_conversation(session, tenant_id=user.tenant_id, user_id=user.id)
