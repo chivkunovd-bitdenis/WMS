@@ -209,19 +209,29 @@ class AssistantErrorBoundary extends Component<{ children: ReactNode }, { failed
   }
 }
 
-export function AssistantPanel() {
-  // R23: каркас монтирует панель по assistant_enabled из /auth/me, но сервер
-  // может выключить тенанта на лету (переменная переключена, API перезапущен).
-  // Первый же ответ 403 assistant_disabled размонтирует тело целиком: ни
-  // кнопки, ни окна, ни контейнера в body, ни опроса — без ошибок в консоли.
-  // Вернётся только со следующей загрузкой профиля, когда тенант снова включён.
-  const [disabledByServer, setDisabledByServer] = useState(false)
-  if (disabledByServer) {
+// R23: каркас монтирует панель по assistant_enabled из /auth/me, но сервер
+// может выключить тенанта на лету (переменная переключена, API перезапущен).
+// Первый же ответ 403 assistant_disabled размонтирует тело целиком: ни
+// кнопки, ни окна, ни контейнера в body, ни опроса — без ошибок в консоли.
+// Отказ помнится для того снимка профиля, при котором пришёл: любая новая
+// загрузка /auth/me (reloadMe после сохранения настроек, F5) даёт новый
+// объект, и панель поднимается снова без перезагрузки страницы. Если сервер
+// всё ещё отказывает, следующий 403 закроет её для нового снимка — по одному
+// запросу на загрузку профиля, а не бесконечный опрос.
+export function AssistantPanel({ profile }: { profile: object }) {
+  const [disabledFor, setDisabledFor] = useState<object | null>(null)
+  // Ссылка на текущий снимок: 403 приходит асинхронно, а тело держит
+  // колбэк с момента своего монтирования — отказ должен лечь на снимок,
+  // актуальный в момент ответа сервера, а не на тот, что был при монтировании.
+  const profileRef = useRef(profile)
+  profileRef.current = profile
+  const disableForCurrentProfile = useCallback(() => setDisabledFor(profileRef.current), [])
+  if (disabledFor === profile) {
     return null
   }
   return (
     <AssistantErrorBoundary>
-      <AssistantPanelBody onDisabledByServer={() => setDisabledByServer(true)} />
+      <AssistantPanelBody onDisabledByServer={disableForCurrentProfile} />
     </AssistantErrorBoundary>
   )
 }
@@ -239,10 +249,10 @@ function AssistantPanelBody({ onDisabledByServer }: { onDisabledByServer: () => 
   // R23: после 403 assistant_disabled новых запросов не начинать — обёртка
   // размонтирует тело, но отложенный перечит из finally мог бы успеть раньше.
   const disabledRef = useRef(false)
-  const markDisabledByServer = () => {
+  const markDisabledByServer = useCallback(() => {
     disabledRef.current = true
     onDisabledByServer()
-  }
+  }, [onDisabledByServer])
   // Последняя попытка отправки: тот же текст → тот же client_message_id,
   // чтобы повтор после потери ответа не создал дубль (R21).
   const attemptRef = useRef<SendAttempt | null>(null)
@@ -318,7 +328,7 @@ function AssistantPanelBody({ onDisabledByServer }: { onDisabledByServer: () => 
         }
       }
     },
-    [token],
+    [token, markDisabledByServer],
   )
 
   // Закрыли окно — загрузка в пути отменяется (её снимок устарел бы к

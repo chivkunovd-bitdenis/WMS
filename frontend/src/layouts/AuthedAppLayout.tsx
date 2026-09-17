@@ -31,9 +31,12 @@ type Props = {
   meRole?: string
   ffPermissions?: FfPermissions | null
   addressStorageEnabled?: boolean
-  // WMS-433/R23: признак assistant_enabled из /auth/me. Без него (превью,
-  // сцены базы знаний, выключенный тенант) помощника в каркасе нет вовсе.
-  assistantEnabled?: boolean
+  // WMS-433/R23: снимок профиля из /auth/me. Панель есть только при
+  // assistant_enabled === true; без профиля (превью, сцены базы знаний) или у
+  // выключенного тенанта помощника в каркасе нет вовсе. Передаётся сам объект,
+  // а не булево: каждая перезагрузка профиля даёт новый объект, и панель по
+  // нему снимает свой отказ после 403 (см. AssistantPanel).
+  assistantProfile?: { assistant_enabled?: boolean } | null
 }
 
 export function AuthedAppLayout({
@@ -45,7 +48,7 @@ export function AuthedAppLayout({
   meRole = '',
   ffPermissions = null,
   addressStorageEnabled = true,
-  assistantEnabled = false,
+  assistantProfile = null,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
   if (portal === 'seller') {
@@ -343,7 +346,9 @@ export function AuthedAppLayout({
           панель не монтируется — ни кнопки, ни окна в DOM, ни опроса переписки,
           что бы ни лежало в localStorage. Селлерский каркас выше его не
           получает — это второй срез. */}
-      {assistantEnabled ? <AssistantPanel /> : null}
+      {assistantProfile?.assistant_enabled === true ? (
+        <AssistantPanel profile={assistantProfile} />
+      ) : null}
     </Box>
   )
 }
