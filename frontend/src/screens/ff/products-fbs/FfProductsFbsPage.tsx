@@ -4,7 +4,7 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { ProductsScreen } from './ProductsScreen'
-import type { FbsRule, Product, Seller } from './stub'
+import type { FbsRule, MarketplaceCode, Product, Seller } from './stub'
 import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey, warehouseRuleKey,
   type WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 
@@ -95,6 +95,43 @@ export function toRule(
     unitsMode: rule?.units_mode ?? false,
     // Stored operator caps survive orders and percentage mode unchanged.
     unitsByWarehouse: qualify(rule?.units_by_warehouse ?? {}),
+  }
+}
+
+/**
+ * Тело правила для PUT /products/{id}/fbs-rule и поле rule в PUT /products/fbs-rule.
+ *
+ * Флаги передачи уходят только если их трогали в этом открытии окна; иначе поле
+ * не отправляется, и сервер оставляет прежнее значение. У товара без карточки
+ * Ozon окно само помечает флаг Ozon тронутым и выключенным, поэтому publish_ozon
+ * у него равен false при каждом сохранении (WMS-454).
+ *
+ * WMS-060/WMS-338: поштучный режим и числа по складам обязательны, иначе API
+ * подставит `units_mode=false` и `units_by_warehouse={}`, и любое сохранение
+ * молча сбросит режим штук и операторский потолок.
+ */
+export function fbsRuleBody(rule: FbsRule): {
+  publish: boolean | undefined
+  publish_ozon: boolean | undefined
+  same_everywhere: boolean
+  percent: number
+  by_warehouse: Record<string, number>
+  units_mode: boolean
+  units_by_warehouse: Record<string, number>
+} {
+  const touched = (marketplace: MarketplaceCode) =>
+    !rule.changedPublication || rule.changedPublication.includes(marketplace)
+  return {
+    publish: touched('wb') ? rule.publish : undefined,
+    publish_ozon: touched('ozon') ? (rule.publishOzon ?? rule.publish) : undefined,
+    same_everywhere: rule.sameEverywhere,
+    percent: rule.percent,
+    by_warehouse: rule.byWarehouse,
+    units_mode: rule.unitsMode,
+    // Что оператор видел в поле, то и записывается как новое выделение: сервер
+    // сдвинет точку отсчёта расхода на «сейчас», и съеденное до этой секунды
+    // уже учтено в том, что было показано.
+    units_by_warehouse: rule.unitsByWarehouse,
   }
 }
 
@@ -205,22 +242,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
-    // WMS-060/WMS-338: сюда нужно передавать поштучный режим и числа по складам,
-    // иначе API подставит `units_mode=false` и `units_by_warehouse={}`, а сервис
-    // молча запишет получившееся правило поверх операторского. То есть открытие
-    // окна с любым сохранением через /ff/fbs-stock раньше сбрасывало режим
-    // штук и операторский потолок. Отправляем всё, что нужно правилу целиком.
-    const body = {
-      publish: rule.changedPublication && !rule.changedPublication.includes("wb")
-                          ? undefined : rule.publish,
-      publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
-                          ? undefined : (rule.publishOzon ?? rule.publish),
-      same_everywhere: rule.sameEverywhere,
-      percent: rule.percent,
-      by_warehouse: rule.byWarehouse,
-      units_mode: rule.unitsMode,
-      units_by_warehouse: rule.unitsByWarehouse,
-    }
+    const body = fbsRuleBody(rule)
     try {
       if (productIds.length === 1) {
         const res = await fetch(apiUrl(`/products/${productIds[0]}/fbs-rule`), {

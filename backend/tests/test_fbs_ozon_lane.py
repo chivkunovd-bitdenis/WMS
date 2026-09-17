@@ -810,6 +810,19 @@ async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
         wms_warehouse_id=warehouse.id,
     )
     db_session.add_all([wb_binding, ozon_binding])
+    # WMS-456: an honest two-marketplace product needs an active Ozon card, or
+    # the Ozon side is not an allocation target at all and this shared-quota
+    # check below has nothing to enforce.
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            product_id=product.id,
+            marketplace="ozon",
+            external_offer_id="ozon-last-unit",
+            is_active=True,
+        )
+    )
     await db_session.commit()
 
     from app.models.inventory_balance import InventoryBalance

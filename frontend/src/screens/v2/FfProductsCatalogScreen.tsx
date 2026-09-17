@@ -40,22 +40,12 @@ import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import TuneOutlined from '@mui/icons-material/TuneOutlined'
 import { apiUrl } from '../../api'
 import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
+import { warehouseNumberFromRuleKey } from '../ff/products-fbs/fbsWarehouseRuleKeys'
 import {
-  qualifyWarehouseRuleValues,
-  warehouseNumberFromRuleKey,
-  warehouseRuleKey,
-  type WarehouseRuleBinding,
-} from '../ff/products-fbs/fbsWarehouseRuleKeys'
-import {
-  toProduct as toFbsProduct,
-  toRule as toFbsRule,
-  type ApiRule as FbsApiRule,
-} from '../ff/products-fbs/FfProductsFbsPage'
-import type {
-  FbsRule as FbsRuleModel,
-  Product as FbsProduct,
-  Seller as FbsSeller,
-} from '../ff/products-fbs/stub'
+  loadFbsStockDialog,
+  type FbsStockDialogData,
+} from '../ff/products-fbs/fbsStockDialogLoader'
+import { fbsRuleBody } from '../ff/products-fbs/FfProductsFbsPage'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
@@ -227,17 +217,6 @@ function humanMergeError(code: string): string {
   return normalized || 'Не удалось объединить карточки.'
 }
 
-function fbsWarehousesLoadError(status: number, message: string): string {
-  const lower = message.toLowerCase()
-  if (status === 403 || lower.includes('нет токена') || lower.includes('missing_marketplace_token')) {
-    return 'Backend не нашёл ключ, пригодный для Marketplace. Если ключ WB уже сохранён, проверьте его права Marketplace в карточке селлера.'
-  }
-  if (status === 401 || status === 502) {
-    return 'Wildberries отклонил сохранённый ключ при загрузке складов. Проверьте права Marketplace у ключа селлера.'
-  }
-  return `Не удалось загрузить склады Wildberries: ${message}`
-}
-
 export function FfProductsCatalogScreen({
   token,
   authHeaders,
@@ -279,15 +258,13 @@ export function FfProductsCatalogScreen({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   // Модалка «Задать остаток» — та же, что была на отдельном экране остатков FBS.
   // Владелец просил, чтобы настройка жила в каталоге, а не отдельным разделом.
-  const [fbsDialog, setFbsDialog] = useState<{
-    products: FbsProduct[]
-    seller: FbsSeller
-    rule: FbsRuleModel
-    // Почему не приехал справочник складов Ozon. Показывается внутри
-    // озоновского блока модалки, поэтому у продавца без озоновских складов
-    // блока нет и текста тоже — его окно остаётся прежним.
-    ozonWarehousesError?: string | null
-  } | null>(null)
+  // Причины отказа справочников живут вместе с окном, а не в fbsDialogError:
+  // ту ошибку стирает любой удачный запрос по галке или сопоставлению, а
+  // причина отсутствия названий должна оставаться на месте, пока окно открыто —
+  // на неё ссылается чип «название недоступно» (WMS-457). Текст про Ozon
+  // показывается внутри озоновского блока, поэтому у продавца без озоновских
+  // складов блока нет и текста тоже — его окно остаётся прежним.
+  const [fbsDialog, setFbsDialog] = useState<FbsStockDialogData | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
 
   // ── Ручное объединение двух карточек (WMS-349) ──────────────────────────
@@ -653,150 +630,20 @@ export function FfProductsCatalogScreen({
       return
     }
     try {
-      const [rulesRes, whRes, bindingsRes, ozonWhRes] = await Promise.all([
-        fetch(apiUrl('/products/fbs-rule/bulk'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-          body: JSON.stringify({ product_ids: chosen.map((r) => r.id) }),
-        }),
-        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
-          headers: { ...authHeaders(token) },
-        }),
-        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), {
-          headers: { ...authHeaders(token) },
-        }),
-        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), {
-          headers: { ...authHeaders(token) },
-        }),
-      ])
-      if (!rulesRes.ok) throw new Error(await readApiErrorMessage(rulesRes))
-      const rulesBody = (await rulesRes.json()) as {
-        items: Array<FbsApiRule & { product_id: string }>
-      }
-      const ruleById = new Map(rulesBody.items.map((one) => [one.product_id, one]))
-      type SellerWarehouseRow = {
-        wb_warehouse_id: number | string
-        name: string | null
-        wms_warehouse_id: string | null
-        served: boolean
-        // Площадка склада. У строк из кабинета Wildberries она всегда «wb»:
-        // эта ручка другого и не отдаёт. У сохранённых привязок берётся из
-        // самой привязки — там маркетплейс лежит с самого начала (WMS-350).
-        marketplace?: 'wb' | 'ozon'
-      }
-      const whRows: SellerWarehouseRow[] = whRes.ok
-        ? ((await whRes.json()) as SellerWarehouseRow[]).map((one) => ({
-            ...one,
-            marketplace: 'wb' as const,
-          }))
-        : []
-      const warehouseLoadError = whRes.ok
-        ? null
-        : fbsWarehousesLoadError(whRes.status, await readApiErrorMessage(whRes))
-
-      // Справочник складов Ozon (WMS-362). До него озоновские строки брались
-      // только из сохранённых привязок: склад, которого ещё не заводили, вообще
-      // не показывался, а заведённый подписывался техническим «Склад Ozon
-      // <номер>». Отсюда приезжают настоящие названия кабинета и все склады.
-      type OzonWarehouseRow = {
-        warehouse_id: number
-        name: string
-        served: boolean
-        wms_warehouse_id: string | null
-      }
-      let ozonWarehousesError: string | null = null
-      if (ozonWhRes.ok) {
-        for (const one of (await ozonWhRes.json()) as OzonWarehouseRow[]) {
-          whRows.push({
-            wb_warehouse_id: one.warehouse_id,
-            name: one.name,
-            wms_warehouse_id: one.wms_warehouse_id,
-            served: one.served,
-            marketplace: 'ozon',
-          })
-        }
-      } else {
-        // Отказ штатный: боевые запросы к Ozon выключаются настройкой. Сервер
-        // отвечает человеческим текстом, его и показываем — молчаливая пустота
-        // читалась бы как «складов у продавца нет».
-        ozonWarehousesError = await readApiErrorMessage(ozonWhRes)
-      }
-
-      // Если WB временно не отдал список, не прячем уже сохранённые привязки:
-      // оператор всё равно должен видеть внешний ID и выбранный WMS-склад.
-      let ruleBindings: WarehouseRuleBinding[] = whRows
-      if (bindingsRes.ok) {
-        const savedBindings = (await bindingsRes.json()) as Array<{
-          wb_warehouse_id: number | string
-          wms_warehouse_id: string
-          is_active: boolean
-          served: boolean
-          stock_sync_enabled: boolean
-          marketplace?: 'wb' | 'ozon'
-          external_warehouse_id?: string | null
-        }>
-        ruleBindings = savedBindings.filter((binding) => binding.is_active)
-        const knownIds = new Set(
-          whRows.map((one) => `${one.marketplace ?? 'wb'}:${one.wb_warehouse_id}`),
-        )
-        for (const binding of savedBindings) {
-          const marketplace = binding.marketplace ?? 'wb'
-          // Ключ теперь с площадкой: номера складов у Wildberries и у Ozon из
-          // разных пространств и совпасть могут, а до этого озоновский склад с
-          // тем же номером просто не показывался.
-          if (knownIds.has(`${marketplace}:${binding.wb_warehouse_id}`)) continue
-          whRows.push({
-            wb_warehouse_id: binding.wb_warehouse_id,
-            name:
-              marketplace === 'ozon'
-                ? `Склад Ozon ${binding.external_warehouse_id ?? binding.wb_warehouse_id}`
-                : `Склад WB ${binding.wb_warehouse_id}`,
-            wms_warehouse_id: binding.wms_warehouse_id,
-            served: binding.is_active && binding.served,
-            marketplace,
-          })
-        }
-      }
-      const seller: FbsSeller = {
-        id: sellerId,
-        name: chosen[0]!.seller_name ?? '—',
-        warehouses: whRows.map((one) => ({
-          id: warehouseRuleKey(one),
-          name: one.name ?? `Склад ${one.wb_warehouse_id}`,
-          boundTo: one.wms_warehouse_id,
-          fbsEnabled: one.served,
-          marketplace: one.marketplace ?? 'wb',
-        })),
-        // Имя поля осталось от старого макета, но Select справа выбирает именно
-        // наш физический WMS-склад для WB-направления. Технические fbs-wb-* и
-        // выключенные склады сюда не попадают.
-        wbWarehouses: warehouses
-          .filter((one) => one.is_operational && !isTechnicalFbsWarehouse(one))
-          .map((one) => ({ id: one.id, name: one.name })),
-      }
-      const products: FbsProduct[] = chosen.map((r) =>
-        toFbsProduct(
-          {
-            id: r.id,
-            seller_id: r.seller_id,
-            name: r.name,
-            sku_code: r.sku_code,
-            wb_size: r.wb_size,
-            wb_primary_barcode: r.wb_primary_barcode,
-            marketplaces: r.marketplaces,
-          },
-          ruleById.get(r.id),
+      // Правила обязательны, справочники кабинетов — нет: их отказ показывается
+      // внутри окна, а строки складов берутся из сохранённых привязок (WMS-457).
+      setFbsDialog(
+        await loadFbsStockDialog({
+          headers: authHeaders(token),
           sellerId,
-        ),
+          sellerName: chosen[0]!.seller_name ?? '—',
+          chosen,
+          // Технические fbs-wb-* и выключенные склады в выбор «Склад WMS» не попадают.
+          wmsWarehouses: warehouses
+            .filter((one) => one.is_operational && !isTechnicalFbsWarehouse(one))
+            .map((one) => ({ id: one.id, name: one.name })),
+        }),
       )
-      const rawRule = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
-      const rule: FbsRuleModel = {
-        ...rawRule,
-        byWarehouse: qualifyWarehouseRuleValues(rawRule.byWarehouse, ruleBindings),
-        unitsByWarehouse: qualifyWarehouseRuleValues(rawRule.unitsByWarehouse, ruleBindings),
-      }
-      setFbsDialog({ products, seller, rule, ozonWarehousesError })
-      if (warehouseLoadError) setFbsDialogError(warehouseLoadError)
     } catch (e) {
       setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
     }
@@ -2124,6 +1971,7 @@ export function FfProductsCatalogScreen({
             seller={fbsDialog.seller}
             rule={fbsDialog.rule}
             saveError={fbsDialogError}
+            wbWarehousesError={fbsDialog.wbWarehousesError ?? null}
             ozonWarehousesError={fbsDialog.ozonWarehousesError ?? null}
             onClose={() => {
               setFbsDialog(null)
@@ -2145,24 +1993,7 @@ export function FfProductsCatalogScreen({
                     // PUT /products/fbs-rule ждёт правило вложенным в rule
                     // (ProductsFbsRuleBulkBody, extra="forbid"). Плоское тело
                     // отбивалось как «rule: Field required».
-                    body: JSON.stringify({
-                      product_ids: ids,
-                      rule: {
-                        publish: rule.changedPublication && !rule.changedPublication.includes("wb")
-                          ? undefined : rule.publish,
-                        publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
-                          ? undefined : (rule.publishOzon ?? rule.publish),
-                        same_everywhere: rule.sameEverywhere,
-                        percent: rule.percent,
-                        by_warehouse: rule.byWarehouse,
-                        units_mode: rule.unitsMode,
-                        // Что оператор видел в поле, то и записывается как новое
-                        // выделение: сервер сдвинет точку отсчёта расхода на
-                        // «сейчас», и съеденное до этой секунды уже учтено в том,
-                        // что было показано.
-                        units_by_warehouse: rule.unitsByWarehouse,
-                      },
-                    }),
+                    body: JSON.stringify({ product_ids: ids, rule: fbsRuleBody(rule) }),
                   })
                   if (!res.ok) {
                     setFbsDialogError(await readApiErrorMessage(res))

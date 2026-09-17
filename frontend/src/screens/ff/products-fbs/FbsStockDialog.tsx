@@ -13,7 +13,13 @@ import {
   WarningNotice,
 } from '../../../ui-kit'
 import {
+  WAREHOUSE_NAME_ISSUE_LABELS,
+  warehouseNameIssueHint,
+} from './fbsSellerWarehouseRows'
+import {
+  dialogShowsOzon,
   freeStock,
+  initialDraft,
   MARKETPLACE_NAMES,
   onHandTotal,
   publishesTo,
@@ -21,6 +27,7 @@ import {
   servedWarehouses,
   totalPercent,
   totalUnits,
+  visibleWarehouses,
   warehouseMarketplace,
   type FbsRule,
   type MarketplaceCode,
@@ -63,6 +70,7 @@ export function FbsStockDialog({
   onBind,
   onServedChange,
   saveError,
+  wbWarehousesError,
   ozonWarehousesError,
 }: {
   open: boolean
@@ -77,6 +85,12 @@ export function FbsStockDialog({
   onServedChange?: (warehouseId: string, served: boolean) => void
   /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
   saveError?: string | null
+  /**
+   * Почему кабинет Wildberries не отдал список складов — плашка сверху окна.
+   * Живёт всё время, пока окно открыто: на неё ссылается чип «название
+   * недоступно» у строк без названия (WMS-457).
+   */
+  wbWarehousesError?: string | null
   /** Почему не приехал справочник складов Ozon — текст в озоновском блоке. */
   ozonWarehousesError?: string | null
 }) {
@@ -91,6 +105,7 @@ export function FbsStockDialog({
       onBind={onBind}
       onServedChange={onServedChange}
       saveError={saveError}
+      wbWarehousesError={wbWarehousesError}
       ozonWarehousesError={ozonWarehousesError}
     />
   )
@@ -105,6 +120,7 @@ function FbsStockDialogBody({
   onBind,
   onServedChange,
   saveError,
+  wbWarehousesError,
   ozonWarehousesError,
 }: {
   products: DialogProduct[]
@@ -115,15 +131,21 @@ function FbsStockDialogBody({
   onBind: (warehouseId: string, wbWarehouseId: string) => void
   onServedChange?: (warehouseId: string, served: boolean) => void
   saveError?: string | null
+  wbWarehousesError?: string | null
   ozonWarehousesError?: string | null
 }) {
+  // Ozon в окне есть только у товара с карточкой Ozon (WMS-454). У остального
+  // товара окно совпадает с окном того же товара у продавца без Ozon-складов,
+  // и Ozon-привязку продавца из него не тронуть: строки просто нет.
+  const ozonShown = dialogShowsOzon(products)
+  const visible: Seller = { ...seller, warehouses: visibleWarehouses(seller, ozonShown) }
   // The percentage limit is shared across destinations. Publication quantities
   // additionally depend on each destination's physical WMS warehouse.
-  const served = servedWarehouses(seller)
+  const served = servedWarehouses(visible)
   // Ни одного обслуживаемого склада — раздавать долю некуда. Ползунок в этом
   // состоянии обманывает: он показывает штуки, которых в кабинете не появится,
   // потому что публикация идёт только по обслуживаемым складам.
-  const noWarehouses = seller.warehouses.length === 0
+  const noWarehouses = visible.warehouses.length === 0
   const noneServed = served.length === 0
   const single = served.length <= 1
 
@@ -137,10 +159,9 @@ function FbsStockDialogBody({
   // а в Wildberries уходила старая доля склада (свободно 5, доля склада 30% —
   // «1 шт уйдёт» при «100% — это 5 шт»), и включить флаг было негде. Поэтому
   // при одном складе черновик всегда считается по общему проценту: что оператор
-  // видит на ползунке, то и уезжает.
-  const [draft, setDraft] = useState<FbsRule>(
-    { ...rule, ...(single ? { sameEverywhere: true } : {}), changedPublication: [] },
-  )
+  // видит на ползунке, то и уезжает — а на ползунок при раздельном правиле
+  // идёт действующая доля этого склада (см. initialDraft).
+  const [draft, setDraft] = useState<FbsRule>(initialDraft(rule, visible.warehouses, ozonShown))
 
   const many = products.length > 1
   // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
@@ -169,7 +190,7 @@ function FbsStockDialogBody({
   const publishesAny = draft.publish || (draft.publishOzon ?? draft.publish)
   // В режиме штук ограничение то же самое, только в единицах: склады делят один
   // и тот же физический остаток, поэтому в сумме больше свободного не раздать.
-  const unitsSum = totalUnits(draft, seller.warehouses)
+  const unitsSum = totalUnits(draft, visible.warehouses)
   const enabledPlacesLabel = [
     draft.publish ? MARKETPLACE_NAMES.wb : null,
     (draft.publishOzon ?? draft.publish) ? MARKETPLACE_NAMES.ozon : null,
@@ -191,14 +212,10 @@ function FbsStockDialogBody({
   )
     .map((marketplace) => ({
       marketplace,
-      warehouses: seller.warehouses.filter((one) => warehouseMarketplace(one) === marketplace),
+      warehouses: visible.warehouses.filter((one) => warehouseMarketplace(one) === marketplace),
     }))
     .filter((group) => group.warehouses.length > 0)
   const manyMarketplaces = groups.length > 1
-  // Товар живёт на Ozon, если так сказал каталог. Пустой список — источник
-  // данных площадок не знает; тогда ведём себя как раньше и считаем товар
-  // вайлдберрисовским.
-  const someProductOnOzon = products.some((one) => (one.marketplaces ?? []).includes('ozon'))
   // Как назвать площадки в общих подписях окна. У продавца с одним только
   // Wildberries это по-прежнему «Wildberries», текст не меняется ни на букву.
   const placesLabel = manyMarketplaces
@@ -237,6 +254,9 @@ function FbsStockDialogBody({
         {/* Отказ сервера показываем здесь, а не наверху страницы: оператор
             смотрит в это окно и должен видеть, что именно не сошлось, не теряя
             уже введённого. */}
+        {wbWarehousesError ? (
+          <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
+        ) : null}
         {saveError ? <ErrorNotice testId="fbs-stock-error">{saveError}</ErrorNotice> : null}
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">
@@ -273,20 +293,22 @@ function FbsStockDialogBody({
           }
           testId="fbs-stock-publish"
         />
-        <CheckboxInput
-          label="Передавать остаток в Ozon"
-          checked={draft.publishOzon ?? draft.publish}
-          onChange={(publishOzon) => setDraft((one) => ({
-            ...one, publishOzon,
-            changedPublication: [...new Set([...(one.changedPublication ?? []), 'ozon' as const])],
-          }))}
-          disabledReason={
-            !served.some((one) => warehouseMarketplace(one) === 'ozon')
-              && !(draft.publishOzon ?? draft.publish)
-              ? 'Сначала выберите хотя бы один склад Ozon' : undefined
-          }
-          testId="fbs-stock-publish-ozon"
-        />
+        {ozonShown ? (
+          <CheckboxInput
+            label="Передавать остаток в Ozon"
+            checked={draft.publishOzon ?? draft.publish}
+            onChange={(publishOzon) => setDraft((one) => ({
+              ...one, publishOzon,
+              changedPublication: [...new Set([...(one.changedPublication ?? []), 'ozon' as const])],
+            }))}
+            disabledReason={
+              !served.some((one) => warehouseMarketplace(one) === 'ozon')
+                && !(draft.publishOzon ?? draft.publish)
+                ? 'Сначала выберите хотя бы один склад Ozon' : undefined
+            }
+            testId="fbs-stock-publish-ozon"
+          />
+        ) : null}
 
         {/* Режим. Доля хороша, когда остаток дышит: приехала партия — в кабинете
             стало больше само. Но если с продавцом согласована разбивка по
@@ -388,24 +410,12 @@ function FbsStockDialogBody({
           {groups.map((group) => (
             <Stack key={group.marketplace} spacing={2}>
               {manyMarketplaces ? (
-                <Stack spacing={0.25}>
-                  <Typography
-                    variant="subtitle2"
-                    data-testid={`fbs-stock-marketplace-${group.marketplace}`}
-                  >
-                    {MARKETPLACE_NAMES[group.marketplace]}
-                  </Typography>
-                  {group.marketplace === 'ozon' && !someProductOnOzon ? (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      data-testid="fbs-stock-ozon-unlinked"
-                    >
-                      Выбранный товар с карточкой Ozon не связан: туда с него ничего не
-                      уедет, но склад всё равно считается в общих ста процентах.
-                    </Typography>
-                  ) : null}
-                </Stack>
+                <Typography
+                  variant="subtitle2"
+                  data-testid={`fbs-stock-marketplace-${group.marketplace}`}
+                >
+                  {MARKETPLACE_NAMES[group.marketplace]}
+                </Typography>
               ) : null}
               {/* Справочник кабинета не ответил. Причина нужна здесь, иначе
                   список складов Ozon выглядит просто коротким, и оператор идёт
@@ -423,13 +433,14 @@ function FbsStockDialogBody({
               {group.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Галочка «обслуживаем» — свойство продавца, а не товара, но живёт
-                    здесь же: оператор видит склады продавца именно в этом окне, и
-                    гонять его на другой экран ради одной галки незачем. Она решает
-                    сразу две вещи: чьи заказы наши и по каким складам раздаём
-                    остаток. Снятая галка — склад чужого фулфилмента. */}
+                {/* Галочка приёма заказов — свойство продавца, а не товара, но
+                    живёт здесь же: оператор видит склады продавца именно в этом
+                    окне, и гонять его на другой экран ради одной галки незачем.
+                    Подпись называет и объект, и эффект (WMS-454): она решает,
+                    чьи заказы с этого склада наши. На публикацию остатка она не
+                    влияет — той управляют галки передачи товара (WMS-376). */}
                 <CheckboxInput
-                  label={`Обслуживаем склад «${warehouse.name}»`}
+                  label={`Принимаем заказы продавца со склада «${warehouse.name}»`}
                   checked={warehouse.fbsEnabled}
                   onChange={(checked) => onServedChange?.(warehouse.id, checked)}
                   disabledReason={
@@ -443,14 +454,25 @@ function FbsStockDialogBody({
                 />
                 {!warehouse.fbsEnabled ? (
                   <StatusChip
-                    label="не обслуживаем"
-                    hint="Заказы с этого склада к нам не приходят, остаток на него не отправляется"
+                    label="заказы не принимаем"
+                    hint="Заказы продавца с этого склада к нам не приходят"
                   />
                 ) : warehouse.boundTo === null ? (
                   <StatusChip
                     label="склад не сопоставлен"
                     tone="warn"
                     hint={`Пока направление ${MARKETPLACE_NAMES[warehouseMarketplace(warehouse)]} не сопоставлено с физическим складом WMS, остаток по нему не уйдёт`}
+                  />
+                ) : null}
+                {/* Номер вместо названия — не название (WMS-457). Чип говорит,
+                    почему имени нет: склада нет в кабинете либо список кабинета
+                    не получен, и причина — в сообщении выше. */}
+                {warehouse.nameIssue ? (
+                  <StatusChip
+                    label={WAREHOUSE_NAME_ISSUE_LABELS[warehouse.nameIssue]}
+                    tone="warn"
+                    hint={warehouseNameIssueHint(warehouse.nameIssue, warehouseMarketplace(warehouse))}
+                    testId={`fbs-stock-name-issue-${warehouse.id}`}
                   />
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />
