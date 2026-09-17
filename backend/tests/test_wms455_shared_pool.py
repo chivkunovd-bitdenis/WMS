@@ -601,10 +601,17 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     first_locked = asyncio.Event()
     release_first = asyncio.Event()
     second_started = asyncio.Event()
-    # Доказывает «второй стартует до освобождения первого» напрямую: второй
-    # вызов должен реально дойти до обёртки замка (не только начать корутину)
-    # раньше, чем тест отпускает первый вызов.
-    second_lock_reached = asyncio.Event()
+    # Доказывает «второй стартует до освобождения первого» напрямую. Второй
+    # вызов сначала пытается захватить ozon — тот же замок, который первый
+    # вызов уже держит (set_rule_for_products перебирает площадки в порядке
+    # ("ozon", "wb") и держит оба захваченных замка внутри одного
+    # AsyncExitStack до самого выхода из функции). На PostgreSQL настоящий
+    # cm.__aenter__() второго вызова поэтому заблокируется до освобождения
+    # первого. Сигнал должен стоять ДО этого await — иначе он зависит от
+    # уже случившегося освобождения и ничего не доказывает (F3, второй круг
+    # кросс-ревью Astra 17.09.2026: старый сигнал стоял после await
+    # cm.__aenter__() и создавал взаимное ожидание, ломавшееся тайм-аутом).
+    second_lock_attempted = asyncio.Event()
     original_lock = rules.marketplace_seller_lock
 
     def observed_lock(session, seller_id, marketplace, **kwargs):
@@ -613,12 +620,12 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
 
         class _Wrapped:
             async def __aenter__(self) -> bool:
+                if role == "second":
+                    second_lock_attempted.set()
                 acquired = await cm.__aenter__()
                 if role == "first" and marketplace == "wb":
                     first_locked.set()
                     await asyncio.wait_for(release_first.wait(), 10)
-                if role == "second":
-                    second_lock_reached.set()
                 return acquired
 
             async def __aexit__(self, *exc: object) -> None:
@@ -652,14 +659,28 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
             )
 
     first_task = asyncio.create_task(enable_shared_pool())
-    await asyncio.wait_for(first_locked.wait(), 10)
-    second_task = asyncio.create_task(disable_with_shares())
-    await asyncio.wait_for(second_started.wait(), 10)
-    # Второй вызов реально дошёл до замка (не только запустил корутину) —
-    # проверяем это ДО release_first, иначе порядок не доказан.
-    await asyncio.wait_for(second_lock_reached.wait(), 10)
-    release_first.set()
-    await asyncio.wait_for(asyncio.gather(first_task, second_task), 10)
+    second_task: asyncio.Task[None] | None = None
+    try:
+        await asyncio.wait_for(first_locked.wait(), 10)
+        second_task = asyncio.create_task(disable_with_shares())
+        await asyncio.wait_for(second_started.wait(), 10)
+        # Второй вызов реально попытался войти в занятый первым замок (не
+        # только запустил корутину) — проверяем это ДО release_first, пока
+        # первый вызов всё ещё держит оба своих замка, иначе порядок не
+        # доказан (см. комментарий у second_lock_attempted выше).
+        await asyncio.wait_for(second_lock_attempted.wait(), 10)
+        release_first.set()
+        await asyncio.wait_for(asyncio.gather(first_task, second_task), 10)
+    except BaseException:
+        # Барьер не должен оставлять задачи висящими при ошибке ожидания:
+        # отпускаем первый вызов и гарантированно завершаем обе задачи, даже
+        # если что-то из wait_for выше упало по тайм-ауту.
+        release_first.set()
+        pending = [task for task in (first_task, second_task) if task is not None]
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        raise
 
     view = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
     # Одно из двух целиком, без частичной записи. Если победил режим — доли
