@@ -61,7 +61,7 @@ async def _audit_item_removal(
         document_id=supply_id, event_type=EVENT_BOX_ITEM_REMOVED,
         before={
             "item_id": item.id, "box_id": item.box_id, "fbs_order_id": item.fbs_order_id,
-            "order_product_id": item.order_product_id,
+            "order_product_id": item.order_product_id, "quantity": item.quantity,
             "assigned_by_user_id": item.assigned_by_user_id, "assigned_at": item.assigned_at,
         },
         after=None,
@@ -79,6 +79,15 @@ class DeliveryBoxReadiness:
     has_physical_boxes: bool
     without_distribution: bool
     unassigned_packed_order_ids: frozenset[uuid.UUID]
+
+
+@dataclass(frozen=True)
+class OzonBoxPositionInput:
+    """One line of the assign-orders request body for an Ozon box (WMS-453):
+    how many units of this order position the operator is adding to the box."""
+
+    order_product_id: uuid.UUID
+    quantity: int
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
@@ -128,18 +137,23 @@ async def get_delivery_box_readiness(
         ).all()
     )
     if supply.marketplace == "ozon":
-        assigned_positions = set(
-            (
-                await session.scalars(
-                    select(FbsPackingBoxItem.order_product_id)
-                    .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
-                    .where(
-                        FbsPackingBoxItem.tenant_id == tenant_id,
-                        FbsPackingBox.supply_id == supply_id,
-                    )
+        # A position is fully placed once the sum of its box quantities
+        # equals what the order needs — not merely "present in some box"
+        # (WMS-453: a position may now be split across several boxes).
+        assigned_totals: dict[uuid.UUID, int] = {}
+        for position_id, total in (
+            await session.execute(
+                select(FbsPackingBoxItem.order_product_id, func.sum(FbsPackingBoxItem.quantity))
+                .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+                .where(
+                    FbsPackingBoxItem.tenant_id == tenant_id,
+                    FbsPackingBox.supply_id == supply_id,
+                    FbsPackingBoxItem.order_product_id.is_not(None),
                 )
-            ).all()
-        )
+                .group_by(FbsPackingBoxItem.order_product_id)
+            )
+        ).all():
+            assigned_totals[position_id] = int(total or 0)
         positions = list(
             (
                 await session.scalars(
@@ -149,13 +163,16 @@ async def get_delivery_box_readiness(
                 )
             ).all()
         )
-        positions_by_order: dict[uuid.UUID, set[uuid.UUID]] = {}
+        positions_by_order: dict[uuid.UUID, list[FbsOrderProduct]] = {}
         for position in positions:
-            positions_by_order.setdefault(position.order_id, set()).add(position.id)
+            positions_by_order.setdefault(position.order_id, []).append(position)
         assigned_order_ids = {
             order_id
-            for order_id, position_ids in positions_by_order.items()
-            if position_ids <= assigned_positions
+            for order_id, order_positions in positions_by_order.items()
+            if all(
+                assigned_totals.get(position.id, 0) >= position.quantity
+                for position in order_positions
+            )
         }
     return DeliveryBoxReadiness(
         has_physical_boxes=bool(boxes),
@@ -364,7 +381,8 @@ async def assign_orders(
     order_ids: list[uuid.UUID],
     *,
     actor_user_id: uuid.UUID | None,
-    order_product_ids: list[uuid.UUID] | None = None,
+    positions: list[OzonBoxPositionInput] | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
@@ -375,10 +393,10 @@ async def assign_orders(
         if order_ids:
             raise FbsPackingBoxError("ozon_order_positions_required")
         await _assign_ozon_positions(
-            session, tenant_id, supply_id, box, order_product_ids or [], actor_user_id
+            session, tenant_id, supply_id, box, positions or [], idempotency_key, actor_user_id
         )
         return
-    if order_product_ids:
+    if positions:
         raise FbsPackingBoxError("order_positions_not_supported")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
@@ -409,6 +427,10 @@ async def assign_orders(
                     tenant_id=tenant_id,
                     box_id=box.id,
                     fbs_order_id=order_id,
+                    # WB never splits a position across boxes; the row means
+                    # "the whole order", quantity=1 is a fixed marker only
+                    # (R10) so the NOT NULL column has one meaning everywhere.
+                    quantity=1,
                     assigned_by_user_id=actor_user_id,
                 )
             )
@@ -433,12 +455,26 @@ async def _assign_ozon_positions(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     box: FbsPackingBox,
-    position_ids: list[uuid.UUID],
+    positions_in: list[OzonBoxPositionInput],
+    idempotency_key: str | None,
     actor_user_id: uuid.UUID | None,
 ) -> None:
-    if not position_ids:
+    if not positions_in:
         raise FbsPackingBoxError("empty_order_set")
-    unique_ids = set(position_ids)
+    stored_key = (idempotency_key or "").strip()
+    if not stored_key:
+        raise FbsPackingBoxError("missing_idempotency_key")
+    if any(entry.quantity < 1 for entry in positions_in):
+        raise FbsPackingBoxError("invalid_qty")
+    # A request may list the same position twice (defensive only — the
+    # operator adds one line per position); merge into a single increment.
+    requested: dict[uuid.UUID, int] = {}
+    for entry in positions_in:
+        requested[entry.order_product_id] = (
+            requested.get(entry.order_product_id, 0) + entry.quantity
+        )
+    position_ids = set(requested)
+
     positions = list(
         (
             await session.scalars(
@@ -447,38 +483,86 @@ async def _assign_ozon_positions(
                 .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.supply_id == supply_id,
-                    FbsOrderProduct.id.in_(unique_ids),
+                    FbsOrderProduct.id.in_(position_ids),
                 )
             )
         ).all()
     )
-    if len(positions) != len(unique_ids):
+    if len(positions) != len(position_ids):
         raise FbsPackingBoxError("order_not_in_supply")
+    positions_by_id = {position.id: position for position in positions}
     order_ids = {position.order_id for position in positions}
     if len(order_ids | {item.fbs_order_id for item in box.items}) != 1:
         raise FbsPackingBoxError("ozon_box_multiple_orders")
     await _assert_ozon_orders_mutable(session, tenant_id, list(order_ids))
-    assigned = list(
-        (
+
+    # Existing rows for these positions in *this* box only — a position may
+    # now also sit in other boxes of the supply (WMS-453, R11), which is not
+    # a conflict; only the same box+position pair must stay a single row.
+    existing_in_box = {
+        item.order_product_id: item
+        for item in (
             await session.scalars(
                 select(FbsPackingBoxItem).where(
                     FbsPackingBoxItem.tenant_id == tenant_id,
-                    FbsPackingBoxItem.order_product_id.in_(unique_ids),
+                    FbsPackingBoxItem.box_id == box.id,
+                    FbsPackingBoxItem.order_product_id.in_(position_ids),
                 )
             )
         ).all()
-    )
-    if any(item.box_id != box.id for item in assigned):
-        raise FbsPackingBoxError("order_already_in_box")
-    assigned_ids = {item.order_product_id for item in assigned}
-    for position in positions:
-        if position.id not in assigned_ids:
+    }
+
+    # A row already stamped with this exact idempotency key already absorbed
+    # this request (R6): skip it instead of adding its quantity again. Any
+    # row left to apply is either new or carries a different (or no) key —
+    # a deliberate repeat action, which does add.
+    to_apply = {
+        position_id: quantity
+        for position_id, quantity in requested.items()
+        if not (
+            (existing := existing_in_box.get(position_id)) is not None
+            and existing.last_idempotency_key == stored_key
+        )
+    }
+    if not to_apply:
+        return
+
+    totals: dict[uuid.UUID, int] = {}
+    for position_id, total in (
+        await session.execute(
+            select(FbsPackingBoxItem.order_product_id, func.sum(FbsPackingBoxItem.quantity))
+            .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+            .where(
+                FbsPackingBoxItem.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+                FbsPackingBoxItem.order_product_id.in_(to_apply),
+            )
+            .group_by(FbsPackingBoxItem.order_product_id)
+        )
+    ).all():
+        totals[position_id] = int(total or 0)
+
+    # Validate the whole request before writing anything: a single position
+    # over its remainder must save nothing at all (R2), not a partial add.
+    for position_id, add_quantity in to_apply.items():
+        current_total = totals.get(position_id, 0)
+        if current_total + add_quantity > positions_by_id[position_id].quantity:
+            raise FbsPackingBoxError("ozon_box_quantity_exceeded")
+
+    for position_id, add_quantity in to_apply.items():
+        existing = existing_in_box.get(position_id)
+        if existing is not None:
+            existing.quantity += add_quantity
+            existing.last_idempotency_key = stored_key
+        else:
             session.add(
                 FbsPackingBoxItem(
                     tenant_id=tenant_id,
                     box_id=box.id,
-                    fbs_order_id=position.order_id,
-                    order_product_id=position.id,
+                    fbs_order_id=positions_by_id[position_id].order_id,
+                    order_product_id=position_id,
+                    quantity=add_quantity,
+                    last_idempotency_key=stored_key,
                     assigned_by_user_id=actor_user_id,
                 )
             )
@@ -622,6 +706,11 @@ async def get_boxes_for_workspace(
             "assigned_order_ids": list(dict.fromkeys(str(item.fbs_order_id) for item in box.items)),
             "assigned_order_product_ids": [
                 str(item.order_product_id) for item in box.items if item.order_product_id
+            ],
+            "assigned_positions": [
+                {"order_product_id": str(item.order_product_id), "quantity": item.quantity}
+                for item in box.items
+                if item.order_product_id
             ],
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,

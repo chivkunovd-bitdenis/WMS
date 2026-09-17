@@ -258,6 +258,7 @@ async def seed_box(ids, count=2):
                     tenant_id=ids["tenant_id"],
                     box_id=box.id,
                     fbs_order_id=order.id,
+                    quantity=1,
                     assigned_by_user_id=ids["user_id"],
                 )
             )

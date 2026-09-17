@@ -76,11 +76,25 @@ class FbsPackingBox(Base):
 class FbsPackingBoxItem(Base):
     __tablename__ = "fbs_packing_box_items"
     __table_args__ = (
+        # WB never splits an order across boxes: at most one row per order,
+        # and only WB rows carry a null position (whole-order assignment).
         Index(
-            "uq_fbs_packing_box_items_order_position",
+            "uq_fbs_packing_box_items_wb_order",
             "fbs_order_id",
-            text("coalesce(order_product_id, '00000000-0000-0000-0000-000000000000')"),
             unique=True,
+            postgresql_where=text("order_product_id IS NULL"),
+            sqlite_where=text("order_product_id IS NULL"),
+        ),
+        # An Ozon position may now live in several boxes (WMS-453), but at
+        # most once within the same box — a second add sums into that row
+        # instead of creating a duplicate (see fbs_packing_box_service).
+        Index(
+            "uq_fbs_packing_box_items_ozon_box_position",
+            "box_id",
+            "order_product_id",
+            unique=True,
+            postgresql_where=text("order_product_id IS NOT NULL"),
+            sqlite_where=text("order_product_id IS NOT NULL"),
         ),
     )
 
@@ -102,6 +116,15 @@ class FbsPackingBoxItem(Base):
         ForeignKey("fbs_order_products.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # How many units of this position sit in this box (WMS-453). WB rows have
+    # no position (order_product_id is null) and always carry 1 — the row
+    # still means "the whole order", quantity is not a second source for it.
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    # Idempotency key of the assign_orders call that last created/incremented
+    # this row (WMS-453, Д4). A retry with the same key is a no-op; a new key
+    # on the same box+position adds to the existing row instead of duplicating
+    # it. Null on rows written before this column existed (backfilled once).
+    last_idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

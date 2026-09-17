@@ -75,6 +75,7 @@ async def seed_boxes(
                 box_id=box.id,
                 fbs_order_id=order.id,
                 order_product_id=position.id,
+                quantity=position.quantity,
             )
         )
         boxes.append(box)
@@ -176,6 +177,57 @@ async def test_qr_sends_every_box_and_repeat_never_ships_again(db_session: Async
     assert order.meta_details_json["ozon_assembly"]["posting_numbers"] == ["POSTING-1", "POSTING-2"]
 
 
+async def test_order_packages_groups_split_position_by_box_in_box_number_order(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-453: splitting one position across boxes (e.g. 40/30/30) must ship
+    as one /ship package per box, each carrying that box's own quantity, in
+    box-number order — regardless of the order boxes/rows were created in."""
+    order, supply, boxes = await _seed(db_session)
+    position = await db_session.scalar(
+        select(FbsOrderProduct).where(
+            FbsOrderProduct.order_id == order.id, FbsOrderProduct.position_index == 1,
+        )
+    )
+    assert position is not None
+    item = await db_session.scalar(
+        select(FbsPackingBoxItem).where(FbsPackingBoxItem.box_id == boxes[1].id)
+    )
+    assert item is not None
+    item.quantity = 1
+    third_physical = WarehouseBox(
+        tenant_id=order.tenant_id,
+        warehouse_id=supply.warehouse_id,
+        internal_barcode=f"ASSEMBLY-{uuid.uuid4().hex}",
+    )
+    db_session.add(third_physical)
+    await db_session.flush()
+    third_box = FbsPackingBox(
+        tenant_id=order.tenant_id,
+        supply_id=supply.id,
+        warehouse_box_id=third_physical.id,
+        box_number=boxes[-1].box_number + 1,
+    )
+    db_session.add(third_box)
+    await db_session.flush()
+    db_session.add(
+        FbsPackingBoxItem(
+            tenant_id=order.tenant_id,
+            box_id=third_box.id,
+            fbs_order_id=order.id,
+            order_product_id=position.id,
+            quantity=2,
+        )
+    )
+    await db_session.flush()
+    packages = await order_packages(db_session, order)
+    assert packages == [
+        {"products": [{"product_id": 3001, "quantity": 2}]},
+        {"products": [{"product_id": 3002, "quantity": 1}]},
+        {"products": [{"product_id": 3002, "quantity": 2}]},
+    ]
+
+
 async def test_partial_assignment_fails_before_any_external_request(
     db_session: AsyncSession,
 ) -> None:
@@ -243,15 +295,35 @@ async def test_timeout_retries_readback_without_resending(db_session: AsyncSessi
     assert len([path for path, _ in transport.endpoint_calls if path.endswith("/ship")]) == 1
 
 
-async def test_packages_take_live_quantity_only_from_position(db_session: AsyncSession) -> None:
-    order, _, _ = await _seed(db_session)
+async def test_packages_use_stored_box_quantity_and_require_it_to_match_live_position(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-453: a box row's quantity is the operator's own entry (how many
+    units of the position sit in *that* box), not a mirror of the live
+    order position — two boxes of the same position can differ. But the sum
+    across boxes must still track the position's live quantity, so a resync
+    that changes what Ozon expects makes an unmatched split incomplete again
+    until the operator (or a future auto-repair) brings the boxes up to it.
+    """
+    order, _, boxes = await _seed(db_session)
+    item = await db_session.scalar(
+        select(FbsPackingBoxItem).where(FbsPackingBoxItem.box_id == boxes[0].id)
+    )
     position = await db_session.scalar(
         select(FbsOrderProduct).where(
             FbsOrderProduct.order_id == order.id,
             FbsOrderProduct.position_index == 0,
         )
     )
+    assert item is not None and position is not None
     position.quantity = 7
+    await db_session.flush()
+    with pytest.raises(OzonFbsProcessError, match="ozon_box_positions_incomplete"):
+        await order_packages(db_session, order)
+
+    # Bringing the box row up to the new total is enough — packages then
+    # read that stored quantity, not a second live copy of the position.
+    item.quantity = 7
     await db_session.flush()
     packages = await order_packages(db_session, order)
     assert packages[0]["products"][0]["quantity"] == 7
