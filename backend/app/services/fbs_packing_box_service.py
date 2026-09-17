@@ -5,12 +5,13 @@ the old PVZ-only restriction was dropped on 2026-08-17."""
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, false, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -484,15 +485,20 @@ async def _assign_ozon_positions(
 
     # R6: recognise a retry of this exact request by its idempotency key,
     # before anything else runs — a plain read against DocumentEvent's
-    # existing tenant-wide (tenant_id, idempotency_key) uniqueness (see
-    # _claim_ozon_assign_idempotency below for where the matching write
-    # happens, and why only there). This has to run before the remainder
-    # check further down: that check assumes this call's quantity has not
-    # been added yet, which is false for a genuine repeat — checking late
-    # would reject a repeat near the position's limit instead of recognising
-    # it (see review WMS-453 F1 — a per-row "last key" forgot an earlier key
-    # as soon as a later add overwrote it, so A -> B -> A double-applied A).
-    if await _ozon_assign_key_already_applied(session, tenant_id=tenant_id, key=stored_key):
+    # existing tenant-wide (tenant_id, idempotency_key) uniqueness, under a
+    # key namespaced to this exact box (see _ozon_assign_idempotency_key —
+    # review WMS-453 F5: the same journal serves other operations, e.g.
+    # inbound intake's "inbound:{action}:{mutation_id}", and the raw client
+    # key alone does not tell one apart from another). This has to run
+    # before the remainder check further down: that check assumes this
+    # call's quantity has not been added yet, which is false for a genuine
+    # repeat — checking late would reject a repeat near the position's limit
+    # instead of recognising it (review WMS-453 F1 — a per-row "last key"
+    # forgot an earlier key as soon as a later add overwrote it, so
+    # A -> B -> A double-applied A).
+    if await _ozon_assign_key_already_applied(
+        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
+    ):
         return
 
     positions = list(
@@ -593,8 +599,38 @@ async def _assign_ozon_positions(
     session.expire(box, ["items"])
 
 
+_OZON_ASSIGN_KEY_NAMESPACE = "fbs_box_item_added"
+
+
+def _ozon_assign_idempotency_key(supply_id: uuid.UUID, box_id: uuid.UUID, client_key: str) -> str:
+    """Namespace the operator's key to this exact box-add action (WMS-453,
+    review F5). DocumentEvent's (tenant_id, idempotency_key) uniqueness is
+    tenant-wide across every kind of mutation the journal already records —
+    e.g. inbound intake's own keys, "inbound:{action}:{mutation_id}" (see
+    inbound_intake_service._claim_intake_mutation) — so a client key that
+    happens to collide with another document's key, or the same client key
+    reused for a *different* box, must not read back as "this box already
+    got it": that reproduced as a real bug (a genuine add silently doing
+    nothing) in review WMS-453 F5, both cross-operation and cross-box.
+
+    Hashing keeps the stored value within the column's 128 characters
+    regardless of the client key's own length (up to 128 on its own, so a
+    plain "prefix:supply:box:client_key" concatenation would not fit), and
+    makes a collision with any other operation's key structurally
+    impossible rather than merely unlikely — nothing else in the codebase
+    constructs a key with this prefix.
+    """
+    digest = hashlib.sha256(f"{supply_id}:{box_id}:{client_key}".encode()).hexdigest()
+    return f"{_OZON_ASSIGN_KEY_NAMESPACE}:{digest}"
+
+
 async def _ozon_assign_key_already_applied(
-    session: AsyncSession, *, tenant_id: uuid.UUID, key: str
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    key: str,
 ) -> bool:
     """Read-only check for a retry, safe to run before any validation.
 
@@ -604,10 +640,14 @@ async def _ozon_assign_key_already_applied(
     a failed attempt never reaches that write (see the call sites in
     _assign_ozon_positions).
     """
+    namespaced_key = _ozon_assign_idempotency_key(supply_id, box_id, key)
     return (
         await session.scalar(
             select(DocumentEvent.id)
-            .where(DocumentEvent.tenant_id == tenant_id, DocumentEvent.idempotency_key == key)
+            .where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.idempotency_key == namespaced_key,
+            )
             .limit(1)
         )
     ) is not None
@@ -628,6 +668,15 @@ async def _claim_ozon_assign_idempotency(
     only if a concurrent identical request under the same supply lock won an
     exceedingly unlikely race and claimed the key first.
     """
+    # SQLite legacy transaction mode does not BEGIN on SELECT/SAVEPOINT: the
+    # reads already done above in _assign_ozon_positions never opened a real
+    # transaction, so record_document_event's SAVEPOINT below would RELEASE
+    # into nothing and the event would survive a later session.rollback()
+    # while the row writes that follow it do not (review WMS-453 F4).
+    # Establish the outer write transaction first — same fix already used in
+    # inbound_intake_service._claim_intake_mutation for the identical cause.
+    if session.bind is not None and session.bind.dialect.name == "sqlite":
+        await session.execute(update(DocumentEvent).where(false()).values(idempotency_key=None))
     actor = current_document_event_actor()
     return await record_document_event(
         session,
@@ -637,8 +686,8 @@ async def _claim_ozon_assign_idempotency(
         event_type=EVENT_BOX_ITEM_ADDED,
         source=actor.source,
         actor_user_id=actor.actor_user_id,
-        payload_json={"box_id": str(box_id)},
-        idempotency_key=key,
+        payload_json={"box_id": str(box_id), "client_key": key},
+        idempotency_key=_ozon_assign_idempotency_key(supply_id, box_id, key),
     )
 
 

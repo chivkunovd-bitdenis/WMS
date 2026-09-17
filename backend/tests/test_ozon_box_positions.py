@@ -555,6 +555,209 @@ async def test_repeat_after_another_operators_add_in_between_stays_a_no_op(
 
 
 @pytest.mark.asyncio
+async def test_rollback_before_route_commit_leaves_nothing_and_retry_still_adds(
+    db_session: AsyncSession,
+) -> None:
+    """Review WMS-453 F4: on SQLite, record_document_event's SAVEPOINT can
+    outlive a later session.rollback() unless the outer write transaction is
+    already open — a pysqlite caveat, not a PostgreSQL one (the identical
+    fix already exists for the same reason in
+    inbound_intake_service._claim_intake_mutation). Reproduced exactly as in
+    the review: reach assign_orders' own flush, then roll back the session
+    *before* the API route's commit — a failure between flush and commit
+    (lost connection, process killed, anything short of the route reaching
+    session.commit()), not a validation failure inside assign_orders.
+    Neither the event nor the row may survive that rollback; a retry with
+    the same key in a fresh session must still add.
+    """
+    from app.models.document_event import EVENT_BOX_ITEM_ADDED, DocumentEvent
+
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    positions = await _positions(db_session, order)  # quantities [3, 5]
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 1, "f4-repro", actor_user_id=None
+    )
+    await db_session.commit()
+    tenant_id, supply_id, box_id = tenant.id, supply.id, boxes[0].id
+    position_id = positions[1].id
+
+    async with SessionLocal() as session:
+        await boxes_svc.assign_orders(
+            session,
+            tenant_id,
+            supply_id,
+            box_id,
+            [],
+            actor_user_id=None,
+            positions=_add(position_id, 1),
+            idempotency_key="rollback-key",
+        )
+        # assign_orders already reached its own flush; simulate the route
+        # never reaching commit (crash, lost connection) rather than a
+        # business-rule rejection.
+        await session.rollback()
+
+    async with SessionLocal() as check:
+        item = await check.scalar(
+            select(FbsPackingBoxItem).where(
+                FbsPackingBoxItem.box_id == box_id,
+                FbsPackingBoxItem.order_product_id == position_id,
+            )
+        )
+        assert item is None
+        events = (
+            await check.scalars(
+                select(DocumentEvent.id).where(
+                    DocumentEvent.document_id == supply_id,
+                    DocumentEvent.event_type == EVENT_BOX_ITEM_ADDED,
+                )
+            )
+        ).all()
+        assert events == []
+
+    async with SessionLocal() as retry:
+        await boxes_svc.assign_orders(
+            retry,
+            tenant_id,
+            supply_id,
+            box_id,
+            [],
+            actor_user_id=None,
+            positions=_add(position_id, 1),
+            idempotency_key="rollback-key",
+        )
+        await retry.commit()
+
+    async with SessionLocal() as final_check:
+        item = await final_check.scalar(
+            select(FbsPackingBoxItem).where(
+                FbsPackingBoxItem.box_id == box_id,
+                FbsPackingBoxItem.order_product_id == position_id,
+            )
+        )
+        assert item is not None and item.quantity == 1
+        events = (
+            await final_check.scalars(
+                select(DocumentEvent.id).where(
+                    DocumentEvent.document_id == supply_id,
+                    DocumentEvent.event_type == EVENT_BOX_ITEM_ADDED,
+                )
+            )
+        ).all()
+        assert len(events) == 1
+
+
+@pytest.mark.asyncio
+async def test_colliding_key_from_another_document_type_does_not_silently_succeed(
+    db_session: AsyncSession,
+) -> None:
+    """Review WMS-453 F5: DocumentEvent's (tenant_id, idempotency_key)
+    uniqueness is tenant-wide across every operation the journal records.
+    Before namespacing, an operator's client key that happened to equal
+    another document's own stored key — reproduced here through the real
+    inbound_intake_service._claim_intake_mutation and its
+    "inbound:{action}:{mutation_id}" scheme — read back as "this box already
+    got it" and silently added nothing. It must instead behave as the
+    genuinely new action it is: a normal, successful add.
+    """
+    from app.services import inbound_intake_service as intake_svc
+
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    positions = await _positions(db_session, order)  # quantities [3, 5]
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 1, "f5-cross-doc", actor_user_id=None
+    )
+    await db_session.commit()
+    tenant_id, supply_id, box_id = tenant.id, supply.id, boxes[0].id
+    position_id = positions[0].id
+
+    mutation_id = uuid.uuid4()
+    colliding_key = f"inbound:create:{mutation_id}"
+    async with SessionLocal() as intake_session:
+        await intake_svc._claim_intake_mutation(
+            intake_session,
+            tenant_id,
+            uuid.uuid4(),  # an unrelated inbound intake request id
+            mutation_id=mutation_id,
+            action="create",
+            payload={"unrelated": True},
+        )
+        await intake_session.commit()
+
+    async with SessionLocal() as add_session:
+        await boxes_svc.assign_orders(
+            add_session,
+            tenant_id,
+            supply_id,
+            box_id,
+            [],
+            actor_user_id=None,
+            positions=_add(position_id, 2),
+            idempotency_key=colliding_key,
+        )
+        await add_session.commit()
+
+    async with SessionLocal() as check:
+        item = await check.scalar(
+            select(FbsPackingBoxItem).where(
+                FbsPackingBoxItem.box_id == box_id,
+                FbsPackingBoxItem.order_product_id == position_id,
+            )
+        )
+        assert item is not None and item.quantity == 2
+
+
+@pytest.mark.asyncio
+async def test_same_key_reused_for_a_different_box_does_not_silently_succeed(
+    db_session: AsyncSession,
+) -> None:
+    """Review WMS-453 F5: reusing the exact same client key for a second,
+    different box (client bug or coincidence, not a network retry) must be
+    judged as a new action for *that* box, not read back as "already done"
+    just because the same string was used for a different box before.
+    """
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    positions = await _positions(db_session, order)  # quantities [3, 5]
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 2, "f5-cross-box", actor_user_id=None
+    )
+    await boxes_svc.assign_orders(
+        db_session,
+        tenant.id,
+        supply.id,
+        boxes[0].id,
+        [],
+        actor_user_id=None,
+        positions=_add(positions[1].id, 2),
+        idempotency_key="shared-client-key",
+    )
+    await boxes_svc.assign_orders(
+        db_session,
+        tenant.id,
+        supply.id,
+        boxes[1].id,
+        [],
+        actor_user_id=None,
+        positions=_add(positions[1].id, 2),
+        idempotency_key="shared-client-key",
+    )
+    item0 = await db_session.scalar(
+        select(FbsPackingBoxItem).where(
+            FbsPackingBoxItem.box_id == boxes[0].id,
+            FbsPackingBoxItem.order_product_id == positions[1].id,
+        )
+    )
+    item1 = await db_session.scalar(
+        select(FbsPackingBoxItem).where(
+            FbsPackingBoxItem.box_id == boxes[1].id,
+            FbsPackingBoxItem.order_product_id == positions[1].id,
+        )
+    )
+    assert item0 is not None and item0.quantity == 2
+    assert item1 is not None and item1.quantity == 2
+
+
+@pytest.mark.asyncio
 async def test_concurrent_additions_serialize_under_the_supply_lock_on_postgresql(
     db_session: AsyncSession,
 ) -> None:
