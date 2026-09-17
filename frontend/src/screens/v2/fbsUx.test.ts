@@ -232,7 +232,7 @@ describe('WMS-453 box shipment lifecycle (R6/R9)', () => {
     expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 5], ['key-1', 5]])
   })
 
-  it('changed input, replay of the pending is definitively refused (409) → pending dropped, changed input goes out under a new key', async () => {
+  it('changed input, replay of the pending is definitively refused (409) → refusal shown, pending dropped, nothing new is sent by itself; the next press is a new key', async () => {
     const server = makeServer()
     const sent: FbsBoxShipment[] = []
     const send = vi.fn(async (shipment: FbsBoxShipment) => {
@@ -244,8 +244,11 @@ describe('WMS-453 box shipment lifecycle (R6/R9)', () => {
     const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
     const first = await sendFbsBoxShipment({ ...base, pending: null, positions: [{ order_product_id: 'shirt', quantity: 70 }] })
     const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: [{ order_product_id: 'shirt', quantity: 60 }] })
-    expect(second.ok).toBe(true)
+    expect(second.ok).toBe(false)
     expect(second.pending).toBeNull()
+    expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 70], ['key-1', 70]])
+    const third = await sendFbsBoxShipment({ ...base, pending: second.pending, positions: [{ order_product_id: 'shirt', quantity: 60 }] })
+    expect(third.ok).toBe(true)
     expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 70], ['key-1', 70], ['key-2', 60]])
   })
 
@@ -303,6 +306,57 @@ describe('WMS-453 box shipment lifecycle (R6/R9)', () => {
     expect(second.ok).toBe('resolved')
     expect(sent.map((item) => item.key)).toEqual(['key-1', 'key-1'])
     expect(server.state.shirt).toBe(5)
+  })
+
+  it('F5-A: P=5 applied but response lost; operator keeps P=5, checks Q and leaves its field empty → replay 5/K1, but the form is incomplete → resolved, window stays open', async () => {
+    const server = makeServer()
+    const sent: FbsBoxShipment[] = []
+    const send = vi.fn(async (shipment: FbsBoxShipment) => {
+      sent.push(shipment)
+      const result = server.apply(shipment)
+      if (sent.length === 1) throw networkFailure()
+      return result
+    })
+    const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
+    const first = await sendFbsBoxShipment({ ...base, pending: null, positions: five, typedPositions: five, formComplete: true })
+    expect(first.ok).toBe(false)
+    // Форма: P=5 (как было), Q отмечена с пустым полем → typedPositions = [P5], но форма неполная.
+    const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: five, typedPositions: five, formComplete: false })
+    expect(second.ok).toBe('resolved')
+    expect(second.pending).toBeNull()
+    expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 5], ['key-1', 5]])
+    expect(server.state.shirt).toBe(5)
+  })
+
+  it('F5-B: P=70/K1 not delivered, other operator adds 40, operator sets P=60 and checks Q with an empty field → replay gets 409, shown; nothing partial is sent; filled form goes out as one new body', async () => {
+    const server = makeServer()
+    const sent: FbsBoxShipment[] = []
+    const send = vi.fn(async (shipment: FbsBoxShipment) => {
+      sent.push(shipment)
+      if (sent.length === 1) throw networkFailure() // 70/K1 не дошёл
+      if (shipment.positions.some((entry) => entry.order_product_id === 'shirt' && server.state.shirt + entry.quantity > 100)) {
+        throw new Error('409 ozon_box_quantity_exceeded')
+      }
+      return server.apply(shipment)
+    })
+    const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
+    const seventy = [{ order_product_id: 'shirt', quantity: 70 }]
+    const first = await sendFbsBoxShipment({ ...base, pending: null, positions: seventy, typedPositions: seventy, formComplete: true })
+    expect(first.ok).toBe(false)
+    server.apply({ key: 'key-B', boxId: 'box-1', positions: [{ order_product_id: 'shirt', quantity: 40 }] })
+    // Оператор: P=60, Q отмечена, поле Q пустое → тело [P60], форма неполная.
+    const sixty = [{ order_product_id: 'shirt', quantity: 60 }]
+    const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: sixty, typedPositions: sixty, formComplete: false })
+    expect(second.ok).toBe(false)
+    expect(second.pending).toBeNull()
+    expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 70], ['key-1', 70]])
+    expect(server.state.shirt).toBe(40)
+    // Заполнил Q → новое действие: P=60 и Q=1 одним телом под новым ключом.
+    const both = [{ order_product_id: 'shirt', quantity: 60 }, { order_product_id: 'hoodie', quantity: 1 }]
+    const third = await sendFbsBoxShipment({ ...base, pending: second.pending, positions: both, typedPositions: both, formComplete: true })
+    expect(third.ok).toBe(true)
+    expect(sent[2]).toMatchObject({ key: 'key-2', positions: both })
+    expect(server.state.shirt).toBe(100)
   })
 
   it('pending replay definitively refused and no new body → the refusal is shown, nothing empty is sent', async () => {

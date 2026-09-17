@@ -1040,6 +1040,7 @@ export function FfFbsSupplyWorkspace({
             boxId,
             positions: boxAssignSelectedPositions,
             typedPositions: boxAssignTypedPositions,
+            formComplete: boxAssignFormComplete,
             send: (shipment) => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [], {
               positions: shipment.positions,
               idempotency_key: shipment.key,
@@ -1635,10 +1636,14 @@ export function FfFbsSupplyWorkspace({
   // Ввод оператора как есть, без фильтра по остатку: нужен, чтобы узнать
   // «ввод не менялся» и повторить незавершённую отправку даже после того, как
   // фоновое обновление убрало полностью разложенную позицию из списка (F4).
-  const boxAssignTypedPositions = ozonPositionRows.filter((row) => boxSelectedPositionIds.has(row.id)).flatMap((row) => {
+  // Отмеченная строка с пустым полем делает форму неполной — такой ввод не
+  // считается прежним, чтобы строка не потерялась молча (F5).
+  const boxAssignTypedRows = ozonPositionRows.filter((row) => boxSelectedPositionIds.has(row.id))
+  const boxAssignTypedPositions = boxAssignTypedRows.flatMap((row) => {
     const quantity = Number(boxProductQty[row.id])
     return Number.isInteger(quantity) && quantity >= 1 ? [{ order_product_id: row.id, quantity }] : []
   })
+  const boxAssignFormComplete = boxAssignTypedPositions.length === boxAssignTypedRows.length
   const boxAssignOrderId = boxAssignBox?.assigned_order_ids[0] ?? boxAssignSelectedRows[0]?.order.id
   const ozonBoxAssignOrders = (workspace?.orders ?? []).map((order) => ({
     order,
@@ -1697,7 +1702,9 @@ export function FfFbsSupplyWorkspace({
     return row.orders.slice(0, qty).map((order) => order.id)
   })
   // Пока есть незавершённая отправка, «Добавить» доступна независимо от текущего
-  // выбора: нажатие повторит её тем же телом и ключом (R6, ревью F4).
+  // выбора: нажатие только повторит её тем же телом и ключом (R6, ревью F4/F5);
+  // без неё — обычная проверка полноты формы (пустое поле у отмеченной строки
+  // запирает кнопку).
   const boxAssignSubmitDisabled = isOzonSupply
     ? boxAssignPending === null && (boxAssignSelectedPositions.length === 0 || boxAssignSelectedPositions.length !== boxAssignSelectedRows.length)
     : boxAssignSelectedOrderIds.length === 0

@@ -103,10 +103,12 @@ export type FbsBoxShipmentResult<W> =
   /** Ошибка: показать; pending — что повторять с тем же телом и ключом (или ничего). */
   | { ok: false; error: unknown; pending: FbsBoxShipment | null }
   /**
-   * Ввод изменился, а прежняя незавершённая отправка только что подтверждена
-   * повтором с тем же ключом: изменённый ввод не отправлен, старая отправка
-   * закрыта. Показать свежее состояние (остатки), сохранить ввод оператора,
-   * модалку не закрывать; следующее «Добавить» — новое действие.
+   * Прежняя незавершённая отправка подтверждена повтором с тем же ключом, но
+   * форма уже не равна её телу (ввод изменился или у отмеченной строки пустое
+   * поле): ничего нового не отправлено, старая отправка закрыта. Показать
+   * свежее состояние (остатки), сохранить выбор и поля, модалку не закрывать;
+   * следующее «Добавить» — новое действие с новым ключом и обычной проверкой
+   * полноты формы.
    */
   | { ok: 'resolved'; workspace: W; pending: null }
 
@@ -120,16 +122,16 @@ export type FbsBoxShipmentResult<W> =
  * оператор (ревью F3).
  *
  * - Нет незавершённой отправки — новый ключ; тело и ключ запоминаются до ответа.
- * - Ввод оператора (typedPositions — отмеченные строки с введёнными
- *   количествами, без фильтра по остатку: фоновое обновление могло убрать
- *   полностью разложенную позицию из списка, а ввод при этом не менялся)
- *   совпадает с незавершённой отправкой — повтор с тем же телом и ключом.
- * - Ввод изменился, а исход прежней отправки неизвестен — сначала повторяем
- *   прежнюю отправку тем же телом и ключом; её успешный ответ — 'resolved'
- *   (изменённый ввод не отправлен; ответ уже содержит свежее рабочее
- *   пространство). Обрыв на этом повторе — ошибка, отправка сохранена.
- *   Окончательный отказ на повторе — прежняя отправка не применена и снята,
- *   изменённый ввод уходит как новое действие с новым ключом.
+ * - Есть незавершённая отправка — нажатие ТОЛЬКО повторяет её тем же телом и
+ *   ключом и никогда само не отправляет новое тело (ревью F5). Успешный ответ
+ *   (он уже содержит свежее рабочее пространство): если форма полная и ровно
+ *   равна старому телу — обычный успех; иначе — 'resolved'. Обрыв на повторе —
+ *   ошибка, отправка сохранена. Окончательный отказ на повторе — отправка
+ *   снята, отказ показывается, ввод сохранён; следующее нажатие — новое действие.
+ *   Форма для сравнения (typedPositions) — отмеченные строки с введёнными
+ *   количествами без фильтра по остатку: фоновое обновление могло убрать
+ *   полностью разложенную позицию из списка, а ввод при этом не менялся
+ *   (ревью F4); отмеченная строка с пустым полем делает форму неполной.
  * - Окончательный отказ сервера (структурный 4xx без просьбы повторить) —
  *   отправка снята: сервер занимает ключ только на пути записи, ничего не
  *   сохранено. Обрыв или неизвестный исход — отправка остаётся для повтора.
@@ -141,33 +143,29 @@ export async function sendFbsBoxShipment<W>(input: {
   positions: FbsPackingBoxPosition[]
   /** Ввод оператора как есть (без фильтра по остатку) — для сравнения с незавершённой отправкой. */
   typedPositions?: FbsPackingBoxPosition[]
+  /** У каждой отмеченной строки заполнено количество; false — форма неполная, повтор не считается «тем же вводом». */
+  formComplete?: boolean
   send: (shipment: FbsBoxShipment) => Promise<W>
   createKey: () => string
   isDefinitiveRefusal: (error: unknown) => boolean
 }): Promise<FbsBoxShipmentResult<W>> {
   const { pending, boxId, positions } = input
-  const typed = input.typedPositions ?? positions
-  if (pending && pending.boxId === boxId && fbsSameBoxPositions(pending.positions, typed)) {
-    return sendOnce(pending)
-  }
   if (pending) {
+    const typed = input.typedPositions ?? positions
+    const unchanged = (input.formComplete ?? true) && pending.boxId === boxId && fbsSameBoxPositions(pending.positions, typed)
+    let workspace: W
     try {
-      return { ok: 'resolved', workspace: await input.send(pending), pending: null }
+      workspace = await input.send(pending)
     } catch (error) {
-      if (!input.isDefinitiveRefusal(error)) return { ok: false, error, pending }
-      // Прежняя отправка сервером отвергнута и снята; если нового тела нет
-      // (оператор всё снял), показать этот отказ, а не слать пустую отправку.
-      if (positions.length === 0) return { ok: false, error, pending: null }
+      return { ok: false, error, pending: input.isDefinitiveRefusal(error) ? null : pending }
     }
+    return unchanged ? { ok: true, workspace, pending: null } : { ok: 'resolved', workspace, pending: null }
   }
-  return sendOnce({ key: input.createKey(), boxId, positions })
-
-  async function sendOnce(shipment: FbsBoxShipment): Promise<FbsBoxShipmentResult<W>> {
-    try {
-      return { ok: true, workspace: await input.send(shipment), pending: null }
-    } catch (error) {
-      return { ok: false, error, pending: input.isDefinitiveRefusal(error) ? null : shipment }
-    }
+  const shipment: FbsBoxShipment = { key: input.createKey(), boxId, positions }
+  try {
+    return { ok: true, workspace: await input.send(shipment), pending: null }
+  } catch (error) {
+    return { ok: false, error, pending: input.isDefinitiveRefusal(error) ? null : shipment }
   }
 }
 
