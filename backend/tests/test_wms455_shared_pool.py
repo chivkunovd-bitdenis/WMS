@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -614,24 +615,32 @@ async def test_c16_two_sessions_saving_the_same_product_leave_one_coherent_state
     second_lock_attempted = asyncio.Event()
     original_lock = rules.marketplace_seller_lock
 
-    def observed_lock(session, seller_id, marketplace, **kwargs):
-        cm = original_lock(session, seller_id, marketplace, **kwargs)
+    # WMS-455 F6 (третий круг кросс-ревью Astra 17.09.2026): барьер должен
+    # ждать ОСВОБОЖДЕНИЯ ВНУТРИ уже открытого `async with original_lock(...)`,
+    # а не после того, как _Wrapped.__aenter__ вернул управление наружу.
+    # Раньше obseved_lock был обычным классом: `await cm.__aenter__()`
+    # успешно захватывал настоящий замок (wb), и только ПОТОМ шло ожидание
+    # release_first. AsyncExitStack.enter_async_context регистрирует чужой
+    # __aexit__ только после успешного возврата __aenter__ — если ожидание
+    # барьера в этот момент падает по отмене или тайм-ауту, __aenter__ так и
+    # не возвращается, стек не успевает узнать про уже захваченный замок, а
+    # обёртка сама cm.__aexit__() при ошибке не звала. Захваченный wb утекал
+    # до сборки мусора/shutdown_asyncgens — уже после закрытия lock_session.
+    # @asynccontextmanager устраняет это: ожидание барьера теперь — обычный
+    # оператор ВНУТРИ `async with original_lock(...)`, и штатные механизмы
+    # Python `async with` сами вызовут его __aexit__ при исключении или
+    # отмене, откуда бы они ни пришли — до того, как исключение уйдёт наружу.
+    @asynccontextmanager
+    async def observed_lock(session, seller_id, marketplace, **kwargs):
         role = caller_role.get()
-
-        class _Wrapped:
-            async def __aenter__(self) -> bool:
-                if role == "second":
-                    second_lock_attempted.set()
-                acquired = await cm.__aenter__()
-                if role == "first" and marketplace == "wb":
-                    first_locked.set()
-                    await asyncio.wait_for(release_first.wait(), 10)
-                return acquired
-
-            async def __aexit__(self, *exc: object) -> None:
-                await cm.__aexit__(*exc)
-
-        return _Wrapped()
+        # Сигнал второго вызова — до попытки захвата, как и раньше (F3).
+        if role == "second":
+            second_lock_attempted.set()
+        async with original_lock(session, seller_id, marketplace, **kwargs) as acquired:
+            if role == "first" and marketplace == "wb":
+                first_locked.set()
+                await asyncio.wait_for(release_first.wait(), 10)
+            yield acquired
 
     monkeypatch.setattr(rules, "marketplace_seller_lock", observed_lock)
 
