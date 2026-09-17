@@ -2938,6 +2938,7 @@ export default function App() {
         meRole={me.role}
         ffPermissions={ffPermissions}
         portal={portal} addressStorageEnabled={me.address_storage_enabled !== false}
+        assistantEnabled={me.assistant_enabled === true}
       >
         <>
         <Routes>

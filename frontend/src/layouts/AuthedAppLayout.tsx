@@ -31,6 +31,9 @@ type Props = {
   meRole?: string
   ffPermissions?: FfPermissions | null
   addressStorageEnabled?: boolean
+  // WMS-433/R23: признак assistant_enabled из /auth/me. Без него (превью,
+  // сцены базы знаний, выключенный тенант) помощника в каркасе нет вовсе.
+  assistantEnabled?: boolean
 }
 
 export function AuthedAppLayout({
@@ -42,6 +45,7 @@ export function AuthedAppLayout({
   meRole = '',
   ffPermissions = null,
   addressStorageEnabled = true,
+  assistantEnabled = false,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
   if (portal === 'seller') {
@@ -334,9 +338,12 @@ export function AuthedAppLayout({
         <Toolbar />
         {children}
       </Box>
-      {/* WMS-433: помощник доступен всем сотрудникам ФФ, как «База знаний» (R20);
-          селлерский каркас выше его не получает — это второй срез. */}
-      <AssistantPanel />
+      {/* WMS-433: помощник доступен всем сотрудникам ФФ, как «База знаний» (R20),
+          но только у тенанта, включённого на сервере (R23): для выключенного
+          панель не монтируется — ни кнопки, ни окна в DOM, ни опроса переписки,
+          что бы ни лежало в localStorage. Селлерский каркас выше его не
+          получает — это второй срез. */}
+      {assistantEnabled ? <AssistantPanel /> : null}
     </Box>
   )
 }

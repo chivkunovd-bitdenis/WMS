@@ -30,8 +30,44 @@ export const ASSISTANT_MESSAGE_MAX_CHARS = 8000
 
 const BAD_RESPONSE_SHAPE = 'неожиданный ответ сервера'
 
+// WMS-433/R23: код отказа сервера, когда помощник выключен для тенанта
+// (403, detail.code). Панель по нему не показывает ошибку, а убирает себя и
+// прекращает опрос — например, если переменную переключили, пока окно открыто.
+export const ASSISTANT_DISABLED_CODE = 'assistant_disabled'
+
+export class AssistantDisabledError extends Error {
+  constructor() {
+    super('помощник выключен для вашей организации')
+    this.name = 'AssistantDisabledError'
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+async function isAssistantDisabledResponse(res: Response): Promise<boolean> {
+  if (res.status !== 403) {
+    return false
+  }
+  try {
+    // Тело читается с копии: оригинал ещё нужен describeFailure для текста.
+    const data = (await res.clone().json()) as { detail?: unknown }
+    const detail = data.detail
+    if (detail === ASSISTANT_DISABLED_CODE) {
+      return true
+    }
+    return isRecord(detail) && detail.code === ASSISTANT_DISABLED_CODE
+  } catch {
+    return false
+  }
+}
+
+async function failureFromResponse(res: Response): Promise<Error> {
+  if (await isAssistantDisabledResponse(res)) {
+    return new AssistantDisabledError()
+  }
+  return new Error(await describeFailure(res))
 }
 
 // Ответ сервера проверяется по форме, а не берётся на веру: тело 200 без
@@ -86,7 +122,7 @@ export async function fetchAssistantConversation(
     signal,
   })
   if (!res.ok) {
-    throw new Error(await describeFailure(res))
+    throw await failureFromResponse(res)
   }
   return parseAssistantConversation(await readJsonBody(res))
 }
@@ -101,7 +137,7 @@ export async function sendAssistantMessage(
     body: JSON.stringify(body),
   })
   if (!res.ok) {
-    throw new Error(await describeFailure(res))
+    throw await failureFromResponse(res)
   }
   const row = parseAssistantMessage(await readJsonBody(res))
   if (row === null) {

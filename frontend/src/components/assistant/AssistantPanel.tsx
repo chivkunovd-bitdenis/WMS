@@ -15,6 +15,7 @@ import { alpha } from '@mui/material/styles'
 import { getStoredToken } from '../../api'
 import {
   ASSISTANT_MESSAGE_MAX_CHARS,
+  AssistantDisabledError,
   describeSendError,
   fetchAssistantConversation,
   sendAssistantMessage,
@@ -209,14 +210,23 @@ class AssistantErrorBoundary extends Component<{ children: ReactNode }, { failed
 }
 
 export function AssistantPanel() {
+  // R23: каркас монтирует панель по assistant_enabled из /auth/me, но сервер
+  // может выключить тенанта на лету (переменная переключена, API перезапущен).
+  // Первый же ответ 403 assistant_disabled размонтирует тело целиком: ни
+  // кнопки, ни окна, ни контейнера в body, ни опроса — без ошибок в консоли.
+  // Вернётся только со следующей загрузкой профиля, когда тенант снова включён.
+  const [disabledByServer, setDisabledByServer] = useState(false)
+  if (disabledByServer) {
+    return null
+  }
   return (
     <AssistantErrorBoundary>
-      <AssistantPanelBody />
+      <AssistantPanelBody onDisabledByServer={() => setDisabledByServer(true)} />
     </AssistantErrorBoundary>
   )
 }
 
-function AssistantPanelBody() {
+function AssistantPanelBody({ onDisabledByServer }: { onDisabledByServer: () => void }) {
   const token = getStoredToken('fulfillment')
   const [open, setOpen] = useState<boolean>(() => readFlag(OPEN_KEY))
   const [expanded, setExpanded] = useState<boolean>(() => readFlag(EXPANDED_KEY))
@@ -226,6 +236,13 @@ function AssistantPanelBody() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  // R23: после 403 assistant_disabled новых запросов не начинать — обёртка
+  // размонтирует тело, но отложенный перечит из finally мог бы успеть раньше.
+  const disabledRef = useRef(false)
+  const markDisabledByServer = () => {
+    disabledRef.current = true
+    onDisabledByServer()
+  }
   // Последняя попытка отправки: тот же текст → тот же client_message_id,
   // чтобы повтор после потери ответа не создал дубль (R21).
   const attemptRef = useRef<SendAttempt | null>(null)
@@ -261,7 +278,7 @@ function AssistantPanelBody() {
   // опроса — иначе при медленном GET за готовым ответом шёл бы лишний запрос.
   const refresh = useCallback(
     async function load(options?: { silent?: boolean; requestReload?: boolean }): Promise<void> {
-      if (!token || !mountedRef.current) return
+      if (!token || !mountedRef.current || disabledRef.current) return
       if (loadInFlightRef.current) {
         if (options?.requestReload) reloadRequestedRef.current = true
         return
@@ -280,7 +297,12 @@ function AssistantPanelBody() {
         )
         setLoadError(null)
       } catch (error) {
-        if (!mountedRef.current || controller.signal.aborted || seq <= appliedSeqRef.current) return
+        if (!mountedRef.current || controller.signal.aborted) return
+        if (error instanceof AssistantDisabledError) {
+          markDisabledByServer()
+          return
+        }
+        if (seq <= appliedSeqRef.current) return
         if (!options?.silent) {
           setLoadError(`Не удалось загрузить переписку: ${describeSendError(error)}`)
         }
@@ -411,10 +433,16 @@ function AssistantPanelBody() {
       })
     } catch (error) {
       if (!mountedRef.current) return
-      // R21: «призрак» убирается, текст возвращается в поле, причина одной
-      // строкой; повтор той же кнопкой уходит с тем же client_message_id.
+      // «Призрак» убирается при любом сбое.
       localOnlyIdsRef.current.delete(pendingId)
       setMessages((current) => current.filter((m) => m.id !== pendingId))
+      if (error instanceof AssistantDisabledError) {
+        // R23: помощника у тенанта больше нет — окно уходит, без ошибки в ленте.
+        markDisabledByServer()
+        return
+      }
+      // R21: текст возвращается в поле, причина одной строкой; повтор той же
+      // кнопкой уходит с тем же client_message_id.
       setDraft((current) => (current.trim() ? current : text))
       setSendError(`Не отправлено: ${describeSendError(error)}`)
       // Пока «призрак» был в ленте, снимок сервера мог обрезать её начало —
