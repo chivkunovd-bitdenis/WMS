@@ -39,6 +39,9 @@ export type ApiRule = {
   by_warehouse: Record<string, number>
   units_mode: boolean
   units_by_warehouse: Record<string, number>
+  // Режим «весь свободный остаток в оба кабинета» (WMS-455). Сервер отдаёт
+  // уже эффективное значение: без связки Ozon — false. Нет в ответе — false.
+  shared_pool?: boolean
   units_remaining_by_warehouse: Record<string, number>
   free_stock: number
   on_hand: number
@@ -95,6 +98,7 @@ export function toRule(
     unitsMode: rule?.units_mode ?? false,
     // Stored operator caps survive orders and percentage mode unchanged.
     unitsByWarehouse: qualify(rule?.units_by_warehouse ?? {}),
+    sharedPool: rule?.shared_pool ?? false,
   }
 }
 
@@ -108,7 +112,9 @@ export function toRule(
  *
  * WMS-060/WMS-338: поштучный режим и числа по складам обязательны, иначе API
  * подставит `units_mode=false` и `units_by_warehouse={}`, и любое сохранение
- * молча сбросит режим штук и операторский потолок.
+ * молча сбросит режим штук и операторский потолок. По той же причине всегда
+ * уходит и `shared_pool` (WMS-455): не прислали — сервер считает false и
+ * выключил бы режим.
  */
 export function fbsRuleBody(rule: FbsRule): {
   publish: boolean | undefined
@@ -118,6 +124,7 @@ export function fbsRuleBody(rule: FbsRule): {
   by_warehouse: Record<string, number>
   units_mode: boolean
   units_by_warehouse: Record<string, number>
+  shared_pool: boolean
 } {
   const touched = (marketplace: MarketplaceCode) =>
     !rule.changedPublication || rule.changedPublication.includes(marketplace)
@@ -132,6 +139,9 @@ export function fbsRuleBody(rule: FbsRule): {
     // сдвинет точку отсчёта расхода на «сейчас», и съеденное до этой секунды
     // уже учтено в том, что было показано.
     units_by_warehouse: rule.unitsByWarehouse,
+    // При включённом режиме сервер доли и штуки выше не читает — они уходят
+    // как есть, чтобы у товара остались его прежние значения на выключение.
+    shared_pool: rule.sharedPool,
   }
 }
 

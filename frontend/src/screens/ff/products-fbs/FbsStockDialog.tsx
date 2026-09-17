@@ -18,6 +18,7 @@ import {
 } from './fbsSellerWarehouseRows'
 import {
   dialogShowsOzon,
+  dialogShowsSharedPool,
   freeStock,
   initialDraft,
   MARKETPLACE_NAMES,
@@ -37,6 +38,9 @@ import {
 } from './stub'
 
 type DialogProduct = Product & { savedPublishedNow?: number }
+
+/** Почему доли и штуки заперты при включённом режиме «весь свободный остаток» (WMS-455). */
+const SHARED_POOL_LOCK = 'Включён весь свободный остаток в оба кабинета'
 
 // The API supplies aggregate stock, not the per-warehouse inputs needed for a
 // draft quantity. Keep percentage editing without inventing a quantity preview.
@@ -138,6 +142,9 @@ function FbsStockDialogBody({
   // товара окно совпадает с окном того же товара у продавца без Ozon-складов,
   // и Ozon-привязку продавца из него не тронуть: строки просто нет.
   const ozonShown = dialogShowsOzon(products)
+  // Режим «весь свободный остаток в Wildberries и Ozon» (WMS-455) — только у
+  // товара на двух площадках; у остальных окно не отличается от прежнего.
+  const sharedPoolShown = dialogShowsSharedPool(products)
   const visible: Seller = { ...seller, warehouses: visibleWarehouses(seller, ozonShown) }
   // The percentage limit is shared across destinations. Publication quantities
   // additionally depend on each destination's physical WMS warehouse.
@@ -161,7 +168,9 @@ function FbsStockDialogBody({
   // при одном складе черновик всегда считается по общему проценту: что оператор
   // видит на ползунке, то и уезжает — а на ползунок при раздельном правиле
   // идёт действующая доля этого склада (см. initialDraft).
-  const [draft, setDraft] = useState<FbsRule>(initialDraft(rule, visible.warehouses, ozonShown))
+  const [draft, setDraft] = useState<FbsRule>(
+    initialDraft(rule, visible.warehouses, ozonShown, sharedPoolShown),
+  )
 
   const many = products.length > 1
   // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
@@ -200,9 +209,13 @@ function FbsStockDialogBody({
   const increasesCap = Object.entries(draft.unitsByWarehouse).some(([key, value]) =>
     value > (rule.unitsByWarehouse[key] ?? 0),
   )
-  const overAllocated = draft.unitsMode
-    ? !many && increasesCap && unitsSum > base
-    : publishesAny && percentSum > 100
+  // В режиме «весь свободный остаток» доли и штуки не участвуют в публикации,
+  // и потолок 100% не считается ни при каких прежних значениях (WMS-455).
+  const overAllocated = draft.sharedPool
+    ? false
+    : draft.unitsMode
+      ? !many && increasesCap && unitsSum > base
+      : publishesAny && percentSum > 100
   // Склады раскладываются по площадкам (WMS-350). Порядок фиксированный:
   // Wildberries первым, потому что он был здесь всегда, Ozon следом.
   // Заголовки появляются только когда площадок правда две — у продавца с одним
@@ -310,6 +323,24 @@ function FbsStockDialogBody({
           />
         ) : null}
 
+        {/* Режим «общая корзинка» (WMS-455): в каждый кабинет уходит весь
+            свободный остаток, без долей. Живёт сразу под галками площадок,
+            потому что относится к обеим: куда публиковать — решают они, а
+            галка режима говорит «без долей». */}
+        {sharedPoolShown ? (
+          <CheckboxInput
+            label="Весь свободный остаток в Wildberries и Ozon"
+            checked={draft.sharedPool}
+            onChange={(sharedPool) => setDraft((one) => ({ ...one, sharedPool }))}
+            helperText={
+              draft.sharedPool
+                ? 'Доли отключены: в каждый кабинет уходит весь свободный остаток, продажа на любой площадке уменьшает его на обеих'
+                : 'Включите, чтобы отдавать весь свободный остаток в оба кабинета без долей'
+            }
+            testId="fbs-stock-shared-pool-mode"
+          />
+        ) : null}
+
         {/* Режим. Доля хороша, когда остаток дышит: приехала партия — в кабинете
             стало больше само. Но если с продавцом согласована разбивка по
             направлениям в конкретных числах, в сетку кратных десяти процентов
@@ -321,17 +352,23 @@ function FbsStockDialogBody({
           checked={draft.unitsMode}
           onChange={(unitsMode) => setDraft((one) => ({ ...one, unitsMode }))}
           helperText={
-            draft.unitsMode
-              ? 'Доля отключена. Числа по складам не растут сами при приёмке — поднимайте руками'
-              : 'Включите, чтобы задать количество по каждому складу числом, а не долей'
+            draft.sharedPool
+              ? undefined
+              : draft.unitsMode
+                ? 'Доля отключена. Числа по складам не растут сами при приёмке — поднимайте руками'
+                : 'Включите, чтобы задать количество по каждому складу числом, а не долей'
           }
           disabledReason={
-            noneServed ? `Сначала выберите хотя бы один склад ${placesLabel}` : undefined
+            draft.sharedPool
+              ? SHARED_POOL_LOCK
+              : noneServed
+                ? `Сначала выберите хотя бы один склад ${placesLabel}`
+                : undefined
           }
           testId="fbs-stock-units-mode"
         />
 
-        {draft.unitsMode ? (
+        {draft.unitsMode && !draft.sharedPool ? (
           <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-units-total">
             Задано по складам {unitsSum.toLocaleString('ru-RU')} шт при{' '}
             {base.toLocaleString('ru-RU')} свободных
@@ -343,13 +380,17 @@ function FbsStockDialogBody({
           label="Доля свободного остатка"
           value={draft.percent}
           onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
-          disabled={noneServed || draft.unitsMode || (!single && !draft.sameEverywhere)}
+          disabled={
+            draft.sharedPool || noneServed || draft.unitsMode || (!single && !draft.sameEverywhere)
+          }
           disabledReason={
-            noneServed
-              ? `Сначала выберите хотя бы один склад ${placesLabel}`
-              : draft.unitsMode
-                ? 'Включён остаток по штукам — количество задаётся числом под каждым складом'
-                : 'Сейчас доля задаётся по каждому складу отдельно'
+            draft.sharedPool
+              ? SHARED_POOL_LOCK
+              : noneServed
+                ? `Сначала выберите хотя бы один склад ${placesLabel}`
+                : draft.unitsMode
+                  ? 'Включён остаток по штукам — количество задаётся числом под каждым складом'
+                  : 'Сейчас доля задаётся по каждому складу отдельно'
           }
           testId="fbs-stock-percent"
         />
@@ -362,12 +403,20 @@ function FbsStockDialogBody({
               checked={draft.sameEverywhere}
               onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
               disabledReason={
-                draft.unitsMode ? 'Включён остаток по штукам' : undefined
+                draft.sharedPool
+                  ? SHARED_POOL_LOCK
+                  : draft.unitsMode
+                    ? 'Включён остаток по штукам'
+                    : undefined
               }
               // Доля применяется к каждому складу отдельно, а не делится между
               // ними. Из старой подписи это не читалось, и оператор, поставив
               // «половину» на два склада, отдавал в WB весь остаток.
-              helperText={`Доля уйдёт на КАЖДЫЙ из ${enabledServed.length} складов ${enabledPlacesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
+              helperText={
+                draft.sharedPool
+                  ? undefined
+                  : `Доля уйдёт на КАЖДЫЙ из ${enabledServed.length} складов ${enabledPlacesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`
+              }
               testId="fbs-stock-same"
             />
           </>
@@ -381,7 +430,7 @@ function FbsStockDialogBody({
           </ErrorNotice>
         ) : null}
 
-        {single || draft.sameEverywhere ? null : (
+        {single || draft.sameEverywhere || draft.sharedPool ? null : (
           <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-rest">
             Нераспределено: {freePercent}%. Количество зависит от свободного остатка
             каждого физического склада WMS.
@@ -396,15 +445,18 @@ function FbsStockDialogBody({
           ) : null}
           {/* Сто процентов — на все склады обеих площадок разом, а не на каждую
               отдельно: товар лежит у нас один. Сказать это надо один раз и до
-              списка, иначе вторая площадка читается как второй остаток. */}
-          {manyMarketplaces ? (
+              списка, иначе вторая площадка читается как второй остаток.
+              В режиме «весь свободный остаток» лимита нет, и та же строка
+              говорит, что уходит на каждый склад (WMS-455). */}
+          {draft.sharedPool || manyMarketplaces ? (
             <Typography
               variant="body2"
               color="text.secondary"
               data-testid="fbs-stock-shared-pool"
             >
-              Общий лимит долей для обеих площадок — 100%. Количество для каждого
-              направления рассчитывается по его физическому складу WMS.
+              {draft.sharedPool
+                ? 'На каждый склад ниже уходит весь свободный остаток товара'
+                : 'Общий лимит долей для обеих площадок — 100%. Количество для каждого направления рассчитывается по его физическому складу WMS.'}
             </Typography>
           ) : null}
           {groups.map((group) => (
@@ -491,7 +543,7 @@ function FbsStockDialogBody({
                   />
                 </Box>
               </Stack>
-              {warehouse.fbsEnabled && draft.unitsMode ? (
+              {warehouse.fbsEnabled && draft.unitsMode && !draft.sharedPool ? (
                 // Поле вместо ползунка. Максимум намеренно НЕ ставится: оператор
                 // должен иметь возможность набрать больше и увидеть красное, а не
                 // упереться в молча не принимающееся поле.
@@ -519,7 +571,7 @@ function FbsStockDialogBody({
                   testId={`fbs-stock-units-${warehouse.id}`}
                 />
               ) : null}
-              {warehouse.fbsEnabled && !single && !draft.unitsMode ? (
+              {warehouse.fbsEnabled && !single && !draft.unitsMode && !draft.sharedPool ? (
                 <PercentSlider
                   label="Доля на этот склад"
                   value={

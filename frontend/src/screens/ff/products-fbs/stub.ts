@@ -103,6 +103,13 @@ export type FbsRule = {
    * можно отдать), при сохранении это становится новым выделением.
    */
   unitsByWarehouse: Record<string, number>
+  /**
+   * Режим «весь свободный остаток в Wildberries и Ozon» (WMS-455): доли и
+   * штуки не применяются, в каждый кабинет уходит весь свободный остаток, и
+   * продажа на любой площадке уменьшает его на обеих. Сервер держит режим
+   * только у товара со связкой Ozon; в ответах он уже эффективный.
+   */
+  sharedPool: boolean
 }
 
 export const SELLERS: Seller[] = [
@@ -169,9 +176,9 @@ export const PRODUCTS: Product[] = [
 ]
 
 export const INITIAL_RULES: FbsRule[] = [
-  { productId: 'p1', publish: true, sameEverywhere: true, percent: 50, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {} },
-  { productId: 'p4', publish: true, sameEverywhere: false, percent: 0, byWarehouse: { 'w-city-1': 30 }, unitsMode: false, unitsByWarehouse: {} },
-  { productId: 'p5', publish: false, sameEverywhere: true, percent: 20, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {} },
+  { productId: 'p1', publish: true, sameEverywhere: true, percent: 50, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {}, sharedPool: false },
+  { productId: 'p4', publish: true, sameEverywhere: false, percent: 0, byWarehouse: { 'w-city-1': 30 }, unitsMode: false, unitsByWarehouse: {}, sharedPool: false },
+  { productId: 'p5', publish: false, sameEverywhere: true, percent: 20, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {}, sharedPool: false },
 ]
 
 /** Свободный остаток на конкретном складе: из него и считается доля этого склада. */
@@ -222,6 +229,19 @@ export function dialogShowsOzon(products: Array<Pick<Product, 'marketplaces'>>):
   return products.some((one) => (one.marketplaces ?? []).includes('ozon'))
 }
 
+/**
+ * Показывать ли галку «Весь свободный остаток в Wildberries и Ozon» (WMS-455).
+ * Режим есть только у товара на двух площадках — у которого в строке каталога
+ * оба значка, «wb» и «ozon». В пачке достаточно одного такого товара: сервер
+ * сам оставит режим только у товаров со связкой Ozon.
+ */
+export function dialogShowsSharedPool(products: Array<Pick<Product, 'marketplaces'>>): boolean {
+  return products.some((one) => {
+    const marketplaces = one.marketplaces ?? []
+    return marketplaces.includes('wb') && marketplaces.includes('ozon')
+  })
+}
+
 /** Склады продавца, которые видны в окне: без Ozon, если Ozon в окне нет. */
 export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWarehouse[] {
   return ozonShown
@@ -249,11 +269,18 @@ export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWar
  * держит Ozon-привязку продавца в общих ста процентах (WMS-454). «ozon» в
  * списке тронутых флагов и есть команда сохранению отправить поле, а не
  * оставить прежнее значение.
+ *
+ * Та же логика у режима «весь свободный остаток» (WMS-455): галка режима есть
+ * только в окне товара на двух площадках (`sharedPoolShown`). Когда её нет,
+ * черновик начинает с выключенного режима — оператор видит доли, и именно
+ * они уходят на сервер, а не невидимый режим, который заставил бы сервер
+ * их проигнорировать.
  */
 export function initialDraft(
   rule: FbsRule,
   warehouses: SellerWarehouse[],
   ozonShown: boolean,
+  sharedPoolShown = false,
 ): FbsRule {
   const served = warehouses.filter((one) => one.fbsEnabled)
   const single = served.length <= 1
@@ -266,6 +293,7 @@ export function initialDraft(
     ...(ozonShown
       ? { changedPublication: [] }
       : { publishOzon: false, changedPublication: ['ozon' as const] }),
+    sharedPool: sharedPoolShown && rule.sharedPool,
   }
 }
 
@@ -283,6 +311,7 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
       byWarehouse: {},
       unitsMode: false,
       unitsByWarehouse: {},
+      sharedPool: false,
     }
   )
 }
@@ -315,6 +344,15 @@ export function splitAmounts(
 ): Record<string, number> {
   const amounts: Record<string, number> = {}
   let remaining = Math.max(freeStockQty, 0)
+  if (rule.sharedPool) {
+    // Режим «весь свободный остаток» (WMS-455): каждое публикующее направление
+    // получает весь свободный остаток одновременно, без вычитания остатка
+    // предыдущего склада — как `split_amounts` на сервере.
+    for (const warehouse of served) {
+      amounts[warehouse.id] = publishesTo(rule, warehouseMarketplace(warehouse)) ? remaining : 0
+    }
+    return amounts
+  }
   for (const warehouse of served) {
     if (!publishesTo(rule, warehouseMarketplace(warehouse))) {
       amounts[warehouse.id] = 0
@@ -343,6 +381,9 @@ export function publishedQty(product: Product, rule: FbsRule, seller: Seller): n
   const served = servedWarehouses(seller)
   if (served.length === 0) return 0
   const amounts = splitAmounts(rule, freeStock(product), served)
+  // В режиме «весь свободный остаток» направления получают одно и то же число
+  // одновременно; сумма удвоила бы его. Как published_now на сервере.
+  if (rule.sharedPool) return Math.max(0, ...Object.values(amounts))
   return Object.values(amounts).reduce((sum, one) => sum + one, 0)
 }
 
