@@ -303,11 +303,13 @@ async def test_fetch_orders_meta_batch_rejects_malformed_response_after_single_4
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
-        with patch("app.services.wildberries_fbs_client.asyncio.sleep"):
-            with pytest.raises(WildberriesClientError) as excinfo:
-                await fetch_marketplace_orders_meta_batch(
-                    client, api_token="wb-token", order_ids=[123456], marketplace_api_base="https://wb-mock.test"
-                )
+        with (
+            patch("app.services.wildberries_fbs_client.asyncio.sleep"),
+            pytest.raises(WildberriesClientError) as excinfo,
+        ):
+            await fetch_marketplace_orders_meta_batch(
+                client, api_token="wb-token", order_ids=[123456], marketplace_api_base="https://wb-mock.test"
+            )
 
     assert calls == 2
     assert excinfo.value.code == "invalid_response"
