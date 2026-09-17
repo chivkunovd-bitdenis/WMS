@@ -30,11 +30,50 @@ export function fbsBoxEditingDisabled(
   return fbsBoxOperationsDisabled(marketplace) || deliveryConfirmed
 }
 
+/**
+ * Сколько штук каждой позиции Ozon уже лежит в коробах поставки (WMS-453):
+ * позиция может быть разбита по нескольким коробам, поэтому количества
+ * строк состава складываются по order_product_id.
+ */
+export function fbsAssignedPositionQuantities(
+  boxes: Array<{ assigned_positions?: Array<{ order_product_id: string; quantity: number }> | null }>,
+): Map<string, number> {
+  const totals = new Map<string, number>()
+  for (const box of boxes) {
+    for (const entry of box.assigned_positions ?? []) {
+      totals.set(entry.order_product_id, (totals.get(entry.order_product_id) ?? 0) + entry.quantity)
+    }
+  }
+  return totals
+}
+
+/** Остаток позиции к раскладке: количество в заказе минус уже положенное в короба. */
+export function fbsPositionRemainingQuantity(
+  position: { id?: string | null; quantity: number },
+  assignedQuantities: ReadonlyMap<string, number>,
+): number {
+  const assigned = position.id ? assignedQuantities.get(position.id) ?? 0 : 0
+  return Math.max(0, position.quantity - assigned)
+}
+
 export function fbsUnassignedPositionQuantity(
   positions: Array<{ id?: string | null; quantity: number }>,
-  assignedPositionIds: Set<string>,
+  assignedQuantities: ReadonlyMap<string, number>,
 ): number {
-  return positions.reduce((sum, position) => sum + (position.id && assignedPositionIds.has(position.id) ? 0 : position.quantity), 0)
+  return positions.reduce((sum, position) => sum + fbsPositionRemainingQuantity(position, assignedQuantities), 0)
+}
+
+/**
+ * Ввод количества в строке Ozon-модалки «Добавить товары в короб»: целое
+ * от 1 до остатка позиции, выход за границы приводится к ближайшей — как
+ * в WB-варианте той же модалки. Пустое поле остаётся пустым, пока оператор
+ * не ввёл число.
+ */
+export function fbsBoxPositionQuantityInput(raw: string, max: number): string {
+  if (raw.trim() === '') return ''
+  const parsed = Math.floor(Number(raw))
+  if (!Number.isFinite(parsed)) return ''
+  return String(Math.min(Math.max(1, max), Math.max(1, parsed)))
 }
 
 export function fbsOrdersAvailableForBox<T extends { id: string }>(

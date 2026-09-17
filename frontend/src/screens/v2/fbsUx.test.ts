@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
+import {
+  fbsAssignedPositionQuantities,
+  fbsBoxPositionQuantityInput,
+  fbsPositionRemainingQuantity,
+  fbsSameStickerScan,
+  fbsUnassignedPositionQuantity,
+  supplyQrExpectedForStatus,
+  fbsMarkingPresentation,
+  fbsOrderMarkingAccepted,
+} from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -19,12 +28,55 @@ describe('supplyQrExpectedForStatus', () => {
 describe('Ozon position distribution', () => {
   it('requires every position, including multiple units in one position', () => {
     const positions = [{ id: 'first', quantity: 3 }, { id: 'second', quantity: 7 }]
-    expect(fbsUnassignedPositionQuantity(positions, new Set(['first']))).toBe(7)
-    expect(fbsUnassignedPositionQuantity(positions, new Set(['first', 'second']))).toBe(0)
+    expect(fbsUnassignedPositionQuantity(positions, new Map([['first', 3]]))).toBe(7)
+    expect(fbsUnassignedPositionQuantity(positions, new Map([['first', 3], ['second', 7]]))).toBe(0)
   })
 
   it('does not mistake a missing position identity for a complete order', () => {
-    expect(fbsUnassignedPositionQuantity([{ id: null, quantity: 2 }], new Set())).toBe(2)
+    expect(fbsUnassignedPositionQuantity([{ id: null, quantity: 2 }], new Map())).toBe(2)
+  })
+
+  it('WMS-453: sums a position split across several boxes and leaves the rest to place', () => {
+    const boxes = [
+      { assigned_positions: [{ order_product_id: 'shirt', quantity: 10 }] },
+      { assigned_positions: [{ order_product_id: 'shirt', quantity: 10 }, { order_product_id: 'hoodie', quantity: 6 }] },
+      { assigned_positions: [] },
+      {},
+    ]
+    const assigned = fbsAssignedPositionQuantities(boxes)
+    expect([...assigned.entries()]).toEqual([['shirt', 20], ['hoodie', 6]])
+    expect(fbsPositionRemainingQuantity({ id: 'shirt', quantity: 100 }, assigned)).toBe(80)
+    expect(fbsPositionRemainingQuantity({ id: 'hoodie', quantity: 6 }, assigned)).toBe(0)
+    expect(fbsUnassignedPositionQuantity([{ id: 'shirt', quantity: 100 }, { id: 'hoodie', quantity: 6 }], assigned)).toBe(80)
+  })
+
+  it('WMS-453: a position without an id is never counted as placed', () => {
+    const assigned = fbsAssignedPositionQuantities([{ assigned_positions: [{ order_product_id: 'x', quantity: 5 }] }])
+    expect(fbsPositionRemainingQuantity({ id: null, quantity: 4 }, assigned)).toBe(4)
+    expect(fbsPositionRemainingQuantity({ quantity: 4 }, assigned)).toBe(4)
+  })
+
+  it('WMS-453: never reports a negative remainder when boxes hold more than the order', () => {
+    const assigned = new Map([['shirt', 120]])
+    expect(fbsPositionRemainingQuantity({ id: 'shirt', quantity: 100 }, assigned)).toBe(0)
+  })
+})
+
+describe('WMS-453 box quantity input', () => {
+  it('clamps typed values to 1…remaining like the WB box field clamps 0…orders', () => {
+    expect(fbsBoxPositionQuantityInput('10', 60)).toBe('10')
+    expect(fbsBoxPositionQuantityInput('60', 60)).toBe('60')
+    expect(fbsBoxPositionQuantityInput('61', 60)).toBe('60')
+    expect(fbsBoxPositionQuantityInput('999', 60)).toBe('60')
+    expect(fbsBoxPositionQuantityInput('0', 60)).toBe('1')
+    expect(fbsBoxPositionQuantityInput('-5', 60)).toBe('1')
+    expect(fbsBoxPositionQuantityInput('5.9', 60)).toBe('5')
+  })
+
+  it('keeps the field empty while the operator has typed nothing usable', () => {
+    expect(fbsBoxPositionQuantityInput('', 60)).toBe('')
+    expect(fbsBoxPositionQuantityInput('   ', 60)).toBe('')
+    expect(fbsBoxPositionQuantityInput('abc', 60)).toBe('')
   })
 })
 

@@ -65,6 +65,9 @@ import {
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
+  fbsAssignedPositionQuantities,
+  fbsBoxPositionQuantityInput,
+  fbsPositionRemainingQuantity,
   fbsUnassignedPositionQuantity,
   fbsStageAfterWorkspaceRefresh,
   ordersWord,
@@ -403,6 +406,12 @@ export function FfFbsSupplyWorkspace({
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
+  // Ключ отправки Ozon-модалки «Добавить товары в короб» (WMS-453, R6): создаётся
+  // при открытии модалки, повторяется при повторном «Добавить» после обрыва
+  // или неизвестного исхода и заменяется после успешного ответа либо
+  // окончательного отказа сервера (см. assignBoxOrders) — сервер по нему
+  // узнаёт повтор той же отправки и не удваивает количество.
+  const boxAssignKeyRef = useRef(createFbsIdempotencyKey())
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
   const deliveryKeyRef = useRef(createFbsIdempotencyKey())
@@ -997,12 +1006,30 @@ export function FfFbsSupplyWorkspace({
   }
 
   const assignBoxOrders = async () => {
-    if (boxOperationsDisabled || !workspace || !boxAssignTarget || (isOzonSupply ? boxAssignSelectedPositionIds.length === 0 : boxAssignSelectedOrderIds.length === 0)) return
+    if (boxOperationsDisabled || !workspace || !boxAssignTarget || boxAssignSubmitDisabled) return
     const next = await run(
-      () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, isOzonSupply ? [] : boxAssignSelectedOrderIds, isOzonSupply ? boxAssignSelectedPositionIds : undefined),
+      () => assignFbsPackingBoxOrders(
+        token,
+        authHeaders,
+        workspace.supply.id,
+        boxAssignTarget,
+        isOzonSupply ? [] : boxAssignSelectedOrderIds,
+        // Ключ читается в момент вызова: повтор через «Повторить» или новое
+        // нажатие «Добавить» после ошибки уходит с тем же ключом (R6).
+        isOzonSupply ? { positions: boxAssignSelectedPositions, idempotency_key: boxAssignKeyRef.current } : undefined,
+      ),
       '',
+      (cause) => {
+        // Окончательный отказ сервера (409/400/422 с кодом) означает, что ничего
+        // не применено, поэтому исправленный оператором запрос уходит с новым
+        // ключом — тот же принцип, что у «Передать» (fbsDeliveryErrorKeepsIdempotencyKey):
+        // иначе он застрянет на старом отказе. Обрыв сети или неизвестный исход —
+        // ключ сохраняется, чтобы повтор не удвоил количество (R6).
+        if (cause instanceof FbsApiError && !cause.retryable) boxAssignKeyRef.current = createFbsIdempotencyKey()
+      },
     )
     if (next) {
+      boxAssignKeyRef.current = createFbsIdempotencyKey()
       setBoxAssignTarget(null)
       setBoxProductSearch('')
       setBoxProductQty({})
@@ -1561,13 +1588,23 @@ export function FfFbsSupplyWorkspace({
   const availableForBox = fbsOrdersAvailableForBox(workspace?.orders ?? [], assignedBoxOrderIds)
   const boxAssignBox = workspace?.boxes.find((box) => box.id === boxAssignTarget)
   const boxAssignName = boxAssignBox?.box_number
-  const assignedBoxPositionIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_product_ids ?? []) ?? [])
-  const ozonPositionRows = (workspace?.orders ?? []).flatMap((order) => order.positions.flatMap((position) => position.id ? [{ order, position, id: position.id }] : []))
-  const boxAssignSelectedPositionIds = ozonPositionRows.filter((row) => boxSelectedPositionIds.has(row.id) && !assignedBoxPositionIds.has(row.id)).map((row) => row.id)
-  const boxAssignOrderId = boxAssignBox?.assigned_order_ids[0] ?? ozonPositionRows.find((row) => boxAssignSelectedPositionIds.includes(row.id))?.order.id
+  // WMS-453: позиция Ozon может лежать в нескольких коробах, поэтому всё ниже
+  // считается по количествам строк состава (assigned_positions), а не по
+  // факту «позиция есть в каком-то коробе».
+  const assignedBoxPositionQuantities = fbsAssignedPositionQuantities(workspace?.boxes ?? [])
+  const ozonPositionRows = (workspace?.orders ?? []).flatMap((order) => order.positions.flatMap((position) => position.id ? [{ order, position, id: position.id, remaining: fbsPositionRemainingQuantity(position, assignedBoxPositionQuantities) }] : []))
+  // Отмеченные строки с остатком: количество — как ввёл оператор (поле само
+  // держит его в 1…остаток); пустое поле у отмеченной строки запирает «Добавить»,
+  // чтобы строка не пропала из отправки молча.
+  const boxAssignSelectedRows = ozonPositionRows.filter((row) => boxSelectedPositionIds.has(row.id) && row.remaining > 0)
+  const boxAssignSelectedPositions = boxAssignSelectedRows.flatMap((row) => {
+    const quantity = Number(boxProductQty[row.id])
+    return Number.isInteger(quantity) && quantity >= 1 ? [{ order_product_id: row.id, quantity }] : []
+  })
+  const boxAssignOrderId = boxAssignBox?.assigned_order_ids[0] ?? boxAssignSelectedRows[0]?.order.id
   const ozonBoxAssignOrders = (workspace?.orders ?? []).map((order) => ({
     order,
-    positions: order.positions.filter((position) => position.id && !assignedBoxPositionIds.has(position.id)),
+    positions: order.positions.filter((position) => position.id && fbsPositionRemainingQuantity(position, assignedBoxPositionQuantities) > 0),
   })).filter(({ order, positions }) => positions.length > 0 && (!boxProductSearch.trim() || `${order.external_order_id} ${positions.map((position) => `${position.name} ${position.seller_article ?? ''} ${position.sku ?? ''}`).join(' ')}`.toLocaleLowerCase('ru').includes(boxProductSearch.trim().toLocaleLowerCase('ru'))))
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
@@ -1575,7 +1612,7 @@ export function FfFbsSupplyWorkspace({
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = isOzonSupply ? 'Ozon' : workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
   const hasNoDistributionBoxes = boxesWithoutDistribution
-  const boxDistributedCount = isOzonSupply ? ozonPositionRows.reduce((sum, row) => sum + (assignedBoxPositionIds.has(row.id) ? row.position.quantity : 0), 0) : assignedBoxOrderIds.size
+  const boxDistributedCount = isOzonSupply ? [...assignedBoxPositionQuantities.values()].reduce((sum, quantity) => sum + quantity, 0) : assignedBoxOrderIds.size
   const boxTotalCount = isOzonSupply ? (workspace?.orders ?? []).reduce((sum, order) => sum + order.positions.reduce((qty, position) => qty + position.quantity, 0), 0) : workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
@@ -1621,6 +1658,9 @@ export function FfFbsSupplyWorkspace({
     const qty = Math.min(row.orders.length, Math.max(0, Number(boxProductQty[row.key]) || 0))
     return row.orders.slice(0, qty).map((order) => order.id)
   })
+  const boxAssignSubmitDisabled = isOzonSupply
+    ? boxAssignSelectedPositions.length === 0 || boxAssignSelectedPositions.length !== boxAssignSelectedRows.length
+    : boxAssignSelectedOrderIds.length === 0
 
   useEffect(() => {
     if (!workspace || stage !== 'boxes') return
@@ -2438,14 +2478,16 @@ export function FfFbsSupplyWorkspace({
                     for (const order of assigned) {
                       if (isOzonSupply) {
                         for (const position of order.positions) {
-                          if (!position.id || !box.assigned_order_product_ids?.includes(position.id)) continue
+                          // Количество — сколько этой позиции лежит именно в этом коробе (WMS-453).
+                          const entry = position.id ? box.assigned_positions?.find((item) => item.order_product_id === position.id) : undefined
+                          if (!position.id || !entry) continue
                           grouped.set(position.id, {
                             key: position.id,
                             name: position.name,
                             imageUrl: position.image_url ?? (position.product_id === order.product.id ? order.product.image_url : null),
                             orderIds: [order.id],
                             positionId: position.id,
-                            quantity: position.quantity,
+                            quantity: entry.quantity,
                           })
                         }
                         continue
@@ -2463,7 +2505,7 @@ export function FfFbsSupplyWorkspace({
                       grouped.set(key, current)
                     }
                     const boxQuantity = [...grouped.values()].reduce((sum, row) => sum + row.quantity, 0)
-                    const remainingOrderQuantity = assigned.reduce((sum, order) => sum + fbsUnassignedPositionQuantity(order.positions, assignedBoxPositionIds), 0)
+                    const remainingOrderQuantity = assigned.reduce((sum, order) => sum + fbsUnassignedPositionQuantity(order.positions, assignedBoxPositionQuantities), 0)
                     const ozonQrDisabled = isOzonSupply && (assigned.length === 0 || remainingOrderQuantity > 0)
                     return (
                       <Box key={box.id}>
@@ -2517,6 +2559,10 @@ export function FfFbsSupplyWorkspace({
                               size="small"
                               disabled={boxEditingDisabled || busy || box.without_distribution || box.ozon_assembled}
                               onClick={() => {
+                                boxAssignKeyRef.current = createFbsIdempotencyKey()
+                                // Плашка ошибки показывается и внутри модалки (R9), поэтому
+                                // прошлая ошибка экрана не должна открыться вместе с ней.
+                                setError(null)
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
                                 setBoxProductQty({})
@@ -2954,6 +3000,9 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
+            {/* Отказ сервера виден внутри модалки (WMS-453, R9): плашка экрана поставки
+                рисуется под ней, а выбор и количества при ошибке сохраняются. */}
+            {isOzonSupply && error ? <Alert severity="error">{error}</Alert> : null}
             <TextField
               autoFocus
               fullWidth
@@ -2970,28 +3019,57 @@ export function FfFbsSupplyWorkspace({
                   <Paper key={order.id} variant="outlined" sx={{ p: 1.5, opacity: disabled ? 0.5 : 1 }} data-testid={`fbs-box-assign-order-${order.id}`}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Ozon №{order.external_order_id}</Typography>
                     <Stack spacing={1}>
-                      {positions.map((position) => (
-                        <Stack key={position.id} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                          <Checkbox
-                            checked={boxSelectedPositionIds.has(position.id!)}
-                            disabled={disabled}
-                            onChange={(event) => setBoxSelectedPositionIds((current) => {
-                              const next = new Set(current)
-                              if (event.target.checked) next.add(position.id!)
-                              else next.delete(position.id!)
-                              return next
-                            })}
-                            slotProps={{ input: { 'aria-label': `Добавить ${position.name}` } }}
-                            data-testid={`fbs-box-assign-position-${position.id}`}
-                          />
-                          <ProductPhotoThumb src={position.image_url ?? (position.product_id === order.product.id ? order.product.image_url : null)} alt={position.name} size={44} />
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{position.name}</Typography>
-                            <Typography variant="caption" color="text.secondary">{[position.seller_article, position.sku].filter(Boolean).join(' · ')}</Typography>
-                          </Box>
-                          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>{position.quantity} шт</Typography>
-                        </Stack>
-                      ))}
+                      {positions.map((position) => {
+                        // Остаток позиции к раскладке — сколько ещё можно положить (WMS-453).
+                        const remaining = fbsPositionRemainingQuantity(position, assignedBoxPositionQuantities)
+                        const checked = boxSelectedPositionIds.has(position.id!)
+                        return (
+                          <Stack key={position.id} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                            <Checkbox
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={(event) => {
+                                const positionId = position.id!
+                                const selected = event.target.checked
+                                setBoxSelectedPositionIds((current) => {
+                                  const next = new Set(current)
+                                  if (selected) next.add(positionId)
+                                  else next.delete(positionId)
+                                  return next
+                                })
+                                // Отметка подставляет весь остаток (позиция целиком одним щелчком),
+                                // снятие отметки очищает поле.
+                                setBoxProductQty((current) => {
+                                  const next = { ...current }
+                                  if (selected) next[positionId] = String(remaining)
+                                  else delete next[positionId]
+                                  return next
+                                })
+                              }}
+                              slotProps={{ input: { 'aria-label': `Добавить ${position.name}` } }}
+                              data-testid={`fbs-box-assign-position-${position.id}`}
+                            />
+                            <ProductPhotoThumb src={position.image_url ?? (position.product_id === order.product.id ? order.product.image_url : null)} alt={position.name} size={44} />
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{position.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">{[position.seller_article, position.sku].filter(Boolean).join(' · ')}</Typography>
+                            </Box>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={boxProductQty[position.id!] ?? ''}
+                              disabled={disabled || !checked}
+                              onChange={(event) => {
+                                const positionId = position.id!
+                                setBoxProductQty((current) => ({ ...current, [positionId]: fbsBoxPositionQuantityInput(event.target.value, remaining) }))
+                              }}
+                              slotProps={{ htmlInput: { min: 1, max: remaining, 'aria-label': `Количество ${position.name}` } }}
+                              sx={{ width: 96 }}
+                            />
+                            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>из {remaining} шт</Typography>
+                          </Stack>
+                        )
+                      })}
                     </Stack>
                   </Paper>
                 )
@@ -3023,7 +3101,7 @@ export function FfFbsSupplyWorkspace({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" disabled={busy || (isOzonSupply ? boxAssignSelectedPositionIds.length === 0 : boxAssignSelectedOrderIds.length === 0)} onClick={() => void assignBoxOrders()}>Добавить</Button>
+          <Button variant="contained" disabled={busy || boxAssignSubmitDisabled} onClick={() => void assignBoxOrders()}>Добавить</Button>
         </DialogActions>
       </Dialog>
       <Menu
