@@ -23,6 +23,7 @@ import {
   freeStock,
   publishedQty,
   ruleFor,
+  warehouseMarketplace,
   type FbsRule,
   type Product,
   type Seller,
@@ -37,6 +38,9 @@ import {
 
 type Row = { product: Product; rule: FbsRule }
 
+/** Почему кабинеты продавца не отдали списки складов — по id продавца. */
+export type SellerWarehouseErrors = Record<string, { wb: string | null; ozon: string | null }>
+
 /**
  * Экран умеет работать и от сервера, и от заглушки.
  *
@@ -50,6 +54,8 @@ type ProductsScreenProps = {
   products?: Product[]
   sellers?: Seller[]
   rules?: FbsRule[]
+  /** Причины отказа справочников кабинетов — окно показывает их у себя (WMS-457). */
+  sellerWarehouseErrors?: SellerWarehouseErrors
   loading?: boolean
   /** Сохранить правило для перечисленных товаров. Без него экран правит только себя. */
   onSaveRule?: (productIds: string[], rule: FbsRule) => Promise<string | null>
@@ -61,6 +67,7 @@ export function ProductsScreen({
   products: productsProp,
   sellers: sellersProp,
   rules: rulesProp,
+  sellerWarehouseErrors,
   loading = false,
   onSaveRule,
   onBindWarehouse,
@@ -194,7 +201,13 @@ export function ProductsScreen({
             </Typography>
           )
         }
-        const qty = publishedQty(product, rule, sellerById(product.sellerId))
+        // Колонка про Wildberries: считаем по его складам, склады Ozon (они
+        // теперь тоже в списке продавца) в это число не входят.
+        const seller = sellerById(product.sellerId)
+        const qty = publishedQty(product, rule, {
+          ...seller,
+          warehouses: seller.warehouses.filter((one) => warehouseMarketplace(one) === 'wb'),
+        })
         return (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <QtyCell value={qty} />
@@ -284,6 +297,8 @@ export function ProductsScreen({
             setSaveError(null)
           }}
           saveError={saveError}
+          wbWarehousesError={sellerWarehouseErrors?.[editing[0]!.sellerId]?.wb ?? null}
+          ozonWarehousesError={sellerWarehouseErrors?.[editing[0]!.sellerId]?.ozon ?? null}
           onSave={(rule) => {
             const ids = editing.map((one) => one.id)
             if (onSaveRule) {

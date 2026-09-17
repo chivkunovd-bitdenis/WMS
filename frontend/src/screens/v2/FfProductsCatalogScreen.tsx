@@ -64,7 +64,7 @@ import { MarketplaceChip } from '../../ui-kit'
 type SellerRow = { id: string; name: string }
 type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
 
-function isTechnicalFbsWarehouse(warehouse: WarehouseRow): boolean {
+export function isTechnicalFbsWarehouse(warehouse: WarehouseRow): boolean {
   return warehouse.code.startsWith('fbs-wb-') || warehouse.name.startsWith('FBS WB ')
 }
 

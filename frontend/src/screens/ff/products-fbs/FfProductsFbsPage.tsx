@@ -3,9 +3,10 @@ import { Box } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
-import { ProductsScreen } from './ProductsScreen'
+import { ProductsScreen, type SellerWarehouseErrors } from './ProductsScreen'
+import { loadFbsSellerWarehouses } from './fbsSellerWarehouseRows'
 import type { FbsRule, MarketplaceCode, Product, Seller } from './stub'
-import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey, warehouseRuleKey,
+import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey,
   type WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 
 // Экран управления остатком FBS, подключённый к серверу.
@@ -47,13 +48,6 @@ export type ApiRule = {
   on_hand: number
   reserved: number
   published_now: number
-}
-
-type ApiSellerWarehouse = {
-  wb_warehouse_id: number
-  served: boolean
-  wms_warehouse_id: string | null
-  name: string | null
 }
 
 /**
@@ -148,9 +142,11 @@ export function fbsRuleBody(rule: FbsRule): {
 type Props = {
   token: string
   sellers: Array<{ id: string; name: string }>
+  /** Физические склады WMS для выбора «Склад WMS» — те же, что в каталоге. */
+  warehouses: Array<{ id: string; name: string }>
 }
 
-export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
+export function FfProductsFbsPage({ token, sellers: sellerList, warehouses: wmsWarehouses }: Props) {
   // Список продавцов приходит сверху новым массивом на каждую перерисовку.
   // Если держать загрузку зависимой от самого массива, она перезапускает себя
   // бесконечно: загрузила — обновила состояние — перерисовка — новый массив —
@@ -159,9 +155,15 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
   const sellerKey = sellerList.map((one) => `${one.id}:${one.name}`).join('|')
   const sellerRef = useRef(sellerList)
   sellerRef.current = sellerList
+  const wmsWarehouseKey = wmsWarehouses.map((one) => `${one.id}:${one.name}`).join('|')
+  const wmsWarehouseRef = useRef(wmsWarehouses)
+  wmsWarehouseRef.current = wmsWarehouses
   const [products, setProducts] = useState<Product[]>([])
   const [rules, setRules] = useState<FbsRule[]>([])
   const [sellers, setSellers] = useState<Seller[]>([])
+  // Почему кабинеты не отдали списки складов — окно показывает это у себя,
+  // как и окно из каталога (WMS-457).
+  const [warehouseErrors, setWarehouseErrors] = useState<SellerWarehouseErrors>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -204,47 +206,38 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       const loadedBindings = new Map<string, WarehouseRuleBinding[]>()
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
-      // делить процент. Тянем только по тем продавцам, чьи товары на экране.
+      // делить процент. Тянем только по тем продавцам, чьи товары на экране —
+      // тем же загрузчиком, что и окно из каталога: строки обеих площадок из
+      // кабинета Wildberries, справочника Ozon и сохранённых привязок. Раньше
+      // здесь брались только склады Wildberries, и окно товара на двух
+      // площадках видело один склад: раздельные доли WB/Ozon схлопывались в
+      // «одинаково», а выключение режима «весь свободный остаток» (WMS-455)
+      // отправляло не сохранённые доли (ревью Astra F1).
       const sellerIds = [...new Set(withSeller.map((row) => row.seller_id as string))]
       const built: Seller[] = []
+      const errors: SellerWarehouseErrors = {}
       for (const id of sellerIds) {
-        const whRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouses`), {
+        const loaded = await loadFbsSellerWarehouses({
           headers: headers(token),
+          sellerId: id,
+          sellerName: known.get(id) ?? '—',
+          wmsWarehouses: wmsWarehouseRef.current,
         })
-        const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
-        const bindingsRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouse-bindings`), {
-          headers: headers(token),
-        })
-        if (!bindingsRes.ok) throw new Error(await readApiErrorMessage(bindingsRes))
-        const bindings = (await bindingsRes.json()) as Array<WarehouseRuleBinding & { is_active: boolean }>
-        loadedBindings.set(id, bindings.filter((one) => one.is_active))
-        built.push({
-          id,
-          name: known.get(id) ?? '—',
-          warehouses: rows.map((one) => ({
-            id: warehouseRuleKey(one),
-            name: one.name ?? `Склад ${one.wb_warehouse_id}`,
-            boundTo: one.wms_warehouse_id,
-            fbsEnabled: one.served,
-            // Эта ручка отдаёт кабинет Wildberries и ничего кроме него.
-            marketplace: 'wb' as const,
-          })),
-          wbWarehouses: rows.map((one) => ({
-            id: String(one.wb_warehouse_id),
-            name: one.name ?? `Склад ${one.wb_warehouse_id}`,
-          })),
-        })
+        loadedBindings.set(id, loaded.ruleBindings)
+        built.push(loaded.seller)
+        errors[id] = { wb: loaded.wbWarehousesError, ozon: loaded.ozonWarehousesError }
       }
       setRules(withSeller.map((row) => toRule(
         row.id, loadedRules.get(row.id), loadedBindings.get(row.seller_id as string),
       )))
       setSellers(built)
+      setWarehouseErrors(errors)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')
     } finally {
       setLoading(false)
     }
-  }, [token, sellerKey])
+  }, [token, sellerKey, wmsWarehouseKey])
 
   useEffect(() => {
     void load()
@@ -290,6 +283,9 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         body: JSON.stringify({
           served: current?.fbsEnabled ?? true,
           wms_warehouse_id: wbWarehouseId || null,
+          // Площадка склада, как в каталоге: без неё сервер искал бы привязку
+          // среди вайлдберрисовских и на озоновской строке завёл бы двойник.
+          marketplace: current?.marketplace ?? 'wb',
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
@@ -307,6 +303,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         products={products}
         sellers={sellers}
         rules={rules}
+        sellerWarehouseErrors={warehouseErrors}
         loading={loading}
         onSaveRule={(ids, rule) => saveRule(ids, rule)}
         onBindWarehouse={(sellerId, warehouseId, wbWarehouseId) =>

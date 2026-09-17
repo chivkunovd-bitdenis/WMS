@@ -54,7 +54,7 @@ import { FfWarehouseMapPage } from './screens/ff/warehouse-map/FfWarehouseMapPag
 import { FfUnloadPickPage } from './screens/ff/unload-pick/FfUnloadPickPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
-import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
+import { FfProductsCatalogScreen, isTechnicalFbsWarehouse } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import { FfBillingScreen } from './screens/ff/FfBillingScreen'
@@ -3359,6 +3359,9 @@ export default function App() {
                 <FfProductsFbsPage
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
+                  warehouses={warehouses
+                    .filter((one) => one.is_operational && !isTechnicalFbsWarehouse(one))
+                    .map((one) => ({ id: one.id, name: one.name }))}
                 />
               ) : (
                 ffAccessDenied
