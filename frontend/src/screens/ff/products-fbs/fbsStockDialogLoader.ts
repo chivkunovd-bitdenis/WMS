@@ -3,11 +3,12 @@
 // Четыре запроса: правила товаров, склады кабинета Wildberries, сохранённые
 // привязки продавца и справочник складов Ozon. Обязательны только правила: без
 // них окну нечего показывать, и оно не открывается. Оба справочника
-// необязательны — их отказ (ошибка сервера или вовсе не дождавшийся ответа
-// запрос) не мешает открыть окно: сохранённые активные привязки показываются
-// номером с чипом «название недоступно», а причина — плашкой сверху (WB) или
-// строкой в группе (Ozon). Раньше отклонённый fetch любого из четырёх запросов
-// ронял открытие целиком, хотя правила и привязки уже приехали.
+// необязательны — их отказ (ошибка сервера, не дождавшийся ответа запрос или
+// оборванное на чтении тело ответа) не мешает открыть окно: сохранённые
+// активные привязки показываются номером с чипом «название недоступно», а
+// причина — плашкой сверху (WB) или строкой в группе (Ozon). Раньше отказ
+// любого из четырёх запросов ронял открытие целиком, хотя правила и привязки
+// уже приехали.
 
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -38,12 +39,20 @@ export type FbsStockDialogData = {
   ozonWarehousesError: string | null
 }
 
-/** Ответ или причина, по которой его не было. */
-type Settled = { response: Response } | { failure: unknown }
+/**
+ * Необязательный справочник: строки, либо ответ сервера с ошибкой (конверт с
+ * причиной), либо отказ без ответа — запрос отклонён или тело ответа
+ * оборвалось на чтении. Ожидание ответа и чтение тела под одной защитой: 200
+ * с оборванным потоком тела — такой же неполученный список, как и обрыв до
+ * ответа, и не должен ронять открытие окна (WMS-457 R3).
+ */
+type Directory<Row> = { rows: Row[] } | { response: Response } | { failure: unknown }
 
-async function settle(request: Promise<Response>): Promise<Settled> {
+async function loadDirectory<Row>(request: () => Promise<Response>): Promise<Directory<Row>> {
   try {
-    return { response: await request }
+    const response = await request()
+    if (!response.ok) return { response }
+    return { rows: (await response.json()) as Row[] }
   } catch (failure) {
     return { failure }
   }
@@ -86,9 +95,13 @@ export async function loadFbsStockDialog({
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ product_ids: chosen.map((r) => r.id) }),
     }),
-    settle(fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), { headers })),
+    loadDirectory<WbWarehouseRow>(() =>
+      fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), { headers }),
+    ),
     fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), { headers }),
-    settle(fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), { headers })),
+    loadDirectory<OzonWarehouseRow>(() =>
+      fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), { headers }),
+    ),
   ])
   if (!rulesRes.ok) throw new Error(await readApiErrorMessage(rulesRes))
   const rulesBody = (await rulesRes.json()) as { items: Array<ApiRule & { product_id: string }> }
@@ -96,12 +109,10 @@ export async function loadFbsStockDialog({
 
   let wbList: CabinetList = { received: false }
   let wbWarehousesError: string | null = null
-  if ('response' in wb && wb.response.ok) {
+  if ('rows' in wb) {
     wbList = {
       received: true,
-      rows: ((await wb.response.json()) as WbWarehouseRow[]).map(
-        (one): CabinetWarehouseRow => ({ ...one, marketplace: 'wb' }),
-      ),
+      rows: wb.rows.map((one): CabinetWarehouseRow => ({ ...one, marketplace: 'wb' })),
     }
   } else {
     // Причина — по коду из конверта ошибки, а не по HTTP-статусу (WMS-457):
@@ -116,10 +127,10 @@ export async function loadFbsStockDialog({
   // не показывался. Отсюда приезжают настоящие названия кабинета и все склады.
   let ozonList: CabinetList = { received: false }
   let ozonWarehousesError: string | null = null
-  if ('response' in ozon && ozon.response.ok) {
+  if ('rows' in ozon) {
     ozonList = {
       received: true,
-      rows: ((await ozon.response.json()) as OzonWarehouseRow[]).map(
+      rows: ozon.rows.map(
         (one): CabinetWarehouseRow => ({
           wb_warehouse_id: one.warehouse_id,
           name: one.name,

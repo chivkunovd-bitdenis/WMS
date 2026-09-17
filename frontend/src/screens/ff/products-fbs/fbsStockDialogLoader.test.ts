@@ -38,6 +38,15 @@ type Answer = Response | Error
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
+// Ответ 200 пришёл, а поток тела оборвался: fetch выполнился, json() отклоняется.
+function interrupted(): Response {
+  return new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('[{"name":'))
+      controller.error(new TypeError('terminated while reading response body'))
+    },
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+}
 function stubFetch(answers: { rules?: Answer; wb?: Answer; bindings?: Answer; ozon?: Answer }) {
   const fetchMock = vi.fn(async (input: string | URL | Request) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -104,6 +113,38 @@ describe('loadFbsStockDialog', () => {
       ['wb:501001', 'E2E Seller Warehouse', undefined],
       ['ozon:1020005029603630', '№ 1020005029603630', 'list_unavailable'],
     ])
+  })
+
+  it('opens the window when the WB cabinet response body breaks while being read', async () => {
+    stubFetch({ wb: interrupted() })
+    const data = await load()
+    expect(data.wbWarehousesError).toBe(
+      'Wildberries не ответил на запрос складов: terminated while reading response body. Ниже показаны сохранённые привязки без названий.',
+    )
+    expect(data.ozonWarehousesError).toBeNull()
+    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
+      ['ozon:1020005029603630', 'Хоругвино', undefined],
+      ['wb:501001', '№ 501001', 'list_unavailable'],
+    ])
+    expect(data.rule.byWarehouse).toEqual({ 'wb:501001': 60, 'ozon:1020005029603630': 40 })
+  })
+
+  it('opens the window when the Ozon directory response body breaks while being read', async () => {
+    stubFetch({ ozon: interrupted() })
+    const data = await load()
+    expect(data.wbWarehousesError).toBeNull()
+    expect(data.ozonWarehousesError).toBe(
+      'Справочник складов Ozon не получен: terminated while reading response body. Ниже показаны сохранённые привязки без названий.',
+    )
+    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
+      ['wb:501001', 'E2E Seller Warehouse', undefined],
+      ['ozon:1020005029603630', '№ 1020005029603630', 'list_unavailable'],
+    ])
+  })
+
+  it('does not open the window when the rules response body breaks while being read', async () => {
+    stubFetch({ rules: interrupted() })
+    await expect(load()).rejects.toThrow('terminated while reading response body')
   })
 
   it('still reads the reason from an HTTP error envelope of the WB cabinet', async () => {

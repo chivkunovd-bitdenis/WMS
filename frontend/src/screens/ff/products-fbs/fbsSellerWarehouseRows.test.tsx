@@ -158,9 +158,9 @@ describe('WMS-457 C6 reason of a failed Wildberries warehouse list by envelope c
     { code: 'wb_upstream_error_403', status: 502, message: 'Ошибка Wildberries.',
       expected: 'У ключа Wildberries продавца нет прав «Маркетплейс». Нужен ключ с этой категорией.' },
     { code: 'wb_transport_error', status: 502, message: 'Ошибка Wildberries.',
-      expected: 'Wildberries не ответил на запрос складов: Ошибка Wildberries.. Ниже показаны сохранённые привязки без названий.' },
+      expected: 'Wildberries не ответил на запрос складов: Ошибка Wildberries. Ниже показаны сохранённые привязки без названий.' },
     { code: 'wb_upstream_error_500', status: 502, message: 'Ошибка Wildberries.',
-      expected: 'Wildberries не ответил на запрос складов: Ошибка Wildberries.. Ниже показаны сохранённые привязки без названий.' },
+      expected: 'Wildberries не ответил на запрос складов: Ошибка Wildberries. Ниже показаны сохранённые привязки без названий.' },
   ])('$code/$status', ({ code, status, message, expected }) => {
     const text = fbsWarehousesLoadError({ status, code, message })
     expect(text).toBe(expected)

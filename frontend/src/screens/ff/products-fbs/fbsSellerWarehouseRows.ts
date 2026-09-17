@@ -126,9 +126,14 @@ export function noResponseEnvelope(error: unknown): FbsErrorEnvelope {
   return { status: 0, code: null, message }
 }
 
+/** Текст без завершающей точки — чтобы после него не получалось «..». */
+function sentence(message: string): string {
+  return message.trim().replace(/\.+$/, '')
+}
+
 /** Справочник Ozon не получен без ответа сервера — текст строки в группе «Ozon». */
 export function ozonWarehousesRequestFailed(error: unknown): string {
-  return `Справочник складов Ozon не получен: ${noResponseEnvelope(error).message}. Ниже показаны сохранённые привязки без названий.`
+  return `Справочник складов Ozon не получен: ${sentence(noResponseEnvelope(error).message)}. Ниже показаны сохранённые привязки без названий.`
 }
 
 /**
@@ -169,7 +174,7 @@ export function fbsWarehousesLoadError({ status, code, message }: FbsErrorEnvelo
   }
   // Прочие ошибки Wildberries и запрос, не дождавшийся ответа (обрыв, тайм-аут).
   if (code?.startsWith('wb_') || status === 0) {
-    return `Wildberries не ответил на запрос складов: ${message}. Ниже показаны сохранённые привязки без названий.`
+    return `Wildberries не ответил на запрос складов: ${sentence(message)}. Ниже показаны сохранённые привязки без названий.`
   }
   // Не конверт FBS: отказ доступа, потерянный продавец и прочее — как раньше.
   return `Не удалось загрузить склады Wildberries: ${message || `Ошибка ${status}`}`
