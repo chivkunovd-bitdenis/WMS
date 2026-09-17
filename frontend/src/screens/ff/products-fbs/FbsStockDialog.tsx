@@ -159,8 +159,9 @@ function FbsStockDialogBody({
   // а в Wildberries уходила старая доля склада (свободно 5, доля склада 30% —
   // «1 шт уйдёт» при «100% — это 5 шт»), и включить флаг было негде. Поэтому
   // при одном складе черновик всегда считается по общему проценту: что оператор
-  // видит на ползунке, то и уезжает.
-  const [draft, setDraft] = useState<FbsRule>(initialDraft(rule, single, ozonShown))
+  // видит на ползунке, то и уезжает — а на ползунок при раздельном правиле
+  // идёт действующая доля этого склада (см. initialDraft).
+  const [draft, setDraft] = useState<FbsRule>(initialDraft(rule, visible.warehouses, ozonShown))
 
   const many = products.length > 1
   // При нескольких товарах свободный остаток у каждого свой; показываем сумму,

@@ -113,8 +113,23 @@ export function warehouseNameIssueHint(
     : 'Список складов из кабинета не получен, поэтому названия нет — причина в сообщении выше'
 }
 
-/** Конверт ошибки FBS: статус ответа, код из detail.code (если это конверт) и текст. */
+/**
+ * Конверт ошибки FBS: статус ответа, код из detail.code (если это конверт) и
+ * текст. Статус 0 — ответа от API не было вовсе (обрыв, тайм-аут, отклонённый
+ * fetch): ни кода, ни серверного текста, только сообщение браузера.
+ */
 export type FbsErrorEnvelope = { status: number; code: string | null; message: string }
+
+/** Конверт для запроса, который не дождался ответа. */
+export function noResponseEnvelope(error: unknown): FbsErrorEnvelope {
+  const message = error instanceof Error && error.message.trim() ? error.message : String(error)
+  return { status: 0, code: null, message }
+}
+
+/** Справочник Ozon не получен без ответа сервера — текст строки в группе «Ozon». */
+export function ozonWarehousesRequestFailed(error: unknown): string {
+  return `Справочник складов Ozon не получен: ${noResponseEnvelope(error).message}. Ниже показаны сохранённые привязки без названий.`
+}
 
 /**
  * Код и текст из ответа с ошибкой. Сервер FBS отвечает конвертом
@@ -152,7 +167,8 @@ export function fbsWarehousesLoadError({ status, code, message }: FbsErrorEnvelo
   if (code === 'wb_upstream_error_403') {
     return 'У ключа Wildberries продавца нет прав «Маркетплейс». Нужен ключ с этой категорией.'
   }
-  if (code?.startsWith('wb_')) {
+  // Прочие ошибки Wildberries и запрос, не дождавшийся ответа (обрыв, тайм-аут).
+  if (code?.startsWith('wb_') || status === 0) {
     return `Wildberries не ответил на запрос складов: ${message}. Ниже показаны сохранённые привязки без названий.`
   }
   // Не конверт FBS: отказ доступа, потерянный продавец и прочее — как раньше.

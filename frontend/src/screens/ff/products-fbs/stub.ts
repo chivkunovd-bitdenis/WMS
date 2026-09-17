@@ -230,12 +230,19 @@ export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWar
 }
 
 /**
- * Черновик, с которого окно начинает.
+ * Черновик, с которого окно начинает. `warehouses` — склады, видимые в окне.
  *
  * Единственный обслуживаемый склад — особый случай: галку «одинаково по всем
  * складам» в этом режиме не показывают (делить не с кем), поэтому черновик
  * всегда считается по общему проценту — что оператор видит на ползунке, то и
- * уезжает.
+ * уезжает. Если сохранённое правило задавало доли по складам, действующая доля
+ * этого единственного склада лежит в byWarehouse, а общий процент — старый и
+ * к ней не относится; на ползунок идёт именно доля склада. Иначе окно показало
+ * бы чужое число (обычно 0), и сохранение без правок затёрло бы долю: у
+ * WB-товара с прежним правилом «WB 60 / Ozon 40» после скрытия Ozon
+ * обслуживаемый склад остаётся один, и WB-доля 60 должна остаться 60.
+ * Когда обслуживаемых нет, а видимый склад один, берётся его доля: она
+ * заработает, как только склад включат.
  *
  * У товара без карточки Ozon флаг Ozon в окне не показывается и при каждом
  * сохранении уходит выключенным: иначе унаследованное «как у Wildberries»
@@ -243,10 +250,19 @@ export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWar
  * списке тронутых флагов и есть команда сохранению отправить поле, а не
  * оставить прежнее значение.
  */
-export function initialDraft(rule: FbsRule, single: boolean, ozonShown: boolean): FbsRule {
+export function initialDraft(
+  rule: FbsRule,
+  warehouses: SellerWarehouse[],
+  ozonShown: boolean,
+): FbsRule {
+  const served = warehouses.filter((one) => one.fbsEnabled)
+  const single = served.length <= 1
+  const only = served[0] ?? (warehouses.length === 1 ? warehouses[0] : undefined)
+  const percent =
+    single && !rule.sameEverywhere && only ? (rule.byWarehouse[only.id] ?? 0) : rule.percent
   return {
     ...rule,
-    ...(single ? { sameEverywhere: true } : {}),
+    ...(single ? { sameEverywhere: true, percent } : {}),
     ...(ozonShown
       ? { changedPublication: [] }
       : { publishOzon: false, changedPublication: ['ozon' as const] }),

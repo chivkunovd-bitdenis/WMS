@@ -5,6 +5,8 @@ import { FbsStockDialog } from './FbsStockDialog'
 import {
   buildSellerWarehouseRows,
   fbsWarehousesLoadError,
+  noResponseEnvelope,
+  ozonWarehousesRequestFailed,
   readFbsErrorEnvelope,
   warehouseNameIssueHint,
   type CabinetList,
@@ -163,6 +165,16 @@ describe('WMS-457 C6 reason of a failed Wildberries warehouse list by envelope c
     const text = fbsWarehousesLoadError({ status, code, message })
     expect(text).toBe(expected)
     if (code === 'wb_upstream_error_401') expect(text.toLowerCase()).not.toContain('прав')
+  })
+
+  it('treats a request without any response as Wildberries not answering', () => {
+    expect(fbsWarehousesLoadError(noResponseEnvelope(new TypeError('Failed to fetch')))).toBe(
+      'Wildberries не ответил на запрос складов: Failed to fetch. Ниже показаны сохранённые привязки без названий.',
+    )
+    expect(noResponseEnvelope(new Error(''))).toEqual({ status: 0, code: null, message: 'Error' })
+    expect(ozonWarehousesRequestFailed(new TypeError('Failed to fetch'))).toBe(
+      'Справочник складов Ozon не получен: Failed to fetch. Ниже показаны сохранённые привязки без названий.',
+    )
   })
 
   it('keeps the generic text for responses without an FBS envelope', () => {

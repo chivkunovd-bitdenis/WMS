@@ -35,15 +35,20 @@ const data = JSON.parse(fs.readFileSync(0, 'utf8'));
 const path = 'src/screens/ff/products-fbs/FfProductsFbsPage.tsx';
 const file = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true,
                                  ts.ScriptKind.TSX);
-let declaration, ruleDeclaration;
+let declaration, ruleDeclaration, bodyDeclaration;
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && node.name?.text === 'saveRule') declaration = node;
   if (ts.isFunctionDeclaration(node) && node.name?.text === 'toRule') ruleDeclaration = node;
+  // WMS-454: saveRule строит тело через общий для обоих маршрутов fbsRuleBody —
+  // вырезаем и его, чтобы исполнялся настоящий код фронта.
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'fbsRuleBody') bodyDeclaration = node;
   ts.forEachChild(node, visit);
 }
 visit(file);
 if (!declaration) throw new Error('saveRule not found');
-const code = ts.transpileModule(declaration.getText(file), {
+if (!bodyDeclaration) throw new Error('fbsRuleBody not found');
+const code = ts.transpileModule(
+  bodyDeclaration.getText(file).replace(/^export /, '') + '\n' + declaration.getText(file), {
   compilerOptions: { target: ts.ScriptTarget.ES2022 }
 }).outputText;
 const calls = [];

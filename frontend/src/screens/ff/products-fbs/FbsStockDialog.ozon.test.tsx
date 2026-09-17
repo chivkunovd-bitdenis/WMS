@@ -3,7 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { FbsStockDialog } from './FbsStockDialog'
 import { fbsRuleBody, toProduct, toRule, type ApiRule } from './FfProductsFbsPage'
-import { dialogShowsOzon, initialDraft, visibleWarehouses, type Seller } from './stub'
+import {
+  dialogShowsOzon,
+  initialDraft,
+  servedWarehouses,
+  splitAmounts,
+  visibleWarehouses,
+  type Seller,
+} from './stub'
 import { warehouseRuleKey } from './fbsWarehouseRuleKeys'
 
 vi.mock('../../../ui-kit', async (original) => ({
@@ -105,12 +112,12 @@ describe('WMS-454 no Ozon in the window of a product without an Ozon card', () =
   it('(д) sends publish_ozon=false for a WB-only product and keeps the touched-only rule for Ozon', () => {
     const rule = toRule('product', apiRule)
     expect(rule.publishOzon).toBe(true)
-    const wbOnly = initialDraft(rule, true, false)
+    const wbOnly = initialDraft(rule, visibleWarehouses(sellerWithOzon, false), false)
     expect(wbOnly.publishOzon).toBe(false)
     expect(fbsRuleBody(wbOnly)).toMatchObject({ publish: undefined, publish_ozon: false, percent: 50 })
     expect(JSON.parse(JSON.stringify(fbsRuleBody(wbOnly)))).not.toHaveProperty('publish')
     expect(JSON.parse(JSON.stringify(fbsRuleBody(wbOnly)))).toHaveProperty('publish_ozon', false)
-    const withOzon = initialDraft(rule, false, true)
+    const withOzon = initialDraft(rule, visibleWarehouses(sellerWithOzon, true), true)
     expect(withOzon.publishOzon).toBe(true)
     expect(fbsRuleBody(withOzon)).toMatchObject({ publish: undefined, publish_ozon: undefined })
     const touched = { ...withOzon, publishOzon: false, changedPublication: ['ozon' as const] }
@@ -118,6 +125,73 @@ describe('WMS-454 no Ozon in the window of a product without an Ozon card', () =
     // Правило без списка тронутых (старые вызовы) шлёт оба флага, как раньше.
     expect(fbsRuleBody({ ...rule, changedPublication: undefined }))
       .toMatchObject({ publish: true, publish_ozon: true })
+  })
+
+  // F1 ревью Astra: у WB-товара со старым раздельным правилом (WB 60 / Ozon 40)
+  // после скрытия Ozon обслуживаемый склад остаётся один, и черновик обязан
+  // унести на сервер действующую WB-долю, а не старый общий процент. Путь
+  // штатный: правило из API → initialDraft → fbsRuleBody → splitAmounts (та же
+  // раскладка, что split_amounts на сервере).
+  describe('keeps the effective WB share when the split rule collapses to one visible warehouse', () => {
+    const splitRule = (extra: Partial<ApiRule>): ApiRule => ({
+      ...apiRule, same_everywhere: false,
+      by_warehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 }, ...extra,
+    })
+    const wbAmount = (apiRuleIn: ApiRule) => {
+      const draft = initialDraft(toRule('product', apiRuleIn), visibleWarehouses(sellerWithOzon, false), false)
+      const body = fbsRuleBody(draft)
+      // Что уйдёт в Wildberries по отправленному правилу при 120 свободных.
+      const saved = toRule('product', { ...apiRuleIn, ...body, publish: body.publish ?? apiRuleIn.publish,
+        publish_ozon: body.publish_ozon ?? apiRuleIn.publish_ozon })
+      const amounts = splitAmounts(saved, 120, servedWarehouses(sellerWithOzon))
+      return { draft, body, wb: amounts['wb:501001'], ozon: amounts['ozon:1020005029603630'] }
+    }
+
+    it.each([
+      { name: 'stale percent 0', percent: 0 },
+      { name: 'stale percent 50', percent: 50 },
+    ])('$name, WB share 60: the slider and the PUT carry 60', ({ percent }) => {
+      const before = splitAmounts(toRule('product', splitRule({ percent })), 120, servedWarehouses(sellerWithOzon))
+      expect(before['wb:501001']).toBe(72)
+      const { draft, body, wb, ozon } = wbAmount(splitRule({ percent }))
+      expect(draft).toMatchObject({ sameEverywhere: true, percent: 60, publishOzon: false })
+      expect(body).toMatchObject({ same_everywhere: true, percent: 60, publish_ozon: false })
+      expect(wb).toBe(72)
+      expect(ozon).toBe(0)
+      const markup = render(['wb'], sellerWithOzon, { same_everywhere: false, percent,
+        by_warehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 } })
+      expect(markup).toContain('>60%<')
+    })
+
+    it('leaves a rule that already was "same everywhere" untouched', () => {
+      const { draft, body, wb } = wbAmount({ ...apiRule, percent: 70 })
+      expect(draft).toMatchObject({ sameEverywhere: true, percent: 70 })
+      expect(body).toMatchObject({ same_everywhere: true, percent: 70 })
+      expect(wb).toBe(84)
+    })
+
+    it('does not change the units of a rule in units mode', () => {
+      const units = splitRule({ units_mode: true, percent: 0,
+        units_by_warehouse: { 'wb:501001': 7, 'ozon:1020005029603630': 3 } })
+      const before = splitAmounts(toRule('product', units), 120, servedWarehouses(sellerWithOzon))
+      const { body, wb } = wbAmount(units)
+      expect(body).toMatchObject({ units_mode: true, units_by_warehouse: { 'wb:501001': 7, 'ozon:1020005029603630': 3 } })
+      expect(wb).toBe(before['wb:501001'])
+      expect(wb).toBe(7)
+    })
+
+    it('carries the share of the only visible warehouse even while nobody serves it', () => {
+      const idle = { ...sellerWbOnly, warehouses: [{ ...wbRow, fbsEnabled: false }] }
+      const draft = initialDraft(toRule('product', splitRule({ percent: 0 })), visibleWarehouses(idle, false), false)
+      expect(draft).toMatchObject({ sameEverywhere: true, percent: 60 })
+    })
+
+    it('keeps separate shares when two warehouses stay visible', () => {
+      const draft = initialDraft(toRule('product', splitRule({ percent: 0 })), visibleWarehouses(sellerWithOzon, true), true)
+      expect(draft).toMatchObject({ sameEverywhere: false, percent: 0 })
+      expect(fbsRuleBody(draft)).toMatchObject({ same_everywhere: false, percent: 0,
+        by_warehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 } })
+    })
   })
 
   it('decides Ozon by the product card, not by the seller warehouses', () => {
