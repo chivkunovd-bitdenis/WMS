@@ -370,6 +370,64 @@ async def test_quantity_over_remainder_is_rejected_and_saves_nothing(
 
 
 @pytest.mark.asyncio
+async def test_same_key_retried_with_corrected_quantity_after_409_succeeds(
+    db_session: AsyncSession,
+) -> None:
+    """A request that fails validation (over the remainder, R2) must never
+    claim its idempotency key — the client keeps one key until the first
+    *successful* response (R6), so a 409 is followed by a retry with the
+    exact same key once the operator lowers the quantity. If the key were
+    claimed before the remainder check (this function's first shape, before
+    a follow-up fix), that retry would wrongly read back as an
+    already-applied no-op instead of actually adding anything.
+    """
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    positions = await _positions(db_session, order)  # quantities [3, 5]
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 1, "retry-after-409", actor_user_id=None
+    )
+    with pytest.raises(boxes_svc.FbsPackingBoxError, match="ozon_box_quantity_exceeded"):
+        await boxes_svc.assign_orders(
+            db_session,
+            tenant.id,
+            supply.id,
+            boxes[0].id,
+            [],
+            actor_user_id=None,
+            positions=_add(positions[0].id, 4),  # only 3 are available
+            idempotency_key="same-key",
+        )
+    items = list(
+        (
+            await db_session.scalars(
+                select(FbsPackingBoxItem).where(FbsPackingBoxItem.box_id == boxes[0].id)
+            )
+        ).all()
+    )
+    assert items == []
+
+    # Same key, corrected quantity: must actually add, not read back as an
+    # already-applied repeat of the failed attempt.
+    await boxes_svc.assign_orders(
+        db_session,
+        tenant.id,
+        supply.id,
+        boxes[0].id,
+        [],
+        actor_user_id=None,
+        positions=_add(positions[0].id, 3),
+        idempotency_key="same-key",
+    )
+    item = await db_session.scalar(
+        select(FbsPackingBoxItem).where(
+            FbsPackingBoxItem.box_id == boxes[0].id,
+            FbsPackingBoxItem.order_product_id == positions[0].id,
+        )
+    )
+    assert item is not None and item.quantity == 3
+
+
+@pytest.mark.asyncio
 async def test_repeat_idempotency_key_is_a_no_op_and_new_key_adds_to_existing_row(
     db_session: AsyncSession,
 ) -> None:

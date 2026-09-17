@@ -20,6 +20,7 @@ from app.models.document_event import (
     EVENT_BOX_DISTRIBUTION_CHANGED,
     EVENT_BOX_ITEM_ADDED,
     EVENT_BOX_ITEM_REMOVED,
+    DocumentEvent,
 )
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
@@ -481,6 +482,19 @@ async def _assign_ozon_positions(
         )
     position_ids = set(requested)
 
+    # R6: recognise a retry of this exact request by its idempotency key,
+    # before anything else runs — a plain read against DocumentEvent's
+    # existing tenant-wide (tenant_id, idempotency_key) uniqueness (see
+    # _claim_ozon_assign_idempotency below for where the matching write
+    # happens, and why only there). This has to run before the remainder
+    # check further down: that check assumes this call's quantity has not
+    # been added yet, which is false for a genuine repeat — checking late
+    # would reject a repeat near the position's limit instead of recognising
+    # it (see review WMS-453 F1 — a per-row "last key" forgot an earlier key
+    # as soon as a later add overwrote it, so A -> B -> A double-applied A).
+    if await _ozon_assign_key_already_applied(session, tenant_id=tenant_id, key=stored_key):
+        return
+
     positions = list(
         (
             await session.scalars(
@@ -501,21 +515,6 @@ async def _assign_ozon_positions(
     if len(order_ids | {item.fbs_order_id for item in box.items}) != 1:
         raise FbsPackingBoxError("ozon_box_multiple_orders")
     await _assert_ozon_orders_mutable(session, tenant_id, list(order_ids))
-
-    # R6: recognise a retry of this exact request by its idempotency key, even
-    # after another operator's own add touched the same box in between (see
-    # review WMS-453 F1 — a per-row "last key" forgets an earlier key as soon
-    # as a later add overwrites it, so A -> B -> A double-applied A). Reusing
-    # DocumentEvent's existing tenant-wide (tenant_id, idempotency_key)
-    # uniqueness makes the whole physical action, not a single row, the unit
-    # of dedup. The insert shares this transaction with the row changes
-    # below: if validation fails further down, both roll back together and
-    # the same key can be retried once the operator corrects the input.
-    is_new_request = await _claim_ozon_assign_idempotency(
-        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
-    )
-    if not is_new_request:
-        return
 
     # Existing rows for these positions in *this* box only — a position may
     # now also sit in other boxes of the supply (WMS-453, R11), which is not
@@ -555,6 +554,26 @@ async def _assign_ozon_positions(
         if current_total + add_quantity > positions_by_id[position_id].quantity:
             raise FbsPackingBoxError("ozon_box_quantity_exceeded")
 
+    # Only now, with every check passed, durably claim the key. Under the
+    # same supply lock held for this whole call, this is equivalent to
+    # claiming earlier for concurrency — but a validation failure above now
+    # never reaches this point, so it never records an event. Claiming
+    # earlier (this function's first shape, cross-review F1) relied on a
+    # failed branch's insert rolling back together with the rest of the
+    # transaction; on the shared SQLite stand, pysqlite does not always undo
+    # an already-released SAVEPOINT the way PostgreSQL does, so a 409 there
+    # could still leave the key claimed and block a corrected retry with the
+    # same key (found by the frontend implementer testing against it).
+    # Claiming only on the guaranteed-write path removes that dependency on
+    # rollback behaviour entirely, on any database.
+    claimed = await _claim_ozon_assign_idempotency(
+        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
+    )
+    if not claimed:
+        # Lost a race with a concurrent identical request under the same
+        # supply lock — that request's write already applied it.
+        return
+
     for position_id, add_quantity in requested.items():
         existing = existing_in_box.get(position_id)
         if existing is not None:
@@ -574,6 +593,26 @@ async def _assign_ozon_positions(
     session.expire(box, ["items"])
 
 
+async def _ozon_assign_key_already_applied(
+    session: AsyncSession, *, tenant_id: uuid.UUID, key: str
+) -> bool:
+    """Read-only check for a retry, safe to run before any validation.
+
+    A plain SELECT against the same DocumentEvent uniqueness that
+    _claim_ozon_assign_idempotency writes to — unaffected by whatever a
+    *failed* attempt's own claim would or would not do on rollback, because
+    a failed attempt never reaches that write (see the call sites in
+    _assign_ozon_positions).
+    """
+    return (
+        await session.scalar(
+            select(DocumentEvent.id)
+            .where(DocumentEvent.tenant_id == tenant_id, DocumentEvent.idempotency_key == key)
+            .limit(1)
+        )
+    ) is not None
+
+
 async def _claim_ozon_assign_idempotency(
     session: AsyncSession,
     *,
@@ -582,8 +621,13 @@ async def _claim_ozon_assign_idempotency(
     box_id: uuid.UUID,
     key: str,
 ) -> bool:
-    """Return True the first time this exact key is seen for the tenant,
-    False on a retry. See the call site in _assign_ozon_positions for why."""
+    """Durably record that this key's request is being applied now.
+
+    Called only once every check has passed and the caller is about to write
+    rows — see _assign_ozon_positions for why. Returns True normally; False
+    only if a concurrent identical request under the same supply lock won an
+    exceedingly unlikely race and claimed the key first.
+    """
     actor = current_document_event_actor()
     return await record_document_event(
         session,
