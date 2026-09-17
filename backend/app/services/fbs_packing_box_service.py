@@ -18,6 +18,7 @@ from app.models.document_event import (
     DOCUMENT_TYPE_FBS_SUPPLY,
     EVENT_BOX_DELETED,
     EVENT_BOX_DISTRIBUTION_CHANGED,
+    EVENT_BOX_ITEM_ADDED,
     EVENT_BOX_ITEM_REMOVED,
 )
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
@@ -31,7 +32,12 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
-from app.services.document_event_service import record_document_mutation, system_document_events
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event,
+    record_document_mutation,
+    system_document_events,
+)
 from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
 
 
@@ -496,6 +502,21 @@ async def _assign_ozon_positions(
         raise FbsPackingBoxError("ozon_box_multiple_orders")
     await _assert_ozon_orders_mutable(session, tenant_id, list(order_ids))
 
+    # R6: recognise a retry of this exact request by its idempotency key, even
+    # after another operator's own add touched the same box in between (see
+    # review WMS-453 F1 — a per-row "last key" forgets an earlier key as soon
+    # as a later add overwrites it, so A -> B -> A double-applied A). Reusing
+    # DocumentEvent's existing tenant-wide (tenant_id, idempotency_key)
+    # uniqueness makes the whole physical action, not a single row, the unit
+    # of dedup. The insert shares this transaction with the row changes
+    # below: if validation fails further down, both roll back together and
+    # the same key can be retried once the operator corrects the input.
+    is_new_request = await _claim_ozon_assign_idempotency(
+        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
+    )
+    if not is_new_request:
+        return
+
     # Existing rows for these positions in *this* box only — a position may
     # now also sit in other boxes of the supply (WMS-453, R11), which is not
     # a conflict; only the same box+position pair must stay a single row.
@@ -512,21 +533,6 @@ async def _assign_ozon_positions(
         ).all()
     }
 
-    # A row already stamped with this exact idempotency key already absorbed
-    # this request (R6): skip it instead of adding its quantity again. Any
-    # row left to apply is either new or carries a different (or no) key —
-    # a deliberate repeat action, which does add.
-    to_apply = {
-        position_id: quantity
-        for position_id, quantity in requested.items()
-        if not (
-            (existing := existing_in_box.get(position_id)) is not None
-            and existing.last_idempotency_key == stored_key
-        )
-    }
-    if not to_apply:
-        return
-
     totals: dict[uuid.UUID, int] = {}
     for position_id, total in (
         await session.execute(
@@ -535,7 +541,7 @@ async def _assign_ozon_positions(
             .where(
                 FbsPackingBoxItem.tenant_id == tenant_id,
                 FbsPackingBox.supply_id == supply_id,
-                FbsPackingBoxItem.order_product_id.in_(to_apply),
+                FbsPackingBoxItem.order_product_id.in_(position_ids),
             )
             .group_by(FbsPackingBoxItem.order_product_id)
         )
@@ -544,16 +550,15 @@ async def _assign_ozon_positions(
 
     # Validate the whole request before writing anything: a single position
     # over its remainder must save nothing at all (R2), not a partial add.
-    for position_id, add_quantity in to_apply.items():
+    for position_id, add_quantity in requested.items():
         current_total = totals.get(position_id, 0)
         if current_total + add_quantity > positions_by_id[position_id].quantity:
             raise FbsPackingBoxError("ozon_box_quantity_exceeded")
 
-    for position_id, add_quantity in to_apply.items():
+    for position_id, add_quantity in requested.items():
         existing = existing_in_box.get(position_id)
         if existing is not None:
             existing.quantity += add_quantity
-            existing.last_idempotency_key = stored_key
         else:
             session.add(
                 FbsPackingBoxItem(
@@ -562,12 +567,35 @@ async def _assign_ozon_positions(
                     fbs_order_id=positions_by_id[position_id].order_id,
                     order_product_id=position_id,
                     quantity=add_quantity,
-                    last_idempotency_key=stored_key,
                     assigned_by_user_id=actor_user_id,
                 )
             )
     await session.flush()
     session.expire(box, ["items"])
+
+
+async def _claim_ozon_assign_idempotency(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    key: str,
+) -> bool:
+    """Return True the first time this exact key is seen for the tenant,
+    False on a retry. See the call site in _assign_ozon_positions for why."""
+    actor = current_document_event_actor()
+    return await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_BOX_ITEM_ADDED,
+        source=actor.source,
+        actor_user_id=actor.actor_user_id,
+        payload_json={"box_id": str(box_id)},
+        idempotency_key=key,
+    )
 
 
 async def remove_order(

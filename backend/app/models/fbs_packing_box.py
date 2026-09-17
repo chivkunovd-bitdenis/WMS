@@ -120,11 +120,12 @@ class FbsPackingBoxItem(Base):
     # no position (order_product_id is null) and always carry 1 — the row
     # still means "the whole order", quantity is not a second source for it.
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    # Idempotency key of the assign_orders call that last created/incremented
-    # this row (WMS-453, Д4). A retry with the same key is a no-op; a new key
-    # on the same box+position adds to the existing row instead of duplicating
-    # it. Null on rows written before this column existed (backfilled once).
-    last_idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Retry recognition for an Ozon add (WMS-453, R6) reuses DocumentEvent's
+    # existing (tenant_id, idempotency_key) uniqueness instead of a column
+    # here — see EVENT_BOX_ITEM_ADDED and fbs_packing_box_service. A per-row
+    # "last key" was tried first and rejected in review (F1): it forgets an
+    # earlier key as soon as another operator's add touches the same row, so
+    # A -> B -> A double-applied A instead of staying a no-op.
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -4,14 +4,16 @@ box freezes once its order is assembled in Ozon."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBoxItem
 from app.services import fbs_packing_box_service as boxes_svc
@@ -435,6 +437,134 @@ async def test_repeat_idempotency_key_is_a_no_op_and_new_key_adds_to_existing_ro
 
 
 @pytest.mark.asyncio
+async def test_repeat_after_another_operators_add_in_between_stays_a_no_op(
+    db_session: AsyncSession,
+) -> None:
+    """Review WMS-453 F1: A -> B -> A must leave the box at 2, not 3.
+
+    Reproduced across *separate* sessions/transactions, each with its own
+    commit — the setting from the review (two operators, not one session
+    replaying calls). A per-row "last key" only remembers the most recent
+    touch, so once B's own add overwrites it, a retried A looks like a new
+    key and gets applied again. The fix (DocumentEvent's existing tenant-wide
+    idempotency-key uniqueness) must keep recognising A regardless of what
+    happened to the row in between.
+    """
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    positions = await _positions(db_session, order)  # quantities [3, 5]
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 1, "f1-repro", actor_user_id=None
+    )
+    await db_session.commit()
+    tenant_id, supply_id, box_id = tenant.id, supply.id, boxes[0].id
+    position_id = positions[1].id  # quantity 5, plenty of remainder for 1+1+1
+
+    async def _call(key: str, quantity: int) -> None:
+        async with SessionLocal() as session:
+            await boxes_svc.assign_orders(
+                session,
+                tenant_id,
+                supply_id,
+                box_id,
+                [],
+                actor_user_id=None,
+                positions=_add(position_id, quantity),
+                idempotency_key=key,
+            )
+            await session.commit()
+
+    async def _current_quantity() -> int:
+        async with SessionLocal() as session:
+            item = await session.scalar(
+                select(FbsPackingBoxItem).where(
+                    FbsPackingBoxItem.box_id == box_id,
+                    FbsPackingBoxItem.order_product_id == position_id,
+                )
+            )
+            assert item is not None
+            return item.quantity
+
+    await _call("A", 1)
+    await _call("B", 1)
+    await _call("A", 1)  # the operator's client retried A after B ran, unaware of it
+    assert await _current_quantity() == 2
+
+    await _call("A", 1)  # a further retry of A must still be recognised
+    assert await _current_quantity() == 2
+
+    await _call("C", 1)  # a genuinely new, later action does add
+    assert await _current_quantity() == 3
+
+
+@pytest.mark.asyncio
+async def test_concurrent_additions_serialize_under_the_supply_lock_on_postgresql(
+    db_session: AsyncSession,
+) -> None:
+    """C3: two operators adding to two different boxes for the same position
+    at the same moment must never let the sum exceed the position's
+    quantity. The FOR UPDATE lock on the supply (already taken for the
+    quantity check) must serialize the two transactions on real PostgreSQL —
+    SQLite has no comparable row lock, so this only runs where it can prove
+    anything (skipped otherwise, like the project's other *_concurrency.py
+    tests, e.g. test_wms351_publication_concurrency.py).
+    """
+    if db_session.bind is None or db_session.bind.dialect.name != "postgresql":
+        pytest.skip("requires isolated PostgreSQL")
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    position = FbsOrderProduct(
+        order_id=order.id,
+        position_index=0,
+        ozon_sku=555,
+        quantity=100,
+        name="Concurrency stress position",
+    )
+    db_session.add(position)
+    await db_session.flush()
+    boxes = await boxes_svc.create_boxes(
+        db_session, tenant.id, supply.id, 2, "c3-concurrency", actor_user_id=None
+    )
+    await db_session.commit()
+    tenant_id, supply_id, position_id = tenant.id, supply.id, position.id
+    box_ids = [box.id for box in boxes]
+
+    async def _attempt(box_id: uuid.UUID, key: str) -> str:
+        async with AsyncSession(bind=db_session.bind, expire_on_commit=False) as session:
+            try:
+                await boxes_svc.assign_orders(
+                    session,
+                    tenant_id,
+                    supply_id,
+                    box_id,
+                    [],
+                    actor_user_id=None,
+                    positions=_add(position_id, 60),
+                    idempotency_key=key,
+                )
+                await session.commit()
+                return "ok"
+            except boxes_svc.FbsPackingBoxError as exc:
+                await session.rollback()
+                return exc.code
+
+    results = await asyncio.gather(
+        _attempt(box_ids[0], "concurrent-a"),
+        _attempt(box_ids[1], "concurrent-b"),
+    )
+    # 60 + 60 = 120 > 100: exactly one of the two must be rejected, and the
+    # lock must make that decision correctly rather than letting both see a
+    # stale "0 so far" and both succeed.
+    assert sorted(results) == ["ok", "ozon_box_quantity_exceeded"]
+
+    async with SessionLocal() as check:
+        total = await check.scalar(
+            select(func.sum(FbsPackingBoxItem.quantity)).where(
+                FbsPackingBoxItem.order_product_id == position_id
+            )
+        )
+    assert total == 60
+
+
+@pytest.mark.asyncio
 async def test_missing_idempotency_key_is_rejected(db_session: AsyncSession) -> None:
     tenant, supply, order = await _ozon_supply_with_one_order(db_session)
     positions = await _positions(db_session, order)
@@ -523,7 +653,6 @@ def test_migration_backfills_quantity_and_builds_new_partial_indexes(
         migration.upgrade()
         upgraded = sa.Table("fbs_packing_box_items", sa.MetaData(), autoload_with=connection)
         assert "quantity" in upgraded.c
-        assert "last_idempotency_key" in upgraded.c
         rows = {
             row.id: row.quantity
             for row in connection.execute(sa.select(upgraded.c.id, upgraded.c.quantity))
@@ -567,7 +696,7 @@ def test_migration_backfills_quantity_and_builds_new_partial_indexes(
                 )
             )
 
-        with pytest.raises(RuntimeError, match="Remove position assignments"):
+        with pytest.raises(RuntimeError, match="Remove partial or multi-box position"):
             migration.downgrade()
         connection.execute(upgraded.delete().where(upgraded.c.id == 4))
         migration.downgrade()
@@ -576,7 +705,6 @@ def test_migration_backfills_quantity_and_builds_new_partial_indexes(
         # (WMS-355, migration 0254) and stays.
         assert "order_product_id" in restored.c
         assert "quantity" not in restored.c
-        assert "last_idempotency_key" not in restored.c
         assert connection.scalar(sa.select(sa.func.count()).select_from(restored)) == 2
         # The pre-WMS-453 combined index is back: same position, same order,
         # a second row is rejected again regardless of which box.
@@ -587,4 +715,84 @@ def test_migration_backfills_quantity_and_builds_new_partial_indexes(
                     order_product_id=position_id.hex,
                 )
             )
+    engine.dispose()
+
+
+def test_migration_downgrade_rejects_single_partial_row_but_allows_single_full_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review WMS-453 F2: a plain COUNT(*) > 1 guard missed a *single* row
+    holding only part of a position ("10 of 100" in one box). The old schema
+    has no quantity column, so that lone row would silently become "the whole
+    position" (100) on downgrade — the owner's exact split-box scenario, not
+    corrupted data. A single row holding the position's *full* quantity is
+    the one state the old schema can represent and must still be allowed to
+    downgrade.
+    """
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    path = Path(__file__).resolve().parents[1] / (
+        "alembic/versions/20260917_0500_wms453_ozon_box_quantity.py"
+    )
+    spec = spec_from_file_location("box_quantity_migration_f2", path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    metadata = sa.MetaData()
+    order_products = sa.Table(
+        "fbs_order_products",
+        metadata,
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("quantity", sa.Integer(), nullable=False),
+    )
+    items = sa.Table(
+        "fbs_packing_box_items",
+        metadata,
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("box_id", sa.Uuid(), nullable=False),
+        sa.Column("fbs_order_id", sa.Uuid(), nullable=False),
+        sa.Column("order_product_id", sa.Uuid(), nullable=True),
+    )
+    engine = sa.create_engine("sqlite://")
+    order_id, box_id, position_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    with engine.begin() as connection:
+        metadata.create_all(connection)
+        connection.execute(
+            sa.text(
+                "CREATE UNIQUE INDEX uq_fbs_packing_box_items_order_position "
+                "ON fbs_packing_box_items (fbs_order_id, "
+                "coalesce(order_product_id, '00000000-0000-0000-0000-000000000000'))"
+            )
+        )
+        connection.execute(order_products.insert().values(id=position_id, quantity=100))
+        connection.execute(
+            items.insert().values(
+                id=1, box_id=box_id, fbs_order_id=order_id, order_product_id=position_id,
+            )
+        )
+        monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(connection)))
+        migration.upgrade()
+        upgraded = sa.Table("fbs_packing_box_items", sa.MetaData(), autoload_with=connection)
+        # Upgrade backfills the whole position, as in the main migration test.
+        assert connection.scalar(sa.select(upgraded.c.quantity)) == 100
+
+        # The owner's exact scenario: only the first 10 of 100 are placed so
+        # far, in a single box — one row, so the old COUNT(*) > 1 guard alone
+        # would not have caught this.
+        connection.execute(upgraded.update().values(quantity=10))
+        with pytest.raises(RuntimeError, match="Remove partial or multi-box position"):
+            migration.downgrade()
+
+        # Once the box legitimately holds the whole position again, the lone
+        # old-schema row means exactly what it always did — safe to downgrade.
+        connection.execute(upgraded.update().values(quantity=100))
+        migration.downgrade()
+        restored = sa.Table("fbs_packing_box_items", sa.MetaData(), autoload_with=connection)
+        assert "quantity" not in restored.c
+        assert connection.scalar(sa.select(restored.c.order_product_id)) == position_id.hex
     engine.dispose()
