@@ -266,6 +266,60 @@ describe('WMS-453 box shipment lifecycle (R6/R9)', () => {
     expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 70], ['key-2', 60]])
   })
 
+  it('F4: pending exists but the background refresh emptied the addable list (remainder 0) → unchanged typed input replays the pending → success, close', async () => {
+    const server = makeServer()
+    const hundred = [{ order_product_id: 'shirt', quantity: 100 }]
+    const sent: FbsBoxShipment[] = []
+    const send = vi.fn(async (shipment: FbsBoxShipment) => {
+      sent.push(shipment)
+      const result = server.apply(shipment)
+      if (sent.length === 1) throw networkFailure() // сервер применил все 100, ответ потерян
+      return result
+    })
+    const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
+    const first = await sendFbsBoxShipment({ ...base, pending: null, positions: hundred, typedPositions: hundred })
+    expect(first.ok).toBe(false)
+    expect(server.state.shirt).toBe(100)
+    // Фоновое обновление: остаток 0, строка ушла из списка — новое тело пустое,
+    // но ввод оператора (отмечено, 100) не менялся.
+    const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: [], typedPositions: hundred })
+    expect(second.ok).toBe(true)
+    expect(second.pending).toBeNull()
+    expect(sent.map((item) => [item.key, item.positions[0].quantity])).toEqual([['key-1', 100], ['key-1', 100]])
+    expect(server.state.shirt).toBe(100)
+  })
+
+  it('F4 variant: pending exists, operator unchecked everything → the pending is still replayed first; resolved, nothing new sent', async () => {
+    const server = makeServer()
+    const sent: FbsBoxShipment[] = []
+    const send = vi.fn(async (shipment: FbsBoxShipment) => {
+      sent.push(shipment)
+      if (sent.length === 1) throw networkFailure()
+      return server.apply(shipment)
+    })
+    const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
+    const first = await sendFbsBoxShipment({ ...base, pending: null, positions: five, typedPositions: five })
+    const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: [], typedPositions: [] })
+    expect(second.ok).toBe('resolved')
+    expect(sent.map((item) => item.key)).toEqual(['key-1', 'key-1'])
+    expect(server.state.shirt).toBe(5)
+  })
+
+  it('pending replay definitively refused and no new body → the refusal is shown, nothing empty is sent', async () => {
+    const sent: FbsBoxShipment[] = []
+    const send = vi.fn<(shipment: FbsBoxShipment) => Promise<Workspace>>(async (shipment) => {
+      sent.push(shipment)
+      if (sent.length === 1) throw networkFailure()
+      throw new Error('409 ozon_box_quantity_exceeded')
+    })
+    const base = { boxId: 'box-1', send, createKey: keys(), isDefinitiveRefusal: refusal }
+    const first = await sendFbsBoxShipment({ ...base, pending: null, positions: five })
+    const second = await sendFbsBoxShipment({ ...base, pending: first.pending, positions: [], typedPositions: [] })
+    expect(second.ok).toBe(false)
+    expect(second.pending).toBeNull()
+    expect(sent).toHaveLength(2)
+  })
+
   it('success clears the pending, so the next add is a new action with a new key', async () => {
     const server = makeServer()
     const sent: FbsBoxShipment[] = []

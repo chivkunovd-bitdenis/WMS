@@ -120,7 +120,10 @@ export type FbsBoxShipmentResult<W> =
  * оператор (ревью F3).
  *
  * - Нет незавершённой отправки — новый ключ; тело и ключ запоминаются до ответа.
- * - Ввод совпадает с незавершённой отправкой — повтор с тем же телом и ключом.
+ * - Ввод оператора (typedPositions — отмеченные строки с введёнными
+ *   количествами, без фильтра по остатку: фоновое обновление могло убрать
+ *   полностью разложенную позицию из списка, а ввод при этом не менялся)
+ *   совпадает с незавершённой отправкой — повтор с тем же телом и ключом.
  * - Ввод изменился, а исход прежней отправки неизвестен — сначала повторяем
  *   прежнюю отправку тем же телом и ключом; её успешный ответ — 'resolved'
  *   (изменённый ввод не отправлен; ответ уже содержит свежее рабочее
@@ -134,13 +137,17 @@ export type FbsBoxShipmentResult<W> =
 export async function sendFbsBoxShipment<W>(input: {
   pending: FbsBoxShipment | null
   boxId: string
+  /** Тело новой отправки: отмеченные строки с остатком и введённым количеством. */
   positions: FbsPackingBoxPosition[]
+  /** Ввод оператора как есть (без фильтра по остатку) — для сравнения с незавершённой отправкой. */
+  typedPositions?: FbsPackingBoxPosition[]
   send: (shipment: FbsBoxShipment) => Promise<W>
   createKey: () => string
   isDefinitiveRefusal: (error: unknown) => boolean
 }): Promise<FbsBoxShipmentResult<W>> {
   const { pending, boxId, positions } = input
-  if (pending && pending.boxId === boxId && fbsSameBoxPositions(pending.positions, positions)) {
+  const typed = input.typedPositions ?? positions
+  if (pending && pending.boxId === boxId && fbsSameBoxPositions(pending.positions, typed)) {
     return sendOnce(pending)
   }
   if (pending) {
@@ -148,6 +155,9 @@ export async function sendFbsBoxShipment<W>(input: {
       return { ok: 'resolved', workspace: await input.send(pending), pending: null }
     } catch (error) {
       if (!input.isDefinitiveRefusal(error)) return { ok: false, error, pending }
+      // Прежняя отправка сервером отвергнута и снята; если нового тела нет
+      // (оператор всё снял), показать этот отказ, а не слать пустую отправку.
+      if (positions.length === 0) return { ok: false, error, pending: null }
     }
   }
   return sendOnce({ key: input.createKey(), boxId, positions })

@@ -413,8 +413,18 @@ export function FfFbsSupplyWorkspace({
   // с неизвестным исходом (обрыв, таймаут) до ответа сервера на повтор того же
   // тела с тем же ключом — единственного надёжного подтверждения; изменённый
   // ввод под старый ключ не попадает (см. sendFbsBoxShipment). Открытие
-  // модалки — новое действие.
+  // модалки — новое действие. Ref читают обработчики в момент вызова; state —
+  // зеркало для кнопки «Добавить»: пока отправка не завершена, кнопка активна,
+  // даже если фоновое обновление убрало позицию из списка (ревью F4).
   const boxAssignShipmentRef = useRef<FbsBoxShipment | null>(null)
+  const [boxAssignPending, setBoxAssignPendingState] = useState<FbsBoxShipment | null>(null)
+  const setBoxAssignShipment = (shipment: FbsBoxShipment | null) => {
+    boxAssignShipmentRef.current = shipment
+    setBoxAssignPendingState(shipment)
+  }
+  // Замок от параллельного вызова assignBoxOrders (двойное нажатие до того,
+  // как busy заперла кнопку): пока отправка идёт, второй вызов выходит сразу.
+  const boxAssignInFlightRef = useRef(false)
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
   const deliveryKeyRef = useRef(createFbsIdempotencyKey())
@@ -474,7 +484,7 @@ export function FfFbsSupplyWorkspace({
   }
   const closeBoxAssignment = () => {
     if (!confirmDiscardChanges(boxAssignmentDirty)) return
-    boxAssignShipmentRef.current = null
+    setBoxAssignShipment(null)
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
     setBoxAssignTarget(null)
@@ -538,7 +548,7 @@ export function FfFbsSupplyWorkspace({
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
-    boxAssignShipmentRef.current = null
+    setBoxAssignShipment(null)
     setBoxProductSearch('')
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
@@ -1012,44 +1022,51 @@ export function FfFbsSupplyWorkspace({
 
   const assignBoxOrders = async () => {
     if (boxOperationsDisabled || !workspace || !boxAssignTarget || boxAssignSubmitDisabled) return
-    const supplyId = workspace.supply.id
-    const boxId = boxAssignTarget
-    // Прежняя незавершённая отправка подтверждена повтором, а ввод уже другой:
-    // изменённый ввод не отправлен, модалка остаётся открытой со свежими
-    // остатками из ответа и вводом оператора.
-    let resolvedWithoutSending = false
-    const operation = isOzonSupply
-      ? async () => {
-        // Незавершённая отправка читается в момент вызова: и повтор через
-        // «Повторить», и новое нажатие «Добавить» видят актуальное состояние.
-        const result = await sendFbsBoxShipment({
-          pending: boxAssignShipmentRef.current,
-          boxId,
-          positions: boxAssignSelectedPositions,
-          send: (shipment) => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [], {
-            positions: shipment.positions,
-            idempotency_key: shipment.key,
-          }),
-          createKey: createFbsIdempotencyKey,
-          // Окончательный отказ — структурный ответ 4xx без просьбы повторить:
-          // сервер ничего не записал (ключ он занимает только на пути записи).
-          // Всё остальное (обрыв, таймаут, 5xx, retryable) — исход неизвестен.
-          isDefinitiveRefusal: (cause) => cause instanceof FbsApiError && cause.status < 500 && !cause.retryable,
-        })
-        boxAssignShipmentRef.current = result.pending
-        if (result.ok === false) throw result.error
-        resolvedWithoutSending = result.ok === 'resolved'
-        return result.workspace
+    if (boxAssignInFlightRef.current) return
+    boxAssignInFlightRef.current = true
+    try {
+      const supplyId = workspace.supply.id
+      const boxId = boxAssignTarget
+      // Прежняя незавершённая отправка подтверждена повтором, а ввод уже другой:
+      // изменённый ввод не отправлен, модалка остаётся открытой со свежими
+      // остатками из ответа и вводом оператора.
+      let resolvedWithoutSending = false
+      const operation = isOzonSupply
+        ? async () => {
+          // Незавершённая отправка читается в момент вызова: и повтор через
+          // «Повторить», и новое нажатие «Добавить» видят актуальное состояние.
+          const result = await sendFbsBoxShipment({
+            pending: boxAssignShipmentRef.current,
+            boxId,
+            positions: boxAssignSelectedPositions,
+            typedPositions: boxAssignTypedPositions,
+            send: (shipment) => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [], {
+              positions: shipment.positions,
+              idempotency_key: shipment.key,
+            }),
+            createKey: createFbsIdempotencyKey,
+            // Окончательный отказ — структурный ответ 4xx без просьбы повторить:
+            // сервер ничего не записал (ключ он занимает только на пути записи).
+            // Всё остальное (обрыв, таймаут, 5xx, retryable) — исход неизвестен.
+            isDefinitiveRefusal: (cause) => cause instanceof FbsApiError && cause.status < 500 && !cause.retryable,
+          })
+          setBoxAssignShipment(result.pending)
+          if (result.ok === false) throw result.error
+          resolvedWithoutSending = result.ok === 'resolved'
+          return result.workspace
+        }
+        : () => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, boxAssignSelectedOrderIds)
+      const next = await run(operation, '')
+      if (next && !resolvedWithoutSending) {
+        setBoxAssignTarget(null)
+        setBoxProductSearch('')
+        setBoxProductQty({})
+        setBoxSelectedPositionIds(new Set())
+        setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
+        setStage('boxes')
       }
-      : () => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, boxAssignSelectedOrderIds)
-    const next = await run(operation, '')
-    if (next && !resolvedWithoutSending) {
-      setBoxAssignTarget(null)
-      setBoxProductSearch('')
-      setBoxProductQty({})
-      setBoxSelectedPositionIds(new Set())
-      setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
-      setStage('boxes')
+    } finally {
+      boxAssignInFlightRef.current = false
     }
   }
 
@@ -1615,6 +1632,13 @@ export function FfFbsSupplyWorkspace({
     const quantity = Number(boxProductQty[row.id])
     return Number.isInteger(quantity) && quantity >= 1 ? [{ order_product_id: row.id, quantity }] : []
   })
+  // Ввод оператора как есть, без фильтра по остатку: нужен, чтобы узнать
+  // «ввод не менялся» и повторить незавершённую отправку даже после того, как
+  // фоновое обновление убрало полностью разложенную позицию из списка (F4).
+  const boxAssignTypedPositions = ozonPositionRows.filter((row) => boxSelectedPositionIds.has(row.id)).flatMap((row) => {
+    const quantity = Number(boxProductQty[row.id])
+    return Number.isInteger(quantity) && quantity >= 1 ? [{ order_product_id: row.id, quantity }] : []
+  })
   const boxAssignOrderId = boxAssignBox?.assigned_order_ids[0] ?? boxAssignSelectedRows[0]?.order.id
   const ozonBoxAssignOrders = (workspace?.orders ?? []).map((order) => ({
     order,
@@ -1672,8 +1696,10 @@ export function FfFbsSupplyWorkspace({
     const qty = Math.min(row.orders.length, Math.max(0, Number(boxProductQty[row.key]) || 0))
     return row.orders.slice(0, qty).map((order) => order.id)
   })
+  // Пока есть незавершённая отправка, «Добавить» доступна независимо от текущего
+  // выбора: нажатие повторит её тем же телом и ключом (R6, ревью F4).
   const boxAssignSubmitDisabled = isOzonSupply
-    ? boxAssignSelectedPositions.length === 0 || boxAssignSelectedPositions.length !== boxAssignSelectedRows.length
+    ? boxAssignPending === null && (boxAssignSelectedPositions.length === 0 || boxAssignSelectedPositions.length !== boxAssignSelectedRows.length)
     : boxAssignSelectedOrderIds.length === 0
 
   useEffect(() => {
@@ -2577,7 +2603,7 @@ export function FfFbsSupplyWorkspace({
                                 // прошлой сессии не повторяется; если она была, перечитываем
                                 // поставку, чтобы остатки в модалке были актуальны.
                                 if (boxAssignShipmentRef.current) {
-                                  boxAssignShipmentRef.current = null
+                                  setBoxAssignShipment(null)
                                   void load(true)
                                 }
                                 // Плашка ошибки показывается и внутри модалки (R9), поэтому
