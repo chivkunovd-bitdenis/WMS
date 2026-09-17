@@ -1,4 +1,4 @@
-import type { FbsOrderMetadata } from './fbsApi'
+import type { FbsOrderMetadata, FbsPackingBoxPosition } from './fbsApi'
 
 export type FbsMarketplace = 'wb' | 'ozon'
 
@@ -74,6 +74,119 @@ export function fbsBoxPositionQuantityInput(raw: string, max: number): string {
   const parsed = Math.floor(Number(raw))
   if (!Number.isFinite(parsed)) return ''
   return String(Math.min(Math.max(1, max), Math.max(1, parsed)))
+}
+
+/**
+ * Отправка «Добавить» в Ozon-короб (WMS-453, R6): ключ идемпотентности живёт
+ * вместе с телом, которое под ним ушло, и со снимком количеств в коробе до
+ * отправки. Пока исход отправки неизвестен (обрыв, таймаут), повтор уходит
+ * ровно с этим телом и ключом; изменённый ввод под старый ключ не попадает.
+ */
+export type FbsBoxShipment = {
+  key: string
+  boxId: string
+  positions: FbsPackingBoxPosition[]
+  /** Количество каждой позиции в этом коробе на момент отправки. */
+  before: ReadonlyMap<string, number>
+}
+
+type FbsShipmentBoxes = Array<{ id: string; assigned_positions?: FbsPackingBoxPosition[] | null }>
+
+/** Количества позиций в одном коробе по строкам состава. */
+export function fbsBoxPositionQuantities(boxes: FbsShipmentBoxes, boxId: string): Map<string, number> {
+  const box = boxes.find((item) => item.id === boxId)
+  return new Map((box?.assigned_positions ?? []).map((entry) => [entry.order_product_id, entry.quantity]))
+}
+
+/** Один и тот же состав отправки: те же позиции с теми же количествами, порядок не важен. */
+export function fbsSameBoxPositions(a: FbsPackingBoxPosition[], b: FbsPackingBoxPosition[]): boolean {
+  const normalize = (list: FbsPackingBoxPosition[]) => [...list]
+    .sort((x, y) => x.order_product_id.localeCompare(y.order_product_id))
+    .map((entry) => `${entry.order_product_id}:${entry.quantity}`)
+    .join('|')
+  return a.length === b.length && normalize(a) === normalize(b)
+}
+
+/**
+ * Применилась ли отправка на сервере: по свежему рабочему пространству у каждой
+ * её позиции количество в этом коробе выросло не меньше, чем было отправлено.
+ */
+export function fbsBoxShipmentApplied(boxes: FbsShipmentBoxes, shipment: FbsBoxShipment): boolean {
+  const now = fbsBoxPositionQuantities(boxes, shipment.boxId)
+  return shipment.positions.every((entry) => (
+    (now.get(entry.order_product_id) ?? 0) - (shipment.before.get(entry.order_product_id) ?? 0) >= entry.quantity
+  ))
+}
+
+export type FbsBoxShipmentResult<W> =
+  /** Отправка применена (ответом сервера или подтверждена перечиткой) — модалку можно закрыть. */
+  | { ok: true; workspace: W; pending: null }
+  /** Ошибка: показать; pending — что повторять с тем же телом и ключом (или ничего). */
+  | { ok: false; error: unknown; pending: FbsBoxShipment | null }
+  /**
+   * Ввод изменился, а перечитка показала, что прежняя отправка уже применилась:
+   * ничего не отправлено, старая отправка снята. Показать свежее состояние
+   * (остатки), сохранить ввод оператора, модалку не закрывать.
+   */
+  | { ok: 'resolved'; workspace: W; pending: null }
+
+/**
+ * Жизненный цикл одной отправки «Добавить» в Ozon-короб (WMS-453, R6/R9).
+ *
+ * - Нет незавершённой отправки — новый ключ, тело и снимок короба запоминаются
+ *   как незавершённая отправка до ответа.
+ * - Ввод совпадает с незавершённой отправкой — повтор с тем же телом и ключом:
+ *   сервер узнаёт повтор и не удваивает количество.
+ * - Ввод изменился, а исход прежней отправки неизвестен — сначала перечитываем
+ *   поставку: если прежняя отправка применилась — 'resolved' (изменённый ввод
+ *   под старый ключ не уходит, оператор видит настоящий остаток и решает сам);
+ *   если нет — новая отправка с новым ключом.
+ * - Окончательный отказ сервера — отправка снята (сервер занимает ключ только на
+ *   пути записи, ничего не сохранено). Обрыв или неизвестный исход — сразу
+ *   перечитываем поставку: применилось — успех, нет — отправка остаётся
+ *   незавершённой для повтора с тем же телом и ключом.
+ */
+export async function sendFbsBoxShipment<W extends { boxes: FbsShipmentBoxes }>(input: {
+  pending: FbsBoxShipment | null
+  boxId: string
+  positions: FbsPackingBoxPosition[]
+  boxes: FbsShipmentBoxes
+  send: (shipment: FbsBoxShipment) => Promise<W>
+  reload: () => Promise<W>
+  createKey: () => string
+  isDefinitiveRefusal: (error: unknown) => boolean
+}): Promise<FbsBoxShipmentResult<W>> {
+  const { pending, boxId, positions } = input
+  let boxes = input.boxes
+  let shipment: FbsBoxShipment
+  if (pending && pending.boxId === boxId && fbsSameBoxPositions(pending.positions, positions)) {
+    shipment = pending
+  } else {
+    if (pending) {
+      let fresh: W
+      try {
+        fresh = await input.reload()
+      } catch (error) {
+        return { ok: false, error, pending }
+      }
+      if (fbsBoxShipmentApplied(fresh.boxes, pending)) return { ok: 'resolved', workspace: fresh, pending: null }
+      boxes = fresh.boxes
+    }
+    shipment = { key: input.createKey(), boxId, positions, before: fbsBoxPositionQuantities(boxes, boxId) }
+  }
+  try {
+    return { ok: true, workspace: await input.send(shipment), pending: null }
+  } catch (error) {
+    if (input.isDefinitiveRefusal(error)) return { ok: false, error, pending: null }
+    let fresh: W | null = null
+    try {
+      fresh = await input.reload()
+    } catch {
+      fresh = null
+    }
+    if (fresh && fbsBoxShipmentApplied(fresh.boxes, shipment)) return { ok: true, workspace: fresh, pending: null }
+    return { ok: false, error, pending: shipment }
+  }
 }
 
 export function fbsOrdersAvailableForBox<T extends { id: string }>(

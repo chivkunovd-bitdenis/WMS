@@ -71,7 +71,9 @@ import {
   fbsUnassignedPositionQuantity,
   fbsStageAfterWorkspaceRefresh,
   ordersWord,
+  sendFbsBoxShipment,
   summarizeDeliveryChecks,
+  type FbsBoxShipment,
 } from './fbsUx'
 import {
   confirmFbsPrintApplied,
@@ -406,12 +408,12 @@ export function FfFbsSupplyWorkspace({
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
-  // Ключ отправки Ozon-модалки «Добавить товары в короб» (WMS-453, R6): создаётся
-  // при открытии модалки, повторяется при повторном «Добавить» после обрыва
-  // или неизвестного исхода и заменяется после успешного ответа либо
-  // окончательного отказа сервера (см. assignBoxOrders) — сервер по нему
-  // узнаёт повтор той же отправки и не удваивает количество.
-  const boxAssignKeyRef = useRef(createFbsIdempotencyKey())
+  // Незавершённая отправка Ozon-модалки «Добавить товары в короб» (WMS-453, R6):
+  // ключ идемпотентности вместе с телом, которое под ним ушло, и снимком короба.
+  // Живёт от отправки с неизвестным исходом (обрыв, таймаут) до ответа сервера;
+  // повтор уходит с тем же телом и ключом, изменённый ввод под старый ключ не
+  // попадает (см. sendFbsBoxShipment). Открытие модалки — новое действие.
+  const boxAssignShipmentRef = useRef<FbsBoxShipment | null>(null)
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
   const deliveryKeyRef = useRef(createFbsIdempotencyKey())
@@ -471,6 +473,7 @@ export function FfFbsSupplyWorkspace({
   }
   const closeBoxAssignment = () => {
     if (!confirmDiscardChanges(boxAssignmentDirty)) return
+    boxAssignShipmentRef.current = null
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
     setBoxAssignTarget(null)
@@ -534,6 +537,7 @@ export function FfFbsSupplyWorkspace({
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
+    boxAssignShipmentRef.current = null
     setBoxProductSearch('')
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
@@ -1007,29 +1011,39 @@ export function FfFbsSupplyWorkspace({
 
   const assignBoxOrders = async () => {
     if (boxOperationsDisabled || !workspace || !boxAssignTarget || boxAssignSubmitDisabled) return
-    const next = await run(
-      () => assignFbsPackingBoxOrders(
-        token,
-        authHeaders,
-        workspace.supply.id,
-        boxAssignTarget,
-        isOzonSupply ? [] : boxAssignSelectedOrderIds,
-        // Ключ читается в момент вызова: повтор через «Повторить» или новое
-        // нажатие «Добавить» после ошибки уходит с тем же ключом (R6).
-        isOzonSupply ? { positions: boxAssignSelectedPositions, idempotency_key: boxAssignKeyRef.current } : undefined,
-      ),
-      '',
-      (cause) => {
-        // Окончательный отказ сервера (409/400/422 с кодом) означает, что ничего
-        // не применено, поэтому исправленный оператором запрос уходит с новым
-        // ключом — тот же принцип, что у «Передать» (fbsDeliveryErrorKeepsIdempotencyKey):
-        // иначе он застрянет на старом отказе. Обрыв сети или неизвестный исход —
-        // ключ сохраняется, чтобы повтор не удвоил количество (R6).
-        if (cause instanceof FbsApiError && !cause.retryable) boxAssignKeyRef.current = createFbsIdempotencyKey()
-      },
-    )
-    if (next) {
-      boxAssignKeyRef.current = createFbsIdempotencyKey()
+    const supplyId = workspace.supply.id
+    const boxId = boxAssignTarget
+    // Прежняя отправка применилась, а ввод уже другой: ничего не отправлено,
+    // модалка остаётся открытой со свежими остатками и вводом оператора.
+    let resolvedWithoutSending = false
+    const operation = isOzonSupply
+      ? async () => {
+        // Незавершённая отправка читается в момент вызова: и повтор через
+        // «Повторить», и новое нажатие «Добавить» видят актуальное состояние.
+        const result = await sendFbsBoxShipment({
+          pending: boxAssignShipmentRef.current,
+          boxId,
+          positions: boxAssignSelectedPositions,
+          boxes: workspace.boxes,
+          send: (shipment) => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [], {
+            positions: shipment.positions,
+            idempotency_key: shipment.key,
+          }),
+          reload: () => fetchFbsWorkspace(token, authHeaders, supplyId),
+          createKey: createFbsIdempotencyKey,
+          // Окончательный отказ — структурный ответ 4xx без просьбы повторить:
+          // сервер ничего не записал (ключ он занимает только на пути записи).
+          // Всё остальное (обрыв, таймаут, 5xx, retryable) — исход неизвестен.
+          isDefinitiveRefusal: (cause) => cause instanceof FbsApiError && cause.status < 500 && !cause.retryable,
+        })
+        boxAssignShipmentRef.current = result.pending
+        if (result.ok === false) throw result.error
+        resolvedWithoutSending = result.ok === 'resolved'
+        return result.workspace
+      }
+      : () => assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, boxAssignSelectedOrderIds)
+    const next = await run(operation, '')
+    if (next && !resolvedWithoutSending) {
       setBoxAssignTarget(null)
       setBoxProductSearch('')
       setBoxProductQty({})
@@ -2559,7 +2573,13 @@ export function FfFbsSupplyWorkspace({
                               size="small"
                               disabled={boxEditingDisabled || busy || box.without_distribution || box.ozon_assembled}
                               onClick={() => {
-                                boxAssignKeyRef.current = createFbsIdempotencyKey()
+                                // Открытие модалки — новое действие (R6): незавершённая отправка
+                                // прошлой сессии не повторяется; если она была, перечитываем
+                                // поставку, чтобы остатки в модалке были актуальны.
+                                if (boxAssignShipmentRef.current) {
+                                  boxAssignShipmentRef.current = null
+                                  void load(true)
+                                }
                                 // Плашка ошибки показывается и внутри модалки (R9), поэтому
                                 // прошлая ошибка экрана не должна открыться вместе с ней.
                                 setError(null)
