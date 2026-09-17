@@ -287,11 +287,25 @@ async def test_colliding_wb_ozon_ids_survive_actual_frontend_http_edit(
         )
         session.add(ozon)
         await session.flush()
+        from app.models.product_marketplace_link import ProductMarketplaceLink
+
         for pid in ids:
             product = await session.get(Product, uuid.UUID(pid))
             assert product is not None
             product.fbs_units_mode = True
             product.fbs_stock_sync_enabled = product.fbs_ozon_stock_sync_enabled = True
+            # WMS-456: an honest two-marketplace product needs an active Ozon
+            # card, or the effective publish_ozon above stays false regardless.
+            session.add(
+                ProductMarketplaceLink(
+                    tenant_id=wb.tenant_id,
+                    seller_id=wb.seller_id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_offer_id=f"ozon-collision-{pid}",
+                    is_active=True,
+                )
+            )
             balance = await session.scalar(
                 select(InventoryBalance).where(InventoryBalance.product_id == product.id)
             )

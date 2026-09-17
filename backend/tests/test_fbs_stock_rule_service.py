@@ -984,7 +984,16 @@ async def _ozon_binding(
     is_active: bool = True,
     served: bool = True,
 ) -> FbsWarehouseBinding:
-    """Привязка озоновского склада того же продавца к тому же складу WMS."""
+    """Привязка озоновского склада того же продавца к тому же складу WMS.
+
+    WMS-456: эффективный флаг публикации в Ozon требует ещё и активную карточку
+    товара на Ozon (ProductMarketplaceLink), иначе доля туда не течёт. Товар
+    этого набора данных — честный двухплощадочный товар (ровно то, что
+    описывают тесты в этом файле), поэтому связка заводится тут же, одним
+    местом на всех вызывающих; отдельно её не смягчаем и не убираем.
+    """
+    from app.models.product_marketplace_link import ProductMarketplaceLink
+
     binding = FbsWarehouseBinding(
         id=uuid.uuid4(),
         tenant_id=seed.tenant.id,
@@ -998,6 +1007,16 @@ async def _ozon_binding(
         served=served,
     )
     session.add(binding)
+    session.add(
+        ProductMarketplaceLink(
+            tenant_id=seed.tenant.id,
+            seller_id=seed.seller.id,
+            product_id=seed.product.id,
+            marketplace="ozon",
+            external_offer_id=f"ozon-offer-{uuid.uuid4().hex[:10]}",
+            is_active=True,
+        )
+    )
     await session.commit()
     return binding
 
@@ -1188,6 +1207,13 @@ async def test_existing_pools_do_not_alias_when_another_marketplace_uses_same_wa
     )
     # The old WB rule exists before another marketplace adds the same number.
     ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+    # WMS-456: the first save above ran before the Ozon card existed, so it
+    # persisted the honest effective false of that moment. The operator turns
+    # Ozon on explicitly once the card exists (WMS-456 decision 3) — this test
+    # is about numeric-key aliasing, not about that gating, so it is turned on
+    # directly here rather than through another set_rule_for_products call.
+    seed.product.fbs_ozon_stock_sync_enabled = True
+    await db_session.commit()
     if ozon_has_pool:
         db_session.add(
             FbsBindingStockPool(
