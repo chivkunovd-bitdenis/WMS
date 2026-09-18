@@ -401,7 +401,7 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
         return HTTPException(status_code=409, detail=code)
     if code == "request_not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
-    if code in ("box_not_found", "barcode_unknown"):
+    if code in ("box_not_found", "barcode_unknown", "product_not_found"):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
     if code in (
         "bad_status",
@@ -416,6 +416,8 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
         "barcode_empty",
         "qty_exceeded",
         "product_not_on_request",
+        "product_not_in_seller_catalog",
+        "product_seller_mismatch",
         "actual_below_posted",
         "invalid_qty",
     ):

@@ -1094,13 +1094,20 @@ async def test_inbound_scan_rejects_catalog_product_not_on_request_until_added(
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
+    # WMS-473: a seller-catalogue product not on the request is added by the scan itself,
+    # as the «Добавить товар» line: plan 0, added by the fulfilment centre.
     scan = await async_client.post(
         f"{base}/{rid}/receiving/scan",
         headers=ah,
         json={"barcode": arrived_barcode},
     )
-    assert scan.status_code == 422, scan.text
-    assert scan.json()["detail"] == "product_not_on_request"
+    assert scan.status_code == 200, scan.text
+    scanned = scan.json()
+    assert scanned["product_id"] == arrived.json()["id"]
+    assert scanned["expected_qty"] == 0
+    assert scanned["actual_qty"] == 1
+    assert scanned["effective_actual_qty"] == 1
+    assert scanned["added_by_fulfillment"] is True
 
     fact = await async_client.post(
         f"{base}/{rid}/receiving/lines",
@@ -1109,10 +1116,11 @@ async def test_inbound_scan_rejects_catalog_product_not_on_request_until_added(
     )
     assert fact.status_code == 201, fact.text
     data = fact.json()
+    assert data["id"] == scanned["id"]
     assert data["product_id"] == arrived.json()["id"]
     assert data["expected_qty"] == 0
-    assert data["actual_qty"] == 1
-    assert data["effective_actual_qty"] == 1
+    assert data["actual_qty"] == 2
+    assert data["effective_actual_qty"] == 2
     assert data["added_by_fulfillment"] is True
 
 

@@ -174,6 +174,8 @@ type Props = {
   containerKind?: 'box' | 'cargo_place'
   readOnly: boolean
   ffDraft?: boolean
+  /** Документ ФФ: колонка итога — «Всего принято» в любом статусе (WMS-473). */
+  ffInbound?: boolean
   token: string
   requestLines: RequestLine[]
   boxLines: InboundBoxLine[]
@@ -191,6 +193,7 @@ export function FfInboundBoxAddDialog({
   containerKind,
   readOnly,
   ffDraft = false,
+  ffInbound = ffDraft,
   token,
   requestLines,
   boxLines,
@@ -376,18 +379,28 @@ export function FfInboundBoxAddDialog({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
+      // WMS-473: сервер сам добавляет в документ товар из каталога селлера, которого
+      // в нём ещё не было. Ответ ручки — только строка тары; чтобы новая позиция
+      // появилась в таблице диалога, нужен состав документа — перечитываем его
+      // один раз, только для новой позиции (обычный скан родителя не трогает).
+      const payload = (await res.json()) as
+        | InboundBoxLine
+        | { lines?: InboundBoxLine[] }
+      const scannedProductId =
+        'product_id' in payload && payload.product_id
+          ? payload.product_id
+          : productId ?? ((payload as { lines?: InboundBoxLine[] }).lines ?? []).at(-1)?.product_id
+      const newLine = scannedProductId != null
+        && !requestLines.some((line) => line.product_id === scannedProductId)
       // Две ручки на одно действие отвечают по-разному: скан в короб отдаёт
       // строку товара, скан в грузоместо — весь объект со списком строк.
       // Читаем оба вида, иначе у грузоместа идентификатор товара оказывается
       // пустым и колонка «В коробе» остаётся пустой при принятом скане.
-      const payload = (await res.json()) as
-        | InboundBoxLine
-        | { lines?: InboundBoxLine[] }
       const scannedLine =
         'product_id' in payload && payload.product_id
           ? (payload as InboundBoxLine)
           : ((payload as { lines?: InboundBoxLine[] }).lines ?? []).find(
-              (line) => line.product_id === productId,
+              (line) => line.product_id === scannedProductId,
             )
       if (!scannedLine) {
         setError('Сервер принял скан, но не вернул строку товара.')
@@ -406,11 +419,13 @@ export function FfInboundBoxAddDialog({
       lastProductLineId.current = requestLines.find((line) => line.product_id === scannedLine.product_id)?.id ?? null
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
-      if (ffDraft) await onUpdated()
+      if (ffDraft || newLine) await onUpdated()
       // The POST response is authoritative for this box. Refresh the heavy parent
       // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
+      // В черновике ФФ запрос идёт через sendIntakeMutations, и код отказа сервера
+      // приходит текстом ошибки — переводим его той же картой, что и обычный ответ.
+      setError(scanErrorMessageRu(e instanceof Error ? e.message : 'Не удалось выполнить скан.'))
     }
   }
 
@@ -533,7 +548,7 @@ export function FfInboundBoxAddDialog({
                 <TableRow>
                   <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={{ width: 80, whiteSpace: 'nowrap', px: 1 }}>
-                    {ffDraft ? 'Всего принято' : 'Заявлено'}
+                    {ffInbound ? 'Всего принято' : 'Заявлено'}
                   </TableCell>
                   <TableCell align="right" sx={boxFillQtyCellSx}>
                     В коробе

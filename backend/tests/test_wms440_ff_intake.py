@@ -605,3 +605,67 @@ async def test_explicit_legacy_recount_keeps_tare_without_duplicating_draft_fact
         assert completed.json()["lines"][0]["actual_qty"] == 4
     async with SessionLocal() as db:
         assert await db.scalar(select(func.sum(InventoryMovement.quantity_delta))) == 4
+
+
+@pytest.mark.asyncio
+async def test_wms473_scan_of_catalog_product_into_box_creates_line_of_empty_ff_document(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-473 C1: empty FF document, scan of a seller-catalogue barcode into a box."""
+    h, wid, sid, _planned_pid = await _setup(async_client)
+    barcode = f"2051083{uuid.uuid4().int % 10_000_000:07d}"
+    arrived = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "WMS473 arrived",
+            "sku_code": f"WMS473-{uuid.uuid4().hex[:8]}",
+            "wb_barcode": barcode,
+            "seller_id": sid,
+        },
+    )
+    assert arrived.status_code == 200, arrived.text
+    pid = arrived.json()["id"]
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    assert created.status_code == 201, created.text
+    rid = created.json()["id"]
+    assert created.json()["lines"] == []
+    box = await async_client.post(f"{BASE}/{rid}/boxes", headers=h)
+    assert box.status_code == 201, box.text
+    bid = box.json()["id"]
+    scan_path = f"{BASE}/{rid}/boxes/{bid}/scan"
+    first = await async_client.post(
+        scan_path, headers=h, json={"barcode": barcode, "mutation_id": str(uuid.uuid4())}
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["product_id"] == pid
+    assert first.json()["quantity"] == 1
+    read = (await async_client.get(f"{BASE}/{rid}", headers=h)).json()
+    assert len(read["lines"]) == 1
+    line = read["lines"][0]
+    assert line["product_id"] == pid
+    assert line["expected_qty"] == 1
+    assert line["actual_qty"] == 0
+    assert line["effective_actual_qty"] == 1
+    assert read["boxes"][0]["lines"][0]["quantity"] == 1
+    second = await async_client.post(
+        scan_path, headers=h, json={"barcode": barcode, "mutation_id": str(uuid.uuid4())}
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["quantity"] == 2
+    read = (await async_client.get(f"{BASE}/{rid}", headers=h)).json()
+    assert len(read["lines"]) == 1
+    assert read["lines"][0]["expected_qty"] == 2
+    assert read["lines"][0]["effective_actual_qty"] == 2
+    unknown = await async_client.post(
+        scan_path, headers=h, json={"barcode": "4600000000000", "mutation_id": str(uuid.uuid4())}
+    )
+    assert unknown.status_code == 422, unknown.text
+    assert unknown.json()["detail"] == "product_not_in_seller_catalog"
+    completed = await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h)
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "sorting"
+    assert completed.json()["has_discrepancy"] is False
+    assert completed.json()["lines"][0]["actual_qty"] == 2
+    async with SessionLocal() as db:
+        assert await db.scalar(select(func.sum(InventoryMovement.quantity_delta))) == 2

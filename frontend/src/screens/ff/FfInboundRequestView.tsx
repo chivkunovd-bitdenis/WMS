@@ -3802,6 +3802,7 @@ export function FfInboundRequestView({
           boxLabel={`Короб № ${boxAddDialogBox.box_number}`}
           readOnly={!receivingActive && !ffDraft}
           ffDraft={ffDraft}
+          ffInbound={ffInbound}
           token={token}
           requestLines={detail?.lines ?? []}
           boxLines={boxAddDialogBox.lines}
@@ -3826,7 +3827,8 @@ export function FfInboundRequestView({
                 boxLabel={`Грузоместо № ${place.place_number}`}
                 containerKind="cargo_place"
                 readOnly={!receivingActive && !ffDraft}
-          ffDraft={ffDraft}
+                ffDraft={ffDraft}
+                ffInbound={ffInbound}
                 token={token}
                 requestLines={detail?.lines ?? []}
                 boxLines={place.lines ?? []}

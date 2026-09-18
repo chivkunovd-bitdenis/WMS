@@ -279,12 +279,9 @@ async def test_receiving_scans_limit_catalog_lookup_to_request_products(
         looked_up_product_ids.append(product_ids if isinstance(product_ids, set) else None)
         return []
 
+    # WMS-473: box and cargo-place scans resolve barcodes through the intake service.
     monkeypatch.setattr(
         "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
-        capture_catalog_lookup,
-    )
-    monkeypatch.setattr(
-        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
         capture_catalog_lookup,
     )
 
@@ -321,10 +318,6 @@ async def test_product_hint_skips_catalog_and_updates_only_requested_line(
         "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
         catalog_must_not_be_loaded,
     )
-    monkeypatch.setattr(
-        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
-        catalog_must_not_be_loaded,
-    )
 
     loose = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/receiving/scan",
@@ -346,13 +339,15 @@ async def test_product_hint_skips_catalog_and_updates_only_requested_line(
     assert boxed.status_code == 200, boxed.text
     assert boxed.json()["quantity"] == 1
 
+    # WMS-473: a hint that is not a product of this organisation is refused without the
+    # catalogue; nothing is added to the document.
     wrong_hint = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/boxes/{box_id}/scan",
         headers=ah,
         json={"barcode": sku, "product_id": str(uuid.uuid4())},
     )
-    assert wrong_hint.status_code == 422, wrong_hint.text
-    assert wrong_hint.json()["detail"] == "product_not_on_request"
+    assert wrong_hint.status_code == 404, wrong_hint.text
+    assert wrong_hint.json()["detail"] == "product_not_found"
 
 
 @pytest.mark.asyncio

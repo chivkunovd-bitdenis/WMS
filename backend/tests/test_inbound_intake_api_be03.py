@@ -166,7 +166,7 @@ async def test_two_boxes_manual_qty_effective_in_get(async_client: AsyncClient) 
 
 @pytest.mark.asyncio
 async def test_loose_scan_unknown_barcode_422(async_client: AsyncClient) -> None:
-    """TC-NEW-IN-BE-03: foreign barcode → product_not_on_request."""
+    """TC-NEW-IN-BE-03 / WMS-473: barcode outside the seller catalogue is refused."""
     suffix = str(int(time.time() * 1000))
     ah = await _admin_headers(async_client, suffix)
     rid, _pid, _sku = await _submitted_request(async_client, ah, suffix)
@@ -178,7 +178,7 @@ async def test_loose_scan_unknown_barcode_422(async_client: AsyncClient) -> None
         json={"barcode": "UNKNOWN-BARCODE-999"},
     )
     assert bad.status_code == 422
-    assert bad.json()["detail"] == "product_not_on_request"
+    assert bad.json()["detail"] == "product_not_in_seller_catalog"
 
 
 @pytest.mark.asyncio
