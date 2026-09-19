@@ -269,8 +269,11 @@ def _match_gs1_ai(value: str, position: int) -> str | None:
 
 def _match_gs_substitute(value: str, position: int) -> str | None:
     for token in _GS_LITERAL_SUBSTITUTES:
-        if value.startswith(token, position):
-            return token
+        # Сканер AVpack 19.09.2026 отдаёт разделитель как «<gs>» в нижнем
+        # регистре — регистр подстановки значения не имеет, важна только длина.
+        candidate = value[position : position + len(token)]
+        if candidate.upper() == token.upper():
+            return candidate
     char = value[position]
     if char in _GS_SINGLE_CHAR_SUBSTITUTES:
         return char

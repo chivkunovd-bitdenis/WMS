@@ -476,7 +476,7 @@ def test_normalize_scanned_cis_strips_aim_prefix(prefix: str) -> None:
     assert hints == ["aim_prefix"]
 
 
-@pytest.mark.parametrize("separator", ["~", "|", "#", "<GS>", "{GS}", "\\x1d"])
+@pytest.mark.parametrize("separator", ["~", "|", "#", "<GS>", "{GS}", "\\x1d", "<gs>", "{gs}"])
 def test_normalize_scanned_cis_restores_gs_substitute_only_at_separator(
     separator: str,
 ) -> None:
