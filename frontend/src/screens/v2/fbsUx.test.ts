@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
+import {
+  fbsSameStickerScan,
+  fbsUnassignedPositionQuantity,
+  supplyQrExpectedForStatus,
+  fbsMarkingPresentation,
+  fbsMarkingVerdictsSummary,
+  fbsOrderMarkingAccepted,
+} from './fbsUx'
+import type { FbsOrderMetadata } from './fbsApi'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -63,6 +71,54 @@ describe('WMS-086 marking verdict presentation', () => {
   })
 })
 
+
+describe('WMS-477 «Проверено в WB: подтверждено X из Y»', () => {
+  const order = (...states: Array<Partial<FbsOrderMetadata['states'][number]> & { status: FbsOrderMetadata['states'][number]['status'] }>) => ({
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: states.map((state) => ({ kind: 'sgtin', reason: null, value_tail: 'TAIL0477', ...state })),
+      delivery_allowed: false,
+      last_checked_at: null,
+    },
+  })
+
+  it('counts orders with a code as Y and WB-confirmed ones as X', () => {
+    expect(fbsMarkingVerdictsSummary([
+      order({ status: 'accepted' }),
+      order({ status: 'allowed_without_check' }),
+      order({ status: 'pending' }),
+      order({ status: 'missing', value_tail: null }),
+    ])).toEqual({ confirmed: 2, withCode: 3 })
+  })
+
+  it.each(['assigned', 'sending', 'pending', 'unknown', 'rejected', 'replacement_required'] as const)(
+    'treats %s as a code that WB has not confirmed', (status) => {
+      expect(fbsMarkingVerdictsSummary([order({ status })])).toEqual({ confirmed: 0, withCode: 1 })
+    },
+  )
+
+  it('keeps a locally bound code in Y when WB answered «required» and the server marked it missing', () => {
+    // Сервер сохраняет value записи и отдаёт value_tail — код всё ещё привязан и
+    // сверяется по кнопке (ревью Astra № 1, находка 2).
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', decision: 'required', value_tail: '77987477' })]))
+      .toEqual({ confirmed: 0, withCode: 1 })
+  })
+
+  it('does not count missing without a value as a code', () => {
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: null })])).toEqual({ confirmed: 0, withCode: 0 })
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: undefined })])).toEqual({ confirmed: 0, withCode: 0 })
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: '' })])).toEqual({ confirmed: 0, withCode: 0 })
+  })
+
+  it('ignores orders without a Честный знак state and other kinds', () => {
+    expect(fbsMarkingVerdictsSummary([
+      { metadata: { required: [], optional: [], states: [], delivery_allowed: false, last_checked_at: null } },
+      order({ kind: 'uin', status: 'accepted' }),
+    ])).toEqual({ confirmed: 0, withCode: 0 })
+    expect(fbsMarkingVerdictsSummary([])).toEqual({ confirmed: 0, withCode: 0 })
+  })
+})
 
 describe('WMS-394 repeated active sticker', () => {
   it('matches scanner whitespace, BOM and Russian keyboard layout', () => {
