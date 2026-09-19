@@ -36,6 +36,7 @@ from app.models.fbs_order import (
     META_STATUS_ACCEPTED,
     META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
+    META_STATUS_REJECTED,
     META_STATUS_SENDING,
     FbsOrder,
     FbsOrderMarking,
@@ -1268,6 +1269,511 @@ async def test_minute_cycle_records_wb_backoff_after_persistent_429(
     assert result.backoff_skips == 0  # nothing was skipped before this failure
     assert autopoll._MARKETPLACE_BACKOFF.remaining_seconds("wb") > 0
     assert await _marking_status(order_id) == META_STATUS_PENDING
+
+
+# --------------------------------------------------------------------------
+# Astra review round 2 (docs/reviews/2026-09-19-wms477/review-astra-2.md) —
+# finding Н1: the single-order path (sync_order_marking_statuses behind
+# POST /operations/fbs-orders/{order_id}/markings/sync — the per-row "Проверить
+# ЧЗ" button on Ozon rows and the pre-handover sync — and get_order_metadata)
+# does its own single WB round trip inside _sync_order_meta_from_wb without a
+# caller-supplied snapshot, so it kept losing the freshness check entirely.
+# Наблюдение Н2 (счётчик общего цикла) — по решению ревьюера не меняется.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stale_single_order_sync_does_not_revert_a_fresher_minute_cycle_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Н1, first reproduced pairing — accepted → pending."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="H1A",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=986001,
+    )
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            # The single-order sync's own (only) WB call: hold it.
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=986001,
+                    meta_details=(
+                        MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                    ),
+                )
+            ]
+        # The minute cycle's call: resolves immediately with the real verdict.
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=986001,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    async with SessionLocal() as single_session:
+        single_task = asyncio.create_task(
+            marking_svc.sync_order_marking_statuses(
+                single_session,
+                tenant_id,
+                order_id,
+                async_client,
+                actor_user_id=None,
+            )
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            async with SessionLocal() as minute_session:
+                minute_result = await autopoll.sync_marking_verdicts_for_seller(
+                    minute_session, target, async_client
+                )
+                await minute_session.commit()
+            assert minute_result.orders_updated == 1
+            assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+            proceed.set()
+            await asyncio.wait_for(single_task, 5)
+            await single_session.commit()
+        finally:
+            proceed.set()
+            if not single_task.done():
+                single_task.cancel()
+            await asyncio.gather(single_task, return_exceptions=True)
+
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED  # not reverted to pending
+
+
+@pytest.mark.asyncio
+async def test_stale_single_order_sync_does_not_revert_a_fresher_button_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Н1, second reproduced pairing — accepted → pending, single order vs button."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="H1B",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=986101,
+    )
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=986101,
+                    meta_details=(
+                        MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                    ),
+                )
+            ]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=986101,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    async with SessionLocal() as single_session:
+        single_task = asyncio.create_task(
+            marking_svc.sync_order_marking_statuses(
+                single_session,
+                tenant_id,
+                order_id,
+                async_client,
+                actor_user_id=None,
+            )
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            async with SessionLocal() as button_session:
+                button_result = await marking_svc.sync_marking_verdicts_for_supply(
+                    button_session,
+                    tenant_id,
+                    supply_id,
+                    async_client,
+                    actor_user_id=None,
+                )
+                await button_session.commit()
+            assert button_result.orders_updated == 1
+            assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+            proceed.set()
+            await asyncio.wait_for(single_task, 5)
+            await single_session.commit()
+        finally:
+            proceed.set()
+            if not single_task.done():
+                single_task.cancel()
+            await asyncio.gather(single_task, return_exceptions=True)
+
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+
+@pytest.mark.asyncio
+async def test_stale_get_order_metadata_sync_does_not_revert_a_fresher_minute_cycle_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Н1, third reproduced pairing — get_order_metadata(sync_wb=True) vs minute cycle."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="H1C",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=986201,
+    )
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=986201,
+                    meta_details=(
+                        MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                    ),
+                )
+            ]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=986201,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    async with SessionLocal() as metadata_session:
+        metadata_task = asyncio.create_task(
+            marking_svc.get_order_metadata(
+                metadata_session,
+                tenant_id,
+                order_id,
+                async_client,
+                sync_wb=True,
+                actor_user_id=None,
+            )
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            async with SessionLocal() as minute_session:
+                minute_result = await autopoll.sync_marking_verdicts_for_seller(
+                    minute_session, target, async_client
+                )
+                await minute_session.commit()
+            assert minute_result.orders_updated == 1
+            assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+            proceed.set()
+            await asyncio.wait_for(metadata_task, 5)
+            await metadata_session.commit()
+        finally:
+            proceed.set()
+            if not metadata_task.done():
+                metadata_task.cancel()
+            await asyncio.gather(metadata_task, return_exceptions=True)
+
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+
+@pytest.mark.asyncio
+async def test_stale_single_order_sync_does_not_revert_a_fresher_rejection(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Н1, fourth reproduced pairing — rejected → accepted (the dangerous
+    direction: a stale positive answer must not undo a fresh WB rejection)."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="H1D",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=986301,
+    )
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            # The single-order sync's own (slow) WB call: an eventual positive
+            # answer that must lose to the button's fresher rejection below.
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=986301,
+                    meta_details=(
+                        MarketplaceMetaDetail(
+                            key="sgtin", value=value, decision="sgtinIntroduced"
+                        ),
+                    ),
+                )
+            ]
+        # The button's call: WB rejects the code outright.
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=986301,
+                meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=value, decision="sgtinNotFound"),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    async with SessionLocal() as single_session:
+        single_task = asyncio.create_task(
+            marking_svc.sync_order_marking_statuses(
+                single_session,
+                tenant_id,
+                order_id,
+                async_client,
+                actor_user_id=None,
+            )
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            async with SessionLocal() as button_session:
+                button_result = await marking_svc.sync_marking_verdicts_for_supply(
+                    button_session,
+                    tenant_id,
+                    supply_id,
+                    async_client,
+                    actor_user_id=None,
+                )
+                await button_session.commit()
+            assert button_result.orders_updated == 1
+            assert await _marking_status(order_id) == META_STATUS_REJECTED
+
+            proceed.set()
+            await asyncio.wait_for(single_task, 5)
+            await single_session.commit()
+        finally:
+            proceed.set()
+            if not single_task.done():
+                single_task.cancel()
+            await asyncio.gather(single_task, return_exceptions=True)
+
+    assert await _marking_status(order_id) == META_STATUS_REJECTED  # not reverted to accepted
+
+
+@pytest.mark.asyncio
+async def test_http_single_order_sync_vs_http_button_stale_answer(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Н1 reproduced through the real HTTP routes, matching the reviewer's own
+    confirmation: POST .../fbs-orders/{id}/markings/sync (single order) racing
+    POST .../fbs-supplies/{id}/markings/sync (button)."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="H1HTTP",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=986401,
+    )
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=986401,
+                    meta_details=(
+                        MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                    ),
+                )
+            ]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=986401,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    single_task = asyncio.create_task(
+        async_client.post(
+            f"/operations/fbs-orders/{order_id}/markings/sync",
+            headers=headers,
+        )
+    )
+    try:
+        await asyncio.wait_for(fetching.wait(), 5)
+
+        button_resp = await async_client.post(
+            f"/operations/fbs-supplies/{supply_id}/markings/sync",
+            headers=headers,
+        )
+        assert button_resp.status_code == 200, button_resp.text
+        assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+        proceed.set()
+        single_resp = await asyncio.wait_for(single_task, 5)
+        assert single_resp.status_code == 200, single_resp.text
+    finally:
+        proceed.set()
+        if not single_task.done():
+            single_task.cancel()
+        await asyncio.gather(single_task, return_exceptions=True)
+
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED  # not reverted to pending
 
 
 # --------------------------------------------------------------------------

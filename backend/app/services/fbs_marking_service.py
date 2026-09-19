@@ -815,25 +815,64 @@ async def _sync_order_meta_from_wb(
     flight — it says nothing about a *different* writer refreshing the very
     same code to a newer verdict in the meantime (WMS-477 review finding 1: a
     slow `pending` from one writer can otherwise land after a fast `accepted`
-    from another and silently revert it). A caller that reads markings before
-    its own HTTP round trip and applies the answer afterward — the only
-    situation where this race is possible — should also pass
-    `expected_marking_verdicts` (a fingerprint of each marking's verdict
-    fields at that same read) and `expected_order_last_checked_at` (the
-    order's own snapshot). When supplied, a fresher write by anyone else
+    from another and silently revert it, or a slow `accepted` land after a
+    fresher `rejected`). A caller that pre-fetches markings and a WB batch of
+    its own before calling this (the button/minute-cycle batch path) should
+    pass `expected_marking_verdicts` (a fingerprint of each marking's verdict
+    fields at that same pre-fetch) and `expected_order_last_checked_at` (the
+    order's own snapshot); when supplied, a fresher write by anyone else
     between that snapshot and this lock makes this call a no-op, exactly like
-    an ID mismatch does. Callers that only ever do a single HTTP round trip
-    inside this same function call (the pre-WMS-477 callers) do not pass
-    these and keep their existing, unchanged behaviour.
+    an ID mismatch does.
+
+    A caller that passes neither `expected_marking_ids` nor
+    `expected_marking_verdicts` (`get_order_metadata`, `sync_order_marking_statuses`
+    — the single-order path behind the "Проверить ЧЗ" button, the WB metadata
+    card and the pre-handover sync) gets the same protection for free: this
+    function takes that same snapshot itself, right before it does its own
+    single-order WB fetch below (WMS-477 review round 2, finding Н1 — this
+    call's own single HTTP round trip is exactly the same race, just with a
+    shorter window). Only a caller that supplies an already-fetched
+    `meta_batch` *without* `expected_marking_verdicts` gets no freshness check
+    beyond the ID one, because by then this function has no "before its HTTP"
+    moment left to snapshot — no real caller does this today.
     """
     order_id = order.id
     tenant_id = order.tenant_id
     wb_order_id = int(order.wb_order_id)
     before_ids = expected_marking_ids
+    verdict_snapshot = expected_marking_verdicts
+    checked_at_snapshot = expected_order_last_checked_at
     if before_ids is None:
-        before_ids = set((await session.scalars(select(FbsOrderMarking.id).where(
-            FbsOrderMarking.order_id == order_id, FbsOrderMarking.tenant_id == tenant_id,
-        ))).all())
+        # No caller-supplied snapshot: this call is about to read WB itself
+        # below (or was handed an already-fetched `meta_batch` without one —
+        # same handling either way). Snapshot the verdict fields here, before
+        # that happens, so the freshness check after the lock can catch the
+        # same race the batch callers already guard against (WMS-477 review
+        # finding Н1): a fresher write by anyone else landing in between.
+        pre_fetch_markings = list(
+            (
+                await session.scalars(
+                    select(FbsOrderMarking).where(
+                        FbsOrderMarking.order_id == order_id,
+                        FbsOrderMarking.tenant_id == tenant_id,
+                    )
+                )
+            ).all()
+        )
+        before_ids = {marking.id for marking in pre_fetch_markings}
+        if verdict_snapshot is None:
+            verdict_snapshot = {
+                marking.id: _marking_verdict_fingerprint(
+                    marking.meta_status,
+                    marking.check_status,
+                    marking.reason,
+                    marking.meta_details_json,
+                )
+                for marking in pre_fetch_markings
+            }
+            checked_at_snapshot = await session.scalar(
+                select(FbsOrder.metadata_last_checked_at).where(FbsOrder.id == order_id)
+            )
     batch = meta_batch
     if batch is None:
         batch = await fetch_marketplace_orders_meta_batch(
@@ -871,8 +910,8 @@ async def _sync_order_meta_from_wb(
     if {marking.id for marking in markings} != before_ids:
         # The GET describes the previous binding; a completed scan/unbind wins.
         return SyncedMarkings(markings, applied=False)
-    if expected_marking_verdicts is not None and (
-        order.metadata_last_checked_at != expected_order_last_checked_at
+    if verdict_snapshot is not None and (
+        order.metadata_last_checked_at != checked_at_snapshot
         or any(
             _marking_verdict_fingerprint(
                 marking.meta_status,
@@ -880,7 +919,7 @@ async def _sync_order_meta_from_wb(
                 marking.reason,
                 marking.meta_details_json,
             )
-            != expected_marking_verdicts.get(marking.id)
+            != verdict_snapshot.get(marking.id)
             for marking in markings
         )
     ):
