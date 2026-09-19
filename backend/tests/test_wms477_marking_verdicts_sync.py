@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -33,6 +34,7 @@ from app.models.fbs_order import (
     CHECK_STATUS_OK,
     FBS_ORDER_STATUS_PACKED,
     META_STATUS_ACCEPTED,
+    META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
     META_STATUS_SENDING,
     FbsOrder,
@@ -849,6 +851,423 @@ async def test_sync_fbs_marking_verdicts_all_sellers_isolates_seller_errors(
     # The failing seller's code is untouched; the healthy seller's went through.
     assert await _marking_status(order_a) == META_STATUS_PENDING
     assert await _marking_status(order_b) == META_STATUS_ACCEPTED
+
+
+# --------------------------------------------------------------------------
+# Astra review round 1 (docs/reviews/2026-09-19-wms477/review-astra-1.md) —
+# findings 1, 3, 4. Findings 2 (frontend) and 5-7 (no fix required) are not
+# addressed here.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stale_new_cycle_answer_does_not_revert_a_fresher_general_cycle_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Finding 1 — a slow `pending` from the minute cycle must not undo a
+    faster `accepted` the general cycle (`fbs-order-statuses-autopoll`, R7,
+    untouched) already committed for the very same code. Reproduces the
+    reviewer's exact sequence: minute cycle's WB call is still out when the
+    general cycle's own (independent) WB call returns and commits first.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="RACE1",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=983001,
+    )
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+
+    async def slow_new_cycle_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        fetching.set()
+        await proceed.wait()
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=983001,
+                meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                ),
+            )
+        ]
+
+    async def fast_general_cycle_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=983001,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        slow_new_cycle_fetch,
+    )
+
+    async with SessionLocal() as new_cycle_session:
+        new_cycle_task = asyncio.create_task(
+            autopoll.sync_marking_verdicts_for_seller(new_cycle_session, target, async_client)
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            # sync_marking_statuses_for_assembling_supplies imports the WB
+            # client inline, from wildberries_fbs_client — not the name the
+            # minute cycle patched above — so both mocks coexist independently.
+            monkeypatch.setattr(
+                "app.services.wildberries_fbs_client.fetch_marketplace_orders_meta_batch",
+                fast_general_cycle_fetch,
+            )
+            async with SessionLocal() as general_session:
+                synced = await autopoll.sync_marking_statuses_for_assembling_supplies(
+                    general_session, target, async_client
+                )
+                await general_session.commit()
+            assert synced == 1
+            assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+            proceed.set()
+            result = await asyncio.wait_for(new_cycle_task, 5)
+            await new_cycle_session.commit()
+        finally:
+            proceed.set()
+            if not new_cycle_task.done():
+                new_cycle_task.cancel()
+            await asyncio.gather(new_cycle_task, return_exceptions=True)
+
+    assert result.orders_checked == 1
+    assert result.orders_updated == 0  # its own answer was stale, correctly skipped
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED  # not reverted to pending
+
+
+@pytest.mark.asyncio
+async def test_stale_new_cycle_answer_does_not_revert_a_fresher_button_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Finding 1, second pairing named by the reviewer — minute cycle vs the
+    "Проверить в WB" button. Both go through the same `sync_marking_verdicts_batch`,
+    so this also proves the shared application point protects same-function callers
+    racing each other, not just the minute cycle against the (untouched) general one.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="RACE2",
+    )
+    order_id, value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=983101,
+    )
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def fetch_mock(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            # The minute cycle's call: hold it until the button's answer wins.
+            fetching.set()
+            await proceed.wait()
+            return [
+                MarketplaceOrderMetaRow(
+                    order_id=983101,
+                    meta_details=(
+                        MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                    ),
+                )
+            ]
+        # The button's call: resolves immediately with WB's final verdict.
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=983101,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", fetch_mock
+    )
+
+    async with SessionLocal() as new_cycle_session:
+        new_cycle_task = asyncio.create_task(
+            autopoll.sync_marking_verdicts_for_seller(new_cycle_session, target, async_client)
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            async with SessionLocal() as button_session:
+                button_result = await marking_svc.sync_marking_verdicts_for_supply(
+                    button_session,
+                    tenant_id,
+                    supply_id,
+                    async_client,
+                    actor_user_id=None,
+                )
+                await button_session.commit()
+            assert button_result.orders_updated == 1
+            assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+            proceed.set()
+            new_cycle_result = await asyncio.wait_for(new_cycle_task, 5)
+            await new_cycle_session.commit()
+        finally:
+            proceed.set()
+            if not new_cycle_task.done():
+                new_cycle_task.cancel()
+            await asyncio.gather(new_cycle_task, return_exceptions=True)
+
+    assert new_cycle_result.orders_updated == 0
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+
+
+@pytest.mark.asyncio
+async def test_replaced_code_during_http_is_not_counted_as_updated(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Finding 4 — a code replaced while its own WB answer is in flight is
+    correctly left alone by `_sync_order_meta_from_wb` (pre-existing ID check),
+    but the caller used to count it as `orders_updated` anyway."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="COUNT",
+    )
+    order_id, old_value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=985001,
+    )
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+
+    async def slow_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        fetching.set()
+        await proceed.wait()
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=985001,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=old_value, decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", slow_fetch
+    )
+
+    async with SessionLocal() as reader_session:
+        reading = asyncio.create_task(
+            marking_svc.sync_marking_verdicts_for_supply(
+                reader_session,
+                tenant_id,
+                supply_id,
+                async_client,
+                actor_user_id=None,
+            )
+        )
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+
+            # The operator scans a replacement code while the HTTP call is out.
+            async with SessionLocal() as writer_session:
+                old_marking = await writer_session.scalar(
+                    select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+                )
+                assert old_marking is not None
+                await writer_session.delete(old_marking)
+                await writer_session.flush()
+                writer_session.add(
+                    FbsOrderMarking(
+                        order_id=order_id,
+                        tenant_id=tenant_id,
+                        kind="sgtin",
+                        value="01REPLACEDDURINGHTTP",
+                        check_status=CHECK_STATUS_NEW,
+                        meta_status=META_STATUS_ASSIGNED,
+                    )
+                )
+                await writer_session.commit()
+
+            proceed.set()
+            result = await asyncio.wait_for(reading, 5)
+            await reader_session.commit()
+        finally:
+            proceed.set()
+            if not reading.done():
+                reading.cancel()
+            await asyncio.gather(reading, return_exceptions=True)
+
+    assert result.orders_checked == 1
+    assert result.orders_updated == 0
+    assert await _marking_status(order_id) == META_STATUS_ASSIGNED
+
+
+@pytest.mark.asyncio
+async def test_minute_cycle_skips_seller_when_wb_backoff_is_active(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Finding 3, part 1 — an already-active WB backoff (shared with the
+    general cycle via the same `_MARKETPLACE_BACKOFF` object) must skip the
+    seller before any WB call, not just log and continue."""
+    from app.services.marketplace_provider import MarketplaceBackoff
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="BACKOFF1",
+    )
+    order_id, _value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=984001,
+    )
+    monkeypatch.setattr(autopoll, "_MARKETPLACE_BACKOFF", MarketplaceBackoff())
+    autopoll._MARKETPLACE_BACKOFF.record_rate_limit("wb", retry_after_seconds=300)
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        _fail_if_called,
+    )
+
+    result = await autopoll.sync_fbs_marking_verdicts_all_sellers()
+
+    assert result.skipped is False
+    assert result.backoff_skips == 1
+    assert result.sellers_checked == 0
+    assert result.seller_errors == 0
+    assert await _marking_status(order_id) == META_STATUS_PENDING
+
+
+@pytest.mark.asyncio
+async def test_minute_cycle_records_wb_backoff_after_persistent_429(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Finding 3, part 2 — a 429 that survives the client's own one-shot retry
+    must arm the shared backoff so the rest of this cycle (and the general
+    cycle, reading the same object) backs off too."""
+    from app.services.marketplace_provider import MarketplaceBackoff
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        marker="BACKOFF2",
+    )
+    order_id, _value = await _seed_coded_wb_order(
+        tenant_id=tenant_id,
+        seller_id=seller_uuid,
+        warehouse_id=warehouse_uuid,
+        supply_id=supply_id,
+        wb_order_id=984101,
+    )
+    monkeypatch.setattr(autopoll, "_MARKETPLACE_BACKOFF", MarketplaceBackoff())
+
+    async def fake_fetch_429(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        raise WildberriesClientError("upstream_error", status_code=429)
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_fetch_429,
+    )
+
+    result = await autopoll.sync_fbs_marking_verdicts_all_sellers()
+
+    assert result.seller_errors == 1
+    assert result.backoff_skips == 0  # nothing was skipped before this failure
+    assert autopoll._MARKETPLACE_BACKOFF.remaining_seconds("wb") > 0
+    assert await _marking_status(order_id) == META_STATUS_PENDING
 
 
 # --------------------------------------------------------------------------

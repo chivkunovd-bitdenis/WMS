@@ -767,6 +767,35 @@ async def pending_kiz_operation(
     return result.scalar_one_or_none()
 
 
+class SyncedMarkings(list[FbsOrderMarking]):
+    """`_sync_order_meta_from_wb`'s markings, plus whether the WB answer was
+    actually applied or skipped because it was stale (WMS-477 review finding 4).
+
+    Every existing caller only ever indexed or iterated the plain list this
+    function used to return, so this stays a drop-in `list[FbsOrderMarking]`;
+    `.applied` is a purely additive signal for callers that must not count a
+    skipped, stale answer as a real update.
+    """
+
+    def __init__(self, markings: list[FbsOrderMarking], *, applied: bool) -> None:
+        super().__init__(markings)
+        self.applied = applied
+
+
+def _marking_verdict_fingerprint(
+    meta_status: str,
+    check_status: str,
+    reason: str | None,
+    meta_details_json: dict[str, Any] | None,
+) -> tuple[str, str, str | None, dict[str, Any] | None]:
+    """Point-in-time shape of a marking's WB verdict, for staleness checks.
+
+    Dict equality is structural (order-independent), so this needs no
+    serialization — just the field values a fresher writer would change.
+    """
+    return (meta_status, check_status, reason, meta_details_json)
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -775,7 +804,28 @@ async def _sync_order_meta_from_wb(
     *,
     meta_batch: list[MarketplaceOrderMetaRow] | None = None,
     expected_marking_ids: set[uuid.UUID] | None = None,
-) -> list[FbsOrderMarking]:
+    expected_marking_verdicts: dict[uuid.UUID, tuple[str, str, str | None, dict[str, Any] | None]]
+    | None = None,
+    expected_order_last_checked_at: datetime | None = None,
+) -> SyncedMarkings:
+    """Apply one order's WB metadata answer under a row lock.
+
+    `expected_marking_ids` alone (the pre-existing protection) only catches a
+    code that was removed or replaced while this order's WB answer was in
+    flight — it says nothing about a *different* writer refreshing the very
+    same code to a newer verdict in the meantime (WMS-477 review finding 1: a
+    slow `pending` from one writer can otherwise land after a fast `accepted`
+    from another and silently revert it). A caller that reads markings before
+    its own HTTP round trip and applies the answer afterward — the only
+    situation where this race is possible — should also pass
+    `expected_marking_verdicts` (a fingerprint of each marking's verdict
+    fields at that same read) and `expected_order_last_checked_at` (the
+    order's own snapshot). When supplied, a fresher write by anyone else
+    between that snapshot and this lock makes this call a no-op, exactly like
+    an ID mismatch does. Callers that only ever do a single HTTP round trip
+    inside this same function call (the pre-WMS-477 callers) do not pass
+    these and keep their existing, unchanged behaviour.
+    """
     order_id = order.id
     tenant_id = order.tenant_id
     wb_order_id = int(order.wb_order_id)
@@ -820,7 +870,25 @@ async def _sync_order_meta_from_wb(
     )
     if {marking.id for marking in markings} != before_ids:
         # The GET describes the previous binding; a completed scan/unbind wins.
-        return markings
+        return SyncedMarkings(markings, applied=False)
+    if expected_marking_verdicts is not None and (
+        order.metadata_last_checked_at != expected_order_last_checked_at
+        or any(
+            _marking_verdict_fingerprint(
+                marking.meta_status,
+                marking.check_status,
+                marking.reason,
+                marking.meta_details_json,
+            )
+            != expected_marking_verdicts.get(marking.id)
+            for marking in markings
+        )
+    ):
+        # Same codes, but someone else already wrote a fresher (or equally
+        # fresh) verdict for at least one of them while this HTTP call was in
+        # flight — WMS-477 review finding 1. The ID check above only catches a
+        # removed/replaced code; this catches the same code changing value.
+        return SyncedMarkings(markings, applied=False)
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_details: tuple[MarketplaceMetaDetail, ...] = ()
@@ -888,7 +956,7 @@ async def _sync_order_meta_from_wb(
     if returned_row and all(marking.kind in returned_kinds for marking in markings):
         order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
-    return markings
+    return SyncedMarkings(markings, applied=True)
 
 
 def _meta_validation_reasons(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
@@ -1177,14 +1245,43 @@ async def sync_marking_verdicts_batch(
 
     order_ids = [order.id for order in orders]
     expected_marking_ids: dict[uuid.UUID, set[uuid.UUID]] = {}
-    for order_id, marking_id in (
+    marking_fingerprints: dict[
+        uuid.UUID, tuple[str, str, str | None, dict[str, Any] | None]
+    ] = {}
+    marking_rows = (
         await session.execute(
-            select(FbsOrderMarking.order_id, FbsOrderMarking.id).where(
-                FbsOrderMarking.order_id.in_(order_ids)
-            )
+            select(
+                FbsOrderMarking.order_id,
+                FbsOrderMarking.id,
+                FbsOrderMarking.meta_status,
+                FbsOrderMarking.check_status,
+                FbsOrderMarking.reason,
+                FbsOrderMarking.meta_details_json,
+            ).where(FbsOrderMarking.order_id.in_(order_ids))
         )
-    ).all():
-        expected_marking_ids.setdefault(order_id, set()).add(marking_id)
+    ).all()
+    for row_order_id, marking_id, meta_status, check_status, reason, meta_details_json in (
+        marking_rows
+    ):
+        expected_marking_ids.setdefault(row_order_id, set()).add(marking_id)
+        marking_fingerprints[marking_id] = _marking_verdict_fingerprint(
+            meta_status, check_status, reason, meta_details_json
+        )
+    # Snapshotting the order's own "last checked" timestamp alongside the
+    # marking fields (WMS-477 review finding 1) closes a gap the ID-only
+    # check leaves open: a concurrent writer (the button, the minute cycle
+    # itself on another order batch, or the general sweep) can refresh the
+    # very same code to a newer verdict without ever changing its ID.
+    order_checked_at_snapshot: dict[uuid.UUID, datetime | None] = {
+        row_id: checked_at
+        for row_id, checked_at in (
+            await session.execute(
+                select(FbsOrder.id, FbsOrder.metadata_last_checked_at).where(
+                    FbsOrder.id.in_(order_ids)
+                )
+            )
+        ).all()
+    }
 
     # Read every batch first: a failure here must leave every marking as it was.
     batches: list[tuple[set[int], list[MarketplaceOrderMetaRow]]] = []
@@ -1212,17 +1309,30 @@ async def sync_marking_verdicts_batch(
                 continue
             checked += 1
             returned_rows = rows_by_wb_order_id.get(wb_id, [])
-            await _sync_order_meta_from_wb(
+            result = await _sync_order_meta_from_wb(
                 session,
                 order,
                 http_client,
                 token,
                 meta_batch=returned_rows,
                 expected_marking_ids=expected,
+                expected_marking_verdicts={mid: marking_fingerprints[mid] for mid in expected},
+                expected_order_last_checked_at=order_checked_at_snapshot.get(order.id),
             )
             if not returned_rows:
                 logger.warning(
                     "fbs marking verdicts sync: WB batch response missed order %s",
+                    order.id,
+                )
+                continue
+            if not result.applied:
+                # A fresher (or equally fresh) verdict already won for this
+                # order's code while this batch's HTTP call was in flight —
+                # not a real update, and _notify_supply_marking_update below
+                # would have nothing new to recompute from (WMS-477 review
+                # finding 4: this used to be counted as updated regardless).
+                logger.info(
+                    "fbs marking verdicts sync: stale WB answer skipped for order %s",
                     order.id,
                 )
                 continue

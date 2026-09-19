@@ -8,8 +8,9 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime
 from time import monotonic
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from sqlalchemy import exists, or_, select, text
@@ -363,6 +364,7 @@ async def sync_marking_statuses_for_assembling_supplies(
 ) -> int:
     from app.services.fbs_marking_service import (
         FbsMarkingError,
+        _marking_verdict_fingerprint,
         _notify_supply_marking_update,
         _sync_order_meta_from_wb,
         list_order_markings,
@@ -390,12 +392,42 @@ async def sync_marking_statuses_for_assembling_supplies(
         return 0
     token = await require_marketplace_token(session, target.tenant_id, target.seller_id)
     synced = 0
+    order_ids = [order.id for order in orders]
     unique_wb_order_ids = list(dict.fromkeys(int(order.wb_order_id) for order in orders))
     marking_ids: dict[uuid.UUID, set[uuid.UUID]] = {}
-    for order_id, marking_id in (await session.execute(select(
-        FbsOrderMarking.order_id, FbsOrderMarking.id,
-    ).where(FbsOrderMarking.order_id.in_([order.id for order in orders])))).all():
+    marking_fingerprints: dict[
+        uuid.UUID, tuple[str, str, str | None, dict[str, Any] | None]
+    ] = {}
+    for order_id, marking_id, meta_status, check_status, reason, meta_details_json in (
+        await session.execute(
+            select(
+                FbsOrderMarking.order_id,
+                FbsOrderMarking.id,
+                FbsOrderMarking.meta_status,
+                FbsOrderMarking.check_status,
+                FbsOrderMarking.reason,
+                FbsOrderMarking.meta_details_json,
+            ).where(FbsOrderMarking.order_id.in_(order_ids))
+        )
+    ).all():
         marking_ids.setdefault(order_id, set()).add(marking_id)
+        marking_fingerprints[marking_id] = _marking_verdict_fingerprint(
+            meta_status, check_status, reason, meta_details_json
+        )
+    # Same freshness snapshot as the new WMS-477 batch sync (fbs_marking_service.
+    # sync_marking_verdicts_batch): the ID set alone only catches a replaced code,
+    # not this same code getting a newer verdict from another writer (the minute
+    # cycle or the button) while this cycle's own batched WB calls are in flight.
+    order_checked_at_snapshot: dict[uuid.UUID, datetime | None] = {
+        row_id: checked_at
+        for row_id, checked_at in (
+            await session.execute(
+                select(FbsOrder.id, FbsOrder.metadata_last_checked_at).where(
+                    FbsOrder.id.in_(order_ids)
+                )
+            )
+        ).all()
+    }
     batches = []
     for start in range(0, len(unique_wb_order_ids), MARKING_SYNC_BATCH_SIZE):
         wb_order_ids = unique_wb_order_ids[start : start + MARKING_SYNC_BATCH_SIZE]
@@ -418,6 +450,7 @@ async def sync_marking_statuses_for_assembling_supplies(
             if not await list_order_markings(session, target.tenant_id, order.id):
                 continue
             returned_rows = rows_by_wb_order_id.get(int(order.wb_order_id), [])
+            expected = marking_ids.get(order.id, set())
             try:
                 await _sync_order_meta_from_wb(
                     session,
@@ -425,7 +458,9 @@ async def sync_marking_statuses_for_assembling_supplies(
                     http_client,
                     token,
                     meta_batch=returned_rows,
-                    expected_marking_ids=marking_ids.get(order.id, set()),
+                    expected_marking_ids=expected,
+                    expected_marking_verdicts={mid: marking_fingerprints[mid] for mid in expected},
+                    expected_order_last_checked_at=order_checked_at_snapshot.get(order.id),
                 )
                 # A partial WB batch must clear a stale positive verdict, but it
                 # must not look like a successful local sync: there is no fresh
@@ -939,6 +974,7 @@ class FbsMarkingVerdictsCycleResult:
     orders_updated: int
     seller_errors: int
     skipped: bool = False
+    backoff_skips: int = 0
 
 
 async def sync_marking_verdicts_for_seller(
@@ -1017,6 +1053,7 @@ async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResu
         orders_checked = 0
         orders_updated = 0
         seller_errors = 0
+        backoff_skips = 0
 
         logger.info(
             "fbs marking verdicts autopoll: starting cycle for %s sellers", len(targets)
@@ -1024,6 +1061,16 @@ async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResu
 
         async with httpx.AsyncClient() as http_client:
             for target in targets:
+                # Same shared backoff the general cycle checks
+                # (sync_fbs_order_statuses_all_sellers) — WB-wide, not one
+                # journal per cycle (review finding 3, R6в).
+                if _MARKETPLACE_BACKOFF.remaining_seconds("wb") > 0:
+                    backoff_skips += 1
+                    logger.info(
+                        "fbs marking verdicts autopoll skipped seller %s: wb backoff active",
+                        target.seller_id,
+                    )
+                    continue
                 try:
                     async with SessionLocal() as session:
                         result = await sync_marking_verdicts_for_seller(
@@ -1031,6 +1078,13 @@ async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResu
                         )
                         await session.commit()
                 except WildberriesClientError as exc:
+                    if exc.status_code == 429:
+                        # The one-shot retry inside fetch_marketplace_orders_meta_batch
+                        # already gave WB one more try; a 429 that still reaches here
+                        # means the limit outlasted that retry, so the next sellers in
+                        # this same cycle — and the general cycle, sharing this same
+                        # backoff — should wait too, not hammer WB seller by seller.
+                        _MARKETPLACE_BACKOFF.record_rate_limit("wb", retry_after_seconds=60.0)
                     seller_errors += 1
                     logger.error(
                         "fbs marking verdicts autopoll failed for seller %s (tenant %s): %s",
@@ -1063,12 +1117,13 @@ async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResu
 
         duration = monotonic() - started
         logger.info(
-            "fbs marking verdicts autopoll done: sellers=%s orders=%s updated=%s "
-            "errors=%s duration=%.1fs",
+            "fbs marking verdicts autopoll done: sellers_checked=%s orders_checked=%s "
+            "orders_updated=%s seller_errors=%s backoff_skips=%s duration=%.1fs",
             sellers_checked,
             orders_checked,
             orders_updated,
             seller_errors,
+            backoff_skips,
             duration,
         )
         return FbsMarkingVerdictsCycleResult(
@@ -1076,4 +1131,5 @@ async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResu
             orders_checked=orders_checked,
             orders_updated=orders_updated,
             seller_errors=seller_errors,
+            backoff_skips=backoff_skips,
         )
