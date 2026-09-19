@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +36,7 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
@@ -78,7 +81,10 @@ from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
     MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
+    split_marketplace_order_id_batches,
 )
+
+logger = logging.getLogger(__name__)
 
 OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
 
@@ -1132,3 +1138,154 @@ async def _notify_supply_marking_update(
         order_id,
         actor_user_id=actor_user_id,
     )
+
+
+@dataclass(frozen=True)
+class MarkingVerdictsSyncResult:
+    """How many orders a batch verdict sync looked at and actually refreshed (WMS-477)."""
+
+    orders_checked: int
+    orders_updated: int
+
+
+async def sync_marking_verdicts_batch(
+    session: AsyncSession,
+    orders: list[FbsOrder],
+    http_client: httpx.AsyncClient,
+    token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> MarkingVerdictsSyncResult:
+    """Refresh WB verdicts for many orders' marking codes in ≤100-order batches.
+
+    Shared by the per-supply "Проверить в WB" endpoint (WMS-477 R2,
+    `sync_marking_verdicts_for_supply` below) and the background verdicts-recheck
+    cycle (WMS-477 R5, `fbs_autopoll_service.sync_marking_verdicts_for_seller`) —
+    the two callers that need WB's answer for *many* orders' codes at once,
+    unlike the existing one-order-at-a-time `sync_order_marking_statuses`.
+
+    Every batch is read from WB before anything is applied to the database: if
+    any batch fails, no marking in `orders` is touched at all (R2/R3 — a failed
+    check must never look like a partial success), and the original
+    `WildberriesClientError` propagates so the caller decides how to isolate the
+    failure (R6 — one seller's WB error must not touch another seller's codes
+    or stop the rest of the cycle).
+    """
+    wb_order_ids = list(dict.fromkeys(int(order.wb_order_id) for order in orders))
+    if not wb_order_ids:
+        return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
+
+    order_ids = [order.id for order in orders]
+    expected_marking_ids: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for order_id, marking_id in (
+        await session.execute(
+            select(FbsOrderMarking.order_id, FbsOrderMarking.id).where(
+                FbsOrderMarking.order_id.in_(order_ids)
+            )
+        )
+    ).all():
+        expected_marking_ids.setdefault(order_id, set()).add(marking_id)
+
+    # Read every batch first: a failure here must leave every marking as it was.
+    batches: list[tuple[set[int], list[MarketplaceOrderMetaRow]]] = []
+    for chunk in split_marketplace_order_id_batches(wb_order_ids):
+        meta_batch = await fetch_marketplace_orders_meta_batch(
+            http_client, api_token=token, order_ids=chunk
+        )
+        batches.append((set(chunk), meta_batch))
+
+    checked = 0
+    updated = 0
+    for wb_ids_in_batch, meta_batch in batches:
+        rows_by_wb_order_id: dict[int, list[MarketplaceOrderMetaRow]] = {}
+        for row in meta_batch:
+            rows_by_wb_order_id.setdefault(row.order_id, []).append(row)
+        for order in orders:
+            wb_id = int(order.wb_order_id)
+            if wb_id not in wb_ids_in_batch:
+                continue
+            expected = expected_marking_ids.get(order.id)
+            if not expected:
+                # The code disappeared between selection and the WB answer —
+                # nothing to apply; the next recheck will pick up whatever
+                # the operator left behind.
+                continue
+            checked += 1
+            returned_rows = rows_by_wb_order_id.get(wb_id, [])
+            await _sync_order_meta_from_wb(
+                session,
+                order,
+                http_client,
+                token,
+                meta_batch=returned_rows,
+                expected_marking_ids=expected,
+            )
+            if not returned_rows:
+                logger.warning(
+                    "fbs marking verdicts sync: WB batch response missed order %s",
+                    order.id,
+                )
+                continue
+            await _notify_supply_marking_update(
+                session,
+                order.tenant_id,
+                order.id,
+                actor_user_id=actor_user_id,
+            )
+            updated += 1
+    return MarkingVerdictsSyncResult(orders_checked=checked, orders_updated=updated)
+
+
+async def sync_marking_verdicts_for_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> MarkingVerdictsSyncResult:
+    """WMS-477 R2 — «Проверить в WB»: пересверить все закодированные WB-заказы поставки.
+
+    Заказ участвует, если у него есть хотя бы один код маркировки любого
+    статуса (в том числе `unknown` и `rejected` — решение D1 в требованиях):
+    пакет WB стоит одинаково независимо от статуса, а заодно подтверждаются
+    коды, потерявшие ответ, и обновляются отказы. Заказы без кода и заказы
+    других маркетплейсов в выборку не попадают — пустая выборка не делает ни
+    одного вызова WB.
+    """
+    supply = await session.scalar(
+        select(FbsSupply).where(
+            FbsSupply.id == supply_id,
+            FbsSupply.tenant_id == tenant_id,
+        )
+    )
+    if supply is None:
+        raise FbsMarkingError("supply_not_found")
+
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+            FbsOrder.marketplace == "wb",
+            exists(
+                select(FbsOrderMarking.id).where(FbsOrderMarking.order_id == FbsOrder.id)
+            ),
+        )
+        .order_by(FbsOrder.id.asc())
+    )
+    orders = list((await session.execute(stmt)).scalars().all())
+    if not orders:
+        return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
+
+    token = await require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        return await sync_marking_verdicts_batch(
+            session,
+            orders,
+            http_client,
+            token,
+            actor_user_id=actor_user_id,
+        )
+    except WildberriesClientError as exc:
+        raise FbsMarkingError(_wb_error_code(exc)) from exc
