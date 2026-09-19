@@ -98,6 +98,19 @@ describe('WMS-477 «Проверено в WB: подтверждено X из Y�
     },
   )
 
+  it('keeps a locally bound code in Y when WB answered «required» and the server marked it missing', () => {
+    // Сервер сохраняет value записи и отдаёт value_tail — код всё ещё привязан и
+    // сверяется по кнопке (ревью Astra № 1, находка 2).
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', decision: 'required', value_tail: '77987477' })]))
+      .toEqual({ confirmed: 0, withCode: 1 })
+  })
+
+  it('does not count missing without a value as a code', () => {
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: null })])).toEqual({ confirmed: 0, withCode: 0 })
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: undefined })])).toEqual({ confirmed: 0, withCode: 0 })
+    expect(fbsMarkingVerdictsSummary([order({ status: 'missing', value_tail: '' })])).toEqual({ confirmed: 0, withCode: 0 })
+  })
+
   it('ignores orders without a Честный знак state and other kinds', () => {
     expect(fbsMarkingVerdictsSummary([
       { metadata: { required: [], optional: [], states: [], delivery_allowed: false, last_checked_at: null } },
