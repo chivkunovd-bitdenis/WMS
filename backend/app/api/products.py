@@ -389,6 +389,11 @@ class ProductFbsRuleBody(BaseModel):
     units_mode: bool = False
     # Сколько штук выделено на каждый склад WB. Ключ — тот же номер склада.
     units_by_warehouse: dict[str, int] = Field(default_factory=dict)
+    # WMS-455: «общая корзинка» — весь свободный остаток товара сразу в оба
+    # кабинета, без долей. По умолчанию false, если поле не прислано.
+    # Действует только у товара с активной связкой Ozon (иначе сервер молча
+    # сохранит false — см. FbsRule.shared_pool / effective_shared_pool).
+    shared_pool: bool = False
 
 
 class ProductFbsRuleOut(ProductFbsRuleBody):
@@ -1593,6 +1598,7 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
             int(key) if key.isdigit() else key: value
             for key, value in body.units_by_warehouse.items()
         },
+        shared_pool=body.shared_pool,
     )
 
 
@@ -1610,6 +1616,7 @@ def _rule_view_out(
         units_by_warehouse={
             str(key): value for key, value in view.rule.units_by_warehouse.items()
         },
+        shared_pool=view.rule.shared_pool,
         free_stock=view.free_stock,
         on_hand=view.on_hand,
         reserved=view.reserved,
@@ -1666,6 +1673,7 @@ async def get_product_fbs_rule(
         units_by_warehouse={
             str(key): value for key, value in view.rule.units_by_warehouse.items()
         },
+        shared_pool=view.rule.shared_pool,
         free_stock=view.free_stock,
         on_hand=view.on_hand,
         reserved=view.reserved,

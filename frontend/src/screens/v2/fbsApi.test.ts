@@ -274,11 +274,26 @@ describe('FBS API client', () => {
 
 
 describe('box position API', () => {
-  it('assigns complete Ozon positions without a second quantity value', async () => {
+  it('WMS-453: assigns Ozon positions with per-box quantities and the shipment idempotency key', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    await assignFbsPackingBoxOrders('token', authHeaders, 'supply', 'box', [], ['position-a', 'position-b'])
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ order_ids: [], order_product_ids: ['position-a', 'position-b'] })
+    await assignFbsPackingBoxOrders('token', authHeaders, 'supply', 'box', [], {
+      positions: [{ order_product_id: 'position-a', quantity: 10 }, { order_product_id: 'position-b', quantity: 1 }],
+      idempotency_key: 'key-1',
+    })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/operations/fbs-supplies/supply/boxes/box/orders')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      order_ids: [],
+      positions: [{ order_product_id: 'position-a', quantity: 10 }, { order_product_id: 'position-b', quantity: 1 }],
+      idempotency_key: 'key-1',
+    })
+  })
+
+  it('WMS-453: keeps the WB body unchanged — only order_ids, no positions or key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await assignFbsPackingBoxOrders('token', authHeaders, 'supply', 'box', ['order-1', 'order-2'])
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ order_ids: ['order-1', 'order-2'] })
   })
 
   it('removes one Ozon position while keeping the WB URL unchanged', async () => {

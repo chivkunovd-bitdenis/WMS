@@ -577,7 +577,8 @@ async def test_repeat_sync_metadata_preserves_position_and_box_assignment(
         boxes[0].id,
         [],
         actor_user_id=None,
-        order_product_ids=[position_id],
+        positions=[box_svc.OzonBoxPositionInput(order_product_id=position_id, quantity=2)],
+        idempotency_key="metadata-position",
     )
     await db_session.commit()
 

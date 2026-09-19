@@ -39,8 +39,23 @@ def product_has_rule_predicate() -> ColumnElement[bool]:
     Не расширять этот предикат новыми условиями (published_now, флаги площадок
     и т.д.): у каждого места вызова свой смысл — served, stock_sync_enabled,
     per-marketplace publication flag — и они добавляются в WHERE отдельно.
+
+    Исключение — WMS-455: ``fbs_shared_pool`` добавлен именно сюда, а не в
+    вызывающие места. Это не флаг площадки (как publish/publish_ozon), а сама
+    формулировка правила — тот же смысл, что у fbs_percent и fbs_units_mode:
+    «оператор задал, как публиковать этот товар». Колонка в базе пишется true
+    только при активной связке Ozon (см. ``effective_shared_pool``), поэтому
+    прямая проверка колонки здесь безопасна без EXISTS по
+    ProductMarketplaceLink и там, где предикат уже объединён с фильтром по
+    активной ozon-связке (``_clear_previous_ozon_stock``), и там, где его нет
+    (``_load_seller_products`` — эффективность довключает
+    ``publish_amounts_for_binding`` ниже по цепочке).
     """
-    return or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True))
+    return or_(
+        Product.fbs_percent.is_not(None),
+        Product.fbs_units_mode.is_(True),
+        Product.fbs_shared_pool.is_(True),
+    )
 
 
 class FbsStockRuleError(Exception):
@@ -74,6 +89,11 @@ class FbsRule:
     # Потолок публикации; резерв и физический расход учитывает inventory_service.
     units_by_warehouse: dict[int | str, int] = field(default_factory=dict)
     publish_ozon: bool | None = None
+    # WMS-455: «общая корзинка» — весь свободный остаток товара в каждое
+    # публикующее направление одновременно, без долей и без потолка 100%
+    # (см. split_amounts, validate_rule). Эффективное значение требует
+    # активную связку Ozon (см. effective_shared_pool), как и publish_ozon.
+    shared_pool: bool = False
 
     def publishes(self, marketplace: str) -> bool:
         if marketplace == "ozon" and self.publish_ozon is not None:
@@ -120,6 +140,10 @@ def validate_rule(
     показом окна и нажатием «Сохранить» приедет заказ, и проверка пройдёт
     по устаревшему числу.
     """
+    if rule.shared_pool:
+        # WMS-455 R4: в режиме «общая корзинка» доли и штуки не участвуют в
+        # публикации (см. split_amounts) — проверять их сумму незачем.
+        return
     if rule.units_mode:
         _validate_units(rule, free_stock)
         return
@@ -340,6 +364,22 @@ def _effective_publish_ozon(product: Product, *, has_ozon_link: bool) -> bool:
     )
 
 
+def effective_shared_pool(product: Product, *, has_ozon_link: bool) -> bool:
+    """Эффективный режим «общая корзинка» (WMS-455): сохранённое значение И карточка Ozon.
+
+    Тот же приём, что у ``_effective_publish_ozon`` (WMS-456): без активной
+    ``ProductMarketplaceLink(marketplace="ozon")`` режим не действует, что бы
+    ни было сохранено в ``products.fbs_shared_pool``. Единственное место, где
+    считается эффективный режим — его читают ``rule_from_product`` (ответ
+    API), ``_has_rule`` (отбор публикуемых товаров для WB- и Ozon-публикации)
+    и ``update_fbs_order_reservation`` в ``inventory_service.py`` (резерв
+    заказа, R8), чтобы не разойтись в нескольких копиях одной формулы.
+    """
+    if not has_ozon_link:
+        return False
+    return bool(product.fbs_shared_pool)
+
+
 def rule_from_product(
     product: Product,
     pool_rows: dict[uuid.UUID, FbsBindingStockPool],
@@ -368,11 +408,15 @@ def rule_from_product(
         by_warehouse=by_warehouse,
         units_mode=bool(product.fbs_units_mode),
         units_by_warehouse=units_by_warehouse,
+        shared_pool=effective_shared_pool(product, has_ozon_link=has_ozon_link),
     )
 
 
 def _has_rule(
-    product: Product, pool_rows: dict[uuid.UUID, FbsBindingStockPool] | None = None
+    product: Product,
+    pool_rows: dict[uuid.UUID, FbsBindingStockPool] | None = None,
+    *,
+    shared_pool: bool = False,
 ) -> bool:
     """Есть ли у товара правило публикации.
 
@@ -385,7 +429,15 @@ def _has_rule(
     `fbs_percent = 0`, потому что в режиме штук доля не используется вовсе.
     Наивное `fbs_percent == 0` выбросило бы из публикации живые числа Ловианы,
     Фэшн и Чжоу. Поэтому признак трёхветочный, по режиму товара.
+
+    WMS-455: товар в действующем режиме «общая корзинка» тоже имеет правило,
+    даже если доля не задана вовсе (fbs_percent NULL/0) или штуки не заданы
+    (решение 4 постановки WMS-455) — сам режим и есть правило. Вызывающий
+    передаёт уже посчитанный эффективный флаг (``effective_shared_pool``),
+    чтобы здесь не читать связки Ozon повторно.
     """
+    if shared_pool:
+        return True
     if product.fbs_units_mode:
         # Режим штук: доля не при чём, правило задаётся количеством.
         return True
@@ -409,6 +461,16 @@ def split_amounts(
     pool_rows: dict[uuid.UUID, FbsBindingStockPool] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Публикация любых правил ограничена общим фактическим свободным остатком."""
+    if rule.shared_pool:
+        # WMS-455 R3: «общая корзинка» — каждое публикующее направление
+        # получает весь свободный остаток целиком и одновременно, без
+        # вычитания remaining. Продажа на любой площадке сразу уменьшает
+        # число, которое видят оба направления, поэтому делить тут нечего.
+        free = max(free_stock, 0)
+        return {
+            binding.id: free if rule.publishes(binding.marketplace) else 0
+            for binding in bindings
+        }
     remaining = max(free_stock, 0)
     amounts: dict[uuid.UUID, int] = {}
     for binding in bindings:
@@ -566,16 +628,23 @@ async def get_rule_views(
                     0, free_by_warehouse[warehouse_id].get(product.id, 0) - direction_reserved
                 )
                 local_pools = {b.id: pool_rows[b.id] for b in local_bindings if b.id in pool_rows}
-                if _has_rule(product, local_pools):
+                if _has_rule(product, local_pools, shared_pool=rule.shared_pool):
                     amounts.update(
                         split_amounts(rule, local_free, local_bindings, pool_rows=local_pools)
                     )
+            # WMS-455 решение 6: в режиме «общая корзинка» каждое направление
+            # получает весь остаток одновременно — сумма по направлениям
+            # удвоила бы число («200 шт» при 100 свободных). published_now
+            # здесь равен тому, что уходит в КАЖДОЕ направление, а не сумме.
+            published_now = (
+                max(amounts.values(), default=0) if rule.shared_pool else sum(amounts.values())
+            )
             views[product.id] = FbsRuleView(
                 rule=rule,
                 on_hand=on_hand,
                 reserved=reserved,
                 free_stock=free,
-                published_now=sum(amounts.values()),
+                published_now=published_now,
                 units_remaining_by_warehouse=_units_by_wb(rule, bindings),
             )
     return views
@@ -588,6 +657,12 @@ def _marketplace_rule_signature(
 ) -> tuple[object, ...]:
     if not rule.publishes(marketplace):
         return (False,)
+    if rule.shared_pool:
+        # WMS-455 R5: доли и штуки не участвуют в публикации в этом режиме
+        # (см. split_amounts) — любые их значения дают одну и ту же
+        # сигнатуру, а включение/выключение режима само меняет сигнатуру,
+        # входя в неё явным маркером.
+        return (True, "shared_pool")
     shares = tuple(
         (
             _binding_key(binding),
@@ -742,22 +817,34 @@ async def set_rule_for_products(
         if rule is None:
             raise FbsStockRuleError("rule_not_configured")
         rule = _qualified_rule(rule, bindings)
-        product_rules = {
-            product.id: replace(
-                rule,
-                publish=old_rules[product.id].publishes("wb")
-                if rule.publish is None else rule.publish,
-                publish_ozon=(
-                    old_rules[product.id].publishes("ozon")
-                    if rule.publish_ozon is None else rule.publish_ozon
-                )
+        product_rules: dict[uuid.UUID, FbsRule] = {}
+        for product in products:
+            previous = old_rules[product.id]
+            publish = previous.publishes("wb") if rule.publish is None else rule.publish
+            publish_ozon = (
+                (previous.publishes("ozon") if rule.publish_ozon is None else rule.publish_ozon)
                 # WMS-456: без активной карточки Ozon эффективный флаг всегда
                 # false — даже если оператор явно прислал true в этом запросе,
                 # публиковать некуда, и в базу true не попадает (решение 3).
-                and product.id in ozon_links,
+                and product.id in ozon_links
             )
-            for product in products
-        }
+            # WMS-455 R2: режим держится связкой Ozon так же, как publish_ozon
+            # (WMS-456) — без неё в базу пишется false, даже если в запросе
+            # пришло true.
+            shared_pool = rule.shared_pool and product.id in ozon_links
+            # WMS-455 R4: включение режима не трогает доли и штуки — каждый
+            # товар пачки наследует их из своего прежнего правила (`previous`),
+            # а не из общего черновика `rule`, иначе массовое включение
+            # затёрло бы индивидуальные раскладки тысяч товаров долями
+            # первого. Выключение режима (rule.shared_pool=False) — обычный
+            # путь: поля берутся из присланного правила, как раньше.
+            base = previous if rule.shared_pool else rule
+            product_rules[product.id] = replace(
+                base,
+                publish=publish,
+                publish_ozon=publish_ozon,
+                shared_pool=shared_pool,
+            )
         changed = {
             marketplace
             for marketplace in ("wb", "ozon")
@@ -770,7 +857,12 @@ async def set_rule_for_products(
         # Свободный остаток читается ЗДЕСЬ, в той же транзакции, что и запись, а не
         # берётся с экрана: между открытием окна и нажатием «Сохранить» мог приехать
         # заказ, и проверка по показанному числу пропустила бы перебор.
-        if rule.units_mode:
+        if rule.shared_pool:
+            # WMS-455 R4: режим не проверяет потолок долей/штук — каждое
+            # публикующее направление получает весь свободный остаток целиком
+            # (см. split_amounts), сумма по складам тут не считается.
+            pass
+        elif rule.units_mode:
             # Проверяем КАЖДЫЙ товар отдельно: в штуках у каждого свой остаток, и
             # одно число на всех сойдётся у одного, а у соседнего окажется перебором.
             for product in products:
@@ -872,6 +964,12 @@ async def set_rule_for_products(
             addressed = {_binding_key(binding) for binding in served}
         else:
             addressed = set(rule.by_warehouse)
+        if any(old_rules[p.id].shared_pool != product_rules[p.id].shared_pool for p in products):
+            # WMS-455 R5: включение или выключение режима у любого товара
+            # запроса — это изменение «как одинаково по всем складам»:
+            # трансляция включается у всех обслуживаемых привязок продавца
+            # затронутых площадок, а не только у названных в правиле.
+            addressed |= {_binding_key(binding) for binding in served}
         for binding in served:
             if (
                 _binding_key(binding) in addressed
@@ -882,8 +980,15 @@ async def set_rule_for_products(
 
         binding_by_key = {_binding_key(binding): binding for binding in bindings}
         for product in products:
-            product.fbs_ozon_stock_sync_enabled = product_rules[product.id].publishes("ozon")
-            product.fbs_stock_sync_enabled = product_rules[product.id].publishes("wb")
+            effective_rule = product_rules[product.id]
+            product.fbs_ozon_stock_sync_enabled = effective_rule.publishes("ozon")
+            product.fbs_stock_sync_enabled = effective_rule.publishes("wb")
+            product.fbs_shared_pool = effective_rule.shared_pool
+            if rule.shared_pool:
+                # WMS-455 R4: включение режима не трогает доли, штуки и пулы —
+                # у каждого товара пачки они остаются его прежними
+                # (product_rules уже унаследовал их от старого правила выше).
+                continue
             product.fbs_same_everywhere = rule.same_everywhere
             product.fbs_percent = rule.percent
             # Доля не стирается при переходе в штуки и наоборот: переключил галку
@@ -982,7 +1087,10 @@ async def publish_amounts_for_binding(
     )
     publishable = [
         product for product in products
-        if _has_rule(product) and (
+        if _has_rule(
+            product,
+            shared_pool=effective_shared_pool(product, has_ozon_link=product.id in ozon_links),
+        ) and (
             product.fbs_stock_sync_enabled
             if binding.marketplace == "wb"
             else _effective_publish_ozon(product, has_ozon_link=product.id in ozon_links)
@@ -1005,13 +1113,15 @@ async def publish_amounts_for_binding(
     amounts: dict[uuid.UUID, int] = {}
     for product in publishable:
         pool_rows = await _pool_rows(session, product.id, [row.id for row in seller_bindings])
+        has_ozon_link = product.id in ozon_links
         # Вторая проверка — уже с пулами: для товара со своей долей по каждому
         # складу «правило есть» решается процентом в пуле, а он читается только
         # здесь. Без пулов первая проверка пропускает такой товар вперёд.
-        if not _has_rule(product, pool_rows):
+        shared_pool = effective_shared_pool(product, has_ozon_link=has_ozon_link)
+        if not _has_rule(product, pool_rows, shared_pool=shared_pool):
             continue
         rule = rule_from_product(
-            product, pool_rows, seller_bindings, has_ozon_link=product.id in ozon_links
+            product, pool_rows, seller_bindings, has_ozon_link=has_ozon_link
         )
         free = breakdown[product.id].free if product.id in breakdown else 0
         split = split_amounts(rule, free, seller_bindings, pool_rows=pool_rows)

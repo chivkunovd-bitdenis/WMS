@@ -436,12 +436,16 @@ export type FbsCargoPlace = {
   applied_at: string | null
 }
 
+/** Строка состава короба Ozon: позиция заказа и сколько её штук лежит в этом коробе (WMS-453). */
+export type FbsPackingBoxPosition = { order_product_id: string; quantity: number }
+
 export type FbsPackingBox = {
   id: string
   box_number: number
   barcode: string
   assigned_order_ids: string[]
   assigned_order_product_ids?: string[]
+  assigned_positions?: FbsPackingBoxPosition[]
   ozon_assembled?: boolean
   trbx_id: string | null
   wb_trbx_id: string | null
@@ -850,11 +854,19 @@ export async function assignFbsPackingBoxOrders(
   supplyId: string,
   boxId: string,
   order_ids: string[],
-  order_product_ids?: string[],
+  // Ozon (WMS-453): позиции с количеством и ключ отправки — сервер повторяет
+  // ответ без второго добавления, если тот же ключ пришёл ещё раз после обрыва.
+  // Для WB тело остаётся прежним: только order_ids.
+  ozon?: { positions: FbsPackingBoxPosition[]; idempotency_key: string },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders`), {
-      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids, ...(order_product_ids ? { order_product_ids } : {}) }),
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({
+        order_ids,
+        ...(ozon ? { positions: ozon.positions, idempotency_key: ozon.idempotency_key } : {}),
+      }),
     }),
   )
 }

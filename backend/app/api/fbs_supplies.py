@@ -534,13 +534,33 @@ class FbsPackingBoxCreateBody(BaseModel):
     without_distribution: bool = False
 
 
+class FbsPackingBoxPositionIn(BaseModel):
+    """One Ozon order position and how many of its units go into this box
+    (WMS-453). The remainder is computed on the server as quantity in the
+    order minus what already sits in the supply's boxes for this position."""
+
+    order_product_id: uuid.UUID
+    quantity: int = Field(ge=1)
+
+
 class FbsPackingBoxAssignOrdersBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
-    order_product_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    positions: list[FbsPackingBoxPositionIn] = Field(default_factory=list, max_length=100)
+    # Required only for the Ozon `positions` path (WMS-453, R6): the client
+    # keeps this key until the first successful response and repeats it on
+    # retry, so a lost response never doubles a quantity. WB's order_ids path
+    # is idempotent by construction (adding the same order twice is a no-op)
+    # and does not need it.
+    idempotency_key: str | None = Field(default=None, max_length=128)
 
 
 class FbsPackingBoxDeleteBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPackingBoxAssignedPositionOut(BaseModel):
+    order_product_id: str
+    quantity: int
 
 
 class FbsPackingBoxOut(BaseModel):
@@ -549,6 +569,7 @@ class FbsPackingBoxOut(BaseModel):
     barcode: str
     assigned_order_ids: list[str]
     assigned_order_product_ids: list[str] = Field(default_factory=list)
+    assigned_positions: list[FbsPackingBoxAssignedPositionOut] = Field(default_factory=list)
     ozon_assembled: bool = False
     trbx_id: str | None
     wb_trbx_id: str | None
@@ -852,6 +873,7 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "box_create_rejected_by_wb",
         "ozon_box_multiple_orders",
         "ozon_order_already_assembled",
+        "ozon_box_quantity_exceeded",
     }:
         raise_fbs_http(
             status.HTTP_409_CONFLICT,
@@ -867,6 +889,7 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "ozon_box_distribution_required",
         "ozon_order_positions_required",
         "order_positions_not_supported",
+        "invalid_qty",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
@@ -1669,7 +1692,13 @@ async def assign_orders_to_fbs_packing_box(
             box_id,
             body.order_ids,
             actor_user_id=user.id,
-            order_product_ids=body.order_product_ids,
+            positions=[
+                packing_box_svc.OzonBoxPositionInput(
+                    order_product_id=position.order_product_id, quantity=position.quantity
+                )
+                for position in body.positions
+            ],
+            idempotency_key=body.idempotency_key,
         )
     except packing_box_svc.FbsPackingBoxError as exc:
         _raise_from_packing_box_service(exc)

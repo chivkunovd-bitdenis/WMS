@@ -197,21 +197,35 @@ async def update_fbs_order_reservation(
         # только оператор. Резерв заказа под потолком не расходуется: сколько
         # публикуем в кабинет решает split_amounts как min(cap, свободный),
         # а сам резерв уменьшает свободное через существующую строку резерва.
+        from app.services.catalog_service import list_ozon_product_links
+        from app.services.fbs_stock_rule_service import effective_shared_pool
+
+        # WMS-455 R8: в действующем режиме «общая корзинка» резерв не зависит
+        # от сохранённых долей и штук — товар считается опубликованным
+        # независимо от fbs_percent (NULL) и наличия пула на складе заказа.
+        # effective_shared_pool уже требует активную связку Ozon (см.
+        # fbs_stock_rule_service.py), как publish_ozon в WMS-456.
+        ozon_links = await list_ozon_product_links(session, order.tenant_id, set(required))
         for pid, quantity in required.items():
             product = products[pid]
             if product is None:
                 order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
                 return
+            shared_pool_active = effective_shared_pool(
+                product, has_ozon_link=pid in ozon_links
+            )
             if product.fbs_units_mode:
-                pool = await _order_stock_pool(session, order, pid)
-                if pool is None:
-                    # Правило поштучного режима задаётся существованием pool.
+                if not shared_pool_active:
+                    pool = await _order_stock_pool(session, order, pid)
+                    if pool is None:
+                        # Правило поштучного режима задаётся существованием pool.
+                        order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
+                        return
+            elif order.marketplace == "wb":
+                if not product.fbs_stock_sync_enabled:
                     order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
-            else:
-                if order.marketplace == "wb" and (
-                    not product.fbs_stock_sync_enabled or product.fbs_percent is None
-                ):
+                if product.fbs_percent is None and not shared_pool_active:
                     order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
             available = await fbs_available_qty_for_product(

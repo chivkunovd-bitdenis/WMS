@@ -5,12 +5,13 @@ the old PVZ-only restriction was dropped on 2026-08-17."""
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, false, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,7 +19,9 @@ from app.models.document_event import (
     DOCUMENT_TYPE_FBS_SUPPLY,
     EVENT_BOX_DELETED,
     EVENT_BOX_DISTRIBUTION_CHANGED,
+    EVENT_BOX_ITEM_ADDED,
     EVENT_BOX_ITEM_REMOVED,
+    DocumentEvent,
 )
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
@@ -31,7 +34,12 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
-from app.services.document_event_service import record_document_mutation, system_document_events
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event,
+    record_document_mutation,
+    system_document_events,
+)
 from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
 
 
@@ -61,7 +69,7 @@ async def _audit_item_removal(
         document_id=supply_id, event_type=EVENT_BOX_ITEM_REMOVED,
         before={
             "item_id": item.id, "box_id": item.box_id, "fbs_order_id": item.fbs_order_id,
-            "order_product_id": item.order_product_id,
+            "order_product_id": item.order_product_id, "quantity": item.quantity,
             "assigned_by_user_id": item.assigned_by_user_id, "assigned_at": item.assigned_at,
         },
         after=None,
@@ -79,6 +87,15 @@ class DeliveryBoxReadiness:
     has_physical_boxes: bool
     without_distribution: bool
     unassigned_packed_order_ids: frozenset[uuid.UUID]
+
+
+@dataclass(frozen=True)
+class OzonBoxPositionInput:
+    """One line of the assign-orders request body for an Ozon box (WMS-453):
+    how many units of this order position the operator is adding to the box."""
+
+    order_product_id: uuid.UUID
+    quantity: int
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
@@ -128,18 +145,23 @@ async def get_delivery_box_readiness(
         ).all()
     )
     if supply.marketplace == "ozon":
-        assigned_positions = set(
-            (
-                await session.scalars(
-                    select(FbsPackingBoxItem.order_product_id)
-                    .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
-                    .where(
-                        FbsPackingBoxItem.tenant_id == tenant_id,
-                        FbsPackingBox.supply_id == supply_id,
-                    )
+        # A position is fully placed once the sum of its box quantities
+        # equals what the order needs — not merely "present in some box"
+        # (WMS-453: a position may now be split across several boxes).
+        assigned_totals: dict[uuid.UUID, int] = {}
+        for position_id, total in (
+            await session.execute(
+                select(FbsPackingBoxItem.order_product_id, func.sum(FbsPackingBoxItem.quantity))
+                .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+                .where(
+                    FbsPackingBoxItem.tenant_id == tenant_id,
+                    FbsPackingBox.supply_id == supply_id,
+                    FbsPackingBoxItem.order_product_id.is_not(None),
                 )
-            ).all()
-        )
+                .group_by(FbsPackingBoxItem.order_product_id)
+            )
+        ).all():
+            assigned_totals[position_id] = int(total or 0)
         positions = list(
             (
                 await session.scalars(
@@ -149,13 +171,16 @@ async def get_delivery_box_readiness(
                 )
             ).all()
         )
-        positions_by_order: dict[uuid.UUID, set[uuid.UUID]] = {}
+        positions_by_order: dict[uuid.UUID, list[FbsOrderProduct]] = {}
         for position in positions:
-            positions_by_order.setdefault(position.order_id, set()).add(position.id)
+            positions_by_order.setdefault(position.order_id, []).append(position)
         assigned_order_ids = {
             order_id
-            for order_id, position_ids in positions_by_order.items()
-            if position_ids <= assigned_positions
+            for order_id, order_positions in positions_by_order.items()
+            if all(
+                assigned_totals.get(position.id, 0) >= position.quantity
+                for position in order_positions
+            )
         }
     return DeliveryBoxReadiness(
         has_physical_boxes=bool(boxes),
@@ -364,7 +389,8 @@ async def assign_orders(
     order_ids: list[uuid.UUID],
     *,
     actor_user_id: uuid.UUID | None,
-    order_product_ids: list[uuid.UUID] | None = None,
+    positions: list[OzonBoxPositionInput] | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
@@ -375,10 +401,10 @@ async def assign_orders(
         if order_ids:
             raise FbsPackingBoxError("ozon_order_positions_required")
         await _assign_ozon_positions(
-            session, tenant_id, supply_id, box, order_product_ids or [], actor_user_id
+            session, tenant_id, supply_id, box, positions or [], idempotency_key, actor_user_id
         )
         return
-    if order_product_ids:
+    if positions:
         raise FbsPackingBoxError("order_positions_not_supported")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
@@ -409,6 +435,10 @@ async def assign_orders(
                     tenant_id=tenant_id,
                     box_id=box.id,
                     fbs_order_id=order_id,
+                    # WB never splits a position across boxes; the row means
+                    # "the whole order", quantity=1 is a fixed marker only
+                    # (R10) so the NOT NULL column has one meaning everywhere.
+                    quantity=1,
                     assigned_by_user_id=actor_user_id,
                 )
             )
@@ -433,12 +463,44 @@ async def _assign_ozon_positions(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     box: FbsPackingBox,
-    position_ids: list[uuid.UUID],
+    positions_in: list[OzonBoxPositionInput],
+    idempotency_key: str | None,
     actor_user_id: uuid.UUID | None,
 ) -> None:
-    if not position_ids:
+    if not positions_in:
         raise FbsPackingBoxError("empty_order_set")
-    unique_ids = set(position_ids)
+    stored_key = (idempotency_key or "").strip()
+    if not stored_key:
+        raise FbsPackingBoxError("missing_idempotency_key")
+    if any(entry.quantity < 1 for entry in positions_in):
+        raise FbsPackingBoxError("invalid_qty")
+    # A request may list the same position twice (defensive only — the
+    # operator adds one line per position); merge into a single increment.
+    requested: dict[uuid.UUID, int] = {}
+    for entry in positions_in:
+        requested[entry.order_product_id] = (
+            requested.get(entry.order_product_id, 0) + entry.quantity
+        )
+    position_ids = set(requested)
+
+    # R6: recognise a retry of this exact request by its idempotency key,
+    # before anything else runs — a plain read against DocumentEvent's
+    # existing tenant-wide (tenant_id, idempotency_key) uniqueness, under a
+    # key namespaced to this exact box (see _ozon_assign_idempotency_key —
+    # review WMS-453 F5: the same journal serves other operations, e.g.
+    # inbound intake's "inbound:{action}:{mutation_id}", and the raw client
+    # key alone does not tell one apart from another). This has to run
+    # before the remainder check further down: that check assumes this
+    # call's quantity has not been added yet, which is false for a genuine
+    # repeat — checking late would reject a repeat near the position's limit
+    # instead of recognising it (review WMS-453 F1 — a per-row "last key"
+    # forgot an earlier key as soon as a later add overwrote it, so
+    # A -> B -> A double-applied A).
+    if await _ozon_assign_key_already_applied(
+        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
+    ):
+        return
+
     positions = list(
         (
             await session.scalars(
@@ -447,43 +509,186 @@ async def _assign_ozon_positions(
                 .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.supply_id == supply_id,
-                    FbsOrderProduct.id.in_(unique_ids),
+                    FbsOrderProduct.id.in_(position_ids),
                 )
             )
         ).all()
     )
-    if len(positions) != len(unique_ids):
+    if len(positions) != len(position_ids):
         raise FbsPackingBoxError("order_not_in_supply")
+    positions_by_id = {position.id: position for position in positions}
     order_ids = {position.order_id for position in positions}
     if len(order_ids | {item.fbs_order_id for item in box.items}) != 1:
         raise FbsPackingBoxError("ozon_box_multiple_orders")
     await _assert_ozon_orders_mutable(session, tenant_id, list(order_ids))
-    assigned = list(
-        (
+
+    # Existing rows for these positions in *this* box only — a position may
+    # now also sit in other boxes of the supply (WMS-453, R11), which is not
+    # a conflict; only the same box+position pair must stay a single row.
+    existing_in_box = {
+        item.order_product_id: item
+        for item in (
             await session.scalars(
                 select(FbsPackingBoxItem).where(
                     FbsPackingBoxItem.tenant_id == tenant_id,
-                    FbsPackingBoxItem.order_product_id.in_(unique_ids),
+                    FbsPackingBoxItem.box_id == box.id,
+                    FbsPackingBoxItem.order_product_id.in_(position_ids),
                 )
             )
         ).all()
+    }
+
+    totals: dict[uuid.UUID, int] = {}
+    for position_id, total in (
+        await session.execute(
+            select(FbsPackingBoxItem.order_product_id, func.sum(FbsPackingBoxItem.quantity))
+            .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+            .where(
+                FbsPackingBoxItem.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+                FbsPackingBoxItem.order_product_id.in_(position_ids),
+            )
+            .group_by(FbsPackingBoxItem.order_product_id)
+        )
+    ).all():
+        totals[position_id] = int(total or 0)
+
+    # Validate the whole request before writing anything: a single position
+    # over its remainder must save nothing at all (R2), not a partial add.
+    for position_id, add_quantity in requested.items():
+        current_total = totals.get(position_id, 0)
+        if current_total + add_quantity > positions_by_id[position_id].quantity:
+            raise FbsPackingBoxError("ozon_box_quantity_exceeded")
+
+    # Only now, with every check passed, durably claim the key. Under the
+    # same supply lock held for this whole call, this is equivalent to
+    # claiming earlier for concurrency — but a validation failure above now
+    # never reaches this point, so it never records an event. Claiming
+    # earlier (this function's first shape, cross-review F1) relied on a
+    # failed branch's insert rolling back together with the rest of the
+    # transaction; on the shared SQLite stand, pysqlite does not always undo
+    # an already-released SAVEPOINT the way PostgreSQL does, so a 409 there
+    # could still leave the key claimed and block a corrected retry with the
+    # same key (found by the frontend implementer testing against it).
+    # Claiming only on the guaranteed-write path removes that dependency on
+    # rollback behaviour entirely, on any database.
+    claimed = await _claim_ozon_assign_idempotency(
+        session, tenant_id=tenant_id, supply_id=supply_id, box_id=box.id, key=stored_key
     )
-    if any(item.box_id != box.id for item in assigned):
-        raise FbsPackingBoxError("order_already_in_box")
-    assigned_ids = {item.order_product_id for item in assigned}
-    for position in positions:
-        if position.id not in assigned_ids:
+    if not claimed:
+        # Lost a race with a concurrent identical request under the same
+        # supply lock — that request's write already applied it.
+        return
+
+    for position_id, add_quantity in requested.items():
+        existing = existing_in_box.get(position_id)
+        if existing is not None:
+            existing.quantity += add_quantity
+        else:
             session.add(
                 FbsPackingBoxItem(
                     tenant_id=tenant_id,
                     box_id=box.id,
-                    fbs_order_id=position.order_id,
-                    order_product_id=position.id,
+                    fbs_order_id=positions_by_id[position_id].order_id,
+                    order_product_id=position_id,
+                    quantity=add_quantity,
                     assigned_by_user_id=actor_user_id,
                 )
             )
     await session.flush()
     session.expire(box, ["items"])
+
+
+_OZON_ASSIGN_KEY_NAMESPACE = "fbs_box_item_added"
+
+
+def _ozon_assign_idempotency_key(supply_id: uuid.UUID, box_id: uuid.UUID, client_key: str) -> str:
+    """Namespace the operator's key to this exact box-add action (WMS-453,
+    review F5). DocumentEvent's (tenant_id, idempotency_key) uniqueness is
+    tenant-wide across every kind of mutation the journal already records —
+    e.g. inbound intake's own keys, "inbound:{action}:{mutation_id}" (see
+    inbound_intake_service._claim_intake_mutation) — so a client key that
+    happens to collide with another document's key, or the same client key
+    reused for a *different* box, must not read back as "this box already
+    got it": that reproduced as a real bug (a genuine add silently doing
+    nothing) in review WMS-453 F5, both cross-operation and cross-box.
+
+    Hashing keeps the stored value within the column's 128 characters
+    regardless of the client key's own length (up to 128 on its own, so a
+    plain "prefix:supply:box:client_key" concatenation would not fit), and
+    makes a collision with any other operation's key structurally
+    impossible rather than merely unlikely — nothing else in the codebase
+    constructs a key with this prefix.
+    """
+    digest = hashlib.sha256(f"{supply_id}:{box_id}:{client_key}".encode()).hexdigest()
+    return f"{_OZON_ASSIGN_KEY_NAMESPACE}:{digest}"
+
+
+async def _ozon_assign_key_already_applied(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    key: str,
+) -> bool:
+    """Read-only check for a retry, safe to run before any validation.
+
+    A plain SELECT against the same DocumentEvent uniqueness that
+    _claim_ozon_assign_idempotency writes to — unaffected by whatever a
+    *failed* attempt's own claim would or would not do on rollback, because
+    a failed attempt never reaches that write (see the call sites in
+    _assign_ozon_positions).
+    """
+    namespaced_key = _ozon_assign_idempotency_key(supply_id, box_id, key)
+    return (
+        await session.scalar(
+            select(DocumentEvent.id)
+            .where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.idempotency_key == namespaced_key,
+            )
+            .limit(1)
+        )
+    ) is not None
+
+
+async def _claim_ozon_assign_idempotency(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    key: str,
+) -> bool:
+    """Durably record that this key's request is being applied now.
+
+    Called only once every check has passed and the caller is about to write
+    rows — see _assign_ozon_positions for why. Returns True normally; False
+    only if a concurrent identical request under the same supply lock won an
+    exceedingly unlikely race and claimed the key first.
+    """
+    # SQLite legacy transaction mode does not BEGIN on SELECT/SAVEPOINT: the
+    # reads already done above in _assign_ozon_positions never opened a real
+    # transaction, so record_document_event's SAVEPOINT below would RELEASE
+    # into nothing and the event would survive a later session.rollback()
+    # while the row writes that follow it do not (review WMS-453 F4).
+    # Establish the outer write transaction first — same fix already used in
+    # inbound_intake_service._claim_intake_mutation for the identical cause.
+    if session.bind is not None and session.bind.dialect.name == "sqlite":
+        await session.execute(update(DocumentEvent).where(false()).values(idempotency_key=None))
+    actor = current_document_event_actor()
+    return await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_BOX_ITEM_ADDED,
+        source=actor.source,
+        actor_user_id=actor.actor_user_id,
+        payload_json={"box_id": str(box_id), "client_key": key},
+        idempotency_key=_ozon_assign_idempotency_key(supply_id, box_id, key),
+    )
 
 
 async def remove_order(
@@ -622,6 +827,11 @@ async def get_boxes_for_workspace(
             "assigned_order_ids": list(dict.fromkeys(str(item.fbs_order_id) for item in box.items)),
             "assigned_order_product_ids": [
                 str(item.order_product_id) for item in box.items if item.order_product_id
+            ],
+            "assigned_positions": [
+                {"order_product_id": str(item.order_product_id), "quantity": item.quantity}
+                for item in box.items
+                if item.order_product_id
             ],
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,
