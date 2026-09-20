@@ -55,6 +55,9 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_status_transition": "Недопустимый переход статуса.",
     "order_not_in_supply": "Заказ не входит в эту поставку.",
     "ozon_box_multiple_orders": "В короб Ozon можно положить позиции только одного заказа.",
+    "ozon_box_quantity_exceeded": (
+        "Нельзя положить больше, чем осталось разложить у этой позиции заказа."
+    ),
     "ozon_order_already_assembled": "Состав уже отправлен в Ozon; изменить раскладку нельзя.",
     "ozon_box_distribution_required": "Разложите позиции заказа Ozon по коробам.",
     "ozon_order_positions_required": "Выберите позиции заказа Ozon для этого короба.",

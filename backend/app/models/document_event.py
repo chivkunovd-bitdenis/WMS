@@ -74,6 +74,12 @@ EVENT_DOCUMENT_CREATED = "document_created"
 EVENT_DATA_CHANGED = "data_changed"
 EVENT_BOX_DELETED = "box_deleted"
 EVENT_BOX_ITEM_REMOVED = "box_item_removed"
+# WMS-453: one event per assign_orders call for an Ozon box, keyed by the
+# operator's idempotency_key. Its only job is the existing tenant-wide
+# (tenant_id, idempotency_key) uniqueness on DocumentEvent — it recognises a
+# retried request even after another operator's add changed the box in
+# between, which a per-row "last key" column cannot (see review WMS-453 F1).
+EVENT_BOX_ITEM_ADDED = "box_item_added"
 EVENT_BOX_DISTRIBUTION_CHANGED = "box_distribution_changed"
 EVENT_PRINT_OPENED = "print_opened"
 EVENT_PACKED_CONFIRMED = "packed_confirmed"
@@ -95,6 +101,7 @@ DOCUMENT_EVENT_TYPES = frozenset(
         EVENT_DATA_CHANGED,
         EVENT_BOX_DELETED,
         EVENT_BOX_ITEM_REMOVED,
+        EVENT_BOX_ITEM_ADDED,
         EVENT_BOX_DISTRIBUTION_CHANGED,
         EVENT_PRINT_OPENED,
         EVENT_PACKED_CONFIRMED,

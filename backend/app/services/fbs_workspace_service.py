@@ -516,16 +516,26 @@ def _unassigned_order_ids(
     worklist_items: list[dict[str, Any]] | None = None,
 ) -> set[uuid.UUID]:
     if supply.marketplace == "ozon":
-        assigned_positions = {
-            str(position_id)
-            for box in boxes
-            for position_id in cast(list[str], box.get("assigned_order_product_ids", []))
-        }
+        # A position may now be split across several boxes (WMS-453); it is
+        # complete only once the sum of its box quantities reaches what the
+        # order needs, not merely "present in some box".
+        assigned_totals: dict[str, int] = {}
+        for box in boxes:
+            for entry in cast(
+                list[dict[str, object]], box.get("assigned_positions", [])
+            ):
+                position_id = str(entry["order_product_id"])
+                assigned_totals[position_id] = assigned_totals.get(position_id, 0) + int(
+                    cast(int, entry["quantity"])
+                )
         complete_orders = {
             uuid.UUID(str(item["id"]))
             for item in worklist_items or []
             if item.get("positions")
-            and all(str(position["id"]) in assigned_positions for position in item["positions"])
+            and all(
+                assigned_totals.get(str(position["id"]), 0) >= int(cast(int, position["quantity"]))
+                for position in item["positions"]
+            )
         }
         return {order.id for order in orders if order.id not in complete_orders}
     assigned: set[uuid.UUID] = set()

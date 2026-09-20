@@ -32,7 +32,7 @@ _SHIPPED_STATUSES = {"awaiting_deliver", "delivering", "driver_pickup", "deliver
 
 
 async def order_packages(session: AsyncSession, order: FbsOrder) -> list[dict[str, Any]]:
-    """Compare position sets before reading credentials or calling Ozon."""
+    """Compare position sums before reading credentials or calling Ozon."""
     positions = list(
         (
             await session.scalars(
@@ -50,19 +50,26 @@ async def order_packages(session: AsyncSession, order: FbsOrder) -> list[dict[st
             )
         ).all()
     )
-    expected = {position.id for position in positions}
-    assigned = [item.order_product_id for item, _ in rows]
+    # A position may now sit in several boxes (WMS-453): complete means the
+    # sum of its box quantities equals the order's quantity for it, not "one
+    # row exists for it".
+    totals: dict[uuid.UUID, int] = {}
+    for item, _ in rows:
+        if item.order_product_id is None:
+            continue
+        totals[item.order_product_id] = totals.get(item.order_product_id, 0) + item.quantity
+    incomplete = any(totals.get(position.id, 0) != position.quantity for position in positions)
     if (
-        not expected
-        or set(assigned) != expected
-        or len(assigned) != len(expected)
+        not positions
+        or incomplete
         or any(
             box.supply_id != order.supply_id or box.tenant_id != order.tenant_id for _, box in rows
         )
     ):
         raise OzonFbsProcessError(
             "ozon_box_positions_incomplete",
-            "Разложите все позиции заказа по коробам: каждая позиция должна быть в одном коробе.",
+            "Разложите по коробам все штуки заказа: у каждой позиции сумма по "
+            "коробам должна совпадать с количеством в заказе.",
             status_code=409,
         )
     box_ids = {box.id for _, box in rows}
@@ -93,7 +100,9 @@ async def order_packages(session: AsyncSession, order: FbsOrder) -> list[dict[st
         packages.setdefault(box.id, []).append(
             {
                 "product_id": int(position.ozon_sku),
-                "quantity": int(position.quantity),
+                # Live from the box row, not the position: two boxes of the
+                # same position carry different, box-specific quantities.
+                "quantity": int(item.quantity),
             }
         )
     return [{"products": products} for products in packages.values()]

@@ -170,4 +170,15 @@ describe('loadFbsStockDialog', () => {
     stubFetch({ rules: json({ detail: 'seller_not_found' }, 404) })
     await expect(load()).rejects.toThrow('seller_not_found')
   })
+
+  // WMS-455: режим «весь свободный остаток» приезжает из bulk-ответа в правило
+  // окна; без поля в ответе (старый сервер) режим выключен.
+  it('carries shared_pool from the bulk rules into the window rule', async () => {
+    stubFetch({})
+    expect((await load()).rule.sharedPool).toBe(false)
+    stubFetch({ rules: json({ items: [{ ...rulesPayload.items[0], shared_pool: true }] }) })
+    const data = await load()
+    expect(data.rule).toMatchObject({ sharedPool: true, sameEverywhere: false,
+      byWarehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 } })
+  })
 })

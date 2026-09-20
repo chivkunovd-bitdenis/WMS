@@ -282,7 +282,7 @@ async def test_cancelled_list_searches_boxes_before_pagination_without_writes(
             session.add(packing_box)
             await session.flush()
             session.add(FbsPackingBoxItem(
-                tenant_id=tenant_id, box_id=packing_box.id, fbs_order_id=order_id,
+                tenant_id=tenant_id, box_id=packing_box.id, fbs_order_id=order_id, quantity=1,
             ))
         await session.commit()
         before = await stock_snapshot(session)

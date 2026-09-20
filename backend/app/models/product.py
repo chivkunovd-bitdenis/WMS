@@ -113,6 +113,15 @@ class Product(Base):
     fbs_units_mode: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # WMS-455: «общая корзинка» — товар на двух площадках отдаёт весь свободный
+    # остаток сразу в оба кабинета, без долей и без потолка 100%. Действует
+    # только при активной связке Ozon (см. effective_shared_pool в
+    # fbs_stock_rule_service.py) — тот же приём, что у fbs_ozon_stock_sync_enabled
+    # (WMS-456). Отдельная колонка, а не комбинация существующих полей: режим —
+    # осознанный выбор оператора, а не то же самое, что «100% одинаково».
+    fbs_shared_pool: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
