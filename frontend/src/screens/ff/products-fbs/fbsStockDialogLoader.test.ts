@@ -171,3 +171,41 @@ describe('loadFbsStockDialog', () => {
     await expect(load()).rejects.toThrow('seller_not_found')
   })
 })
+
+// Номера складов Wildberries и Ozon из разных пространств и совпадают. Площадку
+// номера в правиле определяют действующие привязки — ровно те, по которым его
+// собрал сервер. Справочник кабинета на эту роль не годится: отключённая
+// привязка остаётся в нём сопоставленной строкой, и её номер забирал себе
+// озоновский лимит.
+describe('loadFbsStockDialog при совпадении номеров складов', () => {
+  const collidingRules = () => json({ items: [{ ...rulesPayload.items[0]!, by_warehouse: {},
+    units_mode: true, units_by_warehouse: { 777: 0 }, units_remaining_by_warehouse: { 777: 0 } }] })
+  const collidingWb = () => json([{ wb_warehouse_id: 777, served: true, wms_warehouse_id: YARTSEVO,
+    id: 777, name: 'Коледино' }])
+  // Склада 777 в справочнике Ozon нет — его строка приходит сохранённой
+  // привязкой. В кабинете Wildberries номер есть: по одному только справочнику
+  // ноль выглядел бы лимитом склада Wildberries, и никакой ошибки бы не было.
+  const collidingOzon = () => json([])
+  const collidingBindings = () => json([
+    { id: 'b1', marketplace: 'wb', external_warehouse_id: null, wb_warehouse_id: 777,
+      wms_warehouse_id: YARTSEVO, is_active: false, served: true, stock_sync_enabled: true },
+    { id: 'b2', marketplace: 'ozon', external_warehouse_id: '777', wb_warehouse_id: 777,
+      wms_warehouse_id: YARTSEVO, is_active: true, served: true, stock_sync_enabled: true },
+  ])
+
+  it('отдаёт номер тому складу, чья привязка действует', async () => {
+    stubFetch({ rules: collidingRules(), wb: collidingWb(), ozon: collidingOzon(),
+      bindings: collidingBindings() })
+    const data = await load()
+    // Ноль оператора остаётся озоновским: строка Wildberries показывает пустое поле.
+    expect(data.rule.unitsByWarehouse).toEqual({ 'ozon:777': 0 })
+  })
+
+  it('не берёт площадку из справочника кабинета, когда привязки не отдали', async () => {
+    stubFetch({ rules: collidingRules(), wb: collidingWb(), ozon: collidingOzon(),
+      bindings: json({ detail: 'Не удалось прочитать привязки складов продавца.' }, 500) })
+    // Без привязок ноль выглядел бы лимитом склада Wildberries 777 и ушёл бы
+    // туда при сохранении, поэтому окно не открывается вовсе.
+    await expect(load()).rejects.toThrow('Не удалось прочитать привязки складов продавца.')
+  })
+})

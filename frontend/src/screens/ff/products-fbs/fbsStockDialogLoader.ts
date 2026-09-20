@@ -1,8 +1,9 @@
 // Загрузка данных окна «Остаток для FBS» из каталога (WMS-454, WMS-457).
 //
 // Четыре запроса: правила товаров, склады кабинета Wildberries, сохранённые
-// привязки продавца и справочник складов Ozon. Обязательны только правила: без
-// них окну нечего показывать, и оно не открывается. Оба справочника
+// привязки продавца и справочник складов Ozon. Обязательны правила и привязки:
+// без правил окну нечего показывать, а без действующих привязок не разобрать,
+// какой площадке принадлежит номер склада в правиле. Оба справочника кабинетов
 // необязательны — их отказ (ошибка сервера, не дождавшийся ответа запрос или
 // оборванное на чтении тело ответа) не мешает открыть окно: сохранённые
 // активные привязки показываются номером с чипом «название недоступно», а
@@ -149,20 +150,19 @@ export async function loadFbsStockDialog({
     ozonWarehousesError = ozonWarehousesRequestFailed(ozon.failure)
   }
 
+  // Площадку номера в правиле определяют только действующие привязки — по ним
+  // его собирает сервер. Справочник кабинета для этого не годится: у продавца с
+  // отключённой привязкой WB 123 и работающей Ozon 123 строка Wildberries
+  // показала бы озоновский лимит, а сохранение увело бы туда чужой ноль.
+  // Поэтому отказ этой ручки — обычная ошибка открытия окна, а не пустой список.
+  if (!bindingsRes.ok) throw new Error(await readApiErrorMessage(bindingsRes))
+  const savedBindings = (await bindingsRes.json()) as SavedWarehouseBinding[]
+  const ruleBindings: WarehouseRuleBinding[] = savedBindings.filter((one) => one.is_active)
+
   // Если кабинет не отдал список, сохранённые активные привязки всё равно
   // показываются — номером, с чипом причины (WMS-457): оператор должен видеть
   // внешний номер, выбранный WMS-склад и мочь снять приём заказов с чужого или
   // удалённого склада.
-  const cabinetRows: CabinetWarehouseRow[] = [
-    ...(wbList.received ? wbList.rows : []),
-    ...(ozonList.received ? ozonList.rows : []),
-  ]
-  let ruleBindings: WarehouseRuleBinding[] = cabinetRows
-  let savedBindings: SavedWarehouseBinding[] = []
-  if (bindingsRes.ok) {
-    savedBindings = (await bindingsRes.json()) as SavedWarehouseBinding[]
-    ruleBindings = savedBindings.filter((binding) => binding.is_active)
-  }
   const seller: Seller = {
     id: sellerId,
     name: sellerName,
