@@ -59,7 +59,7 @@ import {
   fbsAccessibleStageIndex,
   fbsErrorText,
   fbsSameStickerScan,
-  fbsOrderMarkingAccepted,
+  fbsOrderPrintDone,
   fbsMarkingPresentation,
   fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
@@ -159,7 +159,6 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage
 }
 
-const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
 
 // КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
 /** Хвост внесённого Честного знака — пустой, значит заказ ещё не сканировали. */
@@ -1487,12 +1486,8 @@ export function FfFbsSupplyWorkspace({
     })
   }, [workspace])
 
-  const orderPrintDone = useCallback(
-    (order: FbsWorkspace['orders'][number]) =>
-      (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
-      fbsOrderMarkingAccepted(order.metadata),
-    [],
-  )
+  const orderPrintDone = (order: FbsWorkspace['orders'][number]) =>
+    fbsOrderPrintDone(order, !isOzonSupply && requiresOrderHonestSign(order))
 
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.

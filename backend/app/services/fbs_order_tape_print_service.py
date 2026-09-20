@@ -691,7 +691,7 @@ async def _print_or_reprint_order_code(
                 ),
             ),
         )
-    if reprint:
+    if reprint and not _order_requires_sgtin(order):
         raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
 
     result = await mc_svc.print_codes_for_packaging_line(
