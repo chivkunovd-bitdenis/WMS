@@ -21,7 +21,6 @@ os.environ["JWT_SECRET_KEY"] = "synthetic-wms488-test-secret-at-least-32-charact
 
 import pytest
 import pytest_asyncio
-from app.api.background_jobs import get_background_job
 from app.api.deps import get_current_user
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
@@ -78,9 +77,12 @@ async def fixture_db():
             private += [str(user.id), user.email]
             session.add(user)
         fixtures = [
-            ("wildberries_cards_sync", str(home.id)),
-            ("storage_measurement_rebuild", str(home.id)),
-            ("wildberries_cards_sync", str(foreign.id)),
+            *(
+                (kind, str(owner))
+                for kind in sorted(AUDIT.SELLER_JOB_TYPES)
+                for owner in (home.id, foreign.id)
+            ),
+            ("storage_measurement_rebuild", None),
             ("movements_digest", None),
             ("wildberries_cards_sync", "malformed-owner"),
             ("fbs_label_print", str(home.id)),
@@ -144,7 +146,27 @@ def synthetic_policy_router(*, broken=None):
                     "error_message": job.error_message,
                 }
             raise HTTPException(404, "job_not_found")
-        return await get_background_job(job_id, user, session)
+        if user.role == FULFILLMENT_SELLER:
+            return {
+                "status": job.status,
+                "payload_json": job.payload_json,
+                "result_json": (
+                    {"seller_id": str(uuid.uuid4())}
+                    if broken == "wrong-result-seller"
+                    else job.result_json
+                ),
+                "error_message": (
+                    job.error_message
+                    if broken == "raw-error"
+                    else AUDIT.SAFE_SELLER_ERROR
+                ),
+            }
+        return {
+            "status": job.status,
+            "payload_json": job.payload_json,
+            "result_json": job.result_json,
+            "error_message": job.error_message,
+        }
 
     return router
 
@@ -166,6 +188,13 @@ async def test_job_probe_accepts_safe_contract_and_redacts_every_record(fixture_
         factory, include_catalog=False, job_router=synthetic_policy_router()
     )
     assert {row["verdict"] for row in output} == {"pass"}
+    assert AUDIT.SELLER_JOB_TYPES == {
+        "wildberries_cards_sync",
+        "storage_measurement_rebuild",
+        "wildberries_supplies_sync",
+        "wildberries_marketplace_orders_sync",
+        "fbs_stock_sync",
+    }
     seller_rows = [row for row in output if "manager" in row]
     assert {(row["manager"], row["scenario"]) for row in seller_rows} == {
         (manager, scenario)
@@ -173,11 +202,19 @@ async def test_job_probe_accepts_safe_contract_and_redacts_every_record(fixture_
         for scenario in AUDIT.JOB_CLASSES
     }
     assert all(1 <= row["checked"] <= row["available"] for row in output)
+    assert all(
+        row["checked"] == 5
+        for row in seller_rows
+        if row["scenario"] == "home"
+    )
     assert_redacted(output, private)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("broken", ["denial-with-private-fields", "allow-foreign"])
+@pytest.mark.parametrize(
+    "broken",
+    ["denial-with-private-fields", "allow-foreign", "raw-error", "wrong-result-seller"],
+)
 async def test_probe_detects_leaky_response_without_logging_it(fixture_db, broken):
     factory, private = fixture_db
     output = await AUDIT.run_audit(
