@@ -943,6 +943,11 @@ async def _sync_order_meta_from_wb(
                 returned_kinds.add(kind)
                 details_by_kind[kind] = detail
 
+    if not returned_row:
+        # An omitted order supplies no new verdict. Preserve the saved state so
+        # pending/sending codes remain eligible for the next minute cycle.
+        return SyncedMarkings(markings, applied=False)
+
     for marking in markings:
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
@@ -950,7 +955,7 @@ async def _sync_order_meta_from_wb(
         # A status entry for a value is not enough: treating it as fresh metadata
         # would mask a partial response and could incorrectly advance the local
         # lifecycle state.
-        if not returned_row or marking.kind not in returned_kinds:
+        if marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
             continue
@@ -1348,6 +1353,12 @@ async def sync_marking_verdicts_batch(
                 continue
             checked += 1
             returned_rows = rows_by_wb_order_id.get(wb_id, [])
+            if not returned_rows:
+                logger.warning(
+                    "fbs marking verdicts sync: WB batch response missed order %s",
+                    order.id,
+                )
+                continue
             result = await _sync_order_meta_from_wb(
                 session,
                 order,
@@ -1358,12 +1369,6 @@ async def sync_marking_verdicts_batch(
                 expected_marking_verdicts={mid: marking_fingerprints[mid] for mid in expected},
                 expected_order_last_checked_at=order_checked_at_snapshot.get(order.id),
             )
-            if not returned_rows:
-                logger.warning(
-                    "fbs marking verdicts sync: WB batch response missed order %s",
-                    order.id,
-                )
-                continue
             if not result.applied:
                 # A fresher (or equally fresh) verdict already won for this
                 # order's code while this batch's HTTP call was in flight —
