@@ -854,6 +854,7 @@ async def test_busy_provider_stops_after_bounded_attempts(
     """B2: a permanently busy provider lock cannot keep a worker forever."""
     tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
     attempts = 0
+    wait_timeouts: list[float] = []
     sync_calls = 0
 
     async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
@@ -871,6 +872,7 @@ async def test_busy_provider_stops_after_bounded_attempts(
             yield True
             return
         attempts += 1
+        wait_timeouts.append(float(_kwargs["wait_timeout_sec"]))
         yield False
 
     async def sync(*_args: Any, **_kwargs: Any) -> Any:
@@ -890,9 +892,10 @@ async def test_busy_provider_stops_after_bounded_attempts(
 
     await asyncio.wait_for(
         publish_service.publish_seller_stocks_now(tenant_id, seller_id),
-        timeout=0.5,
+        timeout=5,
     )
-    assert attempts == publish_service._EVENT_PUBLISH_ATTEMPTS
+    assert attempts == 2
+    assert wait_timeouts == [0, publish_service._EVENT_FOLLOW_UP_WAIT_SECONDS]
     assert sync_calls == 0
 
 
@@ -945,6 +948,112 @@ async def test_five_events_coalesce_into_one_follow_up_publish(
     await asyncio.gather(first, *piled_up)
 
     assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_event_during_follow_up_pass_gets_its_own_publish(
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
+) -> None:
+    """D1: an event during the rerun is not dropped by an arbitrary two-pass cap."""
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    gates = [asyncio.Event() for _ in range(3)]
+    started = [asyncio.Event() for _ in range(3)]
+    calls = 0
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "wb")]
+
+    async def sync(_session: AsyncSession, _target: SellerPollTarget, _client: Any) -> Any:
+        nonlocal calls
+        call_index = calls
+        calls += 1
+        started[call_index].set()
+        await gates[call_index].wait()
+        return SimpleNamespace(
+            bindings_processed=1,
+            products_targeted=1,
+            products_confirmed=1,
+            errors=0,
+            binding_errors=0,
+            retryable_errors=0,
+        )
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+
+    first_event = asyncio.create_task(
+        publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    )
+    await started[0].wait()
+    second_event = asyncio.create_task(
+        publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    )
+    await asyncio.sleep(0)
+    gates[0].set()
+    await started[1].wait()
+    third_event = asyncio.create_task(
+        publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    )
+    await asyncio.sleep(0)
+    gates[1].set()
+    await started[2].wait()
+    gates[2].set()
+
+    await asyncio.wait_for(
+        asyncio.gather(first_event, second_event, third_event),
+        timeout=5,
+    )
+    assert calls == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgresql_concurrency
+async def test_cross_process_follow_up_waits_for_long_running_lock_holder(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D1: the one cross-process follow-up survives a holder longer than one poll."""
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Real PostgreSQL advisory locks required")
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    calls: list[float] = []
+    started_at = time.monotonic()
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "wb")]
+
+    async def sync(_session: AsyncSession, _target: SellerPollTarget, _client: Any) -> Any:
+        calls.append(time.monotonic() - started_at)
+        if len(calls) == 1:
+            await asyncio.sleep(6)
+        return SimpleNamespace(
+            bindings_processed=1,
+            products_targeted=1,
+            products_confirmed=1,
+            errors=0,
+            binding_errors=0,
+            retryable_errors=0,
+        )
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+
+    active_publisher = asyncio.create_task(
+        publish_service._publish_seller_stocks_pass(tenant_id, seller_id)
+    )
+    await asyncio.sleep(0.5)
+    follow_up = asyncio.create_task(
+        publish_service._publish_seller_stocks_pass(tenant_id, seller_id)
+    )
+    await asyncio.gather(active_publisher, follow_up)
+
+    assert len(calls) == 2
+    assert calls[1] >= 5.5
 
 
 @pytest.mark.asyncio
