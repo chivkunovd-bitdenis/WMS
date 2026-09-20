@@ -222,6 +222,51 @@ export function stickerCodeParts(code: string | null): { head: string; tail: str
   return { head: value.slice(0, -4), tail: value.slice(-4) }
 }
 
+type PackingSizeOrder = {
+  product: { size: string | null }
+  positions: Array<{ size?: string | null }>
+}
+
+/**
+ * Размеры строки упаковки. У WB размер один на заказ, у Ozon свой у каждой
+ * позиции отправления, поэтому там список идёт в том же порядке, что и позиции
+ * на экране: размер первой позиции нельзя показывать за весь заказ.
+ */
+export function fbsPackingSizes(order: PackingSizeOrder, isOzon: boolean): Array<string | null> {
+  const clean = (value: string | null | undefined) => {
+    const text = (value ?? '').trim()
+    return text ? text : null
+  }
+  if (isOzon) return order.positions.map((position) => clean(position.size))
+  return [clean(order.product.size)]
+}
+
+/** Столбец «Размер» нужен, когда размер есть хотя бы у одной показанной строки. */
+export function fbsPackingShowsSize(orders: PackingSizeOrder[], isOzon: boolean): boolean {
+  return orders.some((order) => fbsPackingSizes(order, isOzon).some((size) => size !== null))
+}
+
+function PackingSizeCell({ value, withCaption, valueColor }: {
+  value: string | null
+  withCaption: boolean
+  valueColor: string
+}) {
+  return (
+    <Box sx={{ width: 76, flexShrink: 0, textAlign: 'right' }} data-testid="fbs-packing-size">
+      {withCaption ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+          Размер
+        </Typography>
+      ) : null}
+      {/* «универсальный» и «44/46/48/50/52/54» — одно слово без пробелов: без переноса
+          в любом месте оно вылезает из колонки на соседний текст. */}
+      <Typography variant="body2" sx={{ color: value ? valueColor : 'text.disabled', overflowWrap: 'anywhere' }}>
+        {value ?? '—'}
+      </Typography>
+    </Box>
+  )
+}
+
 function kizErrorTextByCode(code: string, message: string, context: unknown, provider = 'WB'): string {
   if (code === 'sticker_not_found') return 'Номер или стикер заказа не найден в этой поставке'
   if (code === 'sticker_ambiguous') return 'Скан совпал с несколькими заказами. Введите номер отправления.'
@@ -1494,6 +1539,10 @@ export function FfFbsSupplyWorkspace({
     [],
   )
 
+  const packingShowsSize = fbsPackingShowsSize(packingOrders, isOzonSupply)
+  // Слот «Доступно ЧЗ» занимает место во всех строках вкладки, если он нужен хотя бы
+  // одной: иначе строка без ЧЗ раздвигает блок товара и размер со стикером уезжают вправо.
+  const packingShowsMarkingAvailable = packingOrders.some(requiresOrderHonestSign)
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
@@ -2206,6 +2255,7 @@ export function FfFbsSupplyWorkspace({
                         : markingView.tone === 'error' ? 'error.main' : 'text.secondary'
                       const tail = markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
+                      const rowSizes = packingShowsSize ? fbsPackingSizes(order, isOzonSupply) : []
                       return (
                         <Stack
                           key={order.id}
@@ -2246,27 +2296,42 @@ export function FfFbsSupplyWorkspace({
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             {isOzonSupply ? (
                               <Stack spacing={0.5}>
-                                {ozonPositions.map((position) => (
-                                  <Box key={position.id ?? position.product_id ?? position.name}>
-                                    <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                                      {position.name}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                      {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
-                                        .filter(Boolean)
-                                        .join(' · ')}
-                                    </Typography>
-                                  </Box>
+                                {ozonPositions.map((position, index) => (
+                                  <Stack
+                                    key={position.id ?? position.product_id ?? position.name}
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{ alignItems: 'flex-start' }}
+                                  >
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                        {position.name}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                        {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
+                                          .filter(Boolean)
+                                          .join(' · ')}
+                                      </Typography>
+                                    </Box>
+                                    {packingShowsSize ? (
+                                      <PackingSizeCell value={rowSizes[index] ?? null} withCaption={index === 0} valueColor={mutedColor} />
+                                    ) : null}
+                                  </Stack>
                                 ))}
                               </Stack>
-                            ) : <>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                                {order.product.name}
-                              </Typography>
-                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                {ids}
-                              </Typography>
-                            </>}
+                            ) : <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                  {order.product.name}
+                                </Typography>
+                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                  {ids}
+                                </Typography>
+                              </Box>
+                              {packingShowsSize ? (
+                                <PackingSizeCell value={rowSizes[0] ?? null} withCaption valueColor={mutedColor} />
+                              ) : null}
+                            </Stack>}
                             {markingShortOrderIds.has(order.id) ? <Typography variant="caption" sx={{ display: 'block', color: 'error.main' }}>ЧЗ не хватило</Typography> : null}
                             {markingView.label ? (
                               <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
@@ -2280,10 +2345,17 @@ export function FfFbsSupplyWorkspace({
                               </Typography>
                             ) : null}
                           </Box>
-                          {needsHonestSign ? (
-                            <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }} data-testid="fbs-packing-marking-available">
-                              <Typography variant="caption" sx={{ display: 'block' }}>Доступно ЧЗ</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: markingShortage ? 700 : 400 }}>{markingAvailable} · нужно {markingNeeded}</Typography>
+                          {packingShowsMarkingAvailable ? (
+                            <Box
+                              sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }}
+                              data-testid={needsHonestSign ? 'fbs-packing-marking-available' : undefined}
+                            >
+                              {needsHonestSign ? (
+                                <>
+                                  <Typography variant="caption" sx={{ display: 'block' }}>Доступно ЧЗ</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: markingShortage ? 700 : 400 }}>{markingAvailable} · нужно {markingNeeded}</Typography>
+                                </>
+                              ) : null}
                             </Box>
                           ) : null}
                           <Box sx={{ width: 150, flexShrink: 0, textAlign: 'right' }}>
@@ -2344,7 +2416,9 @@ export function FfFbsSupplyWorkspace({
                               }}>Проверить ЧЗ</Button>
                             </> : null}
                           </Box>
-                          {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
+                          <Typography sx={{ width: 16, flexShrink: 0, textAlign: 'center', color: 'success.main', fontWeight: 700 }}>
+                            {printed ? '✓' : ''}
+                          </Typography>
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
