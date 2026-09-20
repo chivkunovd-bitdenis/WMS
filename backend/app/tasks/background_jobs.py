@@ -95,3 +95,12 @@ def run_fbs_stock_publish_seller_task(tenant_id: str, seller_id: str) -> None:
     from app.services.fbs_stock_publish_service import publish_seller_stocks_now
 
     asyncio.run(publish_seller_stocks_now(uuid.UUID(tenant_id), uuid.UUID(seller_id)))
+
+
+@celery_app.task(name="wms.fbs_zero_refresh")
+def run_fbs_zero_refresh_task(tenant_id: str, seller_id: str, binding_id: str) -> None:
+    from app.services.fbs_zero_refresh_service import refresh_binding_zero_stocks
+
+    asyncio.run(refresh_binding_zero_stocks(
+        uuid.UUID(tenant_id), uuid.UUID(seller_id), uuid.UUID(binding_id),
+    ))
