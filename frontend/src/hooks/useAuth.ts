@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   apiUrl,
   getStoredToken,
+  isAuthTokenStorageKey,
   setStoredToken,
 } from '../api'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
@@ -56,6 +57,90 @@ export function nameLoginPayload(fullName: string, password: string, organizatio
   return { full_name: fullName, password, organization: organization.trim() || undefined }
 }
 
+export type SessionProfileResult =
+  | { outcome: 'stale' }
+  | { outcome: 'loaded'; me: Me }
+  | { outcome: 'unauthorized'; message: string }
+  | { outcome: 'failed'; message: string }
+
+/**
+ * Профиль применяется, только если к моменту ответа сессия осталась прежней.
+ *
+ * WMS-488: вкладку могли переключить на другого селлера или закрыть сессию,
+ * пока ответ шёл. Такой ответ описывает прежнего пользователя — ни профиль,
+ * ни его 401 к новой сессии отношения не имеют.
+ */
+export async function loadSessionProfile(
+  token: string,
+  isSessionToken: (candidate: string) => boolean,
+): Promise<SessionProfileResult> {
+  try {
+    const res = await fetch(apiUrl('/auth/me'), {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!isSessionToken(token)) {
+      return { outcome: 'stale' }
+    }
+    if (!res.ok) {
+      const msg = await readApiErrorMessage(res)
+      if (!isSessionToken(token)) {
+        return { outcome: 'stale' }
+      }
+      if (res.status === 401) {
+        return {
+          outcome: 'unauthorized',
+          message: `Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`,
+        }
+      }
+      return {
+        outcome: 'failed',
+        message: `Не удалось загрузить профиль (${res.status}). ${msg}`,
+      }
+    }
+    const me = (await res.json()) as Me
+    if (!isSessionToken(token)) {
+      return { outcome: 'stale' }
+    }
+    return { outcome: 'loaded', me }
+  } catch (e) {
+    if (!isSessionToken(token)) {
+      return { outcome: 'stale' }
+    }
+    return {
+      outcome: 'failed',
+      message:
+        e instanceof Error
+          ? e.message
+          : 'Не удалось связаться с сервером. Проверьте, что API запущен.',
+    }
+  }
+}
+
+export type StorageSessionChange =
+  | { changed: false }
+  | { changed: true; token: string | null }
+
+/**
+ * Решение вкладки по событию storage из соседней вкладки (WMS-488).
+ *
+ * Токен портала лежит в общем для вкладок localStorage, поэтому вход, смена
+ * магазина и выход в одной вкладке меняют сессию всех остальных.
+ */
+export function sessionChangeFromStorage(params: {
+  eventKey: string | null
+  portal: AuthPortal
+  sessionToken: string | null
+  storedToken: string | null
+}): StorageSessionChange {
+  if (!isAuthTokenStorageKey(params.eventKey, params.portal)) {
+    return { changed: false }
+  }
+  if (params.storedToken === params.sessionToken) {
+    return { changed: false }
+  }
+  return { changed: true, token: params.storedToken }
+}
+
 export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [token, setToken] = useState<string | null>(() => getStoredToken(portal))
   const [portalMismatch, setPortalMismatch] = useState<string | null>(null)
@@ -65,44 +150,82 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [authBusy, setAuthBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const loadMe = useCallback(async (t: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/auth/me'), {
-        headers: { Authorization: `Bearer ${t}` },
-      })
-      if (!res.ok) {
-        const msg = await readApiErrorMessage(res)
-        if (res.status === 401) {
-          setStoredToken(null, portal)
-          setToken(null)
-          setMe(null)
-          setError(`Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`)
-          return
-        }
-        throw new Error(`Не удалось загрузить профиль (${res.status}). ${msg}`)
+  // Токен текущей сессии вкладки, доступный синхронно: по нему отличаем свой
+  // ответ от ответа прежней сессии, не дожидаясь перерисовки.
+  const sessionTokenRef = useRef<string | null>(token)
+
+  const isSessionToken = useCallback(
+    (candidate: string) => sessionTokenRef.current === candidate,
+    [],
+  )
+
+  const startSession = useCallback((next: string | null) => {
+    sessionTokenRef.current = next
+    setToken(next)
+  }, [])
+
+  const loadMe = useCallback(
+    async (t: string) => {
+      setLoading(true)
+      setError(null)
+      const result = await loadSessionProfile(t, isSessionToken)
+      if (result.outcome === 'stale') {
+        // Сессия уже другая: и профиль, и флаг загрузки принадлежат её запросу.
+        return
       }
-      setMe((await res.json()) as Me)
-    } catch (e) {
-      setMe(null)
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'Не удалось связаться с сервером. Проверьте, что API запущен.',
-      )
-    } finally {
       setLoading(false)
-    }
-  }, [portal])
+      if (result.outcome === 'loaded') {
+        setMe(result.me)
+        return
+      }
+      if (result.outcome === 'unauthorized') {
+        setStoredToken(null, portal)
+        startSession(null)
+        setMe(null)
+        setError(result.message)
+        return
+      }
+      setMe(null)
+      setError(result.message)
+    },
+    [isSessionToken, portal, startSession],
+  )
 
   useEffect(() => {
     if (token) {
       void loadMe(token)
     } else {
       setMe(null)
+      setLoading(false)
     }
   }, [token, loadMe])
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea && event.storageArea !== window.localStorage) {
+        return
+      }
+      const change = sessionChangeFromStorage({
+        eventKey: event.key,
+        portal,
+        sessionToken: sessionTokenRef.current,
+        storedToken: getStoredToken(portal),
+      })
+      if (!change.changed) {
+        return
+      }
+      // WMS-488: в соседней вкладке сменили пользователя или вышли. Профиль и
+      // всё, что построено на нём (каталог, документы, остатки), снимаем сразу
+      // — до того, как сервер подтвердит новую личность.
+      setMe(null)
+      setError(null)
+      setNotice(null)
+      setPortalMismatch(null)
+      startSession(change.token)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [portal, startSession])
 
   useEffect(() => {
     if (!me) {
@@ -114,7 +237,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setPortalMismatch(msg)
       setError(msg)
       setStoredToken(null, 'seller')
-      setToken(null)
+      startSession(null)
       setMe(null)
       return
     }
@@ -124,7 +247,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setPortalMismatch(msg)
       setError(msg)
       setStoredToken(null, 'fulfillment')
-      setToken(null)
+      startSession(null)
       setMe(null)
       return
     }
@@ -133,12 +256,12 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setPortalMismatch(msg)
       setError(msg)
       setStoredToken(null, 'fulfillment')
-      setToken(null)
+      startSession(null)
       setMe(null)
       return
     }
     setPortalMismatch(null)
-  }, [me, portal])
+  }, [me, portal, startSession])
 
   const clearNotice = useCallback(() => {
     setNotice(null)
@@ -191,7 +314,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
             return
           }
           setStoredToken(data.access_token, portal)
-          setToken(data.access_token)
+          startSession(data.access_token)
           return
         }
         if (res.status === 409) {
@@ -214,7 +337,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     } finally {
       setAuthBusy(false)
     }
-  }, [portal])
+  }, [portal, startSession])
 
   const onLogin = useCallback(
     async (e: RegisterFormEvent) => {
@@ -264,7 +387,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const data = (await res.json()) as { access_token: string }
         setStoredToken(data.access_token, portal)
         setPortalMismatch(null)
-        setToken(data.access_token)
+        startSession(data.access_token)
       } catch {
         setError(
           'Сеть: не удалось достучаться до API. Проверьте, что контейнер api запущен.',
@@ -273,7 +396,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         setAuthBusy(false)
       }
     },
-    [portal],
+    [portal, startSession],
   )
 
   const onSetPasswordByLink = useCallback(
@@ -318,7 +441,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const data = (await res.json()) as { access_token: string }
         setStoredToken(data.access_token, portal)
         setPortalMismatch(null)
-        setToken(data.access_token)
+        startSession(data.access_token)
         // Человек пришёл на /set-password из письма. Оставить его на этом
         // адресе нельзя: в приложении такого экрана нет, и он упрётся в «Нет
         // доступа». Перекладываем на корень своего портала.
@@ -333,7 +456,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         setAuthBusy(false)
       }
     },
-    [portal],
+    [portal, startSession],
   )
 
   const onRequestPasswordReset = useCallback(async (e: RegisterFormEvent) => {
@@ -373,20 +496,20 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
 
   const logout = useCallback(() => {
     setStoredToken(null, portal)
-    setToken(null)
+    startSession(null)
     setMe(null)
     setError(null)
     setPortalMismatch(null)
     setNotice(null)
-  }, [portal])
+  }, [portal, startSession])
 
   const applyToken = useCallback(
     (nextToken: string) => {
       setStoredToken(nextToken, portal)
       setPortalMismatch(null)
-      setToken(nextToken)
+      startSession(nextToken)
     },
-    [portal],
+    [portal, startSession],
   )
 
   const updateProfile = useCallback(
@@ -403,10 +526,12 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         throw new Error(await readApiErrorMessage(res))
       }
       const next = (await res.json()) as Me
-      setMe(next)
+      if (isSessionToken(token)) {
+        setMe(next)
+      }
       return next
     },
-    [token],
+    [isSessionToken, token],
   )
 
   const reloadMe = useCallback(
