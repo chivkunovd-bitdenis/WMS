@@ -593,7 +593,8 @@ def _marketplace_rule_signature(
     shares = tuple(
         (
             _binding_key(binding),
-            rule.units_by_warehouse.get(_binding_key(binding), 0)
+            # WB absent -> explicit zero is a publication event (WMS-483).
+            rule.units_by_warehouse.get(_binding_key(binding), None if marketplace == "wb" else 0)
             if rule.units_mode
             else rule.percent
             if rule.same_everywhere

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.inventory_balance import InventoryBalance
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.services import fbs_stock_sync_service as sync
 from app.services.fbs_stock_rule_service import publish_amounts_for_binding
 from tests.test_fbs_stock_sync import (
@@ -186,6 +187,11 @@ async def test_zero_eligibility_is_wb_only(db_session: AsyncSession) -> None:
         tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
         sku_suffix="ozon", fbs_percent=100,
     )
+    product.fbs_ozon_stock_sync_enabled = True
+    db_session.add(ProductMarketplaceLink(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, product_id=product.id,
+        marketplace="ozon", external_product_id="483", is_active=True,
+    ))
     db_session.add(product)
     await db_session.commit()
     eligible = set()
@@ -222,7 +228,7 @@ async def test_committed_events_publish_first_zero_immediately(
     await _configure_rule_amount(db_session, ctx, product, 1)
     transport = _MockStocksTransport()
     # First zero must also work without any prior positive publication.
-    async def publish(tenant_id, seller_id):
+    async def publish(tenant_id, seller_id, marketplace=None):
         async with SessionLocal() as session:
             binding = await session.get(FbsWarehouseBinding, ctx.binding.id)
             await _run(session, SimpleNamespace(
@@ -508,6 +514,12 @@ async def test_percentage_to_units_clears_omitted_units_and_preserves_percentage
         tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
         sku_suffix="switch", fbs_percent=50, fbs_same_everywhere=False,
     )
+    if second_marketplace == "ozon":
+        product.fbs_ozon_stock_sync_enabled = True
+        db_session.add(ProductMarketplaceLink(
+            tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, product_id=product.id,
+            marketplace="ozon", external_product_id="483", is_active=True,
+        ))
     db_session.add_all([product, second])
     await _configure_rule_amount(db_session, ctx, product, 10)
     for binding in [ctx.binding, second]:
@@ -724,9 +736,11 @@ async def test_successful_nonempty_zero_refresh_preserves_another_products_error
 async def test_reentering_explicit_zero_after_unset_publishes_immediately(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.services import fbs_stock_publish_service as publisher
     from app.services import fbs_stock_rule_service as rules
 
-    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    dispatched = []
+    monkeypatch.setattr(publisher, "_dispatch", lambda *args: dispatched.append(args))
     now = datetime(2026, 9, 20, tzinfo=UTC)
     monkeypatch.setattr(sync, "_utcnow", lambda: now)
     ctx = await _seed_binding(db_session)
@@ -745,7 +759,9 @@ async def test_reentering_explicit_zero_after_unset_publishes_immediately(
                 units_by_warehouse=units,
             ),
         )
-        await _run(db_session, ctx, transport)
+        while dispatched:
+            assert dispatched.pop(0) == (ctx.tenant.id, ctx.seller.id, "wb")
+            await _run(db_session, ctx, transport)
 
     explicit_zero = {ctx.binding.wb_warehouse_id: 0}
     await save(explicit_zero)
@@ -768,3 +784,32 @@ async def test_reentering_explicit_zero_after_unset_publishes_immediately(
     now += timedelta(minutes=5)
     await _run(db_session, ctx, transport, zero_refresh_only=True)
     assert transport.put_attempts == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("excluded", [
+    "disabled_product", "no_rule", "positive", "disabled_binding",
+])
+async def test_release_zero_only_preserves_production_publication_boundary(
+    db_session: AsyncSession, excluded: str,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="release-boundary", fbs_percent=100,
+    )
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 3 if excluded == "positive" else 0)
+    if excluded == "disabled_product":
+        product.fbs_stock_sync_enabled = False
+    elif excluded == "no_rule":
+        product.fbs_percent = None
+    elif excluded == "disabled_binding":
+        ctx.binding.stock_sync_enabled = False
+    await db_session.commit()
+    transport = _MockStocksTransport()
+    for _ in range(2):
+        result = await _run(db_session, ctx, transport, zero_refresh_only=True)
+        assert result.products_targeted == 0
+    assert transport.put_attempts == 0
+    assert transport.post_calls == []
