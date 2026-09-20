@@ -25,22 +25,23 @@ function deferred() {
 }
 function fixture() {
   const generation = { current: 1 }
+  const writeSeq = { current: 0 }
   const pending = new Map<string, ReturnType<typeof deferred>>()
   const visible = { workspace: null as unknown, stage: '', error: '', busy: false }
   const callbackFactory = new Function('fetchFbsWorkspace', 'workspaceOpenGeneration',
-    'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
+    'workspaceWriteSeq', 'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
     'authHeaders', `return (${callback})`) as (...args: unknown[]) => (silent?: boolean) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
       const response = deferred(); pending.set(supplyId, response); return response.promise
-    }, generation, (next: unknown) => { visible.workspace = next },
+    }, generation, writeSeq, (next: unknown) => { visible.workspace = next },
     (update: (previous: string) => string) => { visible.stage = update(visible.stage) },
     (next: string) => { visible.error = next }, (next: boolean) => { visible.busy = next },
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
   )
-  return { generation, pending, visible, load }
+  return { generation, writeSeq, pending, visible, load }
 }
 const workspace = (id: string) => ({ supply: { id, marketplace: 'wb' }, stage: id })
 
@@ -65,6 +66,30 @@ describe('FBS workspace delayed response isolation', () => {
     f.pending.get('B')!.resolve(workspace('B')); await b
     expect(f.visible.workspace).toEqual(workspace('B'))
   })
+  // WMS-477: тихое обновление раз в 15 с идёт рядом с действиями оператора, и ответы
+  // возвращаются в произвольном порядке. Запоздалый ответ не должен возвращать строки
+  // к вердиктам, которые на экране уже сменились.
+  it('keeps the newest silent refresh when an earlier one answers last', async () => {
+    const f = fixture()
+    const load = f.load('A')
+    const first = load(true)
+    const firstResponse = f.pending.get('A')!
+    const second = load(true)
+    f.pending.get('A')!.resolve({ ...workspace('A'), revision: 'new' }); await second
+    firstResponse.resolve({ ...workspace('A'), revision: 'stale' }); await first
+    expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'new' })
+  })
+
+  it('lets an operator action outrank a silent refresh that started earlier', async () => {
+    const f = fixture()
+    const silent = f.load('A')(true)
+    // Действие оператора завершилось и записало свой ответ — как это делает run().
+    f.writeSeq.current += 1
+    f.visible.workspace = { ...workspace('A'), revision: 'operator' }
+    f.pending.get('A')!.resolve({ ...workspace('A'), revision: 'stale' }); await silent
+    expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'operator' })
+  })
+
   it('ignores a response after close even when the same UUID will reopen', async () => {
     const f = fixture()
     const old = f.load('A')()
