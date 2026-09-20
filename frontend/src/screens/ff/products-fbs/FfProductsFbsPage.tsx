@@ -4,6 +4,11 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { putFbsRule } from './fbsRuleApi'
+import {
+  qualifyWbWarehouseRuleValues,
+  warehouseNumberFromRuleKey,
+  warehouseRuleKey,
+} from './fbsWarehouseRuleKeys'
 import { ProductsScreen } from './ProductsScreen'
 import type { FbsRule, Product, Seller } from './stub'
 
@@ -145,25 +150,36 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
       const known = new Map(sellerRef.current.map((one) => [one.id, one.name]))
       const withSeller = page.items.filter((row) => row.seller_id !== null)
-      setProducts(
-        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
-      )
-      setRules(withSeller.map((row) => toRule(row.id, loadedRules.get(row.id))))
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
       // делить процент. Тянем только по тем продавцам, чьи товары на экране.
+      // Забираем их до правил: по ним же видно, какие номера в правиле —
+      // вайлдберрисовские, а какие принадлежат складам другой площадки.
       const sellerIds = [...new Set(withSeller.map((row) => row.seller_id as string))]
       const built: Seller[] = []
+      const boundWbNumbers = new Map<string, Set<string>>()
       for (const id of sellerIds) {
         const whRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouses`), {
           headers: headers(token),
         })
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
+        boundWbNumbers.set(
+          id,
+          // Только сопоставленные склады: правило заводится на привязку, а у
+          // склада из кабинета без привязки ключа в правиле быть не может.
+          new Set(
+            rows
+              .filter((one) => one.wms_warehouse_id !== null)
+              .map((one) => String(one.wb_warehouse_id)),
+          ),
+        )
         built.push({
           id,
           name: known.get(id) ?? '—',
           warehouses: rows.map((one) => ({
-            id: String(one.wb_warehouse_id),
+            // Ключ с площадкой, как в правиле на сервере: у Wildberries и Ozon
+            // номера складов из разных пространств и совпадают свободно.
+            id: warehouseRuleKey({ wb_warehouse_id: one.wb_warehouse_id }),
             name: one.name ?? `Склад ${one.wb_warehouse_id}`,
             boundTo: one.wms_warehouse_id,
             fbsEnabled: one.served,
@@ -176,6 +192,21 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           })),
         })
       }
+
+      setProducts(
+        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
+      )
+      setRules(
+        withSeller.map((row) => {
+          const rule = toRule(row.id, loadedRules.get(row.id))
+          const wbNumbers = boundWbNumbers.get(row.seller_id as string) ?? new Set<string>()
+          return {
+            ...rule,
+            byWarehouse: qualifyWbWarehouseRuleValues(rule.byWarehouse, wbNumbers),
+            unitsByWarehouse: qualifyWbWarehouseRuleValues(rule.unitsByWarehouse, wbNumbers),
+          }
+        }),
+      )
       setSellers(built)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')
@@ -207,7 +238,12 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       const current = sellers
         .find((one) => one.id === sellerId)
         ?.warehouses.find((one) => one.id === warehouseId)
-      const res = await fetch(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${warehouseId}`), {
+      // В адрес ручки идёт номер склада в кабинете: строка окна знает его с
+      // приставкой площадки, а ручка ждёт число.
+      const url = apiUrl(
+        `/fbs-sellers/${sellerId}/warehouses/${warehouseNumberFromRuleKey(warehouseId)}`,
+      )
+      const res = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers(token) },
         body: JSON.stringify({

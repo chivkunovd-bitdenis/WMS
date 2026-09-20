@@ -1,3 +1,5 @@
+import { warehouseNumberFromRuleKey } from './fbsWarehouseRuleKeys'
+
 // Заглушка каталога товаров и настроек остатка для FBS.
 //
 // Ключевое, что здесь смоделировано честно: процент считается от СВОБОДНОГО
@@ -187,15 +189,22 @@ export function reservedTotal(product: Product): number {
 
 /** Склады, которые мы обслуживаем по FBS. Только они участвуют в раздаче остатка.
  *
- * Порядок — по возрастанию номера склада WB, ровно как на сервере
- * (`_seller_bindings` сортирует по `wb_warehouse_id`). От порядка зависит, кому
- * не хватит остатка при переборе, поэтому окно должно перебирать так же.
+ * Порядок — по номеру склада, а при совпадении номеров по площадке: ровно так
+ * сортирует `_seller_bindings` на сервере. От порядка зависит, кому не хватит
+ * остатка при переборе, поэтому окно должно перебирать так же. Номер берём из
+ * ключа строки: он приходит с приставкой площадки, и целиком в число не
+ * превращается.
  */
 export function servedWarehouses(seller: Seller): SellerWarehouse[] {
   return seller.warehouses
     .filter((one) => one.fbsEnabled)
     .slice()
-    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
+    .sort(
+      (a, b) =>
+        (Number(warehouseNumberFromRuleKey(a.id)) || 0) -
+          (Number(warehouseNumberFromRuleKey(b.id)) || 0) ||
+        warehouseMarketplace(a).localeCompare(warehouseMarketplace(b)),
+    )
 }
 
 export function sellerById(id: string): Seller {

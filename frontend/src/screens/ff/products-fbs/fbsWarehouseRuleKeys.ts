@@ -27,6 +27,28 @@ export function warehouseUnitsAfterInput(
   return next
 }
 
+// Экран «Остаток для FBS» показывает только склады Wildberries, и его строки
+// живут под ключом wb:<номер>. Сервер же называет тот же склад голым номером,
+// пока номер уникален, и переходит на wb:<номер> ровно тогда, когда у продавца
+// есть озоновский склад с тем же числом. Без приведения ключей сохранённый
+// лимит такого склада выглядел бы пустым полем, введённый заново уехал бы
+// вторым ключом на тот же склад, а очистка поля не убрала бы прежний.
+//
+// Голый номер, которого нет среди привязанных складов WB этого продавца, не
+// трогаем: он принадлежит другой площадке, и вернуть его серверу нужно ровно
+// таким, каким он пришёл.
+export function qualifyWbWarehouseRuleValues(
+  values: Record<string, number>,
+  boundWbWarehouseNumbers: ReadonlySet<string>,
+): Record<string, number> {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => {
+    const qualified = warehouseRuleKey({ wb_warehouse_id: key })
+    const belongsToWb =
+      !key.includes(':') && boundWbWarehouseNumbers.has(key) && values[qualified] === undefined
+    return [belongsToWb ? qualified : key, value]
+  }))
+}
+
 /** Legacy numeric responses are resolved against saved bindings, never by row order. */
 export function qualifyWarehouseRuleValues(
   values: Record<string, number>,
