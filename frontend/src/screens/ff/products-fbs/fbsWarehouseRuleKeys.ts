@@ -54,21 +54,18 @@ export function warehouseUnitsAfterInput(
 // 123 выглядел бы вайлдберрисовским даже тогда, когда активен с этим номером
 // один лишь склад Ozon.
 //
-// Неразрешимый номер оставляем как есть: список привязок и правило читаются
-// разными запросами и могут разойтись, а терять из-за одного поля всю таблицу
-// нельзя — на сохранении сервер назовёт причину точнее.
+// Неразрешимый номер — отказ: экран сообщает об ошибке загрузки и не открывает
+// правку. Молча отдать правило как есть нельзя — строка склада показывала бы
+// пустое поле вместо сохранённого лимита, введённое рядом уехало бы вторым
+// ключом на тот же склад, а очистка оставила бы прежний невидимым.
 export function ruleKeysForScreen<T extends {
   byWarehouse: Record<string, number>
   unitsByWarehouse: Record<string, number>
 }>(rule: T, bindings: WarehouseRuleBinding[]): T {
-  try {
-    return {
-      ...rule,
-      byWarehouse: qualifyWarehouseRuleValues(rule.byWarehouse, bindings),
-      unitsByWarehouse: qualifyWarehouseRuleValues(rule.unitsByWarehouse, bindings),
-    }
-  } catch {
-    return rule
+  return {
+    ...rule,
+    byWarehouse: qualifyWarehouseRuleValues(rule.byWarehouse, bindings),
+    unitsByWarehouse: qualifyWarehouseRuleValues(rule.unitsByWarehouse, bindings),
   }
 }
 

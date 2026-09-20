@@ -174,9 +174,13 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           }),
         ])
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
-        const bindings = bindingsRes.ok ? ((await bindingsRes.json()) as ApiSellerBinding[]) : []
         // Привязки читаем отдельно от справочника складов: по ним сервер собирает
-        // правило, и только по ним видно площадку номера в его ответе.
+        // правило, и только по ним видно площадку номера в его ответе. Без них
+        // экран не имеет права открыть окно правки: пустой список выглядел бы как
+        // «привязок нет», лимит чужого склада показался бы пустым полем, а
+        // введённое рядом ушло бы вторым ключом на тот же склад.
+        if (!bindingsRes.ok) throw new Error(await readApiErrorMessage(bindingsRes))
+        const bindings = (await bindingsRes.json()) as ApiSellerBinding[]
         ruleBindings.set(id, activeRuleBindings(bindings))
         built.push({
           id,
@@ -198,17 +202,19 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         })
       }
 
+      // Ключи правил приводим до записи в состояние: неразрешимый номер должен
+      // оставить экран в ошибке загрузки целиком, а не показать таблицу товаров
+      // с правилами, которых экран не понял.
+      const nextRules = withSeller.map((row) =>
+        ruleKeysForScreen(
+          toRule(row.id, loadedRules.get(row.id)),
+          ruleBindings.get(row.seller_id as string) ?? [],
+        ),
+      )
       setProducts(
         withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
       )
-      setRules(
-        withSeller.map((row) =>
-          ruleKeysForScreen(
-            toRule(row.id, loadedRules.get(row.id)),
-            ruleBindings.get(row.seller_id as string) ?? [],
-          ),
-        ),
-      )
+      setRules(nextRules)
       setSellers(built)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')

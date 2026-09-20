@@ -95,11 +95,15 @@ describe('ключи правила на экране остатка FBS', () =>
     expect(warehouseUnitsAfterInput(units, 'wb:123', null)).toEqual({ 'ozon:123': 5 })
   })
 
-  it('оставляет правило как есть, если номер не нашёлся среди привязок', () => {
+  // Правило с номером, которого нет среди действующих привязок (так выглядит
+  // отказ ручки привязок), в форму правки не отдаём: строка показала бы пустое
+  // поле, а ввод рядом завёл бы второй ключ на тот же склад. Экран покажет
+  // ошибку загрузки.
+  it('отказывается приводить правило, если номер не нашёлся среди привязок', () => {
     const bindings = activeRuleBindings([
       { marketplace: 'wb', wb_warehouse_id: 777, is_active: true },
     ])
-    expect(ruleKeysForScreen(rule({ 999: 12, 777: 3 }), bindings).unitsByWarehouse)
-      .toEqual({ 999: 12, 777: 3 })
+    expect(() => ruleKeysForScreen(rule({ 999: 12, 777: 3 }), bindings)).toThrow('площадку')
+    expect(() => ruleKeysForScreen(rule({ 777: 0 }), [])).toThrow('площадку')
   })
 })
