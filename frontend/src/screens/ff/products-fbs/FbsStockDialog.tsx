@@ -1,226 +1,205 @@
-import { Box, Divider, Slider, Stack, Typography } from '@mui/material'
-import { useState } from 'react'
+import {
+  Box,
+  FormControlLabel,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  Paper,
+  Slider,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import CloseIcon from '@mui/icons-material/Close'
+import { useEffect, useState } from 'react'
 import {
   ActionGroup,
   AppDialog,
   CheckboxInput,
   ErrorNotice,
-  NumberInput,
+  MARKETPLACE_LABELS,
+  MARKETPLACE_PALETTE,
+  MarketplaceIcon,
   PrimaryAction,
   SecondaryAction,
   SelectInput,
   StatusChip,
-  WarningNotice,
 } from '../../../ui-kit'
 import {
   WAREHOUSE_NAME_ISSUE_LABELS,
   warehouseNameIssueHint,
+  type CabinetList,
 } from './fbsSellerWarehouseRows'
 import {
-  dialogShowsOzon,
-  freeStock,
-  initialDraft,
-  MARKETPLACE_NAMES,
-  onHandTotal,
-  publishesTo,
-  reservedTotal,
-  servedWarehouses,
-  totalPercent,
-  totalUnits,
-  visibleWarehouses,
-  warehouseMarketplace,
-  type FbsRule,
-  type MarketplaceCode,
-  type Product,
-  type Seller,
-  type SellerWarehouse,
-} from './stub'
+  addableWarehouses,
+  blockTotals,
+  capNoteText,
+  clampUnits,
+  draftFromState,
+  NUMBER_FORMAT,
+  PERCENT_STEP,
+  pluralRu,
+  rowCalc,
+  ruleBodyFromDrafts,
+  snapPercent,
+  toggleByPercent,
+  unitsCap,
+  visibleStockBindings,
+  type BlockDraft,
+  type CabinetWarehouse,
+  type StockBinding,
+  type StockDialogProduct,
+} from './fbsStockBlocks'
+import type { MarketplaceCode } from './stub'
 
-type DialogProduct = Product & { savedPublishedNow?: number }
+// Окно «Остаток для FBS» по принятому макету WMS-469.
+//
+// Блок = один склад продавца из кабинета площадки ↔ склад ФФ. Внутри блока —
+// галка приёма заказов (свойство продавца, сохраняется сразу) и одна строка
+// площадки этой привязки: переключатель передачи, ползунок в цвете площадки,
+// поле «шт» и галочка «процентом». Процент и число — два представления одного
+// лимита, расходиться они не могут. Лимиты выбранных товаров сохраняются
+// кнопкой «Сохранить»; связка и приём заказов — в момент действия.
 
-// The API supplies aggregate stock, not the per-warehouse inputs needed for a
-// draft quantity. Keep percentage editing without inventing a quantity preview.
-function PercentSlider({ label, value, onChange, disabled = false, disabledReason,
-  max = 100, testId }: {
-  label: string; value: number; onChange: (value: number) => void
-  disabled?: boolean; disabledReason?: string; max?: number; testId?: string
-}) {
-  return <Stack spacing={0.5} sx={{ opacity: disabled ? 0.5 : 1 }}>
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography>
-      <Typography variant="body2">{value}%</Typography>
-    </Stack>
-    <Slider value={value} onChange={(_event, next) =>
-      onChange(Math.min(Array.isArray(next) ? next[0]! : next, max))}
-      min={0} max={100} step={10} marks disabled={disabled} valueLabelDisplay="auto"
-      aria-label={label} data-testid={testId} sx={{ mx: 1, width: 'auto' }} />
-    {disabled && disabledReason ? <Typography variant="caption" color="text.secondary">
-      {disabledReason}
-    </Typography> : null}
-  </Stack>
-}
-
-export function FbsStockDialog({
-  open,
-  products,
-  seller,
-  rule,
-  onClose,
-  onSave,
-  onBind,
-  onServedChange,
-  saveError,
-  wbWarehousesError,
-  ozonWarehousesError,
-}: {
+export type FbsStockDialogProps = {
   open: boolean
-  /** Один товар или несколько — модалка одна и та же. */
-  products: DialogProduct[]
-  seller: Seller
-  rule: FbsRule
-  onClose: () => void
-  onSave: (rule: FbsRule) => void
-  onBind: (warehouseId: string, wbWarehouseId: string) => void
-  /** Обслуживаем ли мы склад продавца. Свойство продавца, не товара. */
-  onServedChange?: (warehouseId: string, served: boolean) => void
-  /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
-  saveError?: string | null
+  sellerName: string
+  /** Один товар или несколько — окно одно и то же. */
+  products: StockDialogProduct[]
+  /** Активные привязки продавца с названиями из кабинетов. */
+  bindings: StockBinding[]
+  /** Ответы кабинетов — из них строится список «Добавить склад». */
+  cabinets: Record<MarketplaceCode, CabinetList>
+  /** Физические склады ФФ для выбора в шапке блока и при добавлении. */
+  wmsWarehouses: Array<{ id: string; name: string }>
   /**
-   * Почему кабинет Wildberries не отдал список складов — плашка сверху окна.
-   * Живёт всё время, пока окно открыто: на неё ссылается чип «название
-   * недоступно» у строк без названия (WMS-457).
+   * Можно ли из этого кабинета добавлять связки, менять склад ФФ и приём
+   * заказов. У селлера — нет (D4): контролы видны, но только читаются.
    */
+  canEditBindings: boolean
+  /** Идёт запрос: кнопки действий заперты, чтобы не отправить дважды. */
+  busy?: boolean
+  onClose: () => void
+  /** Сохранить правило выбранных товаров по привязкам. */
+  onSave: (byBinding: Record<string, { publish: boolean; mode: 'percent' | 'units'; value: number }>) => void
+  /** Добавить связку «склад продавца ↔ склад ФФ». Сохраняется сразу. */
+  onAddBinding?: (warehouse: CabinetWarehouse, wmsWarehouseId: string) => void
+  /** Сменить склад ФФ у готовой связки. Сохраняется сразу. */
+  onChangeWmsWarehouse?: (binding: StockBinding, wmsWarehouseId: string) => void
+  /** Принимаем ли заказы со склада продавца. Свойство продавца, сохраняется сразу. */
+  onServedChange?: (binding: StockBinding, served: boolean) => void
+  /** Отказ сервера или потеря ответа. Показываем здесь: окно с введённым не закрываем. */
+  actionError?: string | null
+  /** Почему кабинет Wildberries не отдал список складов — плашка сверху окна. */
   wbWarehousesError?: string | null
-  /** Почему не приехал справочник складов Ozon — текст в озоновском блоке. */
+  /** Почему не приехал справочник складов Ozon. */
   ozonWarehousesError?: string | null
-}) {
-  if (!open) return null
-  return (
-    <FbsStockDialogBody
-      products={products}
-      seller={seller}
-      rule={rule}
-      onClose={onClose}
-      onSave={onSave}
-      onBind={onBind}
-      onServedChange={onServedChange}
-      saveError={saveError}
-      wbWarehousesError={wbWarehousesError}
-      ozonWarehousesError={ozonWarehousesError}
-    />
-  )
+  /**
+   * Обрезка сервером после сохранения: свободный остаток изменился между
+   * открытием и сохранением, сервер сохранил меньше запрошенного.
+   */
+  serverClamps?: Record<string, { free: number; product: { name: string } }>
 }
+
+export function FbsStockDialog(props: FbsStockDialogProps) {
+  if (!props.open) return null
+  return <FbsStockDialogBody {...props} />
+}
+
+type Picker = { warehouse: CabinetWarehouse | null; wmsWarehouseId: string | null }
 
 function FbsStockDialogBody({
+  sellerName,
   products,
-  seller,
-  rule,
+  bindings,
+  cabinets,
+  wmsWarehouses,
+  canEditBindings: canEditFromCabinet,
+  busy = false,
   onClose,
   onSave,
-  onBind,
+  onAddBinding,
+  onChangeWmsWarehouse,
   onServedChange,
-  saveError,
+  actionError,
   wbWarehousesError,
   ozonWarehousesError,
-}: {
-  products: DialogProduct[]
-  seller: Seller
-  rule: FbsRule
-  onClose: () => void
-  onSave: (rule: FbsRule) => void
-  onBind: (warehouseId: string, wbWarehouseId: string) => void
-  onServedChange?: (warehouseId: string, served: boolean) => void
-  saveError?: string | null
-  wbWarehousesError?: string | null
-  ozonWarehousesError?: string | null
-}) {
-  // Ozon в окне есть только у товара с карточкой Ozon (WMS-454). У остального
-  // товара окно совпадает с окном того же товара у продавца без Ozon-складов,
-  // и Ozon-привязку продавца из него не тронуть: строки просто нет.
-  const ozonShown = dialogShowsOzon(products)
-  const visible: Seller = { ...seller, warehouses: visibleWarehouses(seller, ozonShown) }
-  // The percentage limit is shared across destinations. Publication quantities
-  // additionally depend on each destination's physical WMS warehouse.
-  const served = servedWarehouses(visible)
-  // Ни одного обслуживаемого склада — раздавать долю некуда. Ползунок в этом
-  // состоянии обманывает: он показывает штуки, которых в кабинете не появится,
-  // потому что публикация идёт только по обслуживаемым складам.
-  const noWarehouses = visible.warehouses.length === 0
-  const noneServed = served.length === 0
-  const single = served.length <= 1
-
-  // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
-  // поэтому синхронизировать его с внешним значением не нужно.
-  //
-  // Единственный обслуживаемый склад — особый случай. Галочку «одинаково по
-  // всем складам» в этом режиме не показывают (делить не с кем), а расчёт при
-  // выключенной галочке берёт проценты складов и общий процент игнорирует.
-  // Товар с выключённым флагом попадал в тупик: верхний ползунок стоял на 100%,
-  // а в Wildberries уходила старая доля склада (свободно 5, доля склада 30% —
-  // «1 шт уйдёт» при «100% — это 5 шт»), и включить флаг было негде. Поэтому
-  // при одном складе черновик всегда считается по общему проценту: что оператор
-  // видит на ползунке, то и уезжает — а на ползунок при раздельном правиле
-  // идёт действующая доля этого склада (см. initialDraft).
-  const [draft, setDraft] = useState<FbsRule>(initialDraft(rule, visible.warehouses, ozonShown))
-
+  serverClamps,
+}: FbsStockDialogProps) {
   const many = products.length > 1
-  // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
-  // чтобы процент не выглядел числом, взятым с потолка.
-  const base = products.reduce((sum, product) => sum + freeStock(product), 0)
-  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
-  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
+  const first = products[0]!
+  const visible = visibleStockBindings(bindings, products)
+  // Право на связки решают кабинет и ответ сервера вместе: у селлера привязки
+  // приходят с editable=false, и PUT от его имени сервер всё равно отклонит.
+  const canEditBindings = canEditFromCabinet && bindings.every((one) => one.editable)
 
-  const spent = served.filter((one) => publishesTo(draft, warehouseMarketplace(one))).reduce(
-    (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
-    0,
-  )
-  const freePercent = Math.max(0, 100 - spent)
-  const savedPublished = products.every((product) => product.savedPublishedNow !== undefined)
-    ? products.reduce((sum, product) => sum + product.savedPublishedNow!, 0)
-    : undefined
-  const unbound = served.filter((one) => one.boundTo === null)
-  // Сумма долей так, как её считает сервер. При галке «одинаково» доля идёт
-  // КАЖДОМУ складу, поэтому 50% на четырёх складах — это 200%, и сохранение
-  // отобьётся. Раньше окно про это не знало и узнавало от сервера уже отказом.
-  const enabledServed = served.filter((one) => publishesTo(draft, warehouseMarketplace(one)))
-  const enabledRule = { ...draft, byWarehouse: Object.fromEntries(
-    enabledServed.map((one) => [one.id, draft.byWarehouse[one.id] ?? 0]),
-  ) }
-  const percentSum = totalPercent(enabledRule, enabledServed.length)
-  const publishesAny = draft.publish || (draft.publishOzon ?? draft.publish)
-  // В режиме штук ограничение то же самое, только в единицах: склады делят один
-  // и тот же физический остаток, поэтому в сумме больше свободного не раздать.
-  const unitsSum = totalUnits(draft, visible.warehouses)
-  const enabledPlacesLabel = [
-    draft.publish ? MARKETPLACE_NAMES.wb : null,
-    (draft.publishOzon ?? draft.publish) ? MARKETPLACE_NAMES.ozon : null,
-  ].filter(Boolean).join(" и ")
-  // Existing caps can exceed free stock after an order or stock movement.
-  // For bulk edits the server compares every product with its own saved rule.
-  const increasesCap = Object.entries(draft.unitsByWarehouse).some(([key, value]) =>
-    value > (rule.unitsByWarehouse[key] ?? 0),
-  )
-  const overAllocated = draft.unitsMode
-    ? !many && increasesCap && unitsSum > base
-    : publishesAny && percentSum > 100
-  // Склады раскладываются по площадкам (WMS-350). Порядок фиксированный:
-  // Wildberries первым, потому что он был здесь всегда, Ozon следом.
-  // Заголовки появляются только когда площадок правда две — у продавца с одним
-  // Wildberries окно остаётся ровно таким, каким было.
-  const groups: Array<{ marketplace: MarketplaceCode; warehouses: SellerWarehouse[] }> = (
-    ['wb', 'ozon'] as const
-  )
-    .map((marketplace) => ({
-      marketplace,
-      warehouses: visible.warehouses.filter((one) => warehouseMarketplace(one) === marketplace),
-    }))
-    .filter((group) => group.warehouses.length > 0)
-  const manyMarketplaces = groups.length > 1
-  // Как назвать площадки в общих подписях окна. У продавца с одним только
-  // Wildberries это по-прежнему «Wildberries», текст не меняется ни на букву.
-  const placesLabel = manyMarketplaces
-    ? `${MARKETPLACE_NAMES.wb} и ${MARKETPLACE_NAMES.ozon}`
-    : MARKETPLACE_NAMES[groups[0]?.marketplace ?? 'wb']
+  // Черновики по id привязки. Тело монтируется на каждое открытие, а связки
+  // могут появляться прямо в окне: черновик новой привязки берётся из
+  // сохранённого состояния первого товара в момент, когда она впервые видна.
+  const [drafts, setDrafts] = useState<Record<string, BlockDraft>>({})
+  const [capNotes, setCapNotes] = useState<Record<string, { free: number; product: { name: string } }>>({})
+  const [picker, setPicker] = useState<Picker | null>(null)
+  const draftOf = (binding: StockBinding): BlockDraft =>
+    drafts[binding.id] ?? draftFromState(first.byBinding[binding.id])
+  const patchDraft = (binding: StockBinding, next: BlockDraft) =>
+    setDrafts((current) => ({ ...current, [binding.id]: next }))
+
+  // Свободный остаток поменялся (сменили склад ФФ, перечитали правила) либо
+  // сохранённое число уже выше того, что есть на складе: ручное число выше
+  // потолка встаёт на максимум с подписью, как при вводе. Смотрим и на
+  // нетронутый черновик — он взят из сохранённого правила и тоже может
+  // превышать новый остаток. Подпись про прежний остаток при этом снимается:
+  // она говорила о складе, которого в блоке уже нет.
+  useEffect(() => {
+    for (const binding of visible) {
+      const draft = draftOf(binding)
+      if (draft.byPercent) continue
+      const cap = unitsCap(binding, products)
+      if (draft.units > cap.free) {
+        patchDraft(binding, { ...draft, units: cap.free })
+        setCapNotes((current) => ({ ...current, [binding.id]: cap }))
+      } else {
+        setCapNotes((current) => {
+          if (!(binding.id in current)) return current
+          const next = { ...current }
+          delete next[binding.id]
+          return next
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products])
+
+  const addable = addableWarehouses(cabinets, bindings)
+  const anyCabinetReceived = cabinets.wb.received || cabinets.ozon.received
+  const addDisabledReason = !anyCabinetReceived
+    ? 'Список складов из кабинета не получен — добавить склад пока нельзя'
+    : addable.length === 0
+      ? 'Все склады селлера уже добавлены'
+      : undefined
+
+  function openPicker() {
+    // Единственный склад ФФ подставляется сам; при нескольких выбирают явно.
+    setPicker({
+      warehouse: null,
+      wmsWarehouseId: wmsWarehouses.length === 1 ? wmsWarehouses[0]!.id : null,
+    })
+  }
+
+  function pickerChange(next: Picker) {
+    if (next.warehouse && next.wmsWarehouseId) {
+      // Связка — свойство продавца: запоминается сразу после выбора пары.
+      onAddBinding?.(next.warehouse, next.wmsWarehouseId)
+      setPicker(null)
+      return
+    }
+    setPicker(next)
+  }
+
+  const productsWord = pluralRu(products.length, 'товар', 'товара', 'товаров')
 
   return (
     <AppDialog
@@ -228,22 +207,18 @@ function FbsStockDialogBody({
       onClose={onClose}
       maxWidth="md"
       testId="fbs-stock-dialog"
-      title={many ? `Остаток для FBS · ${products.length} товаров` : 'Остаток для FBS'}
+      title={many ? `Остаток для FBS · ${products.length} ${productsWord}` : 'Остаток для FBS'}
       actions={
         <ActionGroup>
-          <SecondaryAction onClick={onClose} data-testid="fbs-stock-cancel">
+          <SecondaryAction onClick={onClose} data-testid="fbs-stock-cancel" disabled={busy}>
             Отмена
           </SecondaryAction>
           <PrimaryAction
-            onClick={() => onSave(draft)}
-            disabledReason={
-              overAllocated
-                ? draft.unitsMode
-                  ? `По складам распределено ${unitsSum} шт, а свободно только ${base}`
-                  : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий`
-                : undefined
-            }
+            onClick={() => onSave(ruleBodyFromDrafts(visible, Object.fromEntries(
+              visible.map((binding) => [binding.id, draftOf(binding)]),
+            )))}
             data-testid="fbs-stock-save"
+            disabled={busy}
           >
             Сохранить
           </PrimaryAction>
@@ -257,314 +232,417 @@ function FbsStockDialogBody({
         {wbWarehousesError ? (
           <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
         ) : null}
-        {saveError ? <ErrorNotice testId="fbs-stock-error">{saveError}</ErrorNotice> : null}
-        <Stack spacing={0.5}>
-          <Typography variant="subtitle2">
-            {many
-              ? `${products.length} товаров, ${seller.name}`
-              : `${products[0]!.name}${products[0]!.size ? `, ${products[0]!.size}` : ''} · ${products[0]!.sku}`}
-          </Typography>
-          {/* Три числа, а не одно: без «занято» непонятно, почему процент даёт
-              меньше, чем ожидал оператор, глядя на общий остаток. */}
-          <Typography variant="body2" color="text.secondary">
-            На складе {onHand.toLocaleString('ru-RU')} шт, занято{' '}
-            {reserved.toLocaleString('ru-RU')} — свободно {base.toLocaleString('ru-RU')}
-          </Typography>
-        </Stack>
+        {actionError ? <ErrorNotice testId="fbs-stock-error">{actionError}</ErrorNotice> : null}
 
-        {noneServed ? (
-          <WarningNotice testId="fbs-stock-none-served">
-            {noWarehouses
-              ? `Склады ${placesLabel} не загрузились. Выбор склада WMS появится здесь после загрузки хотя бы одного направления ${placesLabel}.`
-              : `Ни один склад ${placesLabel} не выбран. Выберите ниже физический склад WMS хотя бы для одного направления — до этого доля не задаётся и остаток в ${placesLabel} не уйдёт.`}
-          </WarningNotice>
-        ) : null}
+        <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }} data-testid="fbs-stock-head">
+          {many
+            ? `${products.length} ${productsWord}, ${sellerName}`
+            : `${first.name}${first.size ? `, ${first.size}` : ''} · ${first.sku}`}
+        </Typography>
 
-        <CheckboxInput
-          label="Передавать остаток в Wildberries"
-          checked={draft.publish}
-          onChange={(publish) => setDraft((one) => ({
-            ...one, publish,
-            changedPublication: [...new Set([...(one.changedPublication ?? []), 'wb' as const])],
-          }))}
-          disabledReason={
-            !served.some((one) => warehouseMarketplace(one) === 'wb') && !draft.publish
-              ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
-          }
-          testId="fbs-stock-publish"
-        />
-        {ozonShown ? (
-          <CheckboxInput
-            label="Передавать остаток в Ozon"
-            checked={draft.publishOzon ?? draft.publish}
-            onChange={(publishOzon) => setDraft((one) => ({
-              ...one, publishOzon,
-              changedPublication: [...new Set([...(one.changedPublication ?? []), 'ozon' as const])],
-            }))}
-            disabledReason={
-              !served.some((one) => warehouseMarketplace(one) === 'ozon')
-                && !(draft.publishOzon ?? draft.publish)
-                ? 'Сначала выберите хотя бы один склад Ozon' : undefined
+        {visible.map((binding) => (
+          <BindingBlock
+            key={binding.id}
+            binding={binding}
+            products={products}
+            draft={draftOf(binding)}
+            capNote={capNotes[binding.id] ?? serverClamps?.[binding.id]}
+            wmsWarehouses={wmsWarehouses}
+            editable={canEditBindings && binding.editable}
+            busy={busy}
+            onDraft={(next) => patchDraft(binding, next)}
+            onCapNote={(note) =>
+              setCapNotes((current) => {
+                const next = { ...current }
+                if (note) next[binding.id] = note
+                else delete next[binding.id]
+                return next
+              })
             }
-            testId="fbs-stock-publish-ozon"
+            onChangeWmsWarehouse={(id) => onChangeWmsWarehouse?.(binding, id)}
+            onServedChange={(served) => onServedChange?.(binding, served)}
           />
-        ) : null}
+        ))}
 
-        {/* Режим. Доля хороша, когда остаток дышит: приехала партия — в кабинете
-            стало больше само. Но если с продавцом согласована разбивка по
-            направлениям в конкретных числах, в сетку кратных десяти процентов
-            она не ложится, и тогда числа задаются руками. Квота при этом сама
-            не растёт: приехала новая партия — числа прежние, пока их не
-            поднимут. */}
-        <CheckboxInput
-          label="Остаток по штукам"
-          checked={draft.unitsMode}
-          onChange={(unitsMode) => setDraft((one) => ({ ...one, unitsMode }))}
-          helperText={
-            draft.unitsMode
-              ? 'Доля отключена. Числа по складам не растут сами при приёмке — поднимайте руками'
-              : 'Включите, чтобы задать количество по каждому складу числом, а не долей'
-          }
-          disabledReason={
-            noneServed ? `Сначала выберите хотя бы один склад ${placesLabel}` : undefined
-          }
-          testId="fbs-stock-units-mode"
-        />
-
-        {draft.unitsMode ? (
-          <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-units-total">
-            Задано по складам {unitsSum.toLocaleString('ru-RU')} шт при{' '}
-            {base.toLocaleString('ru-RU')} свободных
-            {overAllocated ? ' — это больше, чем есть на складе' : ''}
+        {visible.length === 0 && !picker ? (
+          <Typography color="text.secondary" data-testid="fbs-stock-empty">
+            Склады селлера ещё не добавлены.
           </Typography>
         ) : null}
 
-        <PercentSlider
-          label="Доля свободного остатка"
-          value={draft.percent}
-          onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
-          disabled={noneServed || draft.unitsMode || (!single && !draft.sameEverywhere)}
-          disabledReason={
-            noneServed
-              ? `Сначала выберите хотя бы один склад ${placesLabel}`
-              : draft.unitsMode
-                ? 'Включён остаток по штукам — количество задаётся числом под каждым складом'
-                : 'Сейчас доля задаётся по каждому складу отдельно'
-          }
-          testId="fbs-stock-percent"
-        />
-
-        {single ? null : (
-          <>
-            <Divider />
-            <CheckboxInput
-              label="Одинаково по всем складам"
-              checked={draft.sameEverywhere}
-              onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
-              disabledReason={
-                draft.unitsMode ? 'Включён остаток по штукам' : undefined
-              }
-              // Доля применяется к каждому складу отдельно, а не делится между
-              // ними. Из старой подписи это не читалось, и оператор, поставив
-              // «половину» на два склада, отдавал в WB весь остаток.
-              helperText={`Доля уйдёт на КАЖДЫЙ из ${enabledServed.length} складов ${enabledPlacesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
-              testId="fbs-stock-same"
-            />
-          </>
-        )}
-
-        {overAllocated ? (
-          <ErrorNotice testId="fbs-stock-over">
-            {draft.unitsMode
-              ? `По складам распределено ${unitsSum.toLocaleString('ru-RU')} шт, а свободно только ${base.toLocaleString('ru-RU')}. Товар лежит у нас один, а склады ${placesLabel} — это направления отгрузки: больше, чем есть, раздать нельзя.`
-              : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий: товар лежит у нас один, а склады ${placesLabel} — это направления отгрузки. Больше 100% раздать нельзя, сервер такое правило не примет.`}
-          </ErrorNotice>
-        ) : null}
-
-        {single || draft.sameEverywhere ? null : (
-          <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-rest">
-            Нераспределено: {freePercent}%. Количество зависит от свободного остатка
-            каждого физического склада WMS.
-          </Typography>
-        )}
-
-        <Stack spacing={2}>
-          {noWarehouses ? (
-            <Typography color="text.secondary" data-testid="fbs-stock-no-warehouses">
-              Нет направлений маркетплейсов, которые можно сопоставить со складом WMS.
-            </Typography>
-          ) : null}
-          {/* Сто процентов — на все склады обеих площадок разом, а не на каждую
-              отдельно: товар лежит у нас один. Сказать это надо один раз и до
-              списка, иначе вторая площадка читается как второй остаток. */}
-          {manyMarketplaces ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              data-testid="fbs-stock-shared-pool"
-            >
-              Общий лимит долей для обеих площадок — 100%. Количество для каждого
-              направления рассчитывается по его физическому складу WMS.
-            </Typography>
-          ) : null}
-          {groups.map((group) => (
-            <Stack key={group.marketplace} spacing={2}>
-              {manyMarketplaces ? (
-                <Typography
-                  variant="subtitle2"
-                  data-testid={`fbs-stock-marketplace-${group.marketplace}`}
+        {picker ? (
+          <BindingPicker
+            picker={picker}
+            addable={addable}
+            wmsWarehouses={wmsWarehouses}
+            ozonWarehousesError={cabinets.ozon.received ? null : (ozonWarehousesError ?? null)}
+            onChange={pickerChange}
+            onCancel={() => setPicker(null)}
+          />
+        ) : canEditBindings && onAddBinding ? (
+          <Box>
+            <Tooltip title={addDisabledReason ?? ''}>
+              <span style={{ display: 'inline-flex' }}>
+                <SecondaryAction
+                  onClick={openPicker}
+                  disabled={Boolean(addDisabledReason) || busy}
+                  startIcon={<AddIcon />}
+                  data-testid="fbs-stock-add"
                 >
-                  {MARKETPLACE_NAMES[group.marketplace]}
-                </Typography>
-              ) : null}
-              {/* Справочник кабинета не ответил. Причина нужна здесь, иначе
-                  список складов Ozon выглядит просто коротким, и оператор идёт
-                  искать несуществующую проблему у продавца. Уже сопоставленные
-                  склады при этом остаются на месте — они взяты из привязок. */}
-              {group.marketplace === 'ozon' && ozonWarehousesError ? (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  data-testid="fbs-stock-ozon-directory-error"
-                >
-                  {ozonWarehousesError}
-                </Typography>
-              ) : null}
-              {group.warehouses.map((warehouse) => (
-            <Stack key={warehouse.id} spacing={1}>
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Галочка приёма заказов — свойство продавца, а не товара, но
-                    живёт здесь же: оператор видит склады продавца именно в этом
-                    окне, и гонять его на другой экран ради одной галки незачем.
-                    Подпись называет и объект, и эффект (WMS-454): она решает,
-                    чьи заказы с этого склада наши. На публикацию остатка она не
-                    влияет — той управляют галки передачи товара (WMS-376). */}
-                <CheckboxInput
-                  label={`Принимаем заказы продавца со склада «${warehouse.name}»`}
-                  checked={warehouse.fbsEnabled}
-                  onChange={(checked) => onServedChange?.(warehouse.id, checked)}
-                  disabledReason={
-                    !onServedChange
-                      ? 'Настройка доступна из каталога'
-                      : warehouse.boundTo === null && !warehouse.fbsEnabled
-                        ? 'Сначала выберите склад WMS'
-                        : undefined
-                  }
-                  testId={`fbs-stock-served-${warehouse.id}`}
-                />
-                {!warehouse.fbsEnabled ? (
-                  <StatusChip
-                    label="заказы не принимаем"
-                    hint="Заказы продавца с этого склада к нам не приходят"
-                  />
-                ) : warehouse.boundTo === null ? (
-                  <StatusChip
-                    label="склад не сопоставлен"
-                    tone="warn"
-                    hint={`Пока направление ${MARKETPLACE_NAMES[warehouseMarketplace(warehouse)]} не сопоставлено с физическим складом WMS, остаток по нему не уйдёт`}
-                  />
-                ) : null}
-                {/* Номер вместо названия — не название (WMS-457). Чип говорит,
-                    почему имени нет: склада нет в кабинете либо список кабинета
-                    не получен, и причина — в сообщении выше. */}
-                {warehouse.nameIssue ? (
-                  <StatusChip
-                    label={WAREHOUSE_NAME_ISSUE_LABELS[warehouse.nameIssue]}
-                    tone="warn"
-                    hint={warehouseNameIssueHint(warehouse.nameIssue, warehouseMarketplace(warehouse))}
-                    testId={`fbs-stock-name-issue-${warehouse.id}`}
-                  />
-                ) : null}
-                <Box sx={{ flexGrow: 1 }} />
-                <Box sx={{ minWidth: 240 }}>
-                  {/* У отключённого склада выбор заперт: сопоставление означает
-                      «склад наш» и включило бы его обратно молча. Сначала галочка,
-                      потом склад. */}
-                  <SelectInput
-                    label="Склад WMS"
-                    value={warehouse.boundTo ?? ''}
-                    onChange={(value) => onBind(warehouse.id, value)}
-                    options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
-                    emptyLabel="не сопоставлен"
-                    disabled={!warehouse.fbsEnabled && warehouse.boundTo !== null}
-                    testId={`fbs-stock-bind-${warehouse.id}`}
-                  />
-                </Box>
-              </Stack>
-              {warehouse.fbsEnabled && draft.unitsMode ? (
-                // Поле вместо ползунка. Максимум намеренно НЕ ставится: оператор
-                // должен иметь возможность набрать больше и увидеть красное, а не
-                // упереться в молча не принимающееся поле.
-                <NumberInput
-                  label="Потолок публикации, шт"
-                  value={draft.unitsByWarehouse[warehouse.id] ?? 0}
-                  onChange={(value) =>
-                    setDraft((one) => ({
-                      ...one,
-                      unitsByWarehouse: {
-                        ...one.unitsByWarehouse,
-                        [warehouse.id]: Math.max(0, value ?? 0),
-                      },
-                    }))
-                  }
-                  min={0}
-                  error={
-                    overAllocated
-                      ? `В сумме ${unitsSum} шт при свободных ${base}`
-                      : undefined
-                  }
-                  helperText={
-                    'Потолок публикации. В кабинет уйдёт не больше свободного остатка; число меняется только вручную'
-                  }
-                  testId={`fbs-stock-units-${warehouse.id}`}
-                />
-              ) : null}
-              {warehouse.fbsEnabled && !single && !draft.unitsMode ? (
-                <PercentSlider
-                  label="Доля на этот склад"
-                  value={
-                    draft.sameEverywhere ? draft.percent : (draft.byWarehouse[warehouse.id] ?? 0)
-                  }
-                  onChange={(percent) =>
-                    setDraft((one) => ({
-                      ...one,
-                      byWarehouse: { ...one.byWarehouse, [warehouse.id]: percent },
-                    }))
-                  }
-                          max={(draft.byWarehouse[warehouse.id] ?? 0) + freePercent}
-                  disabled={draft.sameEverywhere}
-                  disabledReason="Включено «одинаково по всем складам»"
-                  testId={`fbs-stock-percent-${warehouse.id}`}
-                />
-              ) : null}
-            </Stack>
-              ))}
-            </Stack>
-          ))}
-        </Stack>
-
-        <Divider />
-
-        <Stack spacing={0.5}>
-          <Typography variant="h6" data-testid="fbs-stock-result">
-            {savedPublished === undefined ? 'Расчёт публикации недоступен' : `${savedPublished.toLocaleString('ru-RU')} шт`}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {savedPublished === undefined
-              ? 'Нет серверного расчёта по сохранённому правилу.'
-              : 'Расчёт публикации по сохранённому правилу при последней загрузке.'}
-            {' '}Изменения в этом окне ещё не учтены. После сохранения откройте правило
-            снова: количество рассчитывается по каждому физическому складу WMS.
-          </Typography>
-        </Stack>
-
-        {unbound.length > 0 && publishesAny ? (
-          <Typography variant="body2" color="text.secondary">
-            По складам {unbound.map((one) => one.name).join(', ')} остаток не уйдёт, пока они не
-            сопоставлены с физическими складами WMS.
-          </Typography>
+                  Добавить склад
+                </SecondaryAction>
+              </span>
+            </Tooltip>
+          </Box>
         ) : null}
       </Stack>
     </AppDialog>
+  )
+}
+
+function BindingBlock({
+  binding,
+  products,
+  draft,
+  capNote,
+  wmsWarehouses,
+  editable,
+  busy,
+  onDraft,
+  onCapNote,
+  onChangeWmsWarehouse,
+  onServedChange,
+}: {
+  binding: StockBinding
+  products: StockDialogProduct[]
+  draft: BlockDraft
+  capNote?: { free: number; product: { name: string } }
+  wmsWarehouses: Array<{ id: string; name: string }>
+  editable: boolean
+  busy: boolean
+  onDraft: (next: BlockDraft) => void
+  onCapNote: (note: { free: number; product: { name: string } } | null) => void
+  onChangeWmsWarehouse: (wmsWarehouseId: string) => void
+  onServedChange: (served: boolean) => void
+}) {
+  const totals = blockTotals(binding, products)
+  const calc = rowCalc(binding, draft, products)
+  const color = MARKETPLACE_PALETTE[binding.marketplace]
+  const label = MARKETPLACE_LABELS[binding.marketplace]
+  // Склад ФФ, которого нет в списке выбора (выключен или технический), всё
+  // равно показывается своим названием — привязка к нему сохранена.
+  const wmsOptions = wmsWarehouses.some((one) => one.id === binding.wmsWarehouseId)
+    ? wmsWarehouses
+    : [...wmsWarehouses, { id: binding.wmsWarehouseId, name: binding.wmsWarehouseName ?? `№ ${binding.wmsWarehouseId}` }]
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ px: 2, pt: 1.5, pb: 1.75 }}
+      data-testid={`fbs-stock-block-${binding.id}`}
+      aria-label={binding.name}
+    >
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          columnGap: 2,
+          rowGap: 1,
+          pb: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.75, flex: '1 1 380px', minWidth: 0 }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <MarketplaceIcon marketplace={binding.marketplace} />
+            <Typography sx={{ fontWeight: 600, fontSize: 16, overflowWrap: 'anywhere' }}>
+              {binding.name}
+            </Typography>
+            {/* Номер вместо названия — не название (WMS-457). Чип говорит,
+                почему имени нет: склада нет в кабинете либо список кабинета
+                не получен, и причина — в сообщении выше. */}
+            {binding.nameIssue ? (
+              <StatusChip
+                label={WAREHOUSE_NAME_ISSUE_LABELS[binding.nameIssue]}
+                tone="warn"
+                hint={warehouseNameIssueHint(binding.nameIssue, binding.marketplace)}
+                testId={`fbs-stock-name-issue-${binding.id}`}
+              />
+            ) : null}
+          </Stack>
+          <Typography color="text.secondary" aria-hidden>↔</Typography>
+          <Box sx={{ width: 260, maxWidth: '100%' }}>
+            <SelectInput
+              label="Склад ФФ"
+              value={binding.wmsWarehouseId}
+              onChange={(value) => {
+                if (value && value !== binding.wmsWarehouseId) onChangeWmsWarehouse(value)
+              }}
+              options={wmsOptions.map((one) => ({ value: one.id, label: one.name }))}
+              disabled={!editable || busy}
+              testId={`fbs-stock-bind-${binding.id}`}
+            />
+          </Box>
+        </Stack>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ ml: 'auto', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+          data-testid={`fbs-stock-totals-${binding.id}`}
+        >
+          на складе {NUMBER_FORMAT(totals.onHand)} шт, занято {NUMBER_FORMAT(totals.reserved)} — свободно{' '}
+          <Box component="b" sx={{ color: 'text.primary' }}>{NUMBER_FORMAT(totals.free)}</Box>
+        </Typography>
+      </Stack>
+
+      <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, pt: 0.5 }}>
+        {/* Галочка приёма заказов — свойство продавца, а не товара, но живёт
+            здесь же: оператор видит склады продавца именно в этом окне.
+            На публикацию остатка она не влияет — той управляет переключатель
+            строки ниже (WMS-376). */}
+        <CheckboxInput
+          label={`Принимаем заказы продавца со склада «${binding.name}»`}
+          checked={binding.served}
+          onChange={onServedChange}
+          disabled={!editable || busy}
+          testId={`fbs-stock-served-${binding.id}`}
+        />
+        {!binding.served ? (
+          <StatusChip
+            label="заказы не принимаем"
+            hint="Заказы продавца с этого склада к нам не приходят"
+            testId={`fbs-stock-not-served-${binding.id}`}
+          />
+        ) : null}
+      </Stack>
+
+      {binding.served ? (
+        <Box sx={{ pt: 0.5 }} data-testid={`fbs-stock-row-${binding.id}`}>
+          <FormControlLabel
+            sx={{ ml: -1, '& .MuiFormControlLabel-label': { display: 'inline-flex', alignItems: 'center', gap: 1, fontSize: 16 } }}
+            control={
+              <Switch
+                checked={draft.publish}
+                onChange={(event) => onDraft({ ...draft, publish: event.target.checked })}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: color },
+                }}
+                slotProps={{ input: { 'data-testid': `fbs-stock-publish-${binding.id}` } as never }}
+              />
+            }
+            label={
+              <>
+                <span>Передавать остаток на</span>
+                <MarketplaceIcon marketplace={binding.marketplace} />
+                <Box component="span" sx={{ fontWeight: 600 }}>{label}</Box>
+              </>
+            }
+          />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr 52px', sm: 'minmax(160px, 1fr) 52px 132px auto' },
+              alignItems: 'center',
+              columnGap: 2,
+              rowGap: 1,
+              pl: { xs: 0, sm: 7.25 },
+              minHeight: 44,
+              opacity: draft.publish ? 1 : 0.42,
+              pointerEvents: draft.publish ? 'auto' : 'none',
+            }}
+          >
+            <Slider
+              value={calc.pct}
+              min={0}
+              max={100}
+              step={PERCENT_STEP}
+              marks={Array.from({ length: 11 }, (_, i) => ({ value: i * 10 }))}
+              // Процент показан числом справа от ползунка; всплывающая
+              // подсказка над головкой наезжала бы на подпись переключателя.
+              valueLabelDisplay="off"
+              disabled={!draft.publish}
+              onChange={(_event, next) => {
+                if (!draft.byPercent) return
+                onDraft({ ...draft, percent: snapPercent(Array.isArray(next) ? next[0]! : next) })
+              }}
+              aria-label={`Доля свободного остатка на ${label}`}
+              aria-readonly={!draft.byPercent}
+              tabIndex={draft.byPercent ? 0 : -1}
+              data-testid={`fbs-stock-percent-${binding.id}`}
+              sx={{
+                color,
+                mx: 1,
+                width: 'auto',
+                '&.Mui-disabled': { color },
+                // Ползунок-индикатор в ручном режиме: белая головка с цветной
+                // обводкой, двигать нельзя.
+                ...(draft.byPercent
+                  ? {}
+                  : {
+                      pointerEvents: 'none',
+                      '& .MuiSlider-thumb': { backgroundColor: 'common.white', border: '2px solid', borderColor: color },
+                    }),
+              }}
+            />
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+              data-testid={`fbs-stock-pct-${binding.id}`}
+            >
+              {calc.pct} %
+            </Typography>
+            <TextField
+              size="small"
+              value={calc.fieldValue}
+              onChange={(event) => {
+                if (draft.byPercent) return
+                const digits = event.target.value.replace(/[^\d]/g, '')
+                const { units, limitedBy } = clampUnits(binding, digits === '' ? 0 : Number(digits), products)
+                onDraft({ ...draft, units })
+                onCapNote(limitedBy)
+              }}
+              disabled={!draft.publish}
+              slotProps={{
+                htmlInput: {
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*',
+                  readOnly: draft.byPercent,
+                  tabIndex: draft.byPercent ? -1 : 0,
+                  'aria-label': `Штук на ${label}`,
+                  'data-testid': `fbs-stock-units-${binding.id}`,
+                  style: { textAlign: 'right' },
+                },
+                input: {
+                  endAdornment: <InputAdornment position="end">шт</InputAdornment>,
+                  sx: draft.byPercent ? { bgcolor: 'action.hover' } : undefined,
+                },
+              }}
+            />
+            <CheckboxInput
+              label="процентом"
+              checked={draft.byPercent}
+              onChange={(byPercent) => {
+                onDraft(toggleByPercent(binding, draft, byPercent, products))
+                if (byPercent) onCapNote(null)
+              }}
+              disabled={!draft.publish}
+              testId={`fbs-stock-by-percent-${binding.id}`}
+            />
+            {capNote ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ gridColumn: '1 / -1', overflowWrap: 'anywhere', mt: -0.5 }}
+                data-testid={`fbs-stock-cap-note-${binding.id}`}
+              >
+                {capNoteText(capNote)}
+              </Typography>
+            ) : null}
+          </Box>
+        </Box>
+      ) : null}
+    </Paper>
+  )
+}
+
+function BindingPicker({
+  picker,
+  addable,
+  wmsWarehouses,
+  ozonWarehousesError,
+  onChange,
+  onCancel,
+}: {
+  picker: Picker
+  addable: CabinetWarehouse[]
+  wmsWarehouses: Array<{ id: string; name: string }>
+  ozonWarehousesError: string | null
+  onChange: (next: Picker) => void
+  onCancel: () => void
+}) {
+  const keyOf = (one: CabinetWarehouse) => `${one.marketplace}:${one.externalId}`
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ px: 2, py: 1.5, borderStyle: 'dashed' }}
+      data-testid="fbs-stock-picker"
+    >
+      <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 2, rowGap: 1.5 }}>
+        <TextField
+          select
+          size="small"
+          label="Склад селлера"
+          value={picker.warehouse ? keyOf(picker.warehouse) : ''}
+          onChange={(event) => {
+            const warehouse = addable.find((one) => keyOf(one) === event.target.value) ?? null
+            onChange({ ...picker, warehouse })
+          }}
+          sx={{ width: 300, maxWidth: '100%' }}
+          slotProps={{
+            inputLabel: { shrink: true },
+            select: {
+              displayEmpty: true,
+              renderValue: (value) => {
+                const warehouse = addable.find((one) => keyOf(one) === value)
+                if (!warehouse) {
+                  return <Box component="span" sx={{ color: 'text.secondary' }}>выберите склад из кабинета</Box>
+                }
+                return (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                    <MarketplaceIcon marketplace={warehouse.marketplace} />
+                    <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{warehouse.name}</Box>
+                  </Stack>
+                )
+              },
+            },
+            htmlInput: { 'data-testid': 'fbs-stock-picker-seller' },
+          }}
+          autoFocus
+        >
+          {addable.map((one) => (
+            <MenuItem key={keyOf(one)} value={keyOf(one)} data-testid={`fbs-stock-picker-option-${keyOf(one)}`}>
+              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                <MarketplaceIcon marketplace={one.marketplace} />
+                <span>{one.name}</span>
+              </Stack>
+            </MenuItem>
+          ))}
+        </TextField>
+        <Typography color="text.secondary" aria-hidden>↔</Typography>
+        <Box sx={{ width: 300, maxWidth: '100%' }}>
+          <SelectInput
+            label="Склад ФФ"
+            value={picker.wmsWarehouseId ?? ''}
+            onChange={(value) => onChange({ ...picker, wmsWarehouseId: value || null })}
+            options={wmsWarehouses.map((one) => ({ value: one.id, label: one.name }))}
+            emptyLabel={picker.wmsWarehouseId ? undefined : 'выберите наш склад'}
+            testId="fbs-stock-picker-ff"
+          />
+        </Box>
+        <IconButton
+          size="small"
+          aria-label="Не добавлять"
+          onClick={onCancel}
+          sx={{ ml: 'auto' }}
+          data-testid="fbs-stock-picker-cancel"
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+        {/* Справочник одной из площадок не получен: её склады в списке не
+            появятся, и без причины список выглядит просто коротким. */}
+        {ozonWarehousesError ? (
+          <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="fbs-stock-ozon-directory-error">
+            {ozonWarehousesError}
+          </Typography>
+        ) : null}
+      </Stack>
+    </Paper>
   )
 }

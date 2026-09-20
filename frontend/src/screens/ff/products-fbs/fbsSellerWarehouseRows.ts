@@ -1,20 +1,15 @@
-// Строки складов продавца для окна «Остаток для FBS» (WMS-457).
+// Справочники складов продавца для окна «Остаток для FBS» (WMS-457, WMS-469).
 //
 // Названия склады получают только из кабинета площадки: Wildberries отдаёт их
 // по ключу продавца, Ozon — из своего справочника. Код названий не выдумывает.
 // Когда имени физически нет — кабинет не ответил или склада в кабинете нет, —
 // строка подписывается номером как номером («№ 2035707»), а рядом чипом
 // объясняется, почему номера недостаточно. «Склад WB 2035707» выглядел как
-// название, и владелец так его и прочитал.
+// название, и владелец так его и прочитал. Сами блоки окна собирает
+// fbsStockBlocks.ts; здесь — формы ответов кабинетов и тексты причин.
 
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
-import { warehouseRuleKey } from './fbsWarehouseRuleKeys'
-import {
-  MARKETPLACE_NAMES,
-  type MarketplaceCode,
-  type SellerWarehouse,
-  type WarehouseNameIssue,
-} from './stub'
+import { MARKETPLACE_NAMES, type MarketplaceCode, type WarehouseNameIssue } from './stub'
 
 /** Строка кабинета площадки: то, что ответил Wildberries или Ozon. */
 export type CabinetWarehouseRow = {
@@ -32,70 +27,22 @@ export type CabinetList =
 
 /** Сохранённая привязка продавца — строка GET …/warehouse-bindings. */
 export type SavedWarehouseBinding = {
+  /** `binding_id` — им ключуется правило товара по привязке (WMS-469). */
+  id?: string
   wb_warehouse_id: number | string
   wms_warehouse_id: string | null
+  wms_warehouse_name?: string | null
   is_active: boolean
   served: boolean
   marketplace?: MarketplaceCode
   external_warehouse_id?: string | null
+  /** Может ли текущий пользователь менять связку; у селлера false (D4). */
+  editable?: boolean
 }
 
 /** Номер как номер, а не как название. */
 export function warehouseNumberLabel(number: number | string): string {
   return `№ ${number}`
-}
-
-/**
- * Строки окна из ответов кабинетов и сохранённых привязок.
- *
- * Порядок прежний: строки кабинета в порядке кабинета (Wildberries, затем
- * Ozon), после них — активные привязки, которых в ответах кабинетов не
- * оказалось. Такая привязка подписывается номером и получает признак: список
- * кабинета получен, но склада в нём нет (удалён или чужой), либо список не
- * получен и имени взять неоткуда.
- *
- * Выключенная привязка без строки кабинета не показывается: строка с «заказы не
- * принимаем» приглашала бы включить её одним нажатием, а сервер при любом PUT
- * молча возвращает привязке is_active=true. Если же её склад есть в кабинете,
- * она показывается как обычная строка кабинета с выключенной галкой.
- */
-export function buildSellerWarehouseRows(
-  cabinets: Record<MarketplaceCode, CabinetList>,
-  bindings: SavedWarehouseBinding[],
-): SellerWarehouse[] {
-  const rows: SellerWarehouse[] = []
-  const known = new Set<string>()
-  for (const marketplace of ['wb', 'ozon'] as const) {
-    const list = cabinets[marketplace]
-    if (!list.received) continue
-    for (const one of list.rows) {
-      const id = warehouseRuleKey({ wb_warehouse_id: one.wb_warehouse_id, marketplace })
-      known.add(id)
-      rows.push({
-        id,
-        name: one.name ?? warehouseNumberLabel(one.wb_warehouse_id),
-        boundTo: one.wms_warehouse_id,
-        fbsEnabled: one.served,
-        marketplace,
-      })
-    }
-  }
-  for (const binding of bindings) {
-    const marketplace = binding.marketplace ?? 'wb'
-    // Ключ с площадкой: номера складов Wildberries и Ozon из разных пространств
-    // и могут совпасть.
-    const id = warehouseRuleKey({ wb_warehouse_id: binding.wb_warehouse_id, marketplace })
-    if (known.has(id) || !binding.is_active) continue
-    rows.push({
-      id,
-      name: warehouseNumberLabel(binding.external_warehouse_id ?? binding.wb_warehouse_id),
-      boundTo: binding.wms_warehouse_id,
-      fbsEnabled: binding.served,
-      marketplace,
-      nameIssue: cabinets[marketplace].received ? 'not_in_cabinet' : 'list_unavailable',
-    })
-  }
-  return rows
 }
 
 export const WAREHOUSE_NAME_ISSUE_LABELS: Record<WarehouseNameIssue, string> = {

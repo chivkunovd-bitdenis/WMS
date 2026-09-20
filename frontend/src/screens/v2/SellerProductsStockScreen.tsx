@@ -34,6 +34,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import { MarketplaceChip } from '../../ui-kit'
+import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 
 type WbCatalogRow = {
   id: string
@@ -108,12 +109,20 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   addressStorageEnabled?: boolean
+  /** Активный продавец кабинета — для окна «Остаток для FBS» (WMS-469). */
+  sellerId: string
+  sellerName: string
+  /** Физические склады ФФ — подписи складов в том же окне. */
+  warehouses: Array<{ id: string; name: string; code?: string; is_operational?: boolean }>
 }
 
 export function SellerProductsStockScreen({
   token,
   authHeaders,
   addressStorageEnabled = true,
+  sellerId,
+  sellerName,
+  warehouses,
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -128,6 +137,9 @@ export function SellerProductsStockScreen({
   const [editBusy, setEditBusy] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
+  // Окно «Остаток для FBS» — то же, что в каталоге ФФ (WMS-469). Селлер меняет
+  // передачу и лимиты своих товаров; связки и приём заказов видит, но не правит.
+  const [stockDialogRows, setStockDialogRows] = useState<WbCatalogRow[] | null>(null)
 
   // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
   const [filterSearch, setFilterSearch] = useState('')
@@ -436,8 +448,7 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог товаров, синхронизированных из маркетплейсов. Остаток и резервы здесь только для
-        просмотра — их настраивает фулфилмент на своём экране каталога.
+        Каталог товаров, синхронизированных из маркетплейсов.
       </Typography>
 
       {error ? (
@@ -479,6 +490,32 @@ export function SellerProductsStockScreen({
           {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}
         </Stack>
       </Paper>
+
+      {selectedCount > 0 ? (
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, mb: 2, borderColor: 'primary.main' }}
+          data-testid="seller-catalog-selection-bar"
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle2" data-testid="seller-catalog-selection-count">
+              Выбрано {selectedCount}
+            </Typography>
+            {/* Та же кнопка и то же окно, что в каталоге фулфилмента (WMS-469). */}
+            <Button
+              variant="contained"
+              onClick={() => setStockDialogRows(selectedRows)}
+              data-testid="seller-catalog-fbs-set-stock"
+            >
+              Задать остаток · {selectedCount}
+            </Button>
+          </Stack>
+        </Paper>
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-catalog-filters">
         <Stack
@@ -941,6 +978,20 @@ export function SellerProductsStockScreen({
           </Box>
         ) : null}
       </Drawer>
+
+      {stockDialogRows ? (
+        <FbsStockDialogContainer
+          token={token}
+          sellerId={sellerId}
+          sellerName={sellerName}
+          chosen={stockDialogRows}
+          warehouses={warehouses}
+          canEditBindings={false}
+          onClose={() => setStockDialogRows(null)}
+          onChanged={() => void loadStock()}
+          onLoadError={setError}
+        />
+      ) : null}
     </Box>
   )
 }

@@ -15,7 +15,6 @@ import {
   TextCell,
 } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
-import { FbsStockDialog } from './FbsStockDialog'
 import {
   INITIAL_RULES,
   PRODUCTS,
@@ -33,7 +32,9 @@ import {
 // Управление остатком для FBS переехало сюда с отдельной вкладки: настраивают
 // его по товару, а не по складу, поэтому и жить оно должно там, где товар.
 // Массовое присвоение — та же самая модалка, вызванная не с одной строки, а с
-// нескольких: второго механизма для того же самого заводить незачем.
+// нескольких: второго механизма для того же самого заводить незачем. Само окно
+// (WMS-469) живёт с сетью в FbsStockDialogContainer: экран только отдаёт
+// выбранные товары наверх через onOpenStockDialog.
 
 type Row = { product: Product; rule: FbsRule }
 
@@ -51,9 +52,11 @@ type ProductsScreenProps = {
   sellers?: Seller[]
   rules?: FbsRule[]
   loading?: boolean
-  /** Сохранить правило для перечисленных товаров. Без него экран правит только себя. */
-  onSaveRule?: (productIds: string[], rule: FbsRule) => Promise<string | null>
-  onBindWarehouse?: (sellerId: string, warehouseId: string, wbWarehouseId: string) => void
+  /**
+   * Открыть окно «Остаток для FBS» для товаров одного продавца. Без него
+   * (превью на заглушке) экран только сообщает, что окну нужен сервер.
+   */
+  onOpenStockDialog?: (products: Product[]) => void
 }
 
 export function ProductsScreen({
@@ -62,14 +65,11 @@ export function ProductsScreen({
   sellers: sellersProp,
   rules: rulesProp,
   loading = false,
-  onSaveRule,
-  onBindWarehouse,
+  onOpenStockDialog,
 }: ProductsScreenProps) {
   const products = productsProp ?? PRODUCTS
   const sellers = sellersProp ?? SELLERS
-  const [localRules, setLocalRules] = useState<FbsRule[]>(INITIAL_RULES)
-  const rules = rulesProp ?? localRules
-  const setRules = setLocalRules
+  const rules = rulesProp ?? INITIAL_RULES
   const sellerById = useMemo(() => {
     const byId = new Map(sellers.map((one) => [one.id, one]))
     // Товар без известного продавца на экране всё равно показываем: спрятать
@@ -80,11 +80,15 @@ export function ProductsScreen({
   const [query, setQuery] = useState('')
   const [sellerId, setSellerId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [editing, setEditing] = useState<Product[] | null>(null)
-  // Отказ сервера на сохранение правила: держим здесь, чтобы показать его
-  // внутри окна и не закрывать окно, пока оператор не поправит.
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [bulkError, setBulkError] = useState<string | null>(null)
+
+  function openStockDialog(products: Product[]) {
+    if (onOpenStockDialog) {
+      onOpenStockDialog(products)
+      return
+    }
+    onNote('Заглушка: окно «Остаток для FBS» открывается только с сервером')
+  }
 
   const rows: Row[] = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -112,7 +116,7 @@ export function ProductsScreen({
       )
       return
     }
-    setEditing(chosen)
+    openStockDialog(chosen)
   }
 
   const columns: Column<Row>[] = [
@@ -215,7 +219,7 @@ export function ProductsScreen({
       render: ({ product }) => (
         <IconAction
           title="Настроить остаток для FBS"
-          onClick={() => setEditing([product])}
+          onClick={() => openStockDialog([product])}
           testId={`products-fbs-${product.id}`}
         >
           <TuneOutlined fontSize="small" />
@@ -273,50 +277,6 @@ export function ProductsScreen({
         empty={{ title: 'Ничего не нашлось', hint: 'Измените поиск или фильтр по продавцу.' }}
       />
 
-      {editing ? (
-        <FbsStockDialog
-          open
-          products={editing}
-          seller={sellerById(editing[0]!.sellerId)}
-          rule={ruleFor(rules, editing[0]!.id)}
-          onClose={() => {
-            setEditing(null)
-            setSaveError(null)
-          }}
-          saveError={saveError}
-          onSave={(rule) => {
-            const ids = editing.map((one) => one.id)
-            if (onSaveRule) {
-              // Окно закрываем только когда сервер принял. Иначе оператор теряет
-              // введённое и не понимает, почему ничего не изменилось.
-              void onSaveRule(ids, rule).then((message) => {
-                setSaveError(message)
-                if (!message) setEditing(null)
-              })
-              return
-            }
-            {
-              setRules((current) => [
-                ...current.filter((one) => !ids.includes(one.productId)),
-                ...ids.map((productId) => ({ ...rule, productId })),
-              ])
-              onNote(
-                ids.length > 1
-                  ? `Заглушка: правило применено к ${ids.length} товарам`
-                  : 'Заглушка: правило сохранено',
-              )
-            }
-            setEditing(null)
-          }}
-          onBind={(warehouseId, wbWarehouseId) => {
-            if (onBindWarehouse) {
-              onBindWarehouse(editing[0]!.sellerId, warehouseId, wbWarehouseId)
-              return
-            }
-            onNote(`Заглушка: склад сопоставлен (${warehouseId} → ${wbWarehouseId || 'сброшено'})`)
-          }}
-        />
-      ) : null}
     </Box>
   )
 }
