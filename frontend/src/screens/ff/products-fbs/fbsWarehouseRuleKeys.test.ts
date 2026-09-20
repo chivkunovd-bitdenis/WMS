@@ -3,6 +3,7 @@ import {
   qualifyWarehouseRuleValues,
   warehouseNumberFromRuleKey,
   warehouseRuleKey,
+  warehouseUnitsAfterInput,
 } from './fbsWarehouseRuleKeys'
 
 describe('marketplace-qualified warehouse rule keys', () => {
@@ -24,5 +25,16 @@ describe('marketplace-qualified warehouse rule keys', () => {
       .toEqual({ 'ozon:123': 40 })
     expect(warehouseNumberFromRuleKey('123')).toBe('123')
     expect(() => qualifyWarehouseRuleValues({ 123: 40 }, bindings)).toThrow('площадку')
+  })
+})
+
+// Ноль и пустое поле означают на сервере разное: ноль — лимит, который оператор
+// поставил сам, пустое — что привязку поштучно не настраивали. Свернуть их
+// обратно в один ноль нельзя: тогда склады, которых оператор не касался, уедут
+// как явный нулевой лимит.
+describe('поштучный лимит склада', () => {
+  it('различает явный ноль оператора и незаданный склад', () => {
+    expect(warehouseUnitsAfterInput({}, 'wb:1', 0)).toEqual({ 'wb:1': 0 })
+    expect(warehouseUnitsAfterInput({ 'wb:1': 7, 'wb:2': 3 }, 'wb:1', null)).toEqual({ 'wb:2': 3 })
   })
 })

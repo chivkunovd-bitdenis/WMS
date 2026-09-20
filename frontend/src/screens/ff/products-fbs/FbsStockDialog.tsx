@@ -13,6 +13,7 @@ import {
   StatusChip,
   WarningNotice,
 } from '../../../ui-kit'
+import { warehouseUnitsAfterInput } from './fbsWarehouseRuleKeys'
 import {
   freeStock,
   MARKETPLACE_NAMES,
@@ -446,16 +447,23 @@ function FbsStockDialogBody({
                 // Поле вместо ползунка. Максимум намеренно НЕ ставится: оператор
                 // должен иметь возможность набрать больше и увидеть красное, а не
                 // упереться в молча не принимающееся поле.
+                //
+                // Пустое поле и ноль — разные вещи. Пусто означает, что склад для
+                // поштучной публикации не выбирали, и ключ в правило не попадёт;
+                // ноль — сознательный нулевой лимит, который держит кабинет на
+                // нуле. Раньше оба состояния выглядели нулём, и склад, который
+                // оператор не трогал, уезжал на сервер как явный ноль.
                 <NumberInput
                   label="Отгрузить на этот склад, шт"
-                  value={draft.unitsByWarehouse[warehouse.id] ?? 0}
+                  value={draft.unitsByWarehouse[warehouse.id] ?? null}
                   onChange={(value) =>
                     setDraft((one) => ({
                       ...one,
-                      unitsByWarehouse: {
-                        ...one.unitsByWarehouse,
-                        [warehouse.id]: Math.max(0, value ?? 0),
-                      },
+                      unitsByWarehouse: warehouseUnitsAfterInput(
+                        one.unitsByWarehouse,
+                        warehouse.id,
+                        value,
+                      ),
                     }))
                   }
                   min={0}
@@ -465,8 +473,10 @@ function FbsStockDialogBody({
                       : undefined
                   }
                   helperText={
-                    `Доступно новым заказам: ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
-                    '. Резервы заказов сюда не входят; приёмка это число не увеличивает'
+                    draft.unitsByWarehouse[warehouse.id] === undefined
+                      ? 'Лимит не задан — на этот склад ничего не уйдёт. Ноль в поле задаёт нулевой лимит'
+                      : `Доступно новым заказам: ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
+                        '. Резервы заказов сюда не входят; приёмка это число не увеличивает'
                   }
                   testId={`fbs-stock-units-${warehouse.id}`}
                 />
