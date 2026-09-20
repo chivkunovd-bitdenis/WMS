@@ -53,6 +53,7 @@ async def test_zero_without_history_refreshes_after_ten_minutes_and_stops_on_res
     await _configure_rule_amount(db_session, ctx, product, 5 if units else 0)
     pool = FbsBindingStockPool(
         tenant_id=ctx.tenant.id, binding_id=ctx.binding.id, product_id=product.id, quantity=0,
+        units_configured=True,
     )
     if units:
         db_session.add(pool)
@@ -445,3 +446,215 @@ async def test_delayed_worker_recalculates_current_rules_and_publishes_only_zero
     monkeypatch.setattr(sync, "_utcnow", lambda: datetime.now(UTC) + timedelta(minutes=11))
     await refresh.refresh_binding_zero_stocks(ctx.tenant.id, ctx.seller.id, ctx.binding.id)
     assert transport.put_attempts == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,error", [("confirmed", None), ("error", "wb_http_error_500")])
+async def test_stale_eta_preserves_binding_summary_and_ignores_unrelated_conflicts(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, status: str, error: str | None,
+) -> None:
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="summary", fbs_percent=100,
+    )
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 0)
+    transport = _MockStocksTransport()
+    await _run(db_session, ctx, transport)
+    now += timedelta(minutes=3)
+    balance = (await db_session.scalars(select(InventoryBalance))).one()
+    balance.quantity = 5
+    await db_session.commit()
+    await _run(db_session, ctx, transport)
+    assert transport.put_calls[-1][0].amount == 5
+    ctx.binding.last_sync_status = status
+    ctx.binding.last_error_code = error
+    for index in range(2):
+        db_session.add(_product(
+            tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=484,
+            sku_suffix=f"unrelated-duplicate-{index}", fbs_percent=100,
+            fbs_stock_sync_enabled=False,
+        ))
+    await db_session.commit()
+    before = (ctx.binding.last_sync_status, ctx.binding.last_error_code, ctx.binding.last_sync_at)
+    now += timedelta(minutes=7)
+    result = await _run(db_session, ctx, transport, zero_refresh_only=True)
+    assert result.products_targeted == result.conflicts == 0
+    assert transport.put_attempts == 2
+    assert (ctx.binding.last_sync_status, ctx.binding.last_error_code,
+            ctx.binding.last_sync_at) == before
+    assert list(await db_session.scalars(select(FbsStockSyncItem.chrt_id))) == [483]
+
+
+@pytest.mark.asyncio
+async def test_percentage_to_units_clears_omitted_pool_and_keeps_explicit_zero(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+    from app.services import fbs_stock_rule_service as rules
+
+    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    ctx = await _seed_binding(db_session)
+    second = FbsWarehouseBinding(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, wms_warehouse_id=ctx.warehouse.id,
+        wb_warehouse_id=501002, stock_sync_enabled=True, is_active=True,
+    )
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="switch", fbs_percent=50, fbs_same_everywhere=False,
+    )
+    db_session.add_all([product, second])
+    await _configure_rule_amount(db_session, ctx, product, 10)
+    for binding in [ctx.binding, second]:
+        db_session.add(FbsBindingStockPool(
+            tenant_id=ctx.tenant.id, binding_id=binding.id, product_id=product.id,
+            quantity=0, percent=50,
+        ))
+    await db_session.commit()
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=False, percent=0, units_mode=True,
+            units_by_warehouse={ctx.binding.wb_warehouse_id: 5},
+        ),
+    )
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 5}
+    pool_binding_ids = list(await db_session.scalars(select(FbsBindingStockPool.binding_id)))
+    assert pool_binding_ids == [ctx.binding.id]
+    eligible = set()
+    await rules.publish_amounts_for_binding(
+        db_session, second, [product], refresh_zero_product_ids=eligible,
+    )
+    assert eligible == set()
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=False, percent=0, units_mode=True,
+            units_by_warehouse={ctx.binding.wb_warehouse_id: 5, second.wb_warehouse_id: 0},
+        ),
+    )
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 5,
+                                         second.wb_warehouse_id: 0}
+    await rules.publish_amounts_for_binding(
+        db_session, second, [product], refresh_zero_product_ids=eligible,
+    )
+    assert eligible == {product.id}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("free", [0, 5])
+async def test_historical_zero_does_not_prove_operator_intent_but_explicit_save_does(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, free: int,
+) -> None:
+    from app.services import fbs_stock_rule_service as rules
+
+    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="historical", fbs_percent=0,
+    )
+    product.fbs_units_mode = True
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, free)
+    pool = FbsBindingStockPool(
+        tenant_id=ctx.tenant.id, binding_id=ctx.binding.id, product_id=product.id,
+        quantity=0, percent=50,
+    )
+    db_session.add(pool)
+    await db_session.commit()
+    assert pool.units_configured is False
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == view.units_remaining_by_warehouse == {}
+    transport = _MockStocksTransport()
+    await _run(db_session, ctx, transport)
+    assert transport.put_attempts == 0
+    # Legacy positive units remain readable and keep the old quantity semantics.
+    pool.quantity = 2
+    await db_session.commit()
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 2}
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=True, percent=0, units_mode=True,
+            units_by_warehouse={ctx.binding.wb_warehouse_id: 0},
+        ),
+    )
+    assert pool.units_configured is True
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 0}
+    await _run(db_session, ctx, transport)
+    assert transport.put_calls[-1][0].amount == 0
+
+
+def test_units_intent_migration_preserves_legacy_quantities() -> None:
+    import runpy
+    from pathlib import Path
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration = runpy.run_path(str(Path(__file__).parents[1] / "alembic" / "versions" /
+                                   "20260920_0255_fbs_explicit_units_rule.py"))
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(sa.text(
+            "CREATE TABLE fbs_binding_stock_pools (quantity INTEGER NOT NULL)",
+        ))
+        connection.execute(sa.text("INSERT INTO fbs_binding_stock_pools VALUES (0), (3)"))
+        with Operations.context(MigrationContext.configure(connection)):
+            migration["upgrade"]()
+        assert connection.execute(sa.text(
+            "SELECT quantity, units_configured FROM fbs_binding_stock_pools ORDER BY quantity",
+        )).all() == [(0, 0), (3, 0)]
+        with Operations.context(MigrationContext.configure(connection)):
+            migration["downgrade"]()
+        assert connection.execute(sa.text(
+            "SELECT quantity FROM fbs_binding_stock_pools ORDER BY quantity",
+        )).scalars().all() == [0, 3]
+    engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_legacy_zero_keeps_one_time_transition_but_never_starts_refresh(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    scheduled = []
+    monkeypatch.setattr(sync, "schedule_binding_zero_refresh", lambda *args: scheduled.append(args))
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="legacy-transition", fbs_percent=0,
+    )
+    product.fbs_units_mode = True
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 5)
+    db_session.add_all([
+        FbsBindingStockPool(
+            tenant_id=ctx.tenant.id, binding_id=ctx.binding.id, product_id=product.id, quantity=0,
+        ),
+        FbsStockSyncItem(
+            binding_id=ctx.binding.id, product_id=product.id, chrt_id=483,
+            last_target_amount=5, last_confirmed_amount=5, status="confirmed",
+        ),
+    ])
+    await db_session.commit()
+    transport = _MockStocksTransport()
+    transport.stored[483] = 5
+    await _run(db_session, ctx, transport)
+    assert transport.stored[483] == 0
+    assert scheduled == []
+    now += timedelta(minutes=10)
+    await _run(db_session, ctx, transport)
+    product.fbs_stock_sync_enabled = False
+    await db_session.commit()
+    now += timedelta(minutes=10)
+    await _run(db_session, ctx, transport)
+    assert transport.put_attempts == 1
+    assert scheduled == []
