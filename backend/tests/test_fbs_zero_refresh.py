@@ -718,3 +718,53 @@ async def test_successful_nonempty_zero_refresh_preserves_another_products_error
     assert (ctx.binding.last_sync_status, ctx.binding.last_error_code,
             ctx.binding.last_sync_at) == before
     assert (other_item.status, other_item.last_error_code) == ("error", "wb_http_error_500")
+
+
+@pytest.mark.asyncio
+async def test_reentering_explicit_zero_after_unset_publishes_immediately(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import fbs_stock_rule_service as rules
+
+    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="zero-unset-zero", fbs_percent=100,
+    )
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 50)
+    transport = _MockStocksTransport()
+
+    async def save(units):
+        await rules.set_rule_for_products(
+            db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+                publish=True, same_everywhere=False, percent=0, units_mode=True,
+                units_by_warehouse=units,
+            ),
+        )
+        await _run(db_session, ctx, transport)
+
+    explicit_zero = {ctx.binding.wb_warehouse_id: 0}
+    await save(explicit_zero)
+    assert transport.put_attempts == 1
+    now += timedelta(minutes=1)
+    await save({})
+    assert transport.put_attempts == 1
+    transport.stored[483] = 8  # WB increases the card while it is unmanaged.
+    now += timedelta(minutes=1)
+    await save(explicit_zero)
+    assert transport.put_attempts == 2
+    assert transport.stored[483] == 0
+    assert transport.post_calls == [[483], [483]]
+    # Saving the unchanged rule is not another transition or a periodic refresh.
+    await save(explicit_zero)
+    assert transport.put_attempts == 2
+    now += timedelta(minutes=5)
+    await _run(db_session, ctx, transport, zero_refresh_only=True)
+    assert transport.put_attempts == 2
+    now += timedelta(minutes=5)
+    await _run(db_session, ctx, transport, zero_refresh_only=True)
+    assert transport.put_attempts == 3
