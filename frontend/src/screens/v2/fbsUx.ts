@@ -402,6 +402,33 @@ export function fbsOrderMarkingAccepted(metadata: FbsOrderMetadata): boolean {
   ))
 }
 
+/**
+ * WMS-477: итог «Проверено в WB: подтверждено X из Y» после кнопки «Проверить в WB».
+ * Y — заказы, у которых внесён Честный знак, X — те из них, чьи коды WB подтвердил
+ * (accepted или allowed_without_check). Считается по ответу сервера, отдельного
+ * счётчика не нужно.
+ *
+ * Наличие кода — по хвосту значения (value_tail), как у соседнего «Очистить ЧЗ»,
+ * а не по статусу: сервер ставит `missing` и сохранённой записи, когда WB отвечает
+ * «required» с пустым значением, и такой заказ он по кнопке всё равно сверяет.
+ * У заказа без записи value_tail пустой.
+ */
+export function fbsMarkingVerdictsSummary(
+  orders: ReadonlyArray<{ metadata: FbsOrderMetadata }>,
+): { confirmed: number; withCode: number } {
+  let withCode = 0
+  let confirmed = 0
+  for (const order of orders) {
+    const codes = order.metadata.states.filter((state) => state.kind === 'sgtin' && Boolean(state.value_tail))
+    if (codes.length === 0) continue
+    withCode += 1
+    if (codes.every((state) => state.status === 'accepted' || state.status === 'allowed_without_check')) {
+      confirmed += 1
+    }
+  }
+  return { confirmed, withCode }
+}
+
 export function fbsMarkingPresentation(
   state: FbsOrderMetadata['states'][number] | undefined,
   provider = 'WB',

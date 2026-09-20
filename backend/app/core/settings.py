@@ -335,6 +335,21 @@ class Settings(BaseSettings):
             "even when no movement event fired (seconds)."
         ),
     )
+    fbs_marking_verdicts_sync_interval_sec: int = Field(
+        default=60,
+        ge=60,
+        le=7200,
+        validation_alias=AliasChoices(
+            "CONF_FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+            "FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+        ),
+        description=(
+            "Celery Beat interval for the WB marking-verdicts recheck (WMS-477): only "
+            "codes still pending/sending in assembling/packed WB supplies, in its own "
+            "light cycle — separate from and never a substitute for the full sweep in "
+            "fbs_statuses_sync_interval_sec (seconds)."
+        ),
+    )
     fbs_universal_test_kiz: str | None = Field(
         default=None,
         validation_alias=AliasChoices("FBS_UNIVERSAL_TEST_KIZ"),

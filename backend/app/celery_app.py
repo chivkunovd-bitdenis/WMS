@@ -49,6 +49,12 @@ celery_app.conf.beat_schedule = {
         "task": "wms.fbs_order_statuses_autopoll",
         "schedule": float(settings.fbs_statuses_sync_interval_sec),
     },
+    # WMS-477 — отдельная лёгкая сверка вердиктов ЧЗ (pending/sending), раз в
+    # минуту по умолчанию; не заменяет и не ускоряет fbs-order-statuses-autopoll.
+    "fbs-marking-verdicts-autopoll": {
+        "task": "wms.fbs_marking_verdicts_autopoll",
+        "schedule": float(settings.fbs_marking_verdicts_sync_interval_sec),
+    },
     "fbs-stock-reconcile": {
         "task": "wms.fbs_stock_reconcile",
         "schedule": float(settings.fbs_stock_reconcile_interval_sec),
