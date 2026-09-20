@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import stock_direction_service
@@ -684,6 +685,7 @@ async def set_rule_for_products(
         FbsWarehouseBinding.marketplace.in_(sorted({binding.marketplace for binding in bindings})),
     )
     for product in products:
+        was_units_publish_enabled = product.fbs_units_mode and product.fbs_stock_sync_enabled
         product.fbs_stock_sync_enabled = rule.publish
         product.fbs_same_everywhere = rule.same_everywhere
         product.fbs_percent = rule.percent
@@ -706,6 +708,29 @@ async def set_rule_for_products(
             percent = rule.by_warehouse.get(warehouse_key)
             units = rule.units_by_warehouse.get(warehouse_key)
             pool = pool_rows.get(binding.id)
+            was_explicit_zero = (
+                was_units_publish_enabled and pool is not None
+                and pool.units_configured and pool.quantity == 0
+            )
+            if (
+                binding.marketplace == "wb" and rule.publish and rule.units_mode
+                and units == 0 and not was_explicit_zero
+            ):
+                # A new operator zero is an event, not a repeat of the old rule.
+                # Keep the observed WB amount, but invalidate its old ten-minute
+                # suppression in the same transaction as the new rule.
+                await session.execute(
+                    update(FbsStockSyncItem)
+                    .where(
+                        FbsStockSyncItem.binding_id == binding.id,
+                        FbsStockSyncItem.product_id == product.id,
+                    )
+                    .values(
+                        status=STOCK_SYNC_STATUS_PENDING,
+                        last_target_amount=0,
+                        last_error_code=None,
+                    )
+                )
             if pool is None:
                 if percent is None and units is None:
                     continue
