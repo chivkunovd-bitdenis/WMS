@@ -98,12 +98,20 @@ export type FbsStockDialogProps = {
   /** Почему не приехал справочник складов Ozon. */
   ozonWarehousesError?: string | null
   /**
-   * Обрезка сервером после сохранения: свободный остаток изменился между
-   * открытием и сохранением, сервер сохранил меньше запрошенного. Новый объект
-   * означает, что всё отправленное сохранено: черновики этих блоков
-   * принимают сохранённое, подпись называет ограничивший товар.
+   * Сервер сохранил отправленные блоки, но часть — меньше запрошенного:
+   * свободный остаток изменился между открытием и сохранением. Черновики
+   * обрезанных блоков принимают сохранённое, подпись называет ограничивший
+   * товар; отметки «изменён» снимаются только с блоков, которые были в
+   * запросе.
    */
-  serverClamps?: Record<string, { free: number; product: { name: string } }>
+  saved?: SavedRule
+}
+
+export type SavedRule = {
+  /** Блоки, которые были в запросе и сохранены. */
+  bindingIds: string[]
+  /** Обрезка по блокам: сохранённое число и ограничивший товар. */
+  clamps: Record<string, { free: number; product: { name: string } }>
 }
 
 export function FbsStockDialog(props: FbsStockDialogProps) {
@@ -129,7 +137,7 @@ function FbsStockDialogBody({
   actionError,
   wbWarehousesError,
   ozonWarehousesError,
-  serverClamps,
+  saved,
 }: FbsStockDialogProps) {
   const many = products.length > 1
   const first = products[0]!
@@ -148,9 +156,10 @@ function FbsStockDialogBody({
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const [capNotes, setCapNotes] = useState<Record<string, { free: number; product: { name: string } }>>({})
   const [picker, setPicker] = useState<Picker | null>(null)
-  // Блок, у которого оператор только что сменил склад ФФ: после перечитывания
-  // его ручное число сверяется с остатком уже на новом складе.
-  const [reclamp, setReclamp] = useState<string | null>(null)
+  // Смена склада ФФ, которую оператор только что запросил: после того как
+  // перечитанная связка действительно встала на новый склад, ручное число
+  // сверяется с остатком уже там. Отказ смены ничего не трогает.
+  const [reclamp, setReclamp] = useState<{ bindingId: string; wmsWarehouseId: string } | null>(null)
   const draftOf = (binding: StockBinding): BlockDraft =>
     drafts[binding.id] ?? draftFromState(first.byBinding[binding.id])
   const patchDraft = (binding: StockBinding, next: BlockDraft) => {
@@ -166,16 +175,20 @@ function FbsStockDialogBody({
       return next
     })
 
-  // Сохранённый операторский потолок при открытии не трогаем, даже если он
-  // выше текущего свободного остатка: лимит меняет только оператор, а уедет
-  // всё равно min(лимит, свободно) (R14). Обрезка — только для нового ввода
-  // (в поле) и после явной смены склада ФФ, когда остаток считается уже по
-  // другому складу (R6, R12). Блок с выключенной передачей не трогаем.
+  // Сохранённый операторский потолок при открытии и перечитывании не трогаем,
+  // даже если он выше текущего свободного остатка: лимит меняет только
+  // оператор, а уедет всё равно min(лимит, свободно) (R14). Обрезка — только
+  // для нового ввода (в поле) и после явной смены склада ФФ, когда остаток
+  // считается уже по другому складу (R6, R12). Основание — перечитанные
+  // связки: пока связка не встала на запрошенный склад (ответа ещё нет либо
+  // сервер отказал), число и подпись остаются прежними. Блок с выключенной
+  // передачей не трогаем.
   useEffect(() => {
     if (!reclamp) return
-    setReclamp(null)
-    const binding = visible.find((one) => one.id === reclamp)
+    const binding = bindings.find((one) => one.id === reclamp.bindingId)
     if (!binding) return
+    if (binding.wmsWarehouseId !== reclamp.wmsWarehouseId) return
+    setReclamp(null)
     const draft = draftOf(binding)
     const cap = unitsCap(binding, products)
     if (draft.publish && !draft.byPercent && draft.units > cap.free) {
@@ -185,18 +198,32 @@ function FbsStockDialogBody({
       // Подпись про прежний склад больше не про этот блок.
       setNote(binding.id, null)
     }
-    // Срабатывает на перечитывание после смены склада; отказ (actionError)
-    // тоже снимает ожидание, чтобы оно не сработало на чужом перечитывании.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, actionError])
+  }, [bindings])
 
-  // Сервер сохранил всё отправленное, но часть — меньше запрошенного. Черновик
-  // равен сохранённому и больше не считается изменённым; подпись называет
-  // ограничивший товар и снимется новым вводом, как местная (R12).
+  // Запись завершилась, а связка на запрошенный склад не встала (отказ, в том
+  // числе без перечитывания): ожидание снимается, чтобы не сработать на
+  // каком-нибудь позднем перечитывании.
   useEffect(() => {
-    if (!serverClamps) return
-    setTouched(new Set())
-    for (const [bindingId, clamp] of Object.entries(serverClamps)) {
+    if (busy || !reclamp) return
+    const binding = bindings.find((one) => one.id === reclamp.bindingId)
+    if (!binding || binding.wmsWarehouseId !== reclamp.wmsWarehouseId) setReclamp(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy])
+
+  // Сервер сохранил отправленные блоки: их отметки «изменён» снимаются, а
+  // черновики обрезанных блоков принимают сохранённое с подписью, которая
+  // снимется новым вводом, как местная (R12). Черновик блока, не входившего
+  // в запрос (например, со снятым приёмом заказов), остаётся изменённым и
+  // уйдёт при следующем сохранении.
+  useEffect(() => {
+    if (!saved) return
+    setTouched((current) => {
+      const next = new Set(current)
+      for (const bindingId of saved.bindingIds) next.delete(bindingId)
+      return next
+    })
+    for (const [bindingId, clamp] of Object.entries(saved.clamps)) {
       setDrafts((current) => {
         const base = current[bindingId] ?? draftFromState(first.byBinding[bindingId])
         return { ...current, [bindingId]: { ...base, byPercent: false, units: clamp.free } }
@@ -204,7 +231,7 @@ function FbsStockDialogBody({
       setNote(bindingId, clamp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverClamps])
+  }, [saved])
 
   const addable = addableWarehouses(cabinets, bindings)
   const anyCabinetReceived = cabinets.wb.received || cabinets.ozon.received
@@ -223,6 +250,8 @@ function FbsStockDialogBody({
   }
 
   function pickerChange(next: Picker) {
+    // Пока идёт запись, форма заперта: второй запрос поверх первого не начинаем.
+    if (busy) return
     if (next.warehouse && next.wmsWarehouseId) {
       // Связка — свойство продавца: запоминается сразу после выбора пары.
       onAddBinding?.(next.warehouse, next.wmsWarehouseId)
@@ -295,7 +324,7 @@ function FbsStockDialogBody({
             onDraft={(next) => patchDraft(binding, next)}
             onCapNote={(note) => setNote(binding.id, note)}
             onChangeWmsWarehouse={(id) => {
-              setReclamp(binding.id)
+              setReclamp({ bindingId: binding.id, wmsWarehouseId: id })
               onChangeWmsWarehouse?.(binding, id)
             }}
             onServedChange={(served) => onServedChange?.(binding, served)}
@@ -314,6 +343,7 @@ function FbsStockDialogBody({
             addable={addable}
             wmsWarehouses={wmsWarehouses}
             ozonWarehousesError={cabinets.ozon.received ? null : (ozonWarehousesError ?? null)}
+            busy={busy}
             onChange={pickerChange}
             onCancel={() => setPicker(null)}
           />
@@ -596,6 +626,7 @@ function BindingPicker({
   addable,
   wmsWarehouses,
   ozonWarehousesError,
+  busy,
   onChange,
   onCancel,
 }: {
@@ -603,6 +634,8 @@ function BindingPicker({
   addable: CabinetWarehouse[]
   wmsWarehouses: Array<{ id: string; name: string }>
   ozonWarehousesError: string | null
+  /** Идёт запись: выбор пары и отмена заперты, как и остальное окно. */
+  busy: boolean
   onChange: (next: Picker) => void
   onCancel: () => void
 }) {
@@ -624,6 +657,7 @@ function BindingPicker({
             onChange({ ...picker, warehouse })
           }}
           sx={{ width: 300, maxWidth: '100%' }}
+          disabled={busy}
           slotProps={{
             inputLabel: { shrink: true },
             select: {
@@ -662,6 +696,7 @@ function BindingPicker({
             onChange={(value) => onChange({ ...picker, wmsWarehouseId: value || null })}
             options={wmsWarehouses.map((one) => ({ value: one.id, label: one.name }))}
             emptyLabel={picker.wmsWarehouseId ? undefined : 'выберите наш склад'}
+            disabled={busy}
             testId="fbs-stock-picker-ff"
           />
         </Box>
@@ -669,6 +704,7 @@ function BindingPicker({
           size="small"
           aria-label="Не добавлять"
           onClick={onCancel}
+          disabled={busy}
           sx={{ ml: 'auto' }}
           data-testid="fbs-stock-picker-cancel"
         >

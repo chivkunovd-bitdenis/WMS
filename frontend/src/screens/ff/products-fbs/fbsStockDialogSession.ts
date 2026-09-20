@@ -44,14 +44,19 @@ export type SaveOutcome =
   | { kind: 'clamped'; items: ApiBulkRuleItem[]; clamps: Record<string, ServerClamp> }
   | { kind: 'error'; message: string; data: FbsStockDialogData | null }
 
+/** Тело PUT связки: только то поле, которое меняем; не переданное сервер не трогает. */
+export type BindingPutBody = { wms_warehouse_id?: string; served?: boolean }
+
 export type StockDialogSession = {
   /** Данные окна для этого набора товаров либо null, если за время запроса выбрали другие товары. */
   load: (chosen: FbsStockDialogRow[]) => Promise<FbsStockDialogData | null>
-  putBinding: (
-    marketplace: 'wb' | 'ozon',
-    externalId: string,
-    body: { wms_warehouse_id: string; served: boolean },
-  ) => Promise<BindingOutcome>
+  /**
+   * Перечитать состояние для текущих товаров; отказ — null. Нужно перед
+   * действием, когда прошлое перечитывание после сбоя не удалось: окно могло
+   * держать склад, которого на сервере уже нет.
+   */
+  reread: () => Promise<FbsStockDialogData | null>
+  putBinding: (marketplace: 'wb' | 'ozon', externalId: string, body: BindingPutBody) => Promise<BindingOutcome>
   saveRule: (productIds: string[], byBinding: Record<string, BindingRuleBody>) => Promise<SaveOutcome>
 }
 
@@ -92,7 +97,7 @@ export function createStockDialogSession({
   async function putBinding(
     marketplace: 'wb' | 'ozon',
     externalId: string,
-    body: { wms_warehouse_id: string; served: boolean },
+    body: BindingPutBody,
   ): Promise<BindingOutcome> {
     try {
       const res = await fetchImpl(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${externalId}`), {
@@ -136,5 +141,5 @@ export function createStockDialogSession({
     }
   }
 
-  return { load, putBinding, saveRule }
+  return { load, reread, putBinding, saveRule }
 }
