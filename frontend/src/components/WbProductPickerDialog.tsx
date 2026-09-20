@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './errors/ErrorBoundary'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Alert,
@@ -140,7 +141,15 @@ function inDraftCaption(message: string): ReactNode {
   )
 }
 
-export function MarketplaceProductPickerDialog({
+export function MarketplaceProductPickerDialog(props: Props) {
+  return (
+    <ErrorBoundary component="MarketplaceProductPickerDialog" resetKey={String(props.open)}>
+      <MarketplaceProductPickerDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function MarketplaceProductPickerDialogContent({
   open,
   busy,
   catalogLoading = false,

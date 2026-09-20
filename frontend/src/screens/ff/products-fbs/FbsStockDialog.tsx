@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../../components/errors/ErrorBoundary'
 import {
   Box,
   FormControlLabel,
@@ -116,7 +117,11 @@ export type SavedRule = {
 
 export function FbsStockDialog(props: FbsStockDialogProps) {
   if (!props.open) return null
-  return <FbsStockDialogBody {...props} />
+  return (
+    <ErrorBoundary component="FbsStockDialog" resetKey={String(props.open)}>
+      <FbsStockDialogBody {...props} />
+    </ErrorBoundary>
+  )
 }
 
 type Picker = { warehouse: CabinetWarehouse | null; wmsWarehouseId: string | null }

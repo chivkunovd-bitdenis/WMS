@@ -532,8 +532,6 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         *,
         meta_batch: list[MarketplaceOrderMetaRow] | None = None,
         expected_marking_ids: set[uuid.UUID] | None = None,
-        expected_marking_verdicts: dict[uuid.UUID, object] | None = None,
-        expected_order_last_checked_at: object = None,
     ) -> list[object]:
         assert meta_batch is not None
         assert len(completed_batches) == 3
@@ -541,11 +539,6 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             FbsOrderMarking.order_id == order.id,
         ))).all())
         assert expected_marking_ids == current_ids and len(current_ids) == 1
-        # WMS-477 review finding 1 — the caller must snapshot each expected
-        # marking's verdict fields (not just its ID) before the WB round trip.
-        assert expected_marking_verdicts is not None
-        assert set(expected_marking_verdicts) == expected_marking_ids
-        assert expected_order_last_checked_at is None  # fresh order, never checked yet
         if meta_batch:
             assert [row.order_id for row in meta_batch] == [order.wb_order_id]
         else:

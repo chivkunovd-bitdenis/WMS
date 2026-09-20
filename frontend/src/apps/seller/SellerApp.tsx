@@ -1,3 +1,4 @@
+import { SectionErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Alert, Box, Button, Typography } from '@mui/material'
@@ -362,12 +363,12 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         <Routes>
           <Route
             path="/"
-            element={<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}
+            element={<SectionErrorBoundary component="route" portal="seller">{<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}</SectionErrorBoundary>}
           />
           <Route
             path="/documents"
             element={
-              sellerPermissions.documents ? (
+              <SectionErrorBoundary component="route" portal="seller">{sellerPermissions.documents ? (
                 <SellerDocumentsScreen
                   key={catalogScopeKey}
                   busy={opsBusy}
@@ -435,13 +436,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/inbound/new"
             element={
-              token && sellerPermissions.documents ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
@@ -454,13 +455,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/inbound/:requestId"
             element={
-              token && sellerPermissions.documents ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
@@ -473,13 +474,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/products"
             element={
-              token && sellerPermissions.products ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.products ? (
                 <SellerProductsStockScreen
                   key={catalogScopeKey}
                   token={token}
@@ -491,13 +492,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/honest-sign"
             element={
-              token && sellerPermissions.honest_sign ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
                   key={catalogScopeKey}
                   token={token}
@@ -505,13 +506,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/reports"
             element={
-              token && sellerPermissions.products ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.products ? (
                 <FfReportsPage
                   key={catalogScopeKey}
                   token={token}
@@ -521,13 +522,13 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/settings"
             element={
-              token && (sellerPermissions.settings || sellerPermissions.staff) ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && (sellerPermissions.settings || sellerPermissions.staff) ? (
                 <SellerSettingsScreen
                   key={catalogScopeKey}
                   token={token}
@@ -541,20 +542,20 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 />
               ) : (
                 accessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="/notifications"
             element={
-              token ? (
+              <SectionErrorBoundary component="route" portal="seller">{token ? (
                 <NotificationsPage token={token} portal="seller" testId="seller-notifications-page" />
-              ) : null
+              ) : null}</SectionErrorBoundary>
             }
           />
           <Route
             path="*"
-            element={<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}
+            element={<SectionErrorBoundary component="route" portal="seller">{<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}</SectionErrorBoundary>}
           />
         </Routes>
       </SellerLayout>
@@ -563,7 +564,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   return (
     <Routes>
-      <Route path="*" element={rootElement} />
+      <Route path="*" element={<SectionErrorBoundary component="route" root portal="seller">{rootElement}</SectionErrorBoundary>} />
     </Routes>
   )
 }

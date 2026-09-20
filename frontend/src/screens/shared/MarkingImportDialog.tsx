@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -238,7 +239,15 @@ type Props = {
   onError?: (message: string | null) => void
 }
 
-export function MarkingImportDialog({
+export function MarkingImportDialog(props: Props) {
+  return (
+    <ErrorBoundary component="MarkingImportDialog" resetKey={String(props.open)}>
+      <MarkingImportDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function MarkingImportDialogContent({
   open,
   token,
   sellerId,
