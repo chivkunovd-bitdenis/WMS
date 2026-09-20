@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './errors/ErrorBoundary'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -79,7 +80,15 @@ function statusRu(status: string): string {
   return status
 }
 
-export function SellerMarketplaceUnloadDialog({
+export function SellerMarketplaceUnloadDialog(props: Props) {
+  return (
+    <ErrorBoundary component="SellerMarketplaceUnloadDialog" resetKey={String(props.open)}>
+      <SellerMarketplaceUnloadDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function SellerMarketplaceUnloadDialogContent({
   open,
   requestId,
   token,

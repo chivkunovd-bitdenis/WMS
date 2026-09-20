@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../../components/errors/ErrorBoundary'
 import { Box, Divider, Slider, Stack, Typography } from '@mui/material'
 import { useState } from 'react'
 import {
@@ -61,7 +62,15 @@ function PercentSlider({ label, value, onChange, disabled = false, disabledReaso
   </Stack>
 }
 
-export function FbsStockDialog({
+export function FbsStockDialog(props: Parameters<typeof FbsStockDialogContent>[0]) {
+  return (
+    <ErrorBoundary component="FbsStockDialog" resetKey={String(props.open)}>
+      <FbsStockDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function FbsStockDialogContent({
   open,
   products,
   seller,

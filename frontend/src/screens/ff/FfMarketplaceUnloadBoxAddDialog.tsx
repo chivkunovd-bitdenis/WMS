@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import {
@@ -167,7 +168,15 @@ function productNeedsExplicitLocation(
 
 
 
-export function FfMarketplaceUnloadBoxAddDialog({
+export function FfMarketplaceUnloadBoxAddDialog(props: Props) {
+  return (
+    <ErrorBoundary component="FfMarketplaceUnloadBoxAddDialog" resetKey={String(props.open)}>
+      <FfMarketplaceUnloadBoxAddDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function FfMarketplaceUnloadBoxAddDialogContent({
   open,
   onClose,
   requestId,

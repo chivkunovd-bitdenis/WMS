@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './errors/ErrorBoundary'
 import { PrintQuantityField } from './PrintQuantityField'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -351,7 +352,15 @@ export function resolveProductTapeBarcodeError(
   return null
 }
 
-export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
+export function MarkingPrintDialog(props: Props) {
+  return (
+    <ErrorBoundary component="MarkingPrintDialog" resetKey={String(props.open)}>
+      <MarkingPrintDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [productBarcodeKey, setProductBarcodeKey] = useState('')
   const barcodeOptions = ctx?.productBarcodeOptions

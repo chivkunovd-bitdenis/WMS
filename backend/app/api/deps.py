@@ -83,6 +83,7 @@ _SUBSCRIPTION_FREE_PATHS = frozenset(
         "/subscription/pay",
         "/subscription/sync",
         "/health",
+        "/client-errors",
     }
 )
 
