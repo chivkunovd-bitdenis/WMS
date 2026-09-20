@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
@@ -2626,20 +2627,20 @@ export function FfFbsSupplyWorkspace({
           ) : null}
         </Box>
       </DialogContent>
-      <FbsPrintPreviewDialog
+      <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
         batch={printBatch}
         open={printPreviewOpen}
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
-      />
-      <FbsSupplyHistoryDialog
+      /></ErrorBoundary>
+      <ErrorBoundary component="FbsSupplyHistoryDialog"><FbsSupplyHistoryDialog
         token={token}
         supplyId={supplyId}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-      />
+      /></ErrorBoundary>
       <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
