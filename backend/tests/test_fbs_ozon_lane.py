@@ -88,10 +88,7 @@ from app.services.fbs_supply_validator_service import (
     SupplyPreflightSummary,
     validate_supply_composition,
 )
-from app.services.fbs_warehouse_binding_service import (
-    FbsWarehouseBindingError,
-    set_binding_stock_pool_quantity,
-)
+from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
 from app.services.integration_fernet import encrypt_secret
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
@@ -775,10 +772,10 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
 
 
 @pytest.mark.asyncio
-async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
+async def test_wb_and_ozon_may_publish_the_same_last_physical_unit(
     db_session: AsyncSession,
 ) -> None:
-    """TC-S04-OZON-031: one physical unit can belong to only one provider binding."""
+    """WMS-469 R13: both providers may publish the shared live unit."""
     tenant = Tenant(name="Shared FBS stock", slug=f"shared-stock-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
     warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
@@ -843,15 +840,15 @@ async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
         product.id,
         1,
     )
-    with pytest.raises(FbsWarehouseBindingError, match="pool_quota_exceeded"):
-        await set_binding_stock_pool_quantity(
-            db_session,
-            tenant.id,
-            seller.id,
-            ozon_binding.id,
-            product.id,
-            1,
-        )
+    ozon_pool = await set_binding_stock_pool_quantity(
+        db_session,
+        tenant.id,
+        seller.id,
+        ozon_binding.id,
+        product.id,
+        1,
+    )
+    assert ozon_pool.quantity == 1
 
 
 async def _sync_ozon_posting_with_products(

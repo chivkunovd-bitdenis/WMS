@@ -33,10 +33,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
-from app.services.fbs_warehouse_binding_service import (
-    FbsWarehouseBindingError,
-    set_binding_stock_pool_quantity,
-)
+from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
 
 
 async def _seed_tenant_seller_warehouses(
@@ -176,10 +173,10 @@ async def test_binding_allows_one_wms_warehouse_for_many_wb_warehouses(
 
 
 @pytest.mark.asyncio
-async def test_one_physical_unit_cannot_be_allocated_to_wb_and_ozon(
+async def test_one_physical_unit_may_be_published_to_wb_and_ozon(
     db_session: AsyncSession,
 ) -> None:
-    """TC-NEW-OZON-STOCK-001: marketplace bindings share one physical FBS pool."""
+    """WMS-469 R13: both bindings use the same live physical pool."""
     tenant, seller, wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
     product = Product(
         tenant_id=tenant.id,
@@ -242,17 +239,15 @@ async def test_one_physical_unit_cannot_be_allocated_to_wb_and_ozon(
         1,
     )
 
-    with pytest.raises(FbsWarehouseBindingError) as error:
-        await set_binding_stock_pool_quantity(
-            db_session,
-            tenant.id,
-            seller.id,
-            ozon_binding.id,
-            product.id,
-            1,
-        )
-
-    assert error.value.code == "pool_quota_exceeded"
+    ozon_pool = await set_binding_stock_pool_quantity(
+        db_session,
+        tenant.id,
+        seller.id,
+        ozon_binding.id,
+        product.id,
+        1,
+    )
+    assert ozon_pool.quantity == 1
 
 
 @pytest.mark.asyncio

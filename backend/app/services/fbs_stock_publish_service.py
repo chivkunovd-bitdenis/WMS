@@ -16,19 +16,26 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from typing import TYPE_CHECKING
 
 import httpx
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from app.services.fbs_autopoll_service import SellerPollTarget
+
 _PENDING_KEY = "fbs_stock_publish_pending"
 _HOOKED_KEY = "fbs_stock_publish_hooked"
+_EVENT_PUBLISH_ATTEMPTS = 3
+_EVENT_PUBLISH_RETRY_SECONDS = 1.0
 
 
 async def publish_seller_stocks_now(
@@ -38,22 +45,50 @@ async def publish_seller_stocks_now(
 ) -> None:
     """Republish independently for every connected provider after movement commit."""
     from app.services.fbs_autopoll_service import (
+        SellerPollTarget,
         list_marketplace_poll_targets,
         sync_marketplace_stocks_for_target,
     )
 
     async with SessionLocal() as target_session:
         all_targets = await list_marketplace_poll_targets(target_session)
+        enabled_marketplaces = set(
+            await target_session.scalars(
+                select(FbsWarehouseBinding.marketplace)
+                .where(
+                    FbsWarehouseBinding.tenant_id == tenant_id,
+                    FbsWarehouseBinding.seller_id == seller_id,
+                    FbsWarehouseBinding.is_active.is_(True),
+                    FbsWarehouseBinding.stock_sync_enabled.is_(True),
+                )
+                .distinct()
+            )
+        )
+    targets_by_marketplace = {
+        target.marketplace: target
+        for target in all_targets
+        if target.tenant_id == tenant_id and target.seller_id == seller_id
+    }
+    # Order polling may omit an unserved WB warehouse, but `served` is not a
+    # publication switch. Every active stock binding remains an event target.
+    for enabled_marketplace in enabled_marketplaces:
+        targets_by_marketplace.setdefault(
+            enabled_marketplace,
+            SellerPollTarget(tenant_id, seller_id, enabled_marketplace),
+        )
     targets = [
         target
-        for target in all_targets
-        if target.tenant_id == tenant_id
-        and target.seller_id == seller_id
-        and (marketplace is None or target.marketplace == marketplace)
+        for target in targets_by_marketplace.values()
+        if marketplace is None or target.marketplace == marketplace
     ]
 
-    async with httpx.AsyncClient() as http_client:
-        for target in targets:
+    async def publish_target(
+        target: SellerPollTarget, http_client: httpx.AsyncClient
+    ) -> None:
+        # A busy provider lock is not a reason to drop the event. Wait on this
+        # provider's own coroutine; the other marketplace runs independently.
+        failed_attempts = 0
+        while True:
             try:
                 async with (
                     SessionLocal() as session,
@@ -62,12 +97,12 @@ async def publish_seller_stocks_now(
                         lock_session,
                         target.seller_id,
                         target.marketplace,
-                        wait_timeout_sec=30,
+                        wait_timeout_sec=1,
                     ) as acquired,
                 ):
                     if not acquired:
                         logger.warning(
-                            "fbs stock publish deferred: seller=%s marketplace=%s busy",
+                            "fbs stock publish waiting: seller=%s marketplace=%s busy",
                             seller_id,
                             target.marketplace,
                         )
@@ -87,6 +122,27 @@ async def publish_seller_stocks_now(
                     target.marketplace,
                     tenant_id,
                 )
+                failed_attempts += 1
+                if failed_attempts >= _EVENT_PUBLISH_ATTEMPTS:
+                    return
+                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
+                continue
+            errors = int(getattr(result, "errors", 0))
+            binding_errors = int(getattr(result, "binding_errors", 0))
+            if errors or binding_errors:
+                failed_attempts += 1
+                logger.warning(
+                    "fbs stock publish incomplete: seller=%s marketplace=%s "
+                    "attempt=%s errors=%s binding_errors=%s",
+                    seller_id,
+                    target.marketplace,
+                    failed_attempts,
+                    errors,
+                    binding_errors,
+                )
+                if failed_attempts >= _EVENT_PUBLISH_ATTEMPTS:
+                    return
+                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
                 continue
             logger.info(
                 "fbs stock publish done: seller=%s marketplace=%s bindings=%s "
@@ -98,6 +154,12 @@ async def publish_seller_stocks_now(
                 result.products_confirmed,
                 result.binding_errors,
             )
+            return
+
+    async with httpx.AsyncClient() as http_client:
+        await asyncio.gather(
+            *(publish_target(target, http_client) for target in targets)
+        )
 
 
 def _dispatch(
