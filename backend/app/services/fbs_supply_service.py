@@ -1260,8 +1260,11 @@ async def _request_order_stickers_for_picking(
     tenant_id: uuid.UUID,
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
+    *,
+    orders: list[FbsOrder] | None = None,
 ) -> None:
-    missing = [order.id for order in supply.orders if not order.sticker_code]
+    target_orders = supply.orders if orders is None else orders
+    missing = [order.id for order in target_orders if not order.sticker_code]
     if not missing:
         return
     try:
@@ -1281,7 +1284,7 @@ async def _request_order_stickers_for_picking(
         )
     except FbsPrintAssetError as exc:
         logger.warning(
-            "fbs supply start-work sticker prefetch skipped supply %s: %s",
+            "fbs supply sticker prefetch skipped supply %s: %s",
             supply.id,
             exc.code,
         )
@@ -2042,6 +2045,10 @@ async def add_orders_to_existing_supply(
         await _sync_existing_packaging_task_for_added_orders(
             session, tenant_id, supply, linked_orders
         )
+        if supply.status != FBS_SUPPLY_STATUS_DRAFT:
+            await _request_order_stickers_for_picking(
+                session, tenant_id, supply, http_client, orders=linked_orders
+            )
     partial_summary = None
     if len(accepted_orders) != len(orders):
         partial_summary = _partial_from_orders_summary(
