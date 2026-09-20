@@ -767,6 +767,11 @@ async def sync_binding_stocks(
         result.errors = errors + result.conflicts + blocked_error_count
         result.bindings_processed = 1
 
+        # Only the full reconcile can summarize the entire binding. Successful
+        # zero refresh must not conceal another product's outstanding error.
+        if zero_refresh_only and result.errors == 0:
+            return result
+
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
             binding.last_error_code = publish_error_code

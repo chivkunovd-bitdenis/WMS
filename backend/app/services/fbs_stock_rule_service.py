@@ -896,10 +896,6 @@ async def set_rule_for_products(
                 percent = rule.by_warehouse.get(warehouse_key)
                 units = rule.units_by_warehouse.get(warehouse_key)
                 pool = pool_rows.get(binding.id)
-                if rule.units_mode and units is None:
-                    if pool is not None:
-                        await session.delete(pool)
-                    continue
                 if pool is None:
                     if percent is None and units is None:
                         continue
@@ -914,7 +910,9 @@ async def set_rule_for_products(
                     )
                     session.add(pool)
                     continue
-                pool.percent = percent
+                # Omitted units clear only that mode, preserving saved percentages.
+                if not rule.units_mode or percent is not None:
+                    pool.percent = percent
                 pool.units_configured = rule.units_mode and units is not None
                 if rule.units_mode:
                     pool.quantity = int(units or 0)

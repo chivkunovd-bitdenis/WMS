@@ -490,8 +490,9 @@ async def test_stale_eta_preserves_binding_summary_and_ignores_unrelated_conflic
 
 
 @pytest.mark.asyncio
-async def test_percentage_to_units_clears_omitted_pool_and_keeps_explicit_zero(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("second_marketplace", ["wb", "ozon"])
+async def test_percentage_to_units_clears_omitted_units_and_preserves_percentages(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, second_marketplace: str,
 ) -> None:
     from app.models.fbs_warehouse_binding import FbsWarehouseBinding
     from app.services import fbs_stock_rule_service as rules
@@ -501,6 +502,7 @@ async def test_percentage_to_units_clears_omitted_pool_and_keeps_explicit_zero(
     second = FbsWarehouseBinding(
         tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, wms_warehouse_id=ctx.warehouse.id,
         wb_warehouse_id=501002, stock_sync_enabled=True, is_active=True,
+        marketplace=second_marketplace,
     )
     product = _product(
         tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
@@ -522,8 +524,29 @@ async def test_percentage_to_units_clears_omitted_pool_and_keeps_explicit_zero(
     )
     view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
     assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 5}
-    pool_binding_ids = list(await db_session.scalars(select(FbsBindingStockPool.binding_id)))
-    assert pool_binding_ids == [ctx.binding.id]
+    pool = (await db_session.scalars(select(FbsBindingStockPool).where(
+        FbsBindingStockPool.binding_id == second.id,
+    ))).one()
+    assert (pool.quantity, pool.units_configured, pool.percent) == (0, False, 50)
+    assert view.rule.by_warehouse == {ctx.binding.wb_warehouse_id: 50, second.wb_warehouse_id: 50}
+    # Switching back uses the percentages returned by GET, as the editor does.
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=False, percent=0,
+            by_warehouse=view.rule.by_warehouse,
+        ),
+    )
+    for binding in [ctx.binding, second]:
+        assert await rules.publish_amounts_for_binding(db_session, binding, [product]) == {
+            product.id: 5,
+        }
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=False, percent=0, units_mode=True,
+            by_warehouse=view.rule.by_warehouse,
+            units_by_warehouse={ctx.binding.wb_warehouse_id: 5},
+        ),
+    )
     eligible = set()
     await rules.publish_amounts_for_binding(
         db_session, second, [product], refresh_zero_product_ids=eligible,
@@ -541,7 +564,7 @@ async def test_percentage_to_units_clears_omitted_pool_and_keeps_explicit_zero(
     await rules.publish_amounts_for_binding(
         db_session, second, [product], refresh_zero_product_ids=eligible,
     )
-    assert eligible == {product.id}
+    assert eligible == ({product.id} if second_marketplace == "wb" else set())
 
 
 @pytest.mark.asyncio
@@ -658,3 +681,40 @@ async def test_legacy_zero_keeps_one_time_transition_but_never_starts_refresh(
     await _run(db_session, ctx, transport)
     assert transport.put_attempts == 1
     assert scheduled == []
+
+
+@pytest.mark.asyncio
+async def test_successful_nonempty_zero_refresh_preserves_another_products_error_summary(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    ctx = await _seed_binding(db_session)
+    zero = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="summary-zero", fbs_percent=100,
+    )
+    other = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=484,
+        sku_suffix="summary-error", fbs_percent=100,
+    )
+    db_session.add_all([zero, other])
+    await _configure_rule_amount(db_session, ctx, other, 5)
+    transport = _MockStocksTransport()
+    await _run(db_session, ctx, transport)
+    other_item = (await db_session.scalars(select(FbsStockSyncItem).where(
+        FbsStockSyncItem.chrt_id == 484,
+    ))).one()
+    other_item.status = "error"
+    other_item.last_error_code = "wb_http_error_500"
+    ctx.binding.last_sync_status = "error"
+    ctx.binding.last_error_code = "wb_http_error_500"
+    await db_session.commit()
+    before = (ctx.binding.last_sync_status, ctx.binding.last_error_code, ctx.binding.last_sync_at)
+    now += timedelta(minutes=10)
+    result = await _run(db_session, ctx, transport, zero_refresh_only=True)
+    assert result.products_confirmed == 1
+    assert [entry.chrt_id for entry in transport.put_calls[-1]] == [483]
+    assert (ctx.binding.last_sync_status, ctx.binding.last_error_code,
+            ctx.binding.last_sync_at) == before
+    assert (other_item.status, other_item.last_error_code) == ("error", "wb_http_error_500")
