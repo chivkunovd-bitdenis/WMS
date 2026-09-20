@@ -1,0 +1,73 @@
+{
+  "product_sha": "69b3f2ccc119e7a9ec67eeb629d4e96e69a6b414",
+  "note": "Negative control on unchanged baseline product, not proof of future fix.",
+  "runs": {
+    "baseline": {
+      "command": "python3 docs/evidence/WMS-477/astra-ui-repro/reproduce.py",
+      "exit_code": 0,
+      "checkout_sha": "6a2c19a68cbad63bcf4f4c6b1c1daee456a36290",
+      "page_errors": [],
+      "failed_assertions": [],
+      "scenarios": {
+        "manual_rejected_to_accepted": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": true
+        },
+        "manual_cross_supply": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": true
+        },
+        "old_get_after_add": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": true
+        },
+        "poll_16s_starvation": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": true
+        }
+      },
+      "max_active_gets": 2,
+      "first_response_applied": false
+    },
+    "expect-fixed": {
+      "command": "python3 docs/evidence/WMS-477/astra-ui-repro/reproduce.py --expect-fixed",
+      "exit_code": 1,
+      "checkout_sha": "6a2c19a68cbad63bcf4f4c6b1c1daee456a36290",
+      "page_errors": [],
+      "failed_assertions": [
+        "manual_rejected_to_accepted",
+        "manual_cross_supply",
+        "old_get_after_add",
+        "poll_16s_starvation"
+      ],
+      "scenarios": {
+        "manual_rejected_to_accepted": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": false
+        },
+        "manual_cross_supply": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": false
+        },
+        "old_get_after_add": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": false
+        },
+        "poll_16s_starvation": {
+          "bug_reproduced": true,
+          "fixed_assertions_passed": false,
+          "expectation_met": false
+        }
+      },
+      "max_active_gets": 2,
+      "first_response_applied": false
+    }
+  }
+}
