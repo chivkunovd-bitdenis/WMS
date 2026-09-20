@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { intakeMutation, readIntake, sendIntakeMutations } from "./inboundDraftPersistence"
 import {
   memo,
@@ -184,7 +185,15 @@ type Props = {
   onMarkingScan?: (code: string, lineId: string | null) => Promise<void>
 }
 
-export function FfInboundBoxAddDialog({
+export function FfInboundBoxAddDialog(props: Props) {
+  return (
+    <ErrorBoundary component="FfInboundBoxAddDialog" resetKey={String(props.open)}>
+      <FfInboundBoxAddDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function FfInboundBoxAddDialogContent({
   open,
   onClose,
   requestId,

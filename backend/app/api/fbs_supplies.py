@@ -19,7 +19,6 @@ from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
 from app.models.warehouse import Warehouse
-from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_order_tape_print_service as order_tape_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import fbs_packing_box_service as packing_box_svc
@@ -2359,43 +2358,6 @@ async def sync_fbs_supply_tracking(
             if exc.code.startswith("wb_"):
                 raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
             raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
-    await session.commit()
-    try:
-        workspace = await get_supply_workspace(session, user.tenant_id, supply_id)
-    except FbsWorkspaceError as exc:
-        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-    return FbsWorkspaceOut.model_validate(workspace)
-
-
-@router.post("/{supply_id}/markings/sync", response_model=FbsWorkspaceOut)
-async def sync_fbs_supply_markings(
-    supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fbs_operator_access)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> FbsWorkspaceOut:
-    """WMS-477 R2 — кнопка «Проверить в WB» на вкладке «Упаковка и маркировка».
-
-    Пересверяет вердикты WB разом по всем закодированным WB-заказам поставки
-    (см. `fbs_marking_service.sync_marking_verdicts_for_supply`) и возвращает
-    обновлённое рабочее место — тот же контракт, что у `sync-tracking`.
-    """
-    async with httpx.AsyncClient() as http_client:
-        try:
-            await marking_svc.sync_marking_verdicts_for_supply(
-                session,
-                user.tenant_id,
-                supply_id,
-                http_client,
-                actor_user_id=user.id,
-            )
-        except marking_svc.FbsMarkingError as exc:
-            if exc.code in {"supply_not_found", "seller_not_found"}:
-                raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-            if exc.code == "missing_marketplace_token":
-                raise_fbs_http(status.HTTP_403_FORBIDDEN, exc.code)
-            if exc.code.startswith("wb_"):
-                raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
-            raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
     await session.commit()
     try:
         workspace = await get_supply_workspace(session, user.tenant_id, supply_id)

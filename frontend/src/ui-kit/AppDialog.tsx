@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../components/errors/ErrorBoundary'
 import { Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material'
 import type { ReactNode } from 'react'
 import { useId } from 'react'
@@ -36,7 +37,7 @@ export function AppDialog({
       data-testid={testId}
     >
       <DialogTitle id={titleId}>{title}</DialogTitle>
-      <DialogContent dividers>{children}</DialogContent>
+      <DialogContent dividers><ErrorBoundary component={testId ?? "AppDialog"}>{children}</ErrorBoundary></DialogContent>
       {actions ? <DialogActions>{actions}</DialogActions> : null}
     </Dialog>
   )

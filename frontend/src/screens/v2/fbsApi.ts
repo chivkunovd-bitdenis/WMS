@@ -1690,11 +1690,3 @@ export async function syncFbsOrderMarkings(token: string, ah: AuthHeaders, order
     method: 'POST', headers: ah(token),
   }))
 }
-
-// WMS-477: «Проверить в WB» — сервер пересверяет вердикты WB по всем заказам
-// поставки с кодом одним пакетом и отдаёт обновлённое рабочее место, как sync-tracking.
-export async function syncFbsSupplyMarkings(token: string, ah: AuthHeaders, supplyId: string): Promise<FbsWorkspace> {
-  return jsonOrThrow<FbsWorkspace>(await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/markings/sync`), {
-    method: 'POST', headers: ah(token),
-  }))
-}
