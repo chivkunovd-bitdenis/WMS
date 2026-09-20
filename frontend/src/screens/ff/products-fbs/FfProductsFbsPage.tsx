@@ -3,6 +3,7 @@ import { Box } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
+import { putFbsRule } from './fbsRuleApi'
 import { ProductsScreen } from './ProductsScreen'
 import type { FbsRule, Product, Seller } from './stub'
 
@@ -189,28 +190,8 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
-    const body = {
-      publish: rule.publish,
-      same_everywhere: rule.sameEverywhere,
-      percent: rule.percent,
-      by_warehouse: rule.byWarehouse,
-    }
     try {
-      if (productIds.length === 1) {
-        const res = await fetch(apiUrl(`/products/${productIds[0]}/fbs-rule`), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify(body),
-        })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      } else {
-        const res = await fetch(apiUrl('/products/fbs-rule'), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({ product_ids: productIds, ...body }),
-        })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      }
+      await putFbsRule(headers(token), productIds, rule)
       await load()
       return null
     } catch (err) {
