@@ -5,10 +5,12 @@ import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { putFbsRule } from './fbsRuleApi'
 import {
-  qualifyWbWarehouseRuleValues,
+  activeRuleBindings,
+  ruleKeysForScreen,
   warehouseNumberFromRuleKey,
   warehouseRuleKey,
 } from './fbsWarehouseRuleKeys'
+import type { WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 import { ProductsScreen } from './ProductsScreen'
 import type { FbsRule, Product, Seller } from './stub'
 
@@ -54,6 +56,12 @@ type ApiSellerWarehouse = {
   served: boolean
   wms_warehouse_id: string | null
   name: string | null
+}
+
+type ApiSellerBinding = {
+  wb_warehouse_id: number | string
+  marketplace?: 'wb' | 'ozon'
+  is_active: boolean
 }
 
 /**
@@ -153,26 +161,23 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
       // делить процент. Тянем только по тем продавцам, чьи товары на экране.
-      // Забираем их до правил: по ним же видно, какие номера в правиле —
+      // Забираем их до правил: по привязкам видно, какие номера в правиле —
       // вайлдберрисовские, а какие принадлежат складам другой площадки.
       const sellerIds = [...new Set(withSeller.map((row) => row.seller_id as string))]
       const built: Seller[] = []
-      const boundWbNumbers = new Map<string, Set<string>>()
+      const ruleBindings = new Map<string, WarehouseRuleBinding[]>()
       for (const id of sellerIds) {
-        const whRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouses`), {
-          headers: headers(token),
-        })
+        const [whRes, bindingsRes] = await Promise.all([
+          fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouses`), { headers: headers(token) }),
+          fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouse-bindings`), {
+            headers: headers(token),
+          }),
+        ])
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
-        boundWbNumbers.set(
-          id,
-          // Только сопоставленные склады: правило заводится на привязку, а у
-          // склада из кабинета без привязки ключа в правиле быть не может.
-          new Set(
-            rows
-              .filter((one) => one.wms_warehouse_id !== null)
-              .map((one) => String(one.wb_warehouse_id)),
-          ),
-        )
+        const bindings = bindingsRes.ok ? ((await bindingsRes.json()) as ApiSellerBinding[]) : []
+        // Привязки читаем отдельно от справочника складов: по ним сервер собирает
+        // правило, и только по ним видно площадку номера в его ответе.
+        ruleBindings.set(id, activeRuleBindings(bindings))
         built.push({
           id,
           name: known.get(id) ?? '—',
@@ -197,15 +202,12 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
       )
       setRules(
-        withSeller.map((row) => {
-          const rule = toRule(row.id, loadedRules.get(row.id))
-          const wbNumbers = boundWbNumbers.get(row.seller_id as string) ?? new Set<string>()
-          return {
-            ...rule,
-            byWarehouse: qualifyWbWarehouseRuleValues(rule.byWarehouse, wbNumbers),
-            unitsByWarehouse: qualifyWbWarehouseRuleValues(rule.unitsByWarehouse, wbNumbers),
-          }
-        }),
+        withSeller.map((row) =>
+          ruleKeysForScreen(
+            toRule(row.id, loadedRules.get(row.id)),
+            ruleBindings.get(row.seller_id as string) ?? [],
+          ),
+        ),
       )
       setSellers(built)
     } catch (err) {

@@ -5,6 +5,21 @@ export type WarehouseRuleBinding = {
   marketplace?: MarketplaceCode
 }
 
+// Привязки, по которым сервер собирает правило: действующие, обеих площадок.
+// Снятое «обслуживаем» привязку не отменяет — такой склад не показывается
+// строкой окна, но свой номер в правиле по-прежнему занимает.
+export function activeRuleBindings(
+  rows: Array<{
+    wb_warehouse_id: number | string
+    marketplace?: MarketplaceCode
+    is_active: boolean
+  }>,
+): WarehouseRuleBinding[] {
+  return rows
+    .filter((one) => one.is_active)
+    .map((one) => ({ wb_warehouse_id: one.wb_warehouse_id, marketplace: one.marketplace ?? 'wb' }))
+}
+
 export function warehouseRuleKey(warehouse: WarehouseRuleBinding): string {
   return `${warehouse.marketplace ?? 'wb'}:${warehouse.wb_warehouse_id}`
 }
@@ -27,26 +42,34 @@ export function warehouseUnitsAfterInput(
   return next
 }
 
-// Экран «Остаток для FBS» показывает только склады Wildberries, и его строки
-// живут под ключом wb:<номер>. Сервер же называет тот же склад голым номером,
-// пока номер уникален, и переходит на wb:<номер> ровно тогда, когда у продавца
-// есть озоновский склад с тем же числом. Без приведения ключей сохранённый
-// лимит такого склада выглядел бы пустым полем, введённый заново уехал бы
-// вторым ключом на тот же склад, а очистка поля не убрала бы прежний.
+// Правило в терминах строк окна остатка. Строка всегда знает свою площадку, а
+// сервер называет склад голым номером, пока номер уникален среди АКТИВНЫХ
+// привязок продавца, и переходит на wb:<номер> / ozon:<номер>, когда номера
+// совпали. Без приведения ключей сохранённый лимит показывался бы пустым полем,
+// введённый заново уехал бы вторым ключом на тот же склад, а очистка не убрала
+// бы прежний.
 //
-// Голый номер, которого нет среди привязанных складов WB этого продавца, не
-// трогаем: он принадлежит другой площадке, и вернуть его серверу нужно ровно
-// таким, каким он пришёл.
-export function qualifyWbWarehouseRuleValues(
-  values: Record<string, number>,
-  boundWbWarehouseNumbers: ReadonlySet<string>,
-): Record<string, number> {
-  return Object.fromEntries(Object.entries(values).map(([key, value]) => {
-    const qualified = warehouseRuleKey({ wb_warehouse_id: key })
-    const belongsToWb =
-      !key.includes(':') && boundWbWarehouseNumbers.has(key) && values[qualified] === undefined
-    return [belongsToWb ? qualified : key, value]
-  }))
+// Площадку номера берём из действующих привязок обеих площадок: справочник
+// складов кабинета Wildberries помнит и отключённую привязку, и по нему номер
+// 123 выглядел бы вайлдберрисовским даже тогда, когда активен с этим номером
+// один лишь склад Ozon.
+//
+// Неразрешимый номер оставляем как есть: список привязок и правило читаются
+// разными запросами и могут разойтись, а терять из-за одного поля всю таблицу
+// нельзя — на сохранении сервер назовёт причину точнее.
+export function ruleKeysForScreen<T extends {
+  byWarehouse: Record<string, number>
+  unitsByWarehouse: Record<string, number>
+}>(rule: T, bindings: WarehouseRuleBinding[]): T {
+  try {
+    return {
+      ...rule,
+      byWarehouse: qualifyWarehouseRuleValues(rule.byWarehouse, bindings),
+      unitsByWarehouse: qualifyWarehouseRuleValues(rule.unitsByWarehouse, bindings),
+    }
+  } catch {
+    return rule
+  }
 }
 
 /** Legacy numeric responses are resolved against saved bindings, never by row order. */
