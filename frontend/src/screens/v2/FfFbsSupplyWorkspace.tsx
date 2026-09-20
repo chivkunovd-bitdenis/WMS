@@ -61,6 +61,7 @@ import {
   fbsSameStickerScan,
   fbsOrderMarkingAccepted,
   fbsMarkingPresentation,
+  fbsMarkingVerdictsSummary,
   fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
@@ -79,6 +80,7 @@ import {
   commitFbsKiz,
   fbsKizOrderNumber,
   syncFbsOrderMarkings,
+  syncFbsSupplyMarkings,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsOrderKiz,
@@ -485,15 +487,22 @@ export function FfFbsSupplyWorkspace({
     return () => { workspaceOpenGeneration.current += 1 }
   }, [open, supplyId])
 
+  // Тихое обновление раз в 15 с идёт рядом с действиями оператора, и ответы
+  // возвращаются в произвольном порядке. На вкладку попадает только самый поздний
+  // старт: запоздалый ответ не возвращает строки к вердиктам, которые уже сменились.
+  const workspaceWriteSeq = useRef(0)
+
   const load = useCallback(
     async (silent = false) => {
       if (!open || !supplyId) return
       const generation = workspaceOpenGeneration.current
       const isCurrent = () => workspaceOpenGeneration.current === generation
+      const seq = ++workspaceWriteSeq.current
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         if (!isCurrent()) return
+        if (seq !== workspaceWriteSeq.current) return next
         setWorkspace(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
@@ -559,8 +568,11 @@ export function FfFbsSupplyWorkspace({
     setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
   }, [workspace?.supply.planned_shipment_date])
 
+  // Тихое обновление раз в 15 с при видимом окне. На «Упаковке и маркировке»
+  // (WMS-477) так сами зеленеют строки, чей Честный знак WB подтвердил в фоне;
+  // load(true) не трогает вкладку, полосу прогресса и состояние скана.
   useEffect(() => {
-    if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
+    if (!open || !supplyId || !['picking', 'packing', 'boxes'].includes(stage)) return
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load(true)
     }, 15_000)
@@ -591,7 +603,9 @@ export function FfFbsSupplyWorkspace({
 
   const run = async (
     operation: () => Promise<FbsWorkspace>,
-    success: string,
+    // Текст успеха может зависеть от ответа (WMS-477: «подтверждено X из Y»);
+    // функция сохраняется и для «Повторить», чтобы повтор дал то же уведомление.
+    success: string | ((next: FbsWorkspace) => string),
     onError?: (cause: unknown) => void,
   ) => {
     setBusy(true)
@@ -600,13 +614,15 @@ export function FfFbsSupplyWorkspace({
     setRetryAction(null)
     try {
       const next = await operation()
+      workspaceWriteSeq.current += 1
       setWorkspace(next)
       setStage((current) => fbsStageAfterWorkspaceRefresh(
         next.supply.marketplace,
         current,
         visualStage(next.stage),
       ))
-      if (success) setNotice(success)
+      const message = typeof success === 'function' ? success(next) : success
+      if (message) setNotice(message)
       return next
     } catch (cause) {
       onError?.(cause)
@@ -1364,6 +1380,19 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
+  // WMS-477: «Проверить в WB» — один запрос по поставке, ответ перерисовывает
+  // строки; ошибка WB уходит в общий красный Alert окна через run().
+  const checkMarkingsInWb = () => {
+    if (!workspace) return
+    void run(
+      () => syncFbsSupplyMarkings(token, authHeaders, workspace.supply.id),
+      (next) => {
+        const { confirmed, withCode } = fbsMarkingVerdictsSummary(next.orders)
+        return `Проверено в WB: подтверждено ${confirmed} из ${withCode}.`
+      },
+    )
+  }
+
   const total = workspace?.progress.total ?? 0
   const ready = workspace
     ? workspace.supply.marketplace === 'wb'
@@ -1509,6 +1538,8 @@ export function FfFbsSupplyWorkspace({
   const clearableSelectedCount = selectedPackingOrders.filter((order) =>
     order.metadata.states.some((state) => state.kind === 'sgtin' && state.value_tail),
   ).length
+  // WMS-477: пока ни у одного заказа нет кода, спрашивать WB не о чем.
+  const packingOrdersWithCode = fbsMarkingVerdictsSummary(packingOrders).withCode
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
   // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
   // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
@@ -2039,6 +2070,15 @@ export function FfFbsSupplyWorkspace({
                         >
                           {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
                         </Button>
+                        {!isOzonSupply && packagingEditable ? (
+                          <Button
+                            disabled={busy || packingOrdersWithCode === 0}
+                            onClick={checkMarkingsInWb}
+                            data-testid="fbs-packing-check-wb"
+                          >
+                            Проверить в WB
+                          </Button>
+                        ) : null}
                         {!isOzonSupply && selectedPackingOrders.length > 0 ? (
                           <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
                             Очистить ЧЗ
