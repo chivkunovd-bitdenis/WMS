@@ -1642,6 +1642,7 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
             )
             for binding_id, item in body.by_binding.items()
         },
+        by_binding_present="by_binding" in body.model_fields_set,
     )
 
 

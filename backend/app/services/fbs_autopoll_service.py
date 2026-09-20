@@ -238,6 +238,7 @@ async def sync_seller_stocks(
                 http_client,
             )
             if binding_result.skipped_busy:
+                result.retryable_errors += 1
                 logger.warning(
                     "fbs stock sync skipped busy binding %s seller %s wb_warehouse %s",
                     binding_id,
@@ -251,6 +252,11 @@ async def sync_seller_stocks(
             result.products_zeroed += binding_result.products_zeroed
             result.conflicts += binding_result.conflicts
             result.errors += binding_result.errors
+            result.retryable_errors += binding_result.retryable_errors
+            result.retry_after_seconds = max(
+                result.retry_after_seconds,
+                binding_result.retry_after_seconds,
+            )
             if binding_result.errors or binding_result.error_code:
                 result.binding_errors += 1
         except FbsStockSyncError as exc:
@@ -263,6 +269,7 @@ async def sync_seller_stocks(
             )
         except Exception:
             result.binding_errors += 1
+            result.retryable_errors += 1
             logger.exception(
                 "fbs stock sync binding failed seller %s wb_warehouse %s",
                 seller_id,

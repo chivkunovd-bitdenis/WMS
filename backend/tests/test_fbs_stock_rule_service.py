@@ -1312,7 +1312,9 @@ async def test_qualified_warehouse_keys_round_trip_both_marketplaces_and_keep_co
     }
     # WMS-469: qualified WB/Ozon keys keep independent limits.
     oversized = ProductFbsRuleBody.model_validate({
-        **body.model_dump(),
+        # Legacy form: the key must be absent. An explicit empty
+        # `by_binding` is the WMS-469 no-visible-edits form.
+        **body.model_dump(exclude={"by_binding"}),
         "by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
         "units_by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
     })
