@@ -402,6 +402,17 @@ export function fbsOrderMarkingAccepted(metadata: FbsOrderMetadata): boolean {
   ))
 }
 
+export function fbsOrderPrintDone(
+  order: { sticker: { status: string; applied_at: string | null }; metadata: FbsOrderMetadata },
+  requiresHonestSign: boolean,
+): boolean {
+  return (Boolean(order.sticker.applied_at) || ['print_opened', 'applied'].includes(order.sticker.status))
+    && fbsOrderMarkingAccepted(order.metadata)
+    && (!requiresHonestSign || order.metadata.states.some((state) =>
+      state.kind === 'sgtin' && Boolean(state.value_tail),
+    ))
+}
+
 export function fbsMarkingPresentation(
   state: FbsOrderMetadata['states'][number] | undefined,
   provider = 'WB',

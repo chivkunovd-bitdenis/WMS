@@ -96,8 +96,9 @@ async def test_skip_pack_handoff_reuses_saved_code_without_new_pool_or_wb_write(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('source, linked', [('operator', True), ('pool', False)])
+@pytest.mark.parametrize('reprint', [False, True])
 async def test_skipped_supply_does_not_replace_unprintable_saved_marking(
-    monkeypatch: pytest.MonkeyPatch, source: str, linked: bool,
+    monkeypatch: pytest.MonkeyPatch, source: str, linked: bool, reprint: bool,
 ) -> None:
     from datetime import UTC, datetime
     from types import SimpleNamespace
@@ -124,7 +125,7 @@ async def test_skipped_supply_does_not_replace_unprintable_saved_marking(
     result = await tape_svc.print_fbs_order_tape(
         AsyncMock(), uuid.uuid4(), uuid.uuid4(), order_ids=[order.id],
         layout={'units': [{'block': 'cz', 'copies': 1}]},
-        allow_partial=False, include_order_qr=False, reprint=False,
+        allow_partial=False, include_order_qr=False, reprint=reprint,
         actor_user_id=uuid.uuid4(), http_client=SimpleNamespace(),
     )
     assert result.orders == []
