@@ -1,0 +1,386 @@
+{
+  "sha": "69b3f2ccc119e7a9ec67eeb629d4e96e69a6b414",
+  "scenarios": {
+    "manual_rejected_to_accepted": {
+      "before": {
+        "requested": "requested: A",
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB не принял ЧЗ\nДоступно ЧЗ\n\n0 · нужно 1\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "A1"
+        ],
+        "sizes": [],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "markings/sync",
+            "at": 1789941894995
+          },
+          {
+            "event": "request",
+            "id": 2,
+            "supply": "A",
+            "path": "workspace",
+            "at": 1789941909898
+          },
+          {
+            "event": "response",
+            "id": 2,
+            "supply": "A",
+            "verdict": "rejected",
+            "added": false,
+            "at": 1789941910087
+          }
+        ]
+      },
+      "after": {
+        "requested": "requested: A",
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "A1"
+        ],
+        "sizes": [],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "markings/sync",
+            "at": 1789941894995
+          },
+          {
+            "event": "request",
+            "id": 2,
+            "supply": "A",
+            "path": "workspace",
+            "at": 1789941909898
+          },
+          {
+            "event": "response",
+            "id": 2,
+            "supply": "A",
+            "verdict": "rejected",
+            "added": false,
+            "at": 1789941910087
+          },
+          {
+            "event": "response",
+            "id": 1,
+            "supply": "A",
+            "verdict": "accepted",
+            "added": false,
+            "at": 1789941910152
+          }
+        ]
+      },
+      "bug_reproduced": true
+    },
+    "manual_cross_supply": {
+      "before": {
+        "requested": "requested: B",
+        "rows": [
+          "Товар поставки B\n\nart-B1 · barcode-B1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "B1"
+        ],
+        "sizes": [],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "markings/sync",
+            "at": 1789941898235
+          }
+        ]
+      },
+      "after": {
+        "requested": "requested: B",
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "A1"
+        ],
+        "sizes": [],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "markings/sync",
+            "at": 1789941898235
+          },
+          {
+            "event": "response",
+            "id": 1,
+            "supply": "A",
+            "verdict": "accepted",
+            "added": false,
+            "at": 1789941898393
+          }
+        ]
+      },
+      "bug_reproduced": true
+    },
+    "old_get_after_add": {
+      "before": {
+        "requested": "requested: A",
+        "rows": [
+          "Добавленный товар L\n\nart-6 · barcode-6 · заказ 6\nРазмер\n\nL\n\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 0006\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR",
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nРазмер\n\n—\n\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "6",
+          "A1"
+        ],
+        "sizes": [
+          "Размер\n\nL",
+          "Размер\n\n—"
+        ],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "workspace",
+            "at": 1789941914902
+          },
+          {
+            "event": "request",
+            "id": 2,
+            "supply": "A",
+            "path": "orders/batch",
+            "at": 1789941915265
+          },
+          {
+            "event": "response",
+            "id": 2,
+            "added": true,
+            "at": 1789941915265
+          }
+        ]
+      },
+      "after": {
+        "requested": "requested: A",
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ],
+        "ids": [
+          "A1"
+        ],
+        "sizes": [],
+        "log": [
+          {
+            "event": "request",
+            "id": 1,
+            "supply": "A",
+            "path": "workspace",
+            "at": 1789941914902
+          },
+          {
+            "event": "request",
+            "id": 2,
+            "supply": "A",
+            "path": "orders/batch",
+            "at": 1789941915265
+          },
+          {
+            "event": "response",
+            "id": 2,
+            "added": true,
+            "at": 1789941915265
+          },
+          {
+            "event": "response",
+            "id": 1,
+            "supply": "A",
+            "verdict": "pending",
+            "added": false,
+            "at": 1789941915590
+          }
+        ]
+      },
+      "bug_reproduced": true
+    },
+    "poll_16s_starvation": {
+      "samples": [
+        {
+          "requested": "requested: A",
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ],
+          "ids": [
+            "A1"
+          ],
+          "sizes": [],
+          "log": [
+            {
+              "event": "request",
+              "id": 1,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941918548
+            }
+          ]
+        },
+        {
+          "requested": "requested: A",
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ],
+          "ids": [
+            "A1"
+          ],
+          "sizes": [],
+          "log": [
+            {
+              "event": "request",
+              "id": 1,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941918548
+            },
+            {
+              "event": "request",
+              "id": 2,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941933548
+            },
+            {
+              "event": "response",
+              "id": 1,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941934548
+            }
+          ]
+        },
+        {
+          "requested": "requested: A",
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ],
+          "ids": [
+            "A1"
+          ],
+          "sizes": [],
+          "log": [
+            {
+              "event": "request",
+              "id": 1,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941918548
+            },
+            {
+              "event": "request",
+              "id": 2,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941933548
+            },
+            {
+              "event": "response",
+              "id": 1,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941934548
+            },
+            {
+              "event": "request",
+              "id": 3,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941948548
+            },
+            {
+              "event": "response",
+              "id": 2,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941949548
+            }
+          ]
+        },
+        {
+          "requested": "requested: A",
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ],
+          "ids": [
+            "A1"
+          ],
+          "sizes": [],
+          "log": [
+            {
+              "event": "request",
+              "id": 1,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941918548
+            },
+            {
+              "event": "request",
+              "id": 2,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941933548
+            },
+            {
+              "event": "response",
+              "id": 1,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941934548
+            },
+            {
+              "event": "request",
+              "id": 3,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941948548
+            },
+            {
+              "event": "response",
+              "id": 2,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941949548
+            },
+            {
+              "event": "request",
+              "id": 4,
+              "supply": "A",
+              "path": "workspace",
+              "at": 1789941963548
+            },
+            {
+              "event": "response",
+              "id": 3,
+              "supply": "A",
+              "verdict": "accepted",
+              "added": false,
+              "at": 1789941964548
+            }
+          ]
+        }
+      ],
+      "successful_responses": 3,
+      "bug_reproduced": true
+    }
+  },
+  "page_errors": []
+}
