@@ -641,15 +641,6 @@ async def sync_binding_stocks(
 
     result = FbsStockSyncResult()
     try:
-        try:
-            api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
-        except FbsStockSyncError as exc:
-            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
-            binding.last_sync_at = _utcnow()
-            binding.last_error_code = exc.code
-            await session.commit()
-            return FbsStockSyncResult(errors=1, error_code=exc.code)
-
         products = await _load_seller_products(session, tenant_id, seller_id)
         try:
             refresh_zero_product_ids: set[uuid.UUID] = set()
@@ -659,10 +650,11 @@ async def sync_binding_stocks(
             )
         except Exception:
             logger.exception("fbs stock rule calculation failed for binding %s", binding.id)
-            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
-            binding.last_sync_at = _utcnow()
-            binding.last_error_code = ERROR_STOCK_RULE_CALCULATION_FAILED
-            await session.commit()
+            if not zero_refresh_only:
+                binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+                binding.last_sync_at = _utcnow()
+                binding.last_error_code = ERROR_STOCK_RULE_CALCULATION_FAILED
+                await session.commit()
             return FbsStockSyncResult(
                 errors=1,
                 error_code=ERROR_STOCK_RULE_CALCULATION_FAILED,
@@ -677,6 +669,15 @@ async def sync_binding_stocks(
 
         if zero_refresh_only:
             targets = [target for target in targets if target.refresh_zero]
+            eligible_chrts = {
+                int(product.wb_chrt_id) for product in products
+                if product.id in refresh_zero_product_ids and product.wb_chrt_id is not None
+            }
+            conflict_chrts &= eligible_chrts
+            blocked_targets = [
+                target for target in blocked_targets
+                if target.product_id in refresh_zero_product_ids
+            ]
 
         # Zero guard: protect against zero amount without is_explicit_zero flag
         # (should not happen with current code, but defends against future regressions)
@@ -696,6 +697,21 @@ async def sync_binding_stocks(
         targets = safe_targets
         if zero_guard_blocked:
             blocked_targets = blocked_targets + zero_guard_blocked
+
+        # A delayed task can outlive its zero rule (or arrive twice). Such a
+        # no-op must not erase the ordinary publication's status/error/time.
+        if zero_refresh_only and not targets:
+            await session.commit()
+            return result
+
+        try:
+            api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+        except FbsStockSyncError as exc:
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_sync_at = _utcnow()
+            binding.last_error_code = exc.code
+            await session.commit()
+            return FbsStockSyncResult(errors=1, error_code=exc.code)
 
         result.skipped_missing_chrt_id = skipped_missing
 

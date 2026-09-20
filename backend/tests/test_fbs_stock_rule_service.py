@@ -1218,9 +1218,8 @@ async def test_qualified_warehouse_keys_round_trip_both_marketplaces_and_keep_co
     for view in [single, bulk]:
         output = _rule_view_out(seed.product.id, view).model_dump()
         assert output["by_warehouse"] == {"wb:501001": 20, "ozon:501001": 30}
-        expected_units = {"wb:501001": 20, "ozon:501001": 30} if units_mode else {
-            "wb:501001": 0, "ozon:501001": 0,
-        }
+        # WMS-483: percentage rows do not imply explicitly entered zero-unit limits.
+        expected_units = {"wb:501001": 20, "ozon:501001": 30} if units_mode else {}
         assert output["units_remaining_by_warehouse"] == expected_units
     assert await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product]) == {
         seed.product.id: 20,

@@ -310,7 +310,8 @@ def rule_from_product(
             continue
         if pool.percent is not None:
             by_warehouse[key] = int(pool.percent)
-        units_by_warehouse[key] = int(pool.quantity or 0)
+        if pool.units_configured or int(pool.quantity or 0) > 0:
+            units_by_warehouse[key] = int(pool.quantity or 0)
     return FbsRule(
         publish=bool(product.fbs_stock_sync_enabled),
         same_everywhere=bool(product.fbs_same_everywhere),
@@ -698,13 +699,19 @@ async def set_rule_for_products(
                     FbsBindingStockPool.tenant_id == tenant_id,
                     FbsBindingStockPool.binding_id.in_(governed_bindings),
                 )
-                .values(quantity=0)
+                .values(quantity=0, units_configured=False)
             )
         pool_rows = await _pool_rows(session, product.id, [b.id for b in bindings])
         for warehouse_key, binding in binding_by_key.items():
             percent = rule.by_warehouse.get(warehouse_key)
             units = rule.units_by_warehouse.get(warehouse_key)
             pool = pool_rows.get(binding.id)
+            if rule.units_mode and units is None:
+                # Omitted units are absence of a rule, including old percentage
+                # rows whose technical quantity=0 never expressed zero intent.
+                if pool is not None:
+                    await session.delete(pool)
+                continue
             if pool is None:
                 if percent is None and units is None:
                     continue
@@ -713,12 +720,14 @@ async def set_rule_for_products(
                     binding_id=binding.id,
                     product_id=product.id,
                     quantity=int(units or 0) if rule.units_mode else 0,
+                    units_configured=rule.units_mode and units is not None,
                     percent=percent,
                     updated_by=updated_by,
                 )
                 session.add(pool)
                 continue
             pool.percent = percent
+            pool.units_configured = rule.units_mode and units is not None
             if rule.units_mode:
                 pool.quantity = int(units or 0)
             else:
@@ -825,12 +834,16 @@ async def publish_amounts_for_binding(
         # A missing allocation is not an explicit zero-unit operator limit.
         pool = pool_rows.get(binding.id)
         if rule.units_mode:
-            has_binding_rule = pool is not None
+            has_binding_rule = pool is not None and (
+                pool.units_configured or int(pool.quantity or 0) > 0
+            )
         elif rule.same_everywhere:
             has_binding_rule = rule.percent > 0
         else:
             has_binding_rule = pool is not None and int(pool.percent or 0) > 0
-        explicit_zero_units = rule.units_mode and pool is not None and pool.quantity == 0
+        explicit_zero_units = (
+            rule.units_mode and pool is not None and pool.units_configured and pool.quantity == 0
+        )
         if (
             refresh_zero_product_ids is not None
             and binding.marketplace == "wb"

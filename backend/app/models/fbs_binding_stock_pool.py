@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -61,6 +62,10 @@ class FbsBindingStockPool(Base):
     )
     quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
+    )
+    # Only an explicit key in an operator-saved units rule proves zero intent.
+    units_configured: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     # quantity — доступные новым заказам штуки, без действующих резервов.
     # Доля свободного остатка для этого склада WB, когда у товара доли разные.
