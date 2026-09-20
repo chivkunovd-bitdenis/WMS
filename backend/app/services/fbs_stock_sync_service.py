@@ -29,6 +29,7 @@ from app.services.fbs_stock_rule_service import (
     product_has_rule_predicate,
     publish_amounts_for_binding,
 )
+from app.services.fbs_zero_refresh_service import schedule_binding_zero_refresh
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH = "nothing_to_publish"
 
 SYNC_LEASE_DURATION = timedelta(minutes=5)
+ZERO_REFRESH_INTERVAL = timedelta(minutes=10)
 DEFAULT_RATE_INTERVAL_SECONDS = 0.2
 MAX_429_RETRY_AFTER_SECONDS = 60.0
 
@@ -108,6 +110,7 @@ class _PublishTarget:
     amount: int
     product_id: uuid.UUID | None
     is_explicit_zero: bool = False
+    refresh_zero: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +212,8 @@ async def _resolve_publish_quantities(
     session: AsyncSession,
     binding: FbsWarehouseBinding,
     products: list[Product],
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Вернуть количества, рассчитанные только по правилу доли свободного остатка.
 
@@ -217,7 +222,9 @@ async def _resolve_publish_quantities(
     числу. Ошибка расчёта также должна подняться в вызывающий код, чтобы привязка
     получила статус ошибки и публикация не состоялась.
     """
-    return await publish_amounts_for_binding(session, binding, products)
+    return await publish_amounts_for_binding(
+        session, binding, products, refresh_zero_product_ids=refresh_zero_product_ids
+    )
 
 
 def _build_publish_plan(
@@ -225,6 +232,8 @@ def _build_publish_plan(
     publish_quantities: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
     product_block_errors: dict[uuid.UUID, str] | None = None,
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
     """Return safe publish targets, blocked targets, missing chrt ids, and conflicts.
 
@@ -276,24 +285,35 @@ def _build_publish_plan(
         amount = int(publish_quantities[product.id])
         amount = max(amount, 0)
         if amount == 0:
-            # WMS-376. Ноль отдаём ОДИН РАЗ — на переходе «публиковали ->
-            # перестали», а не каждый цикл по состоянию «выключено». Признак
-            # перехода уже есть и хранить его отдельно не нужно: пока в кабинете
-            # стоит наше положительное число, ноль имеет смысл; как только он
-            # подтверждён, строка перестаёт удовлетворять условию и замолкает
-            # сама. Раньше этой проверки не было, и снятая галка «Передавать
-            # остаток» гнала ноль каждые пять минут бесконечно.
             item = existing_items.get(chrt_id)
-            confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
-            if confirmed <= 0:
-                continue
-        # В результирующий словарь попадают только товары с настроенной долей,
-        # поэтому amount == 0 здесь означает осознанную нулевую долю.
+            if product.id in (refresh_zero_product_ids or set()):
+                # The item timestamp only moves when an actual publication or
+                # error changes its state; intermediate empty passes cannot
+                # postpone the ten-minute refresh. Errors retry next cycle.
+                if (
+                    item is not None
+                    and item.status == STOCK_SYNC_STATUS_CONFIRMED
+                    and item.last_target_amount == 0
+                    and item.last_confirmed_amount == 0
+                    and item.updated_at is not None
+                ):
+                    updated_at = item.updated_at
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=UTC)
+                    if _utcnow() < updated_at + ZERO_REFRESH_INTERVAL:
+                        continue
+            else:
+                # WMS-376: disabled/unmanaged rules keep their one-time
+                # transition zero, without entering the periodic refresh.
+                confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
+                if confirmed <= 0:
+                    continue
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
             product_id=product.id,
             is_explicit_zero=(amount == 0),
+            refresh_zero=amount == 0 and product.id in (refresh_zero_product_ids or set()),
         )
 
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
@@ -534,7 +554,12 @@ async def _publish_batches(
             rate_limiter=rate_limiter,
             marketplace_api_base=marketplace_api_base,
         )
-        if put_error is not None:
+        # An absolute zero may have reached WB even if its response was lost.
+        # Read it back before another attempt, and only confirm an observed zero.
+        uncertain_zero = put_error == "wb_transport_error" and any(
+            entry.amount == 0 for entry in batch
+        )
+        if put_error is not None and not uncertain_zero:
             if first_error_code is None:
                 first_error_code = put_error
             for entry in batch:
@@ -570,23 +595,31 @@ async def _publish_batches(
 
         if not _compare_readback(batch, readback):
             if first_error_code is None:
-                first_error_code = ERROR_READBACK_MISMATCH
+                first_error_code = put_error or ERROR_READBACK_MISMATCH
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
-                item.last_error_code = ERROR_READBACK_MISMATCH
+                item.last_error_code = put_error or ERROR_READBACK_MISMATCH
             errors += len(batch)
             await session.commit()
             continue
 
         readback_map = {row.chrt_id: row.amount for row in readback}
+        confirmed_at = _utcnow()
         for entry in batch:
             item = sync_items[entry.chrt_id]
             item.status = STOCK_SYNC_STATUS_CONFIRMED
             item.last_confirmed_amount = readback_map[entry.chrt_id]
+            item.updated_at = confirmed_at
             item.last_error_code = None
             confirmed += 1
         await session.commit()
+        batch_chrts = {entry.chrt_id for entry in batch}
+        if any(target.refresh_zero and target.chrt_id in batch_chrts for target in targets):
+            schedule_binding_zero_refresh(
+                binding.tenant_id, binding.seller_id, binding.id,
+                confirmed_at + ZERO_REFRESH_INTERVAL,
+            )
 
     return confirmed, errors, first_error_code
 
@@ -600,6 +633,7 @@ async def sync_binding_stocks(
     *,
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
+    zero_refresh_only: bool = False,
 ) -> FbsStockSyncResult:
     """Publish absolute FBS stock amounts for one seller WB warehouse binding."""
     limiter = rate_limiter or AsyncStockSyncRateLimiter()
@@ -631,8 +665,10 @@ async def sync_binding_stocks(
 
         products = await _load_seller_products(session, tenant_id, seller_id)
         try:
+            refresh_zero_product_ids: set[uuid.UUID] = set()
             publish_quantities = await _resolve_publish_quantities(
-                session, binding, products
+                session, binding, products,
+                refresh_zero_product_ids=refresh_zero_product_ids,
             )
         except Exception:
             logger.exception("fbs stock rule calculation failed for binding %s", binding.id)
@@ -648,8 +684,12 @@ async def sync_binding_stocks(
         existing_items = await _load_existing_sync_items(session, binding.id)
 
         targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
-            products, publish_quantities, existing_items, product_block_errors
+            products, publish_quantities, existing_items, product_block_errors,
+            refresh_zero_product_ids=refresh_zero_product_ids,
         )
+
+        if zero_refresh_only:
+            targets = [target for target in targets if target.refresh_zero]
 
         # Zero guard: protect against zero amount without is_explicit_zero flag
         # (should not happen with current code, but defends against future regressions)

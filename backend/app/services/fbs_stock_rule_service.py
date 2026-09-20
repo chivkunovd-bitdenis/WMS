@@ -958,6 +958,8 @@ async def publish_amounts_for_binding(
     session: AsyncSession,
     binding: FbsWarehouseBinding,
     products: list[Product],
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Сколько штук отправить в WB по этой привязке: product_id -> количество.
 
@@ -1016,4 +1018,22 @@ async def publish_amounts_for_binding(
         free = breakdown[product.id].free if product.id in breakdown else 0
         split = split_amounts(rule, free, seller_bindings, pool_rows=pool_rows)
         amounts[product.id] = split.get(binding.id, 0)
+        # WMS-483: use the same free-stock snapshot as the published amount.
+        # A missing allocation is not an explicit zero-unit operator limit.
+        pool = pool_rows.get(binding.id)
+        if rule.units_mode:
+            has_binding_rule = pool is not None
+        elif rule.same_everywhere:
+            has_binding_rule = rule.percent > 0
+        else:
+            has_binding_rule = pool is not None and int(pool.percent or 0) > 0
+        explicit_zero_units = rule.units_mode and pool is not None and pool.quantity == 0
+        if (
+            refresh_zero_product_ids is not None
+            and binding.marketplace == "wb"
+            and rule.publish
+            and has_binding_rule
+            and (free == 0 or explicit_zero_units)
+        ):
+            refresh_zero_product_ids.add(product.id)
     return amounts
