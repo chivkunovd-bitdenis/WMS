@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useLayoutEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { FfFbsSupplyWorkspace } from '../../src/screens/v2/FfFbsSupplyWorkspace'
 import { ErrorBoundary } from '../../src/components/errors/ErrorBoundary'
@@ -62,6 +62,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input)
   const method = init?.method ?? 'GET'
   if (url.includes('/operations/packaging-tasks/fixture-task')) return response({id:'fixture-task', document_number:'QA',warehouse_id:'fixture-wh',status:'open',marketplace_unload_request_id:null,inbound_intake_request_id:null,is_complete:false,lines:[],events:[]})
+  if (url.includes('/operations/fbs-orders/kiz/lookup')) return response({marketplace:'wb',order_id:'A1',wb_order_id:1,product:{name:'Товар поставки A',image_url:null,barcode:'barcode-A1',seller_article:'art-A1'},current_kiz:null,needs_confirmation:false,can_bind:true,block_reason:null})
   const match = url.match(/\/fbs-supplies\/([^/]+)\/(workspace|markings\/sync|orders\/batch)/)
   if (match) {
     const id = ++seq
@@ -95,9 +96,22 @@ function resolveRequest(id: number, supply='A', verdict='pending', added=false) 
   setLatency: (value:number) => { latency=value },
   pending: () => Array.from(pending.keys()),
 }
+let injectedFailures = 0
+function FaultInjector({nonce}: {nonce:number}) {
+  useLayoutEffect(()=>{
+    if(injectedFailures > 0) {
+      injectedFailures -= 1
+      log.push({event:'injected-error',remaining:injectedFailures,at:Date.now()})
+      throw new Error('WMS QA artificial FBS child exception')
+    }
+  },[nonce])
+  return null
+}
 const headers=() => ({})
 function App() {
   const [supplyId,setSupplyId]=useState<'A'|'B'>('A')
+  const [faultNonce,setFaultNonce]=useState(0)
+  ;(window as any).qa.inject = (count:number) => {injectedFailures=count;setFaultNonce(n=>n+1)}
   return <>
     <div style={{position:'sticky',top:0,zIndex:9999,background:'#e3f2fd',padding:8}}>
       Изолированная QA оснастка — mock API, настоящий компонент из проверяемого SHA
@@ -106,6 +120,7 @@ function App() {
       <span id="requested-supply">requested: {supplyId}</span>
     </div>
     <ErrorBoundary component="FfFbsSupplyWorkspace" resetKey={supplyId}>
+      <FaultInjector nonce={faultNonce} />
       <FfFbsSupplyWorkspace token="synthetic-only" authHeaders={headers}
         supplyId={supplyId} initialWorkspace={initials[supplyId]} open onClose={()=>{}} />
     </ErrorBoundary>

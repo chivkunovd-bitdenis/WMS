@@ -1,0 +1,202 @@
+{
+  "product_sha": "69b3f2ccc119e7a9ec67eeb629d4e96e69a6b414",
+  "scenarios": {
+    "single_exception_recovery": {
+      "healthy_poll": {
+        "before": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        },
+        "after": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        }
+      },
+      "before_error": {
+        "scan": "010460PARTIAL",
+        "selected": 1,
+        "active": 1,
+        "focused": true,
+        "fallback": 0,
+        "host_visible": true,
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ]
+      },
+      "recovered": {
+        "scan": "",
+        "selected": 0,
+        "active": 0,
+        "focused": true,
+        "fallback": 0,
+        "host_visible": true,
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ]
+      },
+      "reports": [
+        {
+          "message": "WMS QA artificial FBS child exception",
+          "stack": "Error: WMS QA artificial FBS child exception\n    at http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:273:10\n    at Object.react_stack_bottom_frame (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:12904:13)\n    at runWithFiberInDEV (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:851:66)\n    at commitHookEffectListMount (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6617:153)\n    at commitHookLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6605:55)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6959:19)\n    at recursivelyTraverseLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7479:102)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7047:14)\n    at recursivelyTraverseLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7479:102)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6962:6)",
+          "url": "http://127.0.0.1:5577/tmp/wms477-astra-repro/index.html",
+          "screen": "/tmp/wms477-astra-repro/index.html",
+          "component": "FfFbsSupplyWorkspace",
+          "action": "react\n    at FaultInjector (http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:263:26)\n    at ErrorBoundary (http://127.0.0.1:5577/src/components/errors/ErrorBoundary.tsx:84:8)\n    at App (http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:283:34)",
+          "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "app_build": "clientErrorReport.ts"
+        }
+      ],
+      "post_recovery_poll": {
+        "before": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        },
+        "after": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        }
+      }
+    },
+    "persistent_exception_reload": {
+      "before_error": {
+        "scan": "010460PARTIAL",
+        "selected": 1,
+        "active": 1,
+        "focused": true,
+        "fallback": 0,
+        "host_visible": true,
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ]
+      },
+      "fallback": "Не удалось показать этот раздел. Обновите страницу.\nОБНОВИТЬ",
+      "host_survived": true,
+      "reports": [
+        {
+          "message": "WMS QA artificial FBS child exception",
+          "stack": "Error: WMS QA artificial FBS child exception\n    at http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:273:10\n    at Object.react_stack_bottom_frame (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:12904:13)\n    at runWithFiberInDEV (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:851:66)\n    at commitHookEffectListMount (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6617:153)\n    at commitHookLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6605:55)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6959:19)\n    at recursivelyTraverseLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7479:102)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7047:14)\n    at recursivelyTraverseLayoutEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7479:102)\n    at commitLayoutEffectOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:6962:6)",
+          "url": "http://127.0.0.1:5577/tmp/wms477-astra-repro/index.html",
+          "screen": "/tmp/wms477-astra-repro/index.html",
+          "component": "FfFbsSupplyWorkspace",
+          "action": "react\n    at FaultInjector (http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:263:26)\n    at ErrorBoundary (http://127.0.0.1:5577/src/components/errors/ErrorBoundary.tsx:84:8)\n    at App (http://127.0.0.1:5577/tmp/wms477-astra-repro/main.tsx:283:34)",
+          "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "app_build": "clientErrorReport.ts"
+        }
+      ],
+      "post_reload_poll": {
+        "before": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        },
+        "after": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        }
+      }
+    },
+    "external_dom_removal": {
+      "removed_dom": "<div class=\"MuiBox-root css-e3oht\" data-testid=\"fbs-packing-size\"><span class=\"MuiTypography-root MuiTypography-caption css-1icoiyk-MuiTypography-root\">Размер</span><p class=\"MuiTypography-root MuiTypography-body2 css-8m3w6a-MuiTypography-root\">—</p></div>",
+      "before_error": {
+        "scan": "010460PARTIAL",
+        "selected": 1,
+        "active": 1,
+        "focused": true,
+        "fallback": 0,
+        "host_visible": true,
+        "rows": [
+          "Добавленный товар L\n\nart-6 · barcode-6 · заказ 6\nРазмер\n\nL\n\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 0006\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR",
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nРазмер\n\n—\n\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ]
+      },
+      "recovered": {
+        "scan": "",
+        "selected": 0,
+        "active": 0,
+        "focused": true,
+        "fallback": 0,
+        "host_visible": true,
+        "rows": [
+          "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+        ]
+      },
+      "reports": [
+        {
+          "message": "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+          "stack": "NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.\n    at removeChild (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:10585:19)\n    at runWithFiberInDEV (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:851:66)\n    at commitDeletionEffectsOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7111:7)\n    at recursivelyTraverseDeletionEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7073:50)\n    at commitDeletionEffectsOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7134:6)\n    at recursivelyTraverseDeletionEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7073:50)\n    at commitDeletionEffectsOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7134:6)\n    at recursivelyTraverseDeletionEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7073:50)\n    at commitDeletionEffectsOnFiber (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7134:6)\n    at recursivelyTraverseMutationEffects (http://127.0.0.1:5577/node_modules/.vite/deps/react-dom_client.js?v=b568d78b:7223:5)",
+          "url": "http://127.0.0.1:5577/tmp/wms477-astra-repro/index.html",
+          "screen": "/tmp/wms477-astra-repro/index.html",
+          "component": "FfFbsSupplyWorkspace",
+          "action": "react\n    at div (<anonymous>)\n    at Styled(div) (http://127.0.0.1:5577/node_modules/.vite/deps/styled-Dt_zTh3p.js?v=b568d78b:3222:50)\n    at Box (http://127.0.0.1:5577/node_modules/.vite/deps/@mui_material.js?v=b568d78b:18:17)\n    at PackingSizeCell (http://127.0.0.1:5577/src/screens/v2/FfFbsS",
+          "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "app_build": "clientErrorReport.ts"
+        }
+      ],
+      "post_recovery_poll": {
+        "before": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        },
+        "after": {
+          "scan": "010460PARTIAL",
+          "selected": 1,
+          "active": 1,
+          "focused": true,
+          "fallback": 0,
+          "host_visible": true,
+          "rows": [
+            "Товар поставки A\n\nart-A1 · barcode-A1 · заказ 1\nЧЗ принят WB\nДоступно ЧЗ\n\n0 · нужно 0\n\nСтикер\n\n90100 1234\n\nЧЗ\n\nQA-CODE\n\nТЗ\nQR"
+          ]
+        }
+      }
+    }
+  }
+}
