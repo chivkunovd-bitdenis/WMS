@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   qualifyWarehouseRuleValues,
+  qualifyWbWarehouseRuleValues,
   warehouseNumberFromRuleKey,
   warehouseRuleKey,
   warehouseUnitsAfterInput,
@@ -36,5 +37,29 @@ describe('поштучный лимит склада', () => {
   it('различает явный ноль оператора и незаданный склад', () => {
     expect(warehouseUnitsAfterInput({}, 'wb:1', 0)).toEqual({ 'wb:1': 0 })
     expect(warehouseUnitsAfterInput({ 'wb:1': 7, 'wb:2': 3 }, 'wb:1', null)).toEqual({ 'wb:2': 3 })
+  })
+})
+
+// Экран остатка FBS показывает только склады Wildberries, а правило приходит с
+// ключами обеих площадок. Когда у продавца склад Ozon с тем же номером, сервер
+// присылает wb:123 — и строка, знавшая себя как «123», показывала пустое поле,
+// заводила второй ключ на тот же склад и не могла очистить прежний.
+describe('ключи правила на экране остатка FBS', () => {
+  const wbNumbers = new Set(['123', '777'])
+
+  it('сводит строку склада и сохранённый лимит к одному ключу', () => {
+    expect(qualifyWbWarehouseRuleValues({ 'wb:123': 0, 'ozon:123': 5 }, wbNumbers))
+      .toEqual({ 'wb:123': 0, 'ozon:123': 5 })
+    expect(qualifyWbWarehouseRuleValues({ 123: 0, 777: 4 }, wbNumbers))
+      .toEqual({ 'wb:123': 0, 'wb:777': 4 })
+  })
+
+  it('не присваивает Wildberries чужой номер склада', () => {
+    expect(qualifyWbWarehouseRuleValues({ 999: 12 }, wbNumbers)).toEqual({ 999: 12 })
+  })
+
+  it('после приведения ключей очистка поля убирает настоящий лимит склада', () => {
+    const units = qualifyWbWarehouseRuleValues({ 'wb:123': 0, 'ozon:123': 5 }, wbNumbers)
+    expect(warehouseUnitsAfterInput(units, 'wb:123', null)).toEqual({ 'ozon:123': 5 })
   })
 })
