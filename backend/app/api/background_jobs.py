@@ -24,11 +24,14 @@ from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import (
     JOB_TYPE_FBS_LABEL_PRINT,
+    JOB_TYPE_FBS_STOCK_SYNC,
     JOB_TYPE_MOVEMENTS_DIGEST,
+    JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
     JOB_TYPE_WILDBERRIES_CARDS_SYNC,
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
     JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
 )
+from app.services.seller_shop_service import uses_home_seller_scope
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 router = APIRouter(
@@ -245,5 +248,33 @@ async def get_background_job(
         output.result_json = {
             k: v for k, v in (output.result_json or {}).items() if k != "claim_id"
         }
+        return output
+    if await uses_home_seller_scope(session, user):
+        # These workers pass payload seller_id to their seller-scoped service.
+        # Unknown/general workers cannot establish ownership from an arbitrary field.
+        seller_job_types = {
+            JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+            JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
+            JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
+            JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
+            JOB_TYPE_FBS_STOCK_SYNC,
+        }
+        raw_seller_id = (job.payload_json or {}).get("seller_id")
+        try:
+            job_seller_id = uuid.UUID(raw_seller_id) if isinstance(raw_seller_id, str) else None
+        except ValueError:
+            job_seller_id = None
+        if (
+            job.job_type not in seller_job_types
+            or job_seller_id is None
+            or job_seller_id != user.seller_id
+            or (job.result_json or {}).get("seller_id", str(job_seller_id)) != str(job_seller_id)
+        ):
+            raise HTTPException(404, "job_not_found")
+        output = _job_out(job)
+        # Historic failures include arbitrary str(exc), potentially SQL parameters.
+        # Keep the own job readable without exposing those unscoped diagnostics.
+        if output.error_message:
+            output.error_message = "Не удалось выполнить задачу"
         return output
     return _job_out(job)

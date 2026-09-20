@@ -42,9 +42,16 @@ from sqlalchemy import select, text
 
 AVPACK_SLUG = "avpack-9uczh"
 SAMPLE_LIMIT = 3  # Per job type and scenario; includes newest and oldest rows.
-# These are the two task types created by existing seller-facing flows. Having a
-# seller_id does not turn an FF-only print/order/stock task into a seller task.
-SELLER_JOB_TYPES = frozenset({"wildberries_cards_sync", "storage_measurement_rebuild"})
+# Producer and result of each type are seller-scoped, including three FF-started
+# syncs. Initiator alone is not an ownership or authorization signal.
+SELLER_JOB_TYPES = frozenset({
+    "wildberries_cards_sync",
+    "storage_measurement_rebuild",
+    "wildberries_supplies_sync",
+    "wildberries_marketplace_orders_sync",
+    "fbs_stock_sync",
+})
+SAFE_SELLER_ERROR = "Не удалось выполнить задачу"
 JOB_CLASSES = ("home", "foreign", "tenant-wide", "ff-only")
 PRIVATE_JOB_FIELDS = frozenset({"payload_json", "result_json", "error_message"})
 
@@ -155,13 +162,25 @@ async def check_job(client, job, *, allow, home_id=None):
     except Exception as exc:  # noqa: BLE001 - never print private SQL/body in traceback
         return {"verdict": "error", "error_type": type(exc).__name__}
     if allow:
-        valid = response.status_code == 200 and isinstance(body, dict)
+        valid = (
+            response.status_code == 200
+            and isinstance(body, dict)
+            and isinstance(body.get("status"), str)
+        )
         if home_id is not None:
             payload = body.get("payload_json") if isinstance(body, dict) else None
+            result = body.get("result_json") if isinstance(body, dict) else None
+            error = body.get("error_message") if isinstance(body, dict) else None
             valid = (
                 valid
                 and isinstance(payload, dict)
                 and as_uuid(payload.get("seller_id")) == home_id
+                and (
+                    not isinstance(result, dict)
+                    or "seller_id" not in result
+                    or as_uuid(result.get("seller_id")) == home_id
+                )
+                and error in (None, "", SAFE_SELLER_ERROR)
             )
     else:
         # Check that denial does not wrap private fields or a full result in detail.

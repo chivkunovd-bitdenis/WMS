@@ -35,8 +35,10 @@ def _upgrade(connection: Connection) -> None:
         migration.upgrade()
 
 
+@pytest.mark.parametrize("slug", ["avpack", "avpack-9uczh"])
 async def test_migration_preserves_only_existing_eligible_delegated_grants(
     db_session: AsyncSession,
+    slug: str,
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -44,7 +46,7 @@ async def test_migration_preserves_only_existing_eligible_delegated_grants(
     monkeypatch.delenv("shop_manager_emails", raising=False)
     monkeypatch.delenv("SHOP_MANAGER_EMAILS", raising=False)
     monkeypatch.setenv("WMS_SHOP_MANAGER_EMAILS", " Exact@Merchant.Ru , ")
-    tenant = Tenant(name="AVpack", slug="avpack")
+    tenant = Tenant(name="AVpack", slug=slug)
     foreign = Tenant(name="Other", slug="other")
     db_session.add_all([tenant, foreign])
     await db_session.flush()
@@ -91,7 +93,7 @@ async def test_migration_preserves_only_existing_eligible_delegated_grants(
         )
         db_session.add(user)
         await db_session.flush()
-        expected[user.id] = outcome
+        expected[user.id] = flag if slug == "avpack-9uczh" else outcome
         if delegated is not None:
             db_session.add(
                 SellerShopDelegation(

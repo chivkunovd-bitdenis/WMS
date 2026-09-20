@@ -37,10 +37,10 @@ from app.services.login_rate_limit import (
 from app.services.seller_shop_service import (
     SellerShopError,
     can_act_as_seller,
+    can_manage_seller_shops,
     list_delegatable_shops,
     list_switchable_shops,
     update_enabled_shops,
-    user_can_manage_seller_shops,
 )
 from app.services.seller_staff_permissions_service import get_seller_permissions
 from app.services.staff_permissions_service import get_staff_permissions
@@ -393,7 +393,7 @@ async def me(
         active = await session.get(Seller, active_seller_id)
         if active is not None:
             active_seller_name = active.name
-    can_manage = user_can_manage_seller_shops(user)
+    can_manage = await can_manage_seller_shops(session, user)
     switchable = await list_switchable_shops(session, user)
     delegatable = await list_delegatable_shops(session, user)
     switchable_out = [
@@ -475,7 +475,7 @@ async def put_seller_shops(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[SellerShopOut]:
-    if not user_can_manage_seller_shops(user):
+    if not await can_manage_seller_shops(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
         rows = await update_enabled_shops(session, user, body.enabled_seller_ids)
