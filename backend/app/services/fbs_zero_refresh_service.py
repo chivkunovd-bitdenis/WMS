@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
-from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 
 logger = logging.getLogger(__name__)
@@ -22,6 +21,7 @@ _tasks: set[asyncio.Task[None]] = set()
 async def refresh_binding_zero_stocks(
     tenant_id: uuid.UUID, seller_id: uuid.UUID, binding_id: uuid.UUID,
 ) -> None:
+    from app.services.fbs_autopoll_service import list_active_stock_sync_bindings
     from app.services.fbs_stock_sync_service import sync_binding_stocks
 
     try:
@@ -35,8 +35,11 @@ async def refresh_binding_zero_stocks(
         ):
             if not acquired:
                 return
-            binding = await session.get(FbsWarehouseBinding, binding_id)
-            if binding is None or binding.marketplace != "wb":
+            # Reuse the normal publication boundary at execution time: an ETA
+            # can outlive moving this binding to an excluded auto-FBS warehouse.
+            bindings = await list_active_stock_sync_bindings(session, tenant_id, seller_id)
+            binding = next((row for row in bindings if row.id == binding_id), None)
+            if binding is None:
                 return
             await sync_binding_stocks(
                 session, tenant_id, seller_id, binding, client, zero_refresh_only=True,

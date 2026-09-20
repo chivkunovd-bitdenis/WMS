@@ -813,3 +813,93 @@ async def test_release_zero_only_preserves_production_publication_boundary(
         assert result.products_targeted == 0
     assert transport.put_attempts == 0
     assert transport.post_calls == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_zero_survives_percentage_mode_and_resumes_refresh(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    from app.services import fbs_stock_rule_service as rules
+
+    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="zero-mode-roundtrip", fbs_percent=100,
+    )
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 50)
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], rules.FbsRule(
+            publish=True, same_everywhere=True, percent=100, units_mode=True,
+            units_by_warehouse={ctx.binding.wb_warehouse_id: 0},
+        ),
+    )
+    transport = _MockStocksTransport()
+    await _run(db_session, ctx, transport)
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], replace(view.rule, units_mode=False),
+    )
+    await rules.reset_legacy_limits_for_products(db_session, ctx.tenant.id, [product.id])
+    view = await rules.get_rule_view(db_session, ctx.tenant.id, product.id)
+    assert view.rule.units_by_warehouse == {ctx.binding.wb_warehouse_id: 0}
+    pool = (await db_session.scalars(select(FbsBindingStockPool))).one()
+    assert pool.units_configured is True
+    eligible = set()
+    assert await rules.publish_amounts_for_binding(
+        db_session, ctx.binding, [product], refresh_zero_product_ids=eligible,
+    ) == {product.id: 50}
+    assert eligible == set()
+    await _run(db_session, ctx, transport)
+    await rules.set_rule_for_products(
+        db_session, ctx.tenant.id, [product.id], replace(view.rule, units_mode=True),
+    )
+    eligible = set()
+    assert await rules.publish_amounts_for_binding(
+        db_session, ctx.binding, [product], refresh_zero_product_ids=eligible,
+    ) == {product.id: 0}
+    assert eligible == {product.id}
+    await _run(db_session, ctx, transport)
+    now += timedelta(minutes=10)
+    await _run(db_session, ctx, transport, zero_refresh_only=True)
+    assert [batch[0].amount for batch in transport.put_calls] == [0, 50, 0, 0]
+
+
+@pytest.mark.asyncio
+async def test_delayed_worker_stops_after_binding_moves_to_auto_fbs_warehouse(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.warehouse import Warehouse
+    from app.services import fbs_zero_refresh_service as refresh
+
+    ctx = await _seed_binding(db_session)
+    ctx.binding.served = False  # This flag is deliberately not a publication boundary.
+    product = _product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, chrt_id=483,
+        sku_suffix="auto-fbs-boundary", fbs_percent=100,
+    )
+    db_session.add(product)
+    await db_session.commit()
+    transport = _MockStocksTransport()
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(refresh.httpx, "AsyncClient", lambda: client_type(
+        transport=httpx.MockTransport(transport.handler),
+    ))
+    await refresh.refresh_binding_zero_stocks(ctx.tenant.id, ctx.seller.id, ctx.binding.id)
+    assert transport.put_attempts == 1
+    auto_warehouse = Warehouse(
+        tenant_id=ctx.tenant.id, code="fbs-wb-483", name="Automatic FBS warehouse",
+    )
+    db_session.add(auto_warehouse)
+    await db_session.flush()
+    ctx.binding.wms_warehouse_id = auto_warehouse.id
+    await db_session.commit()
+    monkeypatch.setattr(sync, "_utcnow", lambda: datetime.now(UTC) + timedelta(minutes=11))
+    await refresh.refresh_binding_zero_stocks(ctx.tenant.id, ctx.seller.id, ctx.binding.id)
+    assert transport.put_attempts == 1
+    assert transport.post_calls == [[483]]

@@ -938,8 +938,8 @@ async def set_rule_for_products(
                 # Omitted units clear only that mode, preserving saved percentages.
                 if not rule.units_mode or percent is not None:
                     pool.percent = percent
-                pool.units_configured = rule.units_mode and units is not None
                 if rule.units_mode:
+                    pool.units_configured = units is not None
                     pool.quantity = int(units or 0)
                 pool.updated_by = updated_by
         for marketplace in sorted(changed):
