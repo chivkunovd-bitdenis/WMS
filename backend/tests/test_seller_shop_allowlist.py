@@ -31,8 +31,8 @@ def _seller_user(email: str, *, can_manage: bool = False) -> User:
         "owner.denmark@company.ru",
     ],
 )
-def test_shop_manager_markers_allow(email: str) -> None:
-    assert user_can_manage_seller_shops(_seller_user(email)) is True
+def test_email_markers_do_not_grant_shop_management(email: str) -> None:
+    assert user_can_manage_seller_shops(_seller_user(email)) is False
 
 
 @pytest.mark.parametrize(
@@ -62,3 +62,10 @@ def test_non_seller_role_denied_even_with_marker() -> None:
         can_manage_seller_shops=False,
     )
     assert user_can_manage_seller_shops(user) is False
+
+
+def test_environment_allowlist_does_not_grant_shop_management(monkeypatch) -> None:
+    from app.core.settings import settings
+
+    monkeypatch.setattr(settings, "shop_manager_emails", "regular@mail.ru")
+    assert user_can_manage_seller_shops(_seller_user("regular@mail.ru")) is False

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models.product import Product
 from app.models.seller_shop_delegation import SellerShopDelegation
+from app.models.user import User
 from app.services.tokens import decode_access_token
 from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
@@ -63,6 +64,9 @@ async def _seed_product(
 
 async def _allow_seller_shop(user_id: str, seller_id: str) -> None:
     async with SessionLocal() as session:
+        user = await session.get(User, uuid.UUID(user_id))
+        assert user is not None
+        user.can_manage_seller_shops = True
         session.add(
             SellerShopDelegation(
                 user_id=uuid.UUID(user_id),

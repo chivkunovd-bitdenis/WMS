@@ -150,8 +150,9 @@ class Settings(BaseSettings):
             "SHOP_MANAGER_EMAILS",
         ),
         description=(
-            "Comma-separated seller user emails allowed to manage/switch shops "
-            "(in addition to users.can_manage_seller_shops and built-in email markers)."
+            "Legacy allowlist retained for configuration compatibility only. "
+            "WMS-488 migrates existing delegated managers to explicit DB grants; "
+            "this setting no longer grants access at runtime."
         ),
     )
     public_base_url: str = Field(

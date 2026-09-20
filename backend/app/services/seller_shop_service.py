@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FULFILLMENT_SELLER
-from app.core.settings import settings
 from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.user import User
@@ -21,17 +20,6 @@ class SellerShopError(Exception):
 _TEST_EMAIL_SUFFIXES = ("@test.example.com", "@example.com")
 _TEST_EMAIL_PREFIXES = ("e2e-", "iso-", "test-", "cat-")
 
-# Built-in allowlist for shop manager UI (seller portal sidebar).
-# Also: users.can_manage_seller_shops in DB, WMS_SHOP_MANAGER_EMAILS env.
-_SHOP_MANAGER_EMAIL_MARKERS = (
-    "vitalik",
-    "vitaliy",
-    "виталий",
-    "denmark",
-    "denmarks",
-    "денмарк",
-)
-
 
 def is_test_user_email(email: str | None) -> bool:
     if email is None:
@@ -44,20 +32,10 @@ def is_test_user_email(email: str | None) -> bool:
 
 
 def user_can_manage_seller_shops(user: User) -> bool:
-    """Shop switcher in seller portal — allowlist only (not all sellers)."""
+    """Shop management requires an explicit grant, independent of email."""
     if user.role != FULFILLMENT_SELLER or user.seller_id is None:
         return False
-    if user.can_manage_seller_shops:
-        return True
-    email = (user.email or "").strip().lower()
-    if any(marker in email for marker in _SHOP_MANAGER_EMAIL_MARKERS):
-        return True
-    configured = settings.shop_manager_emails.strip().lower()
-    if configured:
-        allowed = {e.strip() for e in configured.split(",") if e.strip()}
-        if email in allowed:
-            return True
-    return False
+    return bool(user.can_manage_seller_shops)
 
 
 async def is_test_seller(
