@@ -89,13 +89,6 @@ def run_fbs_order_statuses_autopoll_task() -> None:
     asyncio.run(sync_fbs_order_statuses_all_sellers())
 
 
-@celery_app.task(name="wms.fbs_marking_verdicts_autopoll")
-def run_fbs_marking_verdicts_autopoll_task() -> None:
-    from app.services.fbs_autopoll_service import sync_fbs_marking_verdicts_all_sellers
-
-    asyncio.run(sync_fbs_marking_verdicts_all_sellers())
-
-
 @celery_app.task(name="wms.fbs_stock_reconcile")
 def run_fbs_stock_reconcile_task() -> None:
     from app.services.fbs_autopoll_service import reconcile_fbs_stocks_all_sellers
