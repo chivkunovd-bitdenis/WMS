@@ -113,24 +113,27 @@ export async function loadFbsStockDialog({
   headers,
   sellerId,
   chosen,
+  fetchImpl = fetch,
 }: {
   headers: Record<string, string>
   sellerId: string
   /** Товары одного продавца, для которых открывается окно. */
   chosen: FbsStockDialogRow[]
+  /** Подменяется в тестах; по умолчанию — глобальный fetch на момент вызова. */
+  fetchImpl?: typeof fetch
 }): Promise<FbsStockDialogData> {
   const [rulesRes, wb, bindingsRes, ozon] = await Promise.all([
-    fetch(apiUrl('/products/fbs-rule/bulk'), {
+    fetchImpl(apiUrl('/products/fbs-rule/bulk'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ product_ids: chosen.map((r) => r.id) }),
     }),
     loadDirectory<WbWarehouseRow>(() =>
-      fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), { headers }),
+      fetchImpl(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), { headers }),
     ),
-    fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), { headers }),
+    fetchImpl(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), { headers }),
     loadDirectory<OzonWarehouseRow>(() =>
-      fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), { headers }),
+      fetchImpl(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), { headers }),
     ),
   ])
   if (!rulesRes.ok) throw new Error(await readApiErrorMessage(rulesRes))

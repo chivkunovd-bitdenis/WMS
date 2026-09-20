@@ -1,25 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiUrl } from '../../../api'
-import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FbsStockDialog } from './FbsStockDialog'
 import {
-  loadFbsStockDialog,
   toStockDialogProduct,
-  type ApiBulkRuleItem,
   type FbsStockDialogData,
   type FbsStockDialogRow,
 } from './fbsStockDialogLoader'
+import { createStockDialogSession, type BindingOutcome, type BindingRuleBody } from './fbsStockDialogSession'
 import type { CabinetWarehouse, StockBinding } from './fbsStockBlocks'
 
 // Окно «Остаток для FBS» с сетью (WMS-469). Одно на три входа: каталог ФФ,
 // экран остатков FBS и кабинет селлера. Здесь — загрузка, сохранение правила,
 // добавление связки, смена склада ФФ и приём заказов; само окно про сеть не
-// знает и рисует то, что ему дали.
+// знает и рисует то, что ему дали. Запросы и их исходы — в
+// fbsStockDialogSession.ts.
 //
 // Связка и приём заказов сохраняются сразу и относятся ко всему продавцу;
 // «Отмена» их не откатывает. Лимиты выбранных товаров уходят только по
-// «Сохранить». Любой отказ или потеря ответа оставляют окно открытым с
-// причиной и введённым черновиком (R16, R17).
+// «Сохранить» и только для изменённых блоков. Любой отказ или потеря ответа
+// оставляют окно открытым с причиной и введённым черновиком, а состояние
+// связок перечитывается с сервера (R16, R17).
 
 type WarehouseOption = { id: string; name: string; code?: string; is_operational?: boolean }
 
@@ -29,11 +28,6 @@ export function selectableWmsWarehouses(warehouses: WarehouseOption[]): Array<{ 
     .filter((one) => one.is_operational !== false)
     .filter((one) => !(one.code ?? '').startsWith('fbs-wb-') && !one.name.startsWith('FBS WB '))
     .map((one) => ({ id: one.id, name: one.name }))
-}
-
-type SaveResponse = {
-  items?: ApiBulkRuleItem[]
-  clamps?: Record<string, { requested_value: number; saved_value: number; limiting_product_id: string; limiting_product_name: string }>
 }
 
 export function FbsStockDialogContainer({
@@ -67,21 +61,26 @@ export function FbsStockDialogContainer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [serverClamps, setServerClamps] = useState<Record<string, { free: number; product: { name: string } }>>()
   const changedRef = useRef(false)
-  const headers = useCallback(
-    () => ({ Authorization: `Bearer ${token}` }),
-    [token],
+  const session = useMemo(
+    () => createStockDialogSession({ headers: { Authorization: `Bearer ${token}` }, sellerId }),
+    [sellerId, token],
   )
 
-  const load = useCallback(
-    () => loadFbsStockDialog({ headers: headers(), sellerId, chosen }),
-    [chosen, headers, sellerId],
-  )
-
+  // Новый набор товаров — новая загрузка. Пока идёт первая, каталог ещё
+  // доступен, и выбор могут поменять: ответ прежней загрузки отбрасывается,
+  // окно показывает и сохраняет только текущий выбор.
+  const chosenKey = chosen.map((one) => one.id).join('|')
+  const chosenRef = useRef(chosen)
+  chosenRef.current = chosen
   useEffect(() => {
     let alive = true
-    load()
+    setData(null)
+    setActionError(null)
+    setServerClamps(undefined)
+    session
+      .load(chosenRef.current)
       .then((loaded) => {
-        if (alive) setData(loaded)
+        if (alive && loaded) setData(loaded)
       })
       .catch((e: unknown) => {
         if (!alive) return
@@ -91,113 +90,100 @@ export function FbsStockDialogContainer({
     return () => {
       alive = false
     }
-    // Загружаем один раз на открытие: товары и продавец за время жизни окна не меняются.
+    // onLoadError/onClose — обработчики родителя, на них загрузка не завязана.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  /** Перечитать серверное состояние после немедленного действия. Черновики окна остаются. */
-  const reload = useCallback(async () => {
-    setData(await load())
-  }, [load])
+  }, [session, chosenKey])
 
   function close() {
     onClose()
     if (changedRef.current) onChanged?.()
   }
 
-  async function run(action: () => Promise<void>, failureMessage: string) {
+  /** Немедленное действие со связкой: исход и перечитанное состояние — из сессии. */
+  async function immediate(action: () => Promise<BindingOutcome>) {
     setBusy(true)
     setActionError(null)
-    try {
-      await action()
-      changedRef.current = true
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : failureMessage)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // Одна ручка на связку целиком: сопоставление и «принимаем заказы». Не
-  // переданное поле сервер не меняет, но текущий склад ФФ отправляем всегда —
-  // так запрос читается однозначно.
-  async function putBinding(
-    marketplace: 'wb' | 'ozon',
-    externalId: string,
-    body: { wms_warehouse_id: string; served: boolean },
-  ) {
-    const res = await fetch(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${externalId}`), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...headers() },
-      body: JSON.stringify({ marketplace, ...body }),
-    })
-    if (!res.ok) throw new Error(await readApiErrorMessage(res))
-    await reload()
+    const outcome = await action()
+    // После отказа состояние на сервере могло измениться (ответ потерян):
+    // показываем перечитанное, если оно есть, и не считаем окно нетронутым.
+    if (outcome.data) setData(outcome.data)
+    if (!outcome.ok) setActionError(outcome.message)
+    changedRef.current = true
+    setBusy(false)
   }
 
   function addBinding(warehouse: CabinetWarehouse, wmsWarehouseId: string) {
-    void run(
-      () => putBinding(warehouse.marketplace, warehouse.externalId, { wms_warehouse_id: wmsWarehouseId, served: true }),
-      'Не удалось добавить склад',
+    void immediate(() =>
+      session.putBinding(warehouse.marketplace, warehouse.externalId, { wms_warehouse_id: wmsWarehouseId, served: true }),
     )
   }
 
   function changeWmsWarehouse(binding: StockBinding, wmsWarehouseId: string) {
-    void run(
-      () => putBinding(binding.marketplace, binding.externalId, { wms_warehouse_id: wmsWarehouseId, served: binding.served }),
-      'Не удалось сменить склад ФФ',
+    void immediate(() =>
+      session.putBinding(binding.marketplace, binding.externalId, { wms_warehouse_id: wmsWarehouseId, served: binding.served }),
     )
   }
 
   function setServed(binding: StockBinding, served: boolean) {
-    void run(
-      () => putBinding(binding.marketplace, binding.externalId, { wms_warehouse_id: binding.wmsWarehouseId, served }),
-      served ? 'Не удалось включить приём заказов' : 'Не удалось отключить приём заказов',
+    void immediate(() =>
+      session.putBinding(binding.marketplace, binding.externalId, { wms_warehouse_id: binding.wmsWarehouseId, served }),
     )
   }
 
-  function save(byBinding: Record<string, { publish: boolean; mode: 'percent' | 'units'; value: number }>) {
+  function save(byBinding: Record<string, BindingRuleBody>) {
     if (!data) return
-    void run(async () => {
-      const res = await fetch(apiUrl('/products/fbs-rule'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headers() },
-        // PUT /products/fbs-rule ждёт правило вложенным в rule.
-        body: JSON.stringify({ product_ids: chosen.map((one) => one.id), rule: { by_binding: byBinding } }),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const saved = (await res.json()) as SaveResponse
-      const clamps = saved.clamps ?? {}
-      changedRef.current = true
-      if (Object.keys(clamps).length === 0) {
-        close()
-        return
+    void (async () => {
+      setBusy(true)
+      setActionError(null)
+      const outcome = await session.saveRule(chosenRef.current.map((one) => one.id), byBinding)
+      setBusy(false)
+      switch (outcome.kind) {
+        case 'nothing':
+          // Изменённых блоков нет: серверу нечего сохранять, запрос не уходил.
+          close()
+          return
+        case 'saved':
+          changedRef.current = true
+          close()
+          return
+        case 'clamped': {
+          // Свободный остаток изменился между открытием и сохранением, и сервер
+          // сохранил меньше запрошенного. Успех есть, но не тот, что на экране:
+          // показываем фактически сохранённое и подпись с ограничившим товаром.
+          changedRef.current = true
+          const savedById = new Map(outcome.items.map((one) => [one.product_id, one]))
+          setData((current) =>
+            current
+              ? {
+                  ...current,
+                  products: current.products.map((product) => {
+                    const row = chosenRef.current.find((one) => one.id === product.id)
+                    const item = savedById.get(product.id)
+                    return row && item ? toStockDialogProduct(row, item) : product
+                  }),
+                }
+              : current,
+          )
+          setServerClamps(
+            Object.fromEntries(
+              Object.entries(outcome.clamps).map(([bindingId, clamp]) => [
+                bindingId,
+                { free: clamp.saved_value, product: { name: clamp.limiting_product_name } },
+              ]),
+            ),
+          )
+          return
+        }
+        case 'error':
+          // Черновик остаётся в окне; связки и остатки — перечитанные, если
+          // перечитать удалось. Правило могло сохраниться до потери ответа —
+          // повтор того же запроса состояние не удвоит (R22).
+          if (outcome.data) setData(outcome.data)
+          setActionError(outcome.message)
+          changedRef.current = true
+          return
       }
-      // Свободный остаток изменился между открытием и сохранением, и сервер
-      // сохранил меньше запрошенного. Успех есть, но не тот, что на экране:
-      // показываем фактически сохранённое и подпись с ограничившим товаром.
-      const savedById = new Map((saved.items ?? []).map((one) => [one.product_id, one]))
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              products: current.products.map((product) => {
-                const row = chosen.find((one) => one.id === product.id)
-                const item = savedById.get(product.id)
-                return row && item ? toStockDialogProduct(row, item) : product
-              }),
-            }
-          : current,
-      )
-      setServerClamps(
-        Object.fromEntries(
-          Object.entries(clamps).map(([bindingId, clamp]) => [
-            bindingId,
-            { free: clamp.saved_value, product: { name: clamp.limiting_product_name } },
-          ]),
-        ),
-      )
-    }, 'Не удалось сохранить правило')
+    })()
   }
 
   if (!data) return null

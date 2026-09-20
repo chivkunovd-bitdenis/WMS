@@ -189,9 +189,9 @@ export function draftFromState(state: ProductBindingState | undefined): BlockDra
 }
 
 /**
- * Черновики всех блоков на открытие окна. Как и раньше, при нескольких товарах
- * окно начинает с правила первого выбранного: оно и применится ко всем при
- * сохранении.
+ * Черновики всех блоков на открытие окна. При нескольких товарах окно
+ * начинает с правила первого выбранного; ко всем выбранным применяются
+ * только те блоки, которые оператор в этом открытии менял.
  */
 export function initialDrafts(
   bindings: StockBinding[],
@@ -323,7 +323,13 @@ export function capNoteText(limit: { free: number; product: { name: string } }):
   return `товара «${limit.product.name}» всего ${NUMBER_FORMAT(limit.free)} ${pluralRu(limit.free, 'штука', 'штуки', 'штук')}`
 }
 
-/** Тело `rule.by_binding` для PUT /products/fbs-rule: видимые блоки, с которых принимаем заказы. */
+/**
+ * Тело `rule.by_binding` для PUT /products/fbs-rule из переданных блоков —
+ * вызывающий отдает только изменённые оператором. Не переданный блок сервер
+ * не трогает, поэтому правки WB не задевают Ozon соседних товаров (R8, R24).
+ * Пустой результат означает «нечего сохранять»: отправлять его нельзя —
+ * пустой by_binding сервер читает как старую форму правила.
+ */
 export function ruleBodyFromDrafts(
   bindings: StockBinding[],
   drafts: Record<string, BlockDraft>,

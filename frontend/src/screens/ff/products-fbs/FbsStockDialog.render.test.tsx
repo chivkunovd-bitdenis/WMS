@@ -99,6 +99,31 @@ describe('WMS-469 окно «Остаток для FBS»: структура', (
   })
 })
 
+describe('WMS-469 F2/F6: сохранённый лимит и время записи', () => {
+  it('R14: сохранённый ручной потолок выше остатка при открытии не режется и подписи нет', () => {
+    const markup = render({ products: [product('p', 'Футболка', { 'b-wb': { free: 30, mode: 'units', value: 50 } })] })
+    expect(tag(markup, 'fbs-stock-units-b-wb')).toContain('value="50"')
+    expect(markup).not.toContain('data-testid="fbs-stock-cap-note-b-wb"')
+    // Уедет min(50, 30) = 30 из 30 — индикатор честно показывает 100 %.
+    expect(markup).toContain('>100 %<')
+  })
+
+  it('R14: выключенная передача с потолком выше остатка тоже остаётся как сохранена', () => {
+    const markup = render({ products: [product('p', 'Футболка', { 'b-wb': { free: 30, mode: 'units', value: 50, publish: false } })] })
+    expect(tag(markup, 'fbs-stock-units-b-wb')).toContain('value="50"')
+    expect(tag(markup, 'fbs-stock-publish-b-wb')).not.toContain('checked')
+  })
+
+  it('R16/R17: пока идёт запись, поля, переключатель, галка приёма и кнопки заперты', () => {
+    const markup = render({ busy: true, products: [product('p', 'Футболка', { 'b-wb': { free: 30, mode: 'units', value: 10 } })] })
+    for (const id of ['fbs-stock-units-b-wb', 'fbs-stock-by-percent-b-wb', 'fbs-stock-publish-b-wb', 'fbs-stock-served-b-wb', 'fbs-stock-bind-b-wb', 'fbs-stock-add', 'fbs-stock-cancel', 'fbs-stock-save']) {
+      expect(tag(markup, id), id).toContain('disabled')
+    }
+    expect(markup).toContain('data-testid="fbs-stock-percent-b-wb"')
+    expect(tag(markup, 'fbs-stock-percent-b-wb')).toContain('Mui-disabled')
+  })
+})
+
 describe('WMS-454 C28: Ozon-блок только у товара с карточкой Ozon', () => {
   it('прячет Ozon у WB-only товара, даже если у продавца есть Ozon-привязка', () => {
     const markup = render({ bindings: [wb, ozon],
@@ -199,6 +224,25 @@ describe('WMS-457 названия и причины в окне', () => {
     expect(markup).toContain('название недоступно')
     // Справочник не получен — добавить склад нельзя, и кнопка заперта.
     expect(tag(markup, 'fbs-stock-add')).toContain('disabled')
+  })
+
+  it('F7 / R19: причина недоступности имени Ozon видна в окне у селлера, без формы добавления', () => {
+    const reason = 'Справочник складов Ozon недоступен: боевые запросы к Ozon выключены настройкой WMS_OZON_LIVE_API.'
+    const markup = render({
+      canEditBindings: false, onAddBinding: undefined, onChangeWmsWarehouse: undefined, onServedChange: undefined,
+      bindings: [{ ...wb, editable: false }, { ...ozon, name: '№ 1020005029603630', nameIssue: 'list_unavailable', editable: false }],
+      products: [product('p', 'Худи', { 'b-wb': { free: 100 }, 'b-ozon': { free: 100 } })],
+      cabinets: { wb: received, ozon: { received: false } }, ozonWarehousesError: reason,
+    })
+    expect(markup).not.toContain('data-testid="fbs-stock-picker"')
+    expect(markup).toContain('data-testid="fbs-stock-ozon-directory-error"')
+    expect(markup).toContain(reason)
+    expect(markup).toContain('название недоступно')
+  })
+
+  it('F7: без Ozon-блока без имени плашки Ozon нет — у продавца только WB', () => {
+    const markup = render({ cabinets: { wb: received, ozon: { received: false } }, ozonWarehousesError: 'Справочник складов Ozon недоступен' })
+    expect(markup).not.toContain('data-testid="fbs-stock-ozon-directory-error"')
   })
 
   it('R17: ошибка действия показывается в окне, а само окно с блоками остаётся', () => {

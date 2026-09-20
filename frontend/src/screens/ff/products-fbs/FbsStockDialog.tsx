@@ -99,7 +99,9 @@ export type FbsStockDialogProps = {
   ozonWarehousesError?: string | null
   /**
    * Обрезка сервером после сохранения: свободный остаток изменился между
-   * открытием и сохранением, сервер сохранил меньше запрошенного.
+   * открытием и сохранением, сервер сохранил меньше запрошенного. Новый объект
+   * означает, что всё отправленное сохранено: черновики этих блоков
+   * принимают сохранённое, подпись называет ограничивший товар.
    */
   serverClamps?: Record<string, { free: number; product: { name: string } }>
 }
@@ -140,38 +142,69 @@ function FbsStockDialogBody({
   // могут появляться прямо в окне: черновик новой привязки берётся из
   // сохранённого состояния первого товара в момент, когда она впервые видна.
   const [drafts, setDrafts] = useState<Record<string, BlockDraft>>({})
+  // Блоки, которые оператор менял в этом открытии. Сохраняются только они:
+  // нетронутый блок соседней площадки у остальных выбранных товаров остаётся
+  // со своим правилом (R8, R24), а пустой набор изменений не отправляется.
+  const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const [capNotes, setCapNotes] = useState<Record<string, { free: number; product: { name: string } }>>({})
   const [picker, setPicker] = useState<Picker | null>(null)
+  // Блок, у которого оператор только что сменил склад ФФ: после перечитывания
+  // его ручное число сверяется с остатком уже на новом складе.
+  const [reclamp, setReclamp] = useState<string | null>(null)
   const draftOf = (binding: StockBinding): BlockDraft =>
     drafts[binding.id] ?? draftFromState(first.byBinding[binding.id])
-  const patchDraft = (binding: StockBinding, next: BlockDraft) =>
+  const patchDraft = (binding: StockBinding, next: BlockDraft) => {
     setDrafts((current) => ({ ...current, [binding.id]: next }))
+    setTouched((current) => (current.has(binding.id) ? current : new Set(current).add(binding.id)))
+  }
+  const setNote = (bindingId: string, note: { free: number; product: { name: string } } | null) =>
+    setCapNotes((current) => {
+      if (!note && !(bindingId in current)) return current
+      const next = { ...current }
+      if (note) next[bindingId] = note
+      else delete next[bindingId]
+      return next
+    })
 
-  // Свободный остаток поменялся (сменили склад ФФ, перечитали правила) либо
-  // сохранённое число уже выше того, что есть на складе: ручное число выше
-  // потолка встаёт на максимум с подписью, как при вводе. Смотрим и на
-  // нетронутый черновик — он взят из сохранённого правила и тоже может
-  // превышать новый остаток. Подпись про прежний остаток при этом снимается:
-  // она говорила о складе, которого в блоке уже нет.
+  // Сохранённый операторский потолок при открытии не трогаем, даже если он
+  // выше текущего свободного остатка: лимит меняет только оператор, а уедет
+  // всё равно min(лимит, свободно) (R14). Обрезка — только для нового ввода
+  // (в поле) и после явной смены склада ФФ, когда остаток считается уже по
+  // другому складу (R6, R12). Блок с выключенной передачей не трогаем.
   useEffect(() => {
-    for (const binding of visible) {
-      const draft = draftOf(binding)
-      if (draft.byPercent) continue
-      const cap = unitsCap(binding, products)
-      if (draft.units > cap.free) {
-        patchDraft(binding, { ...draft, units: cap.free })
-        setCapNotes((current) => ({ ...current, [binding.id]: cap }))
-      } else {
-        setCapNotes((current) => {
-          if (!(binding.id in current)) return current
-          const next = { ...current }
-          delete next[binding.id]
-          return next
-        })
-      }
+    if (!reclamp) return
+    setReclamp(null)
+    const binding = visible.find((one) => one.id === reclamp)
+    if (!binding) return
+    const draft = draftOf(binding)
+    const cap = unitsCap(binding, products)
+    if (draft.publish && !draft.byPercent && draft.units > cap.free) {
+      patchDraft(binding, { ...draft, units: cap.free })
+      setNote(binding.id, cap)
+    } else {
+      // Подпись про прежний склад больше не про этот блок.
+      setNote(binding.id, null)
+    }
+    // Срабатывает на перечитывание после смены склада; отказ (actionError)
+    // тоже снимает ожидание, чтобы оно не сработало на чужом перечитывании.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, actionError])
+
+  // Сервер сохранил всё отправленное, но часть — меньше запрошенного. Черновик
+  // равен сохранённому и больше не считается изменённым; подпись называет
+  // ограничивший товар и снимется новым вводом, как местная (R12).
+  useEffect(() => {
+    if (!serverClamps) return
+    setTouched(new Set())
+    for (const [bindingId, clamp] of Object.entries(serverClamps)) {
+      setDrafts((current) => {
+        const base = current[bindingId] ?? draftFromState(first.byBinding[bindingId])
+        return { ...current, [bindingId]: { ...base, byPercent: false, units: clamp.free } }
+      })
+      setNote(bindingId, clamp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products])
+  }, [serverClamps])
 
   const addable = addableWarehouses(cabinets, bindings)
   const anyCabinetReceived = cabinets.wb.received || cabinets.ozon.received
@@ -204,7 +237,9 @@ function FbsStockDialogBody({
   return (
     <AppDialog
       open
-      onClose={onClose}
+      // Пока идёт запись, Escape и клик по фону окно не закрывают: ответ
+      // должен подтвердить именно тот черновик, который отправлен.
+      onClose={busy ? () => undefined : onClose}
       maxWidth="md"
       testId="fbs-stock-dialog"
       title={many ? `Остаток для FBS · ${products.length} ${productsWord}` : 'Остаток для FBS'}
@@ -214,9 +249,10 @@ function FbsStockDialogBody({
             Отмена
           </SecondaryAction>
           <PrimaryAction
-            onClick={() => onSave(ruleBodyFromDrafts(visible, Object.fromEntries(
-              visible.map((binding) => [binding.id, draftOf(binding)]),
-            )))}
+            onClick={() => onSave(ruleBodyFromDrafts(
+              visible.filter((binding) => touched.has(binding.id)),
+              Object.fromEntries(visible.map((binding) => [binding.id, draftOf(binding)])),
+            ))}
             data-testid="fbs-stock-save"
             disabled={busy}
           >
@@ -232,6 +268,12 @@ function FbsStockDialogBody({
         {wbWarehousesError ? (
           <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
         ) : null}
+        {/* Причина, почему у сохранённого Ozon-блока номер вместо названия, —
+            здесь же, в окне: у селлера формы добавления нет, а чип без
+            причины ничего не объясняет (R19). */}
+        {ozonWarehousesError && visible.some((one) => one.marketplace === 'ozon' && one.nameIssue === 'list_unavailable') ? (
+          <ErrorNotice testId="fbs-stock-ozon-directory-error">{ozonWarehousesError}</ErrorNotice>
+        ) : null}
         {actionError ? <ErrorNotice testId="fbs-stock-error">{actionError}</ErrorNotice> : null}
 
         <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }} data-testid="fbs-stock-head">
@@ -246,20 +288,16 @@ function FbsStockDialogBody({
             binding={binding}
             products={products}
             draft={draftOf(binding)}
-            capNote={capNotes[binding.id] ?? serverClamps?.[binding.id]}
+            capNote={capNotes[binding.id]}
             wmsWarehouses={wmsWarehouses}
             editable={canEditBindings && binding.editable}
             busy={busy}
             onDraft={(next) => patchDraft(binding, next)}
-            onCapNote={(note) =>
-              setCapNotes((current) => {
-                const next = { ...current }
-                if (note) next[binding.id] = note
-                else delete next[binding.id]
-                return next
-              })
-            }
-            onChangeWmsWarehouse={(id) => onChangeWmsWarehouse?.(binding, id)}
+            onCapNote={(note) => setNote(binding.id, note)}
+            onChangeWmsWarehouse={(id) => {
+              setReclamp(binding.id)
+              onChangeWmsWarehouse?.(binding, id)
+            }}
             onServedChange={(served) => onServedChange?.(binding, served)}
           />
         ))}
@@ -428,6 +466,7 @@ function BindingBlock({
             control={
               <Switch
                 checked={draft.publish}
+                disabled={busy}
                 onChange={(event) => onDraft({ ...draft, publish: event.target.checked })}
                 sx={{
                   '& .MuiSwitch-switchBase.Mui-checked': { color },
@@ -466,7 +505,7 @@ function BindingBlock({
               // Процент показан числом справа от ползунка; всплывающая
               // подсказка над головкой наезжала бы на подпись переключателя.
               valueLabelDisplay="off"
-              disabled={!draft.publish}
+              disabled={!draft.publish || busy}
               onChange={(_event, next) => {
                 if (!draft.byPercent) return
                 onDraft({ ...draft, percent: snapPercent(Array.isArray(next) ? next[0]! : next) })
@@ -508,7 +547,7 @@ function BindingBlock({
                 onDraft({ ...draft, units })
                 onCapNote(limitedBy)
               }}
-              disabled={!draft.publish}
+              disabled={!draft.publish || busy}
               slotProps={{
                 htmlInput: {
                   inputMode: 'numeric',
@@ -532,7 +571,7 @@ function BindingBlock({
                 onDraft(toggleByPercent(binding, draft, byPercent, products))
                 if (byPercent) onCapNote(null)
               }}
-              disabled={!draft.publish}
+              disabled={!draft.publish || busy}
               testId={`fbs-stock-by-percent-${binding.id}`}
             />
             {capNote ? (

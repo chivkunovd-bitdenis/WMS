@@ -1,4 +1,4 @@
-"""Execute WMS-060's actual saveRule payload builder, then send it to the real ASGI API."""
+"""Execute the actual save path of the WMS-469 stock window, then send it to the real ASGI API."""
 
 from __future__ import annotations
 
@@ -29,51 +29,70 @@ from tests.test_product_fbs_rule_bulk_read_api import (
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 EXTRACT_SAVE = r"""
+// Настоящий путь сохранения окна «Остаток для FBS» (WMS-469): состояние блока
+// из by_binding ответа API → черновик → правка оператора → тело только из
+// изменённых блоков (fbsStockBlocks.ts) → PUT через сессию окна
+// (fbsStockDialogSession.ts). Модули фронта транспилируются как есть; внешние
+// зависимости (адреса, чтение ошибок, загрузчик) подменяются.
 const fs = require('node:fs');
 const ts = require('typescript');
 const data = JSON.parse(fs.readFileSync(0, 'utf8'));
-const path = 'src/screens/ff/products-fbs/FfProductsFbsPage.tsx';
-const file = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true,
-                                 ts.ScriptKind.TSX);
-let declaration, ruleDeclaration, bodyDeclaration;
-function visit(node) {
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'saveRule') declaration = node;
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'toRule') ruleDeclaration = node;
-  // WMS-454: saveRule строит тело через общий для обоих маршрутов fbsRuleBody —
-  // вырезаем и его, чтобы исполнялся настоящий код фронта.
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'fbsRuleBody') bodyDeclaration = node;
-  ts.forEachChild(node, visit);
+const stubs = {
+  '../../../api': { apiUrl: (p) => p },
+  '../../../utils/readApiErrorMessage': { readApiErrorMessage: async () => 'error' },
+  './stub': {},
+  './fbsSellerWarehouseRows': { warehouseNumberLabel: (n) => '№ ' + n },
+  './fbsStockDialogLoader': {},
+};
+function load(name) {
+  const path = 'src/screens/ff/products-fbs/' + name;
+  const out = ts.transpileModule(fs.readFileSync(path, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const mod = { exports: {} };
+  new Function('require', 'module', 'exports', out)(
+    (dep) => { if (stubs[dep]) return stubs[dep]; throw new Error('unexpected import ' + dep); },
+    mod, mod.exports);
+  return mod.exports;
 }
-visit(file);
-if (!declaration) throw new Error('saveRule not found');
-if (!bodyDeclaration) throw new Error('fbsRuleBody not found');
-const code = ts.transpileModule(
-  bodyDeclaration.getText(file).replace(/^export /, '') + '\n' + declaration.getText(file), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022 }
-}).outputText;
+const blocks = load('fbsStockBlocks.ts');
+const { createStockDialogSession } = load('fbsStockDialogSession.ts');
 const calls = [];
-const save = new Function('fetch','apiUrl','headers','token','setError','load',
-                         'readApiErrorMessage',
-                         code + ';return saveRule;')(
-  async (url, options) => { calls.push({url, body: JSON.parse(options.body)}); return {ok:true}; },
-  p => p, () => ({}), '', () => {}, async () => {}, async () => 'error');
-if (data.apiRule) {
-  const keyExports = {};
-  const keyCode = ts.transpileModule(fs.readFileSync(
-    'src/screens/ff/products-fbs/fbsWarehouseRuleKeys.ts', 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS }
-    }).outputText;
-  new Function('exports', keyCode)(keyExports);
-  const mapper = new Function('qualifyWarehouseRuleValues', ts.transpileModule(
-    ruleDeclaration.getText(file).replace(/^export /, ''), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022 }
-    }).outputText + ';return toRule;')(keyExports.qualifyWarehouseRuleValues);
-  data.rule = mapper(data.ids[0], data.apiRule, data.bindings);
-  const key = keyExports.warehouseRuleKey(data.bindings[0]);
-  if (data.rule.unitsByWarehouse[key] !== 5) throw new Error('WB cap not loaded as 5');
-  data.rule.unitsByWarehouse[key] = 4;
+const session = createStockDialogSession({
+  fetchImpl: async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return {
+      ok: true,
+      json: async () => ({ updated_count: data.ids.length, items: [], clamps: {} }),
+    };
+  },
+  headers: {},
+  sellerId: 'seller',
+});
+const entries = Object.entries(data.apiRule.by_binding).map(([id, rule]) => ({
+  id, rule, state: blocks.toProductBindingState(rule),
+}));
+const target = entries.find((one) => one.rule.marketplace === data.edit.marketplace);
+if (!target) throw new Error('binding not found in by_binding');
+if (data.edit.expectLoadedUnits !== undefined
+    && !(target.state.mode === 'units' && target.state.value === data.edit.expectLoadedUnits)) {
+  throw new Error('WB cap not loaded as ' + data.edit.expectLoadedUnits);
 }
-save(data.ids, data.rule).then(() => process.stdout.write(JSON.stringify(calls)));
+// Оператор трогает только этот блок: включает передачу и вводит число.
+const draft = {
+  ...blocks.draftFromState(target.state), publish: true, byPercent: false, units: data.edit.units,
+};
+const binding = {
+  id: target.id, marketplace: target.rule.marketplace,
+  externalId: target.rule.external_warehouse_id, name: 'x',
+  wmsWarehouseId: target.rule.wms_warehouse_id, wmsWarehouseName: null,
+  served: target.rule.served, editable: true,
+};
+const body = blocks.ruleBodyFromDrafts([binding], { [binding.id]: draft });
+session.saveRule(data.ids, body).then((outcome) => {
+  if (outcome.kind !== 'saved') throw new Error('unexpected outcome ' + outcome.kind);
+  process.stdout.write(JSON.stringify(calls));
+});
 """
 
 
@@ -120,7 +139,7 @@ async def test_actual_frontend_save_preserves_units_through_http(
     count: int,
 ) -> None:
     if not shutil.which("node") or not (FRONTEND / "node_modules/typescript").exists():
-        pytest.skip("requires frontend npm ci to execute the actual TypeScript saveRule")
+        pytest.skip("requires frontend npm ci to execute the actual TypeScript save path")
     monkeypatch.setattr(
         "app.services.fbs_stock_rule_service.schedule_seller_stock_publish", lambda *_: None
     )
@@ -132,6 +151,10 @@ async def test_actual_frontend_save_preserves_units_through_http(
     ]
     async with SessionLocal() as session:
         await _stock(session, ids, seller_id)
+    # Окно читает правило по привязкам с сервера, оператор включает передачу
+    # и вводит 5 штук в блоке WB.
+    rule = await async_client.get(f"/products/{ids[0]}/fbs-rule", headers=headers)
+    assert rule.status_code == 200, rule.text
     capture = subprocess.run(
         ["node", "-e", EXTRACT_SAVE],
         cwd=FRONTEND,
@@ -139,18 +162,7 @@ async def test_actual_frontend_save_preserves_units_through_http(
         text=True,
         check=True,
         input=json.dumps(
-            {
-                "ids": ids,
-                "rule": {
-                    "publish": True,
-                    "publishOzon": False,
-                    "sameEverywhere": False,
-                    "percent": 0,
-                    "byWarehouse": {},
-                    "unitsMode": True,
-                    "unitsByWarehouse": {"501001": 5},
-                },
-            }
+            {"ids": ids, "apiRule": rule.json(), "edit": {"marketplace": "wb", "units": 5}}
         ),
     )
     calls = json.loads(capture.stdout)
@@ -337,14 +349,13 @@ async def test_colliding_wb_ozon_ids_survive_actual_frontend_http_edit(
         capture_output=True,
         text=True,
         check=True,
+        # Оператор в окне правит только WB-блок (5 → 4); Ozon-блок не трогает,
+        # и в теле PUT его нет — сервер оставляет его 3 (R8, R24).
         input=json.dumps(
             {
                 "ids": ids,
                 "apiRule": rule.json(),
-                "bindings": [
-                    {"wb_warehouse_id": 123, "marketplace": "wb"},
-                    {"wb_warehouse_id": 123, "marketplace": "ozon"},
-                ],
+                "edit": {"marketplace": "wb", "units": 4, "expectLoadedUnits": 5},
             }
         ),
     )

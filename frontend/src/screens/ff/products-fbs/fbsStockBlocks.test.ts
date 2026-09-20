@@ -184,6 +184,18 @@ describe('WMS-469 R7 тело сохранения', () => {
     })
   })
 
+  it('F4 / R8, R24: уходят только переданные (изменённые) блоки — нетронутый Ozon соседних товаров не задевается', () => {
+    const drafts = {
+      'b-wb': { publish: true, byPercent: false, percent: 0, units: 30 },
+      'b-ozon': { publish: false, byPercent: true, percent: 0, units: 0 },
+    }
+    // Оператор менял только WB: Ozon в теле отсутствует, сервер его не трогает.
+    const touched = [wb, ozon].filter((one) => one.id === 'b-wb')
+    expect(ruleBodyFromDrafts(touched, drafts)).toEqual({ 'b-wb': { publish: true, mode: 'units', value: 30 } })
+    // Ничего не менял — тело пустое, и такой набор отправлять нельзя.
+    expect(ruleBodyFromDrafts([], drafts)).toEqual({})
+  })
+
   it('R13: WB 100 % и Ozon 100 % вместе уходят без потолка на сумму', () => {
     const drafts = {
       'b-wb': { publish: true, byPercent: true, percent: 100, units: 0 },
