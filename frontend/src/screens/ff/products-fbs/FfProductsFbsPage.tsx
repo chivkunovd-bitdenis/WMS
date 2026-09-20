@@ -188,9 +188,6 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
       const known = new Map(sellerRef.current.map((one) => [one.id, one.name]))
       const withSeller = page.items.filter((row) => row.seller_id !== null)
-      setProducts(
-        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
-      )
       const loadedBindings = new Map<string, WarehouseRuleBinding[]>()
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
@@ -202,6 +199,11 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           headers: headers(token),
         })
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
+        // Привязки читаем отдельно от справочника складов: по ним сервер собирает
+        // правило, и только по ним видно площадку номера в его ответе. Без них
+        // экран не имеет права открыть окно правки: пустой список выглядел бы как
+        // «привязок нет», лимит чужого склада показался бы пустым полем, а
+        // введённое рядом ушло бы вторым ключом на тот же склад.
         const bindingsRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouse-bindings`), {
           headers: headers(token),
         })
@@ -225,9 +227,17 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           })),
         })
       }
-      setRules(withSeller.map((row) => toRule(
+
+      // Ключи правил приводим до записи в состояние: неразрешимый номер должен
+      // оставить экран в ошибке загрузки целиком, а не показать таблицу товаров
+      // с правилами, которых экран не понял.
+      const nextRules = withSeller.map((row) => toRule(
         row.id, loadedRules.get(row.id), loadedBindings.get(row.seller_id as string),
-      )))
+      ))
+      setProducts(
+        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
+      )
+      setRules(nextRules)
       setSellers(built)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')
