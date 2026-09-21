@@ -25,6 +25,34 @@ RULE = {"same_everywhere": True, "percent": 40, "publish": False, "publish_ozon"
 PERIOD = {"date_from": "2026-09-01T00:00:00Z", "date_to": "2026-09-30T00:00:00Z"}
 
 
+@pytest.fixture(autouse=True, params=[False, True], ids=["ordinary", "avpack-old-token"])
+async def avpack_manager_context(request, monkeypatch, async_client):
+    if not request.param:
+        yield
+        return
+    from test_wms488_home_scope import enable_avpack_manager, grants_snapshot
+
+    original_seed, original_headers = _seed, _headers
+    snapshots = []
+    active = {}
+
+    async def seed():
+        users, products, warehouse = await original_seed()
+        await enable_avpack_manager(users, products)
+        active[users["a"].id] = users["b"].seller_id
+        snapshots.append((users["a"].id, await grants_snapshot(users["a"].id)))
+        return users, products, warehouse
+
+    def headers(user):
+        return original_headers(user, active_seller=active.get(user.id))
+
+    monkeypatch.setattr(__import__(__name__), "_seed", seed)
+    monkeypatch.setattr(__import__(__name__), "_headers", headers)
+    yield
+    for user_id, before in snapshots:
+        assert await grants_snapshot(user_id) == before
+
+
 async def _catalog():
     users, products, warehouse = await _seed()
     directions = {}

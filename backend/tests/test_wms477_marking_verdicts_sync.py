@@ -1917,3 +1917,116 @@ async def test_postgresql_real_cycles_skip_overlap_and_recover_after_cancellatio
     recovered = await asyncio.wait_for(autopoll.sync_fbs_marking_verdicts_all_sellers(), 5)
     assert not recovered.skipped
     assert calls == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["manual", "background", "single"])
+async def test_omitted_wb_order_preserves_saved_verdict_and_next_cycle(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_wb_supply(
+        tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING, marker="omitted",
+    )
+    seeded: dict[int, tuple[uuid.UUID, str]] = {}
+    for wb_id, status in (
+        (977901, META_STATUS_PENDING), (977902, META_STATUS_SENDING),
+        (977903, META_STATUS_ACCEPTED), (977904, META_STATUS_PENDING),
+    ):
+        seeded[wb_id] = await _seed_coded_wb_order(
+            tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+            supply_id=supply_id, wb_order_id=wb_id, meta_status=status,
+        )
+    omitted_ids = [seeded[wb_id][0] for wb_id in (977901, 977902, 977903)]
+    async with SessionLocal() as session:
+        for order_id in omitted_ids:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.metadata_last_checked_at = datetime(2026, 9, 1, tzinfo=UTC)
+            order.metadata_delivery_allowed = True
+            order.meta_details_json = [{"key": "sgtin", "decision": "pending"}]
+            marking = await session.scalar(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+            assert marking is not None
+            marking.reason = "previous WB verdict"
+            marking.meta_details_json = {"decision": "pending"}
+        await session.commit()
+
+    async def saved_state() -> list[object]:
+        async with SessionLocal() as session:
+            return list((await session.execute(
+                select(
+                    FbsOrder.id, FbsOrder.metadata_last_checked_at,
+                    FbsOrder.metadata_delivery_allowed, FbsOrder.meta_details_json,
+                    FbsOrderMarking.meta_status, FbsOrderMarking.check_status,
+                    FbsOrderMarking.reason, FbsOrderMarking.meta_details_json,
+                ).join(FbsOrderMarking).where(FbsOrder.id.in_(omitted_ids))
+                .order_by(FbsOrder.id)
+            )).all())
+
+    before = await saved_state()
+    requests: list[set[int]] = []
+    complete = False
+
+    async def fake_fetch_batch(
+        client: object, *, api_token: str, order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        requests.append(set(order_ids))
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_id,
+                meta_details=(MarketplaceMetaDetail(
+                    key="sgtin", value=seeded[wb_id][1], decision="sgtinIntroduced",
+                ),),
+            )
+            for wb_id in order_ids if complete or wb_id == 977904
+        ]
+
+    monkeypatch.setattr(marking_svc, "fetch_marketplace_orders_meta_batch", fake_fetch_batch)
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+    if path == "manual":
+        response = await async_client.post(
+            f"/operations/fbs-supplies/{supply_id}/markings/sync", headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        assert requests == [{977901, 977902, 977903, 977904}]
+    else:
+        async with SessionLocal() as session:
+            if path == "background":
+                result = await autopoll.sync_marking_verdicts_for_seller(
+                    session, target, async_client,
+                )
+                assert result.orders_checked == 3
+                assert result.orders_updated == 1
+                assert requests == [{977901, 977902, 977904}]
+            else:
+                for order_id, _value in seeded.values():
+                    await marking_svc.sync_order_marking_statuses(
+                        session, tenant_id, order_id, async_client, actor_user_id=None,
+                    )
+                assert requests == [{977901}, {977902}, {977903}, {977904}]
+            await session.commit()
+
+    assert await saved_state() == before
+    assert await _marking_status(seeded[977904][0]) == META_STATUS_ACCEPTED
+
+    # A fresh session and the real minute-cycle query must still select both
+    # omitted pending/sending orders after the previous transaction committed.
+    complete = True
+    requests.clear()
+    async with SessionLocal() as session:
+        result = await autopoll.sync_marking_verdicts_for_seller(session, target, async_client)
+        await session.commit()
+    assert requests == [{977901, 977902}]
+    assert result.orders_checked == result.orders_updated == 2
+    for wb_id in seeded:
+        assert await _marking_status(seeded[wb_id][0]) == META_STATUS_ACCEPTED

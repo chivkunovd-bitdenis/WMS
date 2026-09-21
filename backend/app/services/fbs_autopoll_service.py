@@ -450,6 +450,11 @@ async def sync_marking_statuses_for_assembling_supplies(
             if not await list_order_markings(session, target.tenant_id, order.id):
                 continue
             returned_rows = rows_by_wb_order_id.get(int(order.wb_order_id), [])
+            # An omitted order supplies no verdict to apply. Keep its saved
+            # state and avoid taking row locks or counting a successful sync.
+            if not returned_rows:
+                logger.warning("fbs autopoll marking response missed order %s", order.id)
+                continue
             expected = marking_ids.get(order.id, set())
             try:
                 await _sync_order_meta_from_wb(
@@ -462,12 +467,6 @@ async def sync_marking_statuses_for_assembling_supplies(
                     expected_marking_verdicts={mid: marking_fingerprints[mid] for mid in expected},
                     expected_order_last_checked_at=order_checked_at_snapshot.get(order.id),
                 )
-                # A partial WB batch must clear a stale positive verdict, but it
-                # must not look like a successful local sync: there is no fresh
-                # timestamp, derived packaging update, or success counter.
-                if not returned_rows:
-                    logger.warning("fbs autopoll marking response missed order %s", order.id)
-                    continue
                 await _notify_supply_marking_update(
                     session,
                     target.tenant_id,

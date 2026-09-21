@@ -487,10 +487,18 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
 
     # Batches follow the common UUID lock order, independently of WB creation dates.
     wb_order_ids = [wb_ids_by_local_id[key] for key in sorted(wb_ids_by_local_id)]
+    async with SessionLocal() as session:
+        omitted_marking = await session.scalar(
+            select(FbsOrderMarking)
+            .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
+            .where(FbsOrder.wb_order_id == wb_order_ids[99])
+        )
+        assert omitted_marking is not None
+        omitted_marking.meta_status = META_STATUS_ACCEPTED
+        await session.commit()
     requested_batches: list[list[int]] = []
     completed_batches: list[list[int]] = []
     synced_wb_order_ids: list[int] = []
-    omitted_wb_order_ids: list[int] = []
     notified_order_ids: list[uuid.UUID] = []
     active_batch_requests = 0
     max_active_batch_requests = 0
@@ -546,15 +554,8 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         assert expected_marking_verdicts is not None
         assert set(expected_marking_verdicts) == expected_marking_ids
         assert expected_order_last_checked_at is None  # fresh order, never checked yet
-        if meta_batch:
-            assert [row.order_id for row in meta_batch] == [order.wb_order_id]
-        else:
-            omitted_wb_order_ids.append(order.wb_order_id)
-            marking = await session.scalar(
-                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.id)
-            )
-            assert marking is not None
-            marking.meta_status = META_STATUS_UNKNOWN
+        # Missing orders must be filtered before the row-locking applicator.
+        assert [row.order_id for row in meta_batch] == [order.wb_order_id]
         synced_wb_order_ids.append(order.wb_order_id)
         return []
 
@@ -599,7 +600,7 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             .where(FbsOrder.wb_order_id == wb_order_ids[99])
         )
         assert omitted_marking is not None
-        assert omitted_marking.meta_status == META_STATUS_UNKNOWN
+        assert omitted_marking.meta_status == META_STATUS_ACCEPTED
 
     assert [len(batch) for batch in requested_batches] == [100, 100, 1]
     assert all(len(batch) <= 100 and len(batch) == len(set(batch)) for batch in requested_batches)
@@ -608,8 +609,7 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
     assert max_active_batch_requests == 1
     expected_synced = wb_order_ids[:99] + wb_order_ids[200:]
     assert synced == len(expected_synced)
-    assert set(synced_wb_order_ids) == set([*expected_synced, wb_order_ids[99]])
-    assert omitted_wb_order_ids == [wb_order_ids[99]]
+    assert set(synced_wb_order_ids) == set(expected_synced)
     assert len(notified_order_ids) == len(expected_synced)
 
     async with SessionLocal() as session:

@@ -7,9 +7,10 @@ requires an existing delegation and never creates a delegation or enables one.
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from alembic import op
 
 revision = "20260921_0488"
 down_revision = "20260913_0306"
@@ -52,6 +53,7 @@ def upgrade() -> None:
         sa.column("user_id", sa.Uuid()),
         sa.column("target_seller_id", sa.Uuid()),
     )
+    tenants = sa.table("tenants", sa.column("id", sa.Uuid()), sa.column("slug", sa.String()))
     home = sellers.alias("home")
     target = sellers.alias("target")
     candidates = connection.execute(
@@ -64,6 +66,7 @@ def upgrade() -> None:
                     home.c.tenant_id == users.c.tenant_id,
                 ),
             )
+            .join(tenants, tenants.c.id == users.c.tenant_id)
             .join(delegations, delegations.c.user_id == users.c.id)
             .join(
                 target,
@@ -74,7 +77,12 @@ def upgrade() -> None:
                 ),
             )
         )
-        .where(users.c.role == "fulfillment_seller", users.c.can_manage_seller_shops.is_(False))
+        .where(
+            users.c.role == "fulfillment_seller",
+            users.c.can_manage_seller_shops.is_(False),
+            # AVpack uses home-only scope; preserve its historical flags unchanged.
+            tenants.c.slug != "avpack-9uczh",
+        )
         .distinct()
     ).all()
     configured = _LegacyAllowlist().emails
