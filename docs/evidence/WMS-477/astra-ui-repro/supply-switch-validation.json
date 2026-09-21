@@ -1,0 +1,72 @@
+{
+  "product_sha": "0e0406691c11545f215a344f6db6cdc98f65decb",
+  "note": "Оба направления прогнаны в настоящем Chrome. Исходное поведение снято подменой экрана в рабочем дереве, поэтому head_sha там прежний, а сравнивать надо component_blob: он отличает проверенный экран от прежнего.",
+  "defects": {
+    "saved_retry_does_not_survive_supply_switch": "Сохранённое «Повторить» из прежней поставки отправляло её операцию из открытой сейчас.",
+    "lost_race_is_repaired_by_a_read_started_after_the_write": "Чтение, начатое позже записи, но прочитавшее базу до неё, отбрасывало успешный ответ операции.",
+    "skip_honest_sign_dialog_is_not_stuck_after_a_supply_switch": "Окно снятия требования Честного знака оставалось занятым и без выхода после смены поставки."
+  },
+  "runs": {
+    "expect-fixed": {
+      "command": "python3 docs/evidence/WMS-477/astra-ui-repro/supply_switch.py",
+      "exit_code": 0,
+      "head_sha": "0e0406691c11545f215a344f6db6cdc98f65decb",
+      "component_blob": "1610fb3d93448f50feb6d135a6a444a6dce0d514",
+      "component_from": "HEAD (WMS-477 fix)",
+      "page_errors": [],
+      "failed": [],
+      "scenarios": {
+        "saved_retry_does_not_survive_supply_switch": {
+          "bug_reproduced": false,
+          "fixed_behaviour": true,
+          "expectation_met": true
+        },
+        "lost_race_is_repaired_by_a_read_started_after_the_write": {
+          "bug_reproduced": false,
+          "fixed_behaviour": true,
+          "expectation_met": true
+        },
+        "skip_honest_sign_dialog_is_not_stuck_after_a_supply_switch": {
+          "bug_reproduced": false,
+          "fixed_behaviour": true,
+          "expectation_met": true
+        }
+      }
+    },
+    "expect-vulnerable": {
+      "command": "python3 docs/evidence/WMS-477/astra-ui-repro/supply_switch.py --expect-vulnerable",
+      "exit_code": 0,
+      "head_sha": "0e0406691c11545f215a344f6db6cdc98f65decb",
+      "component_blob": "dc555a0d1ac44698037f3e8b7a7d7e6bf5f7cae5",
+      "component_from": "c2371648e9dca27d3ef37acbce614ea1e2006edd (до правки)",
+      "page_errors": [],
+      "failed": [],
+      "scenarios": {
+        "saved_retry_does_not_survive_supply_switch": {
+          "bug_reproduced": true,
+          "fixed_behaviour": false,
+          "expectation_met": true
+        },
+        "lost_race_is_repaired_by_a_read_started_after_the_write": {
+          "bug_reproduced": true,
+          "fixed_behaviour": false,
+          "expectation_met": true
+        },
+        "skip_honest_sign_dialog_is_not_stuck_after_a_supply_switch": {
+          "bug_reproduced": true,
+          "fixed_behaviour": false,
+          "expectation_met": true
+        }
+      }
+    }
+  },
+  "observed_baseline_symptoms": {
+    "retry_beside_b_error": 1,
+    "sent_a_operation": true,
+    "rows_after_click": [
+      "Товар поставки A"
+    ],
+    "recovery_started": false,
+    "stuck_without_exit": true
+  }
+}
