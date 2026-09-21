@@ -43,10 +43,16 @@ function fixture() {
   const beginWorkspaceWrite = (new Function('workspaceOpenGeneration', 'workspaceWriteSeq',
     'shownSupplyId', `${beginWriteJs}; return beginWorkspaceWrite`) as (
     ...args: unknown[]) => () => unknown)(generation, writeSeq, shownSupplyId)
+  // У чтения описаны типы (признак применения снимка), поэтому оно тоже сначала
+  // переводится в JS: исполняется тот же код, только без аннотаций.
+  const callbackJs = ts.transpileModule(`const load = ${callback}`, {
+    compilerOptions: { target: ts.ScriptTarget.ESNext },
+  }).outputText
   const callbackFactory = new Function('fetchFbsWorkspace', 'beginWorkspaceWrite',
     'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
-    'authHeaders', `return (${callback})`) as (...args: unknown[]) => (silent?: boolean) => Promise<unknown>
+    'authHeaders', `${callbackJs}; return load`) as (...args: unknown[]) => (
+      silent?: boolean, onApplied?: (applied: unknown) => void) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
       const response = deferred(); pending.set(supplyId, response); return response.promise
@@ -128,6 +134,44 @@ describe('FBS workspace delayed response isolation', () => {
     firstResponse.resolve({ ...workspace('A'), revision: 'stale' })
     await expect(first).resolves.toEqual({ ...workspace('A'), revision: 'stale' })
     expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'new' })
+  })
+
+  // WMS-477: итог операции, посчитанный по ответу, вправе назвать только снимок,
+  // который лёг на экран. Признак применения идёт вместе с самим применением,
+  // иначе оператор увидел бы счётчик, спорящий со строками.
+  it('tells its caller about the snapshot it put on the screen', async () => {
+    const f = fixture()
+    const applied: unknown[] = []
+    const read = f.load('A')(true, (next) => { applied.push(next) })
+    f.pending.get('A')!.resolve(workspace('A')); await read
+    expect(applied).toEqual([workspace('A')])
+    expect(f.visible.workspace).toEqual(workspace('A'))
+  })
+
+  it('says nothing about a snapshot that lost the race to a newer one', async () => {
+    const f = fixture()
+    const load = f.load('A')
+    const applied: unknown[] = []
+    const first = load(true, (next) => { applied.push(next) })
+    const firstResponse = f.pending.get('A')!
+    const second = load(true)
+    f.pending.get('A')!.resolve({ ...workspace('A'), revision: 'newer' }); await second
+    firstResponse.resolve({ ...workspace('A'), revision: 'stale' }); await first
+    expect(applied).toEqual([])
+    expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'newer' })
+  })
+
+  it('says nothing when the read itself failed or the supply was already closed', async () => {
+    const f = fixture()
+    const applied: unknown[] = []
+    const broken = f.load('A')(true, (next) => { applied.push(next) })
+    f.pending.get('A')!.reject(new Error('network down')); await broken
+    expect(applied).toEqual([])
+    const closed = f.load('A')(true, (next) => { applied.push(next) })
+    f.generation.current += 1
+    f.pending.get('A')!.resolve(workspace('A')); await closed
+    expect(applied).toEqual([])
+    expect(f.visible.workspace).toBeNull()
   })
 
   it('ignores a response after close even when the same UUID will reopen', async () => {
