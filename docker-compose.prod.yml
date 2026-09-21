@@ -128,6 +128,10 @@ services:
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
+      # WMS-477 — интервал отдельного цикла сверки вердиктов ЧЗ; расписание
+      # считается в процессе beat из settings, поэтому переменная нужна только
+      # здесь, не в celery_worker и не в api.
+      FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC: ${FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC:-60}
     depends_on:
       redis:
         condition: service_healthy

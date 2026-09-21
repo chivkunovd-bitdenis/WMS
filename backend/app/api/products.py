@@ -1133,6 +1133,7 @@ async def patch_products_requires_honest_sign_bulk(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductHonestSignBulkOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     seller_scope: uuid.UUID | None = None
     if user.role == FULFILLMENT_SELLER:
         seller_scope = user.seller_id

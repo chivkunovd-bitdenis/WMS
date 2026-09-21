@@ -1,3 +1,5 @@
+import { warehouseNumberFromRuleKey } from './fbsWarehouseRuleKeys'
+
 // Заглушка каталога товаров и настроек остатка для FBS.
 //
 // Ключевое, что здесь смоделировано честно: процент считается от СВОБОДНОГО
@@ -31,7 +33,17 @@ export type SellerWarehouse = {
    * все прежние источники данных этого поля не присылают (WMS-350).
    */
   marketplace?: MarketplaceCode
+  /**
+   * Почему у строки нет названия из кабинета (WMS-457). Не задано — название
+   * пришло из кабинета. `not_in_cabinet` — список кабинета получен, но такого
+   * склада в нём нет: он удалён или принадлежит другому продавцу.
+   * `list_unavailable` — список кабинета не получен (ключ, права, сеть), и
+   * имени взять неоткуда. В обоих случаях `name` — это «№ <номер>».
+   */
+  nameIssue?: WarehouseNameIssue
 }
+
+export type WarehouseNameIssue = 'not_in_cabinet' | 'list_unavailable'
 
 /** Площадка склада с умолчанием. Отсутствие поля означает Wildberries. */
 export function warehouseMarketplace(warehouse: SellerWarehouse): MarketplaceCode {
@@ -189,15 +201,81 @@ export function reservedTotal(product: Product): number {
 
 /** Склады, которые мы обслуживаем по FBS. Только они участвуют в раздаче остатка.
  *
- * Порядок — по возрастанию номера склада WB, ровно как на сервере
- * (`_seller_bindings` сортирует по `wb_warehouse_id`). От порядка зависит, кому
- * не хватит остатка при переборе, поэтому окно должно перебирать так же.
+ * Порядок — по номеру склада, а при совпадении номеров по площадке: ровно так
+ * сортирует `_seller_bindings` на сервере. От порядка зависит, кому не хватит
+ * остатка при переборе, поэтому окно должно перебирать так же. Номер берём из
+ * ключа строки: он приходит с приставкой площадки, и целиком в число не
+ * превращается.
  */
 export function servedWarehouses(seller: Seller): SellerWarehouse[] {
   return seller.warehouses
     .filter((one) => one.fbsEnabled)
     .slice()
-    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
+    .sort(
+      (a, b) =>
+        (Number(warehouseNumberFromRuleKey(a.id)) || 0) -
+          (Number(warehouseNumberFromRuleKey(b.id)) || 0) ||
+        warehouseMarketplace(a).localeCompare(warehouseMarketplace(b)),
+    )
+}
+
+/**
+ * Показывать ли в окне остатка Ozon: галку передачи, заголовки площадок и
+ * склады Ozon. Решает карточка товара, а не склады продавца: у товара без
+ * карточки Ozon передавать туда нечего, и его окно совпадает с окном того же
+ * товара у продавца без Ozon-складов (WMS-454). Признак тот же, что у значка
+ * площадки в строке каталога. Пустой список площадок — источник данных этого
+ * не знает; тогда, как и до Ozon, товар считается вайлдберрисовским.
+ */
+export function dialogShowsOzon(products: Array<Pick<Product, 'marketplaces'>>): boolean {
+  return products.some((one) => (one.marketplaces ?? []).includes('ozon'))
+}
+
+/** Склады продавца, которые видны в окне: без Ozon, если Ozon в окне нет. */
+export function visibleWarehouses(seller: Seller, ozonShown: boolean): SellerWarehouse[] {
+  return ozonShown
+    ? seller.warehouses
+    : seller.warehouses.filter((one) => warehouseMarketplace(one) === 'wb')
+}
+
+/**
+ * Черновик, с которого окно начинает. `warehouses` — склады, видимые в окне.
+ *
+ * Единственный обслуживаемый склад — особый случай: галку «одинаково по всем
+ * складам» в этом режиме не показывают (делить не с кем), поэтому черновик
+ * всегда считается по общему проценту — что оператор видит на ползунке, то и
+ * уезжает. Если сохранённое правило задавало доли по складам, действующая доля
+ * этого единственного склада лежит в byWarehouse, а общий процент — старый и
+ * к ней не относится; на ползунок идёт именно доля склада. Иначе окно показало
+ * бы чужое число (обычно 0), и сохранение без правок затёрло бы долю: у
+ * WB-товара с прежним правилом «WB 60 / Ozon 40» после скрытия Ozon
+ * обслуживаемый склад остаётся один, и WB-доля 60 должна остаться 60.
+ * Когда обслуживаемых нет, а видимый склад один, берётся его доля: она
+ * заработает, как только склад включат.
+ *
+ * У товара без карточки Ozon флаг Ozon в окне не показывается и при каждом
+ * сохранении уходит выключенным: иначе унаследованное «как у Wildberries»
+ * держит Ozon-привязку продавца в общих ста процентах (WMS-454). «ozon» в
+ * списке тронутых флагов и есть команда сохранению отправить поле, а не
+ * оставить прежнее значение.
+ */
+export function initialDraft(
+  rule: FbsRule,
+  warehouses: SellerWarehouse[],
+  ozonShown: boolean,
+): FbsRule {
+  const served = warehouses.filter((one) => one.fbsEnabled)
+  const single = served.length <= 1
+  const only = served[0] ?? (warehouses.length === 1 ? warehouses[0] : undefined)
+  const percent =
+    single && !rule.sameEverywhere && only ? (rule.byWarehouse[only.id] ?? 0) : rule.percent
+  return {
+    ...rule,
+    ...(single ? { sameEverywhere: true, percent } : {}),
+    ...(ozonShown
+      ? { changedPublication: [] }
+      : { publishOzon: false, changedPublication: ['ozon' as const] }),
+  }
 }
 
 export function sellerById(id: string): Seller {

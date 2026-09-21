@@ -4,7 +4,7 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { ProductsScreen } from './ProductsScreen'
-import type { FbsRule, Product, Seller } from './stub'
+import type { FbsRule, MarketplaceCode, Product, Seller } from './stub'
 import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey, warehouseRuleKey,
   type WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 
@@ -98,6 +98,43 @@ export function toRule(
   }
 }
 
+/**
+ * Тело правила для PUT /products/{id}/fbs-rule и поле rule в PUT /products/fbs-rule.
+ *
+ * Флаги передачи уходят только если их трогали в этом открытии окна; иначе поле
+ * не отправляется, и сервер оставляет прежнее значение. У товара без карточки
+ * Ozon окно само помечает флаг Ozon тронутым и выключенным, поэтому publish_ozon
+ * у него равен false при каждом сохранении (WMS-454).
+ *
+ * WMS-060/WMS-338: поштучный режим и числа по складам обязательны, иначе API
+ * подставит `units_mode=false` и `units_by_warehouse={}`, и любое сохранение
+ * молча сбросит режим штук и операторский потолок.
+ */
+export function fbsRuleBody(rule: FbsRule): {
+  publish: boolean | undefined
+  publish_ozon: boolean | undefined
+  same_everywhere: boolean
+  percent: number
+  by_warehouse: Record<string, number>
+  units_mode: boolean
+  units_by_warehouse: Record<string, number>
+} {
+  const touched = (marketplace: MarketplaceCode) =>
+    !rule.changedPublication || rule.changedPublication.includes(marketplace)
+  return {
+    publish: touched('wb') ? rule.publish : undefined,
+    publish_ozon: touched('ozon') ? (rule.publishOzon ?? rule.publish) : undefined,
+    same_everywhere: rule.sameEverywhere,
+    percent: rule.percent,
+    by_warehouse: rule.byWarehouse,
+    units_mode: rule.unitsMode,
+    // Что оператор видел в поле, то и записывается как новое выделение: сервер
+    // сдвинет точку отсчёта расхода на «сейчас», и съеденное до этой секунды
+    // уже учтено в том, что было показано.
+    units_by_warehouse: rule.unitsByWarehouse,
+  }
+}
+
 type Props = {
   token: string
   sellers: Array<{ id: string; name: string }>
@@ -151,9 +188,6 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
       const known = new Map(sellerRef.current.map((one) => [one.id, one.name]))
       const withSeller = page.items.filter((row) => row.seller_id !== null)
-      setProducts(
-        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
-      )
       const loadedBindings = new Map<string, WarehouseRuleBinding[]>()
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
@@ -165,6 +199,11 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           headers: headers(token),
         })
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
+        // Привязки читаем отдельно от справочника складов: по ним сервер собирает
+        // правило, и только по ним видно площадку номера в его ответе. Без них
+        // экран не имеет права открыть окно правки: пустой список выглядел бы как
+        // «привязок нет», лимит чужого склада показался бы пустым полем, а
+        // введённое рядом ушло бы вторым ключом на тот же склад.
         const bindingsRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouse-bindings`), {
           headers: headers(token),
         })
@@ -188,9 +227,17 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           })),
         })
       }
-      setRules(withSeller.map((row) => toRule(
+
+      // Ключи правил приводим до записи в состояние: неразрешимый номер должен
+      // оставить экран в ошибке загрузки целиком, а не показать таблицу товаров
+      // с правилами, которых экран не понял.
+      const nextRules = withSeller.map((row) => toRule(
         row.id, loadedRules.get(row.id), loadedBindings.get(row.seller_id as string),
-      )))
+      ))
+      setProducts(
+        withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
+      )
+      setRules(nextRules)
       setSellers(built)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')
@@ -205,22 +252,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
-    // WMS-060/WMS-338: сюда нужно передавать поштучный режим и числа по складам,
-    // иначе API подставит `units_mode=false` и `units_by_warehouse={}`, а сервис
-    // молча запишет получившееся правило поверх операторского. То есть открытие
-    // окна с любым сохранением через /ff/fbs-stock раньше сбрасывало режим
-    // штук и операторский потолок. Отправляем всё, что нужно правилу целиком.
-    const body = {
-      publish: rule.changedPublication && !rule.changedPublication.includes("wb")
-                          ? undefined : rule.publish,
-      publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
-                          ? undefined : (rule.publishOzon ?? rule.publish),
-      same_everywhere: rule.sameEverywhere,
-      percent: rule.percent,
-      by_warehouse: rule.byWarehouse,
-      units_mode: rule.unitsMode,
-      units_by_warehouse: rule.unitsByWarehouse,
-    }
+    const body = fbsRuleBody(rule)
     try {
       if (productIds.length === 1) {
         const res = await fetch(apiUrl(`/products/${productIds[0]}/fbs-rule`), {

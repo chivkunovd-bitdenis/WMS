@@ -6,6 +6,7 @@ import {
   createDebouncedInboundReconciler,
   createSerialScanQueue,
   isLatestScannedInboundLine,
+  shouldDispatchInboundScan,
 } from './inboundReceivingRuntime'
 
 // TC-NEW-A3-001 / TC-NEW-A3-002: this refactor may move source files, but it
@@ -115,6 +116,7 @@ const baselineStaticTestIds = [
   'ff-inbound-receiving-add-products',
   'ff-inbound-reopen-receiving',
   'ff-inbound-return-autoprint',
+  'ff-inbound-return-kiz-reprint',
   'ff-inbound-save',
   'ff-inbound-save-success-snackbar',
   'ff-inbound-scan-add-product',
@@ -245,5 +247,18 @@ describe('inbound scan fast path', () => {
     await first
     await second
     expect(started).toEqual(['first', 'second'])
+  })
+
+  it('does not send a reprint-dialog scan to either intake handler', () => {
+    const scanToReceiving = vi.fn()
+    const addLineByBarcode = vi.fn()
+    const kiz = '010460000000000121SERIAL\x1d91ABCD\x1d92SIGNATURE'
+
+    if (shouldDispatchInboundScan(true)) scanToReceiving(kiz)
+    if (shouldDispatchInboundScan(true)) addLineByBarcode(kiz)
+
+    expect(scanToReceiving).not.toHaveBeenCalled()
+    expect(addLineByBarcode).not.toHaveBeenCalled()
+    expect(shouldDispatchInboundScan(false)).toBe(true)
   })
 })

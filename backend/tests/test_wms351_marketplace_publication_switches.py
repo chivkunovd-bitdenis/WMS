@@ -21,6 +21,8 @@ async def test_independent_switches_roundtrip_and_publish_scope(
     ozon: bool,
     served: bool,
 ) -> None:
+    from app.models.product_marketplace_link import ProductMarketplaceLink
+
     seed = await _seed(db_session, on_hand=10, wb_warehouse_ids=(501001, 501002))
     wb_binding, ozon_binding = seed.bindings
     ozon_binding.marketplace = "ozon"
@@ -38,6 +40,18 @@ async def test_independent_switches_roundtrip_and_publish_scope(
                 percent=50,
             )
         )
+    # WMS-456: an honest two-marketplace product needs an active Ozon card,
+    # or the effective publish_ozon below is false regardless of what is saved.
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=seed.tenant.id,
+            seller_id=seed.seller.id,
+            product_id=seed.product.id,
+            marketplace="ozon",
+            external_offer_id="ozon-independent-switches",
+            is_active=True,
+        )
+    )
     await db_session.commit()
     before = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert before.rule.publish and before.rule.publish_ozon
@@ -112,8 +126,23 @@ async def test_old_rule_request_freezes_ozon_before_changing_wb(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.models.product_marketplace_link import ProductMarketplaceLink
+
     seed = await _seed(db_session)
     seed.product.fbs_percent = 50
+    # WMS-456: an active Ozon card is what makes the inherited effective flag
+    # true in the first place; without it the frozen value would honestly be
+    # false, since a product without a card is not an Ozon product at all.
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=seed.tenant.id,
+            seller_id=seed.seller.id,
+            product_id=seed.product.id,
+            marketplace="ozon",
+            external_offer_id="ozon-freeze",
+            is_active=True,
+        )
+    )
     await db_session.commit()
 
     async def clear(*_args: Any) -> None:
@@ -138,10 +167,25 @@ async def test_disabled_allocation_is_preserved_without_blocking_other_marketpla
     monkeypatch: pytest.MonkeyPatch,
     units: bool,
 ) -> None:
+    from app.models.product_marketplace_link import ProductMarketplaceLink
+
     seed = await _seed(db_session, on_hand=10, wb_warehouse_ids=(501001, 501002))
     seed.bindings[1].marketplace = "ozon"
     seed.product.fbs_stock_sync_enabled = False
     seed.product.fbs_ozon_stock_sync_enabled = False
+    # WMS-456: the explicit publish_ozon=True below only takes effect with an
+    # active Ozon card — this test is about the two switches staying
+    # independent, which needs Ozon to actually be publishable.
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=seed.tenant.id,
+            seller_id=seed.seller.id,
+            product_id=seed.product.id,
+            marketplace="ozon",
+            external_offer_id="ozon-disabled-alloc",
+            is_active=True,
+        )
+    )
     await db_session.commit()
     monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_a: None)
     rule = rules.FbsRule(
@@ -156,7 +200,8 @@ async def test_disabled_allocation_is_preserved_without_blocking_other_marketpla
     await rules.set_rule_for_products(db_session, seed.tenant.id, [seed.product.id], rule)
     view = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert view.published_now == 10
-    assert view.rule.units_by_warehouse[501001] == (10 if units else 0)
+    # WMS-483: a percent-only pool is not an explicit zero-unit allocation.
+    assert view.rule.units_by_warehouse == ({501001: 10, 501002: 10} if units else {})
     assert view.rule.by_warehouse[501001] == 100
     with pytest.raises(rules.FbsStockRuleError):
         await rules.set_rule_for_products(
@@ -237,6 +282,7 @@ async def test_bulk_untouched_marketplace_preserves_each_products_legacy_value(
     import uuid
 
     from app.models.product import Product
+    from app.models.product_marketplace_link import ProductMarketplaceLink
 
     seed = await _seed(db_session)
     seed.product.fbs_percent = 0
@@ -251,6 +297,28 @@ async def test_bulk_untouched_marketplace_preserves_each_products_legacy_value(
         fbs_percent=0,
     )
     db_session.add(other)
+    # WMS-456: the bulk save below explicitly requests publish_ozon=True for
+    # both products — only takes effect with an active Ozon card for each.
+    db_session.add_all(
+        [
+            ProductMarketplaceLink(
+                tenant_id=seed.tenant.id,
+                seller_id=seed.seller.id,
+                product_id=seed.product.id,
+                marketplace="ozon",
+                external_offer_id="ozon-bulk-seed",
+                is_active=True,
+            ),
+            ProductMarketplaceLink(
+                tenant_id=seed.tenant.id,
+                seller_id=seed.seller.id,
+                product_id=other.id,
+                marketplace="ozon",
+                external_offer_id="ozon-bulk-other",
+                is_active=True,
+            ),
+        ]
+    )
     await db_session.commit()
     scheduled = []
 

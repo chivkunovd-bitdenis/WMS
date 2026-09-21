@@ -153,6 +153,7 @@ export type FbsOrderMetadata = {
   required: string[]
   optional: string[]
   states: Array<{
+    id?: string | null
     kind: string
     status:
       | 'missing'
@@ -398,6 +399,7 @@ export type FbsOrderPrintTapeRequest = {
   allow_partial: boolean
   include_order_qr: boolean
   reprint: boolean
+  reprint_marking_ids?: string[]
 }
 
 export type FbsOrderPrintTapeOrder = {
@@ -1687,6 +1689,14 @@ export function fbsKizOrderNumber(order: FbsKizLookup): string {
 
 export async function syncFbsOrderMarkings(token: string, ah: AuthHeaders, orderId: string): Promise<void> {
   await jsonOrThrow<unknown>(await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/sync`), {
+    method: 'POST', headers: ah(token),
+  }))
+}
+
+// WMS-477: «Проверить в WB» — сервер пересверяет вердикты WB по всем заказам
+// поставки с кодом одним пакетом и отдаёт обновлённое рабочее место, как sync-tracking.
+export async function syncFbsSupplyMarkings(token: string, ah: AuthHeaders, supplyId: string): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/markings/sync`), {
     method: 'POST', headers: ah(token),
   }))
 }

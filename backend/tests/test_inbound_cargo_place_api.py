@@ -319,7 +319,7 @@ async def test_box_and_cargo_place_are_counted_once_across_reopen(
 async def test_cargo_place_rejects_product_not_on_request(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-CARGO-002: foreign request product is rejected by PUT and scan."""
+    """TC-NEW-CARGO-002 / WMS-473: PUT needs a line; a scan adds the seller's product."""
     headers = await _register_admin(async_client, "foreign-product")
     request_id, place_id, _product_id, sku_code, seller_id = (
         await _create_receiving_with_cargo_place(
@@ -343,16 +343,35 @@ async def test_cargo_place_rejects_product_not_on_request(
         headers=headers,
         json={"barcode": sku_code, "product_id": foreign_product_id},
     )
-    assert scan.status_code == 422, scan.text
-    assert scan.json()["detail"] == "product_not_on_request"
+    assert scan.status_code == 200, scan.text
+    added = next(row for row in scan.json()["lines"] if row["product_id"] == foreign_product_id)
+    assert added["quantity"] == 1
 
     barcode_scan = await async_client.post(
         f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
         headers=headers,
         json={"barcode": foreign_sku},
     )
-    assert barcode_scan.status_code == 404, barcode_scan.text
-    assert barcode_scan.json()["detail"] == "barcode_unknown"
+    assert barcode_scan.status_code == 200, barcode_scan.text
+    again = next(
+        row for row in barcode_scan.json()["lines"] if row["product_id"] == foreign_product_id
+    )
+    assert again["quantity"] == 2
+    document = await async_client.get(f"{BASE}/{request_id}", headers=headers)
+    assert document.status_code == 200, document.text
+    line = next(row for row in document.json()["lines"] if row["product_id"] == foreign_product_id)
+    # FF-authored document: no seller plan, the stored number is the accepted total.
+    assert line["expected_qty"] == 2
+    assert line["added_by_fulfillment"] is False
+    assert line["effective_actual_qty"] == 2
+
+    outside = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": "4600000000000"},
+    )
+    assert outside.status_code == 422, outside.text
+    assert outside.json()["detail"] == "product_not_in_seller_catalog"
 
 
 @pytest.mark.asyncio

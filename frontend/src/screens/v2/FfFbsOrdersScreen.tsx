@@ -1,4 +1,5 @@
 import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiUrl } from '../../api'
@@ -1302,12 +1303,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       </Stack>
 
       <FfFbsSectionNav />
-      <FbsCancelledAfterPackDialog
+      <ErrorBoundary component="FbsCancelledAfterPackDialog"><FbsCancelledAfterPackDialog
         open={cancelledAfterPackOpen} token={token} authHeaders={authHeaders}
         sellerId={sellerId === '__all__' ? undefined : sellerId}
         onClose={() => setCancelledAfterPackOpen(false)}
         onOpenSupply={(id) => { setWorkspaceId(id); setWorkspaceSeed(null); setWorkspaceOpen(true) }}
-      />
+      /></ErrorBoundary>
 
       {/* Среднее время сборки крупной цифрой над таблицей — согласованный блок.
           До сих пор он жил только в макете: экран его не показывал. */}
@@ -2084,7 +2085,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         </DialogActions>
       </Dialog>
 
-      <FbsSupplyCreateDialog
+      <ErrorBoundary component="FbsSupplyCreateDialog"><FbsSupplyCreateDialog
         token={token}
         authHeaders={authHeaders}
         orderIds={selectedOrderIds}
@@ -2096,9 +2097,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           openWorkspace(workspace.supply.id, workspace)
           void load()
         }}
-      />
+      /></ErrorBoundary>
 
-      <FfFbsSupplyWorkspace
+      <ErrorBoundary component="FfFbsSupplyWorkspace" resetKey={`${workspaceId}:${workspaceOpen}`}><FfFbsSupplyWorkspace
         token={token}
         authHeaders={authHeaders}
         supplyId={workspaceId}
@@ -2114,9 +2115,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
           void load()
         }}
-      />
+      /></ErrorBoundary>
 
-      <FbsPrintPreviewDialog
+      <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
         batch={supplyQrBatch}
@@ -2124,7 +2125,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         open={supplyQrPreviewOpen}
         onClose={() => setSupplyQrPreviewOpen(false)}
         onApplied={confirmSupplyQrApplied}
-      />
+      /></ErrorBoundary>
 
     </Box>
   )

@@ -11,9 +11,11 @@ from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import stock_direction_service
+from app.services.catalog_service import list_ozon_product_links
 from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
@@ -319,10 +321,32 @@ def _qualified_rule(rule: FbsRule, bindings: list[FbsWarehouseBinding]) -> FbsRu
     )
 
 
+def _effective_publish_ozon(product: Product, *, has_ozon_link: bool) -> bool:
+    """Эффективный флаг публикации в Ozon: сохранённое значение И наличие карточки.
+
+    WMS-456. Без активной ProductMarketplaceLink(marketplace="ozon") сервер не
+    считает товар озоновским — публиковать нечего, что бы ни было сохранено или
+    унаследовано в products.fbs_ozon_stock_sync_enabled (NULL, True или False).
+    Это единственное место, где считается эффективный флаг: его читают
+    rule_from_product (для проверки, расчёта и ответа API) и
+    publish_amounts_for_binding (для отбора публикуемых товаров), чтобы не
+    разойтись в двух копиях одной формулы.
+    """
+    if not has_ozon_link:
+        return False
+    return (
+        product.fbs_stock_sync_enabled
+        if product.fbs_ozon_stock_sync_enabled is None
+        else product.fbs_ozon_stock_sync_enabled
+    )
+
+
 def rule_from_product(
     product: Product,
     pool_rows: dict[uuid.UUID, FbsBindingStockPool],
     bindings: list[FbsWarehouseBinding],
+    *,
+    has_ozon_link: bool,
 ) -> FbsRule:
     by_warehouse: dict[int | str, int] = {}
     units_by_warehouse: dict[int | str, int] = {}
@@ -336,14 +360,11 @@ def rule_from_product(
             continue
         if pool.percent is not None:
             by_warehouse[key] = int(pool.percent)
-        units_by_warehouse[key] = int(pool.quantity or 0)
+        if pool.units_configured or int(pool.quantity or 0) > 0:
+            units_by_warehouse[key] = int(pool.quantity or 0)
     return FbsRule(
         publish=bool(product.fbs_stock_sync_enabled),
-        publish_ozon=(
-            product.fbs_stock_sync_enabled
-            if product.fbs_ozon_stock_sync_enabled is None
-            else product.fbs_ozon_stock_sync_enabled
-        ),
+        publish_ozon=_effective_publish_ozon(product, has_ozon_link=has_ozon_link),
         same_everywhere=bool(product.fbs_same_everywhere),
         percent=int(product.fbs_percent or 0),
         by_warehouse=by_warehouse,
@@ -470,6 +491,9 @@ async def get_rule_views(
             "product_without_seller",
             message="У товара нет продавца, поэтому складов WB для него тоже нет.",
         )
+    # WMS-456: один пакетный запрос связок на весь список товаров, а не по одной
+    # на продавца — связка ищется по product_id и продавца не касается.
+    ozon_links = await list_ozon_product_links(session, tenant_id, set(unique_ids))
 
     products_by_seller: dict[uuid.UUID, list[Product]] = {}
     for product in products:
@@ -529,7 +553,9 @@ async def get_rule_views(
         publishing = [binding for binding in bindings if binding.stock_sync_enabled]
         for product in seller_products:
             pool_rows = pools_by_product[product.id]
-            rule = rule_from_product(product, pool_rows, bindings)
+            rule = rule_from_product(
+                product, pool_rows, bindings, has_ozon_link=product.id in ozon_links
+            )
             on_hand, reserved, free = stock_by_product[product.id]
             directions = direction_totals.get(product.id)
             direction_reserved = int(directions.total) if directions is not None else 0
@@ -567,7 +593,8 @@ def _marketplace_rule_signature(
     shares = tuple(
         (
             _binding_key(binding),
-            rule.units_by_warehouse.get(_binding_key(binding), 0)
+            # WB absent -> explicit zero is a publication event (WMS-483).
+            rule.units_by_warehouse.get(_binding_key(binding), None if marketplace == "wb" else 0)
             if rule.units_mode
             else rule.percent
             if rule.same_everywhere
@@ -686,11 +713,19 @@ async def set_rule_for_products(
             raise FbsStockRuleError("mixed_sellers")
         bindings = await _seller_bindings(session, tenant_id, seller_id, publishing_only=False)
         served = [binding for binding in bindings if binding.served]
+        # WMS-456: один запрос связок на всю пачку товаров — тот же признак,
+        # что решает эффективный флаг в get_rule_views и publish_amounts_for_binding.
+        ozon_links = await list_ozon_product_links(
+            session, tenant_id, {product.id for product in products}
+        )
         old_rules = {}
         for product in products:
             pools = await _pool_rows(session, product.id, [b.id for b in bindings])
             old_rules[product.id] = _qualified_rule(
-                rule_from_product(product, pools, bindings), bindings
+                rule_from_product(
+                    product, pools, bindings, has_ozon_link=product.id in ozon_links
+                ),
+                bindings,
             )
         if _binding_quantity is not None:
             binding_id, quantity = _binding_quantity
@@ -715,8 +750,14 @@ async def set_rule_for_products(
                 rule,
                 publish=old_rules[product.id].publishes("wb")
                 if rule.publish is None else rule.publish,
-                publish_ozon=old_rules[product.id].publishes("ozon")
-                if rule.publish_ozon is None else rule.publish_ozon,
+                publish_ozon=(
+                    old_rules[product.id].publishes("ozon")
+                    if rule.publish_ozon is None else rule.publish_ozon
+                )
+                # WMS-456: без активной карточки Ozon эффективный флаг всегда
+                # false — даже если оператор явно прислал true в этом запросе,
+                # публиковать некуда, и в базу true не попадает (решение 3).
+                and product.id in ozon_links,
             )
             for product in products
         }
@@ -844,6 +885,7 @@ async def set_rule_for_products(
 
         binding_by_key = {_binding_key(binding): binding for binding in bindings}
         for product in products:
+            was_units_publish_enabled = product.fbs_units_mode and product.fbs_stock_sync_enabled
             product.fbs_ozon_stock_sync_enabled = product_rules[product.id].publishes("ozon")
             product.fbs_stock_sync_enabled = product_rules[product.id].publishes("wb")
             product.fbs_same_everywhere = rule.same_everywhere
@@ -857,6 +899,28 @@ async def set_rule_for_products(
                 percent = rule.by_warehouse.get(warehouse_key)
                 units = rule.units_by_warehouse.get(warehouse_key)
                 pool = pool_rows.get(binding.id)
+                was_explicit_zero = (
+                    was_units_publish_enabled and pool is not None
+                    and pool.units_configured and pool.quantity == 0
+                )
+                if (
+                    binding.marketplace == "wb" and product_rules[product.id].publishes("wb")
+                    and rule.units_mode and units == 0 and not was_explicit_zero
+                ):
+                    # A newly saved zero must not inherit suppression from the
+                    # previous rule, even if its old confirmed amount was zero.
+                    await session.execute(
+                        update(FbsStockSyncItem)
+                        .where(
+                            FbsStockSyncItem.binding_id == binding.id,
+                            FbsStockSyncItem.product_id == product.id,
+                        )
+                        .values(
+                            status=STOCK_SYNC_STATUS_PENDING,
+                            last_target_amount=0,
+                            last_error_code=None,
+                        )
+                    )
                 if pool is None:
                     if percent is None and units is None:
                         continue
@@ -865,13 +929,17 @@ async def set_rule_for_products(
                         binding_id=binding.id,
                         product_id=product.id,
                         quantity=int(units or 0) if rule.units_mode else 0,
+                        units_configured=rule.units_mode and units is not None,
                         percent=percent,
                         updated_by=updated_by,
                     )
                     session.add(pool)
                     continue
-                pool.percent = percent
+                # Omitted units clear only that mode, preserving saved percentages.
+                if not rule.units_mode or percent is not None:
+                    pool.percent = percent
                 if rule.units_mode:
+                    pool.units_configured = units is not None
                     pool.quantity = int(units or 0)
                 pool.updated_by = updated_by
         for marketplace in sorted(changed):
@@ -920,24 +988,36 @@ async def publish_amounts_for_binding(
     session: AsyncSession,
     binding: FbsWarehouseBinding,
     products: list[Product],
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Сколько штук отправить в WB по этой привязке: product_id -> количество.
 
     Это тот самый «источник числа», который заменил сохранённый абсолютный лимит.
     Товар без правила или с выключенной публикацией не попадает в ответ.
     Последний ноль подтверждается при выключении, перед сохранением настройки.
+
+    WMS-456. Товар без активной карточки Ozon (ProductMarketplaceLink) не
+    попадает в ответ вовсе для Ozon-привязки — не с нулём, а отсутствием: ноль
+    означал бы команду «опубликовать ноль», а sync_ozon_stocks посчитал бы
+    такой товар без связки в missing_links. Тот же признак связки нужен и для
+    WB-привязки: иначе фантомная озоновская доля отъедала бы часть общего
+    остатка у WB внутри split_amounts (см. _effective_publish_ozon).
     """
     # WMS-376. Обслуживание склада решает только то, какие входящие заказы мы
     # видим, и к трансляции остатка отношения не имеет. Публикацией распоряжается
     # её собственная галка.
     if not binding.stock_sync_enabled:
         return {}
+    ozon_links = await list_ozon_product_links(
+        session, binding.tenant_id, {product.id for product in products}
+    )
     publishable = [
         product for product in products
         if _has_rule(product) and (
             product.fbs_stock_sync_enabled
-            if binding.marketplace == "wb" or product.fbs_ozon_stock_sync_enabled is None
-            else product.fbs_ozon_stock_sync_enabled
+            if binding.marketplace == "wb"
+            else _effective_publish_ozon(product, has_ozon_link=product.id in ozon_links)
         )
     ]
     if not publishable:
@@ -962,8 +1042,32 @@ async def publish_amounts_for_binding(
         # здесь. Без пулов первая проверка пропускает такой товар вперёд.
         if not _has_rule(product, pool_rows):
             continue
-        rule = rule_from_product(product, pool_rows, seller_bindings)
+        rule = rule_from_product(
+            product, pool_rows, seller_bindings, has_ozon_link=product.id in ozon_links
+        )
         free = breakdown[product.id].free if product.id in breakdown else 0
         split = split_amounts(rule, free, seller_bindings, pool_rows=pool_rows)
         amounts[product.id] = split.get(binding.id, 0)
+        # WMS-483: use the same free-stock snapshot as the published amount.
+        # A missing allocation is not an explicit zero-unit operator limit.
+        pool = pool_rows.get(binding.id)
+        if rule.units_mode:
+            has_binding_rule = pool is not None and (
+                pool.units_configured or int(pool.quantity or 0) > 0
+            )
+        elif rule.same_everywhere:
+            has_binding_rule = rule.percent > 0
+        else:
+            has_binding_rule = pool is not None and int(pool.percent or 0) > 0
+        explicit_zero_units = (
+            rule.units_mode and pool is not None and pool.units_configured and pool.quantity == 0
+        )
+        if (
+            refresh_zero_product_ids is not None
+            and binding.marketplace == "wb"
+            and rule.publish
+            and has_binding_rule
+            and (free == 0 or explicit_zero_units)
+        ):
+            refresh_zero_product_ids.add(product.id)
     return amounts

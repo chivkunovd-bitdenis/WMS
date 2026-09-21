@@ -35,15 +35,20 @@ const data = JSON.parse(fs.readFileSync(0, 'utf8'));
 const path = 'src/screens/ff/products-fbs/FfProductsFbsPage.tsx';
 const file = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true,
                                  ts.ScriptKind.TSX);
-let declaration, ruleDeclaration;
+let declaration, ruleDeclaration, bodyDeclaration;
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && node.name?.text === 'saveRule') declaration = node;
   if (ts.isFunctionDeclaration(node) && node.name?.text === 'toRule') ruleDeclaration = node;
+  // WMS-454: saveRule строит тело через общий для обоих маршрутов fbsRuleBody —
+  // вырезаем и его, чтобы исполнялся настоящий код фронта.
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'fbsRuleBody') bodyDeclaration = node;
   ts.forEachChild(node, visit);
 }
 visit(file);
 if (!declaration) throw new Error('saveRule not found');
-const code = ts.transpileModule(declaration.getText(file), {
+if (!bodyDeclaration) throw new Error('fbsRuleBody not found');
+const code = ts.transpileModule(
+  bodyDeclaration.getText(file).replace(/^export /, '') + '\n' + declaration.getText(file), {
   compilerOptions: { target: ts.ScriptTarget.ES2022 }
 }).outputText;
 const calls = [];
@@ -287,11 +292,25 @@ async def test_colliding_wb_ozon_ids_survive_actual_frontend_http_edit(
         )
         session.add(ozon)
         await session.flush()
+        from app.models.product_marketplace_link import ProductMarketplaceLink
+
         for pid in ids:
             product = await session.get(Product, uuid.UUID(pid))
             assert product is not None
             product.fbs_units_mode = True
             product.fbs_stock_sync_enabled = product.fbs_ozon_stock_sync_enabled = True
+            # WMS-456: an honest two-marketplace product needs an active Ozon
+            # card, or the effective publish_ozon above stays false regardless.
+            session.add(
+                ProductMarketplaceLink(
+                    tenant_id=wb.tenant_id,
+                    seller_id=wb.seller_id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_offer_id=f"ozon-collision-{pid}",
+                    is_active=True,
+                )
+            )
             balance = await session.scalar(
                 select(InventoryBalance).where(InventoryBalance.product_id == product.id)
             )

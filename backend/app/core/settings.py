@@ -181,8 +181,9 @@ class Settings(BaseSettings):
             "SHOP_MANAGER_EMAILS",
         ),
         description=(
-            "Comma-separated seller user emails allowed to manage/switch shops "
-            "(in addition to users.can_manage_seller_shops and built-in email markers)."
+            "Legacy allowlist retained for configuration compatibility only. "
+            "WMS-488 migrates existing delegated managers to explicit DB grants; "
+            "this setting no longer grants access at runtime."
         ),
     )
     public_base_url: str = Field(
@@ -364,6 +365,21 @@ class Settings(BaseSettings):
         description=(
             "Celery Beat interval for the FBS stock safety net: republishes availability "
             "even when no movement event fired (seconds)."
+        ),
+    )
+    fbs_marking_verdicts_sync_interval_sec: int = Field(
+        default=60,
+        ge=60,
+        le=7200,
+        validation_alias=AliasChoices(
+            "CONF_FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+            "FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+        ),
+        description=(
+            "Celery Beat interval for the WB marking-verdicts recheck (WMS-477): only "
+            "codes still pending/sending in assembling/packed WB supplies, in its own "
+            "light cycle — separate from and never a substitute for the full sweep in "
+            "fbs_statuses_sync_interval_sec (seconds)."
         ),
     )
     fbs_universal_test_kiz: str | None = Field(

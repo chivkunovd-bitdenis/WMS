@@ -22,6 +22,16 @@ async def test_waiting_creates_release_pool_but_owner_keeps_same_connection(
     url = os.environ.get("WMS_TEST_DATABASE_URL", "")
     if not url.startswith("postgresql"):
         pytest.skip("requires explicit PostgreSQL test URL; uses advisory locks and SELECT only")
+    # WMS-435: this exercises transaction_scoped=True + release_connection_while_waiting=True,
+    # the exact combination the real WB create-supply path uses
+    # (fbs_supply_service.create_supply_from_orders). That branch of
+    # marketplace_seller_lock is untouched by the WMS-435 fix: it still takes
+    # and releases the lock on the caller's own session throughout, so a
+    # waiting caller here needs exactly one connection, same as before the
+    # fix — the original tight two-slot pool still proves the real thing.
+    # The session-scoped branch the fix actually changes (its own private
+    # lock connection) has its own tight, single-waiter proof in
+    # test_wms435_seller_lock_leak.py's C10.
     engine = create_async_engine(url, pool_size=2, max_overflow=0, pool_timeout=0.15)
     owner_engine = create_async_engine(url, pool_size=1, max_overflow=0)
     sessions = async_sessionmaker(engine)
@@ -52,6 +62,7 @@ async def test_waiting_creates_release_pool_but_owner_keeps_same_connection(
                 "wb",
                 wait_timeout_sec=3.0,
                 release_connection_while_waiting=True,
+                transaction_scoped=True,
             ) as acquired:
                 assert acquired
                 assert active == 0
@@ -60,7 +71,11 @@ async def test_waiting_creates_release_pool_but_owner_keeps_same_connection(
                 await asyncio.sleep(0.03)  # stand-in for the active owner's HTTP wait
                 assert await session.scalar(text("select pg_backend_pid()")) == pid
                 active -= 1
-            # Unlock ran on the same checked-out connection, before it returns to the pool.
+            # Transaction-scoped mode is untouched by WMS-435: the wrapper
+            # never creates a separate lock connection for it, so this is
+            # trivially the same session/connection throughout — the xact
+            # lock releases when this `async with sessions()` block closes
+            # the session below (implicit rollback), not via an explicit unlock.
             assert await session.scalar(text("select pg_backend_pid()")) == pid
             return int(pid)
 
@@ -72,7 +87,11 @@ async def test_waiting_creates_release_pool_but_owner_keeps_same_connection(
                 tasks = [asyncio.create_task(waiting_create()) for _ in range(2)]
                 await asyncio.wait_for(sleeping.wait(), timeout=2.0)
                 assert not any(task.done() for task in tasks)
-                # Two waiting operators cannot exhaust this deliberately two-slot pool.
+                # Two waiting operators cannot exhaust this deliberately two-slot
+                # pool: release_connection_while_waiting still rolls each one's
+                # own session back to the pool between failed polls (unchanged
+                # by WMS-435 for transaction_scoped mode), so a third, unrelated
+                # screen gets through.
                 async with sessions() as unrelated_screen:
                     assert await unrelated_screen.scalar(text("select 1")) == 1
             await asyncio.gather(*tasks)

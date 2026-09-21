@@ -241,12 +241,15 @@ async def _find_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     code: str,
+    seller_id: uuid.UUID | None = None,
 ) -> list[ScanMatch]:
     # The same two identifiers are accepted by the existing inbound and FBS pick scans.
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
         or_(Product.wb_barcode == code, Product.sku_code == code),
     )
+    if seller_id is not None:
+        stmt = stmt.where(Product.seller_id == seller_id)
     rows = list((await session.execute(stmt)).scalars().all())
     if not rows:
         # Запасной поиск по штрихкодам маркетплейса. Ozon печатает на товаре
@@ -257,20 +260,17 @@ async def _find_products(
             find_product_ids_by_marketplace_barcode,
         )
 
-        product_ids = await find_product_ids_by_marketplace_barcode(session, tenant_id, [code])
+        product_ids = await find_product_ids_by_marketplace_barcode(
+            session, tenant_id, [code], seller_id=seller_id
+        )
         if product_ids:
-            rows = list(
-                (
-                    await session.execute(
-                        select(Product).where(
-                            Product.tenant_id == tenant_id,
-                            Product.id.in_(product_ids),
-                        )
-                    )
-                )
-                .scalars()
-                .all()
+            fallback_stmt = select(Product).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(product_ids),
             )
+            if seller_id is not None:
+                fallback_stmt = fallback_stmt.where(Product.seller_id == seller_id)
+            rows = list((await session.execute(fallback_stmt)).scalars().all())
     return [
         ScanMatch(type="product", id=row.id, name=row.name, warehouse_id=None)
         for row in rows
@@ -357,6 +357,7 @@ async def resolve_any_scan(
     code: str,
     *,
     warehouse_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID | None = None,
 ) -> ScanMatch:
     normalized = normalize_scan_code(code)
     if not normalized:
@@ -374,13 +375,17 @@ async def resolve_any_scan(
     # Codes can overlap, so this order only makes ambiguity output deterministic:
     # every group is always searched and a first match is never silently selected.
     matches: list[ScanMatch] = []
-    matches.extend(await _find_cells(session, tenant_id, normalized, warehouse_id))
-    matches.extend(await _find_pallets(session, tenant_id, normalized, warehouse_id))
-    matches.extend(await _find_boxes(session, tenant_id, normalized, warehouse_id))
-    matches.extend(await _find_cargo_places(session, tenant_id, normalized, warehouse_id))
-    matches.extend(await _find_products(session, tenant_id, normalized))
-    matches.extend(await _find_fbs_orders(session, tenant_id, normalized, warehouse_id))
-    matches.extend(await _find_warehouses(session, tenant_id, normalized, warehouse_id))
+    # Seller catalog access grants product lookup only. Filter before resolving
+    # ambiguity so neither a match nor a 409 can disclose other sellers' objects.
+    if seller_id is None:
+        matches.extend(await _find_cells(session, tenant_id, normalized, warehouse_id))
+        matches.extend(await _find_pallets(session, tenant_id, normalized, warehouse_id))
+        matches.extend(await _find_boxes(session, tenant_id, normalized, warehouse_id))
+        matches.extend(await _find_cargo_places(session, tenant_id, normalized, warehouse_id))
+    matches.extend(await _find_products(session, tenant_id, normalized, seller_id))
+    if seller_id is None:
+        matches.extend(await _find_fbs_orders(session, tenant_id, normalized, warehouse_id))
+        matches.extend(await _find_warehouses(session, tenant_id, normalized, warehouse_id))
 
     unique_matches = tuple(dict.fromkeys((match.type, match.id) for match in matches))
     if not unique_matches:

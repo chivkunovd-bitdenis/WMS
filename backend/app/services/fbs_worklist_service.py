@@ -1267,6 +1267,7 @@ def _build_metadata(
                 ), None)
             states.append(
                 {
+                    "id": str(mark.id),
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.marketplace_seller_lock_service import (
     acquire_marketplace_seller_lock,
+    marketplace_seller_lock,
     marketplace_seller_lock_key,
     release_marketplace_seller_lock,
 )
@@ -46,11 +47,11 @@ async def wb_seller_lock(
     *,
     wait_timeout_sec: float = 0.0,
 ) -> AsyncIterator[bool]:
-    lock_key = await acquire_wb_seller_lock(
-        session, seller_id, wait_timeout_sec=wait_timeout_sec
-    )
-    try:
-        yield lock_key is not None
-    finally:
-        if lock_key is not None:
-            await release_wb_seller_lock(session, lock_key)
+    """Always session-scoped; shares its fix (WMS-435) with marketplace_seller_lock."""
+    async with marketplace_seller_lock(
+        session,
+        seller_id,
+        "wb",
+        wait_timeout_sec=wait_timeout_sec,
+    ) as acquired:
+        yield acquired

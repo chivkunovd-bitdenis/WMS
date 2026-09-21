@@ -164,7 +164,7 @@ async def test_delivered_wb_reuses_saved_code_without_packaging_task(
     allocate.assert_not_awaited()
     attach_to_wb.assert_not_awaited()
     assert supply.packaging_task_id is None
-    if saved_code == "pool":
+    if saved_code in {"pool", "operator"}:
         assert result.order_errors == []
         assert result.orders[0].codes == [code.cis_code]
         assert result.orders[0].printed_codes[0].id == code.id
@@ -173,8 +173,80 @@ async def test_delivered_wb_reuses_saved_code_without_packaging_task(
         assert record_event.call_args.kwargs.get("packaging_task") is None
     else:
         assert result.orders == []
-        assert result.order_errors[0].code == (
-            "operator_kiz_print_forbidden"
-            if saved_code == "operator" else "packaging_line_not_found"
-        )
+        assert result.order_errors[0].code == "packaging_line_not_found"
         record_event.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_inline_reprint_selects_only_clicked_operator_kiz(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reprint beside one Ozon position must never print its neighbour's KIZ."""
+    tenant_id = uuid.uuid4()
+    supply_id = uuid.uuid4()
+    order_id = uuid.uuid4()
+    first_position_id = uuid.uuid4()
+    second_position_id = uuid.uuid4()
+    first_code = SimpleNamespace(id=uuid.uuid4(), cis_code="kiz-first", label_artifact_pdf=None)
+    second_code = SimpleNamespace(id=uuid.uuid4(), cis_code="kiz-second", label_artifact_pdf=None)
+    first_marking = SimpleNamespace(
+        id=uuid.uuid4(),
+        kind="sgtin",
+        meta_status="accepted",
+        order_product_id=first_position_id,
+        marking_code=first_code,
+        created_at="1",
+    )
+    second_marking = SimpleNamespace(
+        id=uuid.uuid4(),
+        kind="sgtin",
+        meta_status="accepted",
+        order_product_id=second_position_id,
+        marking_code=second_code,
+        created_at="2",
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=123456,
+        product_id=uuid.uuid4(),
+        product=SimpleNamespace(requires_honest_sign=True),
+        required_meta_json=["sgtin"],
+        product_positions=[
+            SimpleNamespace(id=first_position_id, position_index=0),
+            SimpleNamespace(id=second_position_id, position_index=1),
+        ],
+        markings=[first_marking, second_marking],
+    )
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status="assembling",
+        packaging_task_id=None,
+        document_number="OZON-TEST",
+        orders=[order],
+    )
+    record_event = AsyncMock()
+    monkeypatch.setattr(service, "_load_supply", AsyncMock(return_value=supply))
+    monkeypatch.setattr(service, "picking_list_order_key", lambda _: ())
+    monkeypatch.setattr(service.mc_svc, "record_event", record_event)
+    monkeypatch.setattr(service.pack_int_svc, "try_promote_fbs_supply_if_ready", AsyncMock())
+
+    result = await service.print_fbs_order_tape(
+        AsyncMock(),
+        tenant_id,
+        supply_id,
+        order_ids=[order_id],
+        layout={"units": [{"block": "cz", "copies": 3}]},
+        allow_partial=False,
+        include_order_qr=False,
+        reprint=True,
+        actor_user_id=uuid.uuid4(),
+        http_client=SimpleNamespace(),
+        reprint_marking_ids=[second_marking.id],
+    )
+
+    assert result.order_errors == []
+    assert result.orders[0].codes == ["kiz-second"]
+    assert [row.id for row in result.orders[0].printed_codes] == [second_code.id]
+    record_event.assert_awaited_once()
+    assert record_event.call_args.kwargs["code"] is second_code
+    assert record_event.call_args.kwargs["copies"] == 3

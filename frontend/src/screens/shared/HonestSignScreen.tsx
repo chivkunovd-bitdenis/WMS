@@ -26,6 +26,7 @@ import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
 import { apiUrl } from '../../api'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { KizReprintDialog } from '../../components/KizReprintDialog'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { PageHeader } from '../../ui/PageHeader'
@@ -202,6 +203,7 @@ export function HonestSignScreen({
   const [search, setSearch] = useState('')
   const [stockFilter, setStockFilter] = useState<StockFilter>('all')
   const [importOpen, setImportOpen] = useState(false)
+  const [kizReprintOpen, setKizReprintOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const effectiveSellerId = sellerId ?? selectedSellerId
@@ -546,6 +548,16 @@ export function HonestSignScreen({
         >
           Лента расхода
         </Button>
+        {routeBase === '/app/ff' ? (
+          <Button
+            variant="outlined"
+            disabled={!effectiveSellerId}
+            onClick={() => setKizReprintOpen(true)}
+            data-testid={`${testIdPrefix}-open-kiz-reprint`}
+          >
+            Перепечатать ЧЗ
+          </Button>
+        ) : null}
       </Stack>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -803,6 +815,13 @@ export function HonestSignScreen({
           }}
         />
       ) : null}
+      <KizReprintDialog
+        open={kizReprintOpen}
+        token={token}
+        sellerId={effectiveSellerId}
+        onClose={() => setKizReprintOpen(false)}
+        testId={`${testIdPrefix}-kiz-reprint`}
+      />
 
       <Snackbar
         open={toastMessage != null}

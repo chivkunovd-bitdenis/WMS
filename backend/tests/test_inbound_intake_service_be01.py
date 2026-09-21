@@ -249,7 +249,7 @@ async def test_status_transitions_collapsed_chain(async_client: AsyncClient) -> 
 
 @pytest.mark.asyncio
 async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient) -> None:
-    """REV-IN-BE-01: box=6, loose=0, planned=10 → total=6, discrepancy=true."""
+    """REV-IN-BE-01 / WMS-473: box=6, loose=0, planned=10 → total=6; FF plan follows fact."""
     tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
@@ -269,7 +269,9 @@ async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient
             session, tenant_id, request_id, actor_user_id=actor_user_id
         )
         assert done.lines[0].actual_qty == 6
-        assert done.has_discrepancy is True
+        # WMS-473 R7: an FF-authored document has one number — no line discrepancy.
+        assert done.lines[0].expected_qty == 6
+        assert done.has_discrepancy is False
 
 
 @pytest.mark.asyncio

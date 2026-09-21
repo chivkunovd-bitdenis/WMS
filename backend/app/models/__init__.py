@@ -59,6 +59,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
+from app.models.kiz_reprint import KizReprint
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -168,6 +169,7 @@ __all__ = [
     "InventoryCountLine",
     "InventoryMovement",
     "InventoryReservation",
+    "KizReprint",
     "MarketplaceAccount",
     "MarketplaceUnloadBox",
     "MarketplaceUnloadBoxLine",

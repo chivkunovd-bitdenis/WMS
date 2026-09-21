@@ -89,6 +89,13 @@ def run_fbs_order_statuses_autopoll_task() -> None:
     asyncio.run(sync_fbs_order_statuses_all_sellers())
 
 
+@celery_app.task(name="wms.fbs_marking_verdicts_autopoll")
+def run_fbs_marking_verdicts_autopoll_task() -> None:
+    from app.services.fbs_autopoll_service import sync_fbs_marking_verdicts_all_sellers
+
+    asyncio.run(sync_fbs_marking_verdicts_all_sellers())
+
+
 @celery_app.task(name="wms.fbs_stock_reconcile")
 def run_fbs_stock_reconcile_task() -> None:
     from app.services.fbs_autopoll_service import reconcile_fbs_stocks_all_sellers
@@ -113,3 +120,12 @@ def run_inbound_marking_check_task(job_id: str) -> None:
     from app.services.inbound_marking_service import run_check_job
 
     asyncio.run(run_check_job(uuid.UUID(job_id)))
+
+
+@celery_app.task(name="wms.fbs_zero_refresh")
+def run_fbs_zero_refresh_task(tenant_id: str, seller_id: str, binding_id: str) -> None:
+    from app.services.fbs_zero_refresh_service import refresh_binding_zero_stocks
+
+    asyncio.run(refresh_binding_zero_stocks(
+        uuid.UUID(tenant_id), uuid.UUID(seller_id), uuid.UUID(binding_id),
+    ))

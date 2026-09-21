@@ -15,6 +15,7 @@ from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
 from app.api.chat_routes import router as chat_router
+from app.api.client_errors import router as client_errors_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
 from app.api.fbs_kiz import router as fbs_kiz_router
@@ -31,6 +32,7 @@ from app.api.inbound_package_catalog import router as inbound_package_catalog_ro
 from app.api.inventory_balances import router as inventory_balances_router
 from app.api.inventory_counts import router as inventory_counts_router
 from app.api.inventory_movements import router as inventory_movements_router
+from app.api.kiz_reprints import router as kiz_reprints_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
 from app.api.marking_credentials import router as marking_credentials_router
@@ -127,6 +129,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(client_errors_router)
     app.include_router(staff_accounts_router)
     app.include_router(seller_staff_accounts_router)
     app.include_router(subscription_router)
@@ -136,6 +139,7 @@ def create_app() -> FastAPI:
     app.include_router(products_router)
     app.include_router(inbound_intake_router)
     app.include_router(inbound_marking_router)
+    app.include_router(kiz_reprints_router)
     app.include_router(inbound_package_catalog_router)
     app.include_router(inventory_balances_router)
     app.include_router(inventory_counts_router)

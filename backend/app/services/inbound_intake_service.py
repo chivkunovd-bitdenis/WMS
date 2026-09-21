@@ -412,7 +412,9 @@ async def redistribute_ff_draft_container(
     Called before changing tare, under the same request row lock. Only drafts use
     this interpretation; seller and historical receiving facts stay independent.
     """
-    if req.status != STATUS_DRAFT or not is_ff_inbound(req):
+    # WMS-473: the same one-number rule holds while the FF document is being received
+    # again after «Редактировать»; only sorting/done facts stay frozen.
+    if req.status in SORTING_STATUSES | DONE_STATUSES or not is_ff_inbound(req):
         return
     line = next((ln for ln in req.lines if ln.product_id == product_id), None)
     if line is None:
@@ -420,7 +422,9 @@ async def redistribute_ff_draft_container(
     containers_before = await container_total_for_product(session, req.id, product_id)
     loose = line.actual_qty
     if loose is None:
-        loose = max(0, line.expected_qty - containers_before)
+        # An untouched draft authored before WMS-440 shows its entered number; after a
+        # legacy recount (submit/begin-receiving) nothing loose has been counted yet.
+        loose = max(0, line.expected_qty - containers_before) if req.status == STATUS_DRAFT else 0
     line.actual_qty = max(0, loose - delta)
     line.expected_qty = line.actual_qty + containers_before + delta
     if line.expected_qty > 1_000_000_000:
@@ -649,6 +653,8 @@ async def get_request_for_receiving_scan(
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest | None:
     """Load only the request state and lines needed by a receiving barcode scan."""
+    # WMS-473: the row lock serializes two simultaneous scans of a product that is not
+    # on the document yet, so the second one sees the line the first one created.
     stmt = (
         select(InboundIntakeRequest)
         .where(
@@ -656,6 +662,8 @@ async def get_request_for_receiving_scan(
             InboundIntakeRequest.tenant_id == tenant_id,
         )
         .options(selectinload(InboundIntakeRequest.lines))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -1366,6 +1374,112 @@ async def _seller_catalog_barcode_index(
     return idx
 
 
+def _index_lookup(
+    idx: dict[str, uuid.UUID | None], raw: str
+) -> tuple[uuid.UUID | None, bool]:
+    """Return (product_id, known): known=True with product_id=None means ambiguous."""
+    if raw in idx:
+        return idx[raw], True
+    upper = raw.upper()
+    if upper in idx:
+        return idx[upper], True
+    return None, False
+
+
+async def resolve_scanned_product_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+    raw: str,
+) -> uuid.UUID | None:
+    """WMS-473: one barcode resolution for loose, box and cargo-place scans.
+
+    Lines of the document first (the catalogue is read only for their products);
+    on a miss an ordinary inbound document falls back to the whole seller catalogue,
+    so a product the seller has but the document does not gets its line created by
+    the caller. Returns None only for a return document, whose historical refusal
+    the caller keeps: returns are not part of this change.
+    """
+    idx = await _request_barcode_index(session, tenant_id, req, include_seller_catalog=False)
+    product_id, known = _index_lookup(idx, raw)
+    if product_id is not None:
+        return product_id
+    if known:
+        raise InboundIntakeError("barcode_ambiguous")
+    if req.operation_type != OPERATION_TYPE_INBOUND:
+        return None
+    if req.seller_id is None:
+        raise InboundIntakeError("product_not_in_seller_catalog")
+    catalog = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
+    product_id, known = _index_lookup(catalog, raw)
+    if product_id is not None:
+        return product_id
+    if known:
+        raise InboundIntakeError("barcode_ambiguous")
+    raise InboundIntakeError("product_not_in_seller_catalog")
+
+
+def scan_creates_lines(req: InboundIntakeRequest) -> bool:
+    """WMS-473 adds document lines from scans of ordinary inbound documents only."""
+    return req.operation_type == OPERATION_TYPE_INBOUND
+
+
+async def ensure_request_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+    *,
+    create_missing: bool = True,
+) -> InboundIntakeLine:
+    """Return the document line of the product, creating it when allowed.
+
+    Creation is what the «Добавить товар» button did: expected 0, nothing accepted
+    yet, marked as added by the fulfilment centre when the seller wrote the plan.
+    Must run under the request row lock so two simultaneous scans share one line.
+    """
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is not None:
+        return line
+    if not create_missing:
+        raise InboundIntakeError("product_not_on_request")
+    product = (
+        await session.execute(
+            select(Product).where(Product.id == product_id, Product.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if product is None:
+        raise InboundIntakeError("product_not_found")
+    if product.seller_id is None:
+        raise InboundIntakeError("product_seller_mismatch")
+    if req.seller_id is None:
+        req.seller_id = product.seller_id
+    elif product.seller_id != req.seller_id:
+        raise InboundIntakeError("product_seller_mismatch")
+    line = InboundIntakeLine(
+        product_id=product_id,
+        expected_qty=0,
+        actual_qty=0,
+        posted_qty=0,
+        added_by_fulfillment=not is_ff_inbound(req),
+    )
+    req.lines.append(line)
+    await session.flush()
+    return line
+
+
+async def sync_ff_line_total(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+    line: InboundIntakeLine,
+) -> None:
+    """FF document keeps one number: expected_qty is the accepted total (loose + tare)."""
+    if not is_ff_inbound(req) or req.status in SORTING_STATUSES | DONE_STATUSES:
+        return
+    containers = await container_total_for_product(session, req.id, line.product_id)
+    line.expected_qty = _loose_qty(line) + containers
+
+
 async def add_or_increment_received_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1386,37 +1500,14 @@ async def add_or_increment_received_product(
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
 
-    prod_stmt = select(Product).where(
-        Product.id == product_id,
-        Product.tenant_id == tenant_id,
-    )
-    prod_res = await session.execute(prod_stmt)
-    product = prod_res.scalar_one_or_none()
-    if product is None:
-        raise InboundIntakeError("product_not_found")
-    if product.seller_id is None:
-        raise InboundIntakeError("product_seller_mismatch")
-    if req.seller_id is None:
-        req.seller_id = product.seller_id
-    elif product.seller_id != req.seller_id:
-        raise InboundIntakeError("product_seller_mismatch")
-    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
-    if line is None:
-        line = InboundIntakeLine(
-            request_id=request_id,
-            product_id=product_id,
-            expected_qty=0,
-            actual_qty=actual_qty,
-            posted_qty=0,
-            added_by_fulfillment=True,
-        )
-        session.add(line)
-    else:
-        new_loose = _loose_qty(line) + actual_qty
-        container_total = await container_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + container_total:
-            raise InboundIntakeError("actual_below_posted")
-        line.actual_qty = new_loose
+    # The manual «Добавить товар» path creates the line for any operation type, as before.
+    line = await ensure_request_line(session, tenant_id, req, product_id)
+    new_loose = _loose_qty(line) + actual_qty
+    container_total = await container_total_for_product(session, request_id, line.product_id)
+    if line.posted_qty > new_loose + container_total:
+        raise InboundIntakeError("actual_below_posted")
+    line.actual_qty = new_loose
+    await sync_ff_line_total(session, req, line)
     await session.commit()
     await session.refresh(line)
     return line
@@ -1434,43 +1525,6 @@ async def scan_barcode_to_loose_intake(
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    if product_id_hint is not None:
-        req_stmt = (
-            select(InboundIntakeRequest)
-            .where(
-                InboundIntakeRequest.id == request_id,
-                InboundIntakeRequest.tenant_id == tenant_id,
-            )
-            .with_for_update()
-        )
-        req = (await session.execute(req_stmt)).scalar_one_or_none()
-        if req is None:
-            raise InboundIntakeError("request_not_found")
-        if req.status == STATUS_SUBMITTED:
-            req.status = STATUS_RECEIVING
-            req.primary_accepted_at = datetime.now(UTC)
-        elif req.status not in RECEIVING_STATUSES:
-            raise InboundIntakeError("not_verifying")
-
-        line_stmt = (
-            select(InboundIntakeLine)
-            .where(
-                InboundIntakeLine.request_id == request_id,
-                InboundIntakeLine.product_id == product_id_hint,
-            )
-            .with_for_update()
-        )
-        line = (await session.execute(line_stmt)).scalar_one_or_none()
-        if line is None:
-            raise InboundIntakeError("product_not_on_request")
-        new_loose = _loose_qty(line) + 1
-        container_total = await container_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + container_total:
-            raise InboundIntakeError("actual_below_posted")
-        line.actual_qty = new_loose
-        await session.commit()
-        await session.refresh(line)
-        return line
     req = await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -1479,22 +1533,19 @@ async def scan_barcode_to_loose_intake(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    idx = await _request_barcode_index(
-        session,
-        tenant_id,
-        req,
-        include_seller_catalog=False,
-    )
-    product_id = idx.get(raw) if raw in idx else idx.get(raw.upper())
+    product_id = product_id_hint
     if product_id is None:
-        if raw in idx or raw.upper() in idx:
-            raise InboundIntakeError("barcode_ambiguous")
-        raise InboundIntakeError("product_not_on_request")
+        product_id = await resolve_scanned_product_id(session, tenant_id, req, raw)
+        if product_id is None:
+            raise InboundIntakeError("product_not_on_request")
+    line = await ensure_request_line(
+        session, tenant_id, req, product_id, create_missing=scan_creates_lines(req)
+    )
     return await add_or_increment_received_product(
         session,
         tenant_id,
         request_id,
-        product_id=product_id,
+        product_id=line.product_id,
         actual_qty=1,
         request=req,
     )
@@ -1523,6 +1574,7 @@ async def set_line_actual_qty(
     if line.posted_qty > actual_qty + container_total:
         raise InboundIntakeError("actual_below_posted")
     line.actual_qty = actual_qty
+    await sync_ff_line_total(session, req, line)
     await session.commit()
     await session.refresh(line)
     return line
@@ -1602,10 +1654,14 @@ async def complete_receiving(
         raise InboundIntakeError("not_verifying")
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
+    ff_document = is_ff_inbound(req)
     for line in req.lines:
         effective = await effective_actual_qty(session, req.id, line, request_status=req.status)
         line.actual_qty = effective
-        if effective != line.expected_qty:
+        if ff_document:
+            # WMS-473: the FF document has no plan to disagree with — one number.
+            line.expected_qty = effective
+        elif effective != line.expected_qty:
             line_discrepancy = True
     live_box_discrepancy = boxes_discrepancy(req.planned_box_count, len(req.boxes))
     req.boxes_discrepancy = live_box_discrepancy
