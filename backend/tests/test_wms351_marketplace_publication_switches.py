@@ -200,7 +200,8 @@ async def test_disabled_allocation_is_preserved_without_blocking_other_marketpla
     await rules.set_rule_for_products(db_session, seed.tenant.id, [seed.product.id], rule)
     view = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert view.published_now == 10
-    assert view.rule.units_by_warehouse[501001] == (10 if units else 0)
+    # WMS-483: a percent-only pool is not an explicit zero-unit allocation.
+    assert view.rule.units_by_warehouse == ({501001: 10, 501002: 10} if units else {})
     assert view.rule.by_warehouse[501001] == 100
     with pytest.raises(rules.FbsStockRuleError):
         await rules.set_rule_for_products(

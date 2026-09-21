@@ -2840,12 +2840,11 @@ async def test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time(
 
 
 @pytest.mark.asyncio
-async def test_fbs_marking_omitted_wb_row_clears_stale_verdict_only(
+async def test_fbs_marking_omitted_wb_row_preserves_saved_verdict(
     async_client: AsyncClient,
 ) -> None:
-    # TC-NEW-FBS-MARKING-001: negative — an order omitted from a successful
-    # batch becomes unknown without erasing its KIZ binding, lifecycle, raw
-    # detail, reason, or last successful check time.
+    # WMS-477 C24: an omitted order supplies no new verdict. Preserve its
+    # accepted status, KIZ binding, lifecycle, raw detail, reason and check time.
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
         async_client, headers, suffix
@@ -2894,14 +2893,17 @@ async def test_fbs_marking_omitted_wb_row_clears_stale_verdict_only(
     async with SessionLocal() as session:
         db_order = await session.get(FbsOrder, order.order_id)
         assert db_order is not None
+        saved_check = db_order.metadata_last_checked_at
+        assert saved_check is not None
         markings = await fbs_marking_svc._sync_order_meta_from_wb(
             session, db_order, async_client, "test-token", meta_batch=[]
         )
         await session.commit()
 
     marking = markings[0]
-    assert marking.meta_status == META_STATUS_UNKNOWN
-    assert marking.check_status == CHECK_STATUS_ERROR
+    assert not markings.applied
+    assert marking.meta_status == META_STATUS_ACCEPTED
+    assert marking.check_status == CHECK_STATUS_OK
     assert marking.marking_code_id == code_id
     assert marking.reason == "previous WB reason"
     assert marking.meta_details_json == {"decision": "filled", "value": value}
@@ -2909,7 +2911,13 @@ async def test_fbs_marking_omitted_wb_row_clears_stale_verdict_only(
         refreshed_order = await session.get(FbsOrder, order.order_id)
         refreshed_code = await session.get(MarkingCode, code_id)
         assert refreshed_order is not None
-        assert refreshed_order.metadata_last_checked_at == previous_check.replace(tzinfo=None)
+        assert refreshed_order.metadata_last_checked_at == saved_check
+        refreshed_marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert refreshed_marking is not None
+        assert refreshed_marking.meta_status == META_STATUS_ACCEPTED
+        assert refreshed_marking.check_status == CHECK_STATUS_OK
         assert refreshed_code is not None
         assert refreshed_code.status == STATUS_RESERVED
 

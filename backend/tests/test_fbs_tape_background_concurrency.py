@@ -23,6 +23,7 @@ from app.services import fbs_order_tape_print_service as tape
 from app.services import fbs_print_asset_service as assets
 from app.services import wb_marketplace_orders_service as wb
 from app.services.wildberries_errors import WildberriesClientError
+from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
 
 
 @pytest.mark.asyncio
@@ -271,9 +272,29 @@ async def test_tape_uncertain_wb_write_keeps_code_and_retries_get_only(
         assert repeated.orders[0].codes == recovered.orders[0].codes
         assert calls.count("put") == 1
         operation_id = await session.scalar(select(FbsWbOperation.id))
-        # A later incomplete WB response invalidates the local positive verdict.
+        # WMS-477: an omitted order preserves the confirmed binding; reprinting
+        # must not resend PUT or reopen the confirmed operation.
         monkeypatch.setattr(
             tape.marking_svc, "fetch_marketplace_orders_meta_batch", AsyncMock(return_value=[]),
+        )
+        await tape.marking_svc.sync_order_marking_statuses(
+            session, seed.tenant_id, seed.order_ids[0], async_client, actor_user_id=seed.user_id,
+        )
+        await session.commit()
+        after_omission = await print_tape(session, async_client, seed)
+        assert after_omission.orders and not after_omission.order_errors
+        assert after_omission.orders[0].codes == recovered.orders[0].codes
+        assert calls.count("put") == 1
+        operation = await session.scalar(select(FbsWbOperation))
+        assert operation.id == operation_id and operation.state == "confirmed"
+
+        # A returned order without the expected metadata kind is a different
+        # case: its unknown verdict still requires the existing recovery path.
+        order = await session.get(FbsOrder, seed.order_ids[0])
+        assert order is not None
+        monkeypatch.setattr(
+            tape.marking_svc, "fetch_marketplace_orders_meta_batch",
+            AsyncMock(return_value=[MarketplaceOrderMetaRow(order_id=int(order.wb_order_id))]),
         )
         await tape.marking_svc.sync_order_marking_statuses(
             session, seed.tenant_id, seed.order_ids[0], async_client, actor_user_id=seed.user_id,
