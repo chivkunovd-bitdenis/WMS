@@ -1,0 +1,195 @@
+{
+  "baseline": "3e125074d5cb4c38e9107f864c3075f4f1f224cd",
+  "method": "synthetic local PostgreSQL; ORM metadata schema; NOT production capacity or browser timing",
+  "postgres": "PostgreSQL 16.14 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+  "pool": {
+    "size": 5,
+    "max_overflow": 10,
+    "timeout_s": 30.0
+  },
+  "pool_concurrent_1_50ms_query": {
+    "n": 1,
+    "median_ms": 56.95,
+    "p95_ms": 56.95,
+    "max_ms": 56.95
+  },
+  "pool_concurrent_15_50ms_query": {
+    "n": 15,
+    "median_ms": 68.22,
+    "p95_ms": 71.41,
+    "max_ms": 71.56
+  },
+  "pool_concurrent_30_50ms_query": {
+    "n": 30,
+    "median_ms": 85.63,
+    "p95_ms": 114.85,
+    "max_ms": 115.41
+  },
+  "pool_concurrent_60_50ms_query": {
+    "n": 60,
+    "median_ms": 139.88,
+    "p95_ms": 228.85,
+    "max_ms": 228.9
+  },
+  "select1_behind_15_held_connections_ms": 507.55,
+  "login_1_concurrent_eventloop": {
+    "elapsed_ms": 414.2,
+    "heartbeat_gap": {
+      "n": 8,
+      "median_ms": 6.18,
+      "p95_ms": 167.03,
+      "max_ms": 245.17
+    },
+    "result": [
+      "invalid_credentials"
+    ]
+  },
+  "login_5_concurrent_eventloop": {
+    "elapsed_ms": 1211.74,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.28,
+      "p95_ms": 6.33,
+      "max_ms": 1208.84
+    },
+    "result": [
+      "invalid_credentials",
+      "invalid_credentials",
+      "invalid_credentials",
+      "invalid_credentials",
+      "invalid_credentials"
+    ]
+  },
+  "catalog_100_limit_None_search_None": {
+    "elapsed_ms": 8.31,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.28,
+      "p95_ms": 6.33,
+      "max_ms": 6.79
+    },
+    "result": 100,
+    "sql_count": 2
+  },
+  "catalog_100_limit_None_search_AUDIT-00009999": {
+    "elapsed_ms": 6.47,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.29,
+      "p95_ms": 6.32,
+      "max_ms": 6.35
+    },
+    "result": 0,
+    "sql_count": 1
+  },
+  "catalog_100_limit_50_search_None": {
+    "elapsed_ms": 6.16,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.29,
+      "p95_ms": 6.33,
+      "max_ms": 6.34
+    },
+    "result": 50,
+    "sql_count": 2
+  },
+  "catalog_100_limit_50_search_AUDIT-00009999": {
+    "elapsed_ms": 7.04,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.28,
+      "p95_ms": 6.32,
+      "max_ms": 6.33
+    },
+    "result": 0,
+    "sql_count": 1
+  },
+  "catalog_1000_limit_None_search_None": {
+    "elapsed_ms": 12.52,
+    "heartbeat_gap": {
+      "n": 8,
+      "median_ms": 6.29,
+      "p95_ms": 6.3,
+      "max_ms": 7.96
+    },
+    "result": 1000,
+    "sql_count": 2
+  },
+  "catalog_1000_limit_None_search_AUDIT-00009999": {
+    "elapsed_ms": 3.12,
+    "heartbeat_gap": {
+      "n": 6,
+      "median_ms": 6.11,
+      "p95_ms": 6.28,
+      "max_ms": 6.3
+    },
+    "result": 0,
+    "sql_count": 1
+  },
+  "catalog_1000_limit_50_search_None": {
+    "elapsed_ms": 3.89,
+    "heartbeat_gap": {
+      "n": 6,
+      "median_ms": 6.18,
+      "p95_ms": 6.31,
+      "max_ms": 6.32
+    },
+    "result": 50,
+    "sql_count": 2
+  },
+  "catalog_1000_limit_50_search_AUDIT-00009999": {
+    "elapsed_ms": 4.33,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.3,
+      "p95_ms": 6.31,
+      "max_ms": 6.32
+    },
+    "result": 0,
+    "sql_count": 1
+  },
+  "catalog_10000_limit_None_search_None": {
+    "elapsed_ms": 162.68,
+    "heartbeat_gap": {
+      "n": 12,
+      "median_ms": 5.92,
+      "p95_ms": 15.4,
+      "max_ms": 122.84
+    },
+    "result": 10000,
+    "sql_count": 2
+  },
+  "catalog_10000_limit_None_search_AUDIT-00009999": {
+    "elapsed_ms": 9.0,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.05,
+      "p95_ms": 6.29,
+      "max_ms": 6.36
+    },
+    "result": 1,
+    "sql_count": 2
+  },
+  "catalog_10000_limit_50_search_None": {
+    "elapsed_ms": 4.9,
+    "heartbeat_gap": {
+      "n": 7,
+      "median_ms": 6.29,
+      "p95_ms": 6.31,
+      "max_ms": 6.32
+    },
+    "result": 50,
+    "sql_count": 2
+  },
+  "catalog_10000_limit_50_search_AUDIT-00009999": {
+    "elapsed_ms": 12.08,
+    "heartbeat_gap": {
+      "n": 8,
+      "median_ms": 6.29,
+      "p95_ms": 6.34,
+      "max_ms": 6.34
+    },
+    "result": 1,
+    "sql_count": 2
+  }
+}

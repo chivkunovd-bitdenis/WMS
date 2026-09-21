@@ -1,0 +1,7 @@
+{
+  "precondition": "Direct audit DB insertion of an inconsistent tenant/product relation",
+  "api_mutation_path_proven": false,
+  "postgres_rejected_inconsistent_relation": false,
+  "read_api_returned_foreign_sku": true,
+  "production_data_checked": false
+}

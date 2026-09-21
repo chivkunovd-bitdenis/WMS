@@ -1,0 +1,130 @@
+{
+  "baseline": "3e125074",
+  "method": "ASGITransport with real JWT+DB; 10 tenants, 19000 products. No socket/browser/TLS. ORM schema, no migrations. Single run per scenario.",
+  "10000_products_single:/products": {
+    "status": 200,
+    "elapsed_ms": 254.79,
+    "bytes": 6468891
+  },
+  "10000_products_single:/products/ff-catalog": {
+    "status": 200,
+    "elapsed_ms": 527.25,
+    "bytes": 7608891
+  },
+  "10000_products_single:/products/ff-catalog-page?limit=100": {
+    "status": 200,
+    "elapsed_ms": 14.78,
+    "bytes": 75974
+  },
+  "10000_products_single:/auth/me": {
+    "status": 200,
+    "elapsed_ms": 2.63,
+    "bytes": 830
+  },
+  "same_account_5_concurrent_products": [
+    {
+      "status": 200,
+      "elapsed_ms": 460.3,
+      "bytes": 6468891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 1380.59,
+      "bytes": 6468891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 845.12,
+      "bytes": 6468891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 1379.27,
+      "bytes": 6468891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 1124.21,
+      "bytes": 6468891
+    }
+  ],
+  "10_tenants_concurrent_products": [
+    {
+      "status": 200,
+      "elapsed_ms": 557.11,
+      "bytes": 6468891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 48.89,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 97.69,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 158.46,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 280.85,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 292.74,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 292.04,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 291.64,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 291.26,
+      "bytes": 645891
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 291.0,
+      "bytes": 645891
+    }
+  ],
+  "same_account_5_concurrent_page": [
+    {
+      "status": 200,
+      "elapsed_ms": 48.95,
+      "bytes": 75974
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 47.89,
+      "bytes": 75974
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 47.25,
+      "bytes": 75974
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 46.76,
+      "bytes": 75974
+    },
+    {
+      "status": 200,
+      "elapsed_ms": 46.33,
+      "bytes": 75974
+    }
+  ]
+}

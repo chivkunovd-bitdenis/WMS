@@ -1,0 +1,20 @@
+{
+  "precondition": "Authenticated ordinary seller knows another job UUID within own tenant",
+  "can_manage_seller_shops": false,
+  "grants_added": false,
+  "cases": [
+    {
+      "job_type": "wildberries_cards_sync",
+      "unauthorized_same_tenant_seller_status": 200,
+      "foreign_tenant_status": 404,
+      "result_and_raw_error_disclosed": true
+    },
+    {
+      "job_type": "movements_digest",
+      "unauthorized_same_tenant_seller_status": 200,
+      "foreign_tenant_status": 404,
+      "result_and_raw_error_disclosed": true
+    }
+  ],
+  "exact_avpack_slug_control_status": 404
+}

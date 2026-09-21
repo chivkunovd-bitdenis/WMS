@@ -1,0 +1,16 @@
+[
+  {
+    "actor": "staff",
+    "inventory_summary": 403,
+    "movements": 200,
+    "disclosed_product_count": 2,
+    "foreign_tenant_disclosed": false
+  },
+  {
+    "actor": "a",
+    "inventory_summary": 403,
+    "movements": 200,
+    "disclosed_product_count": 1,
+    "foreign_tenant_disclosed": false
+  }
+]

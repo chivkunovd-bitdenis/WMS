@@ -1,0 +1,125 @@
+
+> frontend@0.0.0 test:unit
+> vitest run src/hooks/useBarcodeScanner.test.ts src/ui-kit/ScannerLine.test.tsx src/screens/ff/FfInboundRequestView.test.ts src/screens/ff/inventory/InventoryScan.test.ts src/screens/ff/inventory/FfInventoryCountScreen.test.ts src/screens/ff/inventory/foundQueue.test.ts src/screens/ff/unload-pick/UnloadPickScreen.test.tsx src/screens/ff/unload-pick/pickScanSource.test.ts
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms501-performance-isolation-audit/frontend
+
+ ✓ src/hooks/useBarcodeScanner.test.ts (30 tests) 10ms
+ ✓ src/screens/ff/inventory/foundQueue.test.ts (5 tests) 113ms
+ ✓ src/screens/ff/unload-pick/pickScanSource.test.ts (8 tests) 8ms
+ ✓ src/screens/ff/inventory/InventoryScan.test.ts (19 tests) 810ms
+   ✓ inventory product scan > processes repeated scans with 1000 product rows still expanded  801ms
+ ✓ src/ui-kit/ScannerLine.test.tsx (2 tests) 21ms
+ ✓ src/screens/ff/unload-pick/UnloadPickScreen.test.tsx (1 test) 50ms
+ ✓ src/screens/ff/inventory/FfInventoryCountScreen.test.ts (6 tests) 4ms
+ ❯ src/screens/ff/FfInboundRequestView.test.ts (10 tests | 2 failed) 15ms
+   ✓ inbound view split public and source contracts > keeps the public component and type exports used by the FF routes 1ms
+   × inbound view split public and source contracts > preserves the complete static data-testid multiset from the baseline screen 9ms
+     → expected [ 'ff-inbound-add-products', …(109) ] to deeply equal [ 'ff-inbound-add-products', …(100) ]
+   ✓ inbound view split public and source contracts > preserves dynamic row, box, cargo-place and child selector contracts 1ms
+   × inbound view split public and source contracts > does not create an A-3 source module larger than the 600-line monolith limit 1ms
+     → ./FfInboundRequestView.tsx: expected 4154 to be less than or equal to 600
+   ✓ inbound view split public and source contracts > does not suppress TypeScript or ESLint checks in a created A-3 module 0ms
+   ✓ inbound view split public and source contracts > does not introduce an unsafe any contract in a created A-3 module 0ms
+   ✓ inbound scan fast path > replaces the just scanned row, then moves the visible row state to the next scan 0ms
+   ✓ inbound scan fast path > coalesces repeated reconciliation until scanning pauses 2ms
+   ✓ inbound scan fast path > serializes rapid scans in their physical arrival order 0ms
+   ✓ inbound scan fast path > does not send a reprint-dialog scan to either intake handler 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/ff/FfInboundRequestView.test.ts > inbound view split public and source contracts > preserves the complete static data-testid multiset from the baseline screen
+AssertionError: expected [ 'ff-inbound-add-products', …(109) ] to deeply equal [ 'ff-inbound-add-products', …(100) ]
+
+- Expected
++ Received
+
+@@ -7,20 +7,21 @@
+    "ff-inbound-box-line-sku",
+    "ff-inbound-box-row",
+    "ff-inbound-boxes-panel",
+    "ff-inbound-boxes-print-all",
+    "ff-inbound-boxes-summary",
++   "ff-inbound-cargo-place-lines",
+    "ff-inbound-cargo-place-row",
+    "ff-inbound-cargo-places-create",
+    "ff-inbound-cargo-places-dialog",
+    "ff-inbound-cargo-places-error",
+    "ff-inbound-cargo-places-print-all",
+    "ff-inbound-cell-hint",
+    "ff-inbound-cell-hints",
+    "ff-inbound-close",
+-   "ff-inbound-close-confirm",
+-   "ff-inbound-close-confirm-dialog",
++   "ff-inbound-combine-pallet",
++   "ff-inbound-combine-pallet-submit",
+    "ff-inbound-compact-summary",
+    "ff-inbound-create-cargo-places",
+    "ff-inbound-dimensions-dialog",
+    "ff-inbound-dimensions-error",
+    "ff-inbound-dimensions-save",
+@@ -61,10 +62,16 @@
+    "ff-inbound-doc-loading",
+    "ff-inbound-doc-root",
+    "ff-inbound-document-number",
+    "ff-inbound-import-boxes",
+    "ff-inbound-import-success-snackbar",
++   "ff-inbound-kiz-expand",
++   "ff-inbound-kiz-export",
++   "ff-inbound-kiz-recheck",
++   "ff-inbound-kiz-row",
++   "ff-inbound-kiz-table",
++   "ff-inbound-kiz-warning",
+    "ff-inbound-line-actual-display",
+    "ff-inbound-line-added-by-ff",
+    "ff-inbound-line-barcode",
+    "ff-inbound-line-dimensions",
+    "ff-inbound-line-dimensions-edit",
+@@ -89,15 +96,17 @@
+    "ff-inbound-save",
+    "ff-inbound-save-success-snackbar",
+    "ff-inbound-scan-add-product",
+    "ff-inbound-scan-error-snackbar",
+    "ff-inbound-seller-name",
++   "ff-inbound-sorting-objects",
+    "ff-inbound-sorting-wait-reception",
+    "ff-inbound-status-chip",
+    "ff-inbound-submit-warehouse",
+    "ff-inbound-submit-warehouse",
+    "ff-inbound-verify-complete",
+    "ff-inbound-volume-summary",
+    "ff-inbound-waybill-number",
+    "ff-inbound-weight-summary",
+    "ff-sorting-posted-done",
++   "ff-sorting-toolbar-controls",
+  ]
+
+ ❯ src/screens/ff/FfInboundRequestView.test.ts:147:27
+    145| 
+    146|   it('preserves the complete static data-testid multiset from the base…
+    147|     expect(staticTestIds).toEqual(baselineStaticTestIds)
+       |                           ^
+    148|   })
+    149| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/screens/ff/FfInboundRequestView.test.ts > inbound view split public and source contracts > does not create an A-3 source module larger than the 600-line monolith limit
+AssertionError: ./FfInboundRequestView.tsx: expected 4154 to be less than or equal to 600
+ ❯ src/screens/ff/FfInboundRequestView.test.ts:172:47
+    170|   it('does not create an A-3 source module larger than the 600-line mo…
+    171|     for (const [path, source] of Object.entries(inboundSources)) {
+    172|       expect(source.split('\n').length, path).toBeLessThanOrEqual(600)
+       |                                               ^
+    173|     }
+    174|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  2 failed | 79 passed (81)
+   Start at  18:08:01
+   Duration  3.72s (transform 1.91s, setup 0ms, collect 11.08s, tests 1.03s, environment 1ms, prepare 851ms)
+

@@ -1,0 +1,4990 @@
+[
+  {
+    "path": "/health",
+    "method": "GET",
+    "handler": "app.api.health.health",
+    "auth_dependencies": [],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/register",
+    "method": "POST",
+    "handler": "app.api.auth.register",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/seller-accounts",
+    "method": "POST",
+    "handler": "app.api.auth.create_seller_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/login",
+    "method": "POST",
+    "handler": "app.api.auth.login_route",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/set-password",
+    "method": "POST",
+    "handler": "app.api.auth.set_password_route",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/request-password-reset",
+    "method": "POST",
+    "handler": "app.api.auth.request_password_reset_route",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/invites/resend",
+    "method": "POST",
+    "handler": "app.api.auth.resend_invite_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/me",
+    "method": "GET",
+    "handler": "app.api.auth.me",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10aa75bd0>",
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/seller-shops",
+    "method": "PUT",
+    "handler": "app.api.auth.put_seller_shops",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/switch-seller",
+    "method": "POST",
+    "handler": "app.api.auth.switch_seller",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/login-by-name",
+    "method": "POST",
+    "handler": "app.api.auth.login_by_name_route",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/auth/me",
+    "method": "PATCH",
+    "handler": "app.api.auth.patch_me",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10aa75bd0>",
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/client-errors",
+    "method": "POST",
+    "handler": "app.api.client_errors.client_errors",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/staff-accounts",
+    "method": "GET",
+    "handler": "app.api.staff_accounts.get_staff_accounts",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/staff-accounts",
+    "method": "POST",
+    "handler": "app.api.staff_accounts.post_staff_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/staff-accounts/{user_id}/packaging-rate",
+    "method": "PATCH",
+    "handler": "app.api.staff_accounts.patch_staff_packaging_rate",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/staff-accounts/{user_id}/permissions",
+    "method": "PATCH",
+    "handler": "app.api.staff_accounts.patch_staff_permissions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/staff-accounts/{user_id}/profile",
+    "method": "PATCH",
+    "handler": "app.api.staff_accounts.patch_staff_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/seller-staff-accounts",
+    "method": "GET",
+    "handler": "app.api.seller_staff_accounts.get_seller_staff_accounts",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/seller-staff-accounts",
+    "method": "POST",
+    "handler": "app.api.seller_staff_accounts.post_seller_staff_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/seller-staff-accounts/{user_id}/permissions",
+    "method": "PATCH",
+    "handler": "app.api.seller_staff_accounts.patch_seller_staff_permissions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/auth/seller-staff-accounts/{user_id}/profile",
+    "method": "PATCH",
+    "handler": "app.api.seller_staff_accounts.patch_seller_staff_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/subscription",
+    "method": "GET",
+    "handler": "app.api.subscription.get_subscription",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/subscription/pay",
+    "method": "POST",
+    "handler": "app.api.subscription.start_payment",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/subscription/sync",
+    "method": "POST",
+    "handler": "app.api.subscription.sync_payment",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/tenant/settings",
+    "method": "GET",
+    "handler": "app.api.tenant_settings.read_tenant_settings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/tenant/settings",
+    "method": "PATCH",
+    "handler": "app.api.tenant_settings.patch_tenant_settings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/sellers",
+    "method": "GET",
+    "handler": "app.api.sellers.get_sellers",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/sellers/{seller_id}/wb-catalog",
+    "method": "GET",
+    "handler": "app.api.sellers.get_seller_wb_catalog_for_admin",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/sellers",
+    "method": "POST",
+    "handler": "app.api.sellers.post_seller",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/sellers/with-account",
+    "method": "POST",
+    "handler": "app.api.sellers.post_seller_with_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/map",
+    "method": "GET",
+    "handler": "app.api.warehouses.get_warehouse_map_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/map/move",
+    "method": "POST",
+    "handler": "app.api.warehouses.move_warehouse_map_object_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/map/disband",
+    "method": "POST",
+    "handler": "app.api.warehouses.disband_warehouse_map_pallet_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/pallets",
+    "method": "GET",
+    "handler": "app.api.warehouses.list_warehouse_pallets_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/pallets/combine",
+    "method": "POST",
+    "handler": "app.api.warehouses.combine_warehouse_pallet_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/sorting-objects",
+    "method": "GET",
+    "handler": "app.api.warehouses.get_sorting_objects_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/sorting-objects",
+    "method": "POST",
+    "handler": "app.api.warehouses.create_sorting_object_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/sorting-objects/place",
+    "method": "POST",
+    "handler": "app.api.warehouses.place_sorting_object_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses",
+    "method": "GET",
+    "handler": "app.api.warehouses.list_warehouses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses",
+    "method": "POST",
+    "handler": "app.api.warehouses.post_warehouse",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}",
+    "method": "PATCH",
+    "handler": "app.api.warehouses.patch_warehouse",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/resolve",
+    "method": "GET",
+    "handler": "app.api.warehouses.resolve_scan",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}",
+    "method": "DELETE",
+    "handler": "app.api.warehouses.delete_warehouse_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/sorting-location",
+    "method": "GET",
+    "handler": "app.api.warehouses.get_sorting_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/locations",
+    "method": "GET",
+    "handler": "app.api.warehouses.list_locations",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/locations",
+    "method": "POST",
+    "handler": "app.api.warehouses.post_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/locations/{location_id}",
+    "method": "PATCH",
+    "handler": "app.api.warehouses.patch_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/locations/{location_id}",
+    "method": "DELETE",
+    "handler": "app.api.warehouses.delete_location_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/racks",
+    "method": "GET",
+    "handler": "app.api.warehouses.get_racks",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/warehouses/{warehouse_id}/locations/suggest",
+    "method": "GET",
+    "handler": "app.api.warehouses.suggest_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products",
+    "method": "GET",
+    "handler": "app.api.products.get_products",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/categories",
+    "method": "GET",
+    "handler": "app.api.products.get_product_categories",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/wb-catalog",
+    "method": "GET",
+    "handler": "app.api.products.get_seller_wb_catalog",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/linked-wb-catalog",
+    "method": "GET",
+    "handler": "app.api.products.get_linked_wb_catalog",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/ff-catalog",
+    "method": "GET",
+    "handler": "app.api.products.get_ff_catalog",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/ff-catalog-page",
+    "method": "GET",
+    "handler": "app.api.products.get_ff_catalog_page",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products",
+    "method": "POST",
+    "handler": "app.api.products.post_product",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/ozon-link",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_product_ozon_link",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/merge",
+    "method": "POST",
+    "handler": "app.api.products.post_products_merge",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/import-tz/template",
+    "method": "GET",
+    "handler": "app.api.products.get_product_tz_import_template",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/import-tz/preview",
+    "method": "POST",
+    "handler": "app.api.products.post_product_tz_import_preview",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/import-tz/apply",
+    "method": "POST",
+    "handler": "app.api.products.post_product_tz_import_apply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/requires-honest-sign/bulk",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_products_requires_honest_sign_bulk",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/dimensions",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_product_dimensions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/dimensions/history",
+    "method": "GET",
+    "handler": "app.api.products.get_product_dimension_history",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/dimensions/container",
+    "method": "POST",
+    "handler": "app.api.products.post_product_container_dimensions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/dimensions/restore-wb",
+    "method": "POST",
+    "handler": "app.api.products.restore_product_wb_dimensions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/packaging-instructions",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_product_packaging_instructions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/stock-directions",
+    "method": "GET",
+    "handler": "app.api.products.get_product_stock_directions",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/stock-directions",
+    "method": "POST",
+    "handler": "app.api.products.post_product_stock_direction",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/stock-directions/{direction_id}",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_product_stock_direction",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/stock-directions/{direction_id}",
+    "method": "DELETE",
+    "handler": "app.api.products.delete_product_stock_direction",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/fbs-stock-sync",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_product_fbs_stock_sync",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/fbs-rule/bulk",
+    "method": "POST",
+    "handler": "app.api.products.post_products_fbs_rule_bulk_read",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/fbs-rule",
+    "method": "GET",
+    "handler": "app.api.products.get_product_fbs_rule",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/{product_id}/fbs-rule",
+    "method": "PUT",
+    "handler": "app.api.products.put_product_fbs_rule",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/fbs-rule",
+    "method": "PUT",
+    "handler": "app.api.products.put_products_fbs_rule",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/fbs-stock-sync/bulk",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_products_fbs_stock_sync_bulk",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/fbs-stock-limit/from-balance/bulk",
+    "method": "PATCH",
+    "handler": "app.api.products.patch_products_fbs_stock_limit_from_balance_bulk",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/products/fbs-rule/reset-legacy-limits",
+    "method": "POST",
+    "handler": "app.api.fbs_stock_rule_reset.reset_products_legacy_fbs_limits",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests",
+    "method": "GET",
+    "handler": "app.api.inbound_intake.list_inbound_requests",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.create_inbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/begin-receiving",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.begin_inbound_receiving",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}",
+    "method": "GET",
+    "handler": "app.api.inbound_intake.get_inbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}",
+    "method": "DELETE",
+    "handler": "app.api.inbound_intake.delete_inbound_draft_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.patch_inbound_request_planned",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.create_inbound_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/cargo-places",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.create_inbound_cargo_places",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/cargo-places/{place_id}/mark-label-printed",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.mark_inbound_cargo_place_label_printed",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/cargo-places/{place_id}/scan",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.scan_product_into_inbound_cargo_place",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/cargo-places/{place_id}/lines/{product_id}",
+    "method": "PUT",
+    "handler": "app.api.inbound_intake.set_inbound_cargo_place_line_quantity",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/import-boxes/preview",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.preview_inbound_box_import",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/import-boxes/apply",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.apply_inbound_box_import",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/receiving/scan",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.scan_barcode_to_loose_intake",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/receiving/lines",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.add_received_product_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/complete-receiving",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.complete_inbound_receiving",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/reopen-receiving",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.reopen_inbound_receiving",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/mark-label-printed",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.mark_inbound_box_label_printed",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/open",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.open_inbound_box_by_barcode",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/scan",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.scan_product_into_inbound_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/lines/{product_id}",
+    "method": "PUT",
+    "handler": "app.api.inbound_intake.set_inbound_box_line_quantity",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/close",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.close_inbound_box_intake",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}",
+    "method": "DELETE",
+    "handler": "app.api.inbound_intake.delete_inbound_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/damaged",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.set_inbound_box_damaged",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/boxes/{box_id}/putaway",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.putaway_inbound_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/reconcile-sorting",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.reconcile_inbound_sorting",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/resync-sorting-stock",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.resync_inbound_sorting_stock",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}/actual",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.patch_inbound_line_actual",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}/defective",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.patch_inbound_line_defective",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/verify",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.complete_inbound_verification",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/movements",
+    "method": "GET",
+    "handler": "app.api.inbound_intake.list_inbound_movements",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.add_inbound_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}/expected",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.patch_inbound_line_expected",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}",
+    "method": "DELETE",
+    "handler": "app.api.inbound_intake.delete_inbound_draft_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}",
+    "method": "PATCH",
+    "handler": "app.api.inbound_intake.patch_inbound_line_storage",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/lines/{line_id}/receive",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.receive_inbound_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/submit",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.submit_inbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/post",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.post_inbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/loose-putaway",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.loose_putaway",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/distribution-lines",
+    "method": "GET",
+    "handler": "app.api.inbound_intake.list_distribution_lines",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/distribution-scan",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.scan_distribution_barcode",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/distribution-lines",
+    "method": "PUT",
+    "handler": "app.api.inbound_intake.replace_distribution_lines",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/distribution-complete",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.complete_distribution",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/distribution-reopen",
+    "method": "POST",
+    "handler": "app.api.inbound_intake.reopen_distribution_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/marking-codes",
+    "method": "GET",
+    "handler": "app.api.inbound_marking.list_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/marking-codes/scan",
+    "method": "POST",
+    "handler": "app.api.inbound_marking.scan_code",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/marking-codes/check",
+    "method": "POST",
+    "handler": "app.api.inbound_marking.check_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/marking-codes/problems.xlsx",
+    "method": "GET",
+    "handler": "app.api.inbound_marking.export_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/marking-codes/{code_id}",
+    "method": "DELETE",
+    "handler": "app.api.inbound_marking.delete_code",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/kiz-reprints",
+    "method": "GET",
+    "handler": "app.api.kiz_reprints.list_kiz_reprint_history",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/kiz-reprints",
+    "method": "POST",
+    "handler": "app.api.kiz_reprints.create_kiz_reprint",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/kiz-reprints/{reprint_id}/print-claim",
+    "method": "POST",
+    "handler": "app.api.kiz_reprints.claim_kiz_reprint_print",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/kiz-reprints/{reprint_id}/print-started",
+    "method": "POST",
+    "handler": "app.api.kiz_reprints.mark_kiz_reprint_print_started",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/kiz-reprints/{reprint_id}/print-failed",
+    "method": "POST",
+    "handler": "app.api.kiz_reprints.release_kiz_reprint_print_claim",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-packages",
+    "method": "GET",
+    "handler": "app.api.inbound_package_catalog.get_inbound_packages",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-packages/lookup",
+    "method": "GET",
+    "handler": "app.api.inbound_package_catalog.lookup_inbound_package",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_catalog_cells_read_access"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-balances/summary",
+    "method": "GET",
+    "handler": "app.api.inventory_balances.get_inventory_balances_summary",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-balances/monthly-snapshots",
+    "method": "GET",
+    "handler": "app.api.inventory_balances.get_monthly_stock_snapshots",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-balances/monthly-snapshots/run",
+    "method": "POST",
+    "handler": "app.api.inventory_balances.run_monthly_stock_snapshot",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-balances/locations-by-product",
+    "method": "GET",
+    "handler": "app.api.inventory_balances.get_product_locations_in_warehouse",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-balances",
+    "method": "GET",
+    "handler": "app.api.inventory_balances.get_inventory_balances",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts",
+    "method": "GET",
+    "handler": "app.api.inventory_counts.list_inventory_counts",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.create_inventory_count",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}",
+    "method": "GET",
+    "handler": "app.api.inventory_counts.get_inventory_count",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/lines",
+    "method": "PUT",
+    "handler": "app.api.inventory_counts.save_inventory_count_lines",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/empty-place",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.mark_inventory_count_place_empty",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/containers",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.create_inventory_count_container",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/found",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.record_inventory_count_found",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/manual-line",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.add_inventory_count_manual_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/lines/{line_id}/move",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.move_inventory_count_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/containers/{kind}/{container_id}",
+    "method": "DELETE",
+    "handler": "app.api.inventory_counts.delete_inventory_count_container",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}/post",
+    "method": "POST",
+    "handler": "app.api.inventory_counts.post_inventory_count",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-counts/{count_id}",
+    "method": "DELETE",
+    "handler": "app.api.inventory_counts.cancel_inventory_count",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-movements",
+    "method": "GET",
+    "handler": "app.api.inventory_movements.list_inventory_movements",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inventory-movements/summary",
+    "method": "GET",
+    "handler": "app.api.inventory_movements.get_inventory_movements_summary",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/stock-transfers",
+    "method": "POST",
+    "handler": "app.api.stock_transfer.create_stock_transfer",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests",
+    "method": "GET",
+    "handler": "app.api.outbound_shipment.list_outbound_requests",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests",
+    "method": "POST",
+    "handler": "app.api.outbound_shipment.create_outbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}",
+    "method": "GET",
+    "handler": "app.api.outbound_shipment.get_outbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/movements",
+    "method": "GET",
+    "handler": "app.api.outbound_shipment.list_outbound_movements",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/lines",
+    "method": "POST",
+    "handler": "app.api.outbound_shipment.add_outbound_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/lines/{line_id}/ship",
+    "method": "POST",
+    "handler": "app.api.outbound_shipment.ship_outbound_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/lines/{line_id}",
+    "method": "DELETE",
+    "handler": "app.api.outbound_shipment.delete_outbound_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/lines/{line_id}",
+    "method": "PATCH",
+    "handler": "app.api.outbound_shipment.patch_outbound_line_storage",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/submit",
+    "method": "POST",
+    "handler": "app.api.outbound_shipment.submit_outbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/outbound-shipment-requests/{request_id}/post",
+    "method": "POST",
+    "handler": "app.api.outbound_shipment.post_outbound_request",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/reports/inventory",
+    "method": "GET",
+    "handler": "app.api.reports.get_inventory_report",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/reports/inventory/movements",
+    "method": "GET",
+    "handler": "app.api.reports.get_product_movements",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/reports/overview",
+    "method": "GET",
+    "handler": "app.api.reports.get_reports_overview",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/reports/inventory/export.csv",
+    "method": "GET",
+    "handler": "app.api.reports.export_inventory_report",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/scan/resolve",
+    "method": "GET",
+    "handler": "app.api.scan_resolver.resolve_scan",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "seller_line_product_scope"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests",
+    "method": "GET",
+    "handler": "app.api.marketplace_unload_requests.list_marketplace_unloads",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/available-products",
+    "method": "GET",
+    "handler": "app.api.marketplace_unload_requests.list_marketplace_unload_available_products",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}",
+    "method": "GET",
+    "handler": "app.api.marketplace_unload_requests.get_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}",
+    "method": "DELETE",
+    "handler": "app.api.marketplace_unload_requests.delete_marketplace_unload_draft",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.create_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/seller",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.create_seller_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}",
+    "method": "PATCH",
+    "handler": "app.api.marketplace_unload_requests.update_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/lines",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.add_marketplace_unload_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/lines",
+    "method": "PUT",
+    "handler": "app.api.marketplace_unload_requests.replace_marketplace_unload_lines",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/plan",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.plan_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/unplan",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.unplan_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/cancel",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.cancel_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/confirm",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.confirm_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/pick-options",
+    "method": "GET",
+    "handler": "app.api.marketplace_unload_requests.get_marketplace_unload_pick_options",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/pick/scan",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.scan_marketplace_unload_pick",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/pick/add",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.add_marketplace_unload_pick_qty",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/pick/set",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.set_marketplace_unload_pick_qty",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/pick-allocations",
+    "method": "PUT",
+    "handler": "app.api.marketplace_unload_requests.save_marketplace_unload_pick_allocations",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/submit",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.submit_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/lines/{line_id}",
+    "method": "DELETE",
+    "handler": "app.api.marketplace_unload_requests.delete_marketplace_unload_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "<fastapi.security.http.HTTPBearer object at 0x10eb48910>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/ship",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.ship_marketplace_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/import-boxes/preview",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.preview_marketplace_box_import",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/import-boxes/apply",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.apply_marketplace_box_import_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.create_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/batch",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.create_marketplace_unload_boxes_batch",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/attach",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.attach_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}/scan",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.scan_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}/manual-line",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.manual_marketplace_unload_box_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}/close",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.close_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}/copy",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.copy_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}",
+    "method": "DELETE",
+    "handler": "app.api.marketplace_unload_requests.delete_marketplace_unload_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marketplace-unload-requests/{request_id}/boxes/{box_id}/lines/{line_id}/remove",
+    "method": "POST",
+    "handler": "app.api.marketplace_unload_requests.remove_marketplace_unload_box_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks",
+    "method": "GET",
+    "handler": "app.api.packaging_tasks.list_packaging_tasks",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.create_packaging_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/by-unload/{unload_id}",
+    "method": "GET",
+    "handler": "app.api.packaging_tasks.get_packaging_task_for_unload",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}",
+    "method": "GET",
+    "handler": "app.api.packaging_tasks.get_packaging_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/cancel",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.cancel_packaging_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/lines/{line_id}/confirm-packed",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.confirm_packed_from_shelf",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/lines/{line_id}/mark-prepacked",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.mark_line_prepacked_external",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.record_pack_progress",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/scan",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.record_pack_scan",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/lines/{line_id}/product-label-printed",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.mark_product_label_printed",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/undo-last",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.undo_last_pack_action",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/complete",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.complete_packaging_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+    "method": "POST",
+    "handler": "app.api.packaging_tasks.pack_all_and_complete_fbs_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/import/preview",
+    "method": "POST",
+    "handler": "app.api.marking_codes.preview_marking_import",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/import",
+    "method": "POST",
+    "handler": "app.api.marking_codes.import_marking_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pools/{pool_id}/products",
+    "method": "PUT",
+    "handler": "app.api.marking_codes.set_pool_products",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pools/{pool_id}/threshold",
+    "method": "PUT",
+    "handler": "app.api.marking_codes.set_marking_pool_threshold",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pools",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_marking_pools",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pools/{pool_id}",
+    "method": "GET",
+    "handler": "app.api.marking_codes.get_marking_pool",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pools/{pool_id}/codes",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_marking_pool_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/ledger",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_marking_ledger",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/ledger/export",
+    "method": "GET",
+    "handler": "app.api.marking_codes.export_marking_ledger",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/codes/{code_id}/history",
+    "method": "GET",
+    "handler": "app.api.marking_codes.get_marking_code_history",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/inventory",
+    "method": "GET",
+    "handler": "app.api.marking_codes.get_marking_inventory",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/products/{product_id}/marking-overview",
+    "method": "GET",
+    "handler": "app.api.marking_codes.get_product_marking_overview",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/products/{product_id}/codes",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_product_marking_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/products/{product_id}/print",
+    "method": "POST",
+    "handler": "app.api.marking_codes.print_product_marking_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/codes/{code_id}/label-artifact",
+    "method": "GET",
+    "handler": "app.api.marking_codes.get_marking_code_label_artifact",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/label-artifact-tape",
+    "method": "POST",
+    "handler": "app.api.marking_codes.post_label_artifact_tape_pdf",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates/resolve",
+    "method": "GET",
+    "handler": "app.api.marking_codes.resolve_print_template",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_print_templates",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates",
+    "method": "POST",
+    "handler": "app.api.marking_codes.create_print_template",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates/seller-label-options",
+    "method": "PUT",
+    "handler": "app.api.marking_codes.set_seller_label_options",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates/{template_id}",
+    "method": "PUT",
+    "handler": "app.api.marking_codes.update_print_template",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/print-templates/{template_id}",
+    "method": "DELETE",
+    "handler": "app.api.marking_codes.delete_print_template",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/scan-print",
+    "method": "POST",
+    "handler": "app.api.marking_codes.scan_print_marking_codes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/verify-pair",
+    "method": "POST",
+    "handler": "app.api.marking_codes.verify_marking_pair",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/pending-marking",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_pending_marking",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/packaging-lines/{line_id}/print",
+    "method": "POST",
+    "handler": "app.api.marking_codes.print_marking_codes_for_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/packaging-tasks/{task_id}/print-all",
+    "method": "POST",
+    "handler": "app.api.marking_codes.print_all_marking_codes_for_task",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/packaging-task-lines/{line_id}/printed-codes",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_printed_codes_for_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/codes/{code_id}/defect",
+    "method": "POST",
+    "handler": "app.api.marking_codes.report_marking_code_defect",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/reprint-requests",
+    "method": "GET",
+    "handler": "app.api.marking_codes.list_marking_reprint_requests",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/reprint-requests/{request_id}/approve-reprint",
+    "method": "POST",
+    "handler": "app.api.marking_codes.approve_marking_reprint",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/reprint-requests/{request_id}/replace",
+    "method": "POST",
+    "handler": "app.api.marking_codes.replace_marking_reprint",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/reprint-requests/{request_id}/reject",
+    "method": "POST",
+    "handler": "app.api.marking_codes.reject_marking_reprint",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "require_seller_honest_sign_if_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/sellers/{seller_id}/credentials",
+    "method": "GET",
+    "handler": "app.api.marking_credentials.get_seller_marking_credentials",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/self/credentials",
+    "method": "GET",
+    "handler": "app.api.marking_credentials.get_self_marking_credentials",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/sellers/{seller_id}/credentials",
+    "method": "PATCH",
+    "handler": "app.api.marking_credentials.patch_seller_marking_credentials",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/marking-codes/self/credentials",
+    "method": "PATCH",
+    "handler": "app.api.marking_credentials.patch_self_marking_credentials",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/notifications",
+    "method": "GET",
+    "handler": "app.api.notifications.list_notifications",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_ff_or_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/notifications/{notification_id}/read",
+    "method": "POST",
+    "handler": "app.api.notifications.mark_notification_read",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_ff_or_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/notifications/read-all",
+    "method": "POST",
+    "handler": "app.api.notifications.mark_all_notifications_read",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id",
+      "require_ff_or_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/wb-mp-warehouses",
+    "method": "GET",
+    "handler": "app.api.wb_mp_warehouses.list_wb_mp_warehouses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_ff_or_seller"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts",
+    "method": "GET",
+    "handler": "app.api.discrepancy_acts.list_discrepancy_acts",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}",
+    "method": "GET",
+    "handler": "app.api.discrepancy_acts.get_discrepancy_act",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}/approve",
+    "method": "POST",
+    "handler": "app.api.discrepancy_acts.approve_discrepancy_act",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}/reject",
+    "method": "POST",
+    "handler": "app.api.discrepancy_acts.reject_discrepancy_act",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts",
+    "method": "POST",
+    "handler": "app.api.discrepancy_acts.create_discrepancy_act",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}/lines",
+    "method": "POST",
+    "handler": "app.api.discrepancy_acts.add_discrepancy_act_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}/submit",
+    "method": "POST",
+    "handler": "app.api.discrepancy_acts.submit_discrepancy_act",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/discrepancy-acts/{act_id}/lines/{line_id}",
+    "method": "DELETE",
+    "handler": "app.api.discrepancy_acts.delete_discrepancy_act_line",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/document-events",
+    "method": "GET",
+    "handler": "app.api.document_events.get_document_events",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/background-jobs",
+    "method": "POST",
+    "handler": "app.api.background_jobs.start_background_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/background-jobs/wildberries-cards-sync-self",
+    "method": "POST",
+    "handler": "app.api.background_jobs.start_wildberries_cards_sync_self",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/background-jobs/{job_id}",
+    "method": "GET",
+    "handler": "app.api.background_jobs.get_background_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/tariff-matrix",
+    "method": "GET",
+    "handler": "app.api.billing.get_tariff_matrix_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/tariff-matrix",
+    "method": "PUT",
+    "handler": "app.api.billing.put_tariff_matrix_route",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/profiles/ff",
+    "method": "PUT",
+    "handler": "app.api.billing.put_ff_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/profiles/ff",
+    "method": "GET",
+    "handler": "app.api.billing.get_ff_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/profiles/sellers/{seller_id}",
+    "method": "PUT",
+    "handler": "app.api.billing.put_seller_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/profiles/sellers/{seller_id}",
+    "method": "GET",
+    "handler": "app.api.billing.get_seller_profile",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/tariffs",
+    "method": "POST",
+    "handler": "app.api.billing.post_tariff",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/tariffs",
+    "method": "GET",
+    "handler": "app.api.billing.get_tariffs",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/seller-report/summary",
+    "method": "GET",
+    "handler": "app.api.billing.get_seller_report_summary",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/profiles/lookup-inn",
+    "method": "GET",
+    "handler": "app.api.billing.lookup_profile_by_inn",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/seller-report/storage-total",
+    "method": "GET",
+    "handler": "app.api.billing.get_seller_report_storage_total",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/seller-report/sellers/{seller_id}/details",
+    "method": "GET",
+    "handler": "app.api.billing.get_seller_report_details",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/ledger",
+    "method": "GET",
+    "handler": "app.api.billing.get_billing_ledger",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices",
+    "method": "GET",
+    "handler": "app.api.billing.get_billing_invoices",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices/{invoice_id}",
+    "method": "GET",
+    "handler": "app.api.billing.get_billing_invoice",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices/{seller_id}/{period}/form",
+    "method": "POST",
+    "handler": "app.api.billing.form_billing_invoice",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices/{invoice_id}/cancel",
+    "method": "POST",
+    "handler": "app.api.billing.cancel_billing_invoice",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices-v2",
+    "method": "GET",
+    "handler": "app.api.billing_invoices_v2.list_billing_invoices_v2",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices-v2/preview",
+    "method": "POST",
+    "handler": "app.api.billing_invoices_v2.preview_billing_invoice_v2",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices-v2",
+    "method": "POST",
+    "handler": "app.api.billing_invoices_v2.create_billing_invoice_v2",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices-v2/{invoice_id}",
+    "method": "GET",
+    "handler": "app.api.billing_invoices_v2.get_billing_invoice_v2",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/billing/invoices-v2/{invoice_id}/cancel",
+    "method": "POST",
+    "handler": "app.api.billing_invoices_v2.cancel_billing_invoice_v2",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/storage/statements",
+    "method": "GET",
+    "handler": "app.api.storage.list_statements",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/storage/tariffs",
+    "method": "POST",
+    "handler": "app.api.storage.create_tariff",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/storage/measurements/rebuild",
+    "method": "POST",
+    "handler": "app.api.storage.rebuild_storage",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/storage/statements/{statement_id}/print",
+    "method": "GET",
+    "handler": "app.api.storage.print_statement",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/storage/report",
+    "method": "GET",
+    "handler": "app.api.storage.storage_report",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/sync",
+    "method": "POST",
+    "handler": "app.api.fbs_orders.start_fbs_orders_sync",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/worklist",
+    "method": "GET",
+    "handler": "app.api.fbs_orders.get_fbs_orders_worklist",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/history",
+    "method": "GET",
+    "handler": "app.api.fbs_orders.get_fbs_order_history",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders",
+    "method": "GET",
+    "handler": "app.api.fbs_orders.get_fbs_orders",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/cancel",
+    "method": "PATCH",
+    "handler": "app.api.fbs_orders.cancel_fbs_order",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/sync-statuses",
+    "method": "POST",
+    "handler": "app.api.fbs_orders.sync_fbs_order_statuses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/fbs/assembly-time",
+    "method": "GET",
+    "handler": "app.api.fbs_orders.get_fbs_assembly_time",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/fbs/cancelled-after-pack",
+    "method": "GET",
+    "handler": "app.api.fbs_orders.get_fbs_cancelled_after_pack",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/metadata",
+    "method": "GET",
+    "handler": "app.api.fbs_marking.get_fbs_order_metadata",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/markings",
+    "method": "GET",
+    "handler": "app.api.fbs_marking.get_fbs_order_markings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/markings/sync",
+    "method": "POST",
+    "handler": "app.api.fbs_marking.sync_fbs_order_markings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/kiz/lookup",
+    "method": "GET",
+    "handler": "app.api.fbs_kiz.lookup_fbs_order_by_sticker",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/kiz/validate",
+    "method": "POST",
+    "handler": "app.api.fbs_kiz.validate_fbs_order_kiz",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/kiz/commit",
+    "method": "POST",
+    "handler": "app.api.fbs_kiz.commit_fbs_order_kiz",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-orders/{order_id}/kiz",
+    "method": "DELETE",
+    "handler": "app.api.fbs_kiz.delete_fbs_order_kiz",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouses",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_seller_warehouses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/ozon-warehouses",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_seller_ozon_warehouses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/offices",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_seller_offices",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouse-bindings",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_warehouse_bindings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}",
+    "method": "PUT",
+    "handler": "app.api.fbs_sellers.upsert_fbs_warehouse_binding",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}",
+    "method": "DELETE",
+    "handler": "app.api.fbs_sellers.disable_fbs_warehouse_binding",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}/stock-pool",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_binding_stock_pool",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}/stock-pool/{product_id}",
+    "method": "PUT",
+    "handler": "app.api.fbs_sellers.set_fbs_binding_stock_pool_quantity",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/fbs-sellers/{seller_id}/warehouses",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.list_fbs_seller_warehouses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/fbs-sellers/{seller_id}/warehouses/{wb_warehouse_id}",
+    "method": "PUT",
+    "handler": "app.api.fbs_sellers.configure_fbs_seller_warehouse",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/stocks/sync",
+    "method": "POST",
+    "handler": "app.api.fbs_sellers.start_fbs_stock_sync",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-sellers/{seller_id}/stocks/sync-status",
+    "method": "GET",
+    "handler": "app.api.fbs_sellers.get_fbs_stock_sync_status",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/preflight",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.preflight_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/from-orders",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.create_fbs_supply_from_orders",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/calendar",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_shipment_calendar",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/repair-from-wb",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.repair_fbs_supply_from_wb",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/start-work",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.start_fbs_supply_work",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/honest-sign-skip",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.skip_fbs_supply_honest_sign",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/worklist",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supplies_worklist",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick-options",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply_pick_options",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/scan",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.scan_fbs_supply_pick",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/set",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.set_fbs_supply_pick_quantity",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/orders/batch",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.add_orders_to_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/scan-location",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.scan_fbs_pick_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/manual/location",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.select_fbs_manual_pick_location",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/scan-product",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.scan_fbs_pick_product",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/manual",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.confirm_fbs_manual_pick",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/pick/{order_id}/undo",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.undo_fbs_pick",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.create_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/workspace",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply_workspace",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.set_fbs_supply_boxes_without_distribution",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/planned-shipment-date",
+    "method": "PATCH",
+    "handler": "app.api.fbs_supplies.patch_fbs_supply_planned_shipment_date",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.create_fbs_packing_boxes",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.assign_orders_to_fbs_packing_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders/{order_id}",
+    "method": "DELETE",
+    "handler": "app.api.fbs_supplies.remove_order_from_fbs_packing_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes/{box_id}",
+    "method": "DELETE",
+    "handler": "app.api.fbs_supplies.delete_fbs_packing_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes/{box_id}/clear",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.clear_fbs_packing_box",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/boxes/{box_id}/retry-qr",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.retry_fbs_packing_box_qr",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/orders",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.add_order_to_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/picking-list",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply_picking_list",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/stickers",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.fetch_fbs_supply_stickers",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/print-assets",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.fetch_fbs_supply_print_assets",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/order-print-tape",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.print_fbs_supply_order_tape",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/cargo-places/preflight",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.preflight_fbs_cargo_places",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/cargo-places",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.create_fbs_cargo_places",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/cargo-places",
+    "method": "DELETE",
+    "handler": "app.api.fbs_supplies.delete_fbs_cargo_places",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/cargo-places",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.list_fbs_cargo_places",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/trbx",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.create_fbs_supply_trbx",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/trbx/stickers",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.fetch_fbs_supply_trbx_stickers",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/trbx/{trbx_id}/orders",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.bind_orders_to_fbs_trbx",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/status",
+    "method": "PUT",
+    "handler": "app.api.fbs_supplies.update_fbs_supply_status",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/trbx/bind-box",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.bind_fbs_packaging_box_to_trbx",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/delivery-preflight",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.preflight_fbs_delivery",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/deliver",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.deliver_fbs_supply",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/sync-tracking",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.sync_fbs_supply_tracking",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/markings/sync",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.sync_fbs_supply_markings",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/retry-supply-qr",
+    "method": "POST",
+    "handler": "app.api.fbs_supplies.retry_fbs_supply_qr",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/barcode",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply_barcode",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-supplies/{supply_id}/history",
+    "method": "GET",
+    "handler": "app.api.fbs_supplies.get_fbs_supply_history",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-assets/{asset_id}/content",
+    "method": "GET",
+    "handler": "app.api.fbs_print_assets.get_fbs_print_asset_content",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-assets/{asset_id}/applied",
+    "method": "POST",
+    "handler": "app.api.fbs_print_assets.confirm_fbs_print_asset_applied",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs",
+    "method": "POST",
+    "handler": "app.api.fbs_print_jobs.create_fbs_print_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs/document",
+    "method": "POST",
+    "handler": "app.api.fbs_print_jobs.create_fbs_print_job_from_document",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs/next",
+    "method": "POST",
+    "handler": "app.api.fbs_print_jobs.claim_next_fbs_print_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs/{job_id}/content",
+    "method": "GET",
+    "handler": "app.api.fbs_print_jobs.get_fbs_print_job_content",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs/{job_id}/result",
+    "method": "POST",
+    "handler": "app.api.fbs_print_jobs.report_fbs_print_job_result",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/fbs-print-jobs/{job_id}",
+    "method": "GET",
+    "handler": "app.api.fbs_print_jobs.get_fbs_print_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/pairing",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.begin_pairing",
+    "auth_dependencies": [
+      "get_db"
+    ],
+    "anonymous_check": "public-not-invoked"
+  },
+  {
+    "path": "/operations/print/warehouses/{warehouse_id}/pair/preview",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.inspect_pairing",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/warehouses/{warehouse_id}/pair",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.confirm_pairing",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/warehouses/{warehouse_id}/destination",
+    "method": "GET",
+    "handler": "app.api.warehouse_print.destination",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/sorting/{request_id}/label",
+    "method": "GET",
+    "handler": "app.api.warehouse_print.preview_label",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/sorting/{request_id}/jobs",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.create_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/jobs/{job_id}",
+    "method": "GET",
+    "handler": "app.api.warehouse_print.read_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/agent/heartbeat",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.heartbeat",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10ea4fe10>",
+      "get_db",
+      "pc_connection"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/agent/next",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.next_job",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10ea4fe10>",
+      "get_db",
+      "pc_connection"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/agent/jobs/{job_id}/content",
+    "method": "GET",
+    "handler": "app.api.warehouse_print.job_content",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10ea4fe10>",
+      "get_db",
+      "pc_connection"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/print/agent/jobs/{job_id}/result",
+    "method": "POST",
+    "handler": "app.api.warehouse_print.job_result",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10ea4fe10>",
+      "get_db",
+      "pc_connection"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/status",
+    "method": "GET",
+    "handler": "app.api.wildberries_integration.wildberries_status",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/sellers/{seller_id}/imported-cards",
+    "method": "GET",
+    "handler": "app.api.wildberries_integration.list_seller_wildberries_imported_cards",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/sellers/{seller_id}/imported-supplies",
+    "method": "GET",
+    "handler": "app.api.wildberries_integration.list_seller_wildberries_imported_supplies",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/sellers/{seller_id}/link-product",
+    "method": "POST",
+    "handler": "app.api.wildberries_integration.link_product_to_wildberries",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/sellers/{seller_id}/tokens",
+    "method": "GET",
+    "handler": "app.api.wildberries_integration.get_seller_wildberries_tokens",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/self/tokens",
+    "method": "GET",
+    "handler": "app.api.wildberries_integration.get_self_wildberries_tokens",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/sellers/{seller_id}/tokens",
+    "method": "PATCH",
+    "handler": "app.api.wildberries_integration.patch_seller_wildberries_tokens",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "require_fulfillment_admin"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/self/content-token",
+    "method": "POST",
+    "handler": "app.api.wildberries_integration.save_and_validate_self_content_token",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/wildberries/self/sync-products",
+    "method": "POST",
+    "handler": "app.api.wildberries_integration.sync_products_now",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/ozon/self/account",
+    "method": "GET",
+    "handler": "app.api.ozon_integration.get_self_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/ozon/self/account",
+    "method": "PUT",
+    "handler": "app.api.ozon_integration.put_self_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/ozon/self/account/test-connection",
+    "method": "POST",
+    "handler": "app.api.ozon_integration.test_self_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/ozon/self/sync-products",
+    "method": "POST",
+    "handler": "app.api.ozon_integration.sync_ozon_products_now",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/integrations/ozon/self/account",
+    "method": "DELETE",
+    "handler": "app.api.ozon_integration.delete_self_account",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "get_current_user",
+      "get_db",
+      "get_effective_seller_id"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/preview",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.preview_ozon_returns",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/import",
+    "method": "POST",
+    "handler": "app.api.ozon_returns.import_ozon_return_giveouts",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/groups",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.get_imported_ozon_return_groups",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/pass.pdf",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.get_ozon_return_pass_pdf",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/barcode",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.get_ozon_return_barcode",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/refresh-statuses",
+    "method": "POST",
+    "handler": "app.api.ozon_returns.refresh_ozon_return_statuses",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/fbs-return-points",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.get_ozon_fbs_return_points",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/pass.png",
+    "method": "GET",
+    "handler": "app.api.ozon_returns.get_ozon_return_pass_png",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  },
+  {
+    "path": "/operations/inbound-intake-requests/{request_id}/ozon-returns/barcode/reset.png",
+    "method": "POST",
+    "handler": "app.api.ozon_returns.reset_ozon_return_barcode",
+    "auth_dependencies": [
+      "<fastapi.security.http.HTTPBearer object at 0x10b682270>",
+      "_dep",
+      "get_current_user",
+      "get_db",
+      "get_ozon_return_provider"
+    ],
+    "anonymous_status": 401
+  }
+]

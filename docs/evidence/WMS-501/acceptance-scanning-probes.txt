@@ -1,0 +1,6 @@
+REPRO: identical HTTP attempt, same Idempotency-Key: actual_qty 1 -> 2
+.CHECK: 20 parallel scans with same test login, final actual_qty=20
+.REPRO: stale absolute quantity after committed scan: 5 -> 6 -> 5 without conflict
+.REPRO: draft distribution snapshot B silently replaces A; A row absent
+.
+4 passed in 3.26s

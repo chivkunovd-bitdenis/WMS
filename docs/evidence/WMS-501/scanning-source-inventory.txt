@@ -1,0 +1,218 @@
+frontend/src/components/KizReprintDialog.tsx:17:import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
+frontend/src/components/KizReprintDialog.tsx:90:  const scan = useCallback(async (rawKiz: string) => {
+frontend/src/components/KizReprintDialog.tsx:122:  useBarcodeScanner({ enabled: open && Boolean(sellerId) && !loading && printing === null, onScan: scan })
+frontend/src/hooks/useBarcodeScanner.ts:70:export function normalizeScanChar(raw: string, code: string, shift: boolean): string {
+frontend/src/hooks/useBarcodeScanner.ts:153:export function createScannerListener(opts: ScannerListenerOptions) {
+frontend/src/hooks/useBarcodeScanner.ts:212:      const looksLikeScan =
+frontend/src/hooks/useBarcodeScanner.ts:275:export function useBarcodeScanner({
+frontend/src/hooks/useBarcodeScanner.ts:283:  const onScanRef = useRef(onScan)
+frontend/src/hooks/useBarcodeScanner.ts:292:    const handler = createScannerListener({
+frontend/src/ui-kit/ScannerLine.tsx:7:export function ScannerLine({
+frontend/src/ui-kit/ScannerLine.tsx:79:export function ScannerField({
+frontend/src/App.tsx:1632:  async function onScanInboundProductBarcode(barcode: string) {
+frontend/src/App.tsx:1646:          `/operations/inbound-intake-requests/${selectedInboundId}/boxes/${openBox.id}/scan`,
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:270:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:271:  const [scanBusy, setScanBusy] = useState(false)
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:272:  const [scanMessage, setScanMessage] = useState<string | null>(null)
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:283:  const scanInputRef = useRef<HTMLInputElement | null>(null)
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:730:  const focusScanner = useCallback(() => {
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:733:      const input = scanInputRef.current
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:799:  const scanDistribution = async (event?: FormEvent<HTMLFormElement>) => {
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:805:    const barcode = scanValue.trim()
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:816:      const scannedBox = boxByBarcode.get(barcode.toUpperCase())
+frontend/src/screens/ff/FfInboundSortingPanel.tsx:860:      const result = (await res.json()) as DistributionScanOut
+frontend/src/screens/v2/InboundScreen.tsx:150:  const [boxOpenScan, setBoxOpenScan] = useState('')
+frontend/src/screens/v2/InboundScreen.tsx:151:  const [productScanBarcode, setProductScanBarcode] = useState('')
+frontend/src/screens/ff/inboundMarkingCodes.ts:15:export function isInboundMarkingScan(value: string): boolean {
+frontend/src/screens/v2/fbsUx.ts:464:function stickerScanCandidates(raw: string): string[] {
+frontend/src/screens/v2/fbsUx.ts:471:export function fbsSameStickerScan(raw: string, selected: string): boolean {
+frontend/src/screens/v2/fbsUx.ts:472:  const selectedCandidates = new Set(stickerScanCandidates(selected))
+frontend/src/screens/ff/unload-pick-2/UnloadPickRouteScreen.tsx:56:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/ff/unload-pick-2/UnloadPickRouteScreen.tsx:57:  const [scanError, setScanError] = useState<string | null>(null)
+frontend/src/screens/ff/unload-pick-2/UnloadPickRouteScreen.tsx:58:  const [scanNotice, setScanNotice] = useState<string | null>(null)
+frontend/src/screens/ff/unload-pick-2/UnloadPickRouteScreen.tsx:124:  function handleScan(code: string) {
+frontend/src/screens/ff/unload-pick-2/UnloadPickRouteScreen.tsx:297:        <ScannerField
+frontend/src/screens/v2/fbsApi.ts:751:export async function scanFbsPickLocation(
+frontend/src/screens/v2/fbsApi.ts:758:    await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-location`), {
+frontend/src/screens/v2/fbsApi.ts:766:export async function scanFbsPickProduct(
+frontend/src/screens/v2/fbsApi.ts:773:    await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-product`), {
+frontend/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx:125:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx:126:  const [scanError, setScanError] = useState<string | null>(null)
+frontend/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx:127:  const [scanNotice, setScanNotice] = useState<string | null>(null)
+frontend/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx:279:  function handleScan(code: string) {
+frontend/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx:318:          <ScannerField
+frontend/src/screens/v2/FbsKizScanDialog.tsx:103:function scannerDebug(cause: unknown): ScannerDebug | null {
+frontend/src/screens/v2/FbsKizScanDialog.tsx:119:export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, onCommitted }: Props) {
+frontend/src/screens/v2/FbsKizScanDialog.tsx:170:  const scanSticker = useCallback(
+frontend/src/screens/v2/FbsKizScanDialog.tsx:202:  const scanKiz = useCallback(
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:3:import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:330:  const [scanBarcode, setScanBarcode] = useState<string>('')
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:344:  const [mpLineBarcodeScan, setMpLineBarcodeScan] = useState('')
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:977:  const requestAttachBoxScan = (rawInput?: string) => {
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:981:    const raw = (rawInput ?? scanBarcode).trim()
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:1021:  const doCollectScan = async () => {
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:1991:    const code = (rawInput ?? mpLineBarcodeScan).trim()
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:2033:  useBarcodeScanner({
+frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx:2050:  useBarcodeScanner({
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:3:import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:202:  const [scanBarcode, setScanBarcode] = useState('')
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:213:  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:214:  const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:215:  const scanSessionRef = useRef(0)
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:216:  const scanOpenRef = useRef(false)
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:217:  const scanChangedRef = useRef(false)
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:289:  const scanPlaceholder = useMemo(() => {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:350:    const needsRefresh = scanChangedRef.current
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:425:  const runScan = async (barcode: string, session: number) => {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:426:    const isCurrent = () => scanOpenRef.current && scanSessionRef.current === session
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:430:      const scanBody: {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:456:      const postScan = (body: typeof scanBody) => fetch(
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:458:          `/operations/marketplace-unload-requests/${requestId}/boxes/${boxId}/scan`,
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:469:        const refusal = await scanRes.clone().json().catch(() => null) as { detail?: unknown } | null
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:484:        const j = (await scanRes.json()) as {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:568:      const errText = await scanRes.text()
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:595:  const enqueueScan = (barcode: string) => {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:596:    const session = scanSessionRef.current
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:597:    const job = scanQueueRef.current.then(() => runScan(barcode, session))
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:602:  const doScan = (rawInput?: string) => {
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:606:    const raw = (rawInput ?? scanBarcode).trim()
+frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx:614:  useBarcodeScanner({
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:317:function kizScannerDebug(cause: unknown): KizScannerDebug | null {
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:483:  const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:484:  const [kizScanValue, setKizScanValue] = useState('')
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:493:  const [kizScanBusy, setKizScanBusy] = useState(false)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:494:  const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:495:  const [kizScanHints, setKizScanHints] = useState<string[]>([])
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:496:  const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:498:  const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:500:  const kizScanInputRef = useRef<HTMLInputElement | null>(null)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:845:      const input = kizScanInputRef.current
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:856:  const scanKizSticker = useCallback(
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:889:  const scanKizCode = useCallback(
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:898:        const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:906:        const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:932:          const savedOrder = refreshed?.orders.find((order) => order.id === kizScanActive.order_id)
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:935:            const text = `${verdict.label}${verdict.reason ? `: ${verdict.reason}` : ''} · ${fbsKizOrderNumber(kizScanActive)}`
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:958:  const dropKizScanActive = useCallback(() => {
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:971:  const onKizScanEnter = useCallback(
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:982:      const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
+frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:2374:                      const kizRowActive = kizScanActive?.order_id === order.id
+frontend/src/screens/ff/inboundReceivingRuntime.ts:1:export function applyScannedInboundLine<T extends { id: string }>(
+frontend/src/screens/ff/inboundReceivingRuntime.ts:5:  const exists = lines.some((line) => line.id === scannedLine.id)
+frontend/src/screens/ff/inboundReceivingRuntime.ts:31:export function isLatestScannedInboundLine(
+frontend/src/screens/ff/inboundReceivingRuntime.ts:38:export function createSerialScanQueue() {
+frontend/src/screens/ff/inboundReceivingRuntime.ts:41:    const next = tail.then(scan, scan)
+frontend/src/screens/ff/inboundReceivingRuntime.ts:48:export function shouldDispatchInboundScan(kizReprintOpen: boolean): boolean {
+frontend/src/screens/ff/FfInboundRequestView.tsx:16:import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+frontend/src/screens/ff/FfInboundRequestView.tsx:504:  const [scanToastError, setScanToastError] = useState<string | null>(null)
+frontend/src/screens/ff/FfInboundRequestView.tsx:505:  const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
+frontend/src/screens/ff/FfInboundRequestView.tsx:506:  const [lastScannedLineId, setLastScannedLineId] = useState<string | null>(null)
+frontend/src/screens/ff/FfInboundRequestView.tsx:527:  const receivingScanQueue = useRef(createSerialScanQueue()).current
+frontend/src/screens/ff/FfInboundRequestView.tsx:528:  const lastProductScan = useRef<string | null>(null)
+frontend/src/screens/ff/FfInboundRequestView.tsx:529:  const scanDocument = useRef(requestId)
+frontend/src/screens/ff/FfInboundRequestView.tsx:565:  useBarcodeScanner({
+frontend/src/screens/ff/FfInboundRequestView.tsx:584:  useBarcodeScanner({
+frontend/src/screens/ff/FfInboundRequestView.tsx:654:  const receivingScanReconciler = useMemo(
+frontend/src/screens/ff/FfInboundRequestView.tsx:977:  const scanProductByBarcode = useMemo(
+frontend/src/screens/ff/FfInboundRequestView.tsx:1719:  const scanToReceiving = async (raw?: string) => {
+frontend/src/screens/ff/FfInboundRequestView.tsx:1732:      const productId = findInboundScanProductId(code, scanProductByBarcode)
+frontend/src/screens/ff/FfInboundRequestView.tsx:1734:        apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/scan`),
+frontend/src/screens/ff/FfInboundRequestView.tsx:1752:      const scannedLine = (await res.json()) as InboundLine
+frontend/src/screens/ff/FfInboundRequestView.tsx:4009:                  const barcode = scanAddBarcode
+frontend/src/screens/ff/unload-pick/pickScanSource.ts:30:export function resolveProductScanSource(
+frontend/src/screens/ff/unload-pick/pickScanSource.ts:38:  const candidates: ScanSource[] = []
+frontend/src/screens/ff/unload-pick/pickScanSource.ts:62:export function scanSourceKey(source: ScanSource): string {
+frontend/src/screens/ff/FfPackagingPage.tsx:311:  const [scannerValue, setScannerValue] = useState('')
+frontend/src/screens/ff/FfPackagingPage.tsx:312:  const [scannerFeedback, setScannerFeedback] = useState<string | null>(null)
+frontend/src/screens/ff/FfPackagingPage.tsx:317:  const scannerRef = useRef<HTMLInputElement | null>(null)
+frontend/src/screens/ff/FfPackagingPage.tsx:325:  const lineBarcodeForScan = (ln: PackagingTaskLine) => {
+frontend/src/screens/ff/FfPackagingPage.tsx:479:  const submitScanner = async () => {
+frontend/src/screens/ff/FfPackagingPage.tsx:480:    const barcode = scannerValue.trim()
+frontend/src/screens/ff/FfPackagingPage.tsx:496:        const lineBarcode = lineBarcodeForScan(ln)
+frontend/src/screens/ff/FfPackagingPage.tsx:524:      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/scan`), {
+frontend/src/screens/ff/FfPackagingPage.tsx:950:                const barcode = lineBarcodeForScan(ln)
+frontend/src/screens/ff/FfPackagingPage.tsx:1088:            const barcode = lineBarcodeForScan(ln)
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:352:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:353:  const [scanError, setScanError] = useState<string | null>(null)
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:354:  const [scanLoading, setScanLoading] = useState(false)
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:355:  const [scanAnnouncement, setScanAnnouncement] = useState('')
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:360:  const scanInputRef = useRef<HTMLInputElement>(null)
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:441:  const handleScanKeyDown = useCallback(
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:444:      const barcode = scanValue.trim().toUpperCase()
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:460:  const handleScanBlur = useCallback(() => {
+frontend/src/screens/v2/FfCatalogInboundPackages.tsx:462:    const barcode = scanValue.trim().toUpperCase()
+frontend/src/screens/ff/useInboundMarkingCodes.ts:56:    const res = await fetch(apiUrl(`${base}/scan`), {
+frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx:175:  const scannedContainers = useRef<
+frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx:416:  const scan = useCallback(
+frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx:451:        const res = await fetch(apiUrl(`${BASE}/${requestId}/pick/scan`), {
+frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx:464:        const result = (await res.json()) as ApiScanResult
+frontend/src/screens/ff/inboundReceivingHelpers.ts:167:export function scanErrorMessageRu(code: string): string {
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:164:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:165:  const [scanError, setScanError] = useState<string | null>(null)
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:166:  const [scanNotice, setScanNotice] = useState<string | null>(null)
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:286:  async function handleServerScan(code: string) {
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:289:      const result = await onScan({ barcode: code, sourceKey: source })
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:322:      const scannedLocationId = result.storageLocationId
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:366:  async function handleScan(code: string) {
+frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx:561:          <ScannerField
+frontend/src/screens/ff/inboundScanLookup.ts:16:export function buildInboundScanProductMap(
+frontend/src/screens/ff/inboundScanLookup.ts:35:export function findInboundScanProductId(
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:14:import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:219:  const [scanBarcode, setScanBarcode] = useState('')
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:221:  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:225:  const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:237:  const scanProductByBarcode = useMemo(
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:356:  const scanIntoBox = async (rawInput?: string) => {
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:360:    const raw = (rawInput ?? scanBarcode).trim()
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:374:      const productId = findInboundScanProductId(raw, scanProductByBarcode)
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:375:      const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/scan`, { barcode: raw, product_id: productId })]) : await fetch(
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:379:          }/${boxId}/scan`,
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:398:      const scannedProductId =
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:402:      const newLine = scannedProductId != null
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:408:      const scannedLine =
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:419:        const exists = current.some((line) => line.product_id === scannedLine.product_id)
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:441:  const enqueueScanIntoBox = (rawInput?: string): Promise<void> => {
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:442:    const next = scanQueueRef.current.then(
+frontend/src/screens/ff/FfInboundBoxAddDialog.tsx:454:  useBarcodeScanner({
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:80:  const scanInputRef = useRef<HTMLInputElement>(null)
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:85:  const [scanBarcode, setScanBarcode] = useState('')
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:88:  const [scanMessage, setScanMessage] = useState<string | null>(null)
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:89:  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:159:  const doScan = useCallback(async () => {
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:160:    const barcode = scanBarcode.trim()
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:188:        apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/scan`),
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:201:      const scanRes = (await res.json()) as ScanResponse
+frontend/src/screens/ff/FfMpUnloadPickPanel.tsx:256:  const handleScanKeyDown = (e: React.KeyboardEvent) => {
+frontend/src/screens/ff/warehouse-map/FfWarehouseMapScreen.tsx:79:  const [scanValue, setScanValue] = useState('')
+frontend/src/screens/ff/warehouse-map/FfWarehouseMapScreen.tsx:80:  const [scanError, setScanError] = useState<string | null>(null)
+frontend/src/screens/ff/warehouse-map/FfWarehouseMapScreen.tsx:81:  const [scanNotice, setScanNotice] = useState<string | null>(null)
+frontend/src/screens/ff/warehouse-map/FfWarehouseMapScreen.tsx:128:  function handleScan(code: string) {
+frontend/src/screens/ff/inventory/InventoryScanField.tsx:2:import { useBarcodeScanner } from '../../../hooks/useBarcodeScanner'
+frontend/src/screens/ff/inventory/InventoryScanField.tsx:26:export function InventoryScanField({
+frontend/src/screens/ff/inventory/InventoryScanField.tsx:42:  useBarcodeScanner({ onScan, enabled })
+frontend/src/screens/ff/inventory/InventoryScanField.tsx:45:    <ScannerField
+frontend/src/screens/ff/warehouse-map/WarehouseMapToolbar.tsx:88:        <ScannerField
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:104:  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:105:  const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:109:  const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:125:  function handleScan(code: string) {
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:130:      const result = applyScan(current, code, openPlace, false)
+frontend/src/screens/ff/inventory/InventoryCountDialog.tsx:238:        <InventoryScanField
+frontend/src/screens/ff/inventory/InventoryScan.ts:31:export const NOTHING_OPEN: ScanOpenPlace = { containerId: null, cellId: null }
+frontend/src/screens/ff/inventory/InventoryScan.ts:101:export function scanCandidates(rawCode: string): string[] {
+frontend/src/screens/ff/inventory/InventoryScan.ts:158:function findScanTargets(
+frontend/src/screens/ff/inventory/InventoryScan.ts:192:    const empty = count.scannableContainers.find(
+frontend/src/screens/ff/inventory/InventoryScan.ts:210:    const empty = count.scannableCells.find(
+frontend/src/screens/ff/inventory/InventoryScan.ts:296:export function applyScan(
+frontend/src/screens/ff/inventory/InventoryScan.ts:310:  const codes = scanCandidates(rawCode)
+frontend/src/screens/ff/inventory/InventoryScan.ts:317:  const targets = findScanTargets(count, normalizedCodes)
+frontend/src/screens/ff/inventory/InventoryScan.ts:463:function scannedMessage(product: ProductNode): string {
+frontend/src/screens/ff/inventory/InventoryScan.ts:498:  const outside = count.scannableContainers.find((item) => item.id === containerId)
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:231:  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:232:  const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:233:  const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:257:  function handleScan(code: string) {
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:258:    const result = applyScan(count, code, openPlace)
+frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx:554:          <InventoryScanField
+frontend/src/screens/ff/knowledge/scenes/FbsScenes.tsx:595:function pickScan(init: RequestInit | undefined) {
+frontend/src/screens/ff/knowledge/scenes/FbsScenes.tsx:682:    path: /^\/operations\/fbs-supplies\/[^/?]+\/pick\/scan/,

@@ -1,0 +1,41 @@
+{
+  "baseline": "3e125074",
+  "method": "synthetic 10000-product tenant; ASGI JWT+PG; resolver only, no write/DOM/network/device; one burst per combination",
+  "single_scan_ms": 9.17,
+  "single_scan_sql_count": 12,
+  "50_sequential_scan_ms": {
+    "p50": 8.34,
+    "p95": 9.29,
+    "max": 10.09
+  },
+  "20_concurrent_scan_ms": [
+    69.3,
+    87.17,
+    83.14,
+    85.0,
+    84.38,
+    83.46,
+    80.27,
+    82.78,
+    81.56,
+    81.47,
+    80.64,
+    80.77,
+    80.22,
+    79.63,
+    77.57,
+    89.39,
+    93.53,
+    93.22,
+    92.64,
+    92.48
+  ],
+  "scan_with_5_concurrent_http_logins_ms": 1234.45,
+  "mixed_login_http_statuses": [
+    401,
+    401,
+    401,
+    401,
+    401
+  ]
+}

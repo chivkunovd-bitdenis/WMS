@@ -1,0 +1,9 @@
+Independent analyst acceptance rerun, 21.09.2026
+Command: sh docs/evidence/WMS-501/isolation-test-commands.sh probes
+Working directory: /Users/deniscivkunov/Projects/WMS/.worktrees/wms501-performance-isolation-audit
+Database: dedicated disposable wms501_isolation, 127.0.0.1:55451
+Captured stdout:
+.....                                                                    [100%]
+5 passed in 2.49s
+Exit code: 0
+Note: probes reproduce existing defects; PASS is not a fixed-product verdict.

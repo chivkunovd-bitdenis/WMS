@@ -1,0 +1,11 @@
+{
+  "document_errors": [],
+  "checker_source": "/Users/deniscivkunov/Projects/WMS/scripts/ci/check_task_documents.py",
+  "method": "Direct document_errors(WMS-501), not task_refs (checker absent from baseline history); no CI claim",
+  "AGENTS_equals_CLAUDE": true,
+  "broken_markdown_links": [],
+  "audit_python_scripts_compile": true,
+  "raw_log_whitespace": "Preserved pytest whitespace and original user quote; ordinary diff --check reports only those whitespace lines. Configured check ignoring blank-at-eol/blank-at-eof passed.",
+  "product_changes": false,
+  "disposable_postgres": "stopped; owned runtime removed after evidence persisted"
+}
