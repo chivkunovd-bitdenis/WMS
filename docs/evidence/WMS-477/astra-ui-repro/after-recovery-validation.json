@@ -1,0 +1,22 @@
+{
+  "product_sha": "22108eea6137eaaf192c03d53909db22e652c545",
+  "environment": "Chrome, actual React component and ErrorBoundary, synthetic token/API; no production/WB",
+  "command": "python3 docs/evidence/WMS-477/astra-ui-repro/after_recovery_check.py",
+  "scenarios": [
+    {
+      "mode": "auto_recovery",
+      "scan_active": true,
+      "button_request_count": 1,
+      "accepted_visible": true,
+      "page_errors": []
+    },
+    {
+      "mode": "fallback_reload",
+      "scan_active": true,
+      "button_request_count": 1,
+      "accepted_visible": true,
+      "page_errors": []
+    }
+  ],
+  "boundary": "Unsaved draft/selection at the moment of remount are cleared; the check starts a new scan after recovery."
+}
