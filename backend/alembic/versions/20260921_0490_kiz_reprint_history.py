@@ -23,6 +23,8 @@ def upgrade() -> None:
         sa.Column("seller_id", sa.Uuid(), nullable=False),
         sa.Column("kiz", sa.String(length=512), nullable=False),
         sa.Column("idempotency_key", sa.String(length=128), nullable=False),
+        sa.Column("print_claim_key", sa.String(length=128), nullable=True),
+        sa.Column("print_started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by_user_id", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),

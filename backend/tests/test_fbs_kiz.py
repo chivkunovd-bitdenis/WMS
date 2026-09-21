@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -2488,10 +2489,19 @@ async def test_fbs_kiz_pool_to_external_replacement_does_not_double_count_unit(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reprint", [False, True])
+@pytest.mark.parametrize(
+    ("reprint", "meta_status"),
+    [
+        (False, META_STATUS_ACCEPTED),
+        (True, META_STATUS_PENDING),
+        (True, META_STATUS_REJECTED),
+    ],
+)
 async def test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
     reprint: bool,
+    meta_status: str,
 ) -> None:
     # WMS-489: a first print remains forbidden for an operator-bound KIZ, but
     # the explicit FBS reprint must print that exact linked code and only append
@@ -2541,6 +2551,13 @@ async def test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation(
             select(FbsOrderMarking.id).where(FbsOrderMarking.order_id == order.order_id)
         )
         assert marking_id is not None
+        marking = await session.get(FbsOrderMarking, marking_id)
+        assert marking is not None
+        marking.meta_status = meta_status
+        await session.commit()
+
+    send_or_reconcile = AsyncMock()
+    monkeypatch.setattr(tape_print_svc, "_send_or_reconcile_printed_marking", send_or_reconcile)
 
     async with SessionLocal() as session:
         result = await tape_print_svc.print_fbs_order_tape(
@@ -2577,11 +2594,15 @@ async def test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation(
         )
         assert line is not None
         assert code is not None
+        persisted_marking = await session.get(FbsOrderMarking, marking_id)
+        assert persisted_marking is not None
         assert line.qty_marking_printed == 0
         assert line.qty_marking_external == 1
         assert code.source == "external_fbs"
         assert code.pool_id is None
         assert reprint_events == 1
+        assert persisted_marking.meta_status == meta_status
+    send_or_reconcile.assert_not_awaited()
 
 
 @pytest.mark.asyncio

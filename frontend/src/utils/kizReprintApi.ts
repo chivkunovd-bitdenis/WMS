@@ -6,10 +6,12 @@ export type KizReprintRow = {
   seller_id: string
   kiz: string
   created_at: string
+  print_started_at?: string | null
   replayed?: boolean
 }
 
 type KizReprintListResponse = { rows: KizReprintRow[] }
+type KizReprintPrintClaimResponse = { row: KizReprintRow; claimed: boolean }
 
 export const KIZ_REPRINT_ERROR_MESSAGES: Record<string, string> = {
   not_a_kiz: 'Код Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.',
@@ -24,7 +26,10 @@ export function kizReprintErrorMessage(code: string): string {
 }
 
 export function mergeKizReprintRow(rows: KizReprintRow[], row: KizReprintRow): KizReprintRow[] {
-  return rows.some((current) => current.id === row.id) ? rows : [...rows, row]
+  const existing = rows.find((current) => current.id === row.id)
+  return existing
+    ? rows.map((current) => (current.id === row.id ? { ...current, ...row } : current))
+    : [...rows, row]
 }
 
 export async function loadKizReprints(token: string, sellerId: string): Promise<KizReprintRow[]> {
@@ -54,5 +59,45 @@ export async function saveKizReprint(
   if (!response.ok) {
     throw new Error(kizReprintErrorMessage(await readApiErrorMessage(response)))
   }
+  return (await response.json()) as KizReprintRow
+}
+
+export async function claimKizReprintPrint(
+  token: string,
+  reprintId: string,
+  attemptKey: string,
+): Promise<{ row: KizReprintRow; claimed: boolean }> {
+  const response = await fetch(apiUrl(`/operations/kiz-reprints/${encodeURIComponent(reprintId)}/print-claim`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attempt_key: attemptKey }),
+  })
+  if (!response.ok) throw new Error(kizReprintErrorMessage(await readApiErrorMessage(response)))
+  return (await response.json()) as KizReprintPrintClaimResponse
+}
+
+export async function markKizReprintPrintStarted(
+  token: string,
+  reprintId: string,
+): Promise<KizReprintRow> {
+  const response = await fetch(apiUrl(`/operations/kiz-reprints/${encodeURIComponent(reprintId)}/print-started`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(kizReprintErrorMessage(await readApiErrorMessage(response)))
+  return (await response.json()) as KizReprintRow
+}
+
+export async function releaseKizReprintPrintClaim(
+  token: string,
+  reprintId: string,
+  attemptKey: string,
+): Promise<KizReprintRow> {
+  const response = await fetch(apiUrl(`/operations/kiz-reprints/${encodeURIComponent(reprintId)}/print-failed`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attempt_key: attemptKey }),
+  })
+  if (!response.ok) throw new Error(kizReprintErrorMessage(await readApiErrorMessage(response)))
   return (await response.json()) as KizReprintRow
 }

@@ -112,7 +112,7 @@ import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
-import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine } from './inboundReceivingRuntime'
+import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -573,8 +573,10 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
-      !distOpen,
+      !distOpen &&
+      !kizReprintOpen,
     onScan: (code) => {
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => scanToReceiving(code))
     },
   })
@@ -587,8 +589,10 @@ export function FfInboundRequestView({
       boxAddDialogBoxId == null &&
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
-      dimensionsLine == null,
+      dimensionsLine == null &&
+      !kizReprintOpen,
     onScan: (code) => {
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => addLineByBarcode(code))
     },
   })

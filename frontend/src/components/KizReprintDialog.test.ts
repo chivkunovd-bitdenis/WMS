@@ -13,15 +13,18 @@ describe('KizReprintDialog FF contract', () => {
     expect(KizReprintDialog).toBeTypeOf('function')
     expect(dialogSource).toContain('Сканируйте КИЗ')
     expect(dialogSource).toContain('Печать всё')
-    expect(dialogSource).toContain('Честный знак {row.kiz} успешно перепечатан')
+    expect(dialogSource).toContain('успешно перепечатан')
+    expect(dialogSource).toContain('сохранён. Нажмите значок печати ещё раз.')
     expect(dialogSource).toContain('aria-label="Печать КИЗ"')
     expect(dialogSource).toContain('Готово')
   })
 
-  it('uses scanner payloads, persists them first, then only auto-prints non-replayed scans', () => {
+  it('uses scanner payloads, persists them first, claims the print, then marks only its launch', () => {
     expect(dialogSource).toContain('useBarcodeScanner')
     expect(dialogSource).toContain('saveKizReprint')
-    expect(dialogSource).toContain('printScannedKiz(row')
+    expect(dialogSource).toContain('startAutoKizReprintPrint')
+    expect(dialogSource).toContain('claimKizReprintPrint')
+    expect(dialogSource).toContain('markKizReprintPrintStarted')
     expect(dialogSource).toContain('loadKizReprints')
   })
 })

@@ -716,72 +716,96 @@ declare global {
   }
 }
 
-async function printHtmlInIframe(html: string): Promise<void> {
+export async function printHtmlInIframe(html: string): Promise<void> {
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
     window.__WMS_LAST_PRINT_HTML__ = html
   }
 
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  document.body.appendChild(iframe)
+  return new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('aria-hidden', 'true')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    document.body.appendChild(iframe)
 
-  const cleanup = () => {
-    try {
-      document.body.removeChild(iframe)
-    } catch {
-      // ignore
-    }
-  }
-
-  const printNow = () => {
-    const w = iframe.contentWindow
-    if (!w) {
-      cleanup()
-      return
-    }
-    try {
-      w.focus()
-    } catch {
-      // ignore
-    }
-    setTimeout(() => {
+    let settled = false
+    const cleanup = () => {
       try {
-        w.print()
-      } finally {
-        setTimeout(cleanup, 500)
-      }
-    }, 100)
-  }
-
-  iframe.srcdoc = html
-  iframe.onload = () => {
-    const doc = iframe.contentDocument
-    const imgs = doc?.querySelectorAll('img') ?? []
-    if (imgs.length === 0) {
-      printNow()
-      return
-    }
-    let pending = imgs.length
-    const done = () => {
-      pending -= 1
-      if (pending <= 0) {
-        printNow()
+        document.body.removeChild(iframe)
+      } catch {
+        // ignore
       }
     }
-    imgs.forEach((img) => {
-      const el = img as HTMLImageElement
-      if (el.complete) {
-        done()
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeoutId)
+      callback()
+    }
+    const fail = (message: string) => {
+      finish(() => {
+        cleanup()
+        reject(new Error(message))
+      })
+    }
+    const timeoutId = window.setTimeout(
+      () => fail('Не удалось открыть форму печати КИЗ (таймаут).'),
+      20_000,
+    )
+    const printNow = () => {
+      const frameWindow = iframe.contentWindow
+      if (!frameWindow) {
+        fail('Не удалось открыть форму печати КИЗ.')
         return
       }
-      el.addEventListener('load', done, { once: true })
-      el.addEventListener('error', done, { once: true })
-    })
-  }
+      try {
+        frameWindow.focus()
+      } catch {
+        // Browser focus can be denied while the print form itself remains usable.
+      }
+      window.setTimeout(() => {
+        try {
+          frameWindow.print()
+        } catch {
+          fail('Не удалось запустить печать КИЗ.')
+          return
+        }
+        // ``window.print`` has been invoked: the browser has received the print
+        // form.  We cannot truthfully wait for a physical printer afterwards.
+        finish(() => {
+          window.setTimeout(cleanup, 500)
+          resolve()
+        })
+      }, 100)
+    }
+
+    iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
+    iframe.onload = () => {
+      const doc = iframe.contentDocument
+      const imgs = doc?.querySelectorAll('img') ?? []
+      if (imgs.length === 0) {
+        printNow()
+        return
+      }
+      let pending = imgs.length
+      const done = () => {
+        pending -= 1
+        if (pending <= 0) printNow()
+      }
+      imgs.forEach((img) => {
+        const el = img as HTMLImageElement
+        if (el.complete) {
+          done()
+          return
+        }
+        el.addEventListener('load', done, { once: true })
+        el.addEventListener('error', done, { once: true })
+      })
+    }
+    iframe.srcdoc = html
+  })
 }

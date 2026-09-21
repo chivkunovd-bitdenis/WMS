@@ -29,11 +29,21 @@ class KizReprintOut(BaseModel):
     seller_id: str
     kiz: str
     created_at: str
+    print_started_at: str | None
     replayed: bool = False
 
 
 class KizReprintListOut(BaseModel):
     rows: list[KizReprintOut]
+
+
+class KizReprintPrintClaimIn(BaseModel):
+    attempt_key: str = Field(min_length=1, max_length=128)
+
+
+class KizReprintPrintClaimOut(BaseModel):
+    row: KizReprintOut
+    claimed: bool
 
 
 def _out(row: KizReprint, *, replayed: bool = False) -> KizReprintOut:
@@ -42,6 +52,7 @@ def _out(row: KizReprint, *, replayed: bool = False) -> KizReprintOut:
         seller_id=str(row.seller_id),
         kiz=row.kiz,
         created_at=row.created_at.isoformat(),
+        print_started_at=(row.print_started_at.isoformat() if row.print_started_at else None),
         replayed=replayed,
     )
 
@@ -66,6 +77,8 @@ def _raise_service_error(exc: reprint_svc.KizReprintServiceError) -> None:
         "idempotency_key_too_long",
         "not_a_kiz",
         "gs_separator_lost",
+        "print_claim_key_required",
+        "print_claim_key_too_long",
     }
     if exc.code in invalid_request_codes:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -73,6 +86,21 @@ def _raise_service_error(exc: reprint_svc.KizReprintServiceError) -> None:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="kiz_reprint_save_failed",
     )
+
+
+async def _require_reprint_in_tenant(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    reprint_id: uuid.UUID,
+) -> None:
+    row = await session.scalar(
+        select(KizReprint.id).where(
+            KizReprint.id == reprint_id,
+            KizReprint.tenant_id == tenant_id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="reprint_not_found")
 
 
 @router.get("", response_model=KizReprintListOut)
@@ -105,3 +133,51 @@ async def create_kiz_reprint(
     except reprint_svc.KizReprintServiceError as exc:
         _raise_service_error(exc)
     return _out(result.row, replayed=result.replayed)
+
+
+@router.post("/{reprint_id}/print-claim", response_model=KizReprintPrintClaimOut)
+async def claim_kiz_reprint_print(
+    reprint_id: uuid.UUID,
+    body: KizReprintPrintClaimIn,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KizReprintPrintClaimOut:
+    await _require_reprint_in_tenant(session, user.tenant_id, reprint_id)
+    try:
+        result = await reprint_svc.claim_kiz_reprint_print(
+            session, user.tenant_id, reprint_id, attempt_key=body.attempt_key
+        )
+    except reprint_svc.KizReprintServiceError as exc:
+        _raise_service_error(exc)
+    return KizReprintPrintClaimOut(row=_out(result.row), claimed=result.claimed)
+
+
+@router.post("/{reprint_id}/print-started", response_model=KizReprintOut)
+async def mark_kiz_reprint_print_started(
+    reprint_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KizReprintOut:
+    try:
+        row = await reprint_svc.mark_kiz_reprint_print_started(
+            session, user.tenant_id, reprint_id
+        )
+    except reprint_svc.KizReprintServiceError as exc:
+        _raise_service_error(exc)
+    return _out(row)
+
+
+@router.post("/{reprint_id}/print-failed", response_model=KizReprintOut)
+async def release_kiz_reprint_print_claim(
+    reprint_id: uuid.UUID,
+    body: KizReprintPrintClaimIn,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KizReprintOut:
+    try:
+        row = await reprint_svc.release_kiz_reprint_print_claim(
+            session, user.tenant_id, reprint_id, attempt_key=body.attempt_key
+        )
+    except reprint_svc.KizReprintServiceError as exc:
+        _raise_service_error(exc)
+    return _out(row)

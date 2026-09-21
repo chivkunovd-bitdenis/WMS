@@ -102,7 +102,15 @@ async def test_kiz_reprint_rejects_incomplete_or_invalid_codes_without_history(
     async_client: AsyncClient,
 ) -> None:
     headers, _tenant_id, seller_id = await _seed(async_client)
-    for value in ("", "not-a-kiz", "010460000000000121"):
+    for value in (
+        "",
+        "not-a-kiz",
+        "010460000000000121",
+        # A two-byte serial is a truncated short packet, not a full KIZ.
+        "010460000000000121AB",
+        # Long form needs the key and cryptographic tail, not just the AIs.
+        f"010460000000000121SERIAL{GS}91{GS}92",
+    ):
         response = await async_client.post(
             PREFIX,
             headers=headers,
@@ -117,6 +125,73 @@ async def test_kiz_reprint_rejects_incomplete_or_invalid_codes_without_history(
 
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count(KizReprint.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_kiz_reprint_retry_after_lost_save_response_claims_one_print(
+    async_client: AsyncClient,
+) -> None:
+    """C8: durable save without its response is still printed exactly once on retry."""
+    headers, _tenant_id, seller_id = await _seed(async_client)
+    body = {"seller_id": str(seller_id), "kiz": _kiz(), "idempotency_key": "lost-response"}
+    committed_but_unread = await async_client.post(PREFIX, headers=headers, json=body)
+    assert committed_but_unread.status_code == 201
+    reprint_id = committed_but_unread.json()["id"]
+
+    retry = await async_client.post(PREFIX, headers=headers, json=body)
+    assert retry.status_code == 201
+    assert retry.json()["replayed"] is True
+    assert retry.json()["print_started_at"] is None
+
+    claim = await async_client.post(
+        f"{PREFIX}/{reprint_id}/print-claim",
+        headers=headers,
+        json={"attempt_key": "retry-print"},
+    )
+    assert claim.status_code == 200, claim.text
+    assert claim.json()["claimed"] is True
+    started = await async_client.post(f"{PREFIX}/{reprint_id}/print-started", headers=headers)
+    assert started.status_code == 200, started.text
+    assert started.json()["print_started_at"] is not None
+
+    later_retry = await async_client.post(
+        f"{PREFIX}/{reprint_id}/print-claim",
+        headers=headers,
+        json={"attempt_key": "would-duplicate"},
+    )
+    assert later_retry.status_code == 200, later_retry.text
+    assert later_retry.json()["claimed"] is False
+    assert later_retry.json()["row"]["print_started_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_kiz_reprint_concurrent_print_claims_allow_one_automatic_launch(
+    async_client: AsyncClient,
+) -> None:
+    """A duplicate delivery cannot make two browsers auto-open the same label."""
+    headers, _tenant_id, seller_id = await _seed(async_client)
+    created = await async_client.post(
+        PREFIX,
+        headers=headers,
+        json={"seller_id": str(seller_id), "kiz": _kiz(), "idempotency_key": "claim-race"},
+    )
+    assert created.status_code == 201, created.text
+    reprint_id = created.json()["id"]
+
+    first, second = await asyncio.gather(
+        async_client.post(
+            f"{PREFIX}/{reprint_id}/print-claim",
+            headers=headers,
+            json={"attempt_key": "first-browser"},
+        ),
+        async_client.post(
+            f"{PREFIX}/{reprint_id}/print-claim",
+            headers=headers,
+            json={"attempt_key": "second-browser"},
+        ),
+    )
+    assert first.status_code == second.status_code == 200
+    assert sorted([first.json()["claimed"], second.json()["claimed"]]) == [False, True]
 
 
 @pytest.mark.asyncio

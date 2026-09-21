@@ -45,6 +45,13 @@ class KizReprint(Base):
     # Full normalized scanner payload, including GS (0x1D) separators.
     kiz: Mapped[str] = mapped_column(String(512), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    # A scan becomes successful only after the browser has actually started the
+    # print dialog.  The claim serializes that one automatic launch across a
+    # repeated delivery of the same scan request.
+    print_claim_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    print_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

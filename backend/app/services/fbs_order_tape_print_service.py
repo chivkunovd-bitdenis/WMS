@@ -207,7 +207,10 @@ async def print_fbs_order_tape(
                     marking.id for marking in _active_ozon_sgtin_markings(order)
                 )
                 continue
-            marking = _existing_sgtin_marking(order)
+            # The inline reprint names the exact already-bound row.  It must
+            # remain printable even when WB has marked that row rejected: a
+            # physical damaged label is not permission to replace or mutate it.
+            marking = _selected_sgtin_marking(order, selected_reprint_marking_ids)
             if marking is not None and marking.marking_code is not None:
                 selectable_marking_ids.add(marking.id)
         if not selected_reprint_marking_ids.issubset(selectable_marking_ids):
@@ -337,7 +340,14 @@ async def print_fbs_order_tape(
         # Пропуск запрещает автоматическую выдачу новых кодов, но сохраняет
         # печать уже привязанного ЧЗ, в том числе после передачи поставки.
         honest_sign_skipped = supply.honest_sign_skipped_at is not None
-        existing = _existing_sgtin_marking(order) if honest_sign_skipped else None
+        selected_reprint_marking = _selected_sgtin_marking(
+            order, selected_reprint_marking_ids
+        )
+        existing = (
+            selected_reprint_marking
+            if selected_reprint_marking is not None
+            else (_existing_sgtin_marking(order) if honest_sign_skipped else None)
+        )
         requires_honest_sign = _order_requires_sgtin(order) or existing is not None
         if not requires_honest_sign or (honest_sign_skipped and existing is None):
             result_orders.append(
@@ -372,7 +382,7 @@ async def print_fbs_order_tape(
             # treated as a first print, but the explicit FBS reprint action may
             # print its already-linked MarkingCode and write the normal ledger
             # event.  It never allocates a pool code.
-            existing = _existing_sgtin_marking(order)
+            existing = selected_reprint_marking or _existing_sgtin_marking(order)
             if (
                 selected_reprint_marking_ids
                 and (existing is None or existing.id not in selected_reprint_marking_ids)
@@ -457,8 +467,17 @@ async def print_fbs_order_tape(
         shortage_total += printed.shortage or 0
         if (printed.shortage or 0) > 0 and not allow_partial:
             continue
-        marking = _existing_sgtin_marking(order)
-        if printed.codes and marking is not None:
+        marking = selected_reprint_marking or _existing_sgtin_marking(order)
+        explicit_operator_reprint = (
+            reprint
+            and marking is not None
+            and marking.id in selected_reprint_marking_ids
+            and marking.source == "operator"
+        )
+        # The explicit inline reprint is a print-only operation.  In
+        # particular, pending/rejected WB metadata must not be reconciled or
+        # resent merely because an operator needs a replacement sticker.
+        if printed.codes and marking is not None and not explicit_operator_reprint:
             bindings_to_send[order.id] = marking.id
         result_orders.append(
             FbsOrderTapeOrder(
@@ -699,7 +718,7 @@ async def _print_or_reprint_order_code(
     actor_user_id: uuid.UUID,
     reprint_marking_ids: set[uuid.UUID],
 ) -> mc_svc.PrintMarkingCodesResult:
-    existing = _existing_sgtin_marking(order)
+    existing = _selected_sgtin_marking(order, reprint_marking_ids) or _existing_sgtin_marking(order)
     if reprint_marking_ids and (
         existing is None or existing.id not in reprint_marking_ids
     ):
@@ -762,6 +781,24 @@ async def _print_or_reprint_order_code(
 
 def _existing_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
     return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
+
+
+def _selected_sgtin_marking(
+    order: FbsOrder,
+    marking_ids: set[uuid.UUID],
+) -> FbsOrderMarking | None:
+    if not marking_ids:
+        return None
+    return next(
+        (
+            marking
+            for marking in order.markings
+            if marking.id in marking_ids
+            and marking.kind == MARKING_KIND_SGTIN
+            and marking.marking_code is not None
+        ),
+        None,
+    )
 
 
 def _active_ozon_sgtin_markings(order: FbsOrder) -> list[FbsOrderMarking]:

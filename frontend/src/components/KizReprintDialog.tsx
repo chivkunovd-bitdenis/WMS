@@ -17,11 +17,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
 import {
   loadKizReprints,
+  claimKizReprintPrint,
+  markKizReprintPrintStarted,
   mergeKizReprintRow,
+  releaseKizReprintPrintClaim,
   saveKizReprint,
   type KizReprintRow,
 } from '../utils/kizReprintApi'
-import { printKizHistory, printScannedKiz } from '../utils/kizReprintPrint'
+import { printKizHistory, startAutoKizReprintPrint } from '../utils/kizReprintPrint'
 import { printMarkingCodeLabels } from '../utils/printMarkingCodeLabel'
 import { randomId } from '../utils/randomId'
 
@@ -71,12 +74,18 @@ export function KizReprintDialog({
     setError(null)
     try {
       await printKizHistory(target, (codes) => printMarkingCodeLabels(codes, { duplicateCopies: 1 }))
+      const startedRows = await Promise.all(
+        target
+          .filter((row) => !row.print_started_at)
+          .map((row) => markKizReprintPrintStarted(token, row.id)),
+      )
+      setRows((current) => startedRows.reduce(mergeKizReprintRow, current))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось открыть печать КИЗ.')
     } finally {
       setPrinting(null)
     }
-  }, [])
+  }, [token])
 
   const scan = useCallback(async (rawKiz: string) => {
     // Barcode wedges often add a newline.  Do not use String.trim(): KIZ may
@@ -91,7 +100,17 @@ export function KizReprintDialog({
     try {
       const row = await saveKizReprint(token, { sellerId, kiz, idempotencyKey })
       setRows((current) => mergeKizReprintRow(current, row))
-      await printScannedKiz(row, (codes) => printMarkingCodeLabels(codes, { duplicateCopies: 1 }))
+      const printResult = await startAutoKizReprintPrint(
+        row,
+        randomId(),
+        (codes) => printMarkingCodeLabels(codes, { duplicateCopies: 1 }),
+        {
+          claim: (historyRow, attemptKey) => claimKizReprintPrint(token, historyRow.id, attemptKey),
+          markStarted: (historyRow) => markKizReprintPrintStarted(token, historyRow.id),
+          releaseClaim: (historyRow, attemptKey) => releaseKizReprintPrintClaim(token, historyRow.id, attemptKey),
+        },
+      )
+      setRows((current) => mergeKizReprintRow(current, printResult.row))
       idempotencyKeys.current.delete(kiz)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось сохранить КИЗ для печати.')
@@ -147,7 +166,11 @@ export function KizReprintDialog({
               data-testid={`${testId}-row-${row.id}`}
             >
               <Box sx={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
-                <Typography variant="body2">Честный знак {row.kiz} успешно перепечатан</Typography>
+                <Typography variant="body2">
+                  {row.print_started_at
+                    ? `Честный знак ${row.kiz} успешно перепечатан`
+                    : `Честный знак ${row.kiz} сохранён. Нажмите значок печати ещё раз.`}
+                </Typography>
               </Box>
               <Tooltip title="Печать КИЗ">
                 <IconButton
