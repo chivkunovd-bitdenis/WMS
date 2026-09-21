@@ -348,7 +348,7 @@ export function PublicAuthScreen({
           sx={{ mt: 1.5 }}
           fullWidth
         >
-          Регистрация организации (первый админ)
+          Регистрация фулфилмента
         </Button>
       ) : null}
     </Paper>,

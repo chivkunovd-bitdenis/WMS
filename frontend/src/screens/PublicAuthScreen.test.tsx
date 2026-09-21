@@ -17,7 +17,7 @@ describe('public registration entry point', () => {
     const html = renderToStaticMarkup(<PublicAuthScreen
       variant="fulfillment" error={null} notice={null} authBusy={false} {...handlers}
     />)
-    expect(html).toContain('Регистрация организации (первый админ)')
+    expect(html).toContain('Регистрация фулфилмента')
     expect(html).toContain('data-testid="go-to-register"')
     expect(html).toContain('data-testid="login-form"')
     expect(html).toContain('data-testid="go-to-forgot-password"')
