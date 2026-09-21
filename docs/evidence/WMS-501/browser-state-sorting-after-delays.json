@@ -1,0 +1,62 @@
+{
+  "objects": [
+    {
+      "id": "8c9eab6d-c8f5-4fb1-b7d0-eeab2fa701a4",
+      "kind": "box",
+      "code": "WHB-F0BFQAE0DYRJPH",
+      "barcode": "WHB-F0BFQAE0DYRJPH",
+      "holder": "cell:4713f627-ba61-4646-9ba4-761bd465ed1c"
+    },
+    {
+      "id": "0b8d4739-b616-4edc-b3f8-0d6484e103ca",
+      "kind": "box",
+      "code": "WHB-STG1WSBHZRPXT8",
+      "barcode": "WHB-STG1WSBHZRPXT8",
+      "holder": "cell:4713f627-ba61-4646-9ba4-761bd465ed1c"
+    }
+  ],
+  "lines": [
+    {
+      "id": "3ec5535c-be99-4ded-8270-3d21a4eaa903",
+      "productId": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+      "qty": 20,
+      "holder": null
+    }
+  ],
+  "products": [
+    {
+      "id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+      "name": "AUDIT \u0442\u043e\u0432\u0430\u0440 \u0434\u043b\u044f \u0441\u043a\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f",
+      "sku": "50100001",
+      "seller": "Browser Synthetic Seller",
+      "barcode": "50100001",
+      "photo": "",
+      "size": null,
+      "alreadyAt": []
+    }
+  ],
+  "cells": [
+    {
+      "id": "4713f627-ba61-4646-9ba4-761bd465ed1c",
+      "code": "AUDIT-A01",
+      "barcode": "50199901",
+      "objects": [
+        {
+          "id": "8c9eab6d-c8f5-4fb1-b7d0-eeab2fa701a4",
+          "kind": "box",
+          "code": "WHB-F0BFQAE0DYRJPH",
+          "barcode": "WHB-F0BFQAE0DYRJPH",
+          "holder": "cell:4713f627-ba61-4646-9ba4-761bd465ed1c"
+        },
+        {
+          "id": "0b8d4739-b616-4edc-b3f8-0d6484e103ca",
+          "kind": "box",
+          "code": "WHB-STG1WSBHZRPXT8",
+          "barcode": "WHB-STG1WSBHZRPXT8",
+          "holder": "cell:4713f627-ba61-4646-9ba4-761bd465ed1c"
+        }
+      ],
+      "lines": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+2026-09-21T15:32:05Z
+3e125074d5cb4c38e9107f864c3075f4f1f224cd
+wms_prod-api-1|0.11%|318.3MiB / 3.795GiB|6
+wms_prod-db-1|11.65%|281.9MiB / 3.795GiB|19
+wms_prod-celery_worker-1|59.71%|518.6MiB / 3.795GiB|5
+wms_prod-celery_beat-1|0.00%|87.35MiB / 3.795GiB|1
+wms_prod-redis-1|0.50%|5.09MiB / 3.795GiB|6
+wms_prod-web-1|0.00%|22.36MiB / 3.795GiB|18
+/wms_prod-api-1|OOM=false|restarts=0|memory_limit=0|nano_cpus=0
+/wms_prod-db-1|OOM=false|restarts=0|memory_limit=0|nano_cpus=0
+/wms_prod-celery_worker-1|OOM=false|restarts=0|memory_limit=0|nano_cpus=0
+PID                 PPID                COMMAND
+838943              838903              uvicorn
+PID                 PPID                COMMAND
+838941              838884              celery
+839301              838941              celery
+839307              838941              celery
+839329              838941              celery
+procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 1  0 1181476 144516   6288 560004    1    1   354    47    3    0  8  3 88  0  0
+ 2  0 1181476 141116   6288 560140    0    0     0     0 1678 6500 40  7 53  0  0
+ 0  0 1181476 138596   6296 560568    0    0     0   508  935 3886 18  4 77  0  0
+ 0  0 1181476 130784   6296 560676    0    0   108    12  504 3234  5  3 92  0  0
+ 0  0 1181476 130784   6296 560672    0    0     0     8  130  905  1  1 98  0  0
+ 0  0 1181476 130784   6296 560672    0    0     0     0  512 2828  3  1 96  0  0

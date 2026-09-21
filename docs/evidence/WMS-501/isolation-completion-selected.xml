@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="2" tests="249" time="130.421" timestamp="2026-09-21T19:32:49.955036+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_address_storage_cross_system" name="test_tenant_without_address_storage_never_needs_or_sees_a_cell" time="1.665" /><testcase classname="tests.test_auth_email_links" name="test_admin_resends_invite_only_inside_own_tenant" time="0.854" /><testcase classname="tests.test_billing_configuration_api" name="test_billing_configuration_api_validates_profiles_tariffs_and_tenant_boundary" time="0.874" /><testcase classname="tests.test_billing_configuration_api" name="test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic" time="0.556" /><testcase classname="tests.test_billing_configuration_api" name="test_tariff_matrix_api_persists_product_and_employee_rates_without_cross_tenant_leak" time="1.168" /><testcase classname="tests.test_billing_financial_core_migration" name="test_billing_invoice_number_is_unique_inside_tenant_only" time="0.143" /><testcase classname="tests.test_billing_invoice_api" name="test_invoice_numbers_are_tenant_scoped_for_two_tenants" time="0.859" /><testcase classname="tests.test_billing_models" name="test_billing_unique_indexes_separate_global_and_warehouse_tariff_scopes" time="0.056" /><testcase classname="tests.test_billing_piece_tariff" name="test_completed_multiline_intake_prices_pieces_once_and_keeps_tenant_scope[legacy]" time="0.826" /><testcase classname="tests.test_billing_piece_tariff" name="test_completed_multiline_intake_prices_pieces_once_and_keeps_tenant_scope[matrix]" time="0.840" /><testcase classname="tests.test_billing_seller_report_api" name="test_seller_report_summary_and_details_are_tenant_scoped" time="0.814" /><testcase classname="tests.test_billing_seller_report_api" name="test_malformed_same_tenant_invoice_snapshot_makes_history_unknown" time="0.529" /><testcase classname="tests.test_billing_tariff_matrix" name="test_new_tenant_gets_persisted_disabled_matrix_including_storage" time="0.319" /><testcase classname="tests.test_billing_tariff_matrix" name="test_saving_a_matrix_rate_enables_billing_for_the_tenant" time="0.063" /><testcase classname="tests.test_billing_tariff_matrix" name="test_postgresql_composite_ledger_line_foreign_keys_reject_foreign_tenant" time="0.001"><skipped type="pytest.skip" message="WMS_TARIFF_MATRIX_POSTGRES_URL required for real PostgreSQL tariff proof">/Users/deniscivkunov/Projects/WMS/.worktrees/wms501-performance-isolation-audit/backend/tests/test_billing_tariff_matrix.py:220: WMS_TARIFF_MATRIX_POSTGRES_URL required for real PostgreSQL tariff proof</skipped></testcase><testcase classname="tests.test_billing_tariff_matrix" name="test_postgresql_v2_scope_check_rejects_invalid_direct_inserts" time="0.001"><skipped type="pytest.skip" message="WMS_TARIFF_MATRIX_POSTGRES_URL required for real PostgreSQL tariff proof">/Users/deniscivkunov/Projects/WMS/.worktrees/wms501-performance-isolation-audit/backend/tests/test_billing_tariff_matrix.py:220: WMS_TARIFF_MATRIX_POSTGRES_URL required for real PostgreSQL tariff proof</skipped></testcase><testcase classname="tests.test_billing_tariff_priority" name="test_seller_rate_never_leaks_to_another_seller" time="0.051" /><testcase classname="tests.test_bootstrap_billing_tariff_matrix" name="test_bootstrap_matrix_creation_is_idempotent_for_existing_tenant" time="0.045" /><testcase classname="tests.test_fbs_cancelled_after_pack" name="test_cancelled_after_pack_is_tenant_scoped_and_filters_seller_period" time="0.898" /><testcase classname="tests.test_fbs_kiz" name="test_fbs_kiz_lookup_foreign_supply_sticker_returns_404" time="0.716" /><testcase classname="tests.test_fbs_packaging_integration" name="test_fbs_bind_packaging_box_rejects_foreign_tenant_warehouse" time="1.050" /><testcase classname="tests.test_fbs_pick_options" name="test_fbs_pick_options_hides_foreign_tenant_supply" time="0.916" /><testcase classname="tests.test_fbs_pick_unload_contract" name="test_fbs_pick_write_hides_foreign_tenant_supply" time="0.940" /><testcase classname="tests.test_fbs_picking" name="test_fbs_pick_rejects_cross_seller_product" time="0.770" /><testcase classname="tests.test_fbs_print_assets" name="test_print_asset_cross_tenant_404" time="0.949" /><testcase classname="tests.test_fbs_seller_warehouse" name="test_fbs_seller_warehouses_cross_tenant_404" time="0.872" /><testcase classname="tests.test_fbs_stock_rule_service" name="test_bulk_rule_rejects_mixed_sellers" time="0.035" /><testcase classname="tests.test_fbs_stock_share_wave2" name="test_fbs_wave2_routes_are_tenant_isolated" time="0.825" /><testcase classname="tests.test_fbs_tracking_supply_done_rate_limit" name="test_same_wb_supply_id_in_two_tenants_is_isolated" time="0.056"><failure message="sqlalchemy.exc.IntegrityError: (psycopg.errors.ForeignKeyViolation) insert or update on table &quot;fbs_warehouse_bindings&quot; violates foreign key constraint &quot;fbs_warehouse_bindings_tenant_id_fkey&quot;&#10;DETAIL:  Key (tenant_id)=(82228a36-f988-4c77-810a-1e66b8ba99f5) is not present in table &quot;tenants&quot;.&#10;[SQL: INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wms_warehouse_id, is_active, stock_sync_enabled, served, lease_until, last_sync_status, last_sync_at, last_error_code) VALUES (%(id)s::UUID, %(tenant_id)s::UUID, %(seller_id)s::UUID, %(marketplace)s::VARCHAR, %(external_warehouse_id)s::VARCHAR, %(wb_warehouse_id)s::BIGINT, %(wms_warehouse_id)s::UUID, %(is_active)s, %(stock_sync_enabled)s, %(served)s, %(lease_until)s::TIMESTAMP WITH TIME ZONE, %(last_sync_status)s::VARCHAR, %(last_sync_at)s::TIMESTAMP WITH TIME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at]&#10;[parameters: {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', 'external_warehouse_id': None, 'wb_warehouse_id': 501001, 'wms_warehouse_id': UUID('f78f9bbf-9f7b-4b52-9a3e-59de9b4a43bd'), 'is_active': True, 'stock_sync_enabled': True, 'served': True, 'lease_until': None, 'last_sync_status': None, 'last_sync_at': None, 'last_error_code': None}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)">self = &lt;sqlalchemy.engine.base.Connection object at 0x1133b0e60&gt;
+dialect = &lt;sqlalchemy.dialects.postgresql.psycopg.PGDialectAsync_psycopg object at 0x10a22a660&gt;
+context = &lt;sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x11288e550&gt;
+statement = &lt;sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x1171556d0&gt;
+parameters = [{'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -&gt; CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+&gt;                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;psycopg.AsyncCursor [closed] [IDLE] (host=127.0.0.1 port=55451 user=deniscivkunov database=wms501_isolation2) at 0x116b2ec90&gt;
+query = 'INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wm...IME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at'
+params = {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}
+prepare = None, binary = None
+
+    async def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -&gt; Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            async with self._conn.lock:
+                await self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+&gt;           raise ex.with_traceback(None)
+E           psycopg.errors.ForeignKeyViolation: insert or update on table "fbs_warehouse_bindings" violates foreign key constraint "fbs_warehouse_bindings_tenant_id_fkey"
+E           DETAIL:  Key (tenant_id)=(82228a36-f988-4c77-810a-1e66b8ba99f5) is not present in table "tenants".
+
+../../backend/.venv/lib/python3.14/site-packages/psycopg/cursor_async.py:117: ForeignKeyViolation
+
+The above exception was the direct cause of the following exception:
+
+async_client = &lt;httpx.AsyncClient object at 0x1171d5190&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x116ac9e80&gt;
+
+    @pytest.mark.asyncio
+    async def test_same_wb_supply_id_in_two_tenants_is_isolated(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -&gt; None:
+        _ = async_client
+        _disable_wb_mocks(monkeypatch)
+        shared_wb_id = "WB-GI-411-SHARED"
+        tenant_a, seller_a, warehouse_a = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        tenant_b, seller_b, warehouse_b = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+&gt;       supply_a = await _seed_supply(
+            tenant_id=tenant_a,
+            seller_id=seller_a,
+            warehouse_id=warehouse_a,
+            wb_supply_id=shared_wb_id,
+            wb_order_ids=[411001],
+        )
+
+backend/tests/test_fbs_tracking_supply_done_rate_limit.py:764: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/tests/test_fbs_tracking_supply_done_rate_limit.py:172: in _seed_supply
+    await seed_fbs_warehouse_binding(
+backend/tests/fbs_seed_helpers.py:42: in seed_fbs_warehouse_binding
+    await session.flush()
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4353: in flush
+    self._flush(objects)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4488: in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4449: in _flush
+    flush_context.execute()
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py:465: in execute
+    rec.execute(self)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py:94: in save_obj
+    _emit_insert_statements(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;psycopg.AsyncCursor [closed] [IDLE] (host=127.0.0.1 port=55451 user=deniscivkunov database=wms501_isolation2) at 0x116b2ec90&gt;
+query = 'INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wm...IME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at'
+params = {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}
+prepare = None, binary = None
+
+    async def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -&gt; Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            async with self._conn.lock:
+                await self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+&gt;           raise ex.with_traceback(None)
+E           sqlalchemy.exc.IntegrityError: (psycopg.errors.ForeignKeyViolation) insert or update on table "fbs_warehouse_bindings" violates foreign key constraint "fbs_warehouse_bindings_tenant_id_fkey"
+E           DETAIL:  Key (tenant_id)=(82228a36-f988-4c77-810a-1e66b8ba99f5) is not present in table "tenants".
+E           [SQL: INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wms_warehouse_id, is_active, stock_sync_enabled, served, lease_until, last_sync_status, last_sync_at, last_error_code) VALUES (%(id)s::UUID, %(tenant_id)s::UUID, %(seller_id)s::UUID, %(marketplace)s::VARCHAR, %(external_warehouse_id)s::VARCHAR, %(wb_warehouse_id)s::BIGINT, %(wms_warehouse_id)s::UUID, %(is_active)s, %(stock_sync_enabled)s, %(served)s, %(lease_until)s::TIMESTAMP WITH TIME ZONE, %(last_sync_status)s::VARCHAR, %(last_sync_at)s::TIMESTAMP WITH TIME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at]
+E           [parameters: {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', 'external_warehouse_id': None, 'wb_warehouse_id': 501001, 'wms_warehouse_id': UUID('f78f9bbf-9f7b-4b52-9a3e-59de9b4a43bd'), 'is_active': True, 'stock_sync_enabled': True, 'served': True, 'lease_until': None, 'last_sync_status': None, 'last_sync_at': None, 'last_error_code': None}]
+E           (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+../../backend/.venv/lib/python3.14/site-packages/psycopg/cursor_async.py:117: IntegrityError</failure></testcase><testcase classname="tests.test_fbs_warehouse_binding" name="test_fbs_warehouse_binding_cross_tenant_404" time="0.824" /><testcase classname="tests.test_fbs_warehouse_binding" name="test_fbs_stock_sync_cross_tenant_404" time="0.798" /><testcase classname="tests.test_fbs_worklist_query_count" name="test_tsd_working_worklist_keeps_tenant_and_served_warehouse_scope" time="0.931" /><testcase classname="tests.test_fbs_worklist_search" name="test_supply_search_numbers_members_duplicates_and_scope" time="1.229" /><testcase classname="tests.test_fbs_zero_refresh" name="test_same_chrt_in_other_seller_targets_only_its_binding" time="0.067" /><testcase classname="tests.test_inbound_cargo_place_api" name="test_foreign_tenant_cannot_see_or_edit_cargo_place" time="0.767" /><testcase classname="tests.test_inbound_intake" name="test_inbound_receiving_lines_rejects_foreign_seller_product" time="1.511" /><testcase classname="tests.test_inbound_intake_api_be03" name="test_ff_list_hides_only_seller_drafts_and_preserves_seller_scope" time="1.559" /><testcase classname="tests.test_inbound_marking" name="test_delete_preserves_existing_history_and_scope[history]" time="0.434" /><testcase classname="tests.test_inbound_marking" name="test_delete_preserves_existing_history_and_scope[printed]" time="0.406" /><testcase classname="tests.test_inbound_marking" name="test_delete_preserves_existing_history_and_scope[shipped]" time="0.403" /><testcase classname="tests.test_inbound_marking" name="test_delete_preserves_existing_history_and_scope[other_receipt]" time="0.416" /><testcase classname="tests.test_inbound_marking" name="test_delete_preserves_existing_history_and_scope[posted]" time="0.408" /><testcase classname="tests.test_inbound_package_catalog" name="test_catalog_list_and_lookup_are_tenant_scoped_read_only" time="0.443"><failure message="AssertionError: assert {'kind': 'inb...:15:00+04:00'} == {'kind': 'inb...-23T10:15:00'}&#10;  &#10;  Omitting 3 identical items, use -vv to show&#10;  Differing items:&#10;  {'date': '2026-08-23T14:15:00+04:00'} != {'date': '2026-08-23T10:15:00'}&#10;  Use -v to get more diff">async_client = &lt;httpx.AsyncClient object at 0x1163b8f50&gt;
+
+    @pytest.mark.asyncio
+    async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
+        async_client: AsyncClient,
+    ) -&gt; None:
+        suffix = uuid.uuid4().hex[:12]
+        admin_headers = await _register_admin(async_client, suffix)
+        tenant_id = await _tenant_id(async_client, admin_headers)
+        ids = await _seed_packages(tenant_id)
+        before = await _read_state(ids)
+    
+        listed = await async_client.get("/operations/inbound-packages", headers=admin_headers)
+        assert listed.status_code == 200, listed.text
+        rows = listed.json()
+        assert [row["internal_barcode"] for row in rows] == [
+            "INB-CURRENT-RESIDUAL",
+            "INB-CURRENT-EMPTY",
+            "INB-CURRENT-DISTRIBUTED",
+            "ICG-CURRENT",
+            "INB-OLD-RESIDUAL",
+            "INB-DONE-DISTRIBUTED",
+        ]
+        residual = rows[0]
+        assert residual["kind"] == "box"
+        assert residual["fully_distributed"] is False
+        assert residual["remaining_qty"] == 6
+        assert residual["lines"] == [
+            {
+                "product_id": str(ids["product_id"]),
+                "remaining_qty": 6,
+                "name": "Товар в коробе",
+                "sku_code": "PKG-CATALOG-SKU",
+                "wb_vendor_code": "SELLER-ARTICLE",
+                "wb_barcode": "2030000000012",
+                "wb_size": "46",
+                "seller_name": "Селлер короба",
+            }
+        ]
+&gt;       assert residual["source_document"] == {
+            "kind": "inbound_intake",
+            "id": str(ids["current_request_id"]),
+            "number": "№000002",
+            "date": "2026-08-23T10:15:00",
+        }
+E       AssertionError: assert {'kind': 'inb...:15:00+04:00'} == {'kind': 'inb...-23T10:15:00'}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'date': '2026-08-23T14:15:00+04:00'} != {'date': '2026-08-23T10:15:00'}
+E         Use -v to get more diff
+
+backend/tests/test_inbound_package_catalog.py:310: AssertionError</failure></testcase><testcase classname="tests.test_inventory_balances_summary" name="test_inventory_balances_summary_seller_scope" time="2.187" /><testcase classname="tests.test_inventory_counts" name="test_inventory_count_selected_products_narrow_existing_scope" time="1.027" /><testcase classname="tests.test_inventory_counts" name="test_inventory_count_object_keeps_existing_location_and_product_scopes" time="0.486" /><testcase classname="tests.test_inventory_counts" name="test_inventory_count_is_tenant_scoped_for_list_get_and_post" time="0.743" /><testcase classname="tests.test_inventory_counts" name="test_inventory_count_manual_line_rejects_product_from_other_seller" time="0.527" /><testcase classname="tests.test_inventory_counts" name="test_inventory_count_create_container_rejects_foreign_cell" time="0.713" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[save-tenant]" time="0.760" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[save-warehouse]" time="0.765" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[save-kind]" time="0.764" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[post-tenant]" time="0.762" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[post-warehouse]" time="0.758" /><testcase classname="tests.test_inventory_counts" name="test_stale_empty_confirmation_does_not_hide_foreign_container[post-kind]" time="0.761" /><testcase classname="tests.test_inventory_movements_report" name="test_inventory_movements_summary_seller_scope_forbidden" time="1.023" /><testcase classname="tests.test_inventory_stock_cap_wms338" name="test_apply_fbs_supply_write_off_still_rejects_foreign_order" time="0.055" /><testcase classname="tests.test_marketplace_account_service" name="test_tc_s32_ozon_007_real_db_cross_tenant_scope_is_fail_closed" time="0.080" /><testcase classname="tests.test_marketplace_foundation" name="test_lock_key_is_scoped_by_seller_and_marketplace" time="0.001" /><testcase classname="tests.test_marking_inventory_api" name="test_marking_overview_tenant_isolation_404" time="1.071" /><testcase classname="tests.test_marking_inventory_api" name="test_marking_overview_seller_scope_403" time="1.291" /><testcase classname="tests.test_marking_inventory_cz_filter" name="test_inventory_tenant_isolation_same_sku_pool_title" time="0.696" /><testcase classname="tests.test_marking_inventory_cz_filter" name="test_inventory_seller_isolation_same_sku_pool_title" time="0.442" /><testcase classname="tests.test_marking_ledger_external" name="test_ledger_and_export_include_external_events_with_existing_scope_filters" time="1.100" /><testcase classname="tests.test_marking_pool_products" name="test_set_pool_products_foreign_seller_product_rejected" time="0.741" /><testcase classname="tests.test_marking_pools_read" name="test_pool_codes_foreign_pool_returns_404" time="0.782" /><testcase classname="tests.test_marking_product_codes_pool_filter" name="test_list_product_codes_tenant_isolation_same_sku_pool" time="0.819" /><testcase classname="tests.test_marking_product_codes_pool_filter" name="test_list_product_codes_seller_isolation_same_sku_pool" time="0.596" /><testcase classname="tests.test_notifications" name="test_notifications_user_scope_isolated" time="0.503" /><testcase classname="tests.test_notifications" name="test_notifications_seller_scope_isolated" time="1.156" /><testcase classname="tests.test_notifications" name="test_notifications_mark_read_foreign_returns_404" time="1.203" /><testcase classname="tests.test_operation_fact_recovery" name="test_recovery_preflight_counts_only_requested_tenant_facts" time="0.001" /><testcase classname="tests.test_operation_fact_recovery" name="test_recovery_scopes_durable_unload_and_system_cancel_to_period_and_sources" time="0.169" /><testcase classname="tests.test_operation_facts" name="test_correction_schema_exposes_tenant_lines_and_durable_unload_markers" time="0.000" /><testcase classname="tests.test_operation_facts" name="test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_rename" time="0.100" /><testcase classname="tests.test_ozon_marketplace_unload" name="test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse" time="1.464" /><testcase classname="tests.test_ozon_posting_contract" name="test_explicit_posting_intake_without_publication_keeps_warehouse_scope[True]" time="0.063" /><testcase classname="tests.test_ozon_posting_contract" name="test_explicit_posting_intake_without_publication_keeps_warehouse_scope[False]" time="0.040" /><testcase classname="tests.test_ozon_return_service" name="test_imported_giveouts_are_isolated_by_request_and_tenant" time="0.049" /><testcase classname="tests.test_pack_progress_idempotency" name="test_payload_conflicts_and_tenant_boundary" time="1.040" /><testcase classname="tests.test_packaging_tasks" name="test_packaging_create_rejects_mixed_seller_and_decimal_qty" time="1.282" /><testcase classname="tests.test_pick_option_container_sources" name="test_container_paths_fail_closed_outside_tenant_and_warehouse" time="0.699" /><testcase classname="tests.test_print_templates" name="test_operator_layout_does_not_carry_label_options_across_sellers" time="0.853" /><testcase classname="tests.test_product_categories" name="test_product_categories_are_unique_sorted_nonempty_and_tenant_isolated" time="0.653" /><testcase classname="tests.test_product_categories" name="test_product_categories_follow_effective_seller_scope_and_empty_state" time="1.407" /><testcase classname="tests.test_product_categories" name="test_categories_follow_switched_effective_seller_but_admin_sees_tenant_scope" time="0.889" /><testcase classname="tests.test_product_fbs_rule_bulk_read_api" name="test_bulk_read_hides_product_from_other_tenant" time="0.638" /><testcase classname="tests.test_product_fbs_rule_bulk_read_api" name="test_bulk_read_rejects_product_from_other_seller" time="0.880" /><testcase classname="tests.test_product_fbs_stock_sync_api" name="test_fbs_stock_sync_bulk_does_not_touch_other_seller_products" time="0.923" /><testcase classname="tests.test_product_tz_idempotency" name="test_same_file_hash_is_scoped_by_tenant_and_seller" time="0.703" /><testcase classname="tests.test_product_tz_import" name="test_tz_import_cross_seller_barcode_in_preview" time="0.387" /><testcase classname="tests.test_products_api" name="test_invalid_measurements_and_foreign_tenant_do_not_write_history" time="0.647" /><testcase classname="tests.test_products_fbs_stock_from_balance" name="test_apply_from_balance_does_not_touch_other_tenant_product" time="1.656" /><testcase classname="tests.test_products_ozon_catalog" name="test_ozon_catalog_links_do_not_cross_seller_or_tenant_boundaries" time="1.173" /><testcase classname="tests.test_products_ozon_catalog" name="test_existing_product_ozon_link_update_is_warehouse_only_and_tenant_scoped" time="1.671" /><testcase classname="tests.test_products_ozon_catalog" name="test_merge_rejects_three_cards_and_foreign_seller" time="0.428" /><testcase classname="tests.test_products_wb_catalog" name="test_ff_catalog_lists_all_tenant_products" time="2.990" /><testcase classname="tests.test_reports_csv_export" name="test_inventory_csv_for_seller_ignores_requested_foreign_seller_scope" time="1.355" /><testcase classname="tests.test_reports_movements" name="test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv[OZON-ONLY-OFFER]" time="0.747" /><testcase classname="tests.test_reports_movements" name="test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv[OZON-ONLY-SKU]" time="0.564" /><testcase classname="tests.test_reports_overview" name="test_reports_overview_seller_scope_overrides_requested_seller" time="0.968" /><testcase classname="tests.test_scan_resolver_service" name="test_tenant_cannot_resolve_another_tenants_object" time="0.600" /><testcase classname="tests.test_seller_isolation" name="test_seller_does_not_see_inbound_with_other_seller_lines" time="0.989" /><testcase classname="tests.test_seller_marketplace_unload" name="test_seller_cannot_see_other_seller_mp_unload" time="1.242" /><testcase classname="tests.test_seller_shop_scope" name="test_shop_manager_scope_requires_enabled_delegation_for_products" time="0.973" /><testcase classname="tests.test_seller_shop_switch" name="test_seller_shop_switch_acts_as_delegated_seller" time="1.536" /><testcase classname="tests.test_seller_shop_switch" name="test_seller_cannot_switch_without_delegation" time="1.083" /><testcase classname="tests.test_sorting_object_creation_api" name="test_sorting_object_creation_and_listing_are_tenant_scoped" time="0.628" /><testcase classname="tests.test_sorting_print_wms442" name="test_opaque_credentials_cannot_access_employee_api_and_scope_cannot_be_forged" time="0.621" /><testcase classname="tests.test_sorting_print_wms442" name="test_unpaired_expired_and_foreign_pairing_are_rejected" time="0.358" /><testcase classname="tests.test_stock_directions" name="test_seller_stock_directions_summary_and_scope" time="1.029" /><testcase classname="tests.test_storage_daily_charge" name="test_tenant_without_billing_start_date_is_not_charged" time="0.421" /><testcase classname="tests.test_storage_measurement_service" name="test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_scope" time="0.836" /><testcase classname="tests.test_storage_models" name="test_statement_is_unique_for_tenant_seller_warehouse_and_month" time="0.001" /><testcase classname="tests.test_storage_models" name="test_measurement_is_unique_for_tenant_seller_warehouse_sku_and_month" time="0.001" /><testcase classname="tests.test_storage_tariff_api" name="test_tariff_scope_must_belong_to_tenant_and_operational_warehouse" time="1.337" /><testcase classname="tests.test_subscription" name="test_subscription_of_one_tenant_does_not_touch_another" time="0.835" /><testcase classname="tests.test_subscription_payment" name="test_blocked_tenant_can_still_pay" time="0.384" /><testcase classname="tests.test_subscription_payment" name="test_payment_is_scoped_to_its_tenant" time="0.613" /><testcase classname="tests.test_tenant_settings" name="test_tenant_settings_get_and_patch" time="0.360" /><testcase classname="tests.test_tenant_settings" name="test_tenant_settings_patch_separate_marking_print" time="0.340" /><testcase classname="tests.test_tenant_settings" name="test_tenant_settings_patch_no_fields_returns_422" time="0.326" /><testcase classname="tests.test_tenant_settings" name="test_tenant_settings_forbidden_for_staff" time="1.323" /><testcase classname="tests.test_true_api_marking_check" name="test_credential_scope_and_only_cz_is_decrypted" time="0.400" /><testcase classname="tests.test_user_identity_wms443" name="test_profile_permissions_scope_and_immutable_identity" time="1.377" /><testcase classname="tests.test_user_identity_wms443" name="test_seller_named_staff_create_edit_and_other_seller_scope" time="2.092" /><testcase classname="tests.test_warehouse_map_api" name="test_map_totals_moves_sorting_disband_and_tenant_scope" time="0.863" /><testcase classname="tests.test_warehouse_structure_wave1" name="test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it" time="0.080" /><testcase classname="tests.test_warehouses" name="test_migration_does_not_promote_tenant_only_technical_warehouse" time="0.001" /><testcase classname="tests.test_wildberries_tokens_api" name="test_self_content_token_does_not_enable_marketplace_without_scope" time="1.116" /><testcase classname="tests.test_wms121_selection_reset" name="test_wms121_cross_seller_selection_is_rejected" time="0.066" /><testcase classname="tests.test_wms270_login_rate_limit" name="test_rate_limit_scope_is_per_ip_across_emails" time="1.547" /><testcase classname="tests.test_wms325_inbound_unload_mutations" name="test_inbound_box_damage_close_print_delete_and_tenant_boundary" time="0.797" /><testcase classname="tests.test_wms325_marking_template_mutations" name="test_template_http_default_peers_owner_and_deleted_identity" time="0.571" /><testcase classname="tests.test_wms325_marking_template_mutations" name="test_concurrent_default_changes_serialize_scope_without_stale_peer_audits[switch]" time="0.410" /><testcase classname="tests.test_wms325_marking_template_mutations" name="test_concurrent_default_changes_serialize_scope_without_stale_peer_audits[create_empty]" time="0.406" /><testcase classname="tests.test_wms325_marking_template_mutations" name="test_template_creation_api_uses_authenticated_actor_for_shared_scope" time="0.517" /><testcase classname="tests.test_wms325_print_lock_order" name="test_content_does_not_read_cross_tenant_order" time="0.051" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[True-True-False]" time="0.078" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[True-False-True]" time="0.073" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[True-True-True]" time="0.067" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[True-False-False]" time="0.064" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[False-True-False]" time="0.061" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[False-False-True]" time="0.068" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[False-True-True]" time="0.066" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_independent_switches_roundtrip_and_publish_scope[False-False-False]" time="0.062" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_ozon_order_scope_uses_served_independently_of_publication[True-True]" time="0.340" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_ozon_order_scope_uses_served_independently_of_publication[True-False]" time="0.091" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_ozon_order_scope_uses_served_independently_of_publication[False-True]" time="0.044" /><testcase classname="tests.test_wms351_marketplace_publication_switches" name="test_ozon_order_scope_uses_served_independently_of_publication[False-False]" time="0.037" /><testcase classname="tests.test_wms363_ozon_tsd" name="test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenant" time="0.912" /><testcase classname="tests.test_wms397_pick_scan_order" name="test_foreign_tenant_order_product_and_supply_are_not_pickable" time="1.032" /><testcase classname="tests.test_wms418_catalog_publication_filter" name="test_publication_filter_combines_flags_scope_search_category_and_pagination" time="0.791" /><testcase classname="tests.test_wms440_ff_intake" name="test_retry_payload_and_scope_validation" time="0.543" /><testcase classname="tests.test_wms441_sorting" name="test_failure_rollback_and_tenant_isolation" time="0.492" /><testcase classname="tests.test_wms445_fbs_seller_scope" name="test_tsd_worklists_hold_effective_seller_scope" time="0.772" /><testcase classname="tests.test_wms477_marking_verdicts_sync" name="test_markings_sync_endpoint_foreign_supply_is_404" time="1.071" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_authorized_ff_scans_keep_tenant_scope[reception]" time="0.332" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_authorized_ff_scans_keep_tenant_scope[mp_shipments]" time="0.327" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_authorized_ff_scans_keep_tenant_scope[packaging]" time="0.330" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_authorized_ff_scans_keep_tenant_scope[cells]" time="0.327" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_authorized_ff_scans_keep_tenant_scope[inventory]" time="0.324" /><testcase classname="tests.test_wms488_catalog_isolation" name="test_bulk_honest_sign_requires_products_permission_and_preserves_foreign_rows" time="0.123" /><testcase classname="tests.test_wms488_home_scope" name="test_old_foreign_tokens_auth_and_all_grants_stay_unchanged" time="0.261" /><testcase classname="tests.test_wms488_home_scope" name="test_jobs_require_proven_home_scope_but_not_seller_initiator[False]" time="0.721" /><testcase classname="tests.test_wms488_home_scope" name="test_jobs_require_proven_home_scope_but_not_seller_initiator[True]" time="0.740" /><testcase classname="tests.test_wms488_home_scope" name="test_similar_tenant_keeps_delegation[avpack]" time="0.085" /><testcase classname="tests.test_wms488_home_scope" name="test_similar_tenant_keeps_delegation[avpack-9uczh-other]" time="0.080" /><testcase classname="tests.test_wms488_home_scope" name="test_similar_tenant_keeps_delegation[other-tenant-name]" time="0.079" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_scan_filters_foreign_and_ambiguity[SKU]" time="0.211" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_scan_filters_foreign_and_ambiguity[WB]" time="0.215" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_scan_filters_foreign_and_ambiguity[OZN]" time="0.229" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_scan_filters_foreign_and_ambiguity[OZ]" time="0.216" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_cannot_add_foreign_document_line[inbound-intake]" time="0.183" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_cannot_add_foreign_document_line[outbound-shipment]" time="0.197" /><testcase classname="tests.test_wms488_home_scope" name="test_old_token_cannot_add_foreign_document_line[marketplace-unload-requests]" time="0.237" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/dimensions/history-None-b]" time="0.134" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/dimensions/history-None-foreign]" time="0.125" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/dimensions-body1-b]" time="0.127" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/dimensions-body1-foreign]" time="0.122" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/packaging-instructions-body2-b]" time="0.120" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/packaging-instructions-body2-foreign]" time="0.127" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/stock-directions-None-b]" time="0.131" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/stock-directions-None-foreign]" time="0.123" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-POST-/products/{pid}/stock-directions-body4-b]" time="0.295" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-POST-/products/{pid}/stock-directions-body4-foreign]" time="0.131" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/stock-directions/{did}-body5-b]" time="0.130" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/stock-directions/{did}-body5-foreign]" time="0.128" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-DELETE-/products/stock-directions/{did}-None-b]" time="0.126" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-DELETE-/products/stock-directions/{did}-None-foreign]" time="0.124" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/fbs-rule-None-b]" time="0.126" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-GET-/products/{pid}/fbs-rule-None-foreign]" time="0.125" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PUT-/products/{pid}/fbs-rule-body8-b]" time="0.122" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PUT-/products/{pid}/fbs-rule-body8-foreign]" time="0.124" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/fbs-stock-sync-body9-b]" time="0.124" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[ordinary-PATCH-/products/{pid}/fbs-stock-sync-body9-foreign]" time="0.126" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/dimensions/history-None-b]" time="0.143" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/dimensions/history-None-foreign]" time="0.133" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/dimensions-body1-b]" time="0.134" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/dimensions-body1-foreign]" time="0.230" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/packaging-instructions-body2-b]" time="0.177" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/packaging-instructions-body2-foreign]" time="0.165" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/stock-directions-None-b]" time="0.282" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/stock-directions-None-foreign]" time="0.198" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-POST-/products/{pid}/stock-directions-body4-b]" time="0.307" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-POST-/products/{pid}/stock-directions-body4-foreign]" time="0.319" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/stock-directions/{did}-body5-b]" time="1.904" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/stock-directions/{did}-body5-foreign]" time="0.340" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-DELETE-/products/stock-directions/{did}-None-b]" time="0.211" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-DELETE-/products/stock-directions/{did}-None-foreign]" time="0.251" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/fbs-rule-None-b]" time="0.198" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-GET-/products/{pid}/fbs-rule-None-foreign]" time="0.222" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PUT-/products/{pid}/fbs-rule-body8-b]" time="0.252" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PUT-/products/{pid}/fbs-rule-body8-foreign]" time="0.295" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/fbs-stock-sync-body9-b]" time="0.187" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_foreign_product_direct_requests_disclose_nothing_and_write_nothing[avpack-old-token-PATCH-/products/{pid}/fbs-stock-sync-body9-foreign]" time="0.195" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-rule-read-b]" time="0.294" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-rule-read-foreign]" time="0.176" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-rule-write-b]" time="0.164" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-rule-write-foreign]" time="0.276" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-reset-b]" time="0.147" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-reset-foreign]" time="0.150" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-sync-b]" time="0.206" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-sync-foreign]" time="0.166" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-balance-b]" time="0.169" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-balance-foreign]" time="0.170" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-honest-sign-b]" time="0.140" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[ordinary-honest-sign-foreign]" time="0.136" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-rule-read-b]" time="0.146" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-rule-read-foreign]" time="0.154" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-rule-write-b]" time="0.147" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-rule-write-foreign]" time="0.221" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-reset-b]" time="0.194" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-reset-foreign]" time="0.151" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-sync-b]" time="0.170" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-sync-foreign]" time="0.181" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-balance-b]" time="0.195" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-balance-foreign]" time="0.184" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-honest-sign-b]" time="0.158" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_mixed_bulk_requests_preserve_foreign_rows[avpack-old-token-honest-sign-foreign]" time="0.159" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[ordinary-/reports/inventory-b]" time="0.255" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[ordinary-/reports/inventory-foreign]" time="0.222" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[ordinary-/reports/inventory/export.csv-b]" time="0.224" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[ordinary-/reports/inventory/export.csv-foreign]" time="0.218" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[avpack-old-token-/reports/inventory-b]" time="0.229" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[avpack-old-token-/reports/inventory-foreign]" time="0.230" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[avpack-old-token-/reports/inventory/export.csv-b]" time="0.235" /><testcase classname="tests.test_wms488_product_api_matrix" name="test_seller_export_and_report_ignore_foreign_seller_override[avpack-old-token-/reports/inventory/export.csv-foreign]" time="0.240" /><testcase classname="tests.test_wms489_kiz_reprints" name="test_kiz_reprint_scopes_history_to_tenant_and_reception_permission" time="0.741" /></testsuite></testsuites>

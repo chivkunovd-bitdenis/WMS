@@ -1,0 +1,5 @@
+API18451, frontend5541 and load API18452 stopped by owned PIDs. All durable evidence saved before cleanup. pg_ctl fast and immediate shutdown timed out; dedicated postmaster61974 killed after exact command/port assertion. Disposable data directory removed; no unrelated PostgreSQL instance touched.
+2026-09-21 19:50:43.018 +04 [61974] LOG:  received fast shutdown request
+2026-09-21 19:52:06.880 +04 [61974] LOG:  received immediate shutdown request
+2026-09-21 19:52:11.882 +04 [61974] LOG:  issuing SIGKILL to recalcitrant children
+Post-cleanup lsof TCP55451 LISTEN exit=1; output=''. Child checkpointer61975 was still in kernel UEs wait after queued SIGKILL; it is not a serving database. No host-wide restart or unrelated cleanup performed.

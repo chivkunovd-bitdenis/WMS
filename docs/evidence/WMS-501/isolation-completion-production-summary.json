@@ -1,0 +1,1137 @@
+{
+  "check_count": 226,
+  "nonempty_relationships": 155,
+  "mismatched_relationships": 0,
+  "checks": [
+    {
+      "relationship": "billing_invoice_v2_idempotency.user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_invoices.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_invoices_v2.issued_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_invoices_v2.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.performer_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.reversal_of_id->billing_ledger_entries.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.seller_id->sellers.id",
+      "linked_rows": 5232,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.tariff_version_id->billing_tariff_versions.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.tariff_version_v2_id->billing_tariff_versions_v2.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_entries.warehouse_id->warehouses.id",
+      "linked_rows": 5232,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_lines.ledger_entry_id->billing_ledger_entries.id",
+      "linked_rows": 5232,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_lines.operation_fact_line_id->operation_fact_lines.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_lines.product_id->products.id",
+      "linked_rows": 5232,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_ledger_lines.tariff_version_v2_id->billing_tariff_versions_v2.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_profiles.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_run_issues.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_service_states.config_id->billing_tariff_matrix_configs.id",
+      "linked_rows": 70,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_versions.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_versions.warehouse_id->warehouses.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_versions_v2.employee_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_versions_v2.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "billing_tariff_versions_v2.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "discrepancy_acts.inbound_intake_request_id->inbound_intake_requests.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "discrepancy_acts.seller_id->sellers.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "document_event.actor_user_id->users.id",
+      "linked_rows": 16772,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "document_event.product_id->products.id",
+      "linked_rows": 13236,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_binding_stock_pools.binding_id->fbs_warehouse_bindings.id",
+      "linked_rows": 213,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_binding_stock_pools.product_id->products.id",
+      "linked_rows": 213,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_binding_stock_pools.updated_by->users.id",
+      "linked_rows": 27,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_markings.created_by_user_id->users.id",
+      "linked_rows": 145,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_markings.marking_code_id->marking_codes.id",
+      "linked_rows": 184,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_markings.order_id->fbs_orders.id",
+      "linked_rows": 184,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.fbs_order_id->fbs_orders.id",
+      "linked_rows": 2999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.fbs_supply_id->fbs_supplies.id",
+      "linked_rows": 2999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.inventory_movement_id->inventory_movements.id",
+      "linked_rows": 129,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.picked_by_user_id->users.id",
+      "linked_rows": 2987,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.product_id->products.id",
+      "linked_rows": 2999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.sorting_storage_location_id->storage_locations.id",
+      "linked_rows": 2999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_picks.source_storage_location_id->storage_locations.id",
+      "linked_rows": 2999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.fbs_supply_id->fbs_supplies.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.inventory_movement_id->inventory_movements.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.picked_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.sorting_storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.source_storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_picks.undone_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_reservations.product_id->products.id",
+      "linked_rows": 4,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_product_reservations.warehouse_id->warehouses.id",
+      "linked_rows": 4,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_reservations.fbs_order_id->fbs_orders.id",
+      "linked_rows": 44,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_reservations.product_id->products.id",
+      "linked_rows": 44,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_order_reservations.warehouse_id->warehouses.id",
+      "linked_rows": 44,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_orders.product_id->products.id",
+      "linked_rows": 22114,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_orders.seller_id->sellers.id",
+      "linked_rows": 22120,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_orders.supply_id->fbs_supplies.id",
+      "linked_rows": 3877,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_orders.warehouse_id->warehouses.id",
+      "linked_rows": 17659,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packaging_fulfillments.fbs_order_id->fbs_orders.id",
+      "linked_rows": 5564,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packaging_fulfillments.fulfilled_by_user_id->users.id",
+      "linked_rows": 5247,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packaging_fulfillments.inventory_movement_id->inventory_movements.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packaging_fulfillments.packaging_task_id->packaging_tasks.id",
+      "linked_rows": 5564,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packing_box_items.assigned_by_user_id->users.id",
+      "linked_rows": 1869,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packing_box_items.box_id->fbs_packing_boxes.id",
+      "linked_rows": 1870,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packing_box_items.fbs_order_id->fbs_orders.id",
+      "linked_rows": 1870,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packing_boxes.supply_id->fbs_supplies.id",
+      "linked_rows": 733,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_packing_boxes.warehouse_box_id->warehouse_boxes.id",
+      "linked_rows": 733,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_print_assets.applied_by_user_id->users.id",
+      "linked_rows": 5678,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_print_assets.fbs_order_id->fbs_orders.id",
+      "linked_rows": 5765,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_print_assets.fbs_supply_id->fbs_supplies.id",
+      "linked_rows": 448,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_print_assets.seller_id->sellers.id",
+      "linked_rows": 6973,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.fbs_order_id->fbs_orders.id",
+      "linked_rows": 6225,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.product_id->products.id",
+      "linked_rows": 6225,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.reversal_movement_id->inventory_movements.id",
+      "linked_rows": 680,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.shipment_movement_id->inventory_movements.id",
+      "linked_rows": 6093,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.source_warehouse_id->warehouses.id",
+      "linked_rows": 3557,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.storage_location_id->storage_locations.id",
+      "linked_rows": 6225,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.wb_operation_id->fbs_wb_operations.id",
+      "linked_rows": 3040,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_shipment_reversal_ledger.written_off_by_user_id->users.id",
+      "linked_rows": 3040,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.barcode_asset_id->fbs_print_assets.id",
+      "linked_rows": 447,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.boxes_without_distribution_by_user_id->users.id",
+      "linked_rows": 268,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.honest_sign_skipped_by_user_id->users.id",
+      "linked_rows": 4,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.operator_finished_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.packaging_task_id->packaging_tasks.id",
+      "linked_rows": 470,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.seller_id->sellers.id",
+      "linked_rows": 665,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_supplies.warehouse_id->warehouses.id",
+      "linked_rows": 665,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_warehouse_bindings.seller_id->sellers.id",
+      "linked_rows": 112,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_warehouse_bindings.wms_warehouse_id->warehouses.id",
+      "linked_rows": 112,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_wb_operations.created_by_user_id->users.id",
+      "linked_rows": 1211,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "fbs_wb_operations.seller_id->sellers.id",
+      "linked_rows": 1568,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_boxes.pallet_id->pallets.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_boxes.request_id->inbound_intake_requests.id",
+      "linked_rows": 386,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_boxes.storage_location_id->storage_locations.id",
+      "linked_rows": 323,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_place_lines.cargo_place_id->inbound_intake_cargo_places.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_place_lines.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_places.pallet_id->pallets.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_places.request_id->inbound_intake_requests.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_places.storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_requests.completed_by_user_id->users.id",
+      "linked_rows": 5,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_requests.created_by_seller_id->sellers.id",
+      "linked_rows": 51,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_requests.seller_id->sellers.id",
+      "linked_rows": 184,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_requests.warehouse_id->warehouses.id",
+      "linked_rows": 187,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_ozon_return_giveouts.request_id->inbound_intake_requests.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_ozon_return_items.giveout_record_id->inbound_ozon_return_giveouts.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_ozon_return_items.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_ozon_return_items.request_id->inbound_intake_requests.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_balances.product_id->products.id",
+      "linked_rows": 2068,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_balances.storage_location_id->storage_locations.id",
+      "linked_rows": 2068,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_count_created_containers.count_id->inventory_counts.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_count_found_scans.count_id->inventory_counts.id",
+      "linked_rows": 208,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_counts.created_by_user_id->users.id",
+      "linked_rows": 27,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_counts.posted_by_user_id->users.id",
+      "linked_rows": 12,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_counts.seller_id->sellers.id",
+      "linked_rows": 17,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_counts.warehouse_id->warehouses.id",
+      "linked_rows": 27,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.actor_user_id->users.id",
+      "linked_rows": 4339,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.marketplace_unload_request_id->marketplace_unload_requests.id",
+      "linked_rows": 14,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.product_id->products.id",
+      "linked_rows": 10162,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.seller_id->sellers.id",
+      "linked_rows": 10162,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.storage_location_id->storage_locations.id",
+      "linked_rows": 10162,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_movements.warehouse_id->warehouses.id",
+      "linked_rows": 10162,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_reservations.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_reservations.storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_reservations.warehouse_id->warehouses.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "kiz_reprints.created_by_user_id->users.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "kiz_reprints.seller_id->sellers.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_accounts.created_by_user_id->users.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_accounts.disconnected_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_accounts.seller_id->sellers.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_accounts.updated_by_user_id->users.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_requests.cancelled_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_requests.completed_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_requests.seller_id->sellers.id",
+      "linked_rows": 100,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_requests.warehouse_id->warehouses.id",
+      "linked_rows": 100,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_reservations.product_id->products.id",
+      "linked_rows": 74,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_reservations.warehouse_id->warehouses.id",
+      "linked_rows": 74,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.actor_user_id->users.id",
+      "linked_rows": 4283,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.code_id->marking_codes.id",
+      "linked_rows": 4326,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.packaging_task_id->packaging_tasks.id",
+      "linked_rows": 299,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.pool_id->marking_pools.id",
+      "linked_rows": 4113,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.print_batch_id->marking_print_batches.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_events.seller_id->sellers.id",
+      "linked_rows": 4326,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_import_files.import_batch_id->marking_code_imports.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_imports.seller_id->sellers.id",
+      "linked_rows": 66,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_code_imports.uploaded_by_user_id->users.id",
+      "linked_rows": 66,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.import_batch_id->marking_code_imports.id",
+      "linked_rows": 3999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.pool_id->marking_pools.id",
+      "linked_rows": 3999,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.printed_by_user_id->users.id",
+      "linked_rows": 51,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.product_id->products.id",
+      "linked_rows": 240,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.replaced_by_code_id->marking_codes.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.reserved_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_codes.seller_id->sellers.id",
+      "linked_rows": 4184,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_pool_products.pool_id->marking_pools.id",
+      "linked_rows": 73,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_pool_products.product_id->products.id",
+      "linked_rows": 73,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_pools.seller_id->sellers.id",
+      "linked_rows": 46,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_print_batches.created_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_print_batches.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_print_batches.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_reprint_requests.code_id->marking_codes.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_reprint_requests.requested_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marking_reprint_requests.resolved_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_fact_lines.operation_fact_id->operation_facts.id",
+      "linked_rows": 15447,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_fact_lines.product_id->products.id",
+      "linked_rows": 15445,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_facts.actor_user_id->users.id",
+      "linked_rows": 2210,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_facts.reversal_of_id->operation_facts.id",
+      "linked_rows": 34,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_facts.seller_id->sellers.id",
+      "linked_rows": 15441,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "operation_facts.warehouse_id->warehouses.id",
+      "linked_rows": 12612,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "outbound_shipment_requests.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "outbound_shipment_requests.warehouse_id->warehouses.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_events.created_by_user_id->users.id",
+      "linked_rows": 3086,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_events.product_id->products.id",
+      "linked_rows": 2686,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_events.reversed_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_events.storage_location_id->storage_locations.id",
+      "linked_rows": 2686,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_events.task_id->packaging_tasks.id",
+      "linked_rows": 3095,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_tasks.completed_by_user_id->users.id",
+      "linked_rows": 421,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_tasks.created_by_user_id->users.id",
+      "linked_rows": 5,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_tasks.inbound_intake_request_id->inbound_intake_requests.id",
+      "linked_rows": 2,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_tasks.marketplace_unload_request_id->marketplace_unload_requests.id",
+      "linked_rows": 18,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_tasks.warehouse_id->warehouses.id",
+      "linked_rows": 507,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "pallets.inbound_request_id->inbound_intake_requests.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "pallets.storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "pallets.warehouse_id->warehouses.id",
+      "linked_rows": 3,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "print_connections.paired_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "print_connections.warehouse_id->warehouses.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "print_templates.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "print_templates.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "print_templates.user_id->users.id",
+      "linked_rows": 2,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_dimension_events.author_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_dimension_events.product_id->products.id",
+      "linked_rows": 38529,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_marketplace_links.product_id->products.id",
+      "linked_rows": 137,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_marketplace_links.seller_id->sellers.id",
+      "linked_rows": 137,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_tz_imports.seller_id->sellers.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "product_tz_imports.warehouse_id->warehouses.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "products.dimensions_updated_by_user_id->users.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "products.seller_id->sellers.id",
+      "linked_rows": 27333,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "seller_marking_credentials.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "seller_wildberries_imported_cards.seller_id->sellers.id",
+      "linked_rows": 11669,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "seller_wildberries_imported_supplies.seller_id->sellers.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "stock_directions.product_id->products.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "stock_monthly_snapshots.product_id->products.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_locations.rack_id->warehouse_storage_racks.id",
+      "linked_rows": 33,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_locations.warehouse_id->warehouses.id",
+      "linked_rows": 59,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.dimension_event_id->product_dimension_events.id",
+      "linked_rows": 40,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.movement_end_id->inventory_movements.id",
+      "linked_rows": 10,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.movement_start_id->inventory_movements.id",
+      "linked_rows": 10,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.product_id->products.id",
+      "linked_rows": 85,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.seller_id->sellers.id",
+      "linked_rows": 85,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_measurements.warehouse_id->warehouses.id",
+      "linked_rows": 85,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_statements.seller_id->sellers.id",
+      "linked_rows": 26,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "storage_statements.warehouse_id->warehouses.id",
+      "linked_rows": 26,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "users.seller_id->sellers.id",
+      "linked_rows": 40,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_boxes.inbound_request_id->inbound_intake_requests.id",
+      "linked_rows": 1,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_boxes.pallet_id->pallets.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_boxes.storage_location_id->storage_locations.id",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_boxes.warehouse_id->warehouses.id",
+      "linked_rows": 813,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_map_events.actor_user_id->users.id",
+      "linked_rows": 15,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_map_events.warehouse_id->warehouses.id",
+      "linked_rows": 128,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "warehouse_storage_racks.warehouse_id->warehouses.id",
+      "linked_rows": 16,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_lines: inbound_intake_requests->products",
+      "linked_rows": 978,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_lines: inbound_intake_requests->storage_locations",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "outbound_shipment_lines: outbound_shipment_requests->products",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "outbound_shipment_lines: outbound_shipment_requests->storage_locations",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "marketplace_unload_lines: marketplace_unload_requests->products",
+      "linked_rows": 99,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_lines: packaging_tasks->products",
+      "linked_rows": 3202,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "packaging_task_lines: packaging_tasks->storage_locations",
+      "linked_rows": 3202,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_count_lines: inventory_counts->products",
+      "linked_rows": 1661,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inventory_count_lines: inventory_counts->storage_locations",
+      "linked_rows": 1661,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "discrepancy_act_lines: discrepancy_acts->products",
+      "linked_rows": 2,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_box_lines: inbound_intake_boxes->products",
+      "linked_rows": 679,
+      "tenant_mismatches": 0
+    },
+    {
+      "relationship": "inbound_intake_cargo_place_lines: inbound_intake_cargo_places->products",
+      "linked_rows": 0,
+      "tenant_mismatches": 0
+    }
+  ]
+}

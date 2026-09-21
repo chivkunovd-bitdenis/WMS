@@ -1,0 +1,26 @@
+BEGIN
+SET
+SET
+ unlinked | codes | pdf_bytes 
+----------+-------+-----------
+ f        |   240 |   2582022
+ t        |  3944 | 552991881
+(2 rows)
+
+ largest_linked_product_codes | largest_linked_product_pdf_bytes 
+------------------------------+----------------------------------
+                           64 |                           703271
+(1 row)
+
+ deadlocks | temp_files | temp_bytes | numbackends 
+-----------+------------+------------+-------------
+         7 |        206 | 1795956736 |          14
+(1 row)
+
+        state        | count | max_transaction_age_seconds 
+---------------------+-------+-----------------------------
+ idle                |    11 |                            
+ idle in transaction |     2 |                   15.677488
+(2 rows)
+
+ROLLBACK

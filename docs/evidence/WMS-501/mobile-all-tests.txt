@@ -1,0 +1,195 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+
+CrashReportStoreTest > app frame is selected outer first without arguments PASSED
+
+CrashReportStoreTest > extracts Dalvik failed resolution descriptor PASSED
+
+CrashReportStoreTest > extracts Android didnt find class diagnostic PASSED
+
+CrashReportStoreTest > rejects unlabelled dotted text even when it looks like a class name PASSED
+
+CrashReportStoreTest > init fallback survives an unavailable internal report file PASSED
+
+CrashReportStoreTest > malicious missing class message is unavailable and cannot leak PASSED
+
+CrashReportStoreTest > safe report never persists exception message or argument values PASSED
+
+MobileAuditReproTest > receivingQueueSilentlyDropsBeyondSixteenPending STANDARD_OUT
+    REPRO receiving: 30 accepted onScan calls, first API held; 17 POSTs, 13 dropped; 18 GETs incl initial
+
+MobileAuditReproTest > receivingQueueSilentlyDropsBeyondSixteenPending PASSED
+
+MobileAuditReproTest > delayedHttp401FromAInvalidatesNewSessionB STANDARD_OUT
+    REPRO real localhost HTTP: A request delayed401 after login B; B invalidated
+
+MobileAuditReproTest > delayedHttp401FromAInvalidatesNewSessionB PASSED
+
+MobileAuditReproTest > refreshFailureKeepsOldFactWithSuccessFlash STANDARD_OUT
+    REPRO receiving: POST returns qty2, GET fails; UI retains qty1 and success flash without readback error
+
+MobileAuditReproTest > refreshFailureKeepsOldFactWithSuccessFlash PASSED
+
+MobileAuditReproTest > lateExpiryNotificationInvalidatesNewlySelectedEmployee STANDARD_OUT
+    REPRO auth state: unscoped late expiry after A->B invalidates B
+
+MobileAuditReproTest > lateExpiryNotificationInvalidatesNewlySelectedEmployee PASSED
+
+MobileAuditReproTest > completeDoesNotWaitForInflightOrQueuedScans STANDARD_OUT
+    REPRO receiving: completion callback ran before either scan response returned
+
+MobileAuditReproTest > completeDoesNotWaitForInflightOrQueuedScans PASSED
+
+MobileAuditReproTest > managerDropsBurstWhenCollectorHasNotResumed STANDARD_OUT
+    REPRO manager: 20 synchronous submissions; 1 delivered, 19 absent
+
+MobileAuditReproTest > managerDropsBurstWhenCollectorHasNotResumed PASSED
+
+MobileAuditReproTest > wedgeSingleEightyMillisecondGapEmitsTruncatedBarcode STANDARD_OUT
+    REPRO wedge: 4630452635503 with one 80ms gap -> 0452635503
+
+MobileAuditReproTest > wedgeSingleEightyMillisecondGapEmitsTruncatedBarcode PASSED
+
+BaseUrlTest > release rejects http PASSED
+
+BaseUrlTest > normalize adds trailing slash PASSED
+
+BaseUrlTest > rejects credentials query fragment and invalid port PASSED
+
+BaseUrlTest > release accepts https and normalizes PASSED
+
+BaseUrlTest > empty and invalid schemes fail PASSED
+
+BaseUrlTest > debug allows loopback cleartext hosts only PASSED
+
+HealthBodyValidationTest > accepts only documented health contract PASSED
+
+NetworkFailureTest > classifies nested tls dns timeout and connection failures from chain PASSED
+
+NetworkFailureTest > classifies throwables without leaking messages PASSED
+
+NetworkFailureTest > causal cycle terminates without infinite loop PASSED
+
+NetworkFailureTest > classifies http statuses PASSED
+
+NetworkFailureTest > operator messages are concise Russian with safe codes PASSED
+
+NetworkFailureTest > connectivity hint refines only connectivity class failures PASSED
+
+AuthManagerUrlPersistenceTest > successful login persists normalized base url PASSED
+
+AuthManagerUrlPersistenceTest > failed login does not persist candidate base url PASSED
+
+AuthManagerUrlPersistenceTest > login maps 422 and 403 to typed failures PASSED
+
+AuthManagerUrlPersistenceTest > storage failure leaves session null and returns safe typed failure PASSED
+
+AuthManagerUrlPersistenceTest > login rethrows cancellation without mapping to network failure PASSED
+
+AuthStoreCryptoConfigTest > encrypted prefs use stable filenames and algorithms PASSED
+
+IsrgRootCertTest > embedded ISRG Root X1 matches official sha256 and subject PASSED
+
+ServerHealthCheckTest > health 200 with contract succeeds PASSED
+
+ServerHealthCheckTest > unreachable host with false hint refines to offline PASSED
+
+ServerHealthCheckTest > health succeeds even when connectivity hint is false PASSED
+
+ServerHealthCheckTest > health 503 maps to server error PASSED
+
+ServerHealthCheckTest > health 200 with wrong body maps to invalid response PASSED
+
+HardwareBroadcastsTest > ATOL scan source is hardware broadcast PASSED
+
+HardwareBroadcastsTest > empty barcode is ignored PASSED
+
+HardwareBroadcastsTest > unknown action is ignored PASSED
+
+HardwareBroadcastsTest > ATOL action with its extra returns barcode PASSED
+
+WedgeKeyAccumulatorTest > slow human typing is not a scan PASSED
+
+WedgeKeyAccumulatorTest > fast input ending with enter is emitted as scan PASSED
+
+WedgeKeyAccumulatorTest > human pause resets buffer so only tail is considered PASSED
+
+WedgeKeyAccumulatorTest > short input is not a scan PASSED
+
+HomeViewModelTest > testBothRequestsSuccess PASSED
+
+HomeViewModelTest > testOutboundErrorInboundSuccess PASSED
+
+HomeViewModelTest > testInboundErrorOutboundSuccess PASSED
+
+InboundListViewModelTest > testFiltersOnlySubmittedAndReceiving PASSED
+
+InboundListViewModelTest > testNetworkErrorHandling PASSED
+
+InboundReceivingViewModelTest > скан неизвестного штрихкода в открытый короб (422) - flash ошибки PASSED
+
+InboundReceivingViewModelTest > скан штрихкода короба - открывает короб, flash успеха, данные обновлены PASSED
+
+InboundReceivingViewModelTest > confirmComplete завершает приёмку, вызывает onDone при успехе PASSED
+
+InboundReceivingViewModelTest > load сетевая ошибка - loadError заполнен сообщением PASSED
+
+InboundReceivingViewModelTest > confirmCloseBox закрывает открытый короб, флеш успеха, openBoxId очищается PASSED
+
+InboundReceivingViewModelTest > load подтягивает заявку - состояние без ошибки, данные на месте PASSED
+
+InboundReceivingViewModelTest > setLooseMode включает режим без короба, очищает openBoxId PASSED
+
+OutboundAssemblyViewModelTest > упаковка грузится двухшагово - строки берутся из GET по id, а не из by-unload PASSED
+
+OutboundAssemblyViewModelTest > ship с расхождением план-факт - сервер отклоняет, открывается подтверждение расхождения PASSED
+
+OutboundAssemblyViewModelTest > ship после подтверждения расхождения уходит с acknowledgeDiscrepancy и завершает экран PASSED
+
+OutboundAssemblyViewModelTest > submitPack записывает количество и обновляет задачу упаковки PASSED
+
+OutboundAssemblyViewModelTest > load подтягивает заявку, отсутствие задачи упаковки (404) не ошибка PASSED
+
+OutboundAssemblyViewModelTest > markingIncomplete повторяет серверный гейт ЧЗ PASSED
+
+OutboundListViewModelTest > testFiltersOnlyConfirmedAndCollecting PASSED
+
+OutboundListViewModelTest > testNetworkErrorHandling PASSED
+
+SortingViewModelTest > confirmLoosePutaway строит merge на свежем серверном списке, не затирая параллельное размещение PASSED
+
+ScanFeedbackTest > Android 8 uses VibrationEffect API PASSED
+
+ScanFeedbackTest > Android 7 uses legacy vibration API PASSED
+
+BUILD SUCCESSFUL in 4s
+24 actionable tasks: 1 executed, 23 up-to-date

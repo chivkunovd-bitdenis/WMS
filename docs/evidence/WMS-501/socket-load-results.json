@@ -1,0 +1,372 @@
+{
+  "method": "Single uvicorn process, actual loopback HTTP sockets, real PostgreSQL, synthetic 27275 products across 13 tenants (largest24875), 130 docs, 200ms think time. Native macOS hardware; not a production capacity certification. Closed-loop workers reduce offered load under delay; each tier15s, not a soak test. Scans60%, resolver20%, page20%.",
+  "scenarios": [
+    {
+      "name": "single",
+      "operators": 1,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.06,
+      "requests_per_s": 4.25,
+      "all": {
+        "requests": 64,
+        "statuses": {
+          "200": 64
+        },
+        "p50_ms": 27.94,
+        "p95_ms": 50.51,
+        "p99_ms": 271.73,
+        "max_ms": 271.73
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 12,
+          "statuses": {
+            "200": 12
+          },
+          "p50_ms": 38.34,
+          "p95_ms": 50.51,
+          "p99_ms": 50.51,
+          "max_ms": 50.51
+        },
+        "scan_resolve": {
+          "requests": 13,
+          "statuses": {
+            "200": 13
+          },
+          "p50_ms": 22.81,
+          "p95_ms": 77.48,
+          "p99_ms": 77.48,
+          "max_ms": 77.48
+        },
+        "scan_write": {
+          "requests": 39,
+          "statuses": {
+            "200": 39
+          },
+          "p50_ms": 28.68,
+          "p95_ms": 176.49,
+          "p99_ms": 271.73,
+          "max_ms": 271.73
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "multi10",
+      "operators": 10,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.21,
+      "requests_per_s": 42.54,
+      "all": {
+        "requests": 647,
+        "statuses": {
+          "200": 647
+        },
+        "p50_ms": 29.39,
+        "p95_ms": 66.22,
+        "p99_ms": 98.69,
+        "max_ms": 117.47
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 128,
+          "statuses": {
+            "200": 128
+          },
+          "p50_ms": 26.68,
+          "p95_ms": 54.68,
+          "p99_ms": 91.96,
+          "max_ms": 97.04
+        },
+        "scan_resolve": {
+          "requests": 130,
+          "statuses": {
+            "200": 130
+          },
+          "p50_ms": 19.91,
+          "p95_ms": 59.17,
+          "p99_ms": 94.36,
+          "max_ms": 95.83
+        },
+        "scan_write": {
+          "requests": 389,
+          "statuses": {
+            "200": 389
+          },
+          "p50_ms": 32.47,
+          "p95_ms": 72.2,
+          "p99_ms": 114.01,
+          "max_ms": 117.47
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "multi25",
+      "operators": 25,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.28,
+      "requests_per_s": 91.15,
+      "all": {
+        "requests": 1393,
+        "statuses": {
+          "200": 1393
+        },
+        "p50_ms": 53.67,
+        "p95_ms": 177.3,
+        "p99_ms": 241.06,
+        "max_ms": 276.96
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 280,
+          "statuses": {
+            "200": 280
+          },
+          "p50_ms": 45.58,
+          "p95_ms": 126.3,
+          "p99_ms": 235.36,
+          "max_ms": 240.72
+        },
+        "scan_resolve": {
+          "requests": 279,
+          "statuses": {
+            "200": 279
+          },
+          "p50_ms": 39.41,
+          "p95_ms": 125.06,
+          "p99_ms": 150.35,
+          "max_ms": 206.05
+        },
+        "scan_write": {
+          "requests": 834,
+          "statuses": {
+            "200": 834
+          },
+          "p50_ms": 64.0,
+          "p95_ms": 200.32,
+          "p99_ms": 256.32,
+          "max_ms": 276.96
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "multi50",
+      "operators": 50,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.38,
+      "requests_per_s": 103.8,
+      "all": {
+        "requests": 1596,
+        "statuses": {
+          "200": 1596
+        },
+        "p50_ms": 248.3,
+        "p95_ms": 499.73,
+        "p99_ms": 717.69,
+        "max_ms": 1318.36
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 320,
+          "statuses": {
+            "200": 320
+          },
+          "p50_ms": 196.69,
+          "p95_ms": 455.5,
+          "p99_ms": 606.35,
+          "max_ms": 764.47
+        },
+        "scan_resolve": {
+          "requests": 318,
+          "statuses": {
+            "200": 318
+          },
+          "p50_ms": 187.78,
+          "p95_ms": 435.96,
+          "p99_ms": 679.42,
+          "max_ms": 874.01
+        },
+        "scan_write": {
+          "requests": 958,
+          "statuses": {
+            "200": 958
+          },
+          "p50_ms": 274.12,
+          "p95_ms": 522.06,
+          "p99_ms": 749.42,
+          "max_ms": 1318.36
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "multi100",
+      "operators": 100,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.88,
+      "requests_per_s": 97.91,
+      "all": {
+        "requests": 1555,
+        "statuses": {
+          "200": 1555
+        },
+        "p50_ms": 618.88,
+        "p95_ms": 1521.89,
+        "p99_ms": 2130.38,
+        "max_ms": 4174.81
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 312,
+          "statuses": {
+            "200": 312
+          },
+          "p50_ms": 565.12,
+          "p95_ms": 1379.31,
+          "p99_ms": 1926.82,
+          "max_ms": 2983.52
+        },
+        "scan_resolve": {
+          "requests": 308,
+          "statuses": {
+            "200": 308
+          },
+          "p50_ms": 552.06,
+          "p95_ms": 1535.16,
+          "p99_ms": 2263.57,
+          "max_ms": 4174.81
+        },
+        "scan_write": {
+          "requests": 935,
+          "statuses": {
+            "200": 935
+          },
+          "p50_ms": 629.6,
+          "p95_ms": 1537.0,
+          "p99_ms": 2118.94,
+          "max_ms": 3183.94
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "shared25",
+      "operators": 25,
+      "mode": "shared",
+      "requested_duration_s": 15,
+      "elapsed_s": 15.3,
+      "requests_per_s": 67.85,
+      "all": {
+        "requests": 1038,
+        "statuses": {
+          "200": 1038
+        },
+        "p50_ms": 152.68,
+        "p95_ms": 348.87,
+        "p99_ms": 643.85,
+        "max_ms": 748.17
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 208,
+          "statuses": {
+            "200": 208
+          },
+          "p50_ms": 57.04,
+          "p95_ms": 285.43,
+          "p99_ms": 439.98,
+          "max_ms": 476.25
+        },
+        "scan_resolve": {
+          "requests": 204,
+          "statuses": {
+            "200": 204
+          },
+          "p50_ms": 44.0,
+          "p95_ms": 210.67,
+          "p99_ms": 586.8,
+          "max_ms": 638.51
+        },
+        "scan_write": {
+          "requests": 626,
+          "statuses": {
+            "200": 626
+          },
+          "p50_ms": 196.91,
+          "p95_ms": 479.55,
+          "p99_ms": 667.39,
+          "max_ms": 748.17
+        }
+      },
+      "errors": []
+    },
+    {
+      "name": "multi25_catalog",
+      "operators": 25,
+      "mode": "multi",
+      "requested_duration_s": 15,
+      "elapsed_s": 16.46,
+      "requests_per_s": 58.58,
+      "all": {
+        "requests": 964,
+        "statuses": {
+          "200": 964
+        },
+        "p50_ms": 75.0,
+        "p95_ms": 988.45,
+        "p99_ms": 1091.64,
+        "max_ms": 1357.99
+      },
+      "by_kind": {
+        "catalog_page": {
+          "requests": 193,
+          "statuses": {
+            "200": 193
+          },
+          "p50_ms": 59.36,
+          "p95_ms": 974.07,
+          "p99_ms": 1046.85,
+          "max_ms": 1060.33
+        },
+        "full_catalog": {
+          "requests": 5,
+          "statuses": {
+            "200": 5
+          },
+          "p50_ms": 1255.4,
+          "p95_ms": 1357.99,
+          "p99_ms": 1357.99,
+          "max_ms": 1357.99
+        },
+        "scan_resolve": {
+          "requests": 191,
+          "statuses": {
+            "200": 191
+          },
+          "p50_ms": 52.6,
+          "p95_ms": 909.71,
+          "p99_ms": 1022.04,
+          "max_ms": 1032.88
+        },
+        "scan_write": {
+          "requests": 575,
+          "statuses": {
+            "200": 575
+          },
+          "p50_ms": 92.45,
+          "p95_ms": 993.32,
+          "p99_ms": 1091.63,
+          "max_ms": 1134.61
+        }
+      },
+      "errors": []
+    }
+  ]
+}

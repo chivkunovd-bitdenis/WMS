@@ -1,0 +1,28 @@
+{
+  "is_error": false,
+  "duration_ms": 469462,
+  "num_turns": 69,
+  "modelUsage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 919,
+      "outputTokens": 18,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001009,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000
+    },
+    "claude-opus-4-7": {
+      "inputTokens": 41,
+      "outputTokens": 29085,
+      "cacheReadInputTokens": 4056442,
+      "cacheCreationInputTokens": 180135,
+      "webSearchRequests": 0,
+      "costUSD": 3.8813947500000006,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "session_id": "8cec396b-50ad-4cf2-b315-775cce6544ad"
+}

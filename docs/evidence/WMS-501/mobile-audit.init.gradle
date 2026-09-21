@@ -1,0 +1,9 @@
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.findProject(':app')
+    app.android.sourceSets.getByName('test').java.srcDir(
+        '/Users/deniscivkunov/Projects/WMS/.worktrees/wms501-performance-isolation-audit/docs/evidence/WMS-501/mobile-repro-sources'
+    )
+    app.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+        testLogging { events 'passed', 'failed'; showStandardStreams = true }
+    }
+}

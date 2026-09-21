@@ -1,0 +1,5 @@
+name|setting|reset_val|source
+idle_in_transaction_session_timeout|0|0|default
+lock_timeout|0|0|default
+statement_timeout|0|0|default
+(3 rows)

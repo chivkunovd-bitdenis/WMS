@@ -1,0 +1,245 @@
+{
+  "cases": [
+    {
+      "case": "sibling: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/e63f99e0-3c95-45ac-a342-bbae8d3e299c/actual",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/e63f99e0-3c95-45ac-a342-bbae8d3e299c/defective",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/e63f99e0-3c95-45ac-a342-bbae8d3e299c/expected",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document box",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/949c91dc-8eb8-4904-8e50-f8bd86dbf0a2/damaged",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "sibling: other-document box label",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/949c91dc-8eb8-4904-8e50-f8bd86dbf0a2/mark-label-printed",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "sibling: other-document cargo label",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/cargo-places/cfba5d4d-3728-4f79-996d-88e3959bcac5/mark-label-printed",
+      "status": 404,
+      "detail": "cargo_place_not_found"
+    },
+    {
+      "case": "sibling: other-document box scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/949c91dc-8eb8-4904-8e50-f8bd86dbf0a2/scan",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "sibling: other-document cargo scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/cargo-places/cfba5d4d-3728-4f79-996d-88e3959bcac5/scan",
+      "status": 404,
+      "detail": "cargo_place_not_found"
+    },
+    {
+      "case": "sibling: other-document outbound line",
+      "method": "DELETE",
+      "path": "/operations/outbound-shipment-requests/22fb0424-2849-4506-96c8-94f50f6e0b31/lines/5377a8bb-fe43-4c23-a2ad-4e1066f75185",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document outbound location",
+      "method": "PATCH",
+      "path": "/operations/outbound-shipment-requests/22fb0424-2849-4506-96c8-94f50f6e0b31/lines/5377a8bb-fe43-4c23-a2ad-4e1066f75185",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document pack line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/58c864c8-bfb0-4d60-a063-586457ddab43/lines/e6c0d8a4-b84b-4239-8a9e-d73e96e6d155/pack",
+      "status": 422,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: mixed count lines",
+      "method": "PUT",
+      "path": "/operations/inventory-counts/66dd9f8f-5b05-4a47-9813-61bcc1ed7249/lines",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document unload line",
+      "method": "DELETE",
+      "path": "/operations/marketplace-unload-requests/3d5004f6-a474-43b0-8a95-45204228d5d1/lines/adf4e6b9-7744-4ccf-99d8-4f94d6fe9e73",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "sibling: other-document unload box",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/3d5004f6-a474-43b0-8a95-45204228d5d1/boxes/2eab59b2-46ec-4873-8e72-cf37ed9bb0a7/close",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/1afc29d0-398e-4395-914f-91ea8fa3e7b2/actual",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/1afc29d0-398e-4395-914f-91ea8fa3e7b2/defective",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document line",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/lines/1afc29d0-398e-4395-914f-91ea8fa3e7b2/expected",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document box",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/47e77e98-86f2-4088-bcf4-fa76dbc97b24/damaged",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign: other-document box label",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/47e77e98-86f2-4088-bcf4-fa76dbc97b24/mark-label-printed",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign: other-document cargo label",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/cargo-places/ea6b5c47-fa11-4d64-a8e8-19cdf0595cd9/mark-label-printed",
+      "status": 404,
+      "detail": "cargo_place_not_found"
+    },
+    {
+      "case": "foreign: other-document box scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/boxes/47e77e98-86f2-4088-bcf4-fa76dbc97b24/scan",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign: other-document cargo scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/73323e39-49b5-4ee0-a4c1-e9400e7157c5/cargo-places/ea6b5c47-fa11-4d64-a8e8-19cdf0595cd9/scan",
+      "status": 404,
+      "detail": "cargo_place_not_found"
+    },
+    {
+      "case": "foreign: other-document outbound line",
+      "method": "DELETE",
+      "path": "/operations/outbound-shipment-requests/22fb0424-2849-4506-96c8-94f50f6e0b31/lines/05ce7091-3c86-4e97-8216-aeb068168209",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document outbound location",
+      "method": "PATCH",
+      "path": "/operations/outbound-shipment-requests/22fb0424-2849-4506-96c8-94f50f6e0b31/lines/05ce7091-3c86-4e97-8216-aeb068168209",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document pack line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/58c864c8-bfb0-4d60-a063-586457ddab43/lines/498f9f3b-7dd8-4c03-9e61-34fa4203fd83/pack",
+      "status": 422,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: mixed count lines",
+      "method": "PUT",
+      "path": "/operations/inventory-counts/66dd9f8f-5b05-4a47-9813-61bcc1ed7249/lines",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document unload line",
+      "method": "DELETE",
+      "path": "/operations/marketplace-unload-requests/3d5004f6-a474-43b0-8a95-45204228d5d1/lines/23e4ecfd-80dc-4ea1-9cdf-8938d36c8044",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign: other-document unload box",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/3d5004f6-a474-43b0-8a95-45204228d5d1/boxes/dfe8fa32-3e6f-41f1-97bf-6b17fe03da50/close",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign stock transfer reference",
+      "method": "POST",
+      "path": "/operations/stock-transfer",
+      "status": 404,
+      "detail": "Not Found"
+    },
+    {
+      "case": "foreign stock transfer reference",
+      "method": "POST",
+      "path": "/operations/stock-transfer",
+      "status": 404,
+      "detail": "Not Found"
+    },
+    {
+      "case": "foreign stock transfer reference",
+      "method": "POST",
+      "path": "/operations/stock-transfer",
+      "status": 404,
+      "detail": "Not Found"
+    },
+    {
+      "case": "foreign inventory create object",
+      "method": "POST",
+      "path": "/operations/inventory-counts",
+      "status": 404,
+      "detail": "object_not_found"
+    },
+    {
+      "case": "foreign inventory create warehouse",
+      "method": "POST",
+      "path": "/operations/inventory-counts",
+      "status": 404,
+      "detail": "warehouse_not_found"
+    },
+    {
+      "case": "mixed unload product batch",
+      "method": "PUT",
+      "path": "/operations/marketplace-unload-requests/3d5004f6-a474-43b0-8a95-45204228d5d1/lines",
+      "status": 404,
+      "detail": "product_not_found"
+    }
+  ],
+  "changed_tables": [],
+  "unacceptable_responses": 0,
+  "schema_validation_only": 0
+}

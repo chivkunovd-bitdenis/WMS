@@ -1,0 +1,11 @@
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '5s';
+SET LOCAL lock_timeout = '1s';
+SELECT 'settings' AS section, name, setting, unit FROM pg_settings WHERE name IN ('max_connections','shared_buffers','work_mem','effective_cache_size','statement_timeout','lock_timeout','idle_in_transaction_session_timeout');
+SELECT 'database' AS section, pg_size_pretty(pg_database_size(current_database())) AS size, numbackends,xact_commit,xact_rollback,blks_read,blks_hit,temp_files,temp_bytes,deadlocks,stats_reset FROM pg_stat_database WHERE datname=current_database();
+SELECT 'connections' AS section, COALESCE(state,'background') AS state, wait_event_type,count(*) FROM pg_stat_activity WHERE datname=current_database() GROUP BY state,wait_event_type ORDER BY state;
+SELECT 'counts' AS section,(SELECT count(*) FROM tenants) AS tenants,(SELECT count(*) FROM users) AS users,(SELECT count(*) FROM sellers) AS sellers,(SELECT count(*) FROM products) AS products;
+SELECT 'largest_tables' AS section,relname,n_live_tup,n_dead_tup,seq_scan,idx_scan,pg_size_pretty(pg_total_relation_size(relid)) AS size,last_autoanalyze FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 20;
+SELECT 'extensions' AS section,extname FROM pg_extension;
+SELECT 'migration' AS section,version_num FROM alembic_version;
+ROLLBACK;

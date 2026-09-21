@@ -1,0 +1,67 @@
+BEGIN
+SET
+SET
+ section  |                name                 | setting | unit 
+----------+-------------------------------------+---------+------
+ settings | effective_cache_size                | 524288  | 8kB
+ settings | idle_in_transaction_session_timeout | 0       | ms
+ settings | lock_timeout                        | 1000    | ms
+ settings | max_connections                     | 100     | 
+ settings | shared_buffers                      | 16384   | 8kB
+ settings | statement_timeout                   | 5000    | ms
+ settings | work_mem                            | 4096    | kB
+(7 rows)
+
+ section  |  size  | numbackends | xact_commit | xact_rollback | blks_read |  blks_hit  | temp_files | temp_bytes | deadlocks | stats_reset 
+----------+--------+-------------+-------------+---------------+-----------+------------+------------+------------+-----------+-------------
+ database | 651 MB |          14 |    22589023 |        876644 |   4107750 | 1401924451 |        206 | 1795956736 |         7 | 
+(1 row)
+
+   section   |        state        | wait_event_type | count 
+-------------+---------------------+-----------------+-------
+ connections | active              |                 |     1
+ connections | idle                | Client          |    11
+ connections | idle in transaction | Client          |     2
+(3 rows)
+
+ section | tenants | users | sellers | products 
+---------+---------+-------+---------+----------
+ counts  |      13 |    55 |      38 |    27333
+(1 row)
+
+    section     |              relname              | n_live_tup | n_dead_tup | seq_scan | idx_scan |  size   |       last_autoanalyze        
+----------------+-----------------------------------+------------+------------+----------+----------+---------+-------------------------------
+ largest_tables | marking_codes                     |       4184 |        339 |      516 |    57378 | 426 MB  | 2026-09-19 10:36:24.832237+00
+ largest_tables | seller_wildberries_imported_cards |      11669 |       1371 |     1950 |  6818187 | 58 MB   | 2026-09-21 15:24:08.979678+00
+ largest_tables | products                          |      27333 |          8 |    12147 | 41123681 | 33 MB   | 2026-09-21 15:25:09.482336+00
+ largest_tables | fbs_orders                        |      22120 |       2292 |     1428 | 34132551 | 26 MB   | 2026-09-21 12:32:05.357783+00
+ largest_tables | product_dimension_events          |      38529 |        565 |      127 | 18349971 | 16 MB   | 2026-09-09 04:26:23.678683+00
+ largest_tables | operation_facts                   |      15441 |          0 |      493 |  2043323 | 16 MB   | 2026-09-17 09:58:49.66573+00
+ largest_tables | document_event                    |      17277 |          3 |      261 |    10956 | 9616 kB | 2026-09-21 11:24:03.942889+00
+ largest_tables | operation_fact_lines              |      15447 |          0 |      255 |      280 | 5256 kB | 2026-09-18 09:41:47.760922+00
+ largest_tables | inventory_movements               |      10162 |          4 |      594 |   527956 | 4528 kB | 2026-09-20 14:22:03.404953+00
+ largest_tables | fbs_print_assets                  |       6973 |        591 |    10260 |   490994 | 4152 kB | 2026-09-21 05:59:55.170526+00
+ largest_tables | fbs_shipment_reversal_ledger      |       6225 |        781 |    10792 |  2029719 | 3160 kB | 2026-09-21 12:53:05.219996+00
+ largest_tables | fbs_packaging_fulfillments        |       5564 |          0 |     2401 |    67726 | 3144 kB | 2026-09-21 12:41:04.944326+00
+ largest_tables | fbs_wb_operations                 |       1568 |        269 |      307 |  1467455 | 2704 kB | 2026-09-21 05:51:54.893545+00
+ largest_tables | billing_ledger_entries            |       5232 |          0 |      201 |  3175761 | 2688 kB | 2026-09-21 07:45:57.648162+00
+ largest_tables | billing_ledger_lines              |       5232 |          0 |      416 |        0 | 2480 kB | 2026-09-21 07:45:57.684858+00
+ largest_tables | fbs_order_picks                   |       2999 |          7 |    13077 |   223239 | 2040 kB | 2026-09-04 14:26:21.376232+00
+ largest_tables | zz_bak20260831_orders             |       4277 |          0 |       60 |          | 1736 kB | 2026-08-31 07:59:45.18082+00
+ largest_tables | marking_code_events               |       4326 |          2 |       99 |     2386 | 1672 kB | 2026-09-18 10:04:48.056749+00
+ largest_tables | fbs_stock_sync_items              |        594 |         44 |     1511 |  1092093 | 1624 kB | 2026-09-21 14:26:08.174902+00
+ largest_tables | fbs_order_pick_events             |       3033 |          0 |       69 |      317 | 1504 kB | 2026-09-02 05:05:30.934525+00
+(20 rows)
+
+  section   |  extname   
+------------+------------
+ extensions | plpgsql
+ extensions | btree_gist
+(2 rows)
+
+  section  |  version_num  
+-----------+---------------
+ migration | 20260921_0490
+(1 row)
+
+ROLLBACK

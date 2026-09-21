@@ -1,0 +1,14 @@
+{
+  "local_backend": {
+    "python_files": 284,
+    "sha256": "0d876f9691dde92c6db04ac80bf17e9e74fb979d9084d382f016616df240c521"
+  },
+  "wms_prod-api-1": {
+    "python_files": 284,
+    "sha256": "0d876f9691dde92c6db04ac80bf17e9e74fb979d9084d382f016616df240c521"
+  },
+  "wms_prod-celery_worker-1": {
+    "python_files": 284,
+    "sha256": "0d876f9691dde92c6db04ac80bf17e9e74fb979d9084d382f016616df240c521"
+  }
+}

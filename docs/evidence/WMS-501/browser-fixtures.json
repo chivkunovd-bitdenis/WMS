@@ -1,0 +1,33 @@
+{
+  "tenant_id": "43a5c692-f159-484f-8e64-67189e381ece",
+  "user_id": "23499cf4-0353-4398-9d30-97e1278a1370",
+  "seller_id": "6f6b9b34-00a6-4e65-8202-23fee88be33c",
+  "warehouse_id": "dcca77ff-6899-4dd0-8d02-ad80da16efb4",
+  "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+  "barcode": "50100001",
+  "location_id": "4713f627-ba61-4646-9ba4-761bd465ed1c",
+  "location_barcode": "50199901",
+  "login_email": "wms501-browser@example.com",
+  "inbounds": {
+    "rapid": {
+      "id": "8217803c-c3ab-41d6-b051-fcdf1249e4e5",
+      "line_id": "6a6872ce-1c17-4209-bce5-8762b560c079"
+    },
+    "close_queue": {
+      "id": "2b258e0f-b125-4cd6-b465-2fad8b84428d",
+      "line_id": "01d4adfd-6b6b-44cf-98bb-eb0b29945320"
+    },
+    "lost_response": {
+      "id": "d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c",
+      "line_id": "715fb27f-6b80-4d86-bc61-499645ba3226"
+    },
+    "sorting": {
+      "id": "12097dad-d44d-4a0e-89ab-6f5d4485fabc",
+      "line_id": "9bce9fbd-0368-4047-a039-cf81dfa72b24"
+    }
+  },
+  "outbound": {
+    "id": "adf0cc5d-c881-4a6c-ad56-bff9fa5986b0",
+    "line_id": "1a7ec976-3328-4fca-a8a3-613c2bbd5725"
+  }
+}

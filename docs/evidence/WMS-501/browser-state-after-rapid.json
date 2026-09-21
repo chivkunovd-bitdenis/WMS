@@ -1,0 +1,51 @@
+{
+  "rapid": {
+    "status": "receiving",
+    "lines": [
+      {
+        "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+        "actual_qty": 6,
+        "expected_qty": 20
+      }
+    ]
+  },
+  "close_queue": {
+    "status": "receiving",
+    "lines": [
+      {
+        "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+        "actual_qty": null,
+        "expected_qty": 20
+      }
+    ]
+  },
+  "lost_response": {
+    "status": "receiving",
+    "lines": [
+      {
+        "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+        "actual_qty": null,
+        "expected_qty": 20
+      }
+    ]
+  },
+  "sorting": {
+    "status": "sorting",
+    "lines": [
+      {
+        "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+        "actual_qty": 20,
+        "expected_qty": 20
+      }
+    ]
+  },
+  "outbound": {
+    "status": "draft",
+    "lines": [
+      {
+        "product_id": "253666f0-b7ab-4851-bffc-9259467ec4b0",
+        "quantity": 5
+      }
+    ]
+  }
+}

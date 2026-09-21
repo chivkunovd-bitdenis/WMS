@@ -1,0 +1,55 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:3:8 'class EncryptedSharedPreferences : Any, SharedPreferences' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:4:8 'class MasterKey : Any' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:230:22 'class MasterKey : Any' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:230:32 'enum class KeyScheme : Enum<MasterKey.KeyScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:230:54 'class MasterKey : Any' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:230:64 'enum class KeyScheme : Enum<MasterKey.KeyScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:232:13 'class EncryptedSharedPreferences : Any, SharedPreferences' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:232:40 'enum class PrefKeyEncryptionScheme : Enum<EncryptedSharedPreferences.PrefKeyEncryptionScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:233:13 'class EncryptedSharedPreferences : Any, SharedPreferences' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:233:40 'enum class PrefKeyEncryptionScheme : Enum<EncryptedSharedPreferences.PrefKeyEncryptionScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:236:13 'class EncryptedSharedPreferences : Any, SharedPreferences' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:236:40 'enum class PrefValueEncryptionScheme : Enum<EncryptedSharedPreferences.PrefValueEncryptionScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:237:13 'class EncryptedSharedPreferences : Any, SharedPreferences' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt:237:40 'enum class PrefValueEncryptionScheme : Enum<EncryptedSharedPreferences.PrefValueEncryptionScheme!>' is deprecated. Deprecated in Java.
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/scanner/WedgeKeyAccumulatorTest.kt:20:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/scanner/WedgeKeyAccumulatorTest.kt:36:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/scanner/WedgeKeyAccumulatorTest.kt:55:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/scanner/WedgeKeyAccumulatorTest.kt:71:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///Users/deniscivkunov/Projects/WMS/mobile/android/app/src/test/java/ru/wms/tsd/core/scanner/WedgeKeyAccumulatorTest.kt:89:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+> Task :app:testDebugUnitTest
+
+BUILD SUCCESSFUL in 27s
+24 actionable tasks: 18 executed, 3 from cache, 3 up-to-date

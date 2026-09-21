@@ -1,0 +1,475 @@
+{
+  "cases": [
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/outbound-shipment-requests/d7a1137b-2f1d-4bc7-b286-70657b068d01",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/inventory-counts/3042bf81-b404-41ec-9659-7ba01a17bfed",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign root read",
+      "method": "GET",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/begin-receiving",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/boxes",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/cargo-places",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/complete-receiving",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/reopen-receiving",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/verify",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/submit",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/post",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/distribution-complete",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving command",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/distribution-reopen",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/receiving/scan",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving line",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/receiving/lines",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving distribution scan",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/distribution-scan",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving planned edit",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving line edit",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/lines/62b6fc84-06cd-457c-99df-45a26727b4e4/actual",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign receiving line edit",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/lines/62b6fc84-06cd-457c-99df-45a26727b4e4/defective",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign receiving line edit",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/lines/62b6fc84-06cd-457c-99df-45a26727b4e4/expected",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign box",
+      "method": "PATCH",
+      "path": "/operations/inbound-intake-requests/30f6fe23-d5e6-4240-bfee-bfa068977a2c/boxes/316c7103-6b7b-4cde-a1eb-2d60b51f1444/damaged",
+      "status": 404,
+      "detail": "box_not_found"
+    },
+    {
+      "case": "foreign inventory line batch",
+      "method": "PUT",
+      "path": "/operations/inventory-counts/3042bf81-b404-41ec-9659-7ba01a17bfed/lines",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign inventory post",
+      "method": "POST",
+      "path": "/operations/inventory-counts/3042bf81-b404-41ec-9659-7ba01a17bfed/post",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign inventory cancel",
+      "method": "DELETE",
+      "path": "/operations/inventory-counts/3042bf81-b404-41ec-9659-7ba01a17bfed",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign outbound command",
+      "method": "POST",
+      "path": "/operations/outbound-shipment-requests/d7a1137b-2f1d-4bc7-b286-70657b068d01/submit",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign outbound command",
+      "method": "POST",
+      "path": "/operations/outbound-shipment-requests/d7a1137b-2f1d-4bc7-b286-70657b068d01/post",
+      "status": 404,
+      "detail": "request_not_found"
+    },
+    {
+      "case": "foreign outbound delete line",
+      "method": "DELETE",
+      "path": "/operations/outbound-shipment-requests/d7a1137b-2f1d-4bc7-b286-70657b068d01/lines/4201ba3f-1eda-43b0-9083-0ac85449c21e",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign outbound line location",
+      "method": "PATCH",
+      "path": "/operations/outbound-shipment-requests/d7a1137b-2f1d-4bc7-b286-70657b068d01/lines/4201ba3f-1eda-43b0-9083-0ac85449c21e",
+      "status": 404,
+      "detail": "line_not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/plan",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/unplan",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/cancel",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/confirm",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/submit",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload command",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/ship",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload batch",
+      "method": "PUT",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/lines",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload box",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/boxes/b0aa1998-3f19-4d0c-aedb-fd217d6de6de/close",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign unload delete line",
+      "method": "DELETE",
+      "path": "/operations/marketplace-unload-requests/575926fe-ac9b-4d2e-aae4-803b61de7f09/lines/35ce14f8-a0ca-4340-a384-9738c82cd853",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign pack scan",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/scan",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign pack command",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/cancel",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign pack command",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/undo-last",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign pack command",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/complete",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign packaging line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/lines/1f6d0821-580b-4201-b06b-470d7c31f023/confirm-packed",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign packaging line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/lines/1f6d0821-580b-4201-b06b-470d7c31f023/mark-prepacked",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign packaging line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/lines/1f6d0821-580b-4201-b06b-470d7c31f023/pack",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign packaging line",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/62b6de38-baec-4997-bd12-95b02ef82533/lines/1f6d0821-580b-4201-b06b-470d7c31f023/product-label-printed",
+      "status": 404,
+      "detail": "not_found"
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/start-work",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/honest-sign-skip",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/delivery-preflight",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/deliver",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/sync-tracking",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS command",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/markings/sync",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS pick",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/pick/scan",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS undo",
+      "method": "POST",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/pick/266057f1-aa68-43f1-9569-c2a8ed684a26/undo",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS date",
+      "method": "PATCH",
+      "path": "/operations/fbs-supplies/b2fc676d-bb7b-4f9a-9512-adeba18d27e9/planned-shipment-date",
+      "status": 404,
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign FBS order markings",
+      "method": "GET",
+      "path": "/operations/fbs-orders/266057f1-aa68-43f1-9569-c2a8ed684a26/markings",
+      "status": 404,
+      "detail": {
+        "code": "order_not_found",
+        "message": "Заказ не найден.",
+        "context": {},
+        "retryable": false
+      }
+    },
+    {
+      "case": "foreign warehouse edit",
+      "method": "PATCH",
+      "path": "/warehouses/bc49400b-2eb5-49f9-a1ed-eaf0dab3cb3f",
+      "status": 404,
+      "detail": "warehouse_not_found"
+    }
+  ],
+  "changed_tables": [],
+  "unacceptable_responses": 0,
+  "schema_validation_only": 0
+}

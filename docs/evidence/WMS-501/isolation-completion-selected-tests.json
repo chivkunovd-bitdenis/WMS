@@ -1,0 +1,1577 @@
+[
+  {
+    "nodeid": "backend/tests/test_address_storage_cross_system.py::test_tenant_without_address_storage_never_needs_or_sees_a_cell",
+    "line": 15,
+    "name": "test_tenant_without_address_storage_never_needs_or_sees_a_cell",
+    "source_literals": [
+      "/operations/inbound-intake-requests",
+      "/operations/outbound-shipment-requests",
+      "/auth/register",
+      "/warehouses",
+      "/products",
+      "/tenant/settings",
+      "/operations/inventory-balances",
+      "/operations/inventory-balances/summary",
+      "/operations/inventory-balances/locations-by-product",
+      "/operations/packaging-tasks",
+      "/operations/inventory-movements",
+      "/operations/stock-transfers",
+      "/warehouses/",
+      "/locations",
+      "/warehouses/",
+      "/locations",
+      "/warehouses/",
+      "/locations",
+      "/warehouses/",
+      "/sorting-location",
+      "/",
+      "/lines",
+      "/",
+      "/submit",
+      "/",
+      "/verify",
+      "/",
+      "/post",
+      "/",
+      "/movements",
+      "/",
+      "/lines",
+      "/",
+      "/submit",
+      "/",
+      "/post",
+      "/",
+      "/movements"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_auth_email_links.py::test_admin_resends_invite_only_inside_own_tenant",
+    "line": 261,
+    "name": "test_admin_resends_invite_only_inside_own_tenant",
+    "source_literals": [
+      "/auth/invites/resend",
+      "/auth/invites/resend"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_configuration_api.py::test_billing_configuration_api_validates_profiles_tariffs_and_tenant_boundary",
+    "line": 46,
+    "name": "test_billing_configuration_api_validates_profiles_tariffs_and_tenant_boundary",
+    "source_literals": [
+      "/sellers",
+      "/billing/profiles/ff",
+      "/billing/profiles/ff",
+      "/billing/profiles/ff",
+      "/billing/profiles/ff",
+      "/billing/tariffs",
+      "/billing/tariffs",
+      "/billing/tariffs",
+      "/billing/tariffs",
+      "/billing/profiles/sellers/",
+      "/billing/tariffs"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_configuration_api.py::test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic",
+    "line": 145,
+    "name": "test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic",
+    "source_literals": [
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_configuration_api.py::test_tariff_matrix_api_persists_product_and_employee_rates_without_cross_tenant_leak",
+    "line": 284,
+    "name": "test_tariff_matrix_api_persists_product_and_employee_rates_without_cross_tenant_leak",
+    "source_literals": [
+      "/sellers",
+      "/products",
+      "/auth/staff-accounts",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix",
+      "/sellers",
+      "/products",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_financial_core_migration.py::test_billing_invoice_number_is_unique_inside_tenant_only",
+    "line": 96,
+    "name": "test_billing_invoice_number_is_unique_inside_tenant_only",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_billing_invoice_api.py::test_invoice_numbers_are_tenant_scoped_for_two_tenants",
+    "line": 227,
+    "name": "test_invoice_numbers_are_tenant_scoped_for_two_tenants",
+    "source_literals": [
+      "/billing/invoices/",
+      "/2026-07/form",
+      "/billing/invoices/",
+      "/2026-07/form"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_models.py::test_billing_unique_indexes_separate_global_and_warehouse_tariff_scopes",
+    "line": 24,
+    "name": "test_billing_unique_indexes_separate_global_and_warehouse_tariff_scopes",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_billing_piece_tariff.py::test_completed_multiline_intake_prices_pieces_once_and_keeps_tenant_scope",
+    "line": 21,
+    "name": "test_completed_multiline_intake_prices_pieces_once_and_keeps_tenant_scope",
+    "source_literals": [
+      "/auth/register",
+      "/auth/me",
+      "/billing/tariffs",
+      "/billing/tariff-matrix",
+      "/billing/tariff-matrix"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_seller_report_api.py::test_seller_report_summary_and_details_are_tenant_scoped",
+    "line": 247,
+    "name": "test_seller_report_summary_and_details_are_tenant_scoped",
+    "source_literals": [
+      "/billing/seller-report/summary?",
+      "/billing/seller-report/sellers/",
+      "/details?",
+      "/billing/seller-report/sellers/",
+      "/details?"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_seller_report_api.py::test_malformed_same_tenant_invoice_snapshot_makes_history_unknown",
+    "line": 411,
+    "name": "test_malformed_same_tenant_invoice_snapshot_makes_history_unknown",
+    "source_literals": [
+      "/billing/seller-report/sellers/",
+      "/details?date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_tariff_matrix.py::test_new_tenant_gets_persisted_disabled_matrix_including_storage",
+    "line": 43,
+    "name": "test_new_tenant_gets_persisted_disabled_matrix_including_storage",
+    "source_literals": [
+      "/auth/register",
+      "/auth/me"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_billing_tariff_matrix.py::test_saving_a_matrix_rate_enables_billing_for_the_tenant",
+    "line": 167,
+    "name": "test_saving_a_matrix_rate_enables_billing_for_the_tenant",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_billing_tariff_matrix.py::test_postgresql_composite_ledger_line_foreign_keys_reject_foreign_tenant",
+    "line": 329,
+    "name": "test_postgresql_composite_ledger_line_foreign_keys_reject_foreign_tenant",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_billing_tariff_matrix.py::test_postgresql_v2_scope_check_rejects_invalid_direct_inserts",
+    "line": 431,
+    "name": "test_postgresql_v2_scope_check_rejects_invalid_direct_inserts",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_billing_tariff_priority.py::test_seller_rate_never_leaks_to_another_seller",
+    "line": 143,
+    "name": "test_seller_rate_never_leaks_to_another_seller",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_bootstrap_billing_tariff_matrix.py::test_bootstrap_matrix_creation_is_idempotent_for_existing_tenant",
+    "line": 15,
+    "name": "test_bootstrap_matrix_creation_is_idempotent_for_existing_tenant",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_cancelled_after_pack.py::test_cancelled_after_pack_is_tenant_scoped_and_filters_seller_period",
+    "line": 164,
+    "name": "test_cancelled_after_pack_is_tenant_scoped_and_filters_seller_period",
+    "source_literals": [
+      "/sellers",
+      "/fbs/cancelled-after-pack",
+      "/fbs/cancelled-after-pack"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_kiz.py::test_fbs_kiz_lookup_foreign_supply_sticker_returns_404",
+    "line": 691,
+    "name": "test_fbs_kiz_lookup_foreign_supply_sticker_returns_404",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_packaging_integration.py::test_fbs_bind_packaging_box_rejects_foreign_tenant_warehouse",
+    "line": 346,
+    "name": "test_fbs_bind_packaging_box_rejects_foreign_tenant_warehouse",
+    "source_literals": [
+      "/operations/fbs-supplies/",
+      "/trbx",
+      "/operations/fbs-supplies/",
+      "/trbx/bind-box",
+      "/auth/me",
+      "/auth/me"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_pick_options.py::test_fbs_pick_options_hides_foreign_tenant_supply",
+    "line": 408,
+    "name": "test_fbs_pick_options_hides_foreign_tenant_supply",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_pick_unload_contract.py::test_fbs_pick_write_hides_foreign_tenant_supply",
+    "line": 349,
+    "name": "test_fbs_pick_write_hides_foreign_tenant_supply",
+    "source_literals": [
+      "/",
+      "/pick/set"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_picking.py::test_fbs_pick_rejects_cross_seller_product",
+    "line": 835,
+    "name": "test_fbs_pick_rejects_cross_seller_product",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_print_assets.py::test_print_asset_cross_tenant_404",
+    "line": 278,
+    "name": "test_print_asset_cross_tenant_404",
+    "source_literals": [
+      "/operations/fbs-supplies/",
+      "/print-assets",
+      "/operations/fbs-print-assets/",
+      "/content"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_seller_warehouse.py::test_fbs_seller_warehouses_cross_tenant_404",
+    "line": 228,
+    "name": "test_fbs_seller_warehouses_cross_tenant_404",
+    "source_literals": [
+      "/operations/fbs-sellers/",
+      "/warehouses"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_stock_rule_service.py::test_bulk_rule_rejects_mixed_sellers",
+    "line": 335,
+    "name": "test_bulk_rule_rejects_mixed_sellers",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_stock_share_wave2.py::test_fbs_wave2_routes_are_tenant_isolated",
+    "line": 368,
+    "name": "test_fbs_wave2_routes_are_tenant_isolated",
+    "source_literals": [
+      "/fbs/assembly-time",
+      "/fbs-sellers/",
+      "/warehouses",
+      "/fbs-sellers/",
+      "/warehouses/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_tracking_supply_done_rate_limit.py::test_same_wb_supply_id_in_two_tenants_is_isolated",
+    "line": 755,
+    "name": "test_same_wb_supply_id_in_two_tenants_is_isolated",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_warehouse_binding.py::test_fbs_warehouse_binding_cross_tenant_404",
+    "line": 213,
+    "name": "test_fbs_warehouse_binding_cross_tenant_404",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_warehouse_binding.py::test_fbs_stock_sync_cross_tenant_404",
+    "line": 645,
+    "name": "test_fbs_stock_sync_cross_tenant_404",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_worklist_query_count.py::test_tsd_working_worklist_keeps_tenant_and_served_warehouse_scope",
+    "line": 493,
+    "name": "test_tsd_working_worklist_keeps_tenant_and_served_warehouse_scope",
+    "source_literals": [
+      "/operations/fbs-orders/worklist",
+      "/operations/fbs-orders/worklist",
+      "/operations/fbs-orders/worklist"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_worklist_search.py::test_supply_search_numbers_members_duplicates_and_scope",
+    "line": 66,
+    "name": "test_supply_search_numbers_members_duplicates_and_scope",
+    "source_literals": [
+      "/operations/fbs-orders/worklist",
+      "/operations/fbs-supplies/worklist",
+      "/operations/fbs-supplies/worklist",
+      "/operations/",
+      "/worklist",
+      "/operations/",
+      "/worklist",
+      "/operations/",
+      "/worklist"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_fbs_zero_refresh.py::test_same_chrt_in_other_seller_targets_only_its_binding",
+    "line": 327,
+    "name": "test_same_chrt_in_other_seller_targets_only_its_binding",
+    "source_literals": [
+      "/api/v3/stocks/483001",
+      "/api/v3/stocks/483002"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inbound_cargo_place_api.py::test_foreign_tenant_cannot_see_or_edit_cargo_place",
+    "line": 443,
+    "name": "test_foreign_tenant_cannot_see_or_edit_cargo_place",
+    "source_literals": [
+      "/",
+      "/cargo-places/",
+      "/lines/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inbound_intake.py::test_inbound_receiving_lines_rejects_foreign_seller_product",
+    "line": 1384,
+    "name": "test_inbound_receiving_lines_rejects_foreign_seller_product",
+    "source_literals": [
+      "/operations/inbound-intake-requests",
+      "/auth/register",
+      "/warehouses",
+      "/products",
+      "/products",
+      "/",
+      "/lines",
+      "/",
+      "/submit",
+      "/",
+      "/receiving/lines"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inbound_intake_api_be03.py::test_ff_list_hides_only_seller_drafts_and_preserves_seller_scope",
+    "line": 569,
+    "name": "test_ff_list_hides_only_seller_drafts_and_preserves_seller_scope",
+    "source_literals": [
+      "/operations/inbound-intake-requests",
+      "/warehouses",
+      "/products",
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/",
+      "/lines",
+      "/",
+      "/submit"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inbound_marking.py::test_delete_preserves_existing_history_and_scope",
+    "line": 662,
+    "name": "test_delete_preserves_existing_history_and_scope",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_inbound_package_catalog.py::test_catalog_list_and_lookup_are_tenant_scoped_read_only",
+    "line": 274,
+    "name": "test_catalog_list_and_lookup_are_tenant_scoped_read_only",
+    "source_literals": [
+      "/operations/inbound-packages",
+      "/operations/inbound-packages/lookup?barcode=inb-done-distributed",
+      "/operations/inbound-packages/lookup?barcode=INB-CURRENT-DISTRIBUTED",
+      "/operations/inbound-packages/lookup?barcode=ICG-DONE",
+      "/operations/inbound-packages/lookup?barcode=INB-UNKNOWN",
+      "/operations/inbound-packages/lookup?barcode=INB-OTHER-TENANT"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_balances_summary.py::test_inventory_balances_summary_seller_scope",
+    "line": 15,
+    "name": "test_inventory_balances_summary_seller_scope",
+    "source_literals": [
+      "/operations/inbound-intake-requests",
+      "/auth/register",
+      "/sellers",
+      "/sellers",
+      "/warehouses",
+      "/products",
+      "/products",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/warehouses/",
+      "/locations",
+      "/warehouses/",
+      "/locations",
+      "/",
+      "/lines",
+      "/",
+      "/submit",
+      "/",
+      "/verify",
+      "/",
+      "/post",
+      "/operations/inventory-balances/summary"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_inventory_count_selected_products_narrow_existing_scope",
+    "line": 250,
+    "name": "test_inventory_count_selected_products_narrow_existing_scope",
+    "source_literals": [
+      "/warehouses",
+      "/warehouses/",
+      "/locations",
+      "/operations/inventory-counts",
+      "/operations/inventory-counts/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_inventory_count_object_keeps_existing_location_and_product_scopes",
+    "line": 322,
+    "name": "test_inventory_count_object_keeps_existing_location_and_product_scopes",
+    "source_literals": [
+      "/operations/inventory-counts",
+      "/operations/inventory-counts"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_inventory_count_is_tenant_scoped_for_list_get_and_post",
+    "line": 549,
+    "name": "test_inventory_count_is_tenant_scoped_for_list_get_and_post",
+    "source_literals": [
+      "/operations/inventory-counts",
+      "/operations/inventory-counts/",
+      "/operations/inventory-counts/",
+      "/post"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_inventory_count_manual_line_rejects_product_from_other_seller",
+    "line": 1512,
+    "name": "test_inventory_count_manual_line_rejects_product_from_other_seller",
+    "source_literals": [
+      "/operations/inventory-counts",
+      "/operations/inventory-counts/",
+      "/manual-line",
+      "/operations/inventory-counts/",
+      "/manual-line"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_inventory_count_create_container_rejects_foreign_cell",
+    "line": 1639,
+    "name": "test_inventory_count_create_container_rejects_foreign_cell",
+    "source_literals": [
+      "/operations/inventory-counts/",
+      "/containers"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_counts.py::test_stale_empty_confirmation_does_not_hide_foreign_container",
+    "line": 2452,
+    "name": "test_stale_empty_confirmation_does_not_hide_foreign_container",
+    "source_literals": [
+      "/operations/inventory-counts/",
+      "/empty-place",
+      "/lines",
+      "/post"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_movements_report.py::test_inventory_movements_summary_seller_scope_forbidden",
+    "line": 310,
+    "name": "test_inventory_movements_summary_seller_scope_forbidden",
+    "source_literals": [
+      "/auth/register",
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/sellers",
+      "/operations/inventory-movements/summary"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_inventory_stock_cap_wms338.py::test_apply_fbs_supply_write_off_still_rejects_foreign_order",
+    "line": 329,
+    "name": "test_apply_fbs_supply_write_off_still_rejects_foreign_order",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_marketplace_account_service.py::test_tc_s32_ozon_007_real_db_cross_tenant_scope_is_fail_closed",
+    "line": 163,
+    "name": "test_tc_s32_ozon_007_real_db_cross_tenant_scope_is_fail_closed",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_marketplace_foundation.py::test_lock_key_is_scoped_by_seller_and_marketplace",
+    "line": 195,
+    "name": "test_lock_key_is_scoped_by_seller_and_marketplace",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_marking_inventory_api.py::test_marking_overview_tenant_isolation_404",
+    "line": 262,
+    "name": "test_marking_overview_tenant_isolation_404",
+    "source_literals": [
+      "/operations/marking-codes/products/",
+      "/marking-overview"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_inventory_api.py::test_marking_overview_seller_scope_403",
+    "line": 289,
+    "name": "test_marking_overview_seller_scope_403",
+    "source_literals": [
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/operations/marking-codes/products/",
+      "/marking-overview"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_inventory_cz_filter.py::test_inventory_tenant_isolation_same_sku_pool_title",
+    "line": 244,
+    "name": "test_inventory_tenant_isolation_same_sku_pool_title",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_marking_inventory_cz_filter.py::test_inventory_seller_isolation_same_sku_pool_title",
+    "line": 296,
+    "name": "test_inventory_seller_isolation_same_sku_pool_title",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_marking_ledger_external.py::test_ledger_and_export_include_external_events_with_existing_scope_filters",
+    "line": 18,
+    "name": "test_ledger_and_export_include_external_events_with_existing_scope_filters",
+    "source_literals": [
+      "/operations/marking-codes/ledger",
+      "/auth/me",
+      "/operations/marking-codes/codes/",
+      "/history",
+      "/export",
+      "/export"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_pool_products.py::test_set_pool_products_foreign_seller_product_rejected",
+    "line": 129,
+    "name": "test_set_pool_products_foreign_seller_product_rejected",
+    "source_literals": [
+      "/operations/marking-codes/pools/",
+      "/products",
+      "/operations/marking-codes/pools/",
+      "/products"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_pools_read.py::test_pool_codes_foreign_pool_returns_404",
+    "line": 122,
+    "name": "test_pool_codes_foreign_pool_returns_404",
+    "source_literals": [
+      "/operations/marking-codes/pools/",
+      "/codes"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_product_codes_pool_filter.py::test_list_product_codes_tenant_isolation_same_sku_pool",
+    "line": 218,
+    "name": "test_list_product_codes_tenant_isolation_same_sku_pool",
+    "source_literals": [
+      "/operations/marking-codes/products/",
+      "/codes"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_marking_product_codes_pool_filter.py::test_list_product_codes_seller_isolation_same_sku_pool",
+    "line": 268,
+    "name": "test_list_product_codes_seller_isolation_same_sku_pool",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_notifications.py::test_notifications_user_scope_isolated",
+    "line": 78,
+    "name": "test_notifications_user_scope_isolated",
+    "source_literals": [
+      "/auth/me",
+      "/operations/notifications"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_notifications.py::test_notifications_seller_scope_isolated",
+    "line": 106,
+    "name": "test_notifications_seller_scope_isolated",
+    "source_literals": [
+      "/auth/me",
+      "/operations/notifications"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_notifications.py::test_notifications_mark_read_foreign_returns_404",
+    "line": 220,
+    "name": "test_notifications_mark_read_foreign_returns_404",
+    "source_literals": [
+      "/auth/me",
+      "/operations/notifications/",
+      "/read"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_operation_fact_recovery.py::test_recovery_preflight_counts_only_requested_tenant_facts",
+    "line": 32,
+    "name": "test_recovery_preflight_counts_only_requested_tenant_facts",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_operation_fact_recovery.py::test_recovery_scopes_durable_unload_and_system_cancel_to_period_and_sources",
+    "line": 154,
+    "name": "test_recovery_scopes_durable_unload_and_system_cancel_to_period_and_sources",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_operation_facts.py::test_correction_schema_exposes_tenant_lines_and_durable_unload_markers",
+    "line": 286,
+    "name": "test_correction_schema_exposes_tenant_lines_and_durable_unload_markers",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_operation_facts.py::test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_rename",
+    "line": 293,
+    "name": "test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_rename",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_ozon_marketplace_unload.py::test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse",
+    "line": 45,
+    "name": "test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse",
+    "source_literals": [
+      "/warehouses",
+      "/sellers",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests",
+      "/sellers",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests/",
+      "/plan",
+      "/operations/marketplace-unload-requests/",
+      "/confirm",
+      "/operations/marketplace-unload-requests/",
+      "/ship",
+      "/operations/marketplace-unload-requests/",
+      "/operations/marketplace-unload-requests/",
+      "/operations/marketplace-unload-requests/",
+      "/operations/marketplace-unload-requests/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_ozon_posting_contract.py::test_explicit_posting_intake_without_publication_keeps_warehouse_scope",
+    "line": 163,
+    "name": "test_explicit_posting_intake_without_publication_keeps_warehouse_scope",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_ozon_return_service.py::test_imported_giveouts_are_isolated_by_request_and_tenant",
+    "line": 317,
+    "name": "test_imported_giveouts_are_isolated_by_request_and_tenant",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_pack_progress_idempotency.py::test_payload_conflicts_and_tenant_boundary",
+    "line": 121,
+    "name": "test_payload_conflicts_and_tenant_boundary",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_packaging_tasks.py::test_packaging_create_rejects_mixed_seller_and_decimal_qty",
+    "line": 340,
+    "name": "test_packaging_create_rejects_mixed_seller_and_decimal_qty",
+    "source_literals": [
+      "/warehouses",
+      "/sellers",
+      "/sellers",
+      "/operations/packaging-tasks",
+      "/operations/packaging-tasks",
+      "/products"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_pick_option_container_sources.py::test_container_paths_fail_closed_outside_tenant_and_warehouse",
+    "line": 261,
+    "name": "test_container_paths_fail_closed_outside_tenant_and_warehouse",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_print_templates.py::test_operator_layout_does_not_carry_label_options_across_sellers",
+    "line": 511,
+    "name": "test_operator_layout_does_not_carry_label_options_across_sellers",
+    "source_literals": [
+      "/operations/marking-codes/print-templates"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_categories.py::test_product_categories_are_unique_sorted_nonempty_and_tenant_isolated",
+    "line": 152,
+    "name": "test_product_categories_are_unique_sorted_nonempty_and_tenant_isolated",
+    "source_literals": [
+      "/sellers",
+      "/sellers",
+      "/products/categories",
+      "/products"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_categories.py::test_product_categories_follow_effective_seller_scope_and_empty_state",
+    "line": 201,
+    "name": "test_product_categories_follow_effective_seller_scope_and_empty_state",
+    "source_literals": [
+      "/sellers/with-account",
+      "/sellers",
+      "/auth/login",
+      "/products/categories",
+      "/products",
+      "/sellers/with-account",
+      "/auth/login",
+      "/products/categories"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_categories.py::test_categories_follow_switched_effective_seller_but_admin_sees_tenant_scope",
+    "line": 304,
+    "name": "test_categories_follow_switched_effective_seller_but_admin_sees_tenant_scope",
+    "source_literals": [
+      "/sellers/with-account",
+      "/sellers",
+      "/auth/login",
+      "/products/categories",
+      "/auth/switch-seller",
+      "/products/categories",
+      "/products/categories"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_fbs_rule_bulk_read_api.py::test_bulk_read_hides_product_from_other_tenant",
+    "line": 139,
+    "name": "test_bulk_read_hides_product_from_other_tenant",
+    "source_literals": [
+      "/products/fbs-rule/bulk"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_fbs_rule_bulk_read_api.py::test_bulk_read_rejects_product_from_other_seller",
+    "line": 174,
+    "name": "test_bulk_read_rejects_product_from_other_seller",
+    "source_literals": [
+      "/products/fbs-rule/bulk"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_fbs_stock_sync_api.py::test_fbs_stock_sync_bulk_does_not_touch_other_seller_products",
+    "line": 10,
+    "name": "test_fbs_stock_sync_bulk_does_not_touch_other_seller_products",
+    "source_literals": [
+      "/auth/register",
+      "/sellers",
+      "/sellers",
+      "/products",
+      "/products",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/products/fbs-stock-sync/bulk",
+      "/products/ff-catalog"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_tz_idempotency.py::test_same_file_hash_is_scoped_by_tenant_and_seller",
+    "line": 149,
+    "name": "test_same_file_hash_is_scoped_by_tenant_and_seller",
+    "source_literals": [
+      "/sellers"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_product_tz_import.py::test_tz_import_cross_seller_barcode_in_preview",
+    "line": 309,
+    "name": "test_tz_import_cross_seller_barcode_in_preview",
+    "source_literals": [
+      "/auth/register",
+      "/sellers",
+      "/sellers",
+      "/products",
+      "/products/import-tz/preview"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_api.py::test_invalid_measurements_and_foreign_tenant_do_not_write_history",
+    "line": 172,
+    "name": "test_invalid_measurements_and_foreign_tenant_do_not_write_history",
+    "source_literals": [
+      "/products/",
+      "/dimensions",
+      "/products/",
+      "/dimensions/container",
+      "/products/",
+      "/dimensions",
+      "/products/",
+      "/dimensions/history",
+      "/products/",
+      "/dimensions/history",
+      "/products/",
+      "/dimensions/history"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_fbs_stock_from_balance.py::test_apply_from_balance_does_not_touch_other_tenant_product",
+    "line": 414,
+    "name": "test_apply_from_balance_does_not_touch_other_tenant_product",
+    "source_literals": [
+      "/products/fbs-stock-limit/from-balance/bulk"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_ozon_catalog.py::test_ozon_catalog_links_do_not_cross_seller_or_tenant_boundaries",
+    "line": 233,
+    "name": "test_ozon_catalog_links_do_not_cross_seller_or_tenant_boundaries",
+    "source_literals": [
+      "/sellers",
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/products?search=ISOLATED-",
+      "/products?search=ISOLATED-"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_ozon_catalog.py::test_existing_product_ozon_link_update_is_warehouse_only_and_tenant_scoped",
+    "line": 319,
+    "name": "test_existing_product_ozon_link_update_is_warehouse_only_and_tenant_scoped",
+    "source_literals": [
+      "/sellers",
+      "/sellers",
+      "/products/",
+      "/ozon-link",
+      "/products/",
+      "/ozon-link",
+      "/products/",
+      "/ozon-link",
+      "/products?search=OZON-2-",
+      "/products/",
+      "/ozon-link",
+      "/products/",
+      "/ozon-link"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_ozon_catalog.py::test_merge_rejects_three_cards_and_foreign_seller",
+    "line": 711,
+    "name": "test_merge_rejects_three_cards_and_foreign_seller",
+    "source_literals": [
+      "/sellers",
+      "/sellers",
+      "/products/merge",
+      "/products/merge",
+      "/products/merge",
+      "/products?search=GUARD-"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_products_wb_catalog.py::test_ff_catalog_lists_all_tenant_products",
+    "line": 147,
+    "name": "test_ff_catalog_lists_all_tenant_products",
+    "source_literals": [
+      "/auth/register",
+      "/operations/background-jobs",
+      "/products",
+      "/products",
+      "/products",
+      "/warehouses",
+      "/products/ff-catalog",
+      "/products/ff-catalog-page?limit=2&offset=0",
+      "/products/ff-catalog-page?search=Private&limit=100&offset=0",
+      "/products/ff-catalog-page?category=%D0%91%D1%80%D1%8E%D0%BA%D0%B8&limit=100&offset=0",
+      "/integrations/wildberries/sellers/",
+      "/tokens",
+      "/integrations/wildberries/sellers/",
+      "/link-product",
+      "/warehouses/",
+      "/locations",
+      "/operations/inbound-intake-requests",
+      "/operations/inbound-intake-requests",
+      "/products/ff-catalog?seller_id=",
+      "/products/ff-catalog-page?seller_id=",
+      "/operations/inventory-balances/summary?product_id=",
+      "/sellers",
+      "/sellers",
+      "/operations/background-jobs/",
+      "/operations/inbound-intake-requests/",
+      "/lines",
+      "/operations/inbound-intake-requests/",
+      "/submit",
+      "/operations/inbound-intake-requests/",
+      "/lines/",
+      "/operations/inbound-intake-requests/",
+      "/verify",
+      "/operations/inbound-intake-requests/",
+      "/post"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_reports_csv_export.py::test_inventory_csv_for_seller_ignores_requested_foreign_seller_scope",
+    "line": 299,
+    "name": "test_inventory_csv_for_seller_ignores_requested_foreign_seller_scope",
+    "source_literals": [
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/reports/inventory/export.csv"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_reports_movements.py::test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv",
+    "line": 260,
+    "name": "test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv",
+    "source_literals": [
+      "/reports/overview",
+      "/reports/inventory/export.csv",
+      "/reports/inventory"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_reports_overview.py::test_reports_overview_seller_scope_overrides_requested_seller",
+    "line": 245,
+    "name": "test_reports_overview_seller_scope_overrides_requested_seller",
+    "source_literals": [
+      "/auth/register",
+      "/sellers",
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/reports/overview"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_scan_resolver_service.py::test_tenant_cannot_resolve_another_tenants_object",
+    "line": 234,
+    "name": "test_tenant_cannot_resolve_another_tenants_object",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_seller_isolation.py::test_seller_does_not_see_inbound_with_other_seller_lines",
+    "line": 200,
+    "name": "test_seller_does_not_see_inbound_with_other_seller_lines",
+    "source_literals": [
+      "/operations/inbound-intake-requests",
+      "/auth/register",
+      "/warehouses",
+      "/sellers",
+      "/sellers",
+      "/products",
+      "/auth/seller-accounts",
+      "/auth/login",
+      "/warehouses/",
+      "/locations",
+      "/",
+      "/lines",
+      "/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_seller_marketplace_unload.py::test_seller_cannot_see_other_seller_mp_unload",
+    "line": 273,
+    "name": "test_seller_cannot_see_other_seller_mp_unload",
+    "source_literals": [
+      "/auth/register",
+      "/warehouses",
+      "/sellers",
+      "/sellers",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests",
+      "/operations/marketplace-unload-requests/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_seller_shop_scope.py::test_shop_manager_scope_requires_enabled_delegation_for_products",
+    "line": 55,
+    "name": "test_shop_manager_scope_requires_enabled_delegation_for_products",
+    "source_literals": [
+      "/auth/register",
+      "/sellers/with-account",
+      "/sellers",
+      "/sellers",
+      "/auth/login",
+      "/auth/me",
+      "/auth/seller-shops",
+      "/auth/switch-seller",
+      "/auth/me",
+      "/auth/switch-seller",
+      "/auth/seller-shops",
+      "/auth/me",
+      "/products",
+      "/products",
+      "/products/wb-catalog"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_seller_shop_switch.py::test_seller_shop_switch_acts_as_delegated_seller",
+    "line": 30,
+    "name": "test_seller_shop_switch_acts_as_delegated_seller",
+    "source_literals": [
+      "/auth/register",
+      "/warehouses",
+      "/sellers/with-account",
+      "/sellers/with-account",
+      "/sellers/with-account",
+      "/auth/login",
+      "/auth/me",
+      "/auth/seller-shops",
+      "/auth/switch-seller",
+      "/auth/me",
+      "/operations/marketplace-unload-requests/seller",
+      "/operations/marketplace-unload-requests"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_seller_shop_switch.py::test_seller_cannot_switch_without_delegation",
+    "line": 152,
+    "name": "test_seller_cannot_switch_without_delegation",
+    "source_literals": [
+      "/auth/register",
+      "/sellers/with-account",
+      "/sellers/with-account",
+      "/auth/login",
+      "/auth/switch-seller"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_sorting_object_creation_api.py::test_sorting_object_creation_and_listing_are_tenant_scoped",
+    "line": 130,
+    "name": "test_sorting_object_creation_and_listing_are_tenant_scoped",
+    "source_literals": [
+      "/warehouses/",
+      "/sorting-objects",
+      "/warehouses/",
+      "/sorting-objects",
+      "/warehouses/",
+      "/sorting-objects"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_sorting_print_wms442.py::test_opaque_credentials_cannot_access_employee_api_and_scope_cannot_be_forged",
+    "line": 334,
+    "name": "test_opaque_credentials_cannot_access_employee_api_and_scope_cannot_be_forged",
+    "source_literals": [
+      "/auth/me",
+      "/warehouses",
+      "/products",
+      "/agent/jobs/",
+      "/result",
+      "/jobs/",
+      "/agent/next",
+      "/operations/background-jobs/",
+      "/operations/fbs-print-jobs/",
+      "/content",
+      "/operations/fbs-print-jobs/",
+      "/jobs/",
+      "/jobs/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_sorting_print_wms442.py::test_unpaired_expired_and_foreign_pairing_are_rejected",
+    "line": 500,
+    "name": "test_unpaired_expired_and_foreign_pairing_are_rejected",
+    "source_literals": [
+      "/pairing",
+      "/warehouses/",
+      "/pair",
+      "/agent/next",
+      "/pairing",
+      "/agent/heartbeat",
+      "/pairing"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_stock_directions.py::test_seller_stock_directions_summary_and_scope",
+    "line": 186,
+    "name": "test_seller_stock_directions_summary_and_scope",
+    "source_literals": [
+      "/operations/inventory-balances/summary",
+      "/products/",
+      "/stock-directions",
+      "/products/",
+      "/stock-directions",
+      "/products/",
+      "/stock-directions",
+      "/products/",
+      "/stock-directions"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_storage_daily_charge.py::test_tenant_without_billing_start_date_is_not_charged",
+    "line": 205,
+    "name": "test_tenant_without_billing_start_date_is_not_charged",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_storage_measurement_service.py::test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_scope",
+    "line": 252,
+    "name": "test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_scope",
+    "source_literals": [
+      "/auth/register",
+      "/warehouses",
+      "/operations/storage/measurements/rebuild",
+      "/operations/storage/measurements/rebuild",
+      "/operations/storage/statements",
+      "/operations/background-jobs/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_storage_models.py::test_statement_is_unique_for_tenant_seller_warehouse_and_month",
+    "line": 11,
+    "name": "test_statement_is_unique_for_tenant_seller_warehouse_and_month",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_storage_models.py::test_measurement_is_unique_for_tenant_seller_warehouse_sku_and_month",
+    "line": 25,
+    "name": "test_measurement_is_unique_for_tenant_seller_warehouse_sku_and_month",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_storage_tariff_api.py::test_tariff_scope_must_belong_to_tenant_and_operational_warehouse",
+    "line": 536,
+    "name": "test_tariff_scope_must_belong_to_tenant_and_operational_warehouse",
+    "source_literals": [
+      "/billing/tariff-matrix",
+      "/operations/storage/tariffs",
+      "/operations/storage/tariffs"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_subscription.py::test_subscription_of_one_tenant_does_not_touch_another",
+    "line": 128,
+    "name": "test_subscription_of_one_tenant_does_not_touch_another",
+    "source_literals": [
+      "/sellers",
+      "/sellers"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_subscription_payment.py::test_blocked_tenant_can_still_pay",
+    "line": 274,
+    "name": "test_blocked_tenant_can_still_pay",
+    "source_literals": [
+      "/sellers",
+      "/subscription/pay",
+      "/subscription/sync"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_subscription_payment.py::test_payment_is_scoped_to_its_tenant",
+    "line": 290,
+    "name": "test_payment_is_scoped_to_its_tenant",
+    "source_literals": [
+      "/subscription/pay",
+      "/subscription/sync"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_tenant_settings.py::test_tenant_settings_get_and_patch",
+    "line": 55,
+    "name": "test_tenant_settings_get_and_patch",
+    "source_literals": [
+      "/tenant/settings",
+      "/tenant/settings",
+      "/auth/me",
+      "/tenant/settings"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_tenant_settings.py::test_tenant_settings_patch_separate_marking_print",
+    "line": 83,
+    "name": "test_tenant_settings_patch_separate_marking_print",
+    "source_literals": [
+      "/tenant/settings",
+      "/tenant/settings",
+      "/tenant/settings"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_tenant_settings.py::test_tenant_settings_patch_no_fields_returns_422",
+    "line": 107,
+    "name": "test_tenant_settings_patch_no_fields_returns_422",
+    "source_literals": [
+      "/tenant/settings"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_tenant_settings.py::test_tenant_settings_forbidden_for_staff",
+    "line": 123,
+    "name": "test_tenant_settings_forbidden_for_staff",
+    "source_literals": [
+      "/auth/staff-accounts",
+      "/auth/login",
+      "/auth/login",
+      "/tenant/settings"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_true_api_marking_check.py::test_credential_scope_and_only_cz_is_decrypted",
+    "line": 177,
+    "name": "test_credential_scope_and_only_cz_is_decrypted",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_user_identity_wms443.py::test_profile_permissions_scope_and_immutable_identity",
+    "line": 98,
+    "name": "test_profile_permissions_scope_and_immutable_identity",
+    "source_literals": [
+      "/auth/staff-accounts/",
+      "/profile",
+      "/auth/staff-accounts",
+      "/auth/me",
+      "/auth/me",
+      "/auth/staff-accounts"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_user_identity_wms443.py::test_seller_named_staff_create_edit_and_other_seller_scope",
+    "line": 175,
+    "name": "test_seller_named_staff_create_edit_and_other_seller_scope",
+    "source_literals": [
+      "/auth/seller-staff-accounts/",
+      "/profile",
+      "/auth/seller-staff-accounts",
+      "/sellers",
+      "/auth/seller-accounts",
+      "/auth/login"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_warehouse_map_api.py::test_map_totals_moves_sorting_disband_and_tenant_scope",
+    "line": 193,
+    "name": "test_map_totals_moves_sorting_disband_and_tenant_scope",
+    "source_literals": [
+      "/warehouses/",
+      "/map",
+      "/warehouses/",
+      "/map/move",
+      "/warehouses/",
+      "/map/move",
+      "/warehouses/",
+      "/map/move",
+      "/warehouses/",
+      "/sorting-objects",
+      "/warehouses/",
+      "/sorting-objects/place",
+      "/warehouses/",
+      "/map/move",
+      "/warehouses/",
+      "/map/disband",
+      "/warehouses/",
+      "/map/move",
+      "/warehouses/",
+      "/map",
+      "/warehouses/",
+      "/map"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_warehouse_structure_wave1.py::test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it",
+    "line": 112,
+    "name": "test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_warehouses.py::test_migration_does_not_promote_tenant_only_technical_warehouse",
+    "line": 25,
+    "name": "test_migration_does_not_promote_tenant_only_technical_warehouse",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wildberries_tokens_api.py::test_self_content_token_does_not_enable_marketplace_without_scope",
+    "line": 249,
+    "name": "test_self_content_token_does_not_enable_marketplace_without_scope",
+    "source_literals": [
+      "/integrations/wildberries/self/content-token"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms121_selection_reset.py::test_wms121_cross_seller_selection_is_rejected",
+    "line": 91,
+    "name": "test_wms121_cross_seller_selection_is_rejected",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms270_login_rate_limit.py::test_rate_limit_scope_is_per_ip_across_emails",
+    "line": 94,
+    "name": "test_rate_limit_scope_is_per_ip_across_emails",
+    "source_literals": [
+      "/auth/login",
+      "/auth/login"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms325_inbound_unload_mutations.py::test_inbound_box_damage_close_print_delete_and_tenant_boundary",
+    "line": 173,
+    "name": "test_inbound_box_damage_close_print_delete_and_tenant_boundary",
+    "source_literals": [
+      "/",
+      "/boxes/",
+      "/damaged",
+      "/",
+      "/boxes",
+      "/",
+      "/boxes/",
+      "/close",
+      "/",
+      "/boxes/",
+      "/close",
+      "/",
+      "/boxes/",
+      "/",
+      "/boxes/",
+      "/mark-label-printed"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms325_marking_template_mutations.py::test_template_http_default_peers_owner_and_deleted_identity",
+    "line": 187,
+    "name": "test_template_http_default_peers_owner_and_deleted_identity",
+    "source_literals": [
+      "/operations/document-events",
+      "/print-templates/",
+      "/print-templates/",
+      "/print-templates/",
+      "/print-templates/",
+      "/print-templates/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms325_marking_template_mutations.py::test_concurrent_default_changes_serialize_scope_without_stale_peer_audits",
+    "line": 490,
+    "name": "test_concurrent_default_changes_serialize_scope_without_stale_peer_audits",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms325_marking_template_mutations.py::test_template_creation_api_uses_authenticated_actor_for_shared_scope",
+    "line": 682,
+    "name": "test_template_creation_api_uses_authenticated_actor_for_shared_scope",
+    "source_literals": [
+      "/print-templates"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms325_print_lock_order.py::test_content_does_not_read_cross_tenant_order",
+    "line": 297,
+    "name": "test_content_does_not_read_cross_tenant_order",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms351_marketplace_publication_switches.py::test_independent_switches_roundtrip_and_publish_scope",
+    "line": 17,
+    "name": "test_independent_switches_roundtrip_and_publish_scope",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms351_marketplace_publication_switches.py::test_ozon_order_scope_uses_served_independently_of_publication",
+    "line": 365,
+    "name": "test_ozon_order_scope_uses_served_independently_of_publication",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms363_ozon_tsd.py::test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenant",
+    "line": 266,
+    "name": "test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenant",
+    "source_literals": [
+      "/operations/fbs-orders/worklist"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms397_pick_scan_order.py::test_foreign_tenant_order_product_and_supply_are_not_pickable",
+    "line": 178,
+    "name": "test_foreign_tenant_order_product_and_supply_are_not_pickable",
+    "source_literals": [
+      "/operations/fbs-supplies/",
+      "/pick/scan"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms418_catalog_publication_filter.py::test_publication_filter_combines_flags_scope_search_category_and_pagination",
+    "line": 15,
+    "name": "test_publication_filter_combines_flags_scope_search_category_and_pagination",
+    "source_literals": [
+      "/sellers",
+      "/products/ff-catalog-page"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms440_ff_intake.py::test_retry_payload_and_scope_validation",
+    "line": 199,
+    "name": "test_retry_payload_and_scope_validation",
+    "source_literals": [
+      "/sellers",
+      "/",
+      "/lines",
+      "/",
+      "/lines",
+      "/",
+      "/lines",
+      "/",
+      "/lines",
+      "/",
+      "/lines"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms441_sorting.py::test_failure_rollback_and_tenant_isolation",
+    "line": 228,
+    "name": "test_failure_rollback_and_tenant_isolation",
+    "source_literals": []
+  },
+  {
+    "nodeid": "backend/tests/test_wms445_fbs_seller_scope.py::test_tsd_worklists_hold_effective_seller_scope",
+    "line": 26,
+    "name": "test_tsd_worklists_hold_effective_seller_scope",
+    "source_literals": [
+      "/auth/me",
+      "/sellers",
+      "/operations/fbs-orders/worklist",
+      "/operations/fbs-supplies/worklist",
+      "/operations/fbs-orders/worklist",
+      "/operations/fbs-supplies/worklist"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms477_marking_verdicts_sync.py::test_markings_sync_endpoint_foreign_supply_is_404",
+    "line": 448,
+    "name": "test_markings_sync_endpoint_foreign_supply_is_404",
+    "source_literals": [
+      "/operations/fbs-supplies/",
+      "/markings/sync"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_catalog_isolation.py::test_authorized_ff_scans_keep_tenant_scope",
+    "line": 201,
+    "name": "test_authorized_ff_scans_keep_tenant_scope",
+    "source_literals": [
+      "/operations/scan/resolve",
+      "/operations/scan/resolve"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_catalog_isolation.py::test_bulk_honest_sign_requires_products_permission_and_preserves_foreign_rows",
+    "line": 288,
+    "name": "test_bulk_honest_sign_requires_products_permission_and_preserves_foreign_rows",
+    "source_literals": [
+      "/products/requires-honest-sign/bulk",
+      "/products/requires-honest-sign/bulk"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_home_scope.py::test_old_foreign_tokens_auth_and_all_grants_stay_unchanged",
+    "line": 55,
+    "name": "test_old_foreign_tokens_auth_and_all_grants_stay_unchanged",
+    "source_literals": [
+      "/products",
+      "/products/wb-catalog",
+      "/products/categories",
+      "/auth/me",
+      "/auth/switch-seller",
+      "/auth/seller-shops",
+      "/auth/switch-seller"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_home_scope.py::test_jobs_require_proven_home_scope_but_not_seller_initiator",
+    "line": 91,
+    "name": "test_jobs_require_proven_home_scope_but_not_seller_initiator",
+    "source_literals": [
+      "/operations/background-jobs/",
+      "/operations/background-jobs/",
+      "/operations/background-jobs/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_home_scope.py::test_similar_tenant_keeps_delegation",
+    "line": 180,
+    "name": "test_similar_tenant_keeps_delegation",
+    "source_literals": [
+      "/auth/me",
+      "/auth/switch-seller"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_home_scope.py::test_old_token_scan_filters_foreign_and_ambiguity",
+    "line": 202,
+    "name": "test_old_token_scan_filters_foreign_and_ambiguity",
+    "source_literals": [
+      "/operations/scan/resolve",
+      "/operations/scan/resolve",
+      "/operations/scan/resolve"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_home_scope.py::test_old_token_cannot_add_foreign_document_line",
+    "line": 336,
+    "name": "test_old_token_cannot_add_foreign_document_line",
+    "source_literals": [
+      "/operations/",
+      "/",
+      "/lines",
+      "/"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_product_api_matrix.py::test_foreign_product_direct_requests_disclose_nothing_and_write_nothing",
+    "line": 160,
+    "name": "test_foreign_product_direct_requests_disclose_nothing_and_write_nothing",
+    "source_literals": [
+      "/dimensions/history"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_product_api_matrix.py::test_mixed_bulk_requests_preserve_foreign_rows",
+    "line": 250,
+    "name": "test_mixed_bulk_requests_preserve_foreign_rows",
+    "source_literals": [
+      "/products/fbs-rule/bulk",
+      "/products/fbs-rule",
+      "/products/fbs-rule/reset-legacy-limits",
+      "/products/fbs-stock-sync/bulk",
+      "/products/fbs-stock-limit/from-balance/bulk",
+      "/products/requires-honest-sign/bulk"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms488_product_api_matrix.py::test_seller_export_and_report_ignore_foreign_seller_override",
+    "line": 339,
+    "name": "test_seller_export_and_report_ignore_foreign_seller_override",
+    "source_literals": [
+      "/reports/inventory",
+      "/reports/inventory/export.csv"
+    ]
+  },
+  {
+    "nodeid": "backend/tests/test_wms489_kiz_reprints.py::test_kiz_reprint_scopes_history_to_tenant_and_reception_permission",
+    "line": 270,
+    "name": "test_kiz_reprint_scopes_history_to_tenant_and_reception_permission",
+    "source_literals": []
+  }
+]

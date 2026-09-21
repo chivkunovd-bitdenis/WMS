@@ -1,0 +1,367 @@
+[
+  {
+    "time": 1790004948.775222,
+    "event": "start",
+    "request": "0b4cc700",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004948.8096588,
+    "event": "product_response",
+    "request": "0b4cc700",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004948.809855,
+    "event": "end",
+    "request": "0b4cc700",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790004990.0923378,
+    "event": "start",
+    "request": "5181dfac",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004990.1231098,
+    "event": "product_response",
+    "request": "5181dfac",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004990.1234,
+    "event": "end",
+    "request": "5181dfac",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790004990.638881,
+    "event": "start",
+    "request": "14f0493e",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004990.6601548,
+    "event": "product_response",
+    "request": "14f0493e",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004990.660365,
+    "event": "end",
+    "request": "14f0493e",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790004991.0703459,
+    "event": "start",
+    "request": "4b76228a",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004991.0914319,
+    "event": "product_response",
+    "request": "4b76228a",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004991.0916421,
+    "event": "end",
+    "request": "4b76228a",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790004991.468792,
+    "event": "start",
+    "request": "4e883d6c",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004991.489534,
+    "event": "product_response",
+    "request": "4e883d6c",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004991.489748,
+    "event": "end",
+    "request": "4e883d6c",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790004991.878902,
+    "event": "start",
+    "request": "618566fa",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790004991.899199,
+    "event": "product_response",
+    "request": "618566fa",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790004991.899425,
+    "event": "end",
+    "request": "618566fa",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790005103.8284512,
+    "event": "start",
+    "request": "afe51c8b",
+    "path": "/operations/inbound-intake-requests/2b258e0f-b125-4cd6-b465-2fad8b84428d/receiving/scan",
+    "method": "POST",
+    "rule": "close_queue_first_delay"
+  },
+  {
+    "time": 1790005118.869441,
+    "event": "product_response",
+    "request": "afe51c8b",
+    "path": "/operations/inbound-intake-requests/2b258e0f-b125-4cd6-b465-2fad8b84428d/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790005118.8697238,
+    "event": "end",
+    "request": "afe51c8b",
+    "path": "/operations/inbound-intake-requests/2b258e0f-b125-4cd6-b465-2fad8b84428d/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790005138.206508,
+    "event": "start",
+    "request": "0496ab43",
+    "path": "/operations/marketplace-unload-requests/adf0cc5d-c881-4a6c-ad56-bff9fa5986b0/lines/1a7ec976-3328-4fca-a8a3-613c2bbd5725",
+    "method": "DELETE",
+    "rule": null
+  },
+  {
+    "time": 1790005138.287991,
+    "event": "product_response",
+    "request": "0496ab43",
+    "path": "/operations/marketplace-unload-requests/adf0cc5d-c881-4a6c-ad56-bff9fa5986b0/lines/1a7ec976-3328-4fca-a8a3-613c2bbd5725",
+    "method": "DELETE",
+    "status": 204
+  },
+  {
+    "time": 1790005138.288131,
+    "event": "end",
+    "request": "0496ab43",
+    "path": "/operations/marketplace-unload-requests/adf0cc5d-c881-4a6c-ad56-bff9fa5986b0/lines/1a7ec976-3328-4fca-a8a3-613c2bbd5725",
+    "method": "DELETE"
+  },
+  {
+    "time": 1790005138.466784,
+    "event": "start",
+    "request": "cb7be55c",
+    "path": "/operations/marketplace-unload-requests/adf0cc5d-c881-4a6c-ad56-bff9fa5986b0/lines",
+    "method": "POST",
+    "rule": "outbound_post_failure"
+  },
+  {
+    "time": 1790005138.467071,
+    "event": "end",
+    "request": "cb7be55c",
+    "path": "/operations/marketplace-unload-requests/adf0cc5d-c881-4a6c-ad56-bff9fa5986b0/lines",
+    "method": "POST",
+    "status": 503,
+    "synthetic": true
+  },
+  {
+    "time": 1790005379.327035,
+    "event": "start",
+    "request": "c7876a2b",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST",
+    "rule": "receiving_success_response_replaced"
+  },
+  {
+    "time": 1790005379.3819149,
+    "event": "product_committed_response_replaced",
+    "request": "c7876a2b",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST",
+    "status": 200,
+    "synthetic_status": 503
+  },
+  {
+    "time": 1790005379.38209,
+    "event": "end",
+    "request": "c7876a2b",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST",
+    "status": 503,
+    "synthetic": true
+  },
+  {
+    "time": 1790005388.413461,
+    "event": "start",
+    "request": "2e20c0c0",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790005388.429476,
+    "event": "product_response",
+    "request": "2e20c0c0",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790005388.429614,
+    "event": "end",
+    "request": "2e20c0c0",
+    "path": "/operations/inbound-intake-requests/d8ae327d-eb82-4cd6-ae0c-181ea3d35e2c/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790005514.71937,
+    "event": "start",
+    "request": "004374db",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST",
+    "rule": "sorting_objects_first_delay"
+  },
+  {
+    "time": 1790005520.0252109,
+    "event": "start",
+    "request": "46d47d0a",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790005520.065762,
+    "event": "product_response",
+    "request": "46d47d0a",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790005520.06587,
+    "event": "end",
+    "request": "46d47d0a",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST"
+  },
+  {
+    "time": 1790005529.7766101,
+    "event": "product_response",
+    "request": "004374db",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790005529.777174,
+    "event": "end",
+    "request": "004374db",
+    "path": "/warehouses/dcca77ff-6899-4dd0-8d02-ad80da16efb4/sorting-objects/place",
+    "method": "POST"
+  },
+  {
+    "time": 1790005571.9382389,
+    "event": "start",
+    "request": "5d7070a8",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "rule": null
+  },
+  {
+    "time": 1790005571.960068,
+    "event": "product_response",
+    "request": "5d7070a8",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "time": 1790005571.9602659,
+    "event": "end",
+    "request": "5d7070a8",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/receiving/scan",
+    "method": "POST"
+  },
+  {
+    "time": 1790005613.0400782,
+    "event": "start",
+    "request": "2ac0aeb4",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH",
+    "rule": null
+  },
+  {
+    "time": 1790005613.090861,
+    "event": "product_response",
+    "request": "2ac0aeb4",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH",
+    "status": 200
+  },
+  {
+    "time": 1790005613.091041,
+    "event": "end",
+    "request": "2ac0aeb4",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH"
+  },
+  {
+    "time": 1790005613.166347,
+    "event": "start",
+    "request": "fcdad5be",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH",
+    "rule": null
+  },
+  {
+    "time": 1790005613.193057,
+    "event": "product_response",
+    "request": "fcdad5be",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH",
+    "status": 200
+  },
+  {
+    "time": 1790005613.1932101,
+    "event": "end",
+    "request": "fcdad5be",
+    "path": "/operations/inbound-intake-requests/8217803c-c3ab-41d6-b051-fcdf1249e4e5/lines/6a6872ce-1c17-4209-bce5-8762b560c079/actual",
+    "method": "PATCH"
+  }
+]

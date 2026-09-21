@@ -1,0 +1,366 @@
+Isolated loopback PostgreSQL wms501_isolation2; external sockets blocked; mode=selected
+..............ss............F.............F............................. [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+.................................                                        [100%]
+=================================== FAILURES ===================================
+______________ test_same_wb_supply_id_in_two_tenants_is_isolated _______________
+
+self = <sqlalchemy.engine.base.Connection object at 0x1133b0e60>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialectAsync_psycopg object at 0x10a22a660>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x11288e550>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x1171556d0>
+parameters = [{'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.AsyncCursor [closed] [IDLE] (host=127.0.0.1 port=55451 user=deniscivkunov database=wms501_isolation2) at 0x116b2ec90>
+query = 'INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wm...IME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at'
+params = {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}
+prepare = None, binary = None
+
+    async def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            async with self._conn.lock:
+                await self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.ForeignKeyViolation: insert or update on table "fbs_warehouse_bindings" violates foreign key constraint "fbs_warehouse_bindings_tenant_id_fkey"
+E           DETAIL:  Key (tenant_id)=(82228a36-f988-4c77-810a-1e66b8ba99f5) is not present in table "tenants".
+
+../../backend/.venv/lib/python3.14/site-packages/psycopg/cursor_async.py:117: ForeignKeyViolation
+
+The above exception was the direct cause of the following exception:
+
+async_client = <httpx.AsyncClient object at 0x1171d5190>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x116ac9e80>
+
+    @pytest.mark.asyncio
+    async def test_same_wb_supply_id_in_two_tenants_is_isolated(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _ = async_client
+        _disable_wb_mocks(monkeypatch)
+        shared_wb_id = "WB-GI-411-SHARED"
+        tenant_a, seller_a, warehouse_a = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        tenant_b, seller_b, warehouse_b = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+>       supply_a = await _seed_supply(
+            tenant_id=tenant_a,
+            seller_id=seller_a,
+            warehouse_id=warehouse_a,
+            wb_supply_id=shared_wb_id,
+            wb_order_ids=[411001],
+        )
+
+backend/tests/test_fbs_tracking_supply_done_rate_limit.py:764: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/tests/test_fbs_tracking_supply_done_rate_limit.py:172: in _seed_supply
+    await seed_fbs_warehouse_binding(
+backend/tests/fbs_seed_helpers.py:42: in seed_fbs_warehouse_binding
+    await session.flush()
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4353: in flush
+    self._flush(objects)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4488: in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:4449: in _flush
+    flush_context.execute()
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py:465: in execute
+    rec.execute(self)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py:94: in save_obj
+    _emit_insert_statements(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.AsyncCursor [closed] [IDLE] (host=127.0.0.1 port=55451 user=deniscivkunov database=wms501_isolation2) at 0x116b2ec90>
+query = 'INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wm...IME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at'
+params = {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', ...}
+prepare = None, binary = None
+
+    async def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            async with self._conn.lock:
+                await self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.IntegrityError: (psycopg.errors.ForeignKeyViolation) insert or update on table "fbs_warehouse_bindings" violates foreign key constraint "fbs_warehouse_bindings_tenant_id_fkey"
+E           DETAIL:  Key (tenant_id)=(82228a36-f988-4c77-810a-1e66b8ba99f5) is not present in table "tenants".
+E           [SQL: INSERT INTO fbs_warehouse_bindings (id, tenant_id, seller_id, marketplace, external_warehouse_id, wb_warehouse_id, wms_warehouse_id, is_active, stock_sync_enabled, served, lease_until, last_sync_status, last_sync_at, last_error_code) VALUES (%(id)s::UUID, %(tenant_id)s::UUID, %(seller_id)s::UUID, %(marketplace)s::VARCHAR, %(external_warehouse_id)s::VARCHAR, %(wb_warehouse_id)s::BIGINT, %(wms_warehouse_id)s::UUID, %(is_active)s, %(stock_sync_enabled)s, %(served)s, %(lease_until)s::TIMESTAMP WITH TIME ZONE, %(last_sync_status)s::VARCHAR, %(last_sync_at)s::TIMESTAMP WITH TIME ZONE, %(last_error_code)s::VARCHAR) RETURNING fbs_warehouse_bindings.created_at, fbs_warehouse_bindings.updated_at]
+E           [parameters: {'id': UUID('70e8db95-1139-459d-a597-f480727044ae'), 'tenant_id': UUID('82228a36-f988-4c77-810a-1e66b8ba99f5'), 'seller_id': UUID('b70b0ca2-db22-412e-9ff0-debbdf25053a'), 'marketplace': 'wb', 'external_warehouse_id': None, 'wb_warehouse_id': 501001, 'wms_warehouse_id': UUID('f78f9bbf-9f7b-4b52-9a3e-59de9b4a43bd'), 'is_active': True, 'stock_sync_enabled': True, 'served': True, 'lease_until': None, 'last_sync_status': None, 'last_sync_at': None, 'last_error_code': None}]
+E           (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+../../backend/.venv/lib/python3.14/site-packages/psycopg/cursor_async.py:117: IntegrityError
+___________ test_catalog_list_and_lookup_are_tenant_scoped_read_only ___________
+
+async_client = <httpx.AsyncClient object at 0x1163b8f50>
+
+    @pytest.mark.asyncio
+    async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
+        async_client: AsyncClient,
+    ) -> None:
+        suffix = uuid.uuid4().hex[:12]
+        admin_headers = await _register_admin(async_client, suffix)
+        tenant_id = await _tenant_id(async_client, admin_headers)
+        ids = await _seed_packages(tenant_id)
+        before = await _read_state(ids)
+    
+        listed = await async_client.get("/operations/inbound-packages", headers=admin_headers)
+        assert listed.status_code == 200, listed.text
+        rows = listed.json()
+        assert [row["internal_barcode"] for row in rows] == [
+            "INB-CURRENT-RESIDUAL",
+            "INB-CURRENT-EMPTY",
+            "INB-CURRENT-DISTRIBUTED",
+            "ICG-CURRENT",
+            "INB-OLD-RESIDUAL",
+            "INB-DONE-DISTRIBUTED",
+        ]
+        residual = rows[0]
+        assert residual["kind"] == "box"
+        assert residual["fully_distributed"] is False
+        assert residual["remaining_qty"] == 6
+        assert residual["lines"] == [
+            {
+                "product_id": str(ids["product_id"]),
+                "remaining_qty": 6,
+                "name": "Товар в коробе",
+                "sku_code": "PKG-CATALOG-SKU",
+                "wb_vendor_code": "SELLER-ARTICLE",
+                "wb_barcode": "2030000000012",
+                "wb_size": "46",
+                "seller_name": "Селлер короба",
+            }
+        ]
+>       assert residual["source_document"] == {
+            "kind": "inbound_intake",
+            "id": str(ids["current_request_id"]),
+            "number": "№000002",
+            "date": "2026-08-23T10:15:00",
+        }
+E       AssertionError: assert {'kind': 'inb...:15:00+04:00'} == {'kind': 'inb...-23T10:15:00'}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'date': '2026-08-23T14:15:00+04:00'} != {'date': '2026-08-23T10:15:00'}
+E         Use -v to get more diff
+
+backend/tests/test_inbound_package_catalog.py:310: AssertionError
+=============================== warnings summary ===============================
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+tests/test_billing_financial_core_migration.py::test_billing_invoice_number_is_unique_inside_tenant_only
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/alembic/config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/test_tenant_settings.py::test_tenant_settings_patch_no_fields_returns_422
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/test_fbs_tracking_supply_done_rate_limit.py::test_same_wb_supply_id_in_two_tenants_is_isolated
+FAILED backend/tests/test_inbound_package_catalog.py::test_catalog_list_and_lookup_are_tenant_scoped_read_only
+2 failed, 245 passed, 2 skipped, 7 warnings in 130.42s (0:02:10)

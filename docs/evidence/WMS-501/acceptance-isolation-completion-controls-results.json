@@ -1,0 +1,50 @@
+[
+  {
+    "case": "owned inbound",
+    "status": 200
+  },
+  {
+    "case": "owned unload",
+    "status": 200
+  },
+  {
+    "case": "owned outbound",
+    "status": 200
+  },
+  {
+    "case": "owned pack",
+    "status": 200
+  },
+  {
+    "case": "owned count",
+    "status": 200
+  },
+  {
+    "case": "owned supply",
+    "status": 200
+  },
+  {
+    "case": "owned box mutation",
+    "status": 200
+  },
+  {
+    "case": "package BOX-own",
+    "status": 200
+  },
+  {
+    "case": "package BOX-foreign",
+    "status": 404
+  },
+  {
+    "case": "package CARGO-foreign",
+    "status": 404
+  },
+  {
+    "case": "package NONEXISTENT-AUDIT",
+    "status": 404
+  },
+  {
+    "case": "package list excludes foreign",
+    "status": 200
+  }
+]

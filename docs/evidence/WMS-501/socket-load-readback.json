@@ -1,0 +1,62 @@
+{
+  "primary_successful_scan_posts": 4356,
+  "primary_durable_sum_actual_qty": 4356,
+  "primary_equal": true,
+  "initial_all_actual_qty": 0,
+  "documents_checked": 130,
+  "limitation": "Aggregate quantity equality only; no per-attempt idempotency contract or per-document event matching.",
+  "supplement": {
+    "name": "barcode_only_500lines_shared25",
+    "operators": 25,
+    "mode": "shared",
+    "requested_duration_s": 15,
+    "elapsed_s": 15.84,
+    "requests_per_s": 32.89,
+    "all": {
+      "requests": 521,
+      "statuses": {
+        "200": 521
+      },
+      "p50_ms": 675.23,
+      "p95_ms": 1073.61,
+      "p99_ms": 1276.9,
+      "max_ms": 1613.06
+    },
+    "by_kind": {
+      "catalog_page": {
+        "requests": 105,
+        "statuses": {
+          "200": 105
+        },
+        "p50_ms": 100.61,
+        "p95_ms": 378.44,
+        "p99_ms": 671.95,
+        "max_ms": 833.92
+      },
+      "scan_resolve": {
+        "requests": 102,
+        "statuses": {
+          "200": 102
+        },
+        "p50_ms": 112.13,
+        "p95_ms": 285.71,
+        "p99_ms": 340.1,
+        "max_ms": 513.93
+      },
+      "scan_write": {
+        "requests": 314,
+        "statuses": {
+          "200": 314
+        },
+        "p50_ms": 770.05,
+        "p95_ms": 1180.6,
+        "p99_ms": 1337.21,
+        "max_ms": 1613.06
+      }
+    },
+    "errors": []
+  },
+  "supplement_durable_increment": 314,
+  "supplement_successful_scan_posts": 314,
+  "supplement_equal": true
+}

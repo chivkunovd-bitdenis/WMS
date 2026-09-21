@@ -1,0 +1,9 @@
+BEGIN
+SET
+SET
+ products_with_codes | largest_list_codes | largest_list_pdf_bytes 
+---------------------+--------------------+------------------------
+                  71 |                646 |              130601301
+(1 row)
+
+ROLLBACK

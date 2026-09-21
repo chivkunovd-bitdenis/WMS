@@ -1,0 +1,8 @@
+Mon Sep 21 15:42:30 UTC 2026
+3
+               total        used        free      shared  buff/cache   available
+Mem:            3886        3171         110         164         604         285
+Swap:           3071        1153        1918
+some avg10=0.00 avg60=0.00 avg300=0.00 total=7450294548
+full avg10=0.00 avg60=0.00 avg300=0.00 total=4776797811
+0

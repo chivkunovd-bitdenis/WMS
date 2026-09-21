@@ -1,0 +1,14 @@
+{
+  "document_errors": [],
+  "checker_method": "Direct document_errors; audit baseline predates checker introduction. Local check, not CI.",
+  "python_compile_errors": [],
+  "broken_markdown_links": [],
+  "AGENTS_equals_CLAUDE": true,
+  "rules_match_main_checkout": true,
+  "global_rule_matches_git_snapshot": true,
+  "unexpected_modified_paths": [],
+  "runtime_cleanup": "See runtime-cleanup.txt. Owned listeners stopped, disposable runtime removed; kernel-wait checkpointer required queued SIGKILL, no graceful-shutdown claim.",
+  "tests": "70 mobile;6 new isolation probes independently replayed;93 negative HTTP+12controls;226 production FK aggregate checks;4356+314 durable increments. Original targeted245PASS/2FAIL/2SKIP preserved with investigated causes.",
+  "whitespace": "Raw logs and original user quote preserved; configured diff check ignores only blank-at-eol/blank-at-eof.",
+  "final_analyst_acceptance": "Audit accepted with documented limitations; product defects remain open; C1-C12 filled after continuation review."
+}
