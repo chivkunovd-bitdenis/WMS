@@ -335,6 +335,9 @@ class FbsOrderTapePrintBody(BaseModel):
     allow_partial: bool = False
     include_order_qr: bool = True
     reprint: bool = False
+    # The inline FBS action can target one KIZ in an Ozon posting.  Normal
+    # order/bulk reprints leave this empty and preserve their all-codes flow.
+    reprint_marking_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
 
 
 class FbsOrderTapePrintedCodeOut(BaseModel):
@@ -785,6 +788,8 @@ def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -
         "invalid_layout_json",
         "invalid_layout_block",
         "invalid_layout_copies",
+        "reprint_code_selection_requires_reprint",
+        "reprint_code_not_found",
     }:
         raise_fbs_http(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code)
     if exc.code.startswith("wb_"):
@@ -1979,6 +1984,7 @@ async def print_fbs_supply_order_tape(
                 reprint=body.reprint,
                 actor_user_id=user.id,
                 http_client=http_client,
+                reprint_marking_ids=body.reprint_marking_ids,
             )
         except order_tape_svc.FbsOrderTapePrintError as exc:
             _raise_from_order_tape_service(exc)

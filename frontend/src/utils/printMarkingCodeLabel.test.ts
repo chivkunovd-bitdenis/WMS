@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { formatGtinDisplay, maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
@@ -6,12 +6,49 @@ import {
   buildCzLabelHtml,
   buildMarkingTapeDocument,
   buildWbOrderQrLabelHtml,
+  printHtmlInIframe,
   resolveCzArtifactTapeCodeIds,
 } from './printMarkingCodeLabel'
 import type { MarkingTapeUnitInput } from './printMarkingCodeLabel'
 
 const SAMPLE_CIS = `01${'04600000000001'}21${'A'.repeat(20)}0001`
 const MATRIX_STUB = 'data:image/png;base64,stub'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function stubIframePrint(print: () => void): void {
+  const iframe: {
+    onload: (() => void) | null
+    onerror: (() => void) | null
+    contentWindow: { focus: () => void; print: () => void }
+    contentDocument: { querySelectorAll: () => [] }
+    style: Record<string, string>
+    setAttribute: () => void
+    srcdoc: string
+  } = {
+    onload: null,
+    onerror: null,
+    contentWindow: { focus: () => undefined, print },
+    contentDocument: { querySelectorAll: () => [] },
+    style: {},
+    setAttribute: () => undefined,
+    get srcdoc() { return '' },
+    set srcdoc(_html: string) { queueMicrotask(() => this.onload?.()) },
+  }
+  vi.stubGlobal('window', {
+    setTimeout: (callback: () => void, delay?: number) => {
+      if ((delay ?? 0) < 20_000) queueMicrotask(callback)
+      return 1
+    },
+    clearTimeout: () => undefined,
+  })
+  vi.stubGlobal('document', {
+    createElement: () => iframe,
+    body: { appendChild: () => iframe, removeChild: () => undefined },
+  })
+}
 
 describe('parseGs1Cis', () => {
   it('extracts GTIN and serial from GS1 CIS', () => {
@@ -28,6 +65,20 @@ describe('parseGs1Cis', () => {
   it('masks long CIS tail for print', () => {
     expect(maskCisTail(SAMPLE_CIS)).toMatch(/^…/)
     expect(maskCisTail('short')).toBe('short')
+  })
+})
+
+describe('printHtmlInIframe launch acknowledgement', () => {
+  it('resolves only after the browser print form is invoked', async () => {
+    const print = vi.fn()
+    stubIframePrint(print)
+    await printHtmlInIframe('<html></html>')
+    expect(print).toHaveBeenCalledOnce()
+  })
+
+  it('rejects when the browser cannot launch the print form', async () => {
+    stubIframePrint(() => { throw new Error('print blocked') })
+    await expect(printHtmlInIframe('<html></html>')).rejects.toThrow('Не удалось запустить печать КИЗ.')
   })
 })
 

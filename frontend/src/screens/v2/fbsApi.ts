@@ -153,6 +153,7 @@ export type FbsOrderMetadata = {
   required: string[]
   optional: string[]
   states: Array<{
+    id?: string | null
     kind: string
     status:
       | 'missing'
@@ -398,6 +399,7 @@ export type FbsOrderPrintTapeRequest = {
   allow_partial: boolean
   include_order_qr: boolean
   reprint: boolean
+  reprint_marking_ids?: string[]
 }
 
 export type FbsOrderPrintTapeOrder = {

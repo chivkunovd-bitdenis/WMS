@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -37,6 +38,7 @@ from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
 from app.models.marking_code import (
     EVENT_APPLIED,
+    EVENT_REPRINTED,
     EVENT_VOIDED,
     EVENT_WB_ORPHANED,
     STATUS_APPLIED,
@@ -2487,12 +2489,23 @@ async def test_fbs_kiz_pool_to_external_replacement_does_not_double_count_unit(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reprint", [False, True])
-async def test_fbs_order_tape_refuses_print_for_operator_kiz(
+@pytest.mark.parametrize(
+    ("reprint", "meta_status"),
+    [
+        (False, META_STATUS_ACCEPTED),
+        (True, META_STATUS_PENDING),
+        (True, META_STATUS_REJECTED),
+    ],
+)
+async def test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
     reprint: bool,
+    meta_status: str,
 ) -> None:
-    # TC-NEW-FBS-KIZ-010: print and reprint cannot issue a pool label over operator KIZ.
+    # WMS-489: a first print remains forbidden for an operator-bound KIZ, but
+    # the explicit FBS reprint must print that exact linked code and only append
+    # the ordinary reprint ledger event.
     headers, suffix = await _register_ff_admin(async_client)
     actor_response = await async_client.get("/auth/me", headers=headers)
     assert actor_response.status_code == 200, actor_response.text
@@ -2522,7 +2535,7 @@ async def test_fbs_order_tape_refuses_print_for_operator_kiz(
         assert db_order is not None
         db_order.required_meta_json = [MARKING_KIND_SGTIN]
         await session.commit()
-    await _seed_active_marking(
+    code_id = await _seed_active_marking(
         tenant_id=tenant_id,
         seller_id=seller_id,
         order=order,
@@ -2533,6 +2546,18 @@ async def test_fbs_order_tape_refuses_print_for_operator_kiz(
         qty_marking_printed=0,
         qty_marking_external=1,
     )
+    async with SessionLocal() as session:
+        marking_id = await session.scalar(
+            select(FbsOrderMarking.id).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert marking_id is not None
+        marking = await session.get(FbsOrderMarking, marking_id)
+        assert marking is not None
+        marking.meta_status = meta_status
+        await session.commit()
+
+    send_or_reconcile = AsyncMock()
+    monkeypatch.setattr(tape_print_svc, "_send_or_reconcile_printed_marking", send_or_reconcile)
 
     async with SessionLocal() as session:
         result = await tape_print_svc.print_fbs_order_tape(
@@ -2546,11 +2571,38 @@ async def test_fbs_order_tape_refuses_print_for_operator_kiz(
             reprint=reprint,
             actor_user_id=actor_user_id,
             http_client=async_client,
+            reprint_marking_ids=[marking_id] if reprint else None,
         )
 
-    assert result.orders == []
-    assert len(result.order_errors) == 1
-    assert result.order_errors[0].code == "operator_kiz_print_forbidden"
+    if not reprint:
+        assert result.orders == []
+        assert len(result.order_errors) == 1
+        assert result.order_errors[0].code == "operator_kiz_print_forbidden"
+        return
+
+    assert result.order_errors == []
+    assert result.orders[0].codes == [_cis("OPPRINT1")]
+    assert result.orders[0].printed_codes[0].id == code_id
+    async with SessionLocal() as session:
+        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
+        code = await session.get(MarkingCode, code_id)
+        reprint_events = await session.scalar(
+            select(func.count(MarkingCodeEvent.id)).where(
+                MarkingCodeEvent.code_id == code_id,
+                MarkingCodeEvent.event_type == EVENT_REPRINTED,
+            )
+        )
+        assert line is not None
+        assert code is not None
+        persisted_marking = await session.get(FbsOrderMarking, marking_id)
+        assert persisted_marking is not None
+        assert line.qty_marking_printed == 0
+        assert line.qty_marking_external == 1
+        assert code.source == "external_fbs"
+        assert code.pool_id is None
+        assert reprint_events == 1
+        assert persisted_marking.meta_status == meta_status
+    send_or_reconcile.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -131,6 +131,10 @@ type RowOptions = {
   isOzon?: boolean
   productName?: string
   positionNames?: string[]
+  tail?: string | null
+  operatorKiz?: boolean
+  markingCodeId?: string
+  onOperatorKizReprint?: (...args: unknown[]) => void
 }
 
 function packingRow(options: RowOptions = {}): RenderNode {
@@ -167,7 +171,8 @@ function packingRow(options: RowOptions = {}): RenderNode {
     czReady: true,
     markingView: { tone: 'neutral', label: '', reason: null },
     markingColor: 'text.secondary',
-    tail: null,
+    markingState: options.markingCodeId ? { id: options.markingCodeId } : undefined,
+    tail: options.tail ?? null,
     stickerParts: null,
     line: undefined,
     busy: false,
@@ -176,6 +181,8 @@ function packingRow(options: RowOptions = {}): RenderNode {
     packingSelectedIds: new Set<string>(),
     markingShortOrderIds: new Set<string>(),
     hasRemovableKiz: () => false,
+    hasOperatorKiz: () => options.operatorKiz ?? false,
+    openOrderMarkingPrint: options.onOperatorKizReprint ?? (() => undefined),
     productBarcodeOptionsForPosition: () => [],
     alpha: () => 'transparent',
     PackingSizeCell: (props: Record<string, unknown>) => render(renderSizeCell, props),
@@ -298,6 +305,37 @@ describe('C5 · поставка без ЧЗ и без размеров', () => 
 
   it('убирает ячейку размера, когда столбец скрыт', () => {
     expect(sizeCells(packingRow({ showsSize: false }))).toHaveLength(0)
+  })
+})
+
+describe('WMS-489 · перепечатка уже привязанного КИЗ на FBS-упаковке', () => {
+  it('показывает маленькую круговую стрелку только у KIZ, внесённого оператором', () => {
+    const withOperatorKiz = packingRow({ operatorKiz: true, tail: '…KIZ-123' })
+    const withoutOperatorKiz = packingRow({ tail: '…KIZ-123' })
+    expect(findAll(withOperatorKiz, 'fbs-kiz-reprint-inline')).toHaveLength(1)
+    expect(findAll(withoutOperatorKiz, 'fbs-kiz-reprint-inline')).toHaveLength(0)
+    expect(source).toContain('ReplayOutlinedIcon')
+  })
+
+  it('ставит стрелку слева от показанного KIZ и открывает стандартную печать в reprint-режиме', () => {
+    const calls: unknown[][] = []
+    const row = packingRow({
+      operatorKiz: true,
+      tail: '…KIZ-123',
+      markingCodeId: 'marking-code-1',
+      onOperatorKizReprint: (...args: unknown[]) => { calls.push(args) },
+    })
+    const reprintButton = findAll(row, 'fbs-kiz-reprint-inline')[0]
+    expect(reprintButton.props['aria-label']).toBe('Перепечатать КИЗ')
+    ;(reprintButton.props.onClick as () => void)()
+    expect(calls).toHaveLength(1)
+    expect(calls[0][2]).toBe(true)
+    expect(calls[0][3]).toBe('marking-code-1')
+
+    const reprintIndex = source.indexOf('data-testid="fbs-kiz-reprint-inline"')
+    const shownKizIndex = source.indexOf('data-testid="fbs-kiz-tail"')
+    expect(reprintIndex).toBeGreaterThan(-1)
+    expect(reprintIndex).toBeLessThan(shownKizIndex)
   })
 })
 

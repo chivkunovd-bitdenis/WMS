@@ -477,6 +477,7 @@ def build_order_metadata(
         for mark in current:
             states.append(
                 {
+                    "id": str(mark.id),
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,

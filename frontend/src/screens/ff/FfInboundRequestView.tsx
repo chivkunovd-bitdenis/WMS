@@ -60,6 +60,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
+import { KizReprintDialog } from '../../components/KizReprintDialog'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
@@ -111,7 +112,7 @@ import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
-import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine } from './inboundReceivingRuntime'
+import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -493,6 +494,7 @@ export function FfInboundRequestView({
   const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
   const [returnAutoPrint, setReturnAutoPrint] = useState(false)
+  const [kizReprintOpen, setKizReprintOpen] = useState(false)
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
@@ -571,8 +573,10 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
-      !distOpen,
+      !distOpen &&
+      !kizReprintOpen,
     onScan: (code) => {
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => scanToReceiving(code))
     },
   })
@@ -585,8 +589,10 @@ export function FfInboundRequestView({
       boxAddDialogBoxId == null &&
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
-      dimensionsLine == null,
+      dimensionsLine == null &&
+      !kizReprintOpen,
     onScan: (code) => {
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => addLineByBarcode(code))
     },
   })
@@ -2419,6 +2425,17 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
+              {isFulfillmentAdmin && workspace !== 'sorting' && isReturnOperation ? (
+                <Button
+                  variant="outlined"
+                  disabled={!detail.seller_id}
+                  onClick={() => setKizReprintOpen(true)}
+                  data-testid="ff-inbound-return-kiz-reprint"
+                >
+                  Перепечатать ЧЗ
+                </Button>
+              ) : null}
+
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -4122,6 +4139,13 @@ export function FfInboundRequestView({
         onClose={() => setBoxPrintTarget(null)}
         onConfirm={(size) => void confirmInboundBoxPrint(size)}
         testId="ff-inbound-box-print-dialog"
+      />
+      <KizReprintDialog
+        open={kizReprintOpen}
+        token={token}
+        sellerId={detail?.seller_id}
+        onClose={() => setKizReprintOpen(false)}
+        testId="ff-inbound-return-kiz-reprint-dialog"
       />
     </Box>
     </FfProductMarkingPrintProvider>

@@ -43,3 +43,8 @@ export function createSerialScanQueue() {
     return next
   }
 }
+
+/** An open KIZ reprint dialog owns the scanner; intake must not see its burst. */
+export function shouldDispatchInboundScan(kizReprintOpen: boolean): boolean {
+  return !kizReprintOpen
+}
