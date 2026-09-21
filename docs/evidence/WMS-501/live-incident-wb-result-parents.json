@@ -1,0 +1,27 @@
+{
+  "observed_at": "2026-09-21T18:44:25.393101+00:00",
+  "current_task_ids": 19104,
+  "parents": 1811,
+  "retained_parents": 1811,
+  "statuses": {
+    "SUCCESS": 1811
+  },
+  "messages": {
+    "cooldown": 1810,
+    "already_running": 1
+  },
+  "errors": {
+    "None": 1811
+  },
+  "delay_min_s": 0,
+  "delay_max_s": 43220,
+  "date_done_min": "2026-09-21T10:15:00.179644+03:00",
+  "date_done_max": "2026-09-21T13:01:37.996710+03:00",
+  "status_children": {
+    "SUCCESS:children=13": 354,
+    "SUCCESS:children=12": 1185,
+    "SUCCESS:children=1": 270,
+    "SUCCESS:children=10": 1,
+    "SUCCESS:children=2": 1
+  }
+}

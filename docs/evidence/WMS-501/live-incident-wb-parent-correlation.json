@@ -1,0 +1,24 @@
+{
+  "rows_current": 19104,
+  "parents_current": 1811,
+  "log_lines": 297599,
+  "log_first": "2026-09-21T10:05:00.459201240Z",
+  "log_last": "2026-09-21T18:40:00.120529258Z",
+  "bounded_at35seconds": false,
+  "parents_found_succeeded": 0,
+  "total_parent_successes": 0,
+  "parent_result_messages": {},
+  "parent_delay_min_s": null,
+  "parent_delay_max_s": null,
+  "delay_histogram_top": [],
+  "childcount_vs_parent_successcount": {
+    "children=13,successes=0": 354,
+    "children=12,successes=0": 1185,
+    "children=1,successes=0": 270,
+    "children=10,successes=0": 1,
+    "children=2,successes=0": 1
+  },
+  "parent_successes_per_hour": {},
+  "root_task_events": {},
+  "root_event_details_without_ids": []
+}

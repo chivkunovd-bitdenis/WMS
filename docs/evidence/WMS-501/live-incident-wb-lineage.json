@@ -1,0 +1,43 @@
+{
+  "observed_at": "2026-09-21T18:42:36.884157+00:00",
+  "rows": 19104,
+  "unique_task_ids": 19104,
+  "tasks": {
+    "wb_orchestrator_tick": 19104
+  },
+  "retries": {
+    "0": 19104
+  },
+  "redelivered": {
+    "True": 19104
+  },
+  "missing": {},
+  "roots_distinct": 6,
+  "root_sizes_desc": [
+    18945,
+    155,
+    1,
+    1,
+    1,
+    1
+  ],
+  "parents_distinct": 1811,
+  "parent_children_histogram": {
+    "13": 354,
+    "12": 1185,
+    "1": 270,
+    "10": 1,
+    "2": 1
+  },
+  "max_children_same_parent": 13,
+  "parents_also_current_tasks": 0,
+  "roots_also_current_tasks": 0,
+  "eta_min_utc": "2026-09-21T19:15:04.190499+00:00",
+  "eta_max_utc": "2026-09-21T19:19:25.749269+00:00",
+  "origin_process_counts": {
+    "gen8": 6580,
+    "gen10": 6141,
+    "gen9": 6383
+  },
+  "timestamp_headers_present_note": "Task protocol ETA inspected, no message arguments decoded or printed."
+}

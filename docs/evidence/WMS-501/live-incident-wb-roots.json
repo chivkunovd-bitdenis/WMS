@@ -1,0 +1,130 @@
+{
+  "roots": [
+    {
+      "current_descendants": 18945,
+      "retained": false
+    },
+    {
+      "current_descendants": 155,
+      "retained": false
+    },
+    {
+      "current_descendants": 1,
+      "retained": true,
+      "status": "SUCCESS",
+      "date_done": "2026-09-21T13:00:44.625885+03:00",
+      "children_count": 1,
+      "result_keys": [
+        "ok",
+        "status"
+      ],
+      "ok": true,
+      "result_status": "scheduled"
+    },
+    {
+      "current_descendants": 1,
+      "retained": true,
+      "status": "SUCCESS",
+      "date_done": "2026-09-21T13:01:00.398795+03:00",
+      "children_count": 1,
+      "result_keys": [
+        "ok",
+        "status"
+      ],
+      "ok": true,
+      "result_status": "scheduled"
+    },
+    {
+      "current_descendants": 1,
+      "retained": true,
+      "status": "SUCCESS",
+      "date_done": "2026-09-21T13:00:11.979472+03:00",
+      "children_count": 2,
+      "result_keys": [
+        "ok",
+        "step"
+      ],
+      "ok": true
+    },
+    {
+      "current_descendants": 1,
+      "retained": true,
+      "status": "SUCCESS",
+      "date_done": "2026-09-21T13:00:11.616343+03:00",
+      "children_count": 2,
+      "result_keys": [
+        "ok",
+        "step"
+      ],
+      "ok": true
+    }
+  ],
+  "parent_delay_histogram_top": [
+    [
+      43123,
+      111
+    ],
+    [
+      43124,
+      106
+    ],
+    [
+      43203,
+      67
+    ],
+    [
+      43204,
+      34
+    ],
+    [
+      43183,
+      26
+    ],
+    [
+      43192,
+      25
+    ],
+    [
+      43184,
+      24
+    ],
+    [
+      43193,
+      24
+    ],
+    [
+      43188,
+      24
+    ],
+    [
+      43173,
+      23
+    ],
+    [
+      43197,
+      23
+    ],
+    [
+      43171,
+      23
+    ],
+    [
+      43194,
+      23
+    ],
+    [
+      43196,
+      23
+    ],
+    [
+      43187,
+      22
+    ]
+  ],
+  "parents_delay_at_least1hour": 1808,
+  "parents_delay_below1hour": 2,
+  "parent_date_hours_utc": {
+    "2026-09-21T07": 1807,
+    "2026-09-21T10": 4
+  }
+}
