@@ -116,6 +116,37 @@ export async function loadSessionProfile(
   }
 }
 
+/**
+ * Ответ принадлежит текущей сессии портала, только если с ним согласны и сама
+ * вкладка, и общее хранилище.
+ *
+ * WMS-488: соседняя вкладка пишет новый токен в localStorage сразу, а событие
+ * storage до нас доходит позже. В этом промежутке вкладка ещё помнит прежнего
+ * пользователя, и ответ на его запрос выглядит «своим». Если сверяться только
+ * с памятью вкладки, чужой 401 сотрёт уже записанную чужую сессию.
+ */
+export function isCurrentSessionToken(params: {
+  candidate: string
+  sessionToken: string | null
+  storedToken: string | null
+}): boolean {
+  return params.sessionToken === params.candidate && params.storedToken === params.candidate
+}
+
+/** Сообщение о том, что роль пользователя не подходит порталу; null — подходит. */
+export function portalRoleMismatchMessage(portal: AuthPortal, role: string): string | null {
+  if (portal === 'seller' && role !== 'fulfillment_seller') {
+    return 'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.'
+  }
+  if (portal === 'fulfillment' && role === 'fulfillment_seller') {
+    return 'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).'
+  }
+  if (portal === 'fulfillment' && !isFfPortalRole(role)) {
+    return 'Этот портал только для сотрудников фулфилмента.'
+  }
+  return null
+}
+
 export type StorageSessionChange =
   | { changed: false }
   | { changed: true; token: string | null }
@@ -144,7 +175,11 @@ export function sessionChangeFromStorage(params: {
 export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [token, setToken] = useState<string | null>(() => getStoredToken(portal))
   const [portalMismatch, setPortalMismatch] = useState<string | null>(null)
-  const [me, setMe] = useState<Me | null>(null)
+  // Профиль хранится вместе с токеном, которому он принадлежит: проверка роли
+  // выполняется позже ответа, и к этому моменту сессия портала может быть уже
+  // другой — закрывать её из-за роли прежнего пользователя нельзя (WMS-488).
+  const [profile, setProfile] = useState<{ token: string; me: Me } | null>(null)
+  const me = profile?.me ?? null
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
@@ -155,14 +190,51 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const sessionTokenRef = useRef<string | null>(token)
 
   const isSessionToken = useCallback(
-    (candidate: string) => sessionTokenRef.current === candidate,
-    [],
+    (candidate: string) => isCurrentSessionToken({
+      candidate,
+      sessionToken: sessionTokenRef.current,
+      storedToken: getStoredToken(portal),
+    }),
+    [portal],
   )
 
   const startSession = useCallback((next: string | null) => {
     sessionTokenRef.current = next
     setToken(next)
   }, [])
+
+  // Переход на сессию, которая уже лежит в хранилище портала. Нужен и при
+  // событии storage, и когда устаревший ответ первым обнаружил подмену: просто
+  // промолчать нельзя — вкладка осталась бы с профилем прежнего пользователя.
+  const adoptStoredSession = useCallback(() => {
+    const stored = getStoredToken(portal)
+    if (stored === sessionTokenRef.current) {
+      return false
+    }
+    setProfile(null)
+    setError(null)
+    setNotice(null)
+    setPortalMismatch(null)
+    startSession(stored)
+    return true
+  }, [portal, startSession])
+
+  // Сессию закрывает только тот ответ, чей токен всё ещё принадлежит порталу.
+  // Чужую сессию, записанную соседней вкладкой, вместо удаления принимаем.
+  const endSessionForToken = useCallback(
+    (requestToken: string, message: string) => {
+      if (!isSessionToken(requestToken)) {
+        adoptStoredSession()
+        return false
+      }
+      setStoredToken(null, portal)
+      startSession(null)
+      setProfile(null)
+      setError(message)
+      return true
+    },
+    [adoptStoredSession, isSessionToken, portal, startSession],
+  )
 
   const loadMe = useCallback(
     async (t: string) => {
@@ -171,31 +243,29 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       const result = await loadSessionProfile(t, isSessionToken)
       if (result.outcome === 'stale') {
         // Сессия уже другая: и профиль, и флаг загрузки принадлежат её запросу.
+        adoptStoredSession()
         return
       }
       setLoading(false)
       if (result.outcome === 'loaded') {
-        setMe(result.me)
+        setProfile({ token: t, me: result.me })
         return
       }
       if (result.outcome === 'unauthorized') {
-        setStoredToken(null, portal)
-        startSession(null)
-        setMe(null)
-        setError(result.message)
+        endSessionForToken(t, result.message)
         return
       }
-      setMe(null)
+      setProfile(null)
       setError(result.message)
     },
-    [isSessionToken, portal, startSession],
+    [adoptStoredSession, endSessionForToken, isSessionToken],
   )
 
   useEffect(() => {
     if (token) {
       void loadMe(token)
     } else {
-      setMe(null)
+      setProfile(null)
       setLoading(false)
     }
   }, [token, loadMe])
@@ -217,51 +287,27 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       // WMS-488: в соседней вкладке сменили пользователя или вышли. Профиль и
       // всё, что построено на нём (каталог, документы, остатки), снимаем сразу
       // — до того, как сервер подтвердит новую личность.
-      setMe(null)
-      setError(null)
-      setNotice(null)
-      setPortalMismatch(null)
-      startSession(change.token)
+      adoptStoredSession()
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [portal, startSession])
+  }, [portal, adoptStoredSession])
 
   useEffect(() => {
-    if (!me) {
+    if (!profile) {
       return
     }
-    if (portal === 'seller' && me.role !== 'fulfillment_seller') {
-      const msg =
-        'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.'
-      setPortalMismatch(msg)
-      setError(msg)
-      setStoredToken(null, 'seller')
-      startSession(null)
-      setMe(null)
+    const mismatch = portalRoleMismatchMessage(portal, profile.me.role)
+    if (!mismatch) {
+      setPortalMismatch(null)
       return
     }
-    if (portal === 'fulfillment' && me.role === 'fulfillment_seller') {
-      const msg =
-        'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).'
-      setPortalMismatch(msg)
-      setError(msg)
-      setStoredToken(null, 'fulfillment')
-      startSession(null)
-      setMe(null)
-      return
+    // Роль проверяется у того пользователя, чьему токену принадлежит профиль:
+    // сессию соседней вкладки неподходящая роль прежнего входа не закрывает.
+    if (endSessionForToken(profile.token, mismatch)) {
+      setPortalMismatch(mismatch)
     }
-    if (portal === 'fulfillment' && !isFfPortalRole(me.role)) {
-      const msg = 'Этот портал только для сотрудников фулфилмента.'
-      setPortalMismatch(msg)
-      setError(msg)
-      setStoredToken(null, 'fulfillment')
-      startSession(null)
-      setMe(null)
-      return
-    }
-    setPortalMismatch(null)
-  }, [me, portal, startSession])
+  }, [profile, portal, endSessionForToken])
 
   const clearNotice = useCallback(() => {
     setNotice(null)
@@ -497,7 +543,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const logout = useCallback(() => {
     setStoredToken(null, portal)
     startSession(null)
-    setMe(null)
+    setProfile(null)
     setError(null)
     setPortalMismatch(null)
     setNotice(null)
@@ -513,21 +559,21 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   )
 
   const updateProfile = useCallback(
-    async (profile: { full_name: string; job_title: string }) => {
+    async (fields: { full_name: string; job_title: string }) => {
       if (!token) {
         throw new Error('Сессия не найдена. Войдите снова.')
       }
       const res = await fetch(apiUrl('/auth/me'), {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile),
+        body: JSON.stringify(fields),
       })
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res))
       }
       const next = (await res.json()) as Me
       if (isSessionToken(token)) {
-        setMe(next)
+        setProfile({ token, me: next })
       }
       return next
     },

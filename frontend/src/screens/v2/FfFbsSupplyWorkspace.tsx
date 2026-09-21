@@ -533,21 +533,33 @@ export function FfFbsSupplyWorkspace({
   }, [open, supplyId])
 
   // Тихое обновление раз в 15 с идёт рядом с действиями оператора, и ответы
-  // возвращаются в произвольном порядке. На вкладку попадает только самый поздний
-  // старт: запоздалый ответ не возвращает строки к вердиктам, которые уже сменились.
+  // возвращаются в произвольном порядке. Номер занимается в начале обращения,
+  // а применить свой ответ вправе только последнее из начатых: поэтому поздний
+  // снимок не возвращает вердикт, который на экране уже сменился, и не убирает
+  // заказ, добавленный после старта чтения (WMS-477).
   const workspaceWriteSeq = useRef(0)
+  const beginWorkspaceWrite = useCallback(() => {
+    const seq = ++workspaceWriteSeq.current
+    const generation = workspaceOpenGeneration.current
+    return {
+      isCurrent: () => workspaceOpenGeneration.current === generation,
+      isLatest: () => seq === workspaceWriteSeq.current,
+    }
+  }, [])
+  // Ответ может идти дольше 15 с. Пока прежнее тихое обновление не вернулось,
+  // следующее не запускаем: иначе каждый ответ устаревает к своему приходу и
+  // строки не обновляются вообще.
+  const silentRefreshInFlight = useRef(false)
 
   const load = useCallback(
     async (silent = false) => {
       if (!open || !supplyId) return
-      const generation = workspaceOpenGeneration.current
-      const isCurrent = () => workspaceOpenGeneration.current === generation
-      const seq = ++workspaceWriteSeq.current
+      const write = beginWorkspaceWrite()
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
-        if (!isCurrent()) return
-        if (seq !== workspaceWriteSeq.current) return next
+        if (!write.isCurrent()) return
+        if (!write.isLatest()) return next
         setWorkspace(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
@@ -558,12 +570,12 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
-        if (isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
+        if (write.isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
-        if (isCurrent() && !silent) setBusy(false)
+        if (write.isCurrent() && !silent) setBusy(false)
       }
     },
-    [open, supplyId, token, authHeaders],
+    [open, supplyId, token, authHeaders, beginWorkspaceWrite],
   )
 
   useEffect(() => {
@@ -619,7 +631,9 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     if (!open || !supplyId || !['picking', 'packing', 'boxes'].includes(stage)) return
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load(true)
+      if (document.visibilityState !== 'visible' || silentRefreshInFlight.current) return
+      silentRefreshInFlight.current = true
+      void load(true).finally(() => { silentRefreshInFlight.current = false })
     }, 15_000)
     return () => window.clearInterval(timer)
   }, [open, supplyId, stage, load])
@@ -653,23 +667,38 @@ export function FfFbsSupplyWorkspace({
     success: string | ((next: FbsWorkspace) => string),
     onError?: (cause: unknown) => void,
   ) => {
+    const write = beginWorkspaceWrite()
     setBusy(true)
     setError(null)
     setNotice(null)
     setRetryAction(null)
     try {
       const next = await operation()
-      workspaceWriteSeq.current += 1
-      setWorkspace(next)
-      setStage((current) => fbsStageAfterWorkspaceRefresh(
-        next.supply.marketplace,
-        current,
-        visualStage(next.stage),
-      ))
-      const message = typeof success === 'function' ? success(next) : success
+      // Пока шёл запрос, могли открыть другую поставку: ни её строки, ни её
+      // уведомление и занятость чужой ответ не подменяет.
+      if (!write.isCurrent()) return null
+      // Операция прошла, но её снимок мог устареть, пока шёл запрос: строки
+      // на экране им не откатываем. Вызвавшему ответ возвращаем в любом случае —
+      // ему нужен факт успеха.
+      const applied = write.isLatest()
+      if (applied) {
+        setWorkspace(next)
+        setStage((current) => fbsStageAfterWorkspaceRefresh(
+          next.supply.marketplace,
+          current,
+          visualStage(next.stage),
+        ))
+      }
+      // Действие выполнено, поэтому о нём говорим всегда. Молчит только текст,
+      // посчитанный по отброшенному снимку: он спорил бы со строками на экране
+      // («подтверждено 1 из 1» рядом со строкой «WB не принял ЧЗ»).
+      let message = ''
+      if (typeof success === 'string') message = success
+      else if (applied) message = success(next)
       if (message) setNotice(message)
       return next
     } catch (cause) {
+      if (!write.isCurrent()) return null
       onError?.(cause)
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
@@ -677,7 +706,7 @@ export function FfFbsSupplyWorkspace({
       }
       return null
     } finally {
-      setBusy(false)
+      if (write.isCurrent()) setBusy(false)
     }
   }
 
@@ -705,6 +734,7 @@ export function FfFbsSupplyWorkspace({
 
   const addOrdersToCurrentSupply = async () => {
     if (!workspace || addableSelected.size === 0) return
+    const write = beginWorkspaceWrite()
     setAddOrdersBusy(true)
     setError(null)
     try {
@@ -712,23 +742,29 @@ export function FfFbsSupplyWorkspace({
         order_ids: [...addableSelected],
         idempotency_key: createFbsIdempotencyKey(),
       })
-      setWorkspace(next)
-      // Добавление заказа — обычное обновление, а не повод вернуть оператора
-      // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
-      // setStage перекидывал человека с упаковки или коробов на подбор. Правило
-      // проекта: серверные факты не управляют навигацией в рабочем месте WB.
-      setStage((current) => fbsStageAfterWorkspaceRefresh(
-        next.supply.marketplace,
-        current,
-        visualStage(next.stage),
-      ))
+      if (!write.isCurrent()) return
+      // Заказы добавлены в любом случае: закрываем окно и говорим об этом.
+      // Снимок применяем, только если он не старше показанного.
+      if (write.isLatest()) {
+        setWorkspace(next)
+        // Добавление заказа — обычное обновление, а не повод вернуть оператора
+        // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
+        // setStage перекидывал человека с упаковки или коробов на подбор. Правило
+        // проекта: серверные факты не управляют навигацией в рабочем месте WB.
+        setStage((current) => fbsStageAfterWorkspaceRefresh(
+          next.supply.marketplace,
+          current,
+          visualStage(next.stage),
+        ))
+      }
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')
     } catch (cause) {
+      if (!write.isCurrent()) return
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось добавить заказы в поставку.')
     } finally {
-      setAddOrdersBusy(false)
+      if (write.isCurrent()) setAddOrdersBusy(false)
     }
   }
 
@@ -1411,17 +1447,21 @@ export function FfFbsSupplyWorkspace({
 
   const performSkipHonestSign = async () => {
     if (!workspace) return
+    const write = beginWorkspaceWrite()
     setSkipHonestSignBusy(true)
     setError(null)
     try {
       const next = await skipFbsSupplyHonestSign(token, authHeaders, workspace.supply.id)
-      setWorkspace(next)
+      if (!write.isCurrent()) return
+      // Требование снято на сервере; спорным остаётся только снимок состава.
+      if (write.isLatest()) setWorkspace(next)
       setSkipHonestSignOpen(false)
       setNotice('Требование Честного знака снято со всей поставки.')
     } catch (cause) {
+      if (!write.isCurrent()) return
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять требование Честного знака.')
     } finally {
-      setSkipHonestSignBusy(false)
+      if (write.isCurrent()) setSkipHonestSignBusy(false)
     }
   }
 

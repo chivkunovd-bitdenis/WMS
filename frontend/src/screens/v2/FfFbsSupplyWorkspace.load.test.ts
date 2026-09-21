@@ -6,16 +6,19 @@ import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
 const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-let callback = ''
+const hooks: Record<string, string> = {}
 function visit(node: ts.Node) {
-  if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'load' &&
-      node.initializer && ts.isCallExpression(node.initializer)) {
-    callback = node.initializer.arguments[0].getText(file)
+  if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
+      && node.initializer.expression.getText(file) === 'useCallback') {
+    hooks[node.name.getText(file)] = node.initializer.arguments[0].getText(file)
   }
   ts.forEachChild(node, visit)
 }
 visit(file)
+const callback = hooks.load
+const beginWrite = hooks.beginWorkspaceWrite
 if (!callback) throw new Error('Production load callback not found')
+if (!beginWrite) throw new Error('Production beginWorkspaceWrite helper not found')
 
 function deferred() {
   let resolve!: (value: unknown) => void
@@ -28,14 +31,18 @@ function fixture() {
   const writeSeq = { current: 0 }
   const pending = new Map<string, ReturnType<typeof deferred>>()
   const visible = { workspace: null as unknown, stage: '', error: '', busy: false }
-  const callbackFactory = new Function('fetchFbsWorkspace', 'workspaceOpenGeneration',
-    'workspaceWriteSeq', 'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
+  // Билет занимает настоящий продуктовый beginWorkspaceWrite, а не копия из теста:
+  // иначе проверялось бы правило, которого в экране может уже не быть.
+  const beginWorkspaceWrite = (new Function('workspaceOpenGeneration', 'workspaceWriteSeq',
+    `return (${beginWrite})`) as (...args: unknown[]) => () => unknown)(generation, writeSeq)
+  const callbackFactory = new Function('fetchFbsWorkspace', 'beginWorkspaceWrite',
+    'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
     'authHeaders', `return (${callback})`) as (...args: unknown[]) => (silent?: boolean) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
       const response = deferred(); pending.set(supplyId, response); return response.promise
-    }, generation, writeSeq, (next: unknown) => { visible.workspace = next },
+    }, beginWorkspaceWrite, (next: unknown) => { visible.workspace = next },
     (update: (previous: string) => string) => { visible.stage = update(visible.stage) },
     (next: string) => { visible.error = next }, (next: boolean) => { visible.busy = next },
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
@@ -88,6 +95,30 @@ describe('FBS workspace delayed response isolation', () => {
     f.visible.workspace = { ...workspace('A'), revision: 'operator' }
     f.pending.get('A')!.resolve({ ...workspace('A'), revision: 'stale' }); await silent
     expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'operator' })
+  })
+
+  // Опрос снимает свой замок в finally, поэтому load обязан завершаться даже при
+  // сорванной сети. Иначе первая же ошибка заперла бы тихое обновление навсегда.
+  it('settles a failed silent refresh quietly instead of rejecting', async () => {
+    const f = fixture()
+    const silent = f.load('A')(true)
+    f.pending.get('A')!.reject(new Error('network down'))
+    await expect(silent).resolves.toBeUndefined()
+    expect(f.visible).toEqual({ workspace: null, stage: '', error: '', busy: false })
+  })
+
+  // Скан ЧЗ ждёт ответ этого же чтения, чтобы назвать вердикт. Проигравший гонку
+  // снимок не попадает на экран, но вызвавшему возвращается.
+  it('returns the fetched snapshot to its caller even after losing the race', async () => {
+    const f = fixture()
+    const load = f.load('A')
+    const first = load(true)
+    const firstResponse = f.pending.get('A')!
+    const second = load(true)
+    f.pending.get('A')!.resolve({ ...workspace('A'), revision: 'new' }); await second
+    firstResponse.resolve({ ...workspace('A'), revision: 'stale' })
+    await expect(first).resolves.toEqual({ ...workspace('A'), revision: 'stale' })
+    expect(f.visible.workspace).toEqual({ ...workspace('A'), revision: 'new' })
   })
 
   it('ignores a response after close even when the same UUID will reopen', async () => {

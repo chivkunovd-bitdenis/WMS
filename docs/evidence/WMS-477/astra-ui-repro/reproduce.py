@@ -112,7 +112,11 @@ try:
         added_text=added_row.inner_text() if added_row.count() else ''
         added_size=added_row.locator('[data-testid="fbs-packing-size"]').all_inner_texts()
         bug=after['ids']==['A1'] and after['sizes']==[]
-        fixed='6' in after['ids'] and '0006' in added_text and 'Размер\nL' in added_size
+        # Ячейка размера набирается в две строки ещё на исходном SHA: baseline-result.json
+        # хранит 'Размер\n\nL'. Поэтому сравнение идёт по схлопнутым пробелам, как в
+        # проверке before выше, а не по точному литералу с одним переводом строки.
+        added_size_text=' '.join(' '.join(cell.split()) for cell in added_size)
+        fixed='6' in after['ids'] and '0006' in added_text and added_size_text=='Размер L'
         save(page,'old_get_after_add',verify('old_get_after_add',bug,fixed,{'before':before,'after':after,'added_row':added_text,'added_size':added_size}))
 
         # Continuous real 15s intervals with every GET resolving at +16s.

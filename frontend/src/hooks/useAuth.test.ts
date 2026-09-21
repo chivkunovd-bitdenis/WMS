@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  isCurrentSessionToken,
   loadSessionProfile,
   nameLoginPayload,
+  portalRoleMismatchMessage,
   sessionChangeFromStorage,
   type Me,
 } from './useAuth'
@@ -170,5 +172,76 @@ describe('late /auth/me response', () => {
     const result = await loadSessionProfile('token-goryachkina', () => true)
 
     expect(result.outcome).toBe('unauthorized')
+  })
+})
+
+// WMS-488, воспроизведено в Chrome на данных AVpack: соседняя вкладка уже
+// записала токен второго селлера в localStorage, но событие storage до нашей
+// вкладки ещё не дошло. Вкладка помнит прежний токен, поэтому её собственной
+// памяти мало: по ней чужой ответ выглядит своим и стирал чужую сессию.
+describe('response that outruns the storage event', () => {
+  const tab = (sessionToken: string | null, storedToken: string | null) =>
+    (candidate: string) => isCurrentSessionToken({ candidate, sessionToken, storedToken })
+
+  it('calls a 401 of the previous seller stale while storage already holds the new one', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, { detail: 'invalid_token' })))
+
+    const result = await loadSessionProfile(
+      'token-goryachkina',
+      tab('token-goryachkina', 'token-chulkov'),
+    )
+
+    expect(result).toEqual({ outcome: 'stale' })
+  })
+
+  it('calls a profile with a portal-unsuitable role stale in the same window', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, {
+      ...meFixture('goryachkina'), role: 'fulfillment_admin',
+    })))
+
+    const result = await loadSessionProfile(
+      'token-goryachkina',
+      tab('token-goryachkina', 'token-chulkov'),
+    )
+
+    expect(result).toEqual({ outcome: 'stale' })
+  })
+
+  it('still demands a new sign-in when the tab and storage agree on the failing token', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, { detail: 'invalid_token' })))
+
+    const result = await loadSessionProfile(
+      'token-goryachkina',
+      tab('token-goryachkina', 'token-goryachkina'),
+    )
+
+    expect(result.outcome).toBe('unauthorized')
+  })
+
+  it('treats a logout in the neighbouring tab as somebody else’s session too', () => {
+    expect(isCurrentSessionToken({
+      candidate: 'token-goryachkina', sessionToken: 'token-goryachkina', storedToken: null,
+    })).toBe(false)
+  })
+})
+
+// Роль проверяется у владельца профиля, поэтому решение вынесено в чистую
+// функцию: сессию закрывает только собственная неподходящая роль.
+describe('portal role check', () => {
+  it('turns away a fulfillment admin who opened the seller portal', () => {
+    expect(portalRoleMismatchMessage('seller', 'fulfillment_admin')).toContain('только для селлера')
+  })
+
+  it('lets a seller work in the seller portal', () => {
+    expect(portalRoleMismatchMessage('seller', 'fulfillment_seller')).toBeNull()
+  })
+
+  it('turns away a seller who opened the fulfillment portal', () => {
+    expect(portalRoleMismatchMessage('fulfillment', 'fulfillment_seller'))
+      .toContain('для сотрудников фулфилмента')
+  })
+
+  it('lets a fulfillment admin work in the fulfillment portal', () => {
+    expect(portalRoleMismatchMessage('fulfillment', 'fulfillment_admin')).toBeNull()
   })
 })
