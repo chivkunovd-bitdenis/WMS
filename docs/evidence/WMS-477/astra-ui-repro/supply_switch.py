@@ -184,7 +184,9 @@ try:
 
         # 2. Тихое чтение стартовало позже ручной проверки, но прочитало базу до
         # её записи. Свой снимок операция не применяет, зато просит новое чтение —
-        # оно начинается после записи, поэтому строка доходит до правды.
+        # оно начинается после записи, поэтому строка доходит до правды. Итог
+        # «подтверждено X из Y» считается по ответу, поэтому его называет тот же
+        # восстановительный снимок: по отброшенному счёт спорил бы со строками.
         page = fresh()
         page.locator('[data-testid="fbs-packing-check-wb"]').click()
         page.wait_for_timeout(100)
@@ -198,20 +200,29 @@ try:
         page.evaluate('id=>window.qa.resolve(id,"A","accepted")', manual)
         page.wait_for_timeout(250)
         after_discard = rows(page)
+        notice_after_discard = alerts(page)
         recovery = last_pending(page)
         recovery_started = recovery is not None and recovery not in (manual, stale_get)
         if recovery_started:
             page.evaluate('id=>window.qa.resolve(id,"A","accepted")', recovery)
             page.wait_for_timeout(250)
         final = rows(page)
+        notice_after_recovery = alerts(page)
+        check_button_ready = page.locator('[data-testid="fbs-packing-check-wb"]').is_enabled()
         page.screenshot(path=str(OUT / 'recovery.png'), full_page=True)
         verify('lost_race_is_repaired_by_a_read_started_after_the_write',
                bug=not recovery_started and all('WB ещё не подтвердил ЧЗ' in row for row in final),
                fixed=recovery_started
                and all('WB ещё не подтвердил ЧЗ' in row for row in after_discard)
-               and all('ЧЗ принят WB' in row for row in final),
+               and all('ЧЗ принят WB' in row for row in final)
+               and 'Проверено в WB' not in notice_after_discard
+               and 'Проверено в WB: подтверждено 1 из 1.' in notice_after_recovery
+               and check_button_ready,
                data={'before_recovery': before_recovery, 'after_discard': after_discard,
                      'recovery_started': recovery_started, 'final': final,
+                     'notice_after_discard': notice_after_discard,
+                     'notice_after_recovery': notice_after_recovery,
+                     'check_button_ready': check_button_ready,
                      'log': page.evaluate('window.qa.log')})
         page.close()
 

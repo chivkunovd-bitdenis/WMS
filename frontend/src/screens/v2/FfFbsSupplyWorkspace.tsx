@@ -560,7 +560,9 @@ export function FfFbsSupplyWorkspace({
   const silentRefreshInFlight = useRef(false)
 
   const load = useCallback(
-    async (silent = false) => {
+    // onApplied вызывается только снимком, который действительно лёг на экран:
+    // по нему вызвавший вправе назвать оператору итог своей операции (WMS-477).
+    async (silent = false, onApplied?: (applied: FbsWorkspace) => void) => {
       if (!open || !supplyId) return
       const write = beginWorkspaceWrite()
       if (!silent) setBusy(true)
@@ -569,6 +571,7 @@ export function FfFbsSupplyWorkspace({
         if (!write.isCurrent()) return
         if (!write.isLatest()) return next
         setWorkspace(next)
+        onApplied?.(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
             next.supply.marketplace,
@@ -681,7 +684,9 @@ export function FfFbsSupplyWorkspace({
   // делает: чтение, начатое позже нашей записи, могло прочитать базу до неё.
   // Поэтому вместо собственного снимка просим новое чтение — оно начинается
   // после успеха операции, поэтому видит его и отменяет все начатые раньше.
-  const refreshAfterLostRace = () => { void load(true) }
+  const refreshAfterLostRace = (onApplied?: (applied: FbsWorkspace) => void) => {
+    void load(true, onApplied)
+  }
 
   const run = async (
     operation: () => Promise<FbsWorkspace>,
@@ -712,10 +717,18 @@ export function FfFbsSupplyWorkspace({
           current,
           visualStage(next.stage),
         ))
-      } else refreshAfterLostRace()
-      // Действие выполнено, поэтому о нём говорим всегда. Молчит только текст,
-      // посчитанный по отброшенному снимку: он спорил бы со строками на экране
-      // («подтверждено 1 из 1» рядом со строкой «WB не принял ЧЗ»).
+      } else {
+        // Снимок проиграл гонку, но операция сохранена: строки восстановит новое
+        // чтение. Итог, считаемый по ответу, называем по его снимку и только если
+        // тот лёг на экран этой же поставки: по отброшенному ответу «подтверждено
+        // 1 из 1» спорило бы со строкой «WB не принял ЧЗ» (WMS-477, R2).
+        const retell = typeof success === 'string' ? null : success
+        refreshAfterLostRace((fresh) => {
+          if (retell && write.isCurrent() && write.matchesShownSupply(fresh)) setNotice(retell(fresh))
+        })
+      }
+      // Действие выполнено, поэтому о нём говорим всегда. Текст, посчитанный по
+      // ответу, ждёт восстановительного чтения, если свой снимок отброшен.
       let message = ''
       if (typeof success === 'string') message = success
       else if (applied) message = success(next)

@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { fbsMarkingVerdictsSummary } from './fbsUx'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
 const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -50,7 +51,7 @@ if (!resetEffect) throw new Error('Supply opening reset effect not found')
 if (!runSource) throw new Error('Production run() helper not found')
 if (!button) throw new Error('«Проверить в WB» button not found')
 for (const name of ['beginWorkspaceWrite', 'refreshAfterLostRace', 'performSkipHonestSign',
-  'addOrdersToCurrentSupply']) {
+  'addOrdersToCurrentSupply', 'load', 'checkMarkingsInWb']) {
   if (!helpers[name]) throw new Error(`Production ${name} helper not found`)
 }
 // У кода экрана описаны типы, поэтому он сначала переводится в JS: исполняется тот
@@ -150,6 +151,9 @@ function operator(options: {
   const writeSeq = { current: 0 }
   const shownSupplyId = { current: 'supply-1' as string | null }
   const responses: Array<{ resolve: (value: unknown) => void; reject: (cause: unknown) => void }> = []
+  // Восстановительное чтение зовёт обратно только применённым снимком, поэтому
+  // тест решает сам, дошло ли оно до экрана.
+  const recoveries: Array<((fresh: unknown) => void) | undefined> = []
   let retryAction: (() => void) | null = null
   let calls = 0
   const operation = () => {
@@ -165,7 +169,7 @@ function operator(options: {
     'FbsApiError', 'fbsErrorText', `${asJs('run', runSource)}; return run`,
   ) as (...args: unknown[]) => (operation: () => Promise<unknown>, success: unknown) => Promise<unknown>)(
     beginWorkspaceWrite,
-    () => { seen.reread += 1 },
+    (onApplied?: (fresh: unknown) => void) => { seen.reread += 1; recoveries.push(onApplied) },
     (next: boolean) => { seen.busy = next },
     (next: string | null) => { seen.error = next },
     (next: string | null) => { seen.notice = next },
@@ -182,6 +186,7 @@ function operator(options: {
   return {
     seen, answer, generation, writeSeq, shownSupplyId,
     start: () => run(operation, options.success),
+    recover: (fresh: unknown) => { recoveries.at(-1)?.(fresh) },
     answer_: () => responses.shift()!.resolve(answer),
     fail: (cause: unknown) => responses.shift()!.reject(cause),
     retry: () => retryAction?.(),
@@ -294,7 +299,10 @@ describe('WMS-477 operator action that crossed a silent refresh', () => {
     expect(call.seen.reread).toBe(1)
   })
 
-  it('does not read a discarded snapshot out loud but still repairs the rows', async () => {
+  // Счётчик по отброшенному снимку спорил бы со строками, но и молчать об
+  // удавшейся ручной проверке нельзя (R2, D5). Итог называет восстановительное
+  // чтение — и только тот его снимок, который дошёл до экрана.
+  it('does not read a discarded snapshot out loud but names the recovered one', async () => {
     const call = operator({ success: (next) => `Проверено в WB: ${next.revision}.` })
     const result = call.start()
     call.writeSeq.current += 1
@@ -303,6 +311,49 @@ describe('WMS-477 operator action that crossed a silent refresh', () => {
     expect(call.seen.notice).toBeNull()
     expect(call.seen.workspace).toBeNull()
     expect(call.seen.reread).toBe(1)
+    expect(call.seen.busy).toBe(false)
+    call.recover({ ...call.answer, revision: 'recovered' })
+    expect(call.seen.notice).toBe('Проверено в WB: recovered.')
+  })
+
+  // Не дошло до экрана — говорить не о чем: строки показывают чужой, более новый
+  // снимок, и счётчик по нашему ответу оказался бы рядом с чужим вердиктом.
+  it('keeps quiet while the recovery read has not reached the screen', async () => {
+    const call = operator({ success: (next) => `Проверено в WB: ${next.revision}.` })
+    const result = call.start()
+    call.writeSeq.current += 1
+    call.answer_()
+    await result
+    expect(call.seen.reread).toBe(1)
+    expect(call.seen.notice).toBeNull()
+  })
+
+  it('does not name a recovered snapshot of a supply the operator no longer sees', async () => {
+    const call = operator({ success: (next) => `Проверено в WB: ${next.revision}.` })
+    const result = call.start()
+    call.writeSeq.current += 1
+    call.answer_()
+    await result
+    call.generation.current += 1
+    call.recover({ ...call.answer, revision: 'recovered' })
+    expect(call.seen.notice).toBeNull()
+    call.generation.current -= 1
+    call.shownSupplyId.current = 'supply-2'
+    call.recover({ ...call.answer, revision: 'recovered' })
+    expect(call.seen.notice).toBeNull()
+  })
+
+  // Постоянный текст не зависит от снимка: он уже сказан и восстановительным
+  // чтением не переписывается.
+  it('does not wait for a read to tell what does not depend on the answer', async () => {
+    const call = operator({ success: 'Задание создано.' })
+    const result = call.start()
+    call.writeSeq.current += 1
+    call.answer_()
+    await result
+    expect(call.seen.notice).toBe('Задание создано.')
+    call.recover({ ...call.answer, revision: 'recovered' })
+    expect(call.seen.notice).toBe('Задание создано.')
   })
 
   it('leaves the rows, notice and busy flag of another supply alone', async () => {
@@ -533,6 +584,171 @@ describe('WMS-477 «Добавить заказы» under crossing requests', ()
   it('touches neither the dialog nor the busy flag of the supply opened meanwhile', async () => {
     const calls = await add({ latest: false, current: false })
     expect(calls).toEqual([['setAddOrdersBusy', true], ['setError', null]])
+  })
+})
+
+// Итог ручной проверки проверяется не «в принципе», а на настоящем пересечении
+// запросов: нажатие заняло номер раньше тихого чтения, а ответило позже него.
+// Здесь связаны настоящие обработчик кнопки, run(), refreshAfterLostRace(), load()
+// и продуктовый счётчик; порядок ответов POST и GET задаёт тест.
+describe('WMS-477 «Проверено в WB» after the manual check crossed a silent read', () => {
+  const snapshot = (status: string, revision: string) => ({
+    supply: { id: 'supply-1', marketplace: 'wb' },
+    stage: 'packing',
+    revision,
+    orders: [{
+      id: 'order-1',
+      metadata: {
+        required: ['sgtin'], optional: [], delivery_allowed: status === 'accepted',
+        last_checked_at: null,
+        states: [{ kind: 'sgtin', status, reason: null, value_tail: 'QA-CODE' }],
+      },
+    }],
+  })
+
+  function screen() {
+    const generation = { current: 1 }
+    const writeSeq = { current: 0 }
+    const shownSupplyId = { current: 'supply-1' as string | null }
+    const onScreen = snapshot('pending', 'initial')
+    const seen = {
+      workspace: onScreen as unknown, stage: 'packing',
+      notice: null as string | null, error: null as string | null, busy: false,
+    }
+    const reads: Array<{ resolve: (value: unknown) => void; reject: (cause: unknown) => void }> = []
+    const posts: Array<{ resolve: (value: unknown) => void; reject: (cause: unknown) => void }> = []
+    const journal: string[] = []
+    const beginWorkspaceWrite = (new Function('workspaceOpenGeneration', 'workspaceWriteSeq',
+      'shownSupplyId',
+      `${asJs('beginWorkspaceWrite', helpers.beginWorkspaceWrite)}; return beginWorkspaceWrite`) as (
+      ...args: unknown[]) => () => unknown)(generation, writeSeq, shownSupplyId)
+    // Показанную поставку экран ведёт эффектом вслед за применённым снимком.
+    const setWorkspace = (next: { supply: { id: string } }) => {
+      seen.workspace = next
+      shownSupplyId.current = next.supply.id
+    }
+    const setStage = (update: (previous: string) => string) => { seen.stage = update(seen.stage) }
+    const setError = (next: string | null) => { seen.error = next }
+    const setBusy = (next: boolean) => { seen.busy = next }
+    const keepStage = (_marketplace: string, _current: string, next: string) => next
+    const same = (value: string) => value
+    const load = (new Function('fetchFbsWorkspace', 'beginWorkspaceWrite', 'setWorkspace', 'setStage',
+      'setError', 'setBusy', 'fbsErrorText', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
+      'open', 'supplyId', 'token', 'authHeaders', `${asJs('load', helpers.load)}; return load`) as (
+      ...args: unknown[]) => (silent?: boolean, onApplied?: (fresh: unknown) => void) => Promise<unknown>)(
+      () => {
+        journal.push('GET')
+        return new Promise((resolve, reject) => { reads.push({ resolve, reject }) })
+      },
+      beginWorkspaceWrite, setWorkspace, setStage, setError, setBusy, same, keepStage, same,
+      true, 'supply-1', 'synthetic', () => ({}),
+    )
+    const refreshAfterLostRace = (new Function('load',
+      `${asJs('refreshAfterLostRace', helpers.refreshAfterLostRace)}; return refreshAfterLostRace`) as (
+      load: unknown) => (onApplied?: (fresh: unknown) => void) => void)(load)
+    const run = (new Function(
+      'beginWorkspaceWrite', 'refreshAfterLostRace', 'setBusy', 'setError', 'setNotice',
+      'setRetryAction', 'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
+      'FbsApiError', 'fbsErrorText', `${asJs('run', runSource)}; return run`) as (
+      ...args: unknown[]) => unknown)(
+      beginWorkspaceWrite, refreshAfterLostRace, setBusy, setError,
+      (next: string | null) => { seen.notice = next }, () => {}, setWorkspace, setStage,
+      keepStage, same, TestApiError, same,
+    )
+    const press = (new Function('workspace', 'run', 'syncFbsSupplyMarkings', 'token', 'authHeaders',
+      'fbsMarkingVerdictsSummary',
+      `${asJs('checkMarkingsInWb', helpers.checkMarkingsInWb)}; return checkMarkingsInWb`) as (
+      ...args: unknown[]) => () => void)(
+      onScreen, run,
+      () => {
+        journal.push('POST')
+        return new Promise((resolve, reject) => { posts.push({ resolve, reject }) })
+      },
+      'synthetic', () => ({}), fbsMarkingVerdictsSummary,
+    )
+    return {
+      seen, generation, journal, press,
+      // Тик тихого обновления: занимает свой номер записи в момент вызова.
+      silentRead: () => { void load(true); return reads.length - 1 },
+      answerPost: (value: unknown) => { posts.shift()!.resolve(value) },
+      answerRead: (index: number, value: unknown) => { reads[index].resolve(value) },
+      failRead: (index: number) => { reads[index].reject(new Error('network down')) },
+      reads: () => reads.length,
+    }
+  }
+  // Номер восстановительного чтения: тихое чтение теста — 0, его просит сам экран.
+  const recovery = 1
+
+  it('names the result by the read that actually reached the screen', async () => {
+    const s = screen()
+    s.press()
+    expect(s.seen.busy).toBe(true)
+    const stale = s.silentRead()
+    s.answerPost(snapshot('accepted', 'write'))
+    await flush()
+    // Свой снимок отброшен, поэтому счётчик по нему не называется; оператор при
+    // этом не заперт ожиданием восстановительного чтения.
+    expect(s.seen.notice).toBeNull()
+    expect(s.seen.busy).toBe(false)
+    expect(s.reads()).toBe(2)
+    s.answerRead(stale, snapshot('pending', 'stale'))
+    await flush()
+    expect(s.seen.workspace).toMatchObject({ revision: 'initial' })
+    expect(s.seen.notice).toBeNull()
+    s.answerRead(recovery, snapshot('accepted', 'recovered'))
+    await flush()
+    expect(s.seen.workspace).toMatchObject({ revision: 'recovered' })
+    expect(s.seen.notice).toBe('Проверено в WB: подтверждено 1 из 1.')
+    // Состав восстановлен чтением, а не повторной записью в WB.
+    expect(s.journal).toEqual(['POST', 'GET', 'GET'])
+  })
+
+  it('says nothing when a newer rejected verdict reached the screen instead', async () => {
+    const s = screen()
+    s.press()
+    const stale = s.silentRead()
+    s.answerPost(snapshot('accepted', 'write'))
+    await flush()
+    // Следующий тик читает базу уже после того, как WB отказал коду.
+    const newer = s.silentRead()
+    s.answerRead(newer, snapshot('rejected', 'newer'))
+    await flush()
+    expect(s.seen.workspace).toMatchObject({ revision: 'newer' })
+    s.answerRead(recovery, snapshot('accepted', 'recovered'))
+    await flush()
+    s.answerRead(stale, snapshot('pending', 'stale'))
+    await flush()
+    // На экране отказ, поэтому «подтверждено 1 из 1» рядом с ним не появляется.
+    expect(s.seen.workspace).toMatchObject({ revision: 'newer' })
+    expect(s.seen.notice).toBeNull()
+  })
+
+  it('does not claim success when the recovery read itself failed', async () => {
+    const s = screen()
+    s.press()
+    s.silentRead()
+    s.answerPost(snapshot('accepted', 'write'))
+    await flush()
+    s.failRead(recovery)
+    await flush()
+    expect(s.seen.notice).toBeNull()
+    // Сорванное тихое чтение не бросает оператору красную ошибку и не запирает
+    // кнопку: повтор — то же самое нажатие, рядом идёт обычный тик обновления.
+    expect(s.seen.error).toBeNull()
+    expect(s.seen.busy).toBe(false)
+  })
+
+  it('does not carry the result into a supply the operator opened meanwhile', async () => {
+    const s = screen()
+    s.press()
+    s.silentRead()
+    s.answerPost(snapshot('accepted', 'write'))
+    await flush()
+    s.generation.current += 1
+    s.answerRead(recovery, snapshot('accepted', 'recovered'))
+    await flush()
+    expect(s.seen.notice).toBeNull()
+    expect(s.seen.workspace).toMatchObject({ revision: 'initial' })
   })
 })
 
