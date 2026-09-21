@@ -30,6 +30,7 @@ from app.api.inbound_package_catalog import router as inbound_package_catalog_ro
 from app.api.inventory_balances import router as inventory_balances_router
 from app.api.inventory_counts import router as inventory_counts_router
 from app.api.inventory_movements import router as inventory_movements_router
+from app.api.kiz_reprints import router as kiz_reprints_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
 from app.api.marking_credentials import router as marking_credentials_router
@@ -136,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(products_router)
     app.include_router(inbound_intake_router)
     app.include_router(inbound_marking_router)
+    app.include_router(kiz_reprints_router)
     app.include_router(inbound_package_catalog_router)
     app.include_router(inventory_balances_router)
     app.include_router(inventory_counts_router)

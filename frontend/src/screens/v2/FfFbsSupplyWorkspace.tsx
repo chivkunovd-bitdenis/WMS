@@ -43,6 +43,7 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
+import ReplayOutlinedIcon from '@mui/icons-material/ReplayOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
@@ -180,6 +181,21 @@ function hasRemovableKiz(order: FbsWorkspace['orders'][number], marketplace: 'wb
     (state) =>
       state.kind === 'sgtin' &&
       (state.source === 'operator' || (marketplace === 'wb' && state.source === 'pool')) &&
+      state.status !== 'missing' &&
+      (marketplace === 'wb' || state.status !== 'rejected'),
+  )
+}
+
+/** The inline FBS reprint is intentionally only for an operator-bound KIZ.
+ * A pool code continues to use the existing order-level repeat flow. */
+function hasOperatorKiz(
+  state: FbsWorkspace['orders'][number]['metadata']['states'][number] | undefined,
+  marketplace: 'wb' | 'ozon',
+) {
+  return Boolean(
+    state?.id &&
+      state.kind === 'sgtin' &&
+      state.source === 'operator' &&
       state.status !== 'missing' &&
       (marketplace === 'wb' || state.status !== 'rejected'),
   )
@@ -1393,7 +1409,12 @@ export function FfFbsSupplyWorkspace({
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
-  const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line?: PackagingTaskLine, reprint = false) => {
+  const openOrderMarkingPrint = (
+    order: FbsWorkspace['orders'][number],
+    line?: PackagingTaskLine,
+    reprint = false,
+    reprintMarkingId?: string,
+  ) => {
     const productId = order.product.id
       ?? (workspace?.supply.marketplace === 'ozon'
         ? order.positions.find((position) => position.product_id)?.product_id
@@ -1439,6 +1460,7 @@ export function FfFbsSupplyWorkspace({
               allow_partial: allowPartial,
               include_order_qr: false,
               reprint: printReprint,
+              reprint_marking_ids: reprintMarkingId ? [reprintMarkingId] : undefined,
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
@@ -2503,6 +2525,19 @@ export function FfFbsSupplyWorkspace({
                               ЧЗ
                             </Typography>
                             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {hasOperatorKiz(markingState, isOzonSupply ? 'ozon' : 'wb') ? (
+                                <Tooltip title="Перепечатать ЧЗ">
+                                  <IconButton
+                                    size="small"
+                                    disabled={busy || kizScanBusy}
+                                    aria-label="Перепечатать КИЗ"
+                                    onClick={() => openOrderMarkingPrint(order, line, true, markingState?.id ?? undefined)}
+                                    data-testid="fbs-kiz-reprint-inline"
+                                  >
+                                    <ReplayOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : null}
                               {tail ? (
                                 <Typography
                                   sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}

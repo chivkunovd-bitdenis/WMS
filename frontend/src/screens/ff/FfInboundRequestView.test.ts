@@ -115,6 +115,7 @@ const baselineStaticTestIds = [
   'ff-inbound-receiving-add-products',
   'ff-inbound-reopen-receiving',
   'ff-inbound-return-autoprint',
+  'ff-inbound-return-kiz-reprint',
   'ff-inbound-save',
   'ff-inbound-save-success-snackbar',
   'ff-inbound-scan-add-product',

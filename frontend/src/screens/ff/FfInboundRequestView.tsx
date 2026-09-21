@@ -60,6 +60,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
+import { KizReprintDialog } from '../../components/KizReprintDialog'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
@@ -493,6 +494,7 @@ export function FfInboundRequestView({
   const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
   const [returnAutoPrint, setReturnAutoPrint] = useState(false)
+  const [kizReprintOpen, setKizReprintOpen] = useState(false)
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
@@ -2419,6 +2421,17 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
+              {isFulfillmentAdmin && workspace !== 'sorting' && isReturnOperation ? (
+                <Button
+                  variant="outlined"
+                  disabled={!detail.seller_id}
+                  onClick={() => setKizReprintOpen(true)}
+                  data-testid="ff-inbound-return-kiz-reprint"
+                >
+                  Перепечатать ЧЗ
+                </Button>
+              ) : null}
+
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -4122,6 +4135,13 @@ export function FfInboundRequestView({
         onClose={() => setBoxPrintTarget(null)}
         onConfirm={(size) => void confirmInboundBoxPrint(size)}
         testId="ff-inbound-box-print-dialog"
+      />
+      <KizReprintDialog
+        open={kizReprintOpen}
+        token={token}
+        sellerId={detail?.seller_id}
+        onClose={() => setKizReprintOpen(false)}
+        testId="ff-inbound-return-kiz-reprint-dialog"
       />
     </Box>
     </FfProductMarkingPrintProvider>

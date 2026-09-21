@@ -102,6 +102,7 @@ async def print_fbs_order_tape(
     reprint: bool,
     actor_user_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    reprint_marking_ids: list[uuid.UUID] | None = None,
 ) -> FbsOrderTapePrintResult:
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
@@ -195,6 +196,22 @@ async def print_fbs_order_tape(
         ):
             raise FbsOrderTapePrintError("order_not_in_supply")
         requested.append(order)
+    selected_reprint_marking_ids = set(reprint_marking_ids or [])
+    if selected_reprint_marking_ids and not reprint:
+        raise FbsOrderTapePrintError("reprint_code_selection_requires_reprint")
+    if selected_reprint_marking_ids:
+        selectable_marking_ids: set[uuid.UUID] = set()
+        for order in requested:
+            if supply.marketplace == "ozon":
+                selectable_marking_ids.update(
+                    marking.id for marking in _active_ozon_sgtin_markings(order)
+                )
+                continue
+            marking = _existing_sgtin_marking(order)
+            if marking is not None and marking.marking_code is not None:
+                selectable_marking_ids.add(marking.id)
+        if not selected_reprint_marking_ids.issubset(selectable_marking_ids):
+            raise FbsOrderTapePrintError("reprint_code_not_found")
     cancelled_orders = [
         order for order in requested if getattr(order, "status", None) == FBS_ORDER_STATUS_CANCELLED
     ]
@@ -253,6 +270,12 @@ async def print_fbs_order_tape(
             # those facts: it must neither allocate another pool code nor
             # collapse a multi-position posting to its newest code.
             ozon_markings = _active_ozon_sgtin_markings(order)
+            if selected_reprint_marking_ids:
+                ozon_markings = [
+                    marking
+                    for marking in ozon_markings
+                    if marking.id in selected_reprint_marking_ids
+                ]
             requires_honest_sign = _order_requires_sgtin(order) or bool(ozon_markings)
             if not requires_honest_sign:
                 result_orders.append(
@@ -345,9 +368,23 @@ async def print_fbs_order_tape(
         ):
             # A printed code belongs to the order, not to an obligatory packing
             # stage. Reuse it after handoff without issuing another code or
-            # resending metadata to WB. Operator-supplied codes stay protected.
+            # resending metadata to WB. An operator-supplied KIZ cannot be
+            # treated as a first print, but the explicit FBS reprint action may
+            # print its already-linked MarkingCode and write the normal ledger
+            # event.  It never allocates a pool code.
             existing = _existing_sgtin_marking(order)
-            if existing is not None and existing.source == "operator":
+            if (
+                selected_reprint_marking_ids
+                and (existing is None or existing.id not in selected_reprint_marking_ids)
+            ):
+                errors.append(FbsOrderTapeError(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    code="nothing_to_reprint",
+                    message="nothing_to_reprint",
+                ))
+                continue
+            if existing is not None and existing.source == "operator" and not reprint:
                 errors.append(FbsOrderTapeError(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
@@ -405,6 +442,7 @@ async def print_fbs_order_tape(
                 allow_partial=allow_partial,
                 reprint=reprint,
                 actor_user_id=actor_user_id,
+                reprint_marking_ids=selected_reprint_marking_ids,
             )
         except (mc_svc.MarkingCodeServiceError, marking_svc.FbsMarkingError) as exc:
             errors.append(
@@ -659,9 +697,17 @@ async def _print_or_reprint_order_code(
     allow_partial: bool,
     reprint: bool,
     actor_user_id: uuid.UUID,
+    reprint_marking_ids: set[uuid.UUID],
 ) -> mc_svc.PrintMarkingCodesResult:
     existing = _existing_sgtin_marking(order)
-    if existing is not None and existing.source == "operator":
+    if reprint_marking_ids and (
+        existing is None or existing.id not in reprint_marking_ids
+    ):
+        raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
+    # The usual print action must not turn an operator-bound KIZ into a new
+    # print.  A deliberate reprint uses this exact linked code and records only
+    # EVENT_REPRINTED below; it does not allocate, rebind, or change packaging.
+    if existing is not None and existing.source == "operator" and not reprint:
         raise mc_svc.MarkingCodeServiceError("operator_kiz_print_forbidden")
     if existing and existing.marking_code is not None:
         code = existing.marking_code
