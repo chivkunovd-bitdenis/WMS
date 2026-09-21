@@ -56,7 +56,7 @@ services:
       WMS_MAIL_FROM: ${WMS_MAIL_FROM:-}
       WMS_MAIL_FROM_NAME: ${WMS_MAIL_FROM_NAME:-Короб ВМС}
       WMS_AUTH_LINK_TTL_HOURS: ${WMS_AUTH_LINK_TTL_HOURS:-72}
-      WMS_ALLOW_PUBLIC_REGISTRATION: ${WMS_ALLOW_PUBLIC_REGISTRATION:-false}
+      WMS_ALLOW_PUBLIC_REGISTRATION: ${WMS_ALLOW_PUBLIC_REGISTRATION:-true}
       WMS_SUBSCRIPTION_PRICE_RUB: ${WMS_SUBSCRIPTION_PRICE_RUB:-10000}
       # WMS-382. Магазин ЮKassa — тот же, что у оцифровки. Вебхук не трогаем:
       # он один на магазин и настроен на соседний продукт, статус платежа

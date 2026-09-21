@@ -255,13 +255,13 @@ class Settings(BaseSettings):
         description="Сумма к оплате за месяц подписки, рублей (WMS-381).",
     )
     allow_public_registration: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices(
             "WMS_ALLOW_PUBLIC_REGISTRATION", "ALLOW_PUBLIC_REGISTRATION"
         ),
         description=(
-            "Регистрация организации со страницы входа. Выключена: до 06.09.2026 любой "
-            "человек из интернета заводил себе тенант в боевой системе."
+            "Публичная регистрация организации и первого администратора со страницы "
+            "входа фулфилмента (WMS-500)."
         ),
     )
     wms_data_dir: str = Field(
