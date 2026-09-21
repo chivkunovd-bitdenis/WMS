@@ -1,0 +1,29 @@
+BEGIN
+SET
+SET
+        state        | wait_event_type | wait_event | n  | max_xact_seconds 
+---------------------+-----------------+------------+----+------------------
+ idle                | Client          | ClientRead | 12 |                 
+ idle in transaction | Client          | ClientRead |  1 |         0.003594
+(2 rows)
+
+ blocked_sessions 
+------------------
+                0
+(1 row)
+
+ matched_tenant_scopes 
+-----------------------
+                     0
+(1 row)
+
+ job_type | status | n | max_age_or_duration_s 
+----------+--------+---+-----------------------
+(0 rows)
+
+ numbackends | deadlocks | temp_files | temp_bytes 
+-------------+-----------+------------+------------
+          14 |         7 |        206 | 1795956736
+(1 row)
+
+ROLLBACK

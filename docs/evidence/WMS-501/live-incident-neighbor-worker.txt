@@ -1,0 +1,54 @@
+{
+  "window": "20minutes, limited last4000loglines",
+  "counts": [
+    {
+      "task": "wb_orchestrator_tick",
+      "event": "received",
+      "count": 1999
+    },
+    {
+      "task": "archive_backfill_manager",
+      "event": "received",
+      "count": 1
+    },
+    {
+      "task": "archive_backfill_manager",
+      "event": "succeeded",
+      "count": 1
+    }
+  ],
+  "minute_bins": [
+    {
+      "minute": "2026-09-21 18:12",
+      "event": "received",
+      "count": 1999
+    },
+    {
+      "minute": "2026-09-21 18:20",
+      "event": "received",
+      "count": 1
+    },
+    {
+      "minute": "2026-09-21 18:20",
+      "event": "succeeded",
+      "count": 1
+    }
+  ],
+  "first": "2026-09-21 18:12:38,354",
+  "last": "2026-09-21 18:20:00,067"
+}
+docker top wb-finance-celery_worker-1 -eo pid,ppid,comm,rss,etimes
+PID                 PPID                COMMAND             RSS                 ELAPSED
+560042              560017              celery              1395456             29855
+560155              560042              celery              3108                29853
+560156              560042              celery              15276               29853
+560157              560042              celery              2992                29853
+ 
+docker exec wb-finance-redis-1 redis-cli LLEN celery
+NOAUTH Authentication required.
+
+ 
+docker exec wb-finance-redis-1 redis-cli HLEN unacked
+NOAUTH Authentication required.
+
+ 

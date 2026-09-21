@@ -1,0 +1,45 @@
+{
+  "container": "wms_prod-api-1",
+  "bounded_last_lines": 2000,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve",
+      "status": "200",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/{id}/order-print-tape",
+      "status": "200",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-print-assets/{id}/content",
+      "status": "200",
+      "count": 10
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/codes/{id}/label-artifact",
+      "status": "200",
+      "count": 10
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-print-assets/{id}/applied",
+      "status": "200",
+      "count": 10
+    }
+  ],
+  "exception_classes": {}
+}
+{
+  "container": "wms_prod-celery_worker-1",
+  "bounded_last_lines": 2000,
+  "routes": [],
+  "exception_classes": {
+    "WildberriesClientError": 4
+  }
+}

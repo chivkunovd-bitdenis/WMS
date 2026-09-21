@@ -1,0 +1,19 @@
+2026-09-21T18:24:35.613902+00:00
+free -m
+               total        used        free      shared  buff/cache   available
+Mem:            3886        3396         100         157         389          98
+Swap:           3071        1397        1674
+
+df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        40G   39G  395M 100% /
+
+cat /proc/pressure/memory
+some avg10=1.69 avg60=1.96 avg300=7.94 total=7970626248
+full avg10=1.28 avg60=1.63 avg300=5.56 total=5160280555
+
+cat /proc/pressure/io
+some avg10=7.11 avg60=5.12 avg300=8.03 total=16525446582
+full avg10=5.80 avg60=4.20 avg300=5.12 total=11610288398
+
+{"bounded_tail4000_received": 1999, "distinct_task_ids": 1999, "first": "2026-09-21 18:12:38,354", "last": "2026-09-21 18:12:41,859"}
