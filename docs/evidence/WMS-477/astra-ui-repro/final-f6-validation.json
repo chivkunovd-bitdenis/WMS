@@ -1,0 +1,44 @@
+{
+  "product_sha": "f6a72a4e2f9834ddb40f54e788ea25fea57e08c2",
+  "environment": "Chrome with actual React FfFbsSupplyWorkspace; synthetic token, supply, orders and mocked API; no production, external WB or printer",
+  "race_scenarios": {
+    "command": "python3 docs/evidence/WMS-477/astra-ui-repro/reproduce.py --expect-fixed",
+    "passed": [
+      "manual_rejected_to_accepted",
+      "manual_cross_supply",
+      "old_get_after_add",
+      "poll_16s_starvation"
+    ],
+    "page_errors": [],
+    "failed_assertions": []
+  },
+  "supply_switch_scenarios": {
+    "command": "python3 docs/evidence/WMS-477/astra-ui-repro/supply_switch.py",
+    "passed": [
+      "saved_retry_does_not_survive_supply_switch",
+      "lost_race_is_repaired_by_a_read_started_after_the_write",
+      "skip_honest_sign_dialog_is_not_stuck_after_a_supply_switch"
+    ],
+    "recovery_notice_after_discard": "",
+    "recovery_notice_after_fresh_get": "Проверено в WB: подтверждено 1 из 1.",
+    "page_errors": [],
+    "failed_assertions": []
+  },
+  "soak": {
+    "original_command": "python3 /tmp/wms-three-final-soak.py",
+    "reproduction_script": "docs/evidence/WMS-477/astra-ui-repro/soak.py",
+    "exact_result": "docs/evidence/WMS-477/astra-ui-repro/soak-result-f6.json",
+    "duration_seconds": 610.23,
+    "polls": 40,
+    "get_requests": 40,
+    "get_responses": 40,
+    "added_order": "0006",
+    "shown_size": "L",
+    "selection_scan_draft_focus_and_packing_tab_preserved": true,
+    "page_errors": [],
+    "failed": null,
+    "boundary": "The soak used an unfinished scan draft. It did not bind a new KIZ, invoke a real WB endpoint or print a physical sticker."
+  },
+  "soak_script_smoke": "Adapted tracked script run on the same product SHA with WMS_QA_DURATION_SECONDS=20, WMS_QA_MIN_POLLS=1 and WMS_QA_ADD_AT_POLL=1: one GET, added order present, zero page errors.",
+  "post_recovery": "See after-recovery-validation.json for two Chrome scenarios: new sticker scan and one WB button request after auto recovery and fallback reload."
+}

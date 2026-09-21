@@ -1,0 +1,10 @@
+{
+  "sha": "f6a72a4e2f9834ddb40f54e788ea25fea57e08c2",
+  "duration_seconds": 610.23,
+  "polls": 40,
+  "added_order": true,
+  "page_errors": [],
+  "failed": null,
+  "get_requests": 40,
+  "get_responses": 40
+}

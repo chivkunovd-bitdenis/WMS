@@ -1,5 +1,5 @@
 {
-  "product_sha": "22108eea6137eaaf192c03d53909db22e652c545",
+  "product_sha": "f6a72a4e2f9834ddb40f54e788ea25fea57e08c2",
   "environment": "Chrome, actual React component and ErrorBoundary, synthetic token/API; no production/WB",
   "command": "python3 docs/evidence/WMS-477/astra-ui-repro/after_recovery_check.py",
   "scenarios": [
