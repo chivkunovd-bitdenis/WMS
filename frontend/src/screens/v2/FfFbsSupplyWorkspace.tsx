@@ -531,6 +531,13 @@ export function FfFbsSupplyWorkspace({
     workspaceOpenGeneration.current += 1
     return () => { workspaceOpenGeneration.current += 1 }
   }, [open, supplyId])
+  // Поставка, чей состав сейчас на экране. Ответ обязан назвать её сам: иначе
+  // сохранённое «Повторить» из прежней поставки занимает номер записи уже в новом
+  // открытии и её состав ложится на открытую поставку (WMS-477).
+  const shownSupplyId = useRef<string | null>(initialWorkspace?.supply.id ?? null)
+  useEffect(() => {
+    shownSupplyId.current = workspace?.supply.id ?? null
+  }, [workspace])
 
   // Тихое обновление раз в 15 с идёт рядом с действиями оператора, и ответы
   // возвращаются в произвольном порядке. Номер занимается в начале обращения,
@@ -544,6 +551,7 @@ export function FfFbsSupplyWorkspace({
     return {
       isCurrent: () => workspaceOpenGeneration.current === generation,
       isLatest: () => seq === workspaceWriteSeq.current,
+      matchesShownSupply: (next: FbsWorkspace) => next.supply.id === shownSupplyId.current,
     }
   }, [])
   // Ответ может идти дольше 15 с. Пока прежнее тихое обновление не вернулось,
@@ -583,6 +591,9 @@ export function FfFbsSupplyWorkspace({
     setBusy(false)
     setError(null)
     setNotice(null)
+    // «Повторить» держит операцию прежней поставки. Оставленная кнопка либо
+    // отправила бы её из открытой поставки, либо висела бы мёртвой.
+    setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
@@ -602,8 +613,14 @@ export function FfFbsSupplyWorkspace({
     setTzLine(null)
     setReprintMenu(null)
     setAddOrdersOpen(false)
+    setAddOrdersBusy(false)
     setAddableOrders([])
     setAddableSelected(new Set())
+    // Занятость диалогов принадлежит прежнему открытию: ответ той поставки её
+    // уже не снимет, а у открытого окна снятия ЧЗ обе кнопки и закрытие
+    // отключены по занятости — оператор остался бы без выхода.
+    setSkipHonestSignOpen(false)
+    setSkipHonestSignBusy(false)
     setKizScanActive(null)
     kizSelectedStickerRef.current = ''
     setKizScanValue('')
@@ -660,6 +677,12 @@ export function FfFbsSupplyWorkspace({
     }
   }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
 
+  // Пересечение запросов не даёт применить свой ответ, но и чужой свежим не
+  // делает: чтение, начатое позже нашей записи, могло прочитать базу до неё.
+  // Поэтому вместо собственного снимка просим новое чтение — оно начинается
+  // после успеха операции, поэтому видит его и отменяет все начатые раньше.
+  const refreshAfterLostRace = () => { void load(true) }
+
   const run = async (
     operation: () => Promise<FbsWorkspace>,
     // Текст успеха может зависеть от ответа (WMS-477: «подтверждено X из Y»);
@@ -675,8 +698,9 @@ export function FfFbsSupplyWorkspace({
     try {
       const next = await operation()
       // Пока шёл запрос, могли открыть другую поставку: ни её строки, ни её
-      // уведомление и занятость чужой ответ не подменяет.
-      if (!write.isCurrent()) return null
+      // уведомление и занятость чужой ответ не подменяет. Ответ, назвавший
+      // не показанную поставку, чужой независимо от номера записи.
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return null
       // Операция прошла, но её снимок мог устареть, пока шёл запрос: строки
       // на экране им не откатываем. Вызвавшему ответ возвращаем в любом случае —
       // ему нужен факт успеха.
@@ -688,7 +712,7 @@ export function FfFbsSupplyWorkspace({
           current,
           visualStage(next.stage),
         ))
-      }
+      } else refreshAfterLostRace()
       // Действие выполнено, поэтому о нём говорим всегда. Молчит только текст,
       // посчитанный по отброшенному снимку: он спорил бы со строками на экране
       // («подтверждено 1 из 1» рядом со строкой «WB не принял ЧЗ»).
@@ -702,7 +726,10 @@ export function FfFbsSupplyWorkspace({
       onError?.(cause)
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
-        setRetryAction(() => () => { void run(operation, success, onError) })
+        // Кнопка живёт в общем Alert окна. Повторяем только пока открыта та же
+        // поставка, в которой ошибка возникла: иначе нажатие отправило бы её
+        // операцию, а ответ лёг бы на состав открытой сейчас поставки.
+        setRetryAction(() => () => { if (write.isCurrent()) void run(operation, success, onError) })
       }
       return null
     } finally {
@@ -742,9 +769,10 @@ export function FfFbsSupplyWorkspace({
         order_ids: [...addableSelected],
         idempotency_key: createFbsIdempotencyKey(),
       })
-      if (!write.isCurrent()) return
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return
       // Заказы добавлены в любом случае: закрываем окно и говорим об этом.
-      // Снимок применяем, только если он не старше показанного.
+      // Снимок применяем, только если он не старше показанного, иначе читаем
+      // состав заново: старший ответ мог прочитать базу до нашей записи.
       if (write.isLatest()) {
         setWorkspace(next)
         // Добавление заказа — обычное обновление, а не повод вернуть оператора
@@ -756,7 +784,7 @@ export function FfFbsSupplyWorkspace({
           current,
           visualStage(next.stage),
         ))
-      }
+      } else refreshAfterLostRace()
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')
@@ -1452,9 +1480,10 @@ export function FfFbsSupplyWorkspace({
     setError(null)
     try {
       const next = await skipFbsSupplyHonestSign(token, authHeaders, workspace.supply.id)
-      if (!write.isCurrent()) return
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return
       // Требование снято на сервере; спорным остаётся только снимок состава.
       if (write.isLatest()) setWorkspace(next)
+      else refreshAfterLostRace()
       setSkipHonestSignOpen(false)
       setNotice('Требование Честного знака снято со всей поставки.')
     } catch (cause) {

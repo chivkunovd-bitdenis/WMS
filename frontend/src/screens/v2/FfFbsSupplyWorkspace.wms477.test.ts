@@ -1,8 +1,9 @@
 // WMS-477 разбирается прямо из исходника экрана, потому что в проекте нет jsdom и
 // отрисовать компонент в тесте нечем. Проверяется контракт тихого обновления — на
 // каких вкладках таймер живёт, как часто ходит, что делает при скрытом окне и
-// снимается ли при закрытии, — поведение run() при ответе, проигравшем гонку,
-// и условия показа кнопки «Проверить в WB».
+// снимается ли при закрытии, — поведение run() и обоих диалогов при пересечении
+// запросов и смене поставки, что сбрасывает открытие поставки, судьба сохранённого
+// «Повторить» и условия показа кнопки «Проверить в WB».
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
@@ -12,17 +13,28 @@ const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest
 
 let effect = ''
 let deps = ''
+let resetEffect = ''
 let runSource = ''
 let button: ts.JsxElement | null = null
+const helpers: Record<string, string> = {}
 function visit(node: ts.Node) {
-  if (ts.isCallExpression(node) && node.expression.getText(file) === 'useEffect'
-    && node.getText(file).includes('setInterval')) {
-    effect = node.arguments[0].getText(file)
-    deps = node.arguments[1].getText(file)
+  if (ts.isCallExpression(node) && node.expression.getText(file) === 'useEffect') {
+    const effectDeps = node.arguments[1]?.getText(file) ?? ''
+    if (node.getText(file).includes('setInterval')) {
+      effect = node.arguments[0].getText(file)
+      deps = effectDeps
+    }
+    // Сброс при открытии поставки ищется по зависимостям, а не по телу: иначе
+    // проверка находила бы ровно то, наличие чего сама же и утверждает.
+    if (effectDeps === '[open, supplyId, initialWorkspace, load]') resetEffect = node.arguments[0].getText(file)
   }
-  if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'run'
-    && node.initializer && ts.isArrowFunction(node.initializer)) {
-    runSource = node.initializer.getText(file)
+  if (ts.isVariableDeclaration(node) && node.initializer) {
+    const name = node.name.getText(file)
+    if (name === 'run' && ts.isArrowFunction(node.initializer)) runSource = node.initializer.getText(file)
+    else if (ts.isArrowFunction(node.initializer)) helpers[name] = node.initializer.getText(file)
+    else if (ts.isCallExpression(node.initializer) && node.initializer.expression.getText(file) === 'useCallback') {
+      helpers[name] = node.initializer.arguments[0].getText(file)
+    }
   }
   if (ts.isJsxElement(node) && attributeOf(node, 'data-testid').includes('fbs-packing-check-wb')) button = node
   ts.forEachChild(node, visit)
@@ -34,21 +46,51 @@ function attributeOf(element: ts.JsxElement, name: string) {
 }
 visit(file)
 if (!effect) throw new Error('Silent refresh effect not found')
+if (!resetEffect) throw new Error('Supply opening reset effect not found')
 if (!runSource) throw new Error('Production run() helper not found')
 if (!button) throw new Error('«Проверить в WB» button not found')
-// У run() описаны типы параметров, поэтому исходник сначала переводится в JS:
-// проверяется тот же код экрана, только без аннотаций.
-const runJs = ts.transpileModule(`const run = ${runSource}`, {
+for (const name of ['beginWorkspaceWrite', 'refreshAfterLostRace', 'performSkipHonestSign',
+  'addOrdersToCurrentSupply']) {
+  if (!helpers[name]) throw new Error(`Production ${name} helper not found`)
+}
+// У кода экрана описаны типы, поэтому он сначала переводится в JS: исполняется тот
+// же код, только без аннотаций.
+const asJs = (name: string, code: string) => ts.transpileModule(`const ${name} = ${code}`, {
   compilerOptions: { target: ts.ScriptTarget.ESNext },
 }).outputText
 
 const attribute = (name: string) => attributeOf(button!, name)
+const flush = () => new Promise((resolve) => { setTimeout(resolve, 0) })
 
 /** Условие, под которым кнопка вообще попадает на экран. */
 function renderCondition(node: ts.Node): string {
   if (ts.isConditionalExpression(node)) return node.condition.getText(file)
   if (!node.parent) throw new Error('«Проверить в WB» button is rendered unconditionally')
   return renderCondition(node.parent)
+}
+
+/**
+ * Исполняет функцию экрана целиком: подменённые имена берутся из `given`,
+ * остальные свободные имена становятся записывающими заглушками. Так тело
+ * проверяется как есть — добавленный в экран вызов не потеряется из-за того,
+ * что тест о нём не знал. `with` разрешён: тело new Function разбирается вне
+ * строгого режима модуля.
+ */
+function sandbox(code: string, given: Record<string, unknown>) {
+  const calls: Array<[string, unknown]> = []
+  const scope = new Proxy({}, {
+    has: () => true,
+    get: (_target, name) => {
+      if (typeof name !== 'string') return undefined
+      if (name in given) return given[name]
+      if (name in globalThis) return (globalThis as unknown as Record<string, unknown>)[name]
+      return (value?: unknown) => { calls.push([name, value]) }
+    },
+  })
+  const invoke = (new Function('scope', `with (scope) { return (${code}) }`) as (
+    outer: unknown,
+  ) => (...args: unknown[]) => unknown)(scope)
+  return { calls, invoke }
 }
 
 /** Исполняет тело эффекта на подставных зависимостях и возвращает то, что оно сделало. */
@@ -80,32 +122,72 @@ function runEffect(options: {
   return { loads, tick: () => tick?.(), cleanup, cleared: () => cleared, inFlight }
 }
 
-/** Исполняет продуктовый run() с заранее заданной судьбой его билета. */
-function runOperation(options: {
-  ticket: { isCurrent: boolean; isLatest: boolean }
+class TestApiError extends Error {
+  retryable: boolean
+  constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable }
+}
+
+/**
+ * Исполняет продуктовый run() с настоящим билетом записи из экрана. Ответ держится
+ * до `answer()`/`fail()`, поэтому тест успевает изменить обстановку ровно так, как
+ * её меняет оператор: занять номер более поздним чтением, открыть другую поставку
+ * или сменить показанный состав.
+ */
+function operator(options: {
   success: string | ((next: { revision: string }) => string)
+  supply?: string
 }) {
-  const answer = { supply: { id: 'supply-1', marketplace: 'wb' }, stage: 'packing', revision: 'answer' }
-  const seen = { workspace: null as unknown, stage: 'packing', notice: null as string | null, busy: false }
-  const factory = new Function(
-    'beginWorkspaceWrite', 'setBusy', 'setError', 'setNotice', 'setRetryAction',
-    'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
-    'FbsApiError', 'fbsErrorText', `${runJs}; return run`,
-  ) as (...args: unknown[]) => (operation: () => Promise<unknown>, success: unknown) => Promise<unknown>
-  const run = factory(
-    () => ({ isCurrent: () => options.ticket.isCurrent, isLatest: () => options.ticket.isLatest }),
+  const answer = {
+    supply: { id: options.supply ?? 'supply-1', marketplace: 'wb' },
+    stage: 'packing',
+    revision: 'answer',
+  }
+  const seen = {
+    workspace: null as unknown, stage: 'packing', notice: null as string | null,
+    error: null as string | null, busy: false, reread: 0,
+  }
+  const generation = { current: 1 }
+  const writeSeq = { current: 0 }
+  const shownSupplyId = { current: 'supply-1' as string | null }
+  const responses: Array<{ resolve: (value: unknown) => void; reject: (cause: unknown) => void }> = []
+  let retryAction: (() => void) | null = null
+  let calls = 0
+  const operation = () => {
+    calls += 1
+    return new Promise((resolve, reject) => { responses.push({ resolve, reject }) })
+  }
+  const beginWorkspaceWrite = (new Function('workspaceOpenGeneration', 'workspaceWriteSeq', 'shownSupplyId',
+    `${asJs('beginWorkspaceWrite', helpers.beginWorkspaceWrite)}; return beginWorkspaceWrite`) as (
+    ...args: unknown[]) => () => unknown)(generation, writeSeq, shownSupplyId)
+  const run = (new Function(
+    'beginWorkspaceWrite', 'refreshAfterLostRace', 'setBusy', 'setError', 'setNotice',
+    'setRetryAction', 'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
+    'FbsApiError', 'fbsErrorText', `${asJs('run', runSource)}; return run`,
+  ) as (...args: unknown[]) => (operation: () => Promise<unknown>, success: unknown) => Promise<unknown>)(
+    beginWorkspaceWrite,
+    () => { seen.reread += 1 },
     (next: boolean) => { seen.busy = next },
-    () => {},
+    (next: string | null) => { seen.error = next },
     (next: string | null) => { seen.notice = next },
-    () => {},
+    (update: ((previous: (() => void) | null) => (() => void) | null) | null) => {
+      retryAction = typeof update === 'function' ? update(retryAction) : update
+    },
     (next: unknown) => { seen.workspace = next },
     (update: (previous: string) => string) => { seen.stage = update(seen.stage) },
     (_marketplace: string, _current: string, next: string) => next,
     (stage: string) => stage,
-    class extends Error {},
+    TestApiError,
     (message: string) => message,
   )
-  return { seen, answer, result: run(async () => answer, options.success) }
+  return {
+    seen, answer, generation, writeSeq, shownSupplyId,
+    start: () => run(operation, options.success),
+    answer_: () => responses.shift()!.resolve(answer),
+    fail: (cause: unknown) => responses.shift()!.reject(cause),
+    retry: () => retryAction?.(),
+    hasRetry: () => retryAction !== null,
+    calls: () => calls,
+  }
 }
 
 describe('WMS-477 silent workspace refresh', () => {
@@ -180,42 +262,277 @@ describe('WMS-477 silent workspace refresh', () => {
   })
 })
 
-// Действие оператора и тихое обновление идут одновременно, и ответ действия может
-// прийти уже после более свежего снимка. Строки в этом случае не откатываем, но и
-// молчать в ответ на нажатие кнопки нельзя.
-describe('WMS-477 operator action that lost the race', () => {
+// Действие оператора и тихое обновление идут одновременно, и ответы возвращаются
+// в произвольном порядке. Строки при этом не откатываем, молчать в ответ на нажатие
+// кнопки нельзя, а начатое позже чтение не делает свои данные более свежими:
+// оно могло прочитать базу ещё до того, как действие сохранилось.
+describe('WMS-477 operator action that crossed a silent refresh', () => {
   it('applies the answer and its computed text while it is the newest', async () => {
-    const call = runOperation({
-      ticket: { isCurrent: true, isLatest: true },
-      success: (next) => `Проверено в WB: ${next.revision}.`,
-    })
-    await call.result
+    const call = operator({ success: (next) => `Проверено в WB: ${next.revision}.` })
+    const result = call.start()
+    call.answer_()
+    await result
     expect(call.seen.workspace).toEqual(call.answer)
     expect(call.seen.notice).toBe('Проверено в WB: answer.')
+    expect(call.seen.busy).toBe(false)
+    expect(call.seen.reread).toBe(0)
   })
 
-  it('still confirms the action itself when a newer snapshot already replaced the rows', async () => {
-    const call = runOperation({ ticket: { isCurrent: true, isLatest: false }, success: 'Задание создано.' })
-    await expect(call.result).resolves.toEqual(call.answer)
+  // Тихое обновление заняло номер позже действия, но ответило раньше — значит,
+  // базу оно могло прочитать ещё до сохранения действия. Свой снимок поверх
+  // показанного не кладём, но и оставлять экран без результата действия нельзя:
+  // просим новое чтение, начатое уже после успеха.
+  it('asks for a snapshot taken after the write instead of trusting the newer reader', async () => {
+    const call = operator({ success: 'Задание создано.' })
+    const result = call.start()
+    call.writeSeq.current += 1
+    call.answer_()
+    await expect(result).resolves.toEqual(call.answer)
     expect(call.seen.workspace).toBeNull()
     expect(call.seen.notice).toBe('Задание создано.')
     expect(call.seen.busy).toBe(false)
+    expect(call.seen.reread).toBe(1)
   })
 
-  it('does not read a discarded snapshot out loud', async () => {
-    const call = runOperation({
-      ticket: { isCurrent: true, isLatest: false },
-      success: (next) => `Проверено в WB: ${next.revision}.`,
-    })
-    await expect(call.result).resolves.toEqual(call.answer)
+  it('does not read a discarded snapshot out loud but still repairs the rows', async () => {
+    const call = operator({ success: (next) => `Проверено в WB: ${next.revision}.` })
+    const result = call.start()
+    call.writeSeq.current += 1
+    call.answer_()
+    await expect(result).resolves.toEqual(call.answer)
     expect(call.seen.notice).toBeNull()
     expect(call.seen.workspace).toBeNull()
+    expect(call.seen.reread).toBe(1)
   })
 
   it('leaves the rows, notice and busy flag of another supply alone', async () => {
-    const call = runOperation({ ticket: { isCurrent: false, isLatest: false }, success: 'Задание создано.' })
-    await expect(call.result).resolves.toBeNull()
-    expect(call.seen).toEqual({ workspace: null, stage: 'packing', notice: null, busy: true })
+    const call = operator({ success: 'Задание создано.' })
+    const result = call.start()
+    call.generation.current += 1
+    call.answer_()
+    await expect(result).resolves.toBeNull()
+    expect(call.seen).toEqual({
+      workspace: null, stage: 'packing', notice: null, error: null, busy: true, reread: 0,
+    })
+  })
+
+  // Билет занят уже в новом открытии, поэтому по поколению и по номеру записи
+  // ответ проходит. Назвал он при этом прежнюю поставку — её состав на экран
+  // открытой поставки не попадает.
+  it('refuses an answer that names a supply the operator no longer sees', async () => {
+    const call = operator({ success: 'Задание создано.', supply: 'supply-1' })
+    const result = call.start()
+    call.shownSupplyId.current = 'supply-2'
+    call.answer_()
+    await expect(result).resolves.toBeNull()
+    expect(call.seen.workspace).toBeNull()
+    expect(call.seen.notice).toBeNull()
+    expect(call.seen.reread).toBe(0)
+  })
+
+  it('re-reads the composition silently, without moving the tab or the progress bar', () => {
+    const loads: unknown[] = []
+    new Function('load', `${asJs('refresh', helpers.refreshAfterLostRace)}; refresh()`)(
+      (silent: boolean) => { loads.push(silent); return Promise.resolve() },
+    )
+    expect(loads).toEqual([true])
+  })
+})
+
+// «Повторить» — единственная кнопка окна, которая хранит уже собранную операцию
+// и переживает закрытие диалогов. После смены поставки её нажатие отправило бы
+// запрос по прежней поставке, а ответ лёг бы на состав открытой.
+describe('WMS-477 saved «Повторить»', () => {
+  it('replays the failed operation inside the same opening', async () => {
+    const call = operator({ success: 'Задание создано.' })
+    const first = call.start()
+    call.fail(new TestApiError('WB не ответил.', true))
+    await first
+    expect(call.seen.error).toBe('WB не ответил.')
+    expect(call.hasRetry()).toBe(true)
+    call.retry()
+    await flush()
+    expect(call.calls()).toBe(2)
+    call.answer_()
+    await flush()
+    expect(call.seen.workspace).toEqual(call.answer)
+    expect(call.seen.notice).toBe('Задание создано.')
+  })
+
+  it('does not send the previous supply operation after the workspace moved on', async () => {
+    const call = operator({ success: 'Задание создано.' })
+    const first = call.start()
+    call.fail(new TestApiError('WB не ответил.', true))
+    await first
+    call.generation.current += 1
+    call.retry()
+    await flush()
+    expect(call.calls()).toBe(1)
+    expect(call.seen.workspace).toBeNull()
+    expect(call.seen.notice).toBeNull()
+  })
+
+  it('keeps no retry for a failure the operator cannot repeat', async () => {
+    const call = operator({ success: 'Задание создано.' })
+    const first = call.start()
+    call.fail(new TestApiError('WB отказал по составу поставки.', false))
+    await first
+    expect(call.seen.error).toBe('WB отказал по составу поставки.')
+    expect(call.hasRetry()).toBe(false)
+  })
+})
+
+// Открытие поставки обязано отдать экран новой поставке целиком. Всё, что осталось
+// от прежнего открытия, либо врёт оператору, либо действует по чужой поставке.
+describe('WMS-477 opening a supply drops the previous state', () => {
+  const reset = () => {
+    const run = sandbox(resetEffect, {
+      open: true,
+      supplyId: 'supply-2',
+      initialWorkspace: null,
+      load: () => Promise.resolve(),
+      visualStage: (stage: string) => stage,
+      persistentOperationKey: () => 'delivery-key',
+      deliveryKeyRef: { current: '' },
+      kizSelectedStickerRef: { current: 'sticker' },
+    })
+    run.invoke()
+    return run.calls
+  }
+
+  it('drops the saved retry and the Честный знак dialog with its busy flag', () => {
+    const calls = reset()
+    expect(calls).toContainEqual(['setRetryAction', null])
+    // У открытого окна снятия ЧЗ по занятости отключены обе кнопки и закрытие:
+    // оставленная занятость прежней поставки заперла бы оператора в диалоге.
+    expect(calls).toContainEqual(['setSkipHonestSignOpen', false])
+    expect(calls).toContainEqual(['setSkipHonestSignBusy', false])
+    expect(calls).toContainEqual(['setAddOrdersOpen', false])
+    expect(calls).toContainEqual(['setAddOrdersBusy', false])
+  })
+
+  it('still clears the notice, the error and the scan state of the previous supply', () => {
+    const calls = reset()
+    expect(calls).toContainEqual(['setNotice', null])
+    expect(calls).toContainEqual(['setError', null])
+    expect(calls).toContainEqual(['setBusy', false])
+    expect(calls).toContainEqual(['setKizScanActive', null])
+    expect(calls).toContainEqual(['setKizScanBusy', false])
+    expect(calls).toContainEqual(['setKizScanValue', ''])
+  })
+})
+
+// Снятие требования ЧЗ сохраняется на сервере независимо от гонки, поэтому оно
+// само закрывает своё окно и отчитывается. Ответ прежней поставки при этом не
+// распоряжается окном открытой.
+describe('WMS-477 «Сдать без Честного знака» under crossing requests', () => {
+  const skip = (given: { latest: boolean; current: boolean; shown?: string }) => {
+    const applied: Array<[string, unknown]> = []
+    const run = sandbox(helpers.performSkipHonestSign, {
+      workspace: { supply: { id: 'supply-1' } },
+      token: 'synthetic',
+      authHeaders: () => ({}),
+      skipFbsSupplyHonestSign: () => Promise.resolve({ supply: { id: 'supply-1' }, revision: 'answer' }),
+      beginWorkspaceWrite: () => ({
+        isCurrent: () => given.current,
+        isLatest: () => given.latest,
+        matchesShownSupply: (next: { supply: { id: string } }) =>
+          next.supply.id === (given.shown ?? 'supply-1'),
+      }),
+      refreshAfterLostRace: () => { applied.push(['refreshAfterLostRace', null]) },
+    })
+    return (run.invoke() as Promise<void>)
+      .then(() => [...applied, ...run.calls] as Array<[string, unknown]>)
+  }
+
+  it('applies its own snapshot and closes the dialog when nothing overtook it', async () => {
+    const calls = await skip({ latest: true, current: true })
+    expect(calls).toContainEqual(['setWorkspace', { supply: { id: 'supply-1' }, revision: 'answer' }])
+    expect(calls).toContainEqual(['setSkipHonestSignOpen', false])
+    expect(calls).toContainEqual(['setSkipHonestSignBusy', false])
+    expect(calls).toContainEqual(['setNotice', 'Требование Честного знака снято со всей поставки.'])
+    expect(calls).not.toContainEqual(['refreshAfterLostRace', null])
+  })
+
+  // Требование снято на сервере, а на экране остались прежние строки: чтение,
+  // начатое позже, могло прочитать базу до записи. Иначе оператор видел бы
+  // сообщение об успехе рядом с невыполненным требованием.
+  it('re-reads the composition when a newer reader answered first', async () => {
+    const calls = await skip({ latest: false, current: true })
+    expect(calls).toContainEqual(['refreshAfterLostRace', null])
+    expect(calls.some(([name]) => name === 'setWorkspace')).toBe(false)
+    expect(calls).toContainEqual(['setSkipHonestSignOpen', false])
+    expect(calls).toContainEqual(['setNotice', 'Требование Честного знака снято со всей поставки.'])
+  })
+
+  // Позднему ответу прежней поставки принадлежит только её собственное окно;
+  // состояние открытой поставки задаёт переход, а не этот ответ.
+  it('touches neither the dialog nor the busy flag of the supply opened meanwhile', async () => {
+    const calls = await skip({ latest: false, current: false })
+    expect(calls).toEqual([['setSkipHonestSignBusy', true], ['setError', null]])
+  })
+
+  it('ignores an answer that describes the previous supply', async () => {
+    const calls = await skip({ latest: true, current: true, shown: 'supply-2' })
+    expect(calls.some(([name]) => name === 'setWorkspace')).toBe(false)
+    expect(calls.some(([name]) => name === 'setNotice')).toBe(false)
+    expect(calls).toContainEqual(['setSkipHonestSignBusy', false])
+  })
+})
+
+describe('WMS-477 «Добавить заказы» under crossing requests', () => {
+  const answer = { supply: { id: 'supply-1', marketplace: 'wb' }, stage: 'picking', revision: 'answer' }
+  const add = (given: { latest: boolean; current: boolean; shown?: string }) => {
+    const applied: Array<[string, unknown]> = []
+    const run = sandbox(helpers.addOrdersToCurrentSupply, {
+      workspace: { supply: { id: 'supply-1' } },
+      addableSelected: new Set(['order-1']),
+      token: 'synthetic',
+      authHeaders: () => ({}),
+      createFbsIdempotencyKey: () => 'synthetic-key',
+      addFbsOrdersToSupply: () => Promise.resolve(answer),
+      beginWorkspaceWrite: () => ({
+        isCurrent: () => given.current,
+        isLatest: () => given.latest,
+        matchesShownSupply: (next: { supply: { id: string } }) =>
+          next.supply.id === (given.shown ?? 'supply-1'),
+      }),
+      refreshAfterLostRace: () => { applied.push(['refreshAfterLostRace', null]) },
+    })
+    return (run.invoke() as Promise<void>)
+      .then(() => [...applied, ...run.calls] as Array<[string, unknown]>)
+  }
+
+  it('applies its own snapshot and closes the dialog when nothing overtook it', async () => {
+    const calls = await add({ latest: true, current: true })
+    expect(calls).toContainEqual(['setWorkspace', answer])
+    expect(calls).toContainEqual(['setAddOrdersOpen', false])
+    expect(calls).toContainEqual(['setNotice', 'Заказы добавлены в поставку.'])
+    expect(calls).not.toContainEqual(['refreshAfterLostRace', null])
+  })
+
+  // Заказы уже в поставке, а на экране их ещё нет: чтение, начатое позже записи,
+  // могло прочитать базу до неё. Без нового чтения оператор увидел бы сообщение
+  // об успехе над прежним составом и добавил бы те же заказы второй раз.
+  it('re-reads the composition when a newer reader answered first', async () => {
+    const calls = await add({ latest: false, current: true })
+    expect(calls).toContainEqual(['refreshAfterLostRace', null])
+    expect(calls.some(([name]) => name === 'setWorkspace')).toBe(false)
+    expect(calls.some(([name]) => name === 'setStage')).toBe(false)
+    expect(calls).toContainEqual(['setAddOrdersOpen', false])
+    expect(calls).toContainEqual(['setNotice', 'Заказы добавлены в поставку.'])
+  })
+
+  it('ignores an answer that describes the previous supply', async () => {
+    const calls = await add({ latest: true, current: true, shown: 'supply-2' })
+    expect(calls.some(([name]) => name === 'setWorkspace')).toBe(false)
+    expect(calls.some(([name]) => name === 'setNotice')).toBe(false)
+    expect(calls).toContainEqual(['setAddOrdersBusy', false])
+  })
+
+  it('touches neither the dialog nor the busy flag of the supply opened meanwhile', async () => {
+    const calls = await add({ latest: false, current: false })
+    expect(calls).toEqual([['setAddOrdersBusy', true], ['setError', null]])
   })
 })
 
