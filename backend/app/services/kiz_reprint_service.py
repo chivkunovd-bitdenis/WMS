@@ -68,6 +68,19 @@ def is_complete_reprint_kiz(value: str) -> bool:
         # 21 are a partial scanner packet, not a usable reprint label.
         return 4 <= len(tail) <= 20
 
+    # The existing import/restore contract also accepts full DataMatrix payloads
+    # that use AI 93 rather than the 91/92 crypto pair.  It is a single
+    # variable field after serial AI 21, separated by GS; accept it only when
+    # both the serial and AI 93 value are present and bounded by GS1 limits.
+    ai93_parts = tail.split(gs)
+    if (
+        len(ai93_parts) == 2
+        and 1 <= len(ai93_parts[0]) <= 20
+        and ai93_parts[1].startswith("93")
+        and 1 <= len(ai93_parts[1][2:]) <= 90
+    ):
+        return True
+
     compact_tail = tail.replace(gs, "")
     for signature_length in (44, 88):
         suffix_length = 2 + 4 + 2 + signature_length  # 91 + key + 92 + sign

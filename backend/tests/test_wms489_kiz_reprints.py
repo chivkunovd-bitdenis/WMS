@@ -22,6 +22,9 @@ def _kiz(serial: str = "RETURN-1") -> str:
     return f"010460000000000121{serial}{GS}91ABCD{GS}92{'X' * 44}"
 
 
+AI93_KIZ = "010460000000000121SERIAL123\x1d93ACTUAL+/=TAIL"
+
+
 async def _seed(async_client: AsyncClient) -> tuple[dict[str, str], uuid.UUID, uuid.UUID]:
     suffix = uuid.uuid4().hex[:10]
     registered = await async_client.post(
@@ -95,6 +98,25 @@ async def test_kiz_reprint_persists_exact_gs_without_touching_marking_pool(
         assert code_after.pool_id == pool_id
         assert code_after.status == STATUS_AVAILABLE
         assert await session.scalar(select(func.count(KizReprint.id))) == 1
+
+
+@pytest.mark.asyncio
+async def test_kiz_reprint_accepts_complete_ai93_payload_from_marking_fixture(
+    async_client: AsyncClient,
+) -> None:
+    """AI93 is a supported full KIZ form in marking restore/import fixtures."""
+    headers, _tenant_id, seller_id = await _seed(async_client)
+    created = await async_client.post(
+        PREFIX,
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "kiz": AI93_KIZ,
+            "idempotency_key": "ai93-full-kiz",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["kiz"] == AI93_KIZ
 
 
 @pytest.mark.asyncio
