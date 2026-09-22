@@ -3,13 +3,144 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
+import httpx
 import pytest
 from httpx import AsyncClient
 
 from app.api.ozon_integration import OzonValidationResult
 
 ACCOUNT = "/integrations/ozon/self/account"
+
+
+@pytest.fixture
+def roles_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[list[httpx.Request], dict[str, object]]:
+    """Exercise the real validator with isolated HTTP; seller/info is forbidden."""
+    import app.services.ozon_client as ozon_client
+
+    calls: list[httpx.Request] = []
+    response: dict[str, object] = {"status": 200, "body": {"roles": []}}
+    original_client = httpx.AsyncClient
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        assert str(request.url) == "https://api-seller.ozon.ru/v1/roles"
+        assert request.method == "POST"
+        assert json.loads(request.content) == {}
+        assert request.headers["Content-Type"] == "application/json"
+        assert request.extensions["timeout"] == dict.fromkeys(
+            ("connect", "read", "write", "pool"), 10.0
+        )
+        error = response.get("error")
+        if isinstance(error, Exception):
+            raise error
+        return httpx.Response(int(str(response["status"])), json=response["body"])
+
+    def fake_client(**kwargs: object) -> AsyncClient:
+        assert kwargs == {"timeout": 10.0, "follow_redirects": False}
+        return original_client(transport=httpx.MockTransport(handle), **kwargs)
+
+    monkeypatch.delenv("E2E_MOCK_OZON_VALIDATION", raising=False)
+    monkeypatch.setattr(ozon_client.httpx, "AsyncClient", fake_client)
+    return calls, response
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("roles_body", [{"roles": []}, {"roles": [{"name": "Product"}]}, {}])
+async def test_wms506_save_and_recheck_use_roles_without_additional_permission_gate(
+    async_client: AsyncClient,
+    roles_provider: tuple[list[httpx.Request], dict[str, object]],
+    roles_body: object,
+) -> None:
+    calls, provider = roles_provider
+    provider["body"] = roles_body
+    headers = await _seller_headers(async_client)
+    saved = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "roles-client", "api_key": "roles-key"}
+    )
+    assert saved.status_code == 200
+    assert saved.json()["connected"] is True
+    assert saved.json()["validation_status"] == "valid"
+    assert len(calls) == 1
+
+    checked = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers)
+    assert checked.status_code == 200
+    assert checked.json()["validation_status"] == "valid"
+    assert checked.json()["last_validated_at"] is not None
+    assert checked.json()["credentials_updated_at"] == saved.json()["credentials_updated_at"]
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.json() == checked.json()
+    assert len(calls) == 2
+    for request in calls:
+        assert request.url.path == "/v1/roles"
+        assert request.headers["Client-Id"] == "roles-client"
+        assert request.headers["Api-Key"] == "roles-key"
+    for public_response in (saved, checked, current):
+        assert "roles-client" not in public_response.text
+        assert "roles-key" not in public_response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_status", "error", "expected_status", "code", "validation_error"),
+    [
+        (401, None, 422, "ozon_credentials_invalid", "credentials_invalid"),
+        (403, None, 422, "ozon_credentials_invalid", "credentials_invalid"),
+        (429, None, 503, "ozon_validation_unavailable", "rate_limited"),
+        (500, None, 503, "ozon_validation_unavailable", "provider_unavailable"),
+        (302, None, 502, "ozon_validation_failed", "unexpected_status"),
+        (418, None, 502, "ozon_validation_failed", "unexpected_status"),
+        (200, httpx.ConnectError("offline"), 503, "ozon_validation_unavailable", "transport_error"),
+        (200, httpx.ReadTimeout("timeout"), 503, "ozon_validation_unavailable", "transport_error"),
+    ],
+)
+async def test_wms506_roles_failure_preserves_credentials_and_allows_retry(
+    async_client: AsyncClient,
+    roles_provider: tuple[list[httpx.Request], dict[str, object]],
+    provider_status: int,
+    error: Exception | None,
+    expected_status: int,
+    code: str,
+    validation_error: str,
+) -> None:
+    calls, provider = roles_provider
+    headers = await _seller_headers(async_client)
+    saved = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "working-client", "api_key": "working-key"}
+    )
+    assert saved.status_code == 200
+    provider.update(status=provider_status, error=error)
+    rejected = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "candidate-client", "api_key": "candidate-key"}
+    )
+    assert rejected.status_code == expected_status
+    assert rejected.json()["code"] == code
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.json() == saved.json()
+
+    checked = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers)
+    assert checked.status_code == expected_status
+    assert checked.json()["code"] == code
+    assert calls[-1].headers["Client-Id"] == "working-client"
+    assert calls[-1].headers["Api-Key"] == "working-key"
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.json()["last_validation_error"] == validation_error
+    assert current.json()["credentials_updated_at"] == saved.json()["credentials_updated_at"]
+
+    provider.update(status=200, error=None)
+    retried = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "candidate-client", "api_key": "candidate-key"}
+    )
+    assert retried.status_code == 200
+    assert retried.json()["validation_status"] == "valid"
+    checked = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers)
+    assert checked.status_code == 200
+    assert calls[-1].headers["Client-Id"] == "candidate-client"
+    assert calls[-1].headers["Api-Key"] == "candidate-key"
+    assert len(calls) == 5
 
 
 async def _seller_headers(async_client: AsyncClient) -> dict[str, str]:
@@ -133,7 +264,7 @@ async def test_tc_s32_ozon_009_ordinary_validator_path_uses_the_adapter(
         return OzonValidationResult.success()
 
     monkeypatch.delenv("E2E_MOCK_OZON_VALIDATION", raising=False)
-    monkeypatch.setattr(ozon_client, "validate_seller_info", recorded_adapter)
+    monkeypatch.setattr(ozon_client, "validate_api_key_roles", recorded_adapter)
 
     result = await ozon_client.validate_ozon_credentials("ordinary-client", "ordinary-key")
 
