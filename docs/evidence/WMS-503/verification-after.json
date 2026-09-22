@@ -1,0 +1,61 @@
+{
+  "bottles": [
+    {
+      "wb_barcode": "4620424200068",
+      "seller": "ИП Бугаев А.",
+      "ff": "Империя ФФ",
+      "quantity": 200,
+      "unpacked": 200,
+      "packed": 0
+    },
+    {
+      "wb_barcode": "4620424200310",
+      "seller": "ИП Бугаев А.",
+      "ff": "Империя ФФ",
+      "quantity": 200,
+      "unpacked": 200,
+      "packed": 0
+    },
+    {
+      "wb_barcode": "4620424200723",
+      "seller": "ИП Бугаев А.",
+      "ff": "Империя ФФ",
+      "quantity": 200,
+      "unpacked": 200,
+      "packed": 0
+    },
+    {
+      "wb_barcode": "4620424200730",
+      "seller": "ИП Бугаев А.",
+      "ff": "Империя ФФ",
+      "quantity": 150,
+      "unpacked": 150,
+      "packed": 0
+    },
+    {
+      "wb_barcode": "4620424200754",
+      "seller": "ИП Бугаев А.",
+      "ff": "Империя ФФ",
+      "quantity": 50,
+      "unpacked": 50,
+      "packed": 0
+    }
+  ],
+  "corrections": [
+    {
+      "ff": "FFAdam",
+      "events": 65,
+      "restored_qty": 43
+    },
+    {
+      "ff": "Империя ФФ",
+      "events": 71,
+      "restored_qty": 70
+    }
+  ],
+  "unresolved_modern": [
+    {
+      "n": 0
+    }
+  ]
+}

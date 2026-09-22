@@ -1,0 +1,954 @@
+[
+  {
+    "ledger_id": "51040648-40ba-47f5-9b0d-b71c899b5cbe",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "72ad0fef-2884-48a6-8552-2feea5c51992",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6d389e34-dc37-434a-b95b-55dfe170b7d1",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "b050ad75-7aa5-46e9-9625-c18df03caefc",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e90c5723-914d-4b04-b327-a695cfc128cc",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "c730358b-de64-4a10-a261-443f6a9a9922",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4feb8f62-a608-4623-a94f-f994004e6b52",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "45b31b09-e8cc-4e31-ae70-234bfa3ec126",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "71e06efc-e5b5-44ad-ab21-204e2d1060e1",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "65f30702-b49c-487e-8f47-832b9f27f5ed",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e68f12a7-c11f-4eab-971e-f808c93a9b88",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "d1228611-e407-424a-8a33-8d99efb89e6b",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ce5bc80c-26a3-4bb4-bf11-04e3a2036a66",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3af2ee81-5b85-4fa1-a4d8-45433e55f1c5",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "a61a7ed9-0d34-4283-94a2-d3b1cbd1bfc7",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3cda73d6-4a83-448e-b68a-65d95a7557c5",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "e027c795-0081-46ec-871d-a4612d7f2fac",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6413525e-5d03-4286-8967-27a3143356f0",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "802e7d90-788d-4c03-a9f1-548e527977cf",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 5dc79b91-28bd-4e36-8ce0-9fc557569c9b posted 2026-09-03 16:13:41.661403+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "80741079-ad0f-4cd0-8d04-63834d899eb3",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "57b5aa6f-8812-4388-b402-9ec8bb44058a",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "46c6edf5-455c-46ea-bea4-07d2019230de",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "2be9143e-7622-4768-bf33-521e8f8e339c",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "502d62a8-4d78-4395-b609-823837fd0024",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "f20fb43f-4936-485e-865e-a1764e09c43f",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6ce44851-b29f-4a01-8035-62cd664b8191",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "7cc36061-1cab-4015-a297-af92aa2eb836",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "472d4f72-94f7-4b8b-a05f-c6adb7ad32b2",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e3dff7f5-82cd-410b-adbc-ec81559fec31",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e110622c-800f-4a4e-92a4-e8a72761430e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "65a7702f-e523-44bb-8187-33d1b1c2eb8d",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "9abb361e-26a1-4cc7-a370-e9c61823f0d8",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "a602abe7-8ccd-4516-a9f7-9d5f724f5697",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e9b84d50-e887-49fe-a468-ecc9f968c674",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "89128945-279c-4d4d-9459-312e6ef29357",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "5a5edd05-656f-41b7-a463-60e8d77c31d8",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "641cb8d6-9479-4b3f-8cf7-187eb0f28608",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1676f10b-54a6-4401-a632-dd907187eefc",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3487abed-5a6e-4c7f-b5e3-36b4154eab4b",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "9189389e-8cb9-4ff7-bd80-96e231e4160a",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "f2775358-3bef-4072-9c4e-52c600d64283",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "71991839-3ddf-4cef-bd38-7785e9e7b840",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "240048d3-d52d-4c9b-9889-9643325a9e81",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "61ca73b4-6139-4aae-b3d4-33235a6e17df",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "57b423a7-ad36-4f17-a937-6d42a029004e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "7f57df2a-e0a4-4de5-8bf3-355aea37d29a",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1bcb4d4d-405e-440a-b0ca-e4112dab1d2f",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1380924b-ee72-4aef-b12d-c305eb52a822",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6e9deb7b-16ec-4b44-9a88-2e8706a68d6e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e2c693ad-4ebc-457b-8c7d-859aa024bd21",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "c2391645-70e1-4fd2-a4b4-f5c82c415dda",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 9daa1ee1-3d6e-42be-918d-a3abcaa59815 posted 2026-09-17 14:53:41.335749+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "06833aea-c427-403e-9155-7819b20f6c99",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "a80d224c-7d78-4ece-a758-f261648cbeba",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ccb43d61-b0df-477c-88aa-d0428f460944",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "01230ef9-1e41-4dbf-9a12-c3d7452be713",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "674ff060-80a8-4ebf-af16-70307b05ae7c",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "0c77e96d-c169-4024-8b73-035301adf309",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "b6615471-57a2-403c-87ad-37c7ea600833",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "f129673a-e7d1-4033-ac2f-35804e0ecffe",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "a31ca720-ea32-45c9-a87e-a05a8f68d8b6",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "13bb3fa0-db90-4d08-b50b-b08dc14d2dde",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "16113cfe-18e1-4b7e-9686-47cc01dbbdcf",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "656021e4-90d9-4c52-9eee-0d6d8921672e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "670feb6b-13bb-406f-938d-f2d96ad9cc83",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "bead45ee-d321-4fcc-b013-4c408d4e568d",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "82424709-5217-46ac-b041-336652bcbd09",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "51f679da-5633-41a7-82f7-76e72689b861",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "64607e8a-5eba-4ae1-ae9d-03702c5e6385",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4af999d0-5c2d-492f-8730-4e25c41cc29d",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "620e50a1-eb9b-4954-a94b-001bf773f314",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "55f27f16-2759-4be5-abec-f2b29d53ef87",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "7b482e55-f0eb-4faa-bf2f-eb95a2e556ca",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "0f739be7-01bf-4abe-8a80-af10511a0487",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4d27a4a2-c3b8-4cba-83d8-8a34206c612c",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4353116a-a6bf-424e-b11d-bb714aa2fff3",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e5958124-c2a6-4e67-9c7b-b527b53b6492",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4da38fd1-0d66-4f84-92cb-b96dbb220161",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ab1f32ab-b010-4b99-b73e-69a41e358637",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1f88b72e-95a3-45a2-9c3c-acd2245e3162",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "31a784f1-fcd5-488a-acf0-59c345dc8366",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "5ab5aee1-2e36-4f58-8939-0a82fdaa9034",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 9daa1ee1-3d6e-42be-918d-a3abcaa59815 posted 2026-09-17 14:53:41.335749+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "9bb7321c-d240-47a1-b38a-db34a3fcd723",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ab36724a-9aa3-43f0-895f-8d2dfdff447d",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6feeb7fe-dd18-4562-a51e-af8f7ebd9ad9",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "c692a691-0919-42f1-8098-581ebf03b862",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "18de4a90-8e66-4015-b97c-f4adaf473a3d",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "fa54e02d-8647-4e22-a708-f3df62909839",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "f8cad3ae-a16d-4bb6-9c19-b234758e92d7",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "5ab5aee1-2e36-4f58-8939-0a82fdaa9034",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 9daa1ee1-3d6e-42be-918d-a3abcaa59815 posted 2026-09-17 14:53:41.335749+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "448a0903-5b64-4c61-839e-89894bb7397f",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "aff4e5fc-1235-4b42-80eb-7f802abbeac2",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "938e7850-865e-40fb-bb4d-bab837320648",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ed6b9838-618f-4110-913a-e3d1c67123b9",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "5084991e-269a-4625-8d40-4160b3afa681",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1e5887b6-5644-4fae-8b6a-bdfe5dea1935",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "eeac7869-57e8-4c64-8e79-04cc3fff0df6",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "c67d89fe-5fb7-4662-ba8c-b60992e597ce",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "dc65507a-d2be-4204-a636-44f0fc8d2655",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "2e0aea20-72cb-4b5c-90d9-10933df25392",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "c976e201-d297-4092-83b0-605d0d5c90d5",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3ff22552-5223-4d0c-a837-3111fd99a33e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "33a6c33d-891d-43fd-b343-489426a63da2",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "2268664c-b39d-4a8f-8800-9c174c011258",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "8e99e8a1-22d5-4897-8aae-9c5b82504d23",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "d3c1d2ca-a475-46a8-89fb-0e8caec8a034",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "1ead440c-31fa-4b9c-9aaf-4bd9586982ca",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "65aafcc1-a6b8-4f93-9005-44c6c7a7aaab",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "dec1e4aa-6399-4e48-b871-c92c864d3899",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "8f5dbb44-006d-4c9a-bba7-cf9464db98ee",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4e4a71e8-a575-4c37-83e0-be64265a7c46",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "77b9d679-24ac-42a9-bfba-d7067e4467c1",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "312ea0fa-7faf-44e1-8145-89f552ada53e",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "a18ce122-5ce6-434b-835a-dd0c721d4af4",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6c775a35-4f58-46ac-8d2d-645fe5aed887",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3ba02fbb-cc5b-4dca-8459-98b34797a6da",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "522f7c12-43cc-4fa7-82f6-03e7dd7b41ed",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4b601cb6-75d2-4c85-886f-62831d83bc4c",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "ede0f054-d918-43a7-af16-cdc807a89b52",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "67e9e5a9-2058-4bdd-b81b-277257f3d13a",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "9dabd5b9-2d8f-4fef-807d-337172f01998",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "6787b52b-7c14-49e7-a8c8-19de705cac64",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "b1ba931f-d29a-4e1c-be49-a7e349d994a6",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "3635c481-63de-4bae-899a-fac65b5f0744",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "a569400b-a30b-41b3-8def-c43401b2d1db",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "175b1480-2f99-4eb3-88de-52f31a087d2d",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "9b11e4cc-0e9a-4d3a-9341-b4f1e88ec3d4",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "23491347-1742-49e9-a589-db74c017fdd3",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "c710c4c8-cb91-475a-97ae-265be60f160f",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "cac08f3c-d5af-48e6-8b9b-232c4cd1b7e5",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e7975c39-a7d4-4e95-9fe7-8b81c56857bc",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "c2391645-70e1-4fd2-a4b4-f5c82c415dda",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 9daa1ee1-3d6e-42be-918d-a3abcaa59815 posted 2026-09-17 14:53:41.335749+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "8c6d4a95-a2df-46c4-bd50-4a2aa0a254b8",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "ad99cde3-d207-486d-b350-4997075d17a7",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "c2391645-70e1-4fd2-a4b4-f5c82c415dda",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 9daa1ee1-3d6e-42be-918d-a3abcaa59815 posted 2026-09-17 14:53:41.335749+00:00 supersedes the old stock error."
+  },
+  {
+    "ledger_id": "3575e6d5-bb32-4ec2-a9ba-98c140a41e4f",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "e4c96a99-5242-411e-9ab0-be86ab91c1ef",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "79a097c6-1bc6-4b66-a2f4-130f368500f0",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "89da00f1-bb26-4a20-babb-7e92f90b03d4",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "d8baa1aa-9b54-4b3e-9d12-48baa01a2805",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "7b27c55d-20fb-4020-9932-867f4eb6b5c4",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "4275a201-8037-49aa-8776-f10b319efcd8",
+    "action": "restore",
+    "count_line_id": null,
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. No subsequent actual inventory recount; balance equals movement sum. All units currently unpacked; inverse to original location. No operator shipment attached to this movement."
+  },
+  {
+    "ledger_id": "5da67346-814b-4d47-a6c3-bee52329b9e9",
+    "action": "absorbed_by_inventory_count",
+    "count_line_id": "8b0fe592-b9f4-45ad-88db-ac79907fa0f6",
+    "packed_quantity": 0,
+    "evidence": "Historical WB sold automatic writeoff Sep1-4: source_mode present, no actor or WB operation, one-unit negative, sold order. Later actual physical count 201580c6-7243-4997-aacd-3872b7a813ce posted 2026-09-21 19:10:54.621105+00:00 supersedes the old stock error."
+  }
+]

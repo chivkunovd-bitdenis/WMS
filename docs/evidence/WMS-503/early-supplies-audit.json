@@ -1,0 +1,73 @@
+{
+  "supplies": [
+    {
+      "id": "03682d5c-910e-4a59-923b-19d647b63c95",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "seller_id": "eca60890-c78a-4183-af53-4006270e8a0e",
+      "source": "wms",
+      "status": "done",
+      "wb_supply_id": "WB-GI-271105024",
+      "created_at": "2026-08-29 13:53:28.679991+00:00",
+      "delivered_at": "2026-08-29 14:01:09.340054+00:00",
+      "packaging_task_id": "010b8617-305a-4659-8736-28bd89fdddea"
+    },
+    {
+      "id": "a7e66cc2-f42c-4dd3-ba22-5c90891c80f7",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "seller_id": "a852f30d-bb63-42f9-ac7f-a701ee857cca",
+      "source": "wms",
+      "status": "done",
+      "wb_supply_id": "WB-GI-269621985",
+      "created_at": "2026-08-26 06:51:21.006093+00:00",
+      "delivered_at": null,
+      "packaging_task_id": "e9937898-94e9-4547-a950-460e50177747"
+    }
+  ],
+  "operations": [
+    {
+      "id": "c1f3bd39-026e-4537-9014-f1547bb43157",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "operation_kind": "supply_from_orders",
+      "local_entity_id": "03682d5c-910e-4a59-923b-19d647b63c95",
+      "wb_object_id": "WB-GI-271105024",
+      "state": "confirmed",
+      "created_by_user_id": "4ffb8e53-b3b3-42a9-80d6-1916b12186c4",
+      "created_at": "2026-08-29 13:53:28.679991+00:00",
+      "confirmed_at": "2026-08-29 13:53:29.196166+00:00"
+    },
+    {
+      "id": "6de1777c-824b-4916-a811-66f5669f867b",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "operation_kind": "cargo_places_create",
+      "local_entity_id": "03682d5c-910e-4a59-923b-19d647b63c95",
+      "wb_object_id": "WB-GI-271105024",
+      "state": "confirmed",
+      "created_by_user_id": "4ffb8e53-b3b3-42a9-80d6-1916b12186c4",
+      "created_at": "2026-08-29 14:00:43.022390+00:00",
+      "confirmed_at": "2026-08-29 14:00:43.501230+00:00"
+    },
+    {
+      "id": "b24fef4f-03a9-4649-9b76-5ea18aaa0629",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "operation_kind": "supply_deliver",
+      "local_entity_id": "03682d5c-910e-4a59-923b-19d647b63c95",
+      "wb_object_id": "WB-GI-271105024",
+      "state": "confirmed",
+      "created_by_user_id": "4ffb8e53-b3b3-42a9-80d6-1916b12186c4",
+      "created_at": "2026-08-29 14:01:08.775458+00:00",
+      "confirmed_at": "2026-08-29 14:01:09.347229+00:00"
+    },
+    {
+      "id": "ed508a6e-c149-45b4-911a-20d9e8f7c743",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "operation_kind": "supply_from_orders",
+      "local_entity_id": "a7e66cc2-f42c-4dd3-ba22-5c90891c80f7",
+      "wb_object_id": "WB-GI-269621985",
+      "state": "confirmed",
+      "created_by_user_id": null,
+      "created_at": "2026-08-26 06:51:21.006093+00:00",
+      "confirmed_at": "2026-08-26 06:51:21.529147+00:00"
+    }
+  ],
+  "events": []
+}

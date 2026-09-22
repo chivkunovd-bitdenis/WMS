@@ -1,0 +1,218 @@
+{
+  "status": "applied",
+  "sha256": "cb561cc855c88fbd4ae40fb17d7cfbcde43abab7fb01f3461285108ec4f638d0",
+  "restored_units": 113,
+  "absorbed_units": 23,
+  "balances": [
+    {
+      "id": "15b9f35e-e420-4cb3-aeb9-68ef66481a39",
+      "before": 194,
+      "after": 200,
+      "unpacked_delta": 6,
+      "packed_delta": 0
+    },
+    {
+      "id": "2fc2082d-62ad-4569-8e2c-38d75616745e",
+      "before": -9,
+      "after": -7,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "7c065d00-7958-44b6-82fe-ffd900cdbbff",
+      "before": 45,
+      "after": 50,
+      "unpacked_delta": 5,
+      "packed_delta": 0
+    },
+    {
+      "id": "046f4f35-b459-4c34-8717-b873c2c3a9e4",
+      "before": 867,
+      "after": 881,
+      "unpacked_delta": 14,
+      "packed_delta": 0
+    },
+    {
+      "id": "6d2ca4fe-78ec-4b4c-97e1-29bd63efe90e",
+      "before": -8,
+      "after": -5,
+      "unpacked_delta": 3,
+      "packed_delta": 0
+    },
+    {
+      "id": "a5208130-28b4-4894-86fd-048207727ee7",
+      "before": 78,
+      "after": 96,
+      "unpacked_delta": 18,
+      "packed_delta": 0
+    },
+    {
+      "id": "ce435323-33b0-427b-a051-91a46252875f",
+      "before": -2,
+      "after": 0,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "1021d037-713b-4706-b0e5-190f2c520a2b",
+      "before": -5,
+      "after": 0,
+      "unpacked_delta": 5,
+      "packed_delta": 0
+    },
+    {
+      "id": "d9ad9988-476e-4f34-ba9a-2583dd4cfe2b",
+      "before": 191,
+      "after": 200,
+      "unpacked_delta": 9,
+      "packed_delta": 0
+    },
+    {
+      "id": "63ad94d2-f776-4248-8a03-cae81e83cd53",
+      "before": 10,
+      "after": 16,
+      "unpacked_delta": 6,
+      "packed_delta": 0
+    },
+    {
+      "id": "ca14f223-1a8e-4b4f-b74d-bfc27e5b14ea",
+      "before": -10,
+      "after": -8,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "38633dcc-1c53-4ed5-a32b-d268ffb68e69",
+      "before": -11,
+      "after": -8,
+      "unpacked_delta": 3,
+      "packed_delta": 0
+    },
+    {
+      "id": "25b277cc-80fe-423b-81b3-769c07c6e8ec",
+      "before": -4,
+      "after": 0,
+      "unpacked_delta": 4,
+      "packed_delta": 0
+    },
+    {
+      "id": "1b61015f-2d26-49ae-9806-892e933b2f07",
+      "before": -2,
+      "after": 0,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "3976cc14-e214-4731-9493-3f545f4c5085",
+      "before": -5,
+      "after": -3,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "8a6789ba-898f-4b58-8680-49b8589cb98b",
+      "before": -11,
+      "after": -9,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "487727b9-d4be-467b-ae2e-011fc51bd8e6",
+      "before": -11,
+      "after": -9,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "1f27a240-96d7-4876-bf91-fd7f9f15842a",
+      "before": -3,
+      "after": 0,
+      "unpacked_delta": 3,
+      "packed_delta": 0
+    },
+    {
+      "id": "687aef79-727e-48db-a0f0-bfb963514427",
+      "before": -10,
+      "after": -6,
+      "unpacked_delta": 4,
+      "packed_delta": 0
+    },
+    {
+      "id": "0ebed93a-335e-4945-b99b-c243b9df90fc",
+      "before": -7,
+      "after": -5,
+      "unpacked_delta": 2,
+      "packed_delta": 0
+    },
+    {
+      "id": "4dce8c6f-f05c-46af-a7a4-78411ff25716",
+      "before": 194,
+      "after": 200,
+      "unpacked_delta": 6,
+      "packed_delta": 0
+    },
+    {
+      "id": "be44f396-dfc8-4eb6-855a-3cf72f2a225e",
+      "before": -8,
+      "after": -7,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "67ea3f42-f2cd-48c5-b0e6-c95b104424c5",
+      "before": 323,
+      "after": 326,
+      "unpacked_delta": 3,
+      "packed_delta": 0
+    },
+    {
+      "id": "41c2ed92-3213-433a-b66b-660e24e9f67f",
+      "before": -1,
+      "after": 0,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "e0bb68b7-5ce1-4173-bebd-25b8a5801d9a",
+      "before": -11,
+      "after": -10,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "9a8c9453-f8a1-4272-9a7c-5a30f1abe4e3",
+      "before": -1,
+      "after": 0,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "c3fc6836-afbb-4acd-bafa-bb2c4df89d3d",
+      "before": 95,
+      "after": 96,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "3f797bec-5f6f-46f1-a9db-2227d80c7851",
+      "before": -1,
+      "after": 0,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "869fdb39-e0ce-468e-af83-0e9ef9eec188",
+      "before": -9,
+      "after": -8,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    },
+    {
+      "id": "10321fc1-07ba-4e25-88a3-3ce95a5c04a9",
+      "before": 149,
+      "after": 150,
+      "unpacked_delta": 1,
+      "packed_delta": 0
+    }
+  ]
+}

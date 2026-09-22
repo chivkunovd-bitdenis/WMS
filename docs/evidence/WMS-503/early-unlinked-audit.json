@@ -1,0 +1,45 @@
+{
+  "ledgers": [
+    {
+      "id": "c4311650-cfbe-46e4-a3ae-500e871bfdb2",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "fbs_order_id": "1bcc3411-4551-4901-8125-54d4e7720800",
+      "product_id": "c53584fc-3cc2-4128-af7b-166821e5b2d5",
+      "storage_location_id": "b5964198-71d9-4d7d-99a1-b6ec4970e676",
+      "quantity": 1,
+      "created_at": "2026-08-30 17:48:19.236194+00:00",
+      "source_mode": null,
+      "written_off_at": null,
+      "shipment_movement_id": null,
+      "reversed_at": null,
+      "wb_order_id": 5584240601,
+      "seller_id": "a852f30d-bb63-42f9-ac7f-a701ee857cca",
+      "supply_id": "a7e66cc2-f42c-4dd3-ba22-5c90891c80f7",
+      "status": "done",
+      "wb_status": "sold",
+      "wb_barcode": "2047380799382"
+    }
+  ],
+  "movements": [
+    {
+      "id": "e04c9a2e-9554-405c-b306-cd231ec3ff44",
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "product_id": "c53584fc-3cc2-4128-af7b-166821e5b2d5",
+      "storage_location_id": "b5964198-71d9-4d7d-99a1-b6ec4970e676",
+      "quantity_delta": -1,
+      "movement_type": "fbs_shipment",
+      "inbound_intake_line_id": null,
+      "created_at": "2026-08-30 17:48:19.236194+00:00",
+      "outbound_shipment_line_id": null,
+      "transfer_group_id": null,
+      "marketplace_unload_request_id": null,
+      "seller_id": "a852f30d-bb63-42f9-ac7f-a701ee857cca",
+      "warehouse_id": "1ee99a93-e9b4-4d2b-b795-f5b15e786817",
+      "reporting_dimensions_legacy": false,
+      "inventory_count_line_id": null,
+      "actor_user_id": null,
+      "container_kind": null,
+      "container_id": null
+    }
+  ]
+}
