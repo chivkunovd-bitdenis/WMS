@@ -11,7 +11,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import require_ff_or_seller_with_permission, require_fulfillment_admin
+from app.api.deps import (
+    get_effective_seller_id,
+    require_ff_or_seller_with_permission,
+    require_fulfillment_admin,
+)
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.billing import BillingTariffVersionV2
@@ -548,6 +552,7 @@ async def rebuild_storage(
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_storage_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> StorageRebuildOut:
     if (body.year is None) != (body.month is None):
         raise HTTPException(status_code=422, detail="year_and_month_required_together")
@@ -571,7 +576,9 @@ async def rebuild_storage(
         if v is not None
     }
     if user.role == "fulfillment_seller":
-        payload["seller_id"] = str(user.seller_id)
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        payload["seller_id"] = str(effective_seller_id)
     job = await job_svc.create_pending_job(
         session, user.tenant_id, job_type=JOB_TYPE_STORAGE_MEASUREMENT_REBUILD, payload_json=payload
     )

@@ -31,7 +31,6 @@ from app.services.background_job_service import (
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
     JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
 )
-from app.services.seller_shop_service import uses_home_seller_scope
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 router = APIRouter(
@@ -227,6 +226,7 @@ async def get_background_job(
     job_id: uuid.UUID,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> BackgroundJobOut:
     job = await job_svc.get_job(session, user.tenant_id, job_id)
     if job is None:
@@ -249,7 +249,7 @@ async def get_background_job(
             k: v for k, v in (output.result_json or {}).items() if k != "claim_id"
         }
         return output
-    if await uses_home_seller_scope(session, user):
+    if user.role == FULFILLMENT_SELLER:
         # These workers pass payload seller_id to their seller-scoped service.
         # Unknown/general workers cannot establish ownership from an arbitrary field.
         seller_job_types = {
@@ -267,7 +267,7 @@ async def get_background_job(
         if (
             job.job_type not in seller_job_types
             or job_seller_id is None
-            or job_seller_id != user.seller_id
+            or job_seller_id != effective_seller_id
             or (job.result_json or {}).get("seller_id", str(job_seller_id)) != str(job_seller_id)
         ):
             raise HTTPException(404, "job_not_found")

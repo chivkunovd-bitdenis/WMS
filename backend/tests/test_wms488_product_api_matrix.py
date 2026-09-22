@@ -25,7 +25,7 @@ RULE = {"same_everywhere": True, "percent": 40, "publish": False, "publish_ozon"
 PERIOD = {"date_from": "2026-09-01T00:00:00Z", "date_to": "2026-09-30T00:00:00Z"}
 
 
-@pytest.fixture(autouse=True, params=[False, True], ids=["ordinary", "avpack-old-token"])
+@pytest.fixture(autouse=True, params=[False, True], ids=["ordinary", "avpack-active-delegation"])
 async def avpack_manager_context(request, monkeypatch, async_client):
     if not request.param:
         yield
@@ -41,6 +41,9 @@ async def avpack_manager_context(request, monkeypatch, async_client):
         await enable_avpack_manager(users, products)
         active[users["a"].id] = users["b"].seller_id
         snapshots.append((users["a"].id, await grants_snapshot(users["a"].id)))
+        # Matrix key "a" means accessible product, "b" means inactive same-tenant
+        # product. The actor remains the home-A manager with an active-B token.
+        products["a"], products["b"] = products["b"], products["a"]
         return users, products, warehouse
 
     def headers(user):

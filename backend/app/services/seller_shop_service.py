@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.roles import FULFILLMENT_SELLER
 from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
-from app.models.tenant import Tenant
 from app.models.user import User
 
 
@@ -39,16 +38,8 @@ def user_can_manage_seller_shops(user: User) -> bool:
     return bool(user.can_manage_seller_shops)
 
 
-async def uses_home_seller_scope(session: AsyncSession, user: User) -> bool:
-    """AVpack seller accounts always act within their home shop."""
-    if user.role != FULFILLMENT_SELLER:
-        return False
-    tenant = await session.get(Tenant, user.tenant_id)
-    return tenant is not None and tenant.slug == "avpack-9uczh"
-
-
 async def can_manage_seller_shops(session: AsyncSession, user: User) -> bool:
-    return user_can_manage_seller_shops(user) and not await uses_home_seller_scope(session, user)
+    return user_can_manage_seller_shops(user)
 
 
 async def is_test_seller(
