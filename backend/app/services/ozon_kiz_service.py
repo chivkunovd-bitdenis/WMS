@@ -47,6 +47,12 @@ class OzonKizError(Exception):
     message: str
 
 
+@dataclass(frozen=True)
+class OzonKizCommitOutcome:
+    meta_status: str
+    newly_bound: bool
+
+
 async def _packaging_line(
     session: AsyncSession,
     order: FbsOrder,
@@ -184,7 +190,7 @@ async def commit_ozon_kiz(
     actor_user_id: uuid.UUID | None,
     http_client: httpx.AsyncClient,
     provider: OzonMarketplaceProvider | None = None,
-) -> str:
+) -> OzonKizCommitOutcome:
     try:
         position = await resolve_marking_position(session, order, value)
     except OzonMarkingPositionError as error:
@@ -196,7 +202,7 @@ async def commit_ozon_kiz(
     active = await _active_position_markings(session, order.id, position.id)
     existing = next((marking for marking in active if marking.value == value), None)
     if existing is not None:
-        return existing.meta_status
+        return OzonKizCommitOutcome(meta_status=existing.meta_status, newly_bound=False)
     current = active[-1] if len(active) >= position.quantity else None
     if current is not None and not confirmed:
         raise OzonKizError("needs_confirmation", "Для позиции уже внесены все коды маркировки.")
@@ -260,4 +266,4 @@ async def commit_ozon_kiz(
     )
     order.metadata_delivery_allowed = required_total > 0 and accepted_count >= required_total
     await session.flush()
-    return marking.meta_status
+    return OzonKizCommitOutcome(meta_status=marking.meta_status, newly_bound=True)

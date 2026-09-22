@@ -10,13 +10,14 @@ describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
     expect(scanBar).toContain('data-testid="fbs-kiz-auto-reprint-toggle"')
   })
 
-  it('queues one full KIZ only after status ok and before refresh', () => {
+  it('queues one full KIZ only after a new successful bind and before refresh', () => {
     const failureBranch = source.indexOf("if (outcome.status !== 'ok')")
     const print = source.indexOf('printMarkingCodeLabels([kiz], { duplicateCopies: 1 })')
     const refresh = source.indexOf('const refreshed = await load(true)')
     expect(failureBranch).toBeGreaterThan(-1)
     expect(print).toBeGreaterThan(failureBranch)
     expect(refresh).toBeGreaterThan(print)
+    expect(source.slice(failureBranch, print)).toContain('outcome.newly_bound === true')
   })
 
   it('does not schedule an error or pending_confirmation outcome', () => {

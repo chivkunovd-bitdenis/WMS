@@ -1230,6 +1230,8 @@ export type FbsKizCommitResult = {
   status: 'ok' | 'error'
   code: string | null
   message: string | null
+  /** True only when this commit created or replaced the order's KIZ. */
+  newly_bound?: boolean
 }
 
 export async function lookupFbsOrderBySticker(

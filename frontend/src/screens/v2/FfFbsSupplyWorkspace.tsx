@@ -947,13 +947,15 @@ export function FfFbsSupplyWorkspace({
           await load(true)
           return
         }
-        void kizAutoPrintQueueRef.current.enqueue(scan, async (kiz) => {
-          await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
-        }).catch((cause: unknown) => {
-          if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
-          const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать КИЗ.'
-          setKizAutoReprintError(`КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`)
-        })
+        if (outcome.newly_bound === true) {
+          void kizAutoPrintQueueRef.current.enqueue(scan, async (kiz) => {
+            await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
+          }).catch((cause: unknown) => {
+            if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
+            const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать КИЗ.'
+            setKizAutoReprintError(`КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`)
+          })
+        }
         setKizScanNotice(isOzonSupply
           ? outcome.meta_status === 'accepted'
             ? `Код принят Ozon · ${fbsKizOrderNumber(kizScanActive)}`
