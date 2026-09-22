@@ -16,7 +16,7 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.services.marketplace_account_service import MarketplaceAccountService
-from app.services.ozon_client import OzonProviderError, validate_seller_info
+from app.services.ozon_client import OzonProviderError, validate_api_key_roles
 
 
 @dataclass
@@ -29,7 +29,7 @@ class RecordedCall:
 
 
 class RejectingOzonTransport:
-    """Local fake: it permits only the one read-only Call 74 request."""
+    """Local fake: it permits only the read-only API-key roles request."""
 
     def __init__(self, *, status_code: int = 204, error: Exception | None = None) -> None:
         self.status_code = status_code
@@ -48,10 +48,14 @@ class RejectingOzonTransport:
     ) -> int:
         assert host == "https://api-seller.ozon.ru"
         assert method == "POST"
-        assert path == "/v1/seller/info"
+        assert path == "/v1/roles"
         assert json == {}
         assert follow_redirects is False
-        assert set(headers) >= {"Client-Id", "Api-Key"}
+        assert headers == {
+            "Client-Id": "test-client-handle",
+            "Api-Key": "test-api-key-handle",
+            "Content-Type": "application/json",
+        }
         self.calls.append(RecordedCall(host, method, path, json, follow_redirects))
         if self.error is not None:
             raise self.error
@@ -97,7 +101,7 @@ async def _account_row(
 async def test_tc_s32_ozon_009_adapter_allows_only_one_read_only_empty_post() -> None:
     transport = RejectingOzonTransport()
 
-    result = await validate_seller_info(
+    result = await validate_api_key_roles(
         transport=transport,
         client_id="test-client-handle",
         api_key="test-api-key-handle",
@@ -115,7 +119,7 @@ async def test_tc_s32_ozon_004_adapter_preserves_provider_failure_class(
     transport = RejectingOzonTransport(status_code=status_code)
 
     with pytest.raises(OzonProviderError) as raised:
-        await validate_seller_info(
+        await validate_api_key_roles(
             transport=transport,
             client_id="test-client-handle",
             api_key="test-api-key-handle",
