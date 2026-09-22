@@ -1217,6 +1217,7 @@ async def get_product_dimension_history(
     product_id: uuid.UUID,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[ProductDimensionEventOut]:
     await assert_inventory_read_access(session, user)
     try:
@@ -1225,7 +1226,7 @@ async def get_product_dimension_history(
             raise CatalogError("product_not_found")
         seller_scope: uuid.UUID | None = None
         if user.role == FULFILLMENT_SELLER:
-            seller_scope = user.seller_id
+            seller_scope = effective_seller_id
             if seller_scope is None or product.seller_id != seller_scope:
                 raise CatalogError("product_not_found")
         events = await list_product_dimension_events(

@@ -1,4 +1,4 @@
-"""AVpack home scope remains enforced with historic manager grants and JWTs."""
+"""WMS-507: AVpack uses explicit delegation while WMS-488 data isolation remains."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ async def grants_snapshot(user_id):
         return user.can_manage_seller_shops, grants
 
 
-async def test_old_foreign_tokens_auth_and_all_grants_stay_unchanged(async_client: AsyncClient):
+async def test_avpack_delegated_tokens_and_all_grants_stay_unchanged(async_client: AsyncClient):
     users, products, _ = await _seed()
     targets = await enable_avpack_manager(users, products)
     before = await grants_snapshot(users["a"].id)
@@ -62,38 +62,56 @@ async def test_old_foreign_tokens_auth_and_all_grants_stay_unchanged(async_clien
         me = await async_client.get("/auth/me", headers=headers)
         assert me.status_code == 200, me.text
         data = me.json()
-        assert data["seller_id"] == data["active_seller_id"] == data["home_seller_id"] == home
-        assert not data["can_manage_seller_shops"]
-        assert [shop["id"] for shop in data["switchable_shops"]] == [home]
-        assert data["delegatable_shops"] == []
+        assert data["seller_id"] == data["active_seller_id"] == str(target)
+        assert data["home_seller_id"] == home
+        assert data["can_manage_seller_shops"]
+        assert {shop["id"] for shop in data["switchable_shops"]} == {
+            home,
+            *(str(seller_id) for seller_id in targets),
+        }
+        assert {shop["id"] for shop in data["delegatable_shops"]} == {
+            str(seller_id) for seller_id in targets
+        }
         for path in ("/products", "/products/wb-catalog", "/products/categories"):
             response = await async_client.get(path, headers=headers)
             assert response.status_code == 200, response.text
-            assert products["b"].name not in response.text
+            assert products["a"].name not in response.text
+            assert products["foreign"].name not in response.text
+            if target != users["b"].seller_id:
+                assert products["b"].name not in response.text
         switch = await async_client.post(
             "/auth/switch-seller", headers=headers, json={"seller_id": str(target)}
         )
-        assert switch.status_code == 403 and "access_token" not in switch.text
-    for ids in ([str(targets[0])], []):
-        response = await async_client.put(
-            "/auth/seller-shops", headers=headers, json={"enabled_seller_ids": ids}
+        assert switch.status_code == 200, switch.text
+        switched_me = await async_client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {switch.json()['access_token']}"}
         )
-        assert response.status_code == 403, response.text
+        assert switched_me.json()["active_seller_id"] == str(target)
+        assert switched_me.json()["home_seller_id"] == home
     for target in (home, None):
         response = await async_client.post(
             "/auth/switch-seller", headers=headers, json={"seller_id": target}
         )
         assert response.status_code == 200, response.text
+        home_headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+        home_products = await async_client.get("/products", headers=home_headers)
+        assert home_products.status_code == 200, home_products.text
+        assert {row["id"] for row in home_products.json()} == {str(products["a"].id)}
     assert await grants_snapshot(users["a"].id) == before
 
 
 @pytest.mark.parametrize("manager", [False, True])
-async def test_jobs_require_proven_home_scope_but_not_seller_initiator(async_client, manager):
+@pytest.mark.parametrize("tenant_slug", ["avpack-9uczh", "other-shop-tenant"])
+async def test_jobs_require_proven_active_scope_but_not_seller_initiator(
+    async_client, manager, tenant_slug
+):
     users, products, _ = await _seed()
     await enable_avpack_manager(users, products)
     async with SessionLocal() as session:
         user = await session.get(User, users["a"].id)
         user.can_manage_seller_shops = manager
+        tenant = await session.get(Tenant, user.tenant_id)
+        tenant.slug = tenant_slug
         await session.commit()
     allowed = [
         "wildberries_cards_sync",
@@ -125,7 +143,8 @@ async def test_jobs_require_proven_home_scope_but_not_seller_initiator(async_cli
                 f"/operations/background-jobs/{job.id}",
                 headers=_headers(users["a"], active_seller=users["b"].seller_id),
             )
-            permitted = kind in allowed and scope == str(users["a"].seller_id)
+            active_seller_id = users["b" if manager else "a"].seller_id
+            permitted = kind in allowed and scope == str(active_seller_id)
             assert response.status_code == (
                 200 if permitted else 403 if kind == "fbs_label_print" else 404
             ), response.text
@@ -142,7 +161,9 @@ async def test_jobs_require_proven_home_scope_but_not_seller_initiator(async_cli
 
 
 @pytest.mark.parametrize("celery", [False, True])
-async def test_old_token_enqueues_home_and_worker_uses_home(async_client, monkeypatch, celery):
+async def test_delegated_token_enqueues_active_and_worker_uses_active(
+    async_client, monkeypatch, celery
+):
     from app.core.settings import settings
     from app.services import background_job_service as jobs
     from app.tasks.background_jobs import run_wildberries_cards_sync_task
@@ -169,11 +190,11 @@ async def test_old_token_enqueues_home_and_worker_uses_home(async_client, monkey
     job_id = uuid.UUID(response.json()["id"])
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
-        assert job.payload_json == {"seller_id": str(users["a"].seller_id)}
+        assert job.payload_json == {"seller_id": str(users["b"].seller_id)}
     if celery:
         assert queued == [str(job_id)]
         await jobs.run_wildberries_cards_sync_job(job_id)
-    assert called == [(users["a"].tenant_id, users["a"].seller_id)]
+    assert called == [(users["a"].tenant_id, users["b"].seller_id)]
 
 
 @pytest.mark.parametrize("slug", ["avpack", "avpack-9uczh-other", "other-tenant-name"])
@@ -199,7 +220,7 @@ async def test_similar_tenant_keeps_delegation(async_client, slug):
 
 
 @pytest.mark.parametrize("prefix", ["SKU", "WB", "OZN", "OZ"])
-async def test_old_token_scan_filters_foreign_and_ambiguity(async_client, prefix):
+async def test_active_token_scan_filters_inactive_and_ambiguity(async_client, prefix):
     from app.models.product import Product
 
     users, products, _ = await _seed()
@@ -209,7 +230,7 @@ async def test_old_token_scan_filters_foreign_and_ambiguity(async_client, prefix
         response = await async_client.get(
             "/operations/scan/resolve", headers=headers, params={"code": f"{prefix}-{target}"}
         )
-        assert response.status_code == (200 if target == "a" else 404), response.text
+        assert response.status_code == (200 if target == "b" else 404), response.text
     async with SessionLocal() as session:
         own = await session.get(Product, products["a"].id)
         foreign = await session.get(Product, products["b"].id)
@@ -218,11 +239,11 @@ async def test_old_token_scan_filters_foreign_and_ambiguity(async_client, prefix
     response = await async_client.get(
         "/operations/scan/resolve", headers=headers, params={"code": "SHARED"}
     )
-    assert response.status_code == 200 and response.json()["id"] == str(products["a"].id)
+    assert response.status_code == 200 and response.json()["id"] == str(products["b"].id)
     async with SessionLocal() as session:
         second = Product(
             tenant_id=users["a"].tenant_id,
-            seller_id=users["a"].seller_id,
+            seller_id=users["b"].seller_id,
             name="Own second",
             sku_code="SECOND",
             wb_barcode="SHARED",
@@ -234,7 +255,7 @@ async def test_old_token_scan_filters_foreign_and_ambiguity(async_client, prefix
     )
     assert response.status_code == 409, response.text
     assert {match["id"] for match in response.json()["detail"]["matches"]} == {
-        str(products["a"].id),
+        str(products["b"].id),
         str(second.id),
     }
 
@@ -266,7 +287,7 @@ async def test_own_job_failure_hides_raw_diagnostics_and_mismatched_result(async
     assert (await async_client.get(path, headers=_headers(users["a"]))).status_code == 404
 
 
-async def test_direct_marketplace_sync_uses_home(async_client, monkeypatch):
+async def test_direct_marketplace_sync_uses_active(async_client, monkeypatch):
     from app.api import ozon_integration as ozon
     from app.api import wildberries_integration as wb
     from app.services.ozon_product_import_service import OzonProductImportResult
@@ -300,10 +321,10 @@ async def test_direct_marketplace_sync_uses_home(async_client, monkeypatch):
             headers=_headers(users["a"], active_seller=users["b"].seller_id),
         )
         assert response.status_code == 200, response.text
-    assert seen == [(key, users["a"].seller_id) for key in ("wb", "ozon", "ozon-import")]
+    assert seen == [(key, users["b"].seller_id) for key in ("wb", "ozon", "ozon-import")]
 
 
-async def test_old_token_marking_reads_print_and_ff_catalog(async_client):
+async def test_active_token_marking_reads_print_and_ff_catalog(async_client):
     from app.models.ff_staff_permissions import FfStaffPermissions
 
     users, products, _ = await _seed()
@@ -313,12 +334,12 @@ async def test_old_token_marking_reads_print_and_ff_catalog(async_client):
         for action in ("marking-overview", "codes", "print"):
             path = f"/operations/marking-codes/products/{products[target].id}/{action}"
             if action == "print":
-                if target == "a":
+                if target == "b":
                     continue  # Own printing needs an available code pool; covered separately.
                 response = await async_client.post(path, headers=headers, json={"quantity": 1})
             else:
                 response = await async_client.get(path, headers=headers)
-            expected = 200 if target == "a" else 403 if target == "b" else 404
+            expected = 200 if target == "b" else 403 if target == "a" else 404
             assert response.status_code == expected, response.text
     async with SessionLocal() as session:
         session.add(FfStaffPermissions(user_id=users["staff"].id, can_reception=True))
@@ -333,9 +354,30 @@ async def test_old_token_marking_reads_print_and_ff_catalog(async_client):
 @pytest.mark.parametrize(
     "kind", ["inbound-intake", "outbound-shipment", "marketplace-unload-requests"]
 )
-async def test_old_token_cannot_add_foreign_document_line(async_client, kind):
+async def test_active_token_cannot_add_inactive_document_line(async_client, kind):
+    from app.models.inventory_balance import InventoryBalance
+    from app.models.storage_location import StorageLocation
+
     users, products, warehouse = await _seed()
     await enable_avpack_manager(users, products)
+    async with SessionLocal() as session:
+        location = StorageLocation(
+            tenant_id=users["a"].tenant_id,
+            warehouse_id=warehouse.id,
+            code="AVAILABLE",
+            barcode="AVAILABLE",
+        )
+        session.add(location)
+        await session.flush()
+        session.add(
+            InventoryBalance(
+                tenant_id=users["a"].tenant_id,
+                product_id=products["b"].id,
+                storage_location_id=location.id,
+                quantity=20,
+            )
+        )
+        await session.commit()
     headers = _headers(users["a"], active_seller=users["b"].seller_id)
     body = {"warehouse_id": str(warehouse.id)}
     if kind != "outbound-shipment":
@@ -345,12 +387,17 @@ async def test_old_token_cannot_add_foreign_document_line(async_client, kind):
     assert created.status_code == 201, created.text
     request_id = created.json()["id"]
     line = {
-        "product_id": str(products["b"].id),
+        "product_id": str(products["a"].id),
         "expected_qty" if kind == "inbound-intake" else "quantity": 1,
     }
     denied = await async_client.post(f"{path}/{request_id}/lines", headers=headers, json=line)
-    assert denied.status_code == (404 if kind.endswith("requests") else 422), denied.text
+    assert denied.status_code == 422, denied.text
     # Re-read as FF to verify no foreign product line was actually stored.
     document = await async_client.get(f"{path}/{request_id}", headers=_headers(users["admin"]))
     assert document.status_code == 200, document.text
-    assert str(products["b"].id) not in document.text
+    assert str(products["a"].id) not in document.text
+    line["product_id"] = str(products["b"].id)
+    allowed = await async_client.post(f"{path}/{request_id}/lines", headers=headers, json=line)
+    assert allowed.status_code in (200, 201), allowed.text
+    document = await async_client.get(f"{path}/{request_id}", headers=_headers(users["admin"]))
+    assert str(products["b"].id) in document.text

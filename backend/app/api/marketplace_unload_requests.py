@@ -919,7 +919,12 @@ async def create_marketplace_unload(
     body: MarketplaceUnloadRequestCreate,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarketplaceUnloadRequestSummaryOut:
+    if user.role == FULFILLMENT_SELLER and (
+        effective_seller_id is None or body.seller_id != effective_seller_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
         r = await svc.create_request(
             session,
