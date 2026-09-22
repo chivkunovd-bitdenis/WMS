@@ -37,14 +37,13 @@ beforeEach(() => {
 
 describe('WMS-506 · automatic KIZ duplicate after FBS scan', () => {
   it('keeps the preference separate for FF and operator, defaulting to off', () => {
-    expect(loadFbsKizAutoReprintEnabled(token(), 'ff-warehouse-1')).toBe(false)
-    saveFbsKizAutoReprintEnabled(token(), 'ff-warehouse-1', true)
-    expect(loadFbsKizAutoReprintEnabled(token(), 'ff-warehouse-1')).toBe(true)
-    expect(loadFbsKizAutoReprintEnabled(token(), 'ff-warehouse-2')).toBe(false)
-    expect(loadFbsKizAutoReprintEnabled(token('ff-a', 'operator-b'), 'ff-warehouse-1')).toBe(false)
-    expect(loadFbsKizAutoReprintEnabled(token('ff-b'), 'ff-warehouse-1')).toBe(false)
-    expect(fbsKizAutoReprintStorageKey(token(), 'ff-warehouse-1'))
-      .not.toBe(fbsKizAutoReprintStorageKey(token('ff-a', 'operator-b'), 'ff-warehouse-1'))
+    expect(loadFbsKizAutoReprintEnabled(token())).toBe(false)
+    saveFbsKizAutoReprintEnabled(token(), true)
+    expect(loadFbsKizAutoReprintEnabled(token())).toBe(true)
+    expect(loadFbsKizAutoReprintEnabled(token('ff-a', 'operator-b'))).toBe(false)
+    expect(loadFbsKizAutoReprintEnabled(token('ff-b'))).toBe(false)
+    expect(fbsKizAutoReprintStorageKey(token()))
+      .not.toBe(fbsKizAutoReprintStorageKey(token('ff-a', 'operator-b')))
   })
 
   it('does nothing while the checkbox snapshot is off', async () => {

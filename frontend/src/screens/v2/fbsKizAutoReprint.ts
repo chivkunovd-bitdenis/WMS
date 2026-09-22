@@ -27,23 +27,23 @@ function tokenIdentity(token: string): { tenant: string; user: string } {
   }
 }
 
-/** The setting belongs to one FF operator in one browser, not to a supply. */
-export function fbsKizAutoReprintStorageKey(token: string, fulfillmentId: string): string {
+/** The setting belongs to one FF operator in one browser, not to a supply or warehouse. */
+export function fbsKizAutoReprintStorageKey(token: string): string {
   const identity = tokenIdentity(token)
-  return `${PREFERENCE_PREFIX}:${identity.tenant}:${identity.user}:${fulfillmentId}`
+  return `${PREFERENCE_PREFIX}:${identity.tenant}:${identity.user}`
 }
 
-export function loadFbsKizAutoReprintEnabled(token: string, fulfillmentId: string): boolean {
+export function loadFbsKizAutoReprintEnabled(token: string): boolean {
   try {
-    return window.localStorage.getItem(fbsKizAutoReprintStorageKey(token, fulfillmentId)) === 'true'
+    return window.localStorage.getItem(fbsKizAutoReprintStorageKey(token)) === 'true'
   } catch {
     return false
   }
 }
 
-export function saveFbsKizAutoReprintEnabled(token: string, fulfillmentId: string, value: boolean): void {
+export function saveFbsKizAutoReprintEnabled(token: string, value: boolean): void {
   try {
-    window.localStorage.setItem(fbsKizAutoReprintStorageKey(token, fulfillmentId), value ? 'true' : 'false')
+    window.localStorage.setItem(fbsKizAutoReprintStorageKey(token), value ? 'true' : 'false')
   } catch {
     // Storage can be disabled on a hardened warehouse workstation. The in-memory
     // checkbox state still applies to the current open workspace.

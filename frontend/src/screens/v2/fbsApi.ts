@@ -1232,6 +1232,8 @@ export type FbsKizCommitResult = {
   message: string | null
   /** True only when this commit created or replaced the order's KIZ. */
   newly_bound?: boolean
+  /** Exact server-normalized KIZ saved for this order, including GS separators. */
+  bound_kiz?: string | null
 }
 
 export async function lookupFbsOrderBySticker(

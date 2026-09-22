@@ -546,7 +546,6 @@ export function FfFbsSupplyWorkspace({
   }
 
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
-  const kizAutoReprintFulfillmentId = workspace?.supply.wms_warehouse.id ?? null
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
@@ -673,12 +672,8 @@ export function FfFbsSupplyWorkspace({
   }, [workspace?.supply.planned_shipment_date])
 
   useEffect(() => {
-    setKizAutoReprintEnabled(
-      kizAutoReprintFulfillmentId
-        ? loadFbsKizAutoReprintEnabled(token, kizAutoReprintFulfillmentId)
-        : false,
-    )
-  }, [token, kizAutoReprintFulfillmentId])
+    setKizAutoReprintEnabled(loadFbsKizAutoReprintEnabled(token))
+  }, [token])
 
   // Тихое обновление раз в 15 с при видимом окне. На «Упаковке и маркировке»
   // (WMS-477) так сами зеленеют строки, чей Честный знак WB подтвердил в фоне;
@@ -912,7 +907,6 @@ export function FfFbsSupplyWorkspace({
       const scan = {
         attemptId: createFbsIdempotencyKey(),
         orderId: kizScanActive.order_id,
-        kiz: raw,
         enabled: kizAutoReprintEnabled,
         workspaceGeneration: workspaceOpenGeneration.current,
       }
@@ -948,13 +942,19 @@ export function FfFbsSupplyWorkspace({
           return
         }
         if (outcome.newly_bound === true) {
-          void kizAutoPrintQueueRef.current.enqueue(scan, async (kiz) => {
-            await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
-          }).catch((cause: unknown) => {
-            if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
-            const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать КИЗ.'
-            setKizAutoReprintError(`КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`)
-          })
+          if (!outcome.bound_kiz) {
+            setKizAutoReprintError(
+              `КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но перепечатка не запущена: сервер не вернул сохранённый код.`,
+            )
+          } else {
+            void kizAutoPrintQueueRef.current.enqueue({ ...scan, kiz: outcome.bound_kiz }, async (kiz) => {
+              await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
+            }).catch((cause: unknown) => {
+              if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
+              const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать КИЗ.'
+              setKizAutoReprintError(`КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`)
+            })
+          }
         }
         setKizScanNotice(isOzonSupply
           ? outcome.meta_status === 'accepted'
@@ -2320,9 +2320,7 @@ export function FfFbsSupplyWorkspace({
                               onChange={(event) => {
                                 const enabled = event.target.checked
                                 setKizAutoReprintEnabled(enabled)
-                                if (kizAutoReprintFulfillmentId) {
-                                  saveFbsKizAutoReprintEnabled(token, kizAutoReprintFulfillmentId, enabled)
-                                }
+                                saveFbsKizAutoReprintEnabled(token, enabled)
                               }}
                             />
                           }

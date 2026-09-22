@@ -75,6 +75,7 @@ class FbsKizCommitRowOut(BaseModel):
     message: str
     meta_status: str | None = None
     newly_bound: bool = False
+    bound_kiz: str | None = None
 
 
 def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
@@ -151,6 +152,7 @@ def _commit_row_out(result: kiz_svc.FbsKizCommitRow) -> FbsKizCommitRowOut:
         message=result.message,
         meta_status=result.meta_status,
         newly_bound=result.newly_bound,
+        bound_kiz=result.bound_kiz,
     )
 
 

@@ -221,12 +221,14 @@ class FbsKizCommitRow:
     message: str
     meta_status: str | None = None
     newly_bound: bool = False
+    bound_kiz: str | None = None
 
 
 @dataclass(frozen=True)
 class _FbsKizCommitOutcome:
     meta_status: str | None
     newly_bound: bool
+    bound_kiz: str
 
 
 @dataclass(frozen=True)
@@ -1294,6 +1296,7 @@ async def _commit_one_kiz_pair(
             return _FbsKizCommitOutcome(
                 meta_status=ozon_result.meta_status,
                 newly_bound=ozon_result.newly_bound,
+                bound_kiz=ozon_result.bound_kiz,
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
@@ -1328,7 +1331,11 @@ async def _commit_one_kiz_pair(
                 document_number=line_ref.document_number, packaging_task=line_ref.line,
                 source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
-        return _FbsKizCommitOutcome(meta_status=None, newly_bound=False)
+        return _FbsKizCommitOutcome(
+            meta_status=None,
+            newly_bound=False,
+            bound_kiz=current.value,
+        )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
@@ -1443,7 +1450,11 @@ async def _commit_one_kiz_pair(
     await session.flush()
     if pending_error is not None:
         raise pending_error
-    return _FbsKizCommitOutcome(meta_status=None, newly_bound=True)
+    return _FbsKizCommitOutcome(
+        meta_status=None,
+        newly_bound=True,
+        bound_kiz=validated.value,
+    )
 
 
 def _ok_commit_row(
@@ -1451,6 +1462,7 @@ def _ok_commit_row(
     meta_status: str | None = None,
     *,
     newly_bound: bool = False,
+    bound_kiz: str | None = None,
 ) -> FbsKizCommitRow:
     return FbsKizCommitRow(
         order_id=order_id,
@@ -1459,6 +1471,7 @@ def _ok_commit_row(
         message="ok",
         meta_status=meta_status,
         newly_bound=newly_bound,
+        bound_kiz=bound_kiz,
     )
 
 
@@ -1513,6 +1526,7 @@ async def commit_kiz_pairs(
                     pair.order_id,
                     outcome.meta_status,
                     newly_bound=outcome.newly_bound,
+                    bound_kiz=outcome.bound_kiz,
                 )
             )
 

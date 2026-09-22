@@ -18,6 +18,9 @@ describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
     expect(print).toBeGreaterThan(failureBranch)
     expect(refresh).toBeGreaterThan(print)
     expect(source.slice(failureBranch, print)).toContain('outcome.newly_bound === true')
+    expect(source.slice(failureBranch, print)).toContain('!outcome.bound_kiz')
+    expect(source.slice(failureBranch, print)).toContain('{ ...scan, kiz: outcome.bound_kiz }')
+    expect(source.slice(source.indexOf('const scan ='), failureBranch)).not.toContain('kiz: raw')
   })
 
   it('does not schedule an error or pending_confirmation outcome', () => {

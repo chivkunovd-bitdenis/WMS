@@ -1535,6 +1535,7 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
     )
     assert order.packaging_task_line_id is not None
     value = _cis("IDEMPOTENT")
+    scanned = f"]d2{value.replace(_GS, '<GS>')}"
     sent: list[tuple[int, str]] = []
 
     async def fake_put(
@@ -1586,7 +1587,7 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
         "pairs": [
             {
                 "order_id": str(order.order_id),
-                "value": value,
+                "value": scanned,
                 "confirmed": False,
             }
         ],
@@ -1608,6 +1609,8 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
     assert second.json()[0]["status"] == "ok"
     assert first.json()[0]["newly_bound"] is True
     assert second.json()[0]["newly_bound"] is False
+    assert first.json()[0]["bound_kiz"] == value
+    assert second.json()[0]["bound_kiz"] == value
     assert sent == [(order.wb_order_id, value)]
     async with SessionLocal() as session:
         markings = list(
