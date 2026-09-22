@@ -49,6 +49,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
@@ -111,6 +112,11 @@ import {
   type FbsWorkspace,
   type FbsWorklistOrder,
 } from './fbsApi'
+import {
+  FbsKizAutoPrintQueue,
+  loadFbsKizAutoReprintEnabled,
+  saveFbsKizAutoReprintEnabled,
+} from './fbsKizAutoReprint'
 
 type Props = {
   token: string
@@ -494,11 +500,14 @@ export function FfFbsSupplyWorkspace({
   const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
+  const [kizAutoReprintEnabled, setKizAutoReprintEnabled] = useState(false)
+  const [kizAutoReprintError, setKizAutoReprintError] = useState<string | null>(null)
   const [kizConfirmValue, setKizConfirmValue] = useState<string | null>(null)
   const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const kizSelectedStickerRef = useRef('')
+  const kizAutoPrintQueueRef = useRef(new FbsKizAutoPrintQueue())
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -537,6 +546,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
+  const kizAutoReprintFulfillmentId = workspace?.supply.wms_warehouse.id ?? null
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
@@ -647,6 +657,7 @@ export function FfFbsSupplyWorkspace({
     setKizScanError(null)
     setKizScanHints([])
     setKizScanDebugOpen(false)
+    setKizAutoReprintError(null)
     setKizConfirmTarget(null)
     setKizConfirmValue(null)
     setKizScanNotice(null)
@@ -660,6 +671,14 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
   }, [workspace?.supply.planned_shipment_date])
+
+  useEffect(() => {
+    setKizAutoReprintEnabled(
+      kizAutoReprintFulfillmentId
+        ? loadFbsKizAutoReprintEnabled(token, kizAutoReprintFulfillmentId)
+        : false,
+    )
+  }, [token, kizAutoReprintFulfillmentId])
 
   // Тихое обновление раз в 15 с при видимом окне. На «Упаковке и маркировке»
   // (WMS-477) так сами зеленеют строки, чей Честный знак WB подтвердил в фоне;
@@ -860,6 +879,7 @@ export function FfFbsSupplyWorkspace({
       setKizScanError(null)
       setKizScanHints([])
       setKizScanDebugOpen(false)
+      setKizAutoReprintError(null)
       setKizScanNotice(null)
       try {
         const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
@@ -889,10 +909,18 @@ export function FfFbsSupplyWorkspace({
   const scanKizCode = useCallback(
     async (raw: string, confirmed = false) => {
       if (!kizScanActive) return
+      const scan = {
+        attemptId: createFbsIdempotencyKey(),
+        orderId: kizScanActive.order_id,
+        kiz: raw,
+        enabled: kizAutoReprintEnabled,
+        workspaceGeneration: workspaceOpenGeneration.current,
+      }
       setKizScanBusy(true)
       setKizScanError(null)
       setKizScanHints([])
       setKizScanDebugOpen(false)
+      setKizAutoReprintError(null)
       setKizScanNotice(null)
       try {
         const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
@@ -901,7 +929,7 @@ export function FfFbsSupplyWorkspace({
           token,
           authHeaders,
           [{ order_id: kizScanActive.order_id, value: raw, confirmed: confirmed || kizScanActive.needs_confirmation }],
-          createFbsIdempotencyKey(),
+          scan.attemptId,
         )
         const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
         if (!outcome) throw new Error('Сервер не подтвердил сохранение кода')
@@ -919,6 +947,13 @@ export function FfFbsSupplyWorkspace({
           await load(true)
           return
         }
+        void kizAutoPrintQueueRef.current.enqueue(scan, async (kiz) => {
+          await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
+        }).catch((cause: unknown) => {
+          if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
+          const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать КИЗ.'
+          setKizAutoReprintError(`КИЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`)
+        })
         setKizScanNotice(isOzonSupply
           ? outcome.meta_status === 'accepted'
             ? `Код принят Ozon · ${fbsKizOrderNumber(kizScanActive)}`
@@ -951,7 +986,7 @@ export function FfFbsSupplyWorkspace({
         refocusKizInput()
       }
     },
-    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName],
+    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName, kizAutoReprintEnabled],
   )
 
   // WMS-403: restore the original reset from 2ef9c0d3; it only clears scanner UI.
@@ -963,6 +998,7 @@ export function FfFbsSupplyWorkspace({
     setKizScanHints([])
     setKizScanNotice(null)
     setKizScanDebugOpen(false)
+    setKizAutoReprintError(null)
     setKizConfirmTarget(null)
     setKizConfirmValue(null)
     refocusKizInput()
@@ -2268,9 +2304,29 @@ export function FfFbsSupplyWorkspace({
                       sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
                       data-testid="fbs-kiz-scan-bar"
                     >
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                        Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером
-                      </Typography>
+                      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером
+                        </Typography>
+                        <FormControlLabel
+                          data-testid="fbs-kiz-auto-reprint-toggle"
+                          sx={{ m: 0, flexShrink: 0, '& .MuiFormControlLabel-label': { fontSize: 13 } }}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={kizAutoReprintEnabled}
+                              onChange={(event) => {
+                                const enabled = event.target.checked
+                                setKizAutoReprintEnabled(enabled)
+                                if (kizAutoReprintFulfillmentId) {
+                                  saveFbsKizAutoReprintEnabled(token, kizAutoReprintFulfillmentId, enabled)
+                                }
+                              }}
+                            />
+                          }
+                          label="Перепечатывать КИЗ"
+                        />
+                      </Stack>
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
                         <TextField
                           inputRef={kizScanInputRef}
@@ -2358,6 +2414,16 @@ export function FfFbsSupplyWorkspace({
                               </Collapse>
                             </>
                           ) : null}
+                        </Typography>
+                      ) : null}
+                      {kizAutoReprintError ? (
+                        <Typography
+                          variant="caption"
+                          component="div"
+                          sx={{ color: 'error.main', mt: 0.5 }}
+                          data-testid="fbs-kiz-auto-reprint-error"
+                        >
+                          {kizAutoReprintError}
                         </Typography>
                       ) : null}
                     </Box>
