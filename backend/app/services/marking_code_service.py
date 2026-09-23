@@ -7,6 +7,8 @@ import io
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -88,6 +90,30 @@ _MARKING_SOURCE_LABELS = {
     MARKING_SOURCE_SHIPPING: "Отгрузка",
     MARKING_SOURCE_PACKING_FBS_PRINT: "Упаковка/FBS-печать",
 }
+_IMPORT_REQUEST_LOCKS: dict[uuid.UUID, tuple[asyncio.Lock, int]] = {}
+
+
+@asynccontextmanager
+async def _serialize_import_request(request_id: uuid.UUID) -> AsyncIterator[None]:
+    """Serialize a request in-process; PostgreSQL lock below covers multiple workers."""
+    current = _IMPORT_REQUEST_LOCKS.get(request_id)
+    if current is None:
+        lock = asyncio.Lock()
+        _IMPORT_REQUEST_LOCKS[request_id] = (lock, 1)
+    else:
+        lock, users = current
+        _IMPORT_REQUEST_LOCKS[request_id] = (lock, users + 1)
+    try:
+        async with lock:
+            yield
+    finally:
+        stored = _IMPORT_REQUEST_LOCKS.get(request_id)
+        if stored is not None:
+            stored_lock, users = stored
+            if users <= 1:
+                _IMPORT_REQUEST_LOCKS.pop(request_id, None)
+            else:
+                _IMPORT_REQUEST_LOCKS[request_id] = (stored_lock, users - 1)
 # Human-readable seller labels often print the GS1 element string as
 # "(01) <gtin>" and "(21) <serial>" — with parens, a space after each AI
 # marker, and sometimes wrapped onto two separate lines on narrow labels
@@ -228,6 +254,43 @@ class MarkingImportPreviewResult:
     total_codes: int
     invalid_count: int
     duplicates_in_file: int
+
+
+@dataclass(frozen=True)
+class AutoImportProductGroup:
+    product_id: uuid.UUID
+    sku: str
+    product_name: str
+    size: str | None
+    barcode: str | None
+    loaded_count: int
+
+
+@dataclass(frozen=True)
+class AutoImportUnmatchedRow:
+    key: str
+    marking_code: str
+    article: str | None
+    size: str | None
+    reason: str
+    eligible_for_assignment: bool
+    has_label_artifact: bool
+
+
+@dataclass(frozen=True)
+class AutoMarkingImportResult:
+    import_id: uuid.UUID
+    document_number: str
+    groups: list[AutoImportProductGroup]
+    unmatched: list[AutoImportUnmatchedRow]
+
+
+@dataclass(frozen=True)
+class AssignMarkingCodesResult:
+    import_id: uuid.UUID
+    document_number: str
+    product: AutoImportProductGroup
+    assigned_keys: list[str]
 
 
 @dataclass(frozen=True)
@@ -550,6 +613,7 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
         )
         gtin_key = lowered.get("gtin") or lowered.get("штрихкод")
         sku_key = lowered.get("sku") or lowered.get("sku_code") or lowered.get("артикул")
+        size_key = lowered.get("size") or lowered.get("размер")
         rows: list[dict[str, str]] = []
         for row in reader:
             if cis_key and row.get(cis_key):
@@ -558,6 +622,8 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
                         "cis": row[cis_key] or "",
                         "gtin": (row.get(gtin_key) or "") if gtin_key else "",
                         "sku": (row.get(sku_key) or "") if sku_key else "",
+                        "size": (row.get(size_key) or "") if size_key else "",
+                        "code_valid": "1",
                     }
                 )
         if rows:
@@ -565,7 +631,10 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
     # GS is a field separator inside a KIZ, not a record boundary.
     lines = [ln.strip() for ln in re.split(r"[\r\n]+", text) if ln.strip()]
     if lines and not any(sep in lines[0] for sep in (",", ";", "\t")):
-        return [{"cis": ln, "gtin": "", "sku": ""} for ln in lines]
+        return [
+            {"cis": ln, "gtin": "", "sku": "", "size": "", "code_valid": "1"}
+            for ln in lines
+        ]
     return []
 
 
@@ -615,18 +684,49 @@ def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
         raise MarkingCodeServiceError("no_valid_codes")
     for artifact in artifacts:
         cis = artifact.cis
-        if cis in seen:
-            continue
-        seen.add(cis)
+        if artifact.code_valid:
+            if cis in seen:
+                continue
+            seen.add(cis)
+        article, size = _extract_article_and_size_from_label_pdf(artifact.label_pdf)
         rows.append(
             {
                 "cis": cis,
                 "gtin": artifact.gtin,
-                "sku": "",
+                "sku": article or "",
+                "size": size or "",
                 "label_pdf": artifact.label_pdf,
+                "code_valid": "1" if artifact.code_valid else "0",
             },
         )
     return rows
+
+
+_ARTICLE_LABEL_RE = re.compile(
+    r"(?im)(?:^|\s)(?:артикул|арт\.?|sku)\s*[:№#\-]?\s*([^\s,;|]+)"
+)
+_SIZE_LABEL_RE = re.compile(
+    r"(?im)(?:^|\s)(?:размер|разм\.?|size)\s*[:№#\-]?\s*([^\s,;|]+)"
+)
+
+
+def _extract_article_and_size_from_label_pdf(pdf_bytes: bytes) -> tuple[str | None, str | None]:
+    """Read only explicitly labelled metadata from the original seller label."""
+    try:
+        import fitz  # pymupdf
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            text_value = "\n".join(page.get_text("text") for page in doc)
+        finally:
+            doc.close()
+    except Exception:
+        return None, None
+    article_match = _ARTICLE_LABEL_RE.search(text_value)
+    size_match = _SIZE_LABEL_RE.search(text_value)
+    article = article_match.group(1).strip() if article_match else None
+    size = size_match.group(1).strip() if size_match else None
+    return article or None, size or None
 
 
 def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = None) -> bool:
@@ -718,7 +818,13 @@ async def build_label_artifact_tape_pdf(
 
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
     return [
-        {"cis": str(row["cis"]), "gtin": str(row["gtin"]), "sku": str(row.get("sku") or "")}
+        {
+            "cis": str(row["cis"]),
+            "gtin": str(row["gtin"]),
+            "sku": str(row.get("sku") or ""),
+            "size": str(row.get("size") or ""),
+            "code_valid": str(row.get("code_valid") or "0"),
+        }
         for row in _parse_pdf_label_rows(content)
     ]
 
@@ -1026,6 +1132,9 @@ def _group_cis_codes_from_rows(
     duplicate_count = 0
     for row in parsed_rows:
         raw_cis = str(row.get("cis", ""))
+        if str(row.get("code_valid", "1")) != "1":
+            invalid_count += 1
+            continue
         # Decoded PDF payloads are already validated; retain the original bytes.
         cis = raw_cis if row.get("label_pdf") else normalize_cis(raw_cis)
         if cis is None:
@@ -1051,7 +1160,8 @@ async def _try_insert_imported_code(
     *,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-    pool_id: uuid.UUID,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None = None,
     import_batch_id: uuid.UUID,
     cis_code: str,
     gtin: str,
@@ -1067,6 +1177,7 @@ async def _try_insert_imported_code(
             tenant_id=tenant_id,
             seller_id=seller_id,
             pool_id=pool_id,
+            product_id=product_id,
             import_batch_id=import_batch_id,
             cis_code=cis_code,
             gtin=gtin,
@@ -1155,7 +1266,7 @@ async def preview_marking_import(
 
     grouped = _group_cis_codes_from_rows(parsed_rows)
     by_gtin, invalid_count, duplicates_in_file, _label_pdfs = grouped
-    if not by_gtin:
+    if not by_gtin and invalid_count == 0:
         raise MarkingCodeServiceError("no_valid_codes")
 
     groups: list[ImportPreviewGroup] = []
@@ -1395,6 +1506,612 @@ async def import_marking_codes(
         skip_reasons=[ImportSkipReason(k, v) for k, v in sorted(skip_counts.items())],
         pools=pool_results,
     )
+
+
+def _import_files_fingerprint(files: list[tuple[str, bytes]]) -> str:
+    digest = hashlib.sha256()
+    for filename, content in files:
+        digest.update(filename.encode("utf-8", errors="replace"))
+        digest.update(b"\0")
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(hashlib.sha256(content).digest())
+    return digest.hexdigest()
+
+
+def _clean_match_value(value: str | None) -> str:
+    return re.sub(r"\s+", "", value or "").casefold()
+
+
+def _product_article_values(product: Product) -> set[str]:
+    return {
+        value
+        for value in (
+            _clean_match_value(product.sku_code),
+            _clean_match_value(product.wb_vendor_code),
+        )
+        if value
+    }
+
+
+def _resolve_auto_product(
+    products: list[Product],
+    *,
+    article: str,
+    size: str,
+    gtin: str,
+) -> tuple[Product | None, str]:
+    article_clean = _clean_match_value(article)
+    size_clean = _clean_match_value(size)
+    gtin_variants = set(_gtin_lookup_variants(gtin))
+    gtin_candidates = [
+        product
+        for product in products
+        if product.wb_barcode and product.wb_barcode.strip() in gtin_variants
+    ]
+
+    if article_clean:
+        article_candidates = [
+            product for product in products if article_clean in _product_article_values(product)
+        ]
+        if not article_candidates:
+            return None, "Не найден артикул в каталоге селлера"
+        if size_clean:
+            sized = [
+                product
+                for product in article_candidates
+                if _clean_match_value(product.wb_size) == size_clean
+            ]
+            if not sized:
+                return None, "Артикул найден, но размер не совпадает"
+            article_candidates = sized
+        if gtin_candidates:
+            gtin_ids = {candidate.id for candidate in gtin_candidates}
+            combined = [candidate for candidate in article_candidates if candidate.id in gtin_ids]
+            if len(combined) == 1:
+                return combined[0], ""
+            if len(combined) > 1:
+                return None, "Совпадение неоднозначно: найдено несколько товаров"
+            return None, "Артикул и штрихкод указывают на разные товары"
+        # A Честный знак GTIN is allowed to differ from the WB barcode. When it
+        # does not identify any catalog row, article/size remains authoritative.
+        if len(article_candidates) == 1:
+            return article_candidates[0], ""
+        return None, "Совпадение неоднозначно: найдено несколько товаров"
+
+    candidates = gtin_candidates
+    if size_clean and candidates:
+        sized = [
+            product for product in candidates if _clean_match_value(product.wb_size) == size_clean
+        ]
+        if not sized:
+            return None, "Штрихкод найден, но размер не совпадает"
+        candidates = sized
+    if len(candidates) == 1:
+        return candidates[0], ""
+    if len(candidates) > 1:
+        return None, "Совпадение неоднозначно: найдено несколько товаров"
+    return None, "Товар не найден в каталоге селлера"
+
+
+def _unmatched_to_json(row: AutoImportUnmatchedRow) -> dict[str, object]:
+    return {
+        "key": row.key,
+        "marking_code": row.marking_code,
+        "article": row.article,
+        "size": row.size,
+        "reason": row.reason,
+        "eligible_for_assignment": row.eligible_for_assignment,
+        "has_label_artifact": row.has_label_artifact,
+    }
+
+
+def _unmatched_from_json(value: object) -> list[AutoImportUnmatchedRow]:
+    if not isinstance(value, list):
+        return []
+    rows: list[AutoImportUnmatchedRow] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            AutoImportUnmatchedRow(
+                key=str(item.get("key", "")),
+                marking_code=str(item.get("marking_code", "")),
+                article=str(item["article"]) if item.get("article") is not None else None,
+                size=str(item["size"]) if item.get("size") is not None else None,
+                reason=str(item.get("reason", "")),
+                eligible_for_assignment=bool(item.get("eligible_for_assignment")),
+                has_label_artifact=bool(item.get("has_label_artifact")),
+            )
+        )
+    return rows
+
+
+def _batch_metadata(batch: MarkingCodeImport) -> dict[str, object]:
+    if not batch.skip_reasons_json:
+        return {}
+    try:
+        value = json.loads(batch.skip_reasons_json)
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+async def _lock_import_request_in_database(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> None:
+    connection = await session.connection()
+    if connection.dialect.name != "postgresql":
+        return
+    key = int.from_bytes(
+        hashlib.sha256(f"marking-import:{tenant_id}:{request_id}".encode()).digest()[:8],
+        signed=True,
+    )
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+
+
+async def _auto_import_groups(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    import_id: uuid.UUID,
+) -> list[AutoImportProductGroup]:
+    stmt = (
+        select(Product, func.count(MarkingCode.id))
+        .join(MarkingCode, MarkingCode.product_id == Product.id)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.import_batch_id == import_id,
+        )
+        .group_by(Product.id)
+        .order_by(Product.sku_code, Product.id)
+    )
+    return [
+        AutoImportProductGroup(
+            product_id=product.id,
+            sku=product.sku_code,
+            product_name=product.name,
+            size=product.wb_size,
+            barcode=product.wb_barcode,
+            loaded_count=int(count),
+        )
+        for product, count in (await session.execute(stmt)).all()
+    ]
+
+
+async def _existing_idempotent_batch(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    request_id: uuid.UUID,
+    mode: str,
+    fingerprint: str,
+) -> tuple[MarkingCodeImport | None, dict[str, object]]:
+    batch = await session.get(MarkingCodeImport, request_id)
+    if batch is None:
+        return None, {}
+    metadata = _batch_metadata(batch)
+    if (
+        batch.tenant_id != tenant_id
+        or batch.seller_id != seller_id
+        or metadata.get("mode") != mode
+        or metadata.get("fingerprint") != fingerprint
+    ):
+        raise MarkingCodeServiceError("import_request_conflict")
+    return batch, metadata
+
+
+async def auto_import_marking_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    request_id: uuid.UUID,
+    files: list[tuple[str, bytes]],
+    uploaded_by_user_id: uuid.UUID | None,
+) -> AutoMarkingImportResult:
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("seller_not_found")
+    if not files:
+        raise MarkingCodeServiceError("empty_file")
+    fingerprint = _import_files_fingerprint(files)
+
+    async with _serialize_import_request(request_id):
+        await _lock_import_request_in_database(session, tenant_id, request_id)
+        existing, metadata = await _existing_idempotent_batch(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            request_id=request_id,
+            mode="wms476-auto",
+            fingerprint=fingerprint,
+        )
+        if existing is not None:
+            return AutoMarkingImportResult(
+                import_id=existing.id,
+                document_number=existing.document_number or "",
+                groups=await _auto_import_groups(session, tenant_id, existing.id),
+                unmatched=_unmatched_from_json(metadata.get("unmatched")),
+            )
+
+        parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+        if not parsed_rows:
+            raise MarkingCodeServiceError("empty_file")
+        products = list(
+            (
+                await session.scalars(
+                    select(Product).where(
+                        Product.tenant_id == tenant_id,
+                        Product.seller_id == seller_id,
+                        Product.requires_honest_sign.is_(True),
+                    )
+                )
+            ).all()
+        )
+        batch = MarkingCodeImport(
+            id=request_id,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            filename=", ".join(filename for filename, _ in files)[:512],
+            accepted_count=0,
+            skipped_count=0,
+            uploaded_by_user_id=uploaded_by_user_id,
+        )
+        session.add(batch)
+        await session.flush()
+        document_number = await assign_document_number_if_missing(
+            session,
+            tenant_id,
+            DOC_TYPE_MARKING_IMPORT,
+            batch,
+        )
+        assert document_number is not None
+        _persist_import_source_pdfs(
+            session,
+            tenant_id=tenant_id,
+            import_batch_id=batch.id,
+            files=files,
+        )
+
+        unmatched: list[AutoImportUnmatchedRow] = []
+        seen: set[str] = set()
+        accepted_count = 0
+        for index, row in enumerate(parsed_rows):
+            key = str(index)
+            raw_cis = str(row.get("cis") or "")
+            article = str(row.get("sku") or "").strip() or None
+            size = str(row.get("size") or "").strip() or None
+            label_pdf = row.get("label_pdf")
+            has_label = isinstance(label_pdf, bytes) and bool(label_pdf)
+            code_valid = str(row.get("code_valid", "1")) == "1"
+            cis = raw_cis if has_label else normalize_cis(raw_cis)
+            gtin = str(row.get("gtin") or "").strip()
+            if code_valid and cis is not None and not gtin:
+                gtin = extract_gtin_from_cis(cis) or ""
+            if not code_valid or cis is None or not gtin:
+                unmatched.append(
+                    AutoImportUnmatchedRow(
+                        key=key,
+                        marking_code=raw_cis or "—",
+                        article=article,
+                        size=size,
+                        reason="В файле повреждён GTIN, распознать не удалось",
+                        eligible_for_assignment=False,
+                        has_label_artifact=has_label,
+                    )
+                )
+                continue
+            if cis in seen:
+                unmatched.append(
+                    AutoImportUnmatchedRow(
+                        key=key,
+                        marking_code=cis,
+                        article=article,
+                        size=size,
+                        reason="Код повторяется в загруженном файле",
+                        eligible_for_assignment=False,
+                        has_label_artifact=has_label,
+                    )
+                )
+                continue
+            seen.add(cis)
+            existing_code = await session.scalar(
+                select(MarkingCode).where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code == cis,
+                )
+            )
+            if existing_code is not None:
+                unmatched.append(
+                    AutoImportUnmatchedRow(
+                        key=key,
+                        marking_code=cis,
+                        article=article,
+                        size=size,
+                        reason="Код уже загружен",
+                        eligible_for_assignment=False,
+                        has_label_artifact=has_label,
+                    )
+                )
+                continue
+            product, reason = _resolve_auto_product(
+                products,
+                article=article or "",
+                size=size or "",
+                gtin=gtin,
+            )
+            if product is None:
+                unmatched.append(
+                    AutoImportUnmatchedRow(
+                        key=key,
+                        marking_code=cis,
+                        article=article,
+                        size=size,
+                        reason=reason,
+                        eligible_for_assignment=True,
+                        has_label_artifact=has_label,
+                    )
+                )
+                continue
+            code = await _try_insert_imported_code(
+                session,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                pool_id=None,
+                product_id=product.id,
+                import_batch_id=batch.id,
+                cis_code=cis,
+                gtin=gtin,
+                label_pdf=label_pdf if isinstance(label_pdf, bytes) else None,
+            )
+            if code is None:
+                unmatched.append(
+                    AutoImportUnmatchedRow(
+                        key=key,
+                        marking_code=cis,
+                        article=article,
+                        size=size,
+                        reason="Код уже загружен",
+                        eligible_for_assignment=False,
+                        has_label_artifact=has_label,
+                    )
+                )
+                continue
+            await record_event(
+                session,
+                code=code,
+                event_type=EVENT_IMPORTED,
+                actor=uploaded_by_user_id,
+                document_number=document_number,
+                source_process=MARKING_SOURCE_CATALOG,
+            )
+            accepted_count += 1
+
+        batch.accepted_count = accepted_count
+        batch.skipped_count = len(unmatched)
+        batch.skip_reasons_json = json.dumps(
+            {
+                "mode": "wms476-auto",
+                "fingerprint": fingerprint,
+                "unmatched": [_unmatched_to_json(row) for row in unmatched],
+            },
+            ensure_ascii=False,
+        )
+        await session.commit()
+        return AutoMarkingImportResult(
+            import_id=batch.id,
+            document_number=document_number,
+            groups=await _auto_import_groups(session, tenant_id, batch.id),
+            unmatched=unmatched,
+        )
+
+
+async def assign_import_rows_to_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    request_id: uuid.UUID,
+    files: list[tuple[str, bytes]],
+    row_keys: list[str],
+    product_id: uuid.UUID,
+    uploaded_by_user_id: uuid.UUID | None,
+) -> AssignMarkingCodesResult:
+    if not files or not row_keys:
+        raise MarkingCodeServiceError("no_codes")
+    product = await session.get(Product, product_id)
+    if (
+        product is None
+        or product.tenant_id != tenant_id
+        or product.seller_id != seller_id
+        or not product.requires_honest_sign
+    ):
+        raise MarkingCodeServiceError("product_not_found")
+    fingerprint = _import_files_fingerprint(files)
+    selected_key_list = list(dict.fromkeys(row_keys))
+    selected_signature = hashlib.sha256(
+        ("\0".join(selected_key_list) + f"\0{product_id}").encode()
+    ).hexdigest()
+    mode = "wms476-assign"
+
+    async with _serialize_import_request(request_id):
+        await _lock_import_request_in_database(session, tenant_id, request_id)
+        existing, metadata = await _existing_idempotent_batch(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            request_id=request_id,
+            mode=mode,
+            fingerprint=fingerprint,
+        )
+        if existing is not None:
+            if metadata.get("selection") != selected_signature:
+                raise MarkingCodeServiceError("import_request_conflict")
+            groups = await _auto_import_groups(session, tenant_id, existing.id)
+            group = groups[0] if groups else AutoImportProductGroup(
+                product_id=product.id,
+                sku=product.sku_code,
+                product_name=product.name,
+                size=product.wb_size,
+                barcode=product.wb_barcode,
+                loaded_count=0,
+            )
+            stored_assigned_keys = metadata.get("assigned_keys")
+            assigned_keys = (
+                [str(key) for key in stored_assigned_keys]
+                if isinstance(stored_assigned_keys, list)
+                else []
+            )
+            return AssignMarkingCodesResult(
+                import_id=existing.id,
+                document_number=existing.document_number or "",
+                product=group,
+                assigned_keys=assigned_keys,
+            )
+
+        parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+        selected: list[tuple[str, dict[str, str | bytes]]] = []
+        for key in selected_key_list:
+            try:
+                index = int(key)
+            except ValueError as exc:
+                raise MarkingCodeServiceError("invalid_row_key") from exc
+            if index < 0 or index >= len(parsed_rows):
+                raise MarkingCodeServiceError("invalid_row_key")
+            selected.append((key, parsed_rows[index]))
+
+        batch = MarkingCodeImport(
+            id=request_id,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            filename=", ".join(filename for filename, _ in files)[:512],
+            accepted_count=0,
+            skipped_count=0,
+            uploaded_by_user_id=uploaded_by_user_id,
+        )
+        session.add(batch)
+        await session.flush()
+        document_number = await assign_document_number_if_missing(
+            session,
+            tenant_id,
+            DOC_TYPE_MARKING_IMPORT,
+            batch,
+        )
+        assert document_number is not None
+        assigned_keys = []
+        for key, row in selected:
+            label_pdf = row.get("label_pdf")
+            has_label = isinstance(label_pdf, bytes) and bool(label_pdf)
+            raw_cis = str(row.get("cis") or "")
+            cis = raw_cis if has_label else normalize_cis(raw_cis)
+            gtin = str(row.get("gtin") or "").strip()
+            if str(row.get("code_valid", "1")) != "1" or cis is None:
+                continue
+            if not gtin:
+                gtin = extract_gtin_from_cis(cis) or ""
+            if not gtin:
+                continue
+            code = await _try_insert_imported_code(
+                session,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                pool_id=None,
+                product_id=product.id,
+                import_batch_id=batch.id,
+                cis_code=cis,
+                gtin=gtin,
+                label_pdf=label_pdf if isinstance(label_pdf, bytes) else None,
+            )
+            if code is None:
+                continue
+            await record_event(
+                session,
+                code=code,
+                event_type=EVENT_IMPORTED,
+                actor=uploaded_by_user_id,
+                document_number=document_number,
+                source_process=MARKING_SOURCE_CATALOG,
+            )
+            assigned_keys.append(key)
+
+        batch.accepted_count = len(assigned_keys)
+        batch.skipped_count = len(selected) - len(assigned_keys)
+        batch.skip_reasons_json = json.dumps(
+            {
+                "mode": mode,
+                "fingerprint": fingerprint,
+                "selection": selected_signature,
+                "assigned_keys": assigned_keys,
+            },
+            ensure_ascii=False,
+        )
+        await session.commit()
+        groups = await _auto_import_groups(session, tenant_id, batch.id)
+        group = groups[0] if groups else AutoImportProductGroup(
+            product_id=product.id,
+            sku=product.sku_code,
+            product_name=product.name,
+            size=product.wb_size,
+            barcode=product.wb_barcode,
+            loaded_count=0,
+        )
+        return AssignMarkingCodesResult(
+            import_id=batch.id,
+            document_number=document_number,
+            product=group,
+            assigned_keys=assigned_keys,
+        )
+
+
+async def build_unmatched_import_pdf(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    files: list[tuple[str, bytes]],
+    row_keys: list[str],
+) -> bytes:
+    if not files or not row_keys:
+        raise MarkingCodeServiceError("no_codes")
+    parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+    wanted = set(row_keys)
+    selected = [row for index, row in enumerate(parsed_rows) if str(index) in wanted]
+    if len(selected) != len(wanted):
+        raise MarkingCodeServiceError("label_artifact_missing")
+    selected_codes = {
+        str(row.get("cis") or "")
+        for row in selected
+        if str(row.get("code_valid", "1")) == "1" and row.get("cis")
+    }
+    loaded_codes = set(
+        (
+            await session.scalars(
+                select(MarkingCode.cis_code).where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code.in_(selected_codes),
+                )
+            )
+        ).all()
+    ) if selected_codes else set()
+    remaining = [
+        row
+        for row in selected
+        if str(row.get("code_valid", "1")) != "1"
+        or not row.get("cis")
+        or str(row["cis"]) not in loaded_codes
+    ]
+    parts = [
+        row["label_pdf"]
+        for row in remaining
+        if isinstance(row.get("label_pdf"), bytes) and row["label_pdf"]
+    ]
+    if len(parts) != len(remaining):
+        raise MarkingCodeServiceError("label_artifact_missing")
+    if not parts:
+        raise MarkingCodeServiceError("no_codes")
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs
+
+    return await asyncio.to_thread(merge_label_artifact_pdfs, cast(list[bytes], parts))
 
 
 async def list_inventory(
