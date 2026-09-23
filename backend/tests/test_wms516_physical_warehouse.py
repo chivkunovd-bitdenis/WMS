@@ -588,3 +588,85 @@ async def test_repair_checks_all_columns_of_composite_parent(db_session):
     })
     assert any("composite_parent_mismatch:billing_ledger_lines:" in blocker
                for row in state for blocker in row["blockers"])
+
+
+@pytest.mark.parametrize("parent_kind", ["pallet", "location", "pallet_location"])
+async def test_repair_rejects_box_parent_in_third_same_tenant_warehouse(db_session, parent_kind):
+    from app.models.pallet import Pallet
+
+    session = db_session
+    tenant, legacy, target, _, _, _, box = await seed(session)
+    third = Warehouse(tenant_id=tenant.id, code="third", name="Third")
+    session.add(third)
+    await session.flush()
+    location = StorageLocation(tenant_id=tenant.id, warehouse_id=third.id,
+                               code="THIRD", barcode="THIRD")
+    pallet = Pallet(tenant_id=tenant.id, warehouse_id=third.id, code="THIRD", barcode="THIRD")
+    session.add_all([location, pallet])
+    await session.flush()
+    if parent_kind == "pallet_location":
+        pallet.warehouse_id = legacy.id
+        pallet.storage_location_id = location.id
+        box.pallet_id = pallet.id
+    elif parent_kind == "pallet":
+        box.pallet_id = pallet.id
+    else:
+        box.storage_location_id = location.id
+    await session.commit()
+    report = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                  source_id=legacy.id, target_id=target.id)
+    assert report["status"] == "blocked", report
+    assert any("physical_parent_outside_repair_scope:warehouse_boxes:" in blocker
+               for blocker in report["blockers"])
+
+
+@pytest.mark.parametrize("phase", ["apply", "rollback"])
+async def test_physical_parent_scope_drift_is_blocked(db_session, phase):
+    from app.models.pallet import Pallet
+
+    session = db_session
+    tenant, legacy, target, _, _, _, box = await seed(session)
+    third = Warehouse(tenant_id=tenant.id, code="third", name="Third")
+    pallet = Pallet(tenant_id=tenant.id, warehouse_id=target.id, code="VALID", barcode="VALID")
+    session.add_all([third, pallet])
+    await session.flush()
+    box.pallet_id = pallet.id
+    await session.commit()
+    run = uuid.uuid4()
+    report = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                  source_id=legacy.id, target_id=target.id)
+    assert report["status"] == "prepared"
+    await session.commit()
+    if phase == "rollback":
+        await repair.apply(session, run)
+        await session.commit()
+    pallet.warehouse_id = third.id
+    await session.commit()
+    if phase == "apply":
+        assert (await repair.apply(session, run))["status"] == "stale"
+    else:
+        with pytest.raises(repair.WarehouseRepairError, match="rollback_blocked_by_later_changes"):
+            await repair.rollback(session, run)
+
+
+async def test_historical_movement_container_is_not_current_placement(db_session):
+    session = db_session
+    tenant, legacy, target, _, _, _, _ = await seed(session)
+    third = Warehouse(tenant_id=tenant.id, code="third", name="Third")
+    session.add(third)
+    await session.flush()
+    historical_box = WarehouseBox(tenant_id=tenant.id, warehouse_id=third.id,
+                                   internal_barcode="HISTORY")
+    session.add(historical_box)
+    await session.flush()
+    await session.execute(update(InventoryMovement).values(
+        container_kind="box", container_id=historical_box.id))
+    await session.commit()
+    run = uuid.uuid4()
+    report = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                  source_id=legacy.id, target_id=target.id)
+    assert report["status"] == "prepared", report
+    await session.commit()
+    assert (await repair.apply(session, run))["status"] == "completed"
+    assert await session.scalar(select(WarehouseBox.warehouse_id).where(
+        WarehouseBox.id == historical_box.id)) == third.id

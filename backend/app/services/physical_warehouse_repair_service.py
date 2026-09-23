@@ -185,6 +185,8 @@ async def _reference_state(
     physical = {t.name for t in _tables()}
     cache = {(name, row["id"]): row for name, rows in snapshot.items() for row in rows}
     queue = list(cache)
+    roots = set(cache)
+    placement_edges: dict[tuple[str, str], set[tuple[str, str]]] = {}
     state: dict[tuple[str, str], Row] = {}
     missing: set[tuple[str, str]] = set()
 
@@ -213,6 +215,7 @@ async def _reference_state(
         name, identity = queue.pop()
         if (name, identity) in state:
             continue
+        placement = placement_edges.setdefault((name, identity), set())
         row = cache[name, identity]
         table = Base.metadata.tables[name]
         blockers: list[str] = []
@@ -235,6 +238,16 @@ async def _reference_state(
                 blockers.append(f"missing_parent:{name}:{id_fk.parent.name}")
             elif any(row[fk.parent.name] != ancestor.get(fk.column.name) for fk in elements):
                 blockers.append(f"composite_parent_mismatch:{name}:{constraint.name}")
+            if ancestor is not None:
+                # An intake is provenance once the container has its own current
+                # warehouse/location. Its original warehouse is not placement.
+                provenance = parent_name == "inbound_intake_requests" and (
+                    name in {"warehouse_boxes", "pallets"}
+                    or (name in {"inbound_intake_boxes", "inbound_intake_cargo_places"}
+                        and row.get("storage_location_id") is not None)
+                )
+                if not provenance:
+                    placement.add((parent_name, ancestor["id"]))
         for column in sorted(fields):
             if not column.endswith("container_id") or not row.get(column):
                 continue
@@ -252,19 +265,9 @@ async def _reference_state(
                     found.append((candidate, container))
             if len(found) != 1:
                 blockers.append(f"unresolved_container:{name}:{column}")
-            elif name == "inventory_balances":
+            elif name != "inventory_movements":
                 container_name, container = found[0]
-                # A live balance and its container must end on the same physical
-                # source/target group. Historical movements may refer to moved
-                # containers; their current warehouse is not rewritten by repair.
-                container_warehouse = container.get("warehouse_id")
-                if container_warehouse is None:
-                    location = await parent("storage_locations", container["storage_location_id"]) \
-                        if container.get("storage_location_id") else None
-                    request = await parent("inbound_intake_requests", container["request_id"])
-                    container_warehouse = (location or request or {}).get("warehouse_id")
-                if container_warehouse not in {w["id"] for w in snapshot["warehouses"]}:
-                    blockers.append(f"container_outside_repair_scope:{container_name}:{row[column]}")
+                placement.add((container_name, container["id"]))
         if row.get("product_id") and row.get("seller_id"):
             product = await parent("products", row["product_id"])
             if product and product.get("seller_id") != row["seller_id"]:
@@ -272,6 +275,27 @@ async def _reference_state(
         state[name, identity] = {
             "table": name, "id": identity, "values": values, "blockers": sorted(set(blockers)),
         }
+    # Propagate warehouse identity through every physical parent, not just one
+    # direct balance/container hop. Fixed-point sets also handle cyclic FK paths.
+    warehouses = {key: {key[1]} if key[0] == "warehouses" else set() for key in state}
+    while True:
+        changed = False
+        for key, edges in placement_edges.items():
+            expanded = warehouses[key] | set().union(*(warehouses[parent] for parent in edges))
+            if expanded != warehouses[key]:
+                warehouses[key] = expanded
+                changed = True
+        if not changed:
+            break
+    scope = {w["id"] for w in snapshot.get("warehouses", [])}
+    for key in roots:
+        # A non-moved historical parent may be on another real warehouse. It is
+        # invalid only when the SAME physical record also belongs to this repair.
+        outside = warehouses[key] - scope
+        if warehouses[key] & scope and outside:
+            state[key]["blockers"].append(
+                f"physical_parent_outside_repair_scope:{key[0]}:{key[1]}:"
+                + ",".join(sorted(outside)))
     return [state[key] for key in sorted(state)]
 
 
