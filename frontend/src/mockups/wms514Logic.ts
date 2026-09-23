@@ -13,7 +13,9 @@ export const WMS514_DIRECT_KIZ =
 export const WMS514_BOUND_KIZ =
   '010460000000051421BOUND51491EFGH92ZYXWVUTSRQPONMLKJIHGFEDCBA876543210987654321'
 
-const ORDER_NUMBERS = [3941200046, 3941200053, 3941200060, 3941200067, 3941200074, 3941200081]
+// The configured product barcode belongs to TSHIRT_M. These are exactly the
+// four existing TSHIRT_M/M rows in the scene fixture, in workspace order.
+const PRODUCT_ORDER_NUMBERS = [3941200018, 3941200025, 3941200032, 3941200039]
 
 export type Wms514ProductSimulation = {
   handled: boolean
@@ -38,7 +40,15 @@ export function simulateWms514ProductScan(
   if (!modes.printQr && !modes.printChz && !modes.reprintChz) {
     return { handled: false, outputs: [], waitsForFullKiz: false }
   }
-  const orderNumber = ORDER_NUMBERS[orderIndex % ORDER_NUMBERS.length]
+  const orderNumber = PRODUCT_ORDER_NUMBERS[orderIndex]
+  if (orderNumber == null) {
+    return {
+      handled: true,
+      outputs: [],
+      waitsForFullKiz: false,
+      error: 'Подходящие единицы товара размера M в этой поставке закончились.',
+    }
+  }
   const outputs: Wms514MockupOutput[] = []
   if (modes.printQr) outputs.push('order_qr')
   if (modes.printChz && !modes.reprintChz) outputs.push('new_chz')
@@ -71,7 +81,7 @@ export function createWms514MockupScanPrinting() {
       }
       if (kind === 'product') {
         const result = simulateWms514ProductScan(modes, productScanIndex)
-        if (result.handled) productScanIndex += 1
+        if (result.orderNumber != null) productScanIndex += 1
         return result
       }
       return {

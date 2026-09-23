@@ -33,6 +33,7 @@ describe('WMS-514 clickable mockup scan logic', () => {
       expect(result.outputs).toEqual(item.outputs)
       expect(result.waitsForFullKiz).toBe(item.waits)
       expect(result.outputs).not.toContain('product_barcode')
+      if (item.handled) expect(result.orderNumber).toBe(3941200018)
     }
   })
 
@@ -79,5 +80,27 @@ describe('WMS-514 clickable mockup scan logic', () => {
     await expect(mockup.reprintBoundKiz(WMS514_BOUND_KIZ)).resolves.toBe(true)
     await expect(mockup.reprintBoundKiz(WMS514_PRODUCT_BARCODE)).resolves.toBe(false)
     await expect(mockup.reprintBoundKiz('almost-a-kiz')).resolves.toBe(false)
+  })
+
+  it('selects only existing T-shirt M rows and reports exhaustion without cycling', async () => {
+    const mockup = createWms514MockupScanPrinting()
+    const modes = { printQr: true, printChz: false, reprintChz: false }
+    const selected = []
+    for (let index = 0; index < 4; index += 1) {
+      const result = await mockup.handleIdleScan(WMS514_PRODUCT_BARCODE, modes)
+      if (!('waitsForFullKiz' in result)) throw new Error('Expected a product-scan result')
+      selected.push(result.orderNumber)
+    }
+    expect(selected).toEqual([3941200018, 3941200025, 3941200032, 3941200039])
+
+    const exhausted = await mockup.handleIdleScan(WMS514_PRODUCT_BARCODE, modes)
+    if (!('waitsForFullKiz' in exhausted)) throw new Error('Expected a product-scan result')
+    expect(exhausted.orderNumber).toBeUndefined()
+    expect(exhausted.outputs).toEqual([])
+    expect(exhausted.error).toContain('закончились')
+    const repeated = await mockup.handleIdleScan(WMS514_PRODUCT_BARCODE, modes)
+    if (!('waitsForFullKiz' in repeated)) throw new Error('Expected a product-scan result')
+    expect(repeated.orderNumber).toBeUndefined()
+    expect(repeated.error).toBe(exhausted.error)
   })
 })

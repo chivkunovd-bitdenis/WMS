@@ -431,7 +431,6 @@ function supplyOrders(stage: SupplyStage): Array<FbsWorkspace['orders'][number]>
               states: [
                 markingReady
                   ? {
-                      id: `mock-kiz-${orderId}`,
                       kind: 'sgtin',
                       status: 'accepted' as const,
                       reason: null,
