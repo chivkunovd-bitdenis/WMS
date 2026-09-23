@@ -77,6 +77,34 @@ async def _seller_marking_write_counts(seller_id: str) -> dict[str, int]:
         }
 
 
+async def _seller_marking_write_ids(seller_id: str) -> dict[str, set[uuid.UUID]]:
+    seller_uuid = uuid.UUID(seller_id)
+    async with SessionLocal() as session:
+        queries = {
+            "imports": select(MarkingCodeImport.id).where(
+                MarkingCodeImport.seller_id == seller_uuid
+            ),
+            "source_files": select(MarkingCodeImportFile.id)
+            .join(
+                MarkingCodeImport,
+                MarkingCodeImport.id == MarkingCodeImportFile.import_batch_id,
+            )
+            .where(MarkingCodeImport.seller_id == seller_uuid),
+            "pools": select(MarkingPool.id).where(MarkingPool.seller_id == seller_uuid),
+            "pool_products": select(MarkingPoolProduct.id)
+            .join(MarkingPool, MarkingPool.id == MarkingPoolProduct.pool_id)
+            .where(MarkingPool.seller_id == seller_uuid),
+            "codes": select(MarkingCode.id).where(MarkingCode.seller_id == seller_uuid),
+            "events": select(MarkingCodeEvent.id).where(
+                MarkingCodeEvent.seller_id == seller_uuid
+            ),
+        }
+        return {
+            name: set((await session.execute(query)).scalars().all())
+            for name, query in queries.items()
+        }
+
+
 async def _import_files(
     async_client: AsyncClient,
     headers: dict[str, str],
@@ -185,6 +213,71 @@ async def test_import_rejects_mixed_covered_and_uncovered_gtins_before_writes(
         "codes": 0,
         "events": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_explicit_empty_mixed_spec_without_changing_existing_data(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={
+            "name": "Existing marking data",
+            "email": f"existing-{uuid.uuid4().hex[:8]}@example.com",
+        },
+    )
+    seller_id = str(seller.json()["id"])
+    product_id = await _create_product(async_client, headers, seller_id, name="Existing product")
+    existing_gtin = "00000000000300"
+    existing_code = f"01{existing_gtin}21{'I' * 20}0000"
+    existing = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[
+            {
+                "gtin": existing_gtin,
+                "title": "Existing pool",
+                "product_ids": [product_id],
+            }
+        ],
+        files=[("existing.csv", f"cis\n{existing_code}".encode())],
+    )
+    assert existing.status_code == 200, existing.text
+    before_ids = await _seller_marking_write_ids(seller_id)
+    assert all(
+        before_ids[entity]
+        for entity in ("imports", "pools", "pool_products", "codes", "events")
+    )
+
+    gtin_a = "00000000000301"
+    gtin_b = "00000000000302"
+    codes = [f"01{gtin_a}21{'J' * 20}0001", f"01{gtin_b}21{'K' * 20}0002"]
+    persistence_calls: list[object] = []
+    monkeypatch.setattr(
+        marking_service,
+        "_persist_import_source_pdfs",
+        lambda *args, **kwargs: persistence_calls.append((args, kwargs)),
+    )
+
+    response = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[
+            {"gtin": gtin_a, "title": "Covered A", "product_ids": [product_id]},
+            {"gtin": gtin_b, "title": "Explicitly empty B", "product_ids": []},
+        ],
+        files=[("mixed-explicit-empty.csv", ("cis\n" + "\n".join(codes)).encode())],
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "manual_import_product_required"
+    assert persistence_calls == []
+    assert await _seller_marking_write_ids(seller_id) == before_ids
 
 
 @pytest.mark.asyncio
