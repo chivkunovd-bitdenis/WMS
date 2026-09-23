@@ -497,6 +497,8 @@ export function FfFbsSupplyWorkspace({
   const [kizConfirmValue, setKizConfirmValue] = useState<string | null>(null)
   const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
+  const [autoPrintOrderQr, setAutoPrintOrderQr] = useState(false)
+  const [autoPrintHonestSign, setAutoPrintHonestSign] = useState(false)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const kizSelectedStickerRef = useRef('')
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
@@ -2294,6 +2296,26 @@ export function FfFbsSupplyWorkspace({
                             },
                           }}
                           sx={{ '& input': { fontFamily: 'monospace' } }}
+                        />
+                        <FormControlLabel
+                          control={(
+                            <Checkbox
+                              checked={autoPrintOrderQr}
+                              onChange={(event) => setAutoPrintOrderQr(event.target.checked)}
+                            />
+                          )}
+                          label="Печатать QR"
+                          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                        />
+                        <FormControlLabel
+                          control={(
+                            <Checkbox
+                              checked={autoPrintHonestSign}
+                              onChange={(event) => setAutoPrintHonestSign(event.target.checked)}
+                            />
+                          )}
+                          label="Печатать ЧЗ"
+                          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                         />
                         {kizScanActive ? (
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">

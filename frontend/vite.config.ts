@@ -85,6 +85,7 @@ export default defineConfig({
         schet: 'schet.html',
         knowledge: 'knowledge.html',
         kbScenes: 'kb-scenes.html',
+        wms514Mockup: 'wms514-mockup.html',
         fbsOrders: 'fbs-orders.html',
         fbsPick: 'fbs-pick.html',
         packaging: 'packaging.html',
