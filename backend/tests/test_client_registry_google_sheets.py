@@ -12,9 +12,12 @@ from app.models.document_event import SOURCE_SYSTEM, SOURCE_USER, DocumentEvent
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.services.client_registry_google_sheets_service import (
-    CLIENT_HEADERS,
     ClientRegistryRow,
+    GoogleSheetsClientRegistryGateway,
     RegistrySheetSnapshot,
+    RegistrySyncPlan,
+    _summary_values,
+    _update_cells_request,
     build_registry_sync_plan,
     collect_client_registry_rows,
 )
@@ -30,7 +33,17 @@ def _registry_snapshot(*, tenant_id: str, manual_values: list[str]) -> RegistryS
             ["", "Доход", "=sum"],
             [],
             ["Клиенты"],
-            CLIENT_HEADERS,
+            [
+                "ID клиента",
+                "Фулфилмент",
+                "Дата регистрации",
+                "Последняя активность",
+                "Доступ",
+                "Оплачено до",
+                "Дата оплаты",
+                "Сумма, ₽",
+                "Следующая оплата",
+            ],
             [tenant_id, "Старое имя", "01.01.2026", "", "Да", "", *manual_values],
             ["Расходы"],
             ["Дата", "На что", "Сумма, ₽"],
@@ -91,6 +104,84 @@ def test_blank_sheet_initializes_one_list_with_no_manual_values() -> None:
     assert plan.insert_at_row == 7
     assert plan.separator_row == 7
     assert plan.new_rows == [[str(tenant_id), "Первый FF", "01.01.2026", "", "Да", "", "", "", ""]]
+
+
+def test_legacy_headers_remain_readable_without_changing_manual_columns() -> None:
+    tenant_id = uuid.uuid4()
+    snapshot = _registry_snapshot(tenant_id=str(tenant_id), manual_values=["", "", ""])
+    snapshot.values[5] = [
+        "tenant_id",
+        "FF",
+        "Дата регистрации",
+        "Последняя активность",
+        "Доступ",
+        "Оплачено до",
+        "Дата платежа",
+        "Сумма, ₽",
+        "Следующий платёж",
+    ]
+
+    plan = build_registry_sync_plan(snapshot, [_client(tenant_id, name="FF")])
+
+    assert plan.existing_updates[7] == [str(tenant_id), "FF", "01.01.2026", "", "Да", ""]
+
+
+def test_summary_expenses_formula_starts_after_actual_expense_header() -> None:
+    assert _summary_values(24)[4] == "=SUM(C24:C)"
+    assert _summary_values(9)[4] == "=SUM(C9:C)"
+
+
+def test_system_value_starting_with_equals_is_written_as_literal_string() -> None:
+    request = _update_cells_request(1, 7, 1, ["=not-a-formula"])
+
+    value = request["updateCells"]["rows"][0]["values"][0]["userEnteredValue"]
+    assert value == {"stringValue": "=not-a-formula"}
+
+
+class _FakeBatchUpdate:
+    def __init__(self) -> None:
+        self.bodies: list[dict[str, object]] = []
+
+    def batchUpdate(self, *, spreadsheetId: str, body: dict[str, object]) -> _FakeBatchUpdate:
+        assert spreadsheetId == "sheet-id"
+        self.bodies.append(body)
+        return self
+
+    def execute(self) -> dict[str, object]:
+        return {}
+
+
+class _FakeGoogleService:
+    def __init__(self) -> None:
+        self.batch = _FakeBatchUpdate()
+
+    def spreadsheets(self) -> _FakeBatchUpdate:
+        return self.batch
+
+
+def test_insert_and_client_values_share_one_google_batch_update() -> None:
+    gateway = GoogleSheetsClientRegistryGateway(
+        spreadsheet_id="sheet-id", service_account_file="not-read-by-this-test"
+    )
+    fake = _FakeGoogleService()
+    gateway._service = fake
+    gateway._sheet_id = 1
+    plan = RegistrySyncPlan(
+        initialize=False,
+        existing_updates={},
+        new_rows=[["tenant-id", "=FF name", "01.01.2026", "", "Да", "", "", "", ""]],
+        insert_at_row=22,
+        separator_row=22,
+    )
+
+    gateway.apply(plan)
+
+    assert len(fake.batch.bodies) == 1
+    requests = fake.batch.bodies[0]["requests"]
+    assert isinstance(requests, list)
+    assert any("insertDimension" in request for request in requests)
+    update_cells = next(request["updateCells"] for request in requests if "updateCells" in request)
+    assert update_cells["rows"][0]["values"][1]["userEnteredValue"] == {"stringValue": "=FF name"}
 
 
 @pytest.mark.asyncio

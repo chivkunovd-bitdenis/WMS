@@ -9,13 +9,16 @@ the expense rows below the register.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select, union_all
+from sqlalchemy import func, select, text, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -33,6 +36,17 @@ SHEET_TITLE = "Клиенты"
 CLIENT_HEADER_ROW = 6
 FIRST_CLIENT_ROW = CLIENT_HEADER_ROW + 1
 CLIENT_HEADERS = [
+    "ID клиента",
+    "Фулфилмент",
+    "Дата регистрации",
+    "Последняя активность",
+    "Доступ",
+    "Оплачено до",
+    "Дата оплаты",
+    "Сумма, ₽",
+    "Следующая оплата",
+]
+LEGACY_CLIENT_HEADERS = [
     "tenant_id",
     "FF",
     "Дата регистрации",
@@ -91,6 +105,9 @@ class RegistrySyncPlan:
 
 
 class ClientRegistryGateway(Protocol):
+    @property
+    def lock_scope(self) -> str: ...
+
     def read_snapshot(self) -> RegistrySheetSnapshot: ...
 
     def apply(self, plan: RegistrySyncPlan) -> None: ...
@@ -143,7 +160,8 @@ def build_registry_sync_plan(
         )
 
     header_index = CLIENT_HEADER_ROW - 1
-    if snapshot.values[header_index][: len(CLIENT_HEADERS)] != CLIENT_HEADERS:
+    headers = snapshot.values[header_index][: len(CLIENT_HEADERS)]
+    if headers not in (CLIENT_HEADERS, LEGACY_CLIENT_HEADERS):
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
 
     separator_index: int | None = None
@@ -254,12 +272,35 @@ async def collect_client_registry_rows(
 
 async def sync_client_registry(gateway: ClientRegistryGateway) -> RegistrySyncPlan:
     """Read the database, then apply one idempotent, one-way Sheet mutation."""
-    async with SessionLocal() as session:
+    async with SessionLocal() as session, _client_registry_lock(session, gateway.lock_scope):
         clients = await collect_client_registry_rows(session)
-    snapshot = await asyncio.to_thread(gateway.read_snapshot)
-    plan = build_registry_sync_plan(snapshot, clients)
-    await asyncio.to_thread(gateway.apply, plan)
+        snapshot = await asyncio.to_thread(gateway.read_snapshot)
+        plan = build_registry_sync_plan(snapshot, clients)
+        await asyncio.to_thread(gateway.apply, plan)
     return plan
+
+
+def _client_registry_lock_key(scope: str) -> int:
+    digest = hashlib.blake2b(
+        f"wms:google-sheets:client-registry:{scope}".encode(), digest_size=8
+    ).digest()
+    raw = int.from_bytes(digest, "big", signed=False)
+    return raw - (1 << 64) if raw >= 1 << 63 else raw
+
+
+@asynccontextmanager
+async def _client_registry_lock(session: AsyncSession, scope: str) -> AsyncIterator[None]:
+    """Hold a PostgreSQL advisory lock for one configured Google Sheet sync."""
+    connection = await session.connection()
+    if connection.dialect.name != "postgresql":
+        yield
+        return
+    lock_key = _client_registry_lock_key(scope)
+    await session.scalar(text("select pg_advisory_lock(:lock_key)"), {"lock_key": lock_key})
+    try:
+        yield
+    finally:
+        await session.scalar(text("select pg_advisory_unlock(:lock_key)"), {"lock_key": lock_key})
 
 
 class GoogleSheetsClientRegistryGateway:
@@ -270,6 +311,10 @@ class GoogleSheetsClientRegistryGateway:
         self._service_account_file = service_account_file
         self._service: Any | None = None
         self._sheet_id: int | None = None
+
+    @property
+    def lock_scope(self) -> str:
+        return self._spreadsheet_id
 
     def _get_service(self) -> Any:
         if self._service is not None:
@@ -364,49 +409,37 @@ class GoogleSheetsClientRegistryGateway:
         elif plan.new_rows:
             requests.append(_basic_filter_request(self._sheet_id, final_separator_row))
 
-        data: list[dict[str, Any]] = []
         if plan.initialize:
-            data.extend(
+            first_expense_row = final_separator_row + 2
+            requests.extend(
                 [
-                    {
-                        "range": f"'{SHEET_TITLE}'!B3:I3",
-                        "values": [
-                            [
-                                "Доход",
-                                "=SUM(H7:H)",
-                                "",
-                                "Расходы",
-                                "=SUM(C24:C)",
-                                "",
-                                "Баланс",
-                                "=C3-F3",
-                            ]
-                        ],
-                    },
-                    {"range": f"'{SHEET_TITLE}'!A5", "values": [["Клиенты"]]},
-                    {"range": f"'{SHEET_TITLE}'!A6:I6", "values": [CLIENT_HEADERS]},
-                    {
-                        "range": f"'{SHEET_TITLE}'!A{final_separator_row}",
-                        "values": [[EXPENSES_MARKER]],
-                    },
-                    {
-                        "range": (
-                            f"'{SHEET_TITLE}'!A{final_separator_row + 1}:C{final_separator_row + 1}"
-                        ),
-                        "values": [EXPENSES_HEADERS],
-                    },
+                    _update_cells_request(
+                        self._sheet_id,
+                        3,
+                        2,
+                        _summary_values(first_expense_row),
+                        formula_indices=frozenset({1, 4, 7}),
+                    ),
+                    _update_cells_request(self._sheet_id, 5, 1, ["Клиенты"]),
+                    _update_cells_request(self._sheet_id, 6, 1, CLIENT_HEADERS),
+                    _update_cells_request(
+                        self._sheet_id, final_separator_row, 1, [EXPENSES_MARKER]
+                    ),
+                    _update_cells_request(
+                        self._sheet_id, final_separator_row + 1, 1, EXPENSES_HEADERS
+                    ),
                 ]
             )
         for row, values in plan.existing_updates.items():
-            data.append({"range": f"'{SHEET_TITLE}'!A{row}:F{row}", "values": [values]})
+            requests.append(_update_cells_request(self._sheet_id, row, 1, values))
         if plan.new_rows:
             first_row = plan.insert_at_row
-            last_row = first_row + len(plan.new_rows) - 1
-            data.append(
-                {
-                    "range": f"'{SHEET_TITLE}'!A{first_row}:I{last_row}",
-                    "values": plan.new_rows,
-                }
+            requests.append(
+                _update_cells_rows_request(
+                    self._sheet_id,
+                    first_row,
+                    [values[:6] for values in plan.new_rows],
+                )
             )
         try:
             if requests:
@@ -414,13 +447,76 @@ class GoogleSheetsClientRegistryGateway:
                     spreadsheetId=self._spreadsheet_id,
                     body={"requests": requests},
                 ).execute()
-            if data:
-                service.spreadsheets().values().batchUpdate(
-                    spreadsheetId=self._spreadsheet_id,
-                    body={"valueInputOption": "USER_ENTERED", "data": data},
-                ).execute()
         except Exception as exc:
             raise ClientRegistryGoogleSheetsError("google_api_error") from exc
+
+
+def _summary_values(first_expense_row: int) -> list[str]:
+    return [
+        "Доход",
+        "=SUM(H7:H)",
+        "",
+        "Расходы",
+        f"=SUM(C{first_expense_row}:C)",
+        "",
+        "Баланс",
+        "=C3-F3",
+    ]
+
+
+def _update_cells_request(
+    sheet_id: int,
+    row: int,
+    column: int,
+    values: list[str],
+    *,
+    formula_indices: frozenset[int] = frozenset(),
+) -> dict[str, Any]:
+    return _update_cells_rows_request(
+        sheet_id,
+        row,
+        [values],
+        start_column=column,
+        formula_indices=formula_indices,
+    )
+
+
+def _update_cells_rows_request(
+    sheet_id: int,
+    first_row: int,
+    rows: list[list[str]],
+    *,
+    start_column: int = 1,
+    formula_indices: frozenset[int] = frozenset(),
+) -> dict[str, Any]:
+    return {
+        "updateCells": {
+            "range": {
+                "sheetId": sheet_id,
+                "startRowIndex": first_row - 1,
+                "endRowIndex": first_row - 1 + len(rows),
+                "startColumnIndex": start_column - 1,
+                "endColumnIndex": start_column - 1 + max(len(row) for row in rows),
+            },
+            "rows": [
+                {
+                    "values": [
+                        _cell_value(value, formula=column_index in formula_indices)
+                        for column_index, value in enumerate(row)
+                    ]
+                }
+                for row in rows
+            ],
+            "fields": "userEnteredValue",
+        }
+    }
+
+
+def _cell_value(value: str, *, formula: bool) -> dict[str, dict[str, str]]:
+    # System strings such as a tenant name must never be interpreted as a Sheet formula.
+    if formula:
+        return {"userEnteredValue": {"formulaValue": value}}
+    return {"userEnteredValue": {"stringValue": value}}
 
 
 def _initial_format_requests(sheet_id: int) -> list[dict[str, Any]]:
