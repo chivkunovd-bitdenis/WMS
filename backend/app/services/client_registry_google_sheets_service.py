@@ -2,8 +2,8 @@
 
 The Sheet is intentionally the source of truth for its manual values.  This
 module only writes columns A:F and only inserts a new client immediately before
-the expense divider, so Google never receives a destructive rewrite of G:I or
-the expense rows below the register.
+the money-flow divider, so Google never receives a destructive rewrite of the
+manual next-payment column or the money rows below the register.
 """
 
 from __future__ import annotations
@@ -42,23 +42,10 @@ CLIENT_HEADERS = [
     "Последняя активность",
     "Доступ",
     "Оплачено до",
-    "Дата оплаты",
-    "Сумма, ₽",
     "Следующая оплата",
 ]
-LEGACY_CLIENT_HEADERS = [
-    "tenant_id",
-    "FF",
-    "Дата регистрации",
-    "Последняя активность",
-    "Доступ",
-    "Оплачено до",
-    "Дата платежа",
-    "Сумма, ₽",
-    "Следующий платёж",
-]
-EXPENSES_MARKER = "Расходы"
-EXPENSES_HEADERS = ["Дата", "На что", "Сумма, ₽"]
+CASHFLOW_MARKER = "Поступления и расходы"
+CASHFLOW_HEADERS = ["Дата", "Тип", "Клиент / на что", "Сумма, ₽"]
 
 
 class ClientRegistryGoogleSheetsError(Exception):
@@ -154,21 +141,21 @@ def build_registry_sync_plan(
         return RegistrySyncPlan(
             initialize=True,
             existing_updates={},
-            new_rows=[[*client.system_values(), "", "", ""] for client in clients],
+            new_rows=[[*client.system_values(), ""] for client in clients],
             insert_at_row=FIRST_CLIENT_ROW,
             separator_row=FIRST_CLIENT_ROW,
         )
 
     header_index = CLIENT_HEADER_ROW - 1
     headers = snapshot.values[header_index][: len(CLIENT_HEADERS)]
-    if headers not in (CLIENT_HEADERS, LEGACY_CLIENT_HEADERS):
+    if headers != CLIENT_HEADERS:
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
 
     separator_index: int | None = None
     existing_rows: dict[str, int] = {}
     for row_index in range(FIRST_CLIENT_ROW - 1, len(snapshot.values)):
         first_cell = _cell(snapshot.values, row_index, 0)
-        if first_cell == EXPENSES_MARKER:
+        if first_cell == CASHFLOW_MARKER:
             separator_index = row_index
             break
         if not first_cell:
@@ -180,9 +167,9 @@ def build_registry_sync_plan(
     if separator_index is None:
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
     if [
-        _cell(snapshot.values, separator_index + 1, column_index)
-        for column_index in range(len(EXPENSES_HEADERS))
-    ] != EXPENSES_HEADERS:
+        _cell(snapshot.values, separator_index + 1, column_index + 1)
+        for column_index in range(len(CASHFLOW_HEADERS))
+    ] != CASHFLOW_HEADERS:
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
 
     existing_updates: dict[int, list[str]] = {}
@@ -190,7 +177,7 @@ def build_registry_sync_plan(
     for client in clients:
         row = existing_rows.get(str(client.tenant_id))
         if row is None:
-            new_rows.append([*client.system_values(), "", "", ""])
+            new_rows.append([*client.system_values(), ""])
         else:
             existing_updates[row] = client.system_values()
 
@@ -409,23 +396,17 @@ class GoogleSheetsClientRegistryGateway:
             requests.append(_basic_filter_request(self._sheet_id, final_separator_row))
 
         if plan.initialize:
-            first_expense_row = final_separator_row + 2
+            first_cashflow_row = final_separator_row + 2
             requests.extend(
                 [
-                    _update_cells_request(
-                        self._sheet_id,
-                        3,
-                        2,
-                        _summary_values(first_expense_row),
-                        formula_indices=frozenset({1, 4, 7}),
-                    ),
+                    *_initial_summary_requests(self._sheet_id, first_cashflow_row),
                     _update_cells_request(self._sheet_id, 5, 1, ["Клиенты"]),
                     _update_cells_request(self._sheet_id, 6, 1, CLIENT_HEADERS),
                     _update_cells_request(
-                        self._sheet_id, final_separator_row, 1, [EXPENSES_MARKER]
+                        self._sheet_id, final_separator_row, 1, [CASHFLOW_MARKER]
                     ),
                     _update_cells_request(
-                        self._sheet_id, final_separator_row + 1, 1, EXPENSES_HEADERS
+                        self._sheet_id, final_separator_row + 1, 2, CASHFLOW_HEADERS
                     ),
                 ]
             )
@@ -450,16 +431,20 @@ class GoogleSheetsClientRegistryGateway:
             raise ClientRegistryGoogleSheetsError("google_api_error") from exc
 
 
-def _summary_values(first_expense_row: int) -> list[str]:
+def _initial_summary_requests(sheet_id: int, first_cashflow_row: int) -> list[dict[str, Any]]:
     return [
-        "Доход",
-        "=SUM(H7:H)",
-        "",
-        "Расходы",
-        f"=SUM(C{first_expense_row}:C)",
-        "",
-        "Баланс",
-        "=C3-F3",
+        _update_cells_request(sheet_id, 2, 2, ["Поступления", "Расходы", "Остаток"]),
+        _update_cells_request(
+            sheet_id,
+            3,
+            2,
+            [
+                f'=SUMIF(C{first_cashflow_row}:C;"Поступление";E{first_cashflow_row}:E)',
+                f'=SUMIF(C{first_cashflow_row}:C;"Расход";E{first_cashflow_row}:E)',
+                "=B3-C3",
+            ],
+            formula_indices=frozenset({0, 1, 2}),
+        ),
     ]
 
 
@@ -549,6 +534,7 @@ def _initial_format_requests(sheet_id: int) -> list[dict[str, Any]]:
 
 
 def _filter_and_data_format_requests(sheet_id: int, separator_row: int) -> list[dict[str, Any]]:
+    first_cashflow_row_index = separator_row + 1
     return [
         _basic_filter_request(sheet_id, separator_row),
         {
@@ -566,17 +552,18 @@ def _filter_and_data_format_requests(sheet_id: int, separator_row: int) -> list[
         _number_format_request(sheet_id, 3, 4, "dd.mm.yyyy hh:mm"),
         _number_format_request(sheet_id, 5, 6, "dd.mm.yyyy"),
         _number_format_request(sheet_id, 6, 7, "dd.mm.yyyy"),
-        _number_format_request(sheet_id, 7, 8, "#,##0.00 [$₽-ru-RU]"),
-        _number_format_request(sheet_id, 8, 9, "dd.mm.yyyy"),
-        _number_format_request(sheet_id, 2, 3, "#,##0.00 [$₽-ru-RU]", start_row=2, end_row=3),
-        _number_format_request(sheet_id, 5, 6, "#,##0.00 [$₽-ru-RU]", start_row=2, end_row=3),
-        _number_format_request(sheet_id, 8, 9, "#,##0.00 [$₽-ru-RU]", start_row=2, end_row=3),
+        _number_format_request(
+            sheet_id, 1, 2, "dd.mm.yyyy", start_row=first_cashflow_row_index
+        ),
         _number_format_request(
             sheet_id,
-            2,
-            3,
+            4,
+            5,
             "#,##0.00 [$₽-ru-RU]",
-            start_row=separator_row + 1,
+            start_row=first_cashflow_row_index,
+        ),
+        _number_format_request(
+            sheet_id, 1, 4, "#,##0.00 [$₽-ru-RU]", start_row=2, end_row=3
         ),
     ]
 
