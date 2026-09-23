@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import jwt
@@ -17,12 +17,10 @@ def create_access_token(
     seller_id: uuid.UUID | None = None,
 ) -> str:
     now = datetime.now(tz=UTC)
-    expire = now + timedelta(minutes=settings.access_token_expire_minutes)
     payload: dict[str, object] = {
         "sub": str(user_id),
         "tenant_id": str(tenant_id),
         "role": role,
-        "exp": expire,
         "iat": now,
     }
     if seller_id is not None:
