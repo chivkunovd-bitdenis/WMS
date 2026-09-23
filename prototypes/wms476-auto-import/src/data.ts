@@ -249,31 +249,6 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} МБ`
 }
 
-export type PreviewGroupSeed = {
-  key: string
-  gtin: string
-  codesCount: number
-  suggestedTitle: string
-  suggestedProductIds: string[]
-}
-
-export const previewGroupSeeds: PreviewGroupSeed[] = [
-  {
-    key: 'preview-1',
-    gtin: '04650097654321',
-    codesCount: 174,
-    suggestedTitle: 'Палантин Оазис · 90×180 / 70×140',
-    suggestedProductIds: ['p-1001', 'p-1002'],
-  },
-  {
-    key: 'preview-2',
-    gtin: '04650098811234',
-    codesCount: 42,
-    suggestedTitle: 'Худи Классик · бордо XL',
-    suggestedProductIds: ['p-1003'],
-  },
-]
-
 export const manualLoadedPerProduct: Record<string, number> = {
   'p-1001': 128,
   'p-1002': 46,

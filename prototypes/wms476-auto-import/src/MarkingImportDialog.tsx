@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   autoFailedRows,
   autoSuccessGroupsFull,
@@ -6,7 +6,6 @@ import {
   catalog,
   formatFileSize,
   manualLoadedPerProduct,
-  previewGroupSeeds,
   sampleAutoFiles,
   type AutoGroup,
   type CatalogRow,
@@ -31,20 +30,8 @@ type Stage =
   | 'processing-manual'
   | 'result-manual'
 
-type PreviewGroupState = {
-  key: string
-  gtin: string
-  codesCount: number
-  suggestedTitle: string
-  title: string
-  productSearch: string
-  productIds: Set<string>
-  showAll: boolean
-}
-
 type ManualPerProductRow = {
   product: CatalogRow
-  groupKey: string
   loadedCount: number
 }
 
@@ -63,31 +50,6 @@ function filterProducts(rows: CatalogRow[], search: string): CatalogRow[] {
   return rows.filter((row) => {
     const hay = `${row.sku} ${row.vendorCode} ${row.name} ${row.size ?? ''} ${row.barcode}`.toLowerCase()
     return hay.includes(needle)
-  })
-}
-
-function seedsToPreviewGroups(existing: PreviewGroupState[]): PreviewGroupState[] {
-  const byKey = new Map(existing.map((g) => [g.key, g] as const))
-  return previewGroupSeeds.map((seed) => {
-    const prev = byKey.get(seed.key)
-    if (prev) {
-      return {
-        ...prev,
-        gtin: seed.gtin,
-        codesCount: seed.codesCount,
-        suggestedTitle: seed.suggestedTitle,
-      }
-    }
-    return {
-      key: seed.key,
-      gtin: seed.gtin,
-      codesCount: seed.codesCount,
-      suggestedTitle: seed.suggestedTitle,
-      title: seed.suggestedTitle,
-      productSearch: '',
-      productIds: new Set<string>(),
-      showAll: false,
-    }
   })
 }
 
@@ -114,21 +76,19 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
   const [stage, setStage] = useState<Stage>('picker')
   const [files, setFiles] = useState<SampleFile[]>([])
   const [parsingBusy, setParsingBusy] = useState(false)
-  const [previewGroups, setPreviewGroups] = useState<PreviewGroupState[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [processingProgress, setProcessingProgress] = useState(0)
   const [processingLine, setProcessingLine] = useState('')
   const [manualResult, setManualResult] = useState<ManualResult | null>(null)
   const processingTimersRef = useRef<number[]>([])
   const parsingTimerRef = useRef<number | null>(null)
 
-  const totalSelected = useMemo(
-    () => previewGroups.reduce((sum, g) => sum + g.productIds.size, 0),
-    [previewGroups],
-  )
-  const canRunAuto =
-    files.length > 0 && !parsingBusy && previewGroups.length > 0 && totalSelected === 0
-  const canRunManual =
-    files.length > 0 && !parsingBusy && previewGroups.length > 0 && totalSelected > 0
+  const totalSelected = selectedIds.size
+  const filesReady = files.length > 0 && !parsingBusy
+  const canRunAuto = filesReady && totalSelected === 0
+  const canRunManual = filesReady && totalSelected > 0
 
   const clearProcessingTimers = () => {
     for (const id of processingTimersRef.current) {
@@ -147,7 +107,9 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
   const resetInputs = () => {
     clearParsingTimer()
     setFiles([])
-    setPreviewGroups([])
+    setSelectedIds(new Set())
+    setProductSearch('')
+    setShowAll(false)
     setParsingBusy(false)
     setManualResult(null)
     setProcessingProgress(0)
@@ -168,12 +130,11 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     }
   }, [open, scenario])
 
-  const runPreview = () => {
+  const runParsing = () => {
     clearParsingTimer()
     setParsingBusy(true)
     const timer = window.setTimeout(() => {
       parsingTimerRef.current = null
-      setPreviewGroups((prev) => seedsToPreviewGroups(prev))
       setParsingBusy(false)
     }, 380)
     parsingTimerRef.current = timer
@@ -184,9 +145,8 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     const next = sampleAutoFiles[files.length % sampleAutoFiles.length]
     if (!next) return
     if (files.some((f) => f.name === next.name)) return
-    const nextFiles = [...files, next]
-    setFiles(nextFiles)
-    runPreview()
+    setFiles([...files, next])
+    runParsing()
   }
 
   const removeFileAt = (index: number) => {
@@ -196,22 +156,17 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     if (nextFiles.length === 0) {
       clearParsingTimer()
       setParsingBusy(false)
-      setPreviewGroups([])
     } else {
-      runPreview()
+      runParsing()
     }
   }
 
-  const updateGroup = (key: string, patch: (group: PreviewGroupState) => PreviewGroupState) => {
-    setPreviewGroups((prev) => prev.map((g) => (g.key === key ? patch(g) : g)))
-  }
-
-  const toggleGroupProduct = (groupKey: string, productId: string) => {
-    updateGroup(groupKey, (group) => {
-      const next = new Set(group.productIds)
+  const toggleProduct = (productId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
       if (next.has(productId)) next.delete(productId)
       else next.add(productId)
-      return { ...group, productIds: next }
+      return next
     })
   }
 
@@ -222,7 +177,7 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
   }
 
   const runAutoScenario = (override?: DemoScenario) => {
-    if (files.length === 0 || parsingBusy || previewGroups.length === 0) return
+    if (!filesReady) return
     clearProcessingTimers()
     const effective = override ?? scenario
     setStage('processing-auto')
@@ -256,21 +211,15 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     processingTimersRef.current.push(finalTimer)
   }
 
-  const buildManualResultFromGroups = (): ManualResult => {
+  const buildManualResultFromSelection = (): ManualResult => {
     const perProduct: ManualPerProductRow[] = []
-    const seenProducts = new Set<string>()
-    for (const group of previewGroups) {
-      for (const productId of group.productIds) {
-        if (seenProducts.has(productId)) continue
-        seenProducts.add(productId)
-        const product = catalog.find((row) => row.id === productId)
-        if (!product) continue
-        perProduct.push({
-          product,
-          groupKey: group.key,
-          loadedCount: manualLoadedPerProduct[productId] ?? 20,
-        })
-      }
+    for (const productId of selectedIds) {
+      const product = catalog.find((row) => row.id === productId)
+      if (!product) continue
+      perProduct.push({
+        product,
+        loadedCount: manualLoadedPerProduct[productId] ?? 20,
+      })
     }
     const loadedCount = perProduct.reduce((sum, row) => sum + row.loadedCount, 0)
     const skippedCount = perProduct.length > 1 ? 3 : 1
@@ -302,7 +251,7 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     }
     const finalTimer = window.setTimeout(() => {
       setProcessingProgress(100)
-      setManualResult(buildManualResultFromGroups())
+      setManualResult(buildManualResultFromSelection())
       setStage('result-manual')
     }, 1400)
     processingTimersRef.current.push(finalTimer)
@@ -319,7 +268,9 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     clearParsingTimer()
     setStage('picker')
     setFiles([])
-    setPreviewGroups([])
+    setSelectedIds(new Set())
+    setProductSearch('')
+    setShowAll(false)
     setParsingBusy(false)
     setProcessingProgress(0)
     setProcessingLine('')
@@ -370,11 +321,17 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
             <PickerBody
               files={files}
               parsingBusy={parsingBusy}
-              previewGroups={previewGroups}
+              productSearch={productSearch}
+              showAll={showAll}
+              selectedIds={selectedIds}
               onDropzoneClick={addSampleFile}
               onRemoveFile={removeFileAt}
-              onUpdateGroup={updateGroup}
-              onToggleGroupProduct={toggleGroupProduct}
+              onSearchChange={(value) => {
+                setProductSearch(value)
+                setShowAll(false)
+              }}
+              onShowAll={() => setShowAll(true)}
+              onToggleProduct={toggleProduct}
             />
           ) : null}
 
@@ -421,7 +378,6 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
             canRunAuto={canRunAuto}
             canRunManual={canRunManual}
             selectedCount={totalSelected}
-            groupsCount={previewGroups.length}
             onRunAuto={() => runAutoScenario()}
             onRunManual={runManualScenario}
             onBackToPicker={backToPicker}
@@ -439,7 +395,6 @@ function ModalFooter({
   canRunAuto,
   canRunManual,
   selectedCount,
-  groupsCount,
   onRunAuto,
   onRunManual,
   onBackToPicker,
@@ -450,7 +405,6 @@ function ModalFooter({
   canRunAuto: boolean
   canRunManual: boolean
   selectedCount: number
-  groupsCount: number
   onRunAuto: () => void
   onRunManual: () => void
   onBackToPicker: () => void
@@ -477,7 +431,7 @@ function ModalFooter({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!canRunAuto || groupsCount === 0}
+            disabled={!canRunAuto}
             onClick={onRunAuto}
           >
             Распознать автоматически
@@ -520,23 +474,31 @@ function ModalFooter({
 function PickerBody({
   files,
   parsingBusy,
-  previewGroups,
+  productSearch,
+  showAll,
+  selectedIds,
   onDropzoneClick,
   onRemoveFile,
-  onUpdateGroup,
-  onToggleGroupProduct,
+  onSearchChange,
+  onShowAll,
+  onToggleProduct,
 }: {
   files: SampleFile[]
   parsingBusy: boolean
-  previewGroups: PreviewGroupState[]
+  productSearch: string
+  showAll: boolean
+  selectedIds: Set<string>
   onDropzoneClick: () => void
   onRemoveFile: (index: number) => void
-  onUpdateGroup: (
-    key: string,
-    patch: (group: PreviewGroupState) => PreviewGroupState,
-  ) => void
-  onToggleGroupProduct: (groupKey: string, productId: string) => void
+  onSearchChange: (value: string) => void
+  onShowAll: () => void
+  onToggleProduct: (productId: string) => void
 }) {
+  const showList = files.length > 0 && !parsingBusy
+  const filtered = filterProducts(catalog, productSearch)
+  const truncated = filtered.length > PRODUCT_SEARCH_INITIAL_LIMIT && !showAll
+  const visible = truncated ? filtered.slice(0, PRODUCT_SEARCH_INITIAL_LIMIT) : filtered
+
   return (
     <>
       <button
@@ -589,140 +551,72 @@ function PickerBody({
         </div>
       ) : null}
 
-      {previewGroups.map((group) => (
-        <PreviewGroupCard
-          key={group.key}
-          group={group}
-          onUpdateGroup={onUpdateGroup}
-          onToggleProduct={onToggleGroupProduct}
-        />
-      ))}
-    </>
-  )
-}
-
-function PreviewGroupCard({
-  group,
-  onUpdateGroup,
-  onToggleProduct,
-}: {
-  group: PreviewGroupState
-  onUpdateGroup: (
-    key: string,
-    patch: (group: PreviewGroupState) => PreviewGroupState,
-  ) => void
-  onToggleProduct: (groupKey: string, productId: string) => void
-}) {
-  const filtered = filterProducts(catalog, group.productSearch)
-  const truncated = filtered.length > PRODUCT_SEARCH_INITIAL_LIMIT && !group.showAll
-  const visible = truncated ? filtered.slice(0, PRODUCT_SEARCH_INITIAL_LIMIT) : filtered
-  const shortGtin = group.gtin.slice(-4)
-
-  return (
-    <div className="paper paper-padded preview-group">
-      <div className="row-space" style={{ gap: 8 }}>
-        <div>
-          <div className="section-title">
-            GTIN …{shortGtin}
-            <span className="counter">{group.codesCount} КМ</span>
+      {showList ? (
+        <div className="paper paper-padded picker-products">
+          <label className="field-label" htmlFor="picker-product-search">
+            Поиск товаров
+          </label>
+          <div className="field-search">
+            <span className="field-search-icon" aria-hidden>
+              🔍
+            </span>
+            <input
+              id="picker-product-search"
+              className="input"
+              placeholder="Артикул, название или штрихкод"
+              value={productSearch}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
           </div>
-          <div className="text-caption text-secondary mono">Полный GTIN: {group.gtin}</div>
-        </div>
-      </div>
-      <label className="field-label" htmlFor={`title-${group.key}`}>
-        Название пула
-      </label>
-      <input
-        id={`title-${group.key}`}
-        className="input"
-        value={group.title}
-        onChange={(e) =>
-          onUpdateGroup(group.key, (g) => ({ ...g, title: e.target.value }))
-        }
-      />
-      <label className="field-label" htmlFor={`search-${group.key}`}>
-        Поиск товаров
-      </label>
-      <div className="field-search">
-        <span className="field-search-icon" aria-hidden>
-          🔍
-        </span>
-        <input
-          id={`search-${group.key}`}
-          className="input"
-          placeholder="Артикул, название или штрихкод"
-          value={group.productSearch}
-          onChange={(e) =>
-            onUpdateGroup(group.key, (g) => ({
-              ...g,
-              productSearch: e.target.value,
-              showAll: false,
-            }))
-          }
-        />
-      </div>
-      <div className="preview-products">
-        {visible.length === 0 ? (
-          <div className="product-row-empty">
-            По запросу ничего не нашли. Очистите поле или измените запрос.
-          </div>
-        ) : (
-          visible.map((product) => {
-            const checked = group.productIds.has(product.id)
-            return (
-              <div
-                key={product.id}
-                className={`product-row${checked ? ' is-checked' : ''}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => onToggleProduct(group.key, product.id)}
-                onKeyDown={(e) => {
-                  if (e.key === ' ' || e.key === 'Enter') {
-                    e.preventDefault()
-                    onToggleProduct(group.key, product.id)
-                  }
-                }}
-              >
-                <CheckboxIcon checked={checked} />
-                <div className="product-cell-name">
-                  <div className="product-sku">{product.sku}</div>
-                  <div className="product-name" title={product.name}>
-                    {product.name}
-                  </div>
-                </div>
-                <div className="product-cell-mobile-hide">
-                  <div className="product-meta">Артикул: {product.vendorCode}</div>
-                  <div className="product-barcode">ШК: {product.barcode}</div>
-                </div>
-                <div className="product-cell-mobile-hide">
-                  <span className="chip chip-outlined">{product.size ?? '—'}</span>
-                </div>
-                <div className="product-cell-mobile-hide" style={{ textAlign: 'right' }}>
-                  <span className="text-caption text-secondary">{checked ? 'выбран' : ' '}</span>
-                </div>
+          <div className="picker-product-list">
+            {visible.length === 0 ? (
+              <div className="product-row-empty">
+                По запросу ничего не нашли. Очистите поле или измените запрос.
               </div>
-            )
-          })
-        )}
-      </div>
-      {truncated ? (
-        <div className="row" style={{ gap: 8 }}>
-          <span className="text-caption text-secondary">
-            Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {filtered.length}
-            {group.productIds.size > 0 ? ` · выбрано ${group.productIds.size}` : ''}
-          </span>
-          <button
-            type="button"
-            className="btn btn-text btn-sm"
-            onClick={() =>
-              onUpdateGroup(group.key, (g) => ({ ...g, showAll: true }))
-            }
-          >
-            Показать ещё
-          </button>
+            ) : (
+              visible.map((product) => {
+                const checked = selectedIds.has(product.id)
+                return (
+                  <div
+                    key={product.id}
+                    className={`product-row${checked ? ' is-checked' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={checked}
+                    onClick={() => onToggleProduct(product.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault()
+                        onToggleProduct(product.id)
+                      }
+                    }}
+                  >
+                    <CheckboxIcon checked={checked} />
+                    <div className="product-cell-name">
+                      <div className="product-sku">{product.sku}</div>
+                      <div className="product-name" title={product.name}>
+                        {product.name}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+          {truncated ? (
+            <div className="row" style={{ gap: 8 }}>
+              <span className="text-caption text-secondary">
+                Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {filtered.length}
+                {selectedIds.size > 0 ? ` · выбрано ${selectedIds.size}` : ''}
+              </span>
+              <button type="button" className="btn btn-text btn-sm" onClick={onShowAll}>
+                Показать ещё
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   )
 }
 
@@ -918,23 +812,19 @@ function ManualResultBody({ result }: { result: ManualResult }) {
           <thead>
             <tr>
               <th style={{ minWidth: 260 }}>Товар</th>
-              <th style={{ minWidth: 100 }}>Размер</th>
               <th className="col-num" style={{ minWidth: 140 }}>
                 Загружено КИЗ
               </th>
             </tr>
           </thead>
           <tbody>
-            {result.perProduct.map(({ product, loadedCount, groupKey }) => (
-              <tr key={`${groupKey}-${product.id}`}>
+            {result.perProduct.map(({ product, loadedCount }) => (
+              <tr key={product.id}>
                 <td>
                   <div className="product-sku">{product.sku}</div>
                   <div className="product-name" title={product.name}>
                     {product.name}
                   </div>
-                </td>
-                <td>
-                  <span className="chip chip-outlined">{product.size ?? '—'}</span>
                 </td>
                 <td className="col-num">
                   <strong>{loadedCount}</strong>

@@ -63,24 +63,6 @@ const backgroundRows: BackgroundRow[] = [
 export function HonestSignBackground({ onOpenImport }: Props): ReactNode {
   return (
     <div className="app-inner" aria-hidden={false}>
-      <header className="app-bar" role="banner">
-        <div className="app-bar-brand">
-          <span className="app-bar-mark">SF</span>
-          <span>SellerFocus WMS</span>
-        </div>
-        <nav className="app-bar-nav" aria-label="Основная навигация">
-          <span className="app-bar-nav-item">Заказы</span>
-          <span className="app-bar-nav-item">Каталог</span>
-          <span className="app-bar-nav-item is-active">Честный знак</span>
-          <span className="app-bar-nav-item">Ячейки</span>
-          <span className="app-bar-nav-item">Расчёты</span>
-        </nav>
-        <div className="app-bar-user">
-          <span>ФФ · Империя</span>
-          <span className="app-bar-avatar">Д</span>
-        </div>
-      </header>
-
       <section className="page-header">
         <h1 className="page-title">Честный знак</h1>
         <p className="page-subtitle">
