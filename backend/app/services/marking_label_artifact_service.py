@@ -15,6 +15,7 @@ class ExtractedLabelArtifact:
     gtin: str
     label_pdf: bytes
     source_page_index: int
+    code_valid: bool = True
 
 
 def pdf_bytes_to_png(pdf_bytes: bytes, dpi: int = 600) -> bytes:
@@ -372,6 +373,141 @@ def _label_rect_for_cis(
     return _fallback_label_rect(cis_bbox, cis_boxes, pg.rect, _content_rect_for_page(page))
 
 
+def _looks_like_raster_datamatrix(page: object, rect: object) -> bool:
+    """Reject ordinary square logos/photos; retain dense monochrome matrix symbols."""
+    import fitz  # pymupdf
+
+    pg = cast(fitz.Page, page)
+    box = cast(fitz.Rect, rect)
+    try:
+        pix = pg.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), clip=box, colorspace=fitz.csGRAY)
+    except Exception:
+        return False
+    if pix.width < 16 or pix.height < 16:
+        return False
+    pixels = pix.samples
+    total = len(pixels)
+    dark = sum(value < 64 for value in pixels)
+    light = sum(value > 191 for value in pixels)
+    if (dark + light) / total < 0.82 or not 0.12 <= dark / total <= 0.68:
+        return False
+    transitions = 0
+    comparisons = 0
+    width = pix.width
+    height = pix.height
+    for y in range(height):
+        offset = y * width
+        for x in range(1, width):
+            transitions += (pixels[offset + x] < 128) != (pixels[offset + x - 1] < 128)
+            comparisons += 1
+    for y in range(1, height):
+        offset = y * width
+        previous = offset - width
+        for x in range(width):
+            transitions += (pixels[offset + x] < 128) != (pixels[previous + x] < 128)
+            comparisons += 1
+    if comparisons == 0 or transitions / comparisons < 0.025:
+        return False
+
+    dark_points = [
+        (index % width, index // width)
+        for index, value in enumerate(pixels)
+        if value < 128
+    ]
+    if not dark_points:
+        return False
+    x0 = min(point[0] for point in dark_points)
+    x1 = max(point[0] for point in dark_points)
+    y0 = min(point[1] for point in dark_points)
+    y1 = max(point[1] for point in dark_points)
+    if x1 - x0 < 12 or y1 - y0 < 12:
+        return False
+
+    sides = [
+        [pixels[y0 * width + x] < 128 for x in range(x0, x1 + 1)],
+        [pixels[y * width + x1] < 128 for y in range(y0, y1 + 1)],
+        [pixels[y1 * width + x] < 128 for x in range(x0, x1 + 1)],
+        [pixels[y * width + x0] < 128 for y in range(y0, y1 + 1)],
+    ]
+
+    def side_stats(values: list[bool]) -> tuple[float, float]:
+        dark_fraction = sum(values) / len(values)
+        transition_rate = sum(
+            values[index] != values[index - 1] for index in range(1, len(values))
+        ) / max(len(values) - 1, 1)
+        return dark_fraction, transition_rate
+
+    stats = [side_stats(side) for side in sides]
+    solid = [dark_fraction >= 0.85 for dark_fraction, _ in stats]
+    alternating = [
+        0.2 <= dark_fraction <= 0.8 and transition_rate >= 0.025
+        for dark_fraction, transition_rate in stats
+    ]
+    # ECC200 DataMatrix has a solid L-shaped finder border and alternating
+    # modules on the opposite two sides. This rejects checker logos and most
+    # square product artwork while retaining a symbol whose payload is damaged.
+    return any(
+        solid[index]
+        and solid[(index + 1) % 4]
+        and alternating[(index + 2) % 4]
+        and alternating[(index + 3) % 4]
+        for index in range(4)
+    )
+
+
+def _rect_key(rect: object) -> tuple[float, float, float, float]:
+    import fitz  # pymupdf
+
+    box = cast(fitz.Rect, rect)
+    return tuple(round(value, 1) for value in (box.x0, box.y0, box.x1, box.y1))
+
+
+def _vector_datamatrix_candidates(page: object, frames: list[object]) -> list[object]:
+    """Locate dense vector module grids without treating every square artwork as a code."""
+    import fitz  # pymupdf
+
+    pg = cast(fitz.Page, page)
+    modules: list[fitz.Rect] = []
+    for drawing in pg.get_drawings():
+        raw = drawing.get("rect")
+        if raw is None:
+            continue
+        rect = fitz.Rect(raw)
+        if not 0.7 <= rect.width / max(rect.height, 0.01) <= 1.3:
+            continue
+        if 0.5 <= rect.width <= 16 and 0.5 <= rect.height <= 16:
+            modules.append(rect)
+    if len(modules) < 20:
+        return []
+
+    groups: dict[tuple[float, float, float, float] | None, list[fitz.Rect]] = {}
+    for module in modules:
+        containing = [
+            cast(fitz.Rect, frame)
+            for frame in frames
+            if _rect_contains(frame, module)
+            and cast(fitz.Rect, frame).get_area() >= module.get_area() * 25
+        ]
+        frame = min(containing, key=lambda rect: float(rect.get_area())) if containing else None
+        groups.setdefault(_rect_key(frame) if frame is not None else None, []).append(module)
+
+    candidates: list[object] = []
+    for group in groups.values():
+        if len(group) < 20:
+            continue
+        bounds = fitz.Rect(group[0])
+        filled_area = 0.0
+        for module in group:
+            bounds |= module
+            filled_area += float(module.get_area())
+        if not 0.7 <= bounds.width / max(bounds.height, 0.01) <= 1.3:
+            continue
+        density = filled_area / max(float(bounds.get_area()), 0.01)
+        if 0.08 <= density <= 0.8 and _looks_like_raster_datamatrix(page, bounds):
+            candidates.append(bounds)
+    return candidates
+
+
 def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtifact]:
     try:
         import fitz  # pymupdf
@@ -387,12 +523,14 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
     try:
         for page_index in range(doc.page_count):
             page = doc[page_index]
+            frames = _drawing_rects(page)
             decoded = decode_datamatrix_codes_on_pdf_page(page)
             text_boxes = _find_cis_boxes_on_page(page)
             cis_boxes: list[tuple[str, object]] = []
+            decoded_rows: list[tuple[str, str, bool, object]] = []
             for item in decoded:
-                if normalize_cis(item.value) is None or not extract_gtin_from_cis(item.value):
-                    continue
+                normalized = normalize_cis(item.value)
+                gtin = extract_gtin_from_cis(item.value) if normalized is not None else None
                 # Text may locate a label, but never supplies or completes its payload.
                 box = fitz.Rect(item.page_rect)
                 matching_text = [
@@ -405,23 +543,80 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
                         key=lambda rect: abs(rect.x0 - box.x0) + abs(rect.y0 - box.y0),
                     )
                     box |= nearest
+                # Preserve the exact decoded payload. Validation and normalized lookup
+                # are separate concerns; downstream printing relies on these bytes.
                 cis_boxes.append((item.value, box))
-            if not cis_boxes:
-                continue
-            frames = _drawing_rects(page)
-            for cis, cis_bbox in cis_boxes:
-                if cis in seen:
+                decoded_rows.append(
+                    (item.value, gtin or "", normalized is not None and bool(gtin), box)
+                )
+            decoded_frames = {
+                _rect_key(frame)
+                for _, _, _, decoded_box in decoded_rows
+                if (frame := _frame_rect_for_cis(decoded_box, frames)) is not None
+            }
+            # A page may contain several labels while only some DataMatrix symbols
+            # decode. Retain only matrix-like raster/vector regions from a different
+            # label frame. A generic square logo or product photo must not become a
+            # synthetic damaged KIZ.
+            damaged_boxes: list[fitz.Rect] = []
+            for image_info in page.get_image_info():
+                image_box = fitz.Rect(image_info["bbox"])
+                if image_box.width < 20 or image_box.height < 20:
                     continue
-                seen.add(cis)
+                aspect = image_box.width / image_box.height
+                if not 0.75 <= aspect <= 1.33:
+                    continue
+                if not _looks_like_raster_datamatrix(page, image_box):
+                    continue
+                if any(
+                    (image_box & cast(fitz.Rect, decoded_box)).get_area()
+                    >= image_box.get_area() * 0.25
+                    for _, _, _, decoded_box in decoded_rows
+                ):
+                    continue
+                frame = _frame_rect_for_cis(image_box, frames)
+                if frame is not None and _rect_key(frame) in decoded_frames:
+                    continue
+                damaged_boxes.append(image_box)
+            for vector_box in _vector_datamatrix_candidates(page, frames):
+                candidate = cast(fitz.Rect, vector_box)
+                if any(
+                    (candidate & cast(fitz.Rect, decoded_box)).get_area()
+                    >= candidate.get_area() * 0.25
+                    for _, _, _, decoded_box in decoded_rows
+                ):
+                    continue
+                frame = _frame_rect_for_cis(candidate, frames)
+                if frame is not None and _rect_key(frame) in decoded_frames:
+                    continue
+                if any(
+                    (candidate & existing).get_area() >= candidate.get_area() * 0.5
+                    for existing in damaged_boxes
+                ):
+                    continue
+                damaged_boxes.append(candidate)
+            for damaged_box in damaged_boxes:
+                cis_boxes.append(("", damaged_box))
+                decoded_rows.append(("", "", False, damaged_box))
+            if not cis_boxes:
+                # No decoded or geometrically identified matrix exists on this page.
+                # Do not guess from arbitrary artwork: an ordinary square image is
+                # not evidence of a damaged marking code.
+                continue
+            for cis, gtin, code_valid, cis_bbox in decoded_rows:
+                if code_valid:
+                    if cis in seen:
+                        continue
+                    seen.add(cis)
                 label_rect = _label_rect_for_cis(cis_bbox, cis_boxes, frames, page)
                 label_pdf = crop_pdf_page_to_single_label_pdf(doc, page_index, label_rect)
-                gtin = extract_gtin_from_cis(cis) or ""
                 artifacts.append(
                     ExtractedLabelArtifact(
                         cis=cis,
                         gtin=gtin,
                         label_pdf=label_pdf,
                         source_page_index=page_index,
+                        code_valid=code_valid,
                     ),
                 )
     finally:

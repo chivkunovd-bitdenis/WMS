@@ -1,32 +1,12 @@
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
+  Alert, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, TextField, Typography,
 } from '@mui/material'
-import { alpha } from '@mui/material/styles'
 import CloudUploadOutlined from '@mui/icons-material/CloudUploadOutlined'
 import { apiUrl } from '../../api'
-import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
-import { catalogRowToDisplayMeta } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type ImportCatalogRow = {
@@ -54,53 +34,64 @@ async function fetchImportCatalog(
   mode: 'ff' | 'seller',
 ): Promise<ImportCatalogRow[]> {
   const headers = { Authorization: `Bearer ${token}` }
-  const path =
-    mode === 'seller'
-      ? '/products/wb-catalog'
-      : `/products/linked-wb-catalog?seller_id=${encodeURIComponent(sellerId)}`
+  const path = mode === 'seller'
+    ? '/products/wb-catalog'
+    : `/products/linked-wb-catalog?seller_id=${encodeURIComponent(sellerId)}`
   const res = await fetch(apiUrl(path), { headers })
-  if (!res.ok) {
-    throw new Error(await readApiErrorMessage(res))
-  }
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return (await res.json()) as ImportCatalogRow[]
 }
 
-type PreviewGroup = {
-  gtin: string
-  codes_count: number
-  suggested_title: string
-}
-
+type PreviewGroup = { gtin: string; codes_count: number; suggested_title: string }
 type PreviewResponse = {
   groups: PreviewGroup[]
   total_codes: number
   invalid_count: number
   duplicates_in_file: number
 }
-
-type ImportResponse = {
-  accepted_count: number
-  skipped_count: number
-  pools: { pool_id: string; accepted: number; duplicates: number }[]
+type ImportResponse = { accepted_count: number; skipped_count: number }
+type AutoProductGroup = {
+  product_id: string
+  sku: string
+  product_name: string
+  size: string | null
+  barcode: string | null
+  loaded_count: number
+}
+type AutoUnmatchedRow = {
+  key: string
+  marking_code: string
+  article: string | null
+  size: string | null
+  reason: string
+  eligible_for_assignment: boolean
+  has_label_artifact: boolean
+}
+type AutoImportResponse = {
+  import_id: string
+  document_number: string
+  groups: AutoProductGroup[]
+  unmatched: AutoUnmatchedRow[]
+}
+type AssignResponse = {
+  import_id: string
+  document_number: string
+  product: AutoProductGroup
+  assigned_keys: string[]
 }
 
-export type PoolImportSpec = {
-  gtin?: string
-  title: string
-  product_ids: string[]
-}
-
+export type PoolImportSpec = { gtin?: string; title: string; product_ids: string[] }
 export type PoolImportContext = {
   gtin: string
   title: string
   productIds: string[]
 }
-
 type GroupDraft = PreviewGroup & {
   title: string
   productIds: Set<string>
   productSearch: string
 }
+type Stage = 'picker' | 'auto-result' | 'auto-error' | 'assign'
 
 export const PRODUCT_SEARCH_INITIAL_LIMIT = 8
 
@@ -109,9 +100,7 @@ export function filterProductsBySearch(
   search: string,
 ): ImportCatalogRow[] {
   const needle = search.trim().toLowerCase()
-  if (!needle) {
-    return products
-  }
+  if (!needle) return products
   return products.filter((row) => {
     const nm = row.wb_nm_id != null ? String(row.wb_nm_id) : ''
     const barcodes = row.wb_barcodes.join(' ').toLowerCase()
@@ -127,79 +116,54 @@ export function paginateProductSearchResults<T>(
 ): { visible: T[]; total: number; truncated: boolean; limit: number } {
   const total = items.length
   const truncated = total > limit && !showAll
-  return {
-    visible: truncated ? items.slice(0, limit) : items,
-    total,
-    truncated,
-    limit,
-  }
+  return { visible: truncated ? items.slice(0, limit) : items, total, truncated, limit }
 }
 
 export function removeImportFileAt(files: File[], index: number): File[] {
-  if (index < 0 || index >= files.length) {
-    return files
-  }
+  if (index < 0 || index >= files.length) return files
   return files.filter((_, i) => i !== index)
 }
-
 export function isImportGroupTitleMissing(title: string): boolean {
   return title.trim().length === 0
 }
-
 export function gtinsWithMissingTitle(groups: { gtin: string; title: string }[]): string[] {
   return groups.filter((g) => isImportGroupTitleMissing(g.title)).map((g) => g.gtin)
 }
-
 export function findFirstGtinWithMissingTitle(
   groups: { gtin: string; title: string }[],
 ): string | null {
   return groups.find((g) => isImportGroupTitleMissing(g.title))?.gtin ?? null
 }
-
 export function gtinMatches(a: string, b: string): boolean {
   const cleanA = a.trim()
   const cleanB = b.trim()
-  if (!cleanA || !cleanB) {
-    return false
-  }
-  if (cleanA === cleanB) {
-    return true
-  }
+  if (!cleanA || !cleanB) return false
+  if (cleanA === cleanB) return true
   const variants = (gtin: string): string[] => {
     const out = [gtin]
-    if (gtin.length === 14 && gtin.startsWith('0')) {
-      out.push(gtin.slice(1))
-    } else if (gtin.length === 13) {
-      out.push(`0${gtin}`)
-    }
+    if (gtin.length === 14 && gtin.startsWith('0')) out.push(gtin.slice(1))
+    else if (gtin.length === 13) out.push(`0${gtin}`)
     return out
   }
   const setA = new Set(variants(cleanA))
   return variants(cleanB).some((variant) => setA.has(variant))
 }
-
 export function applyPoolContextToGroup(
   group: GroupDraft,
   poolContext: PoolImportContext | null | undefined,
 ): GroupDraft {
-  if (!poolContext || !gtinMatches(group.gtin, poolContext.gtin)) {
-    return group
-  }
-  const productIds =
-    poolContext.productIds.length > 0
-      ? new Set([...group.productIds, ...poolContext.productIds])
-      : group.productIds
+  if (!poolContext || !gtinMatches(group.gtin, poolContext.gtin)) return group
   return {
     ...group,
     title: poolContext.title.trim() || group.title,
-    productIds,
+    productIds: poolContext.productIds.length > 0
+      ? new Set([...group.productIds, ...poolContext.productIds])
+      : group.productIds,
   }
 }
-
 function findExistingGroupByGtin(prev: GroupDraft[], gtin: string): GroupDraft | undefined {
   return prev.find((g) => gtinMatches(g.gtin, gtin))
 }
-
 export function mergePreviewGroups(
   prev: GroupDraft[],
   incoming: PreviewGroup[],
@@ -207,21 +171,9 @@ export function mergePreviewGroups(
 ): GroupDraft[] {
   return incoming.map((g) => {
     const existing = findExistingGroupByGtin(prev, g.gtin)
-    if (existing) {
-      return {
-        ...g,
-        title: existing.title,
-        productIds: existing.productIds,
-        productSearch: existing.productSearch,
-      }
-    }
+    if (existing) return { ...g, title: existing.title, productIds: existing.productIds, productSearch: existing.productSearch }
     return applyPoolContextToGroup(
-      {
-        ...g,
-        title: g.suggested_title,
-        productIds: new Set<string>(),
-        productSearch: '',
-      },
+      { ...g, title: g.suggested_title, productIds: new Set<string>(), productSearch: '' },
       poolContext,
     )
   })
@@ -239,6 +191,11 @@ type Props = {
   onError?: (message: string | null) => void
 }
 
+function newRequestId(): string { return crypto.randomUUID() }
+function appendFiles(form: FormData, files: File[]): void {
+  for (const file of files) form.append('files', file)
+}
+
 export function MarkingImportDialog(props: Props) {
   return (
     <ErrorBoundary component="MarkingImportDialog" resetKey={String(props.open)}>
@@ -248,523 +205,460 @@ export function MarkingImportDialog(props: Props) {
 }
 
 function MarkingImportDialogContent({
-  open,
-  token,
-  sellerId,
-  catalogMode = 'ff',
-  testIdPrefix,
-  poolContext = null,
-  onClose,
-  onImported,
-  onError,
+  open, token, sellerId, catalogMode = 'ff', testIdPrefix, poolContext = null,
+  onClose, onImported, onError,
 }: Props) {
+  const [stage, setStage] = useState<Stage>('picker')
   const [files, setFiles] = useState<File[]>([])
   const [groups, setGroups] = useState<GroupDraft[]>([])
-  const [previewMeta, setPreviewMeta] = useState<{
-    invalid_count: number
-    duplicates_in_file: number
-  } | null>(null)
   const [catalog, setCatalog] = useState<ImportCatalogRow[]>([])
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [productSearch, setProductSearch] = useState('')
+  const [showAllProducts, setShowAllProducts] = useState(false)
+  const [previewComplete, setPreviewComplete] = useState(false)
   const [parseBusy, setParseBusy] = useState(false)
-  const [uploadBusy, setUploadBusy] = useState(false)
+  const [actionBusy, setActionBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [titleErrorGtins, setTitleErrorGtins] = useState<Set<string>>(new Set())
-  const [expandedProductLists, setExpandedProductLists] = useState<Set<string>>(new Set())
-  const scrollToTitleGtinRef = useRef<string | null>(null)
+  const [autoResult, setAutoResult] = useState<AutoImportResponse | null>(null)
+  const [selectedUnmatchedKeys, setSelectedUnmatchedKeys] = useState<Set<string>>(new Set())
+  const [assignmentProductId, setAssignmentProductId] = useState<string | null>(null)
+  const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null)
   const previewAbortRef = useRef<AbortController | null>(null)
+  const autoRequestIdRef = useRef(newRequestId())
 
   const sellerCatalogProducts = useMemo(
     () => catalog.filter((row) => row.seller_id == null || row.seller_id === sellerId),
     [catalog, sellerId],
   )
-
   const sellerProducts = useMemo(
     () => sellerCatalogProducts.filter((row) => row.requires_honest_sign),
     [sellerCatalogProducts],
   )
 
-  const abortPreview = useCallback((clearBusy: boolean) => {
+  const reset = useCallback(() => {
     previewAbortRef.current?.abort()
     previewAbortRef.current = null
-    if (clearBusy) {
-      setParseBusy(false)
-    }
-  }, [])
-
-  const reset = useCallback(() => {
-    abortPreview(true)
+    setStage('picker')
     setFiles([])
     setGroups([])
-    setPreviewMeta(null)
+    setSelectedProductIds(new Set(poolContext?.productIds ?? []))
+    setProductSearch('')
+    setShowAllProducts(false)
+    setPreviewComplete(false)
+    setParseBusy(false)
+    setActionBusy(false)
     setError(null)
-    setTitleErrorGtins(new Set())
-    setExpandedProductLists(new Set())
-    scrollToTitleGtinRef.current = null
-  }, [abortPreview])
+    setAutoResult(null)
+    setSelectedUnmatchedKeys(new Set())
+    setAssignmentProductId(null)
+    setAssignmentRequestId(null)
+    autoRequestIdRef.current = newRequestId()
+  }, [poolContext])
 
   useEffect(() => {
-    return () => {
-      abortPreview(false)
-    }
-  }, [abortPreview])
-
-  useEffect(() => {
-    if (!open) {
-      reset()
-      return
-    }
+    if (!open) { reset(); return }
     reset()
     void (async () => {
-      try {
-        const rows = await fetchImportCatalog(token, sellerId, catalogMode)
-        setCatalog(rows)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить каталог товаров.')
-      }
+      try { setCatalog(await fetchImportCatalog(token, sellerId, catalogMode)) }
+      catch (err) { setError(err instanceof Error ? err.message : 'Не удалось загрузить каталог товаров.') }
     })()
   }, [catalogMode, open, reset, sellerId, token])
+  useEffect(() => () => previewAbortRef.current?.abort(), [])
 
   const runPreview = async (picked: File[]) => {
-    if (picked.length === 0) {
-      return
-    }
     previewAbortRef.current?.abort()
-    const abortController = new AbortController()
-    previewAbortRef.current = abortController
+    if (picked.length === 0) { setGroups([]); setPreviewComplete(false); return }
+    const controller = new AbortController()
+    previewAbortRef.current = controller
     setParseBusy(true)
+    setPreviewComplete(false)
     setError(null)
+    setAutoResult(null)
+    setStage('picker')
+    autoRequestIdRef.current = newRequestId()
     try {
       const form = new FormData()
       form.append('seller_id', sellerId)
-      for (const file of picked) {
-        form.append('files', file)
-      }
+      appendFiles(form, picked)
       const res = await fetch(apiUrl('/operations/marking-codes/import/preview'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-        signal: abortController.signal,
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+        signal: controller.signal,
       })
-      if (abortController.signal.aborted) {
-        return
-      }
-      if (!res.ok) {
-        const message = await readApiErrorMessage(res)
-        setError(message)
-        onError?.(message)
-        return
-      }
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const data = (await res.json()) as PreviewResponse
-      if (abortController.signal.aborted) {
-        return
+      if (!controller.signal.aborted) {
+        setGroups((prev) => mergePreviewGroups(prev, data.groups, poolContext))
+        setPreviewComplete(true)
+        onError?.(null)
       }
-      setPreviewMeta({
-        invalid_count: data.invalid_count,
-        duplicates_in_file: data.duplicates_in_file,
-      })
-      setGroups((prev) => mergePreviewGroups(prev, data.groups, poolContext))
-      onError?.(null)
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return
-      }
+      if (err instanceof DOMException && err.name === 'AbortError') return
       const message = err instanceof Error ? err.message : 'Не удалось разобрать файл.'
-      setError(message)
-      onError?.(message)
+      setPreviewComplete(false); setError(message); onError?.(message)
     } finally {
-      if (previewAbortRef.current === abortController) {
-        previewAbortRef.current = null
-        setParseBusy(false)
+      if (previewAbortRef.current === controller) {
+        previewAbortRef.current = null; setParseBusy(false)
       }
     }
   }
 
   const onPickFiles = (picked: FileList | null) => {
-    if (!picked?.length) {
-      return
-    }
+    if (!picked?.length) return
     const next = [...files, ...Array.from(picked)]
-    setFiles(next)
-    void runPreview(next)
+    setFiles(next); void runPreview(next)
   }
-
-  const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onPickFiles(event.target.files)
-    event.target.value = ''
-  }
-
-  const clearPreview = () => {
-    setGroups([])
-    setPreviewMeta(null)
-    setError(null)
-    setTitleErrorGtins(new Set())
-    setExpandedProductLists(new Set())
-    scrollToTitleGtinRef.current = null
-  }
-
-  const removeFileAt = (index: number) => {
-    if (busy) {
-      return
-    }
+  const removeFile = (index: number) => {
+    if (parseBusy || actionBusy) return
     const next = removeImportFileAt(files, index)
-    setFiles(next)
-    if (next.length === 0) {
-      clearPreview()
-      return
-    }
-    void runPreview(next)
+    setFiles(next); void runPreview(next)
   }
-
-  const updateGroupTitle = (gtin: string, title: string) => {
-    setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, title } : g)))
-    if (!isImportGroupTitleMissing(title)) {
-      setTitleErrorGtins((prev) => {
-        if (!prev.has(gtin)) {
-          return prev
-        }
-        const next = new Set(prev)
-        next.delete(gtin)
-        return next
-      })
-    }
-  }
-
-  const updateGroupProductSearch = (gtin: string, productSearch: string) => {
-    setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, productSearch } : g)))
-    setExpandedProductLists((prev) => {
-      if (!prev.has(gtin)) {
-        return prev
-      }
+  const toggleProduct = (productId: string) => {
+    setSelectedProductIds((prev) => {
       const next = new Set(prev)
-      next.delete(gtin)
+      if (next.has(productId)) next.delete(productId); else next.add(productId)
       return next
     })
   }
 
-  const expandProductList = (gtin: string) => {
-    setExpandedProductLists((prev) => new Set(prev).add(gtin))
-  }
-
-  const toggleGroupProduct = (gtin: string, productId: string) => {
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.gtin !== gtin) {
-          return g
-        }
-        const next = new Set(g.productIds)
-        if (next.has(productId)) {
-          next.delete(productId)
-        } else {
-          next.add(productId)
-        }
-        return { ...g, productIds: next }
-      }),
-    )
-  }
-
-  const summary = useMemo(() => {
-    const poolCount = groups.length
-    const codeCount = groups.reduce((sum, g) => sum + g.codes_count, 0)
-    const productCount = new Set(groups.flatMap((g) => [...g.productIds])).size
-    return { poolCount, codeCount, productCount }
-  }, [groups])
-
-  const upload = async () => {
-    if (files.length === 0 || groups.length === 0) {
-      return
-    }
-    const missingTitleGtins = gtinsWithMissingTitle(groups)
-    if (missingTitleGtins.length > 0) {
-      setTitleErrorGtins(new Set(missingTitleGtins))
-      scrollToTitleGtinRef.current = findFirstGtinWithMissingTitle(groups)
-      setError('Укажите название пула для каждого GTIN.')
-      return
-    }
-    setUploadBusy(true)
-    setError(null)
-    setTitleErrorGtins(new Set())
-    scrollToTitleGtinRef.current = null
+  const manualUpload = async () => {
+    if (files.length === 0 || groups.length === 0 || selectedProductIds.size === 0) return
+    setActionBusy(true); setError(null)
     try {
-      const poolsJson: PoolImportSpec[] = groups.map((g) => ({
-        gtin: g.gtin,
-        title: g.title.trim(),
-        product_ids: [...g.productIds],
+      const poolsJson: PoolImportSpec[] = groups.map((group) => ({
+        gtin: group.gtin,
+        title: poolContext && gtinMatches(group.gtin, poolContext.gtin)
+          ? poolContext.title : group.suggested_title,
+        product_ids: [...selectedProductIds],
       }))
       const form = new FormData()
       form.append('seller_id', sellerId)
       form.append('pools_json', JSON.stringify(poolsJson))
-      for (const file of files) {
-        form.append('files', file)
-      }
+      appendFiles(form, files)
       const res = await fetch(apiUrl('/operations/marking-codes/import'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
       })
-      if (!res.ok) {
-        const message = await readApiErrorMessage(res)
-        setError(message)
-        onError?.(message)
-        return
-      }
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const data = (await res.json()) as ImportResponse
-      const dup = data.skipped_count
-      const msg =
-        dup > 0
-          ? `Загружено ${data.accepted_count}, пропущено ${dup} (дубликаты/ошибки)`
-          : `Загружено ${data.accepted_count}`
-      onError?.(null)
-      onImported(msg)
-      onClose()
-    } finally {
-      setUploadBusy(false)
-    }
+      const message = data.skipped_count > 0
+        ? `Загружено ${data.accepted_count}, пропущено ${data.skipped_count} (дубликаты/ошибки)`
+        : `Загружено ${data.accepted_count}`
+      onError?.(null); onImported(message); onClose()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось загрузить коды.'
+      setError(message); onError?.(message)
+    } finally { setActionBusy(false) }
   }
 
-  const busy = parseBusy || uploadBusy
+  const autoUpload = async () => {
+    if (files.length === 0 || groups.length === 0 || selectedProductIds.size > 0) return
+    setActionBusy(true); setError(null)
+    try {
+      const form = new FormData()
+      form.append('seller_id', sellerId)
+      form.append('request_id', autoRequestIdRef.current)
+      appendFiles(form, files)
+      const res = await fetch(apiUrl('/operations/marking-codes/import/auto'), {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const data = (await res.json()) as AutoImportResponse
+      setAutoResult(data); setSelectedUnmatchedKeys(new Set()); setStage('auto-result')
+      onError?.(null)
+      onImported(`Загружено ${data.groups.reduce((sum, row) => sum + row.loaded_count, 0)} КИЗ`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Распознавание не завершено.'
+      setError(message); setStage('auto-error'); onError?.(message)
+    } finally { setActionBusy(false) }
+  }
 
-  useEffect(() => {
-    const gtin = scrollToTitleGtinRef.current
-    if (!gtin) {
-      return
-    }
-    document
-      .querySelector(`[data-testid="${testIdPrefix}-import-group-${gtin}-title-missing"]`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    scrollToTitleGtinRef.current = null
-  }, [titleErrorGtins, testIdPrefix])
+  const toggleUnmatched = (row: AutoUnmatchedRow) => {
+    if (!row.eligible_for_assignment) return
+    setSelectedUnmatchedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(row.key)) next.delete(row.key); else next.add(row.key)
+      return next
+    })
+  }
+  const toggleAllUnmatched = () => {
+    const eligible = (autoResult?.unmatched ?? [])
+      .filter((row) => row.eligible_for_assignment).map((row) => row.key)
+    const allSelected = eligible.length > 0 && eligible.every((key) => selectedUnmatchedKeys.has(key))
+    setSelectedUnmatchedKeys(allSelected ? new Set() : new Set(eligible))
+  }
+  const beginAssignment = () => {
+    if (selectedUnmatchedKeys.size === 0) return
+    setAssignmentProductId(null); setProductSearch(''); setShowAllProducts(false)
+    setAssignmentRequestId(newRequestId()); setError(null); setStage('assign')
+  }
+
+  const confirmAssignment = async () => {
+    if (!assignmentProductId || !assignmentRequestId || selectedUnmatchedKeys.size === 0) return
+    setActionBusy(true); setError(null)
+    try {
+      const form = new FormData()
+      form.append('seller_id', sellerId)
+      form.append('request_id', assignmentRequestId)
+      form.append('product_id', assignmentProductId)
+      form.append('row_keys_json', JSON.stringify([...selectedUnmatchedKeys]))
+      appendFiles(form, files)
+      const res = await fetch(apiUrl('/operations/marking-codes/import/assign'), {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const data = (await res.json()) as AssignResponse
+      const assigned = new Set(data.assigned_keys)
+      setAutoResult((prev) => {
+        if (!prev) return prev
+        const exists = prev.groups.some((row) => row.product_id === data.product.product_id)
+        const nextGroups = exists
+          ? prev.groups.map((row) => row.product_id === data.product.product_id
+              ? { ...row, loaded_count: row.loaded_count + data.product.loaded_count } : row)
+          : [...prev.groups, data.product]
+        return { ...prev, groups: nextGroups, unmatched: prev.unmatched.filter((row) => !assigned.has(row.key)) }
+      })
+      setSelectedUnmatchedKeys(new Set()); setAssignmentProductId(null)
+      setAssignmentRequestId(null); setStage('auto-result')
+      onImported(`Добавлено к товару: ${data.assigned_keys.length} КИЗ`); onError?.(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось добавить КИЗ к товару.'
+      setError(message); onError?.(message)
+    } finally { setActionBusy(false) }
+  }
+
+  const downloadUnmatched = async () => {
+    if (
+      !autoResult
+      || autoResult.unmatched.length === 0
+      || autoResult.unmatched.some((row) => !row.has_label_artifact)
+    ) return
+    setActionBusy(true); setError(null)
+    try {
+      const form = new FormData()
+      form.append('seller_id', sellerId)
+      form.append('row_keys_json', JSON.stringify(autoResult.unmatched.map((row) => row.key)))
+      appendFiles(form, files)
+      const res = await fetch(apiUrl('/operations/marking-codes/import/unmatched-pdf'), {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const url = URL.createObjectURL(await res.blob())
+      const anchor = document.createElement('a')
+      anchor.href = url; anchor.download = 'WMS-476-nepodgruzhennye-kizy.pdf'
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось скачать PDF.'
+      setError(message); onError?.(message)
+    } finally { setActionBusy(false) }
+  }
+
+  const busy = parseBusy || actionBusy
+  const pickerReady = files.length > 0 && previewComplete && !parseBusy
 
   return (
-    <Dialog
-      open={open}
-      onClose={() => !busy && onClose()}
-      fullWidth
-      maxWidth="md"
-      data-testid={`${testIdPrefix}-import-dialog`}
-    >
-      <DialogTitle>{poolContext ? 'Догрузить КМ' : 'Загрузить КМ'}</DialogTitle>
+    <Dialog open={open} onClose={() => !busy && onClose()} fullWidth maxWidth="md"
+      data-testid={`${testIdPrefix}-import-dialog`}>
+      <DialogTitle>Загрузка КИЗ</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          {poolContext ? (
-            <Alert severity="info" data-testid={`${testIdPrefix}-import-pool-context`}>
-              Догрузка в пул «{poolContext.title}» (GTIN {poolContext.gtin})
-              {poolContext.productIds.length > 0
-                ? ` · привязано товаров: ${poolContext.productIds.length}`
-                : ''}
-            </Alert>
-          ) : null}
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 3,
-              textAlign: 'center',
-              borderStyle: 'dashed',
-              cursor: busy ? 'default' : 'pointer',
-            }}
-            onClick={() => {
-              if (busy) {
-                return
-              }
-              document.getElementById(`${testIdPrefix}-import-file-input`)?.click()
-            }}
-            data-testid={`${testIdPrefix}-import-dropzone`}
-          >
-            <CloudUploadOutlined sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
-            <Typography variant="body2">
-              Перетащите или выберите CSV, TXT или PDF (можно несколько файлов)
-            </Typography>
-            {files.length > 0 ? (
-              <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', justifyContent: 'center', mt: 1 }}>
-                {files.map((f, index) => (
-                  <Chip
-                    key={`${f.name}-${f.size}-${index}`}
-                    size="small"
-                    label={f.name}
-                    onDelete={(event) => {
-                      event.stopPropagation()
-                      removeFileAt(index)
-                    }}
-                    data-testid={`${testIdPrefix}-import-file-chip-${index}`}
-                  />
-                ))}
-              </Stack>
-            ) : null}
-            <input
-              id={`${testIdPrefix}-import-file-input`}
-              type="file"
-              accept=".csv,.txt,.tsv,.pdf"
-              multiple
-              hidden
-              onChange={onFileInputChange}
-              data-testid={`${testIdPrefix}-import-file-input`}
-            />
-          </Paper>
-
-          {parseBusy ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid={`${testIdPrefix}-import-parsing`}>
-              <CircularProgress size={20} />
-              <Typography variant="body2">Разбор файла…</Typography>
-            </Stack>
-          ) : null}
-
-          {error ? (
-            <Alert severity="error" data-testid={`${testIdPrefix}-import-error`}>
-              {error}
-            </Alert>
-          ) : null}
-
-          {previewMeta && groups.length > 0 ? (
-            <Typography variant="body2" color="text.secondary" data-testid={`${testIdPrefix}-import-preview-meta`}>
-              Дубликаты в файле: {previewMeta.duplicates_in_file}
-            </Typography>
-          ) : null}
-
-          {groups.map((g) => {
-            const filteredProducts = filterProductsBySearch(sellerProducts, g.productSearch)
-            const showAllProducts = expandedProductLists.has(g.gtin)
-            const { visible: visibleProducts, total: productTotal, truncated } =
-              paginateProductSearchResults(filteredProducts, showAllProducts)
-            const titleMissing = titleErrorGtins.has(g.gtin)
-
-            return (
-              <Paper
-                key={g.gtin}
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  ...(titleMissing
-                    ? {
-                        borderColor: 'error.main',
-                        backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
-                      }
-                    : {}),
-                }}
-                data-testid={
-                  titleMissing
-                    ? `${testIdPrefix}-import-group-${g.gtin}-title-missing`
-                    : `${testIdPrefix}-import-group-${g.gtin}`
-                }
-              >
-                <Stack spacing={1.5}>
-                  <Typography variant="subtitle2">
-                    GTIN …{g.gtin.slice(-4)} — {g.codes_count} КМ
-                  </Typography>
-                  <TextField
-                    label="Название пула"
-                    value={g.title}
-                    onChange={(e) => updateGroupTitle(g.gtin, e.target.value)}
-                    error={titleMissing}
-                    helperText={titleMissing ? 'Укажите название пула' : undefined}
-                    data-testid={`${testIdPrefix}-import-title-${g.gtin}`}
-                  />
-                  <TextField
-                    label="Поиск товаров"
-                    value={g.productSearch}
-                    onChange={(e) => updateGroupProductSearch(g.gtin, e.target.value)}
-                    data-testid={`${testIdPrefix}-import-product-search-${g.gtin}`}
-                  />
-                  <TableContainer sx={{ overflowX: 'auto' }}>
-                    <Table size="small" data-testid={`${testIdPrefix}-import-products-table-${g.gtin}`}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell padding="checkbox" sx={{ width: 48 }} />
-                          <FfProductTableHeadCells showPrint={false} nameLabel="Наименование" />
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {visibleProducts.map((row) => (
-                          <TableRow
-                            key={`${g.gtin}-${row.id}`}
-                            data-testid={`${testIdPrefix}-import-product-row-${row.id}`}
-                          >
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={g.productIds.has(row.id)}
-                                onChange={() => toggleGroupProduct(g.gtin, row.id)}
-                                slotProps={{
-                                  input: {
-                                    'aria-label': `Привязать ${row.sku_code} к GTIN ${g.gtin}`,
-                                  },
-                                }}
-                              />
-                            </TableCell>
-                            <FfProductLineCells
-                              meta={catalogRowToDisplayMeta(row)}
-                              showPrint={false}
-                              lineTestIdPrefix={`${testIdPrefix}-import-product-${row.id}`}
-                            />
-                          </TableRow>
-                        ))}
-                        {visibleProducts.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={3}>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                data-testid={`${testIdPrefix}-import-products-empty-${g.gtin}`}
-                              >
-                                {sellerProducts.length === 0 && sellerCatalogProducts.length > 0
-                                  ? 'У этого селлера нет товаров с признаком «Нужен Честный знак при упаковке». Включите его в карточке товара: каталог товаров → товар → упаковка и маркировка.'
-                                  : sellerProducts.length === 0
-                                    ? 'У этого селлера нет товаров для привязки. Сначала добавьте товар в каталог.'
-                                    : 'По поиску товары не найдены. Измените запрос или очистите поиск.'}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  {truncated ? (
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        data-testid={`${testIdPrefix}-import-products-truncated-${g.gtin}`}
-                      >
-                        Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {productTotal}
-                        {g.productIds.size > 0 ? ` · выбрано ${g.productIds.size}` : ''}
-                      </Typography>
-                      <Button
-                        size="small"
-                        onClick={() => expandProductList(g.gtin)}
-                        data-testid={`${testIdPrefix}-import-products-show-more-${g.gtin}`}
-                      >
-                        Показать ещё
-                      </Button>
-                    </Stack>
-                  ) : null}
-                  {g.productIds.size === 0 ? (
-                    <Chip size="small" color="warning" label="Товары не выбраны — можно привязать позже" />
-                  ) : null}
-                </Stack>
+          {stage === 'picker' ? (
+            <>
+              <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderStyle: 'dashed', cursor: busy ? 'default' : 'pointer' }}
+                onClick={() => !busy && document.getElementById(`${testIdPrefix}-import-file-input`)?.click()}
+                data-testid={`${testIdPrefix}-import-dropzone`}>
+                <CloudUploadOutlined sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
+                <Typography variant="body2">Перетащите PDF или CSV из «Честного знака»</Typography>
+                {files.length > 0 ? (
+                  <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', justifyContent: 'center', mt: 1 }}>
+                    {files.map((file, index) => (
+                      <Chip key={`${file.name}-${file.size}-${index}`} size="small" label={file.name}
+                        onDelete={(event) => { event.stopPropagation(); removeFile(index) }} />
+                    ))}
+                  </Stack>
+                ) : null}
+                <input id={`${testIdPrefix}-import-file-input`} type="file" accept=".csv,.txt,.tsv,.pdf"
+                  multiple hidden data-testid={`${testIdPrefix}-import-file-input`}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    onPickFiles(event.target.files); event.target.value = ''
+                  }} />
               </Paper>
-            )
-          })}
-
-          {groups.length > 0 ? (
-            <Box data-testid={`${testIdPrefix}-import-summary`}>
-              <Typography variant="body2">
-                Будет загружено: {summary.codeCount} КМ в {summary.poolCount} пул(ов), привязка к{' '}
-                {summary.productCount} товарам
-              </Typography>
-            </Box>
+              {parseBusy ? <BusyLine text="Разбор файла…" testId={`${testIdPrefix}-import-parsing`} /> : null}
+              {error ? <Alert severity="error">{error}</Alert> : null}
+              {pickerReady && groups.length > 0 ? (
+                <ProductPicker products={sellerProducts} allCatalogProducts={sellerCatalogProducts}
+                  search={productSearch} showAll={showAllProducts} selectedIds={selectedProductIds}
+                  onSearch={(value) => { setProductSearch(value); setShowAllProducts(false) }}
+                  onShowAll={() => setShowAllProducts(true)} onToggle={toggleProduct}
+                  testIdPrefix={`${testIdPrefix}-import`} />
+              ) : null}
+              {actionBusy ? <BusyLine text={selectedProductIds.size > 0
+                ? 'Загружаем коды на выбранные товары…' : 'Распознаём коды…'} /> : null}
+            </>
+          ) : null}
+          {stage === 'auto-result' && autoResult ? (
+            <AutoResult result={autoResult} selectedKeys={selectedUnmatchedKeys} busy={actionBusy}
+              onToggle={toggleUnmatched} onToggleAll={toggleAllUnmatched} onAssign={beginAssignment}
+              onDownload={() => void downloadUnmatched()} error={error} testIdPrefix={testIdPrefix} />
+          ) : null}
+          {stage === 'assign' ? (
+            <>
+              <Alert severity="info">Выбрано КИЗ: <strong>{selectedUnmatchedKeys.size}</strong>. Выберите один товар для добавления.</Alert>
+              {error ? <Alert severity="error">{error}</Alert> : null}
+              <ProductPicker products={sellerProducts} allCatalogProducts={sellerCatalogProducts}
+                search={productSearch} showAll={showAllProducts}
+                selectedIds={new Set(assignmentProductId ? [assignmentProductId] : [])}
+                onSearch={(value) => { setProductSearch(value); setShowAllProducts(false) }}
+                onShowAll={() => setShowAllProducts(true)}
+                onToggle={(productId) => setAssignmentProductId((current) => current === productId ? null : productId)}
+                testIdPrefix={`${testIdPrefix}-assignment`} />
+              {actionBusy ? <BusyLine text="Добавляем КИЗ к товару…" /> : null}
+            </>
+          ) : null}
+          {stage === 'auto-error' ? (
+            <>
+              <Alert severity="error"><strong>Распознавание не завершено.</strong> {error ?? 'Попробуйте повторить или выберите другой файл.'}</Alert>
+              <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1.5}>
+                <Typography variant="caption" color="text.secondary">Файлы, с которыми не получилось:</Typography>
+                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                  {files.map((file, index) => <Chip key={`${file.name}-${index}`} size="small" label={file.name} />)}
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button variant="contained" onClick={() => void autoUpload()} disabled={actionBusy}>Попробовать снова</Button>
+                  <Button variant="outlined" onClick={reset} disabled={actionBusy}>Выбрать другой файл</Button>
+                </Stack>
+              </Stack></Paper>
+            </>
           ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>
-          Отмена
-        </Button>
-        <Button
-          variant="contained"
-          disabled={busy || groups.length === 0}
-          onClick={() => void upload()}
-          data-testid={`${testIdPrefix}-import-submit`}
-        >
-          Загрузить
-        </Button>
+        {stage === 'picker' ? <>
+          <Button onClick={onClose} disabled={busy}>Отмена</Button>
+          <Button variant="contained" disabled={!pickerReady || busy}
+            onClick={() => void (selectedProductIds.size > 0 ? manualUpload() : autoUpload())}
+            data-testid={`${testIdPrefix}-import-submit`}>
+            {selectedProductIds.size > 0 ? 'Загрузить' : 'Распознать автоматически'}
+          </Button>
+        </> : null}
+        {stage === 'auto-result' ? <>
+          <Button variant="outlined" onClick={reset} disabled={busy}>Загрузить ещё</Button>
+          <Button variant="contained" onClick={onClose} disabled={busy}>Готово</Button>
+        </> : null}
+        {stage === 'assign' ? <>
+          <Button variant="outlined" disabled={busy} onClick={() => {
+            setAssignmentProductId(null); setAssignmentRequestId(null); setError(null); setStage('auto-result')
+          }}>Назад</Button>
+          <Button variant="contained" disabled={!assignmentProductId || busy}
+            onClick={() => void confirmAssignment()}>Добавить к выбранному товару</Button>
+        </> : null}
+        {stage === 'auto-error' ? <Button onClick={onClose} disabled={busy}>Закрыть</Button> : null}
       </DialogActions>
     </Dialog>
   )
+}
+
+function BusyLine({ text, testId }: { text: string; testId?: string }) {
+  return <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid={testId}>
+    <CircularProgress size={20} /><Typography variant="body2">{text}</Typography>
+  </Stack>
+}
+
+function ProductPicker({ products, allCatalogProducts, search, showAll, selectedIds,
+  onSearch, onShowAll, onToggle, testIdPrefix }: {
+  products: ImportCatalogRow[]
+  allCatalogProducts: ImportCatalogRow[]
+  search: string
+  showAll: boolean
+  selectedIds: Set<string>
+  onSearch: (value: string) => void
+  onShowAll: () => void
+  onToggle: (productId: string) => void
+  testIdPrefix: string
+}) {
+  const filtered = filterProductsBySearch(products, search)
+  const { visible, total, truncated } = paginateProductSearchResults(filtered, showAll)
+  return <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1.5}>
+    <TextField label="Поиск товаров" placeholder="Артикул, название или штрихкод" value={search}
+      onChange={(event) => onSearch(event.target.value)} data-testid={`${testIdPrefix}-product-search`} />
+    <TableContainer sx={{ maxHeight: 360 }}><Table size="small" stickyHeader><TableBody>
+      {visible.map((row) => <TableRow key={row.id} hover selected={selectedIds.has(row.id)}
+        onClick={() => onToggle(row.id)} sx={{ cursor: 'pointer' }}
+        data-testid={`${testIdPrefix}-product-row-${row.id}`}>
+        <TableCell padding="checkbox"><Checkbox checked={selectedIds.has(row.id)}
+          slotProps={{ input: { 'aria-label': `${row.sku_code} ${row.name}` } }} /></TableCell>
+        <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.sku_code}</Typography>
+          <Typography variant="caption" color="text.secondary">{row.name}</Typography></TableCell>
+      </TableRow>)}
+      {visible.length === 0 ? <TableRow><TableCell colSpan={2}><Typography variant="body2" color="text.secondary">
+        {products.length === 0 && allCatalogProducts.length > 0
+          ? 'У этого селлера нет товаров с признаком «Нужен Честный знак при упаковке».'
+          : products.length === 0 ? 'У этого селлера нет товаров для привязки.'
+            : 'По поиску товары не найдены. Измените запрос или очистите поиск.'}
+      </Typography></TableCell></TableRow> : null}
+    </TableBody></Table></TableContainer>
+    {truncated ? <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Typography variant="caption" color="text.secondary">Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {total}
+        {selectedIds.size > 0 ? ` · выбрано ${selectedIds.size}` : ''}</Typography>
+      <Button size="small" onClick={onShowAll}>Показать ещё</Button>
+    </Stack> : null}
+  </Stack></Paper>
+}
+
+function AutoResult({ result, selectedKeys, busy, onToggle, onToggleAll, onAssign,
+  onDownload, error, testIdPrefix }: {
+  result: AutoImportResponse
+  selectedKeys: Set<string>
+  busy: boolean
+  onToggle: (row: AutoUnmatchedRow) => void
+  onToggleAll: () => void
+  onAssign: () => void
+  onDownload: () => void
+  error: string | null
+  testIdPrefix: string
+}) {
+  const loaded = result.groups.reduce((sum, row) => sum + row.loaded_count, 0)
+  const eligible = result.unmatched.filter((row) => row.eligible_for_assignment)
+  const allSelected = eligible.length > 0 && eligible.every((row) => selectedKeys.has(row.key))
+  const canDownload = result.unmatched.length > 0
+    && result.unmatched.every((row) => row.has_label_artifact)
+  return <>
+    <Alert severity="success"><strong>Загружено {loaded} КИЗ</strong> · привязано к {result.groups.length} товарам.</Alert>
+    {error ? <Alert severity="error">{error}</Alert> : null}
+    <TableContainer component={Paper} variant="outlined"><Table size="small" data-testid={`${testIdPrefix}-auto-groups`}>
+      <TableHead><TableRow><TableCell>Артикул</TableCell><TableCell>Размер</TableCell>
+        <TableCell>Штрихкод</TableCell><TableCell align="right">Загружено КИЗ</TableCell></TableRow></TableHead>
+      <TableBody>{result.groups.map((row) => <TableRow key={row.product_id}>
+        <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.sku}</Typography>
+          <Typography variant="caption" color="text.secondary">{row.product_name}</Typography></TableCell>
+        <TableCell>{row.size ?? '—'}</TableCell><TableCell sx={{ fontFamily: 'monospace' }}>{row.barcode ?? '—'}</TableCell>
+        <TableCell align="right"><strong>{row.loaded_count}</strong></TableCell>
+      </TableRow>)}</TableBody>
+    </Table></TableContainer>
+    <Paper variant="outlined" sx={{ borderColor: 'error.light', overflow: 'hidden' }}><Stack spacing={1.5} sx={{ p: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <Typography variant="subtitle2">Не подгружено — {result.unmatched.length} КИЗ</Typography>
+        {result.unmatched.length > 0 ? <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Button variant="contained" size="small" disabled={selectedKeys.size === 0 || busy} onClick={onAssign}>Добавить к товару</Button>
+          {canDownload ? <Button variant="outlined" color="error" size="small" disabled={busy}
+            onClick={onDownload}>Скачать PDF с неподгруженными КИЗами</Button> : null}
+        </Stack> : null}
+      </Stack>
+      {result.unmatched.length === 0
+        ? <Typography variant="caption" color="text.secondary">В файле не осталось этикеток без привязки — все КИЗ распознаны.</Typography>
+        : <><Typography variant="caption" color="text.secondary">Успешная часть уже сохранена. Эти коды можно перепроверить и загрузить вручную позже.</Typography>
+          <TableContainer><Table size="small" data-testid={`${testIdPrefix}-auto-unmatched`}>
+            <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={allSelected} disabled={eligible.length === 0}
+              onChange={onToggleAll} slotProps={{ input: { 'aria-label': 'Выбрать все доступные КИЗ' } }} /></TableCell>
+              <TableCell>Код маркировки</TableCell><TableCell>Артикул</TableCell><TableCell>Размер</TableCell><TableCell>Причина</TableCell>
+            </TableRow></TableHead>
+            <TableBody>{result.unmatched.map((row) => <TableRow key={row.key} sx={{ opacity: row.eligible_for_assignment ? 1 : 0.65 }}>
+              <TableCell padding="checkbox"><Checkbox checked={selectedKeys.has(row.key)} disabled={!row.eligible_for_assignment}
+                onChange={() => onToggle(row)} slotProps={{ input: { 'aria-label': `Выбрать КИЗ ${row.marking_code}` } }} /></TableCell>
+              <TableCell sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{row.marking_code}</TableCell>
+              <TableCell>{row.article ?? '—'}</TableCell><TableCell>{row.size ?? '—'}</TableCell>
+              <TableCell><Typography variant="body2">{row.reason}</Typography>{!row.eligible_for_assignment
+                ? <Typography variant="caption" color="error">Нельзя добавить к товару</Typography> : null}</TableCell>
+            </TableRow>)}</TableBody>
+          </Table></TableContainer></>}
+    </Stack></Paper>
+  </>
 }
