@@ -29,6 +29,7 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { sellerStaffError, sellerStaffRequest } from '../../utils/sellerStaffRequest'
 import {
   SELLER_PERMISSION_BLOCKS,
   type SellerPermissions,
@@ -122,32 +123,6 @@ const MARKETPLACE_OPTIONS = [
   { value: 'wildberries', label: 'Wildberries' },
   { value: 'ozon', label: 'Ozon' },
 ] as const
-
-function humanSellerStaffError(message: string): string {
-  if (message.includes('Этот сотрудник уже добавлен') || message.includes('email_taken')) {
-    return 'Этот email уже используется'
-  }
-  if (message.includes('Нет доступа') || message.includes('forbidden') || message.includes('seller_not_linked')) {
-    return 'Нет доступа к сотрудникам'
-  }
-  if (
-    message.includes('Сотрудник не найден') ||
-    message.includes('not_seller_user') ||
-    message.includes('user_not_found')
-  ) {
-    return 'Сотрудник не найден'
-  }
-  if (message.includes('owner_protected')) {
-    return 'Нельзя снять последний полный доступ к кабинету'
-  }
-  if (message.includes('self_update_forbidden')) {
-    return 'Нельзя изменить собственный доступ'
-  }
-  if (message.includes('email_already_set')) return 'Email уже задан. Обновите список сотрудников.'
-  if (message.includes('account_already_active')) return 'Сотрудник уже активировал доступ. Для восстановления пароля используйте «Забыли пароль» при входе.'
-  if (message.includes('email_required')) return 'Сначала добавьте email сотрудника.'
-  return message || 'Не удалось сохранить. Попробуйте еще раз'
-}
 
 export function SellerSettingsScreen({
   token,
@@ -379,12 +354,9 @@ export function SellerSettingsScreen({
     if (!permissions.staff) {
       return
     }
-    const res = await fetch(apiUrl('/auth/seller-staff-accounts'), {
+    const res = await sellerStaffRequest(apiUrl('/auth/seller-staff-accounts'), {
       headers: { ...authHeaders(token) },
-    })
-    if (!res.ok) {
-      throw new Error(humanSellerStaffError(await readApiErrorMessage(res)))
-    }
+    }, 'load')
     setStaffRows((await res.json()) as SellerStaffAccountRow[])
   }
 
@@ -394,7 +366,7 @@ export function SellerSettingsScreen({
       return
     }
     void loadStaffRows().catch((e: unknown) => {
-      setStaffError(e instanceof Error ? e.message : 'Не удалось загрузить сотрудников.')
+      setStaffError(sellerStaffError(e, 'load'))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when permission or token changes
   }, [permissions.staff, token])
@@ -568,25 +540,21 @@ export function SellerSettingsScreen({
     setStaffError(null)
     setStaffOk(null)
     try {
-      const res = await fetch(apiUrl('/auth/seller-staff-accounts'), {
+      await sellerStaffRequest(apiUrl('/auth/seller-staff-accounts'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ full_name: fullName, job_title: jobTitle || null, email, permissions: staffCreatePerms }),
-      })
-      if (!res.ok) {
-        setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
-        return
-      }
+      }, 'create')
       form.reset()
       setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
       await loadStaffRows()
       await onStaffChanged?.()
       setStaffOk(`Сотрудник добавлен: ${fullName}. Приглашение на ${email} передано на отправку.`)
     } catch (e) {
-      setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
+      setStaffError(sellerStaffError(e, 'create'))
     } finally {
       setStaffBusy(false)
     }
@@ -597,13 +565,12 @@ export function SellerSettingsScreen({
     setStaffError(null)
     setStaffOk(null)
     try {
-      const response = await fetch(apiUrl(`/auth/seller-staff-accounts/${row.id}/invite`), {
+      await sellerStaffRequest(apiUrl(`/auth/seller-staff-accounts/${row.id}/invite`), {
         method: 'POST', headers: authHeaders(token),
-      })
-      if (!response.ok) throw new Error(humanSellerStaffError(await readApiErrorMessage(response)))
+      }, 'invite')
       setStaffOk(`Приглашение на ${row.email} передано на отправку.`)
     } catch (error) {
-      setStaffError(error instanceof Error ? error.message : 'Не удалось отправить приглашение.')
+      setStaffError(sellerStaffError(error, 'invite'))
     } finally {
       setStaffInviteBusyId(null)
     }
@@ -622,24 +589,20 @@ export function SellerSettingsScreen({
     setStaffError(null)
     setStaffOk(null)
     try {
-      const res = await fetch(apiUrl(`/auth/seller-staff-accounts/${row.id}/permissions`), {
+      const res = await sellerStaffRequest(apiUrl(`/auth/seller-staff-accounts/${row.id}/permissions`), {
         method: 'PATCH',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(next),
-      })
-      if (!res.ok) {
-        setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
-        return
-      }
+      }, 'permissions')
       const updated = (await res.json()) as SellerStaffAccountRow
       setStaffRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       await onStaffChanged?.()
       setStaffOk('Права сохранены')
     } catch (e) {
-      setStaffError(e instanceof Error ? e.message : 'Не удалось сохранить права.')
+      setStaffError(sellerStaffError(e, 'permissions'))
     } finally {
       setStaffPermBusyId(null)
     }
@@ -689,20 +652,19 @@ export function SellerSettingsScreen({
     setStaffError(null)
     setEditingStaffBusy(true)
     try {
-      const res = await fetch(apiUrl(`/auth/seller-staff-accounts/${editingStaff.id}/profile`), {
+      const res = await sellerStaffRequest(apiUrl(`/auth/seller-staff-accounts/${editingStaff.id}/profile`), {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify({ full_name: fullName, job_title: editingStaffTitle.trim() || null,
           ...(!editingStaff.email && !editingStaff.is_owner && email ? { email } : {}),
         }),
-      })
-      if (!res.ok) throw new Error(humanSellerStaffError(await readApiErrorMessage(res)))
+      }, 'profile')
       const updated = (await res.json()) as SellerStaffAccountRow
       setStaffRows((previous) => previous.map((row) => row.id === updated.id ? updated : row))
       setEditingStaff(null)
       setStaffOk(email ? `Данные сотрудника сохранены. Приглашение на ${email} передано на отправку.` : 'Данные сотрудника сохранены')
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Не удалось сохранить сотрудника.')
+      setStaffError(sellerStaffError(err, 'profile'))
     } finally {
       setEditingStaffBusy(false)
     }
