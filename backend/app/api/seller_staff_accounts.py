@@ -3,20 +3,23 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, public_base_url
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user_profile import ProfilePatch, StaffIdentityCreate
+from app.schemas.user_profile import ProfilePatch
+from app.services.auth_service import send_auth_link
 from app.services.seller_staff_permissions_service import (
     SellerPermissionsSnapshot,
     can_manage_seller_staff,
     create_seller_staff_user,
     list_seller_staff_users,
+    prepare_seller_staff_invite,
     update_seller_staff_permissions,
+    update_seller_staff_profile,
 )
 
 router = APIRouter(prefix="/auth/seller-staff-accounts", tags=["auth"])
@@ -39,21 +42,13 @@ class SellerPermissionsBody(BaseModel):
         )
 
 
-class SellerStaffAccountCreate(StaffIdentityCreate):
-    password: str | None = Field(default=None, max_length=128)
+class SellerStaffAccountCreate(ProfilePatch):
+    email: EmailStr
     permissions: SellerPermissionsBody = Field(default_factory=SellerPermissionsBody)
 
-    @field_validator("password")
-    @classmethod
-    def normalize_optional_password(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        s = v.strip()
-        if not s:
-            return None
-        if len(s) < 8:
-            raise ValueError("password must be at least 8 characters")
-        return s
+
+class SellerStaffProfilePatch(ProfilePatch):
+    email: EmailStr | None = None
 
 
 class SellerPermissionsOut(BaseModel):
@@ -130,6 +125,8 @@ async def get_seller_staff_accounts(
 @router.post("", response_model=SellerStaffAccountOut, status_code=201)
 async def post_seller_staff_account(
     body: SellerStaffAccountCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerStaffAccountOut:
@@ -137,10 +134,9 @@ async def post_seller_staff_account(
         created, perms = await create_seller_staff_user(
             session,
             acting_user=user,
-            email=str(body.email) if body.email else None,
+            email=str(body.email),
             full_name=body.full_name,
             job_title=body.job_title,
-            password=body.password,
             permissions=body.permissions.to_snapshot(),
         )
     except PermissionError as exc:
@@ -157,7 +153,34 @@ async def post_seller_staff_account(
                 detail="email_taken",
             ) from None
         raise
+    background_tasks.add_task(
+        send_auth_link, created, purpose="invite", base_url=public_base_url(request),
+    )
     return _account_out(created, perms, is_owner=False)
+
+
+@router.post("/{user_id}/invite", status_code=204)
+async def resend_seller_staff_invite(
+    user_id: uuid.UUID,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    actor: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        staff_user = await prepare_seller_staff_invite(
+            session, acting_user=actor, staff_user_id=user_id,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="user_not_found") from None
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="forbidden") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    background_tasks.add_task(
+        send_auth_link, staff_user, purpose="invite", base_url=public_base_url(request),
+    )
+    return Response(status_code=204)
 
 
 @router.patch("/{user_id}/permissions", response_model=SellerStaffAccountOut)
@@ -196,19 +219,26 @@ async def patch_seller_staff_permissions(
 @router.patch("/{user_id}/profile", response_model=SellerStaffAccountOut)
 async def patch_seller_staff_profile(
     user_id: uuid.UUID,
-    body: ProfilePatch,
+    body: SellerStaffProfilePatch,
+    request: Request,
+    background_tasks: BackgroundTasks,
     actor: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerStaffAccountOut:
-    if actor.seller_id is None or not await can_manage_seller_staff(session, actor):
-        raise HTTPException(status_code=403, detail="forbidden")
-    rows = await list_seller_staff_users(
-        session, tenant_id=actor.tenant_id, seller_id=actor.seller_id,
-    )
-    for staff_user, perms, is_owner in rows:
-        if staff_user.id == user_id:
-            staff_user.full_name = body.full_name
-            staff_user.job_title = body.job_title
-            await session.commit()
-            return _account_out(staff_user, perms, is_owner=is_owner)
-    raise HTTPException(status_code=404, detail="user_not_found")
+    try:
+        staff_user, perms, is_owner, invite = await update_seller_staff_profile(
+            session, acting_user=actor, staff_user_id=user_id,
+            full_name=body.full_name, job_title=body.job_title,
+            email=str(body.email) if body.email is not None else None,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="user_not_found") from None
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="forbidden") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    if invite:
+        background_tasks.add_task(
+            send_auth_link, staff_user, purpose="invite", base_url=public_base_url(request),
+        )
+    return _account_out(staff_user, perms, is_owner=is_owner)
