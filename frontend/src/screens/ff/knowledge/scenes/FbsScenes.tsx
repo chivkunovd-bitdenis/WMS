@@ -376,6 +376,7 @@ type SupplyStage = 'picking' | 'packing' | 'handoff_prep'
  * строка с хвостом кода отличается от белой, где сканировать ещё нечего.
  */
 const MARKED_ORDERS = 4
+const MOCK_BOUND_KIZ = new Map<string, string>()
 
 /** Заказы поставки: по одной единице на заказ — так их и отдаёт WB. */
 function supplyOrders(stage: SupplyStage): Array<FbsWorkspace['orders'][number]> {
@@ -387,13 +388,16 @@ function supplyOrders(stage: SupplyStage): Array<FbsWorkspace['orders'][number]>
   for (const line of SUPPLY_LINES) {
     for (let unit = 0; unit < line.planned; unit += 1) {
       wbOrderId += 7
+      const orderId = `so-${index + 1}`
       const picked = done || marking || unit < pickedOf(line.card.productId)
       // На шаге упаковки часть заказов уже готова, остальные ждут своей очереди.
       const ready = done || (marking && index < MARKED_ORDERS)
+      const boundKiz = MOCK_BOUND_KIZ.get(orderId)
+      const markingReady = ready || Boolean(boundKiz)
       const tail = kizTailFor(wbOrderId)
       rows.push({
         ...order({
-          id: `so-${index + 1}`,
+          id: orderId,
           wbOrderId,
           card: line.card,
           wbWarehouse: WB_KOLEDINO,
@@ -420,13 +424,14 @@ function supplyOrders(stage: SupplyStage): Array<FbsWorkspace['orders'][number]>
               required: ['sgtin'],
               optional: [],
               states: [
-                ready
+                markingReady
                   ? {
+                      id: `mock-kiz-${orderId}`,
                       kind: 'sgtin',
                       status: 'accepted' as const,
                       reason: null,
                       source: 'operator' as const,
-                      value_tail: tail,
+                      value_tail: boundKiz?.slice(-4) ?? tail,
                     }
                   : { kind: 'sgtin', status: 'missing' as const, reason: null, value_tail: null },
               ],
@@ -816,15 +821,61 @@ const PACKAGING_TASK = {
 const MARKING_ROUTES: StubRoute[] = [
   { path: /^\/operations\/fbs-supplies\/[^/?]+\/workspace/, handler: () => workspace('packing') },
   { path: /^\/operations\/packaging-tasks\/[^/?]+/, handler: () => PACKAGING_TASK },
+  {
+    path: /^\/operations\/fbs-orders\/kiz\/lookup/,
+    handler: () => {
+      const target = supplyOrders('packing')[MARKED_ORDERS]
+      return {
+        order_id: target.id,
+        wb_order_id: target.wb_order_id,
+        product: {
+          name: target.product.name,
+          image_url: target.product.image_url,
+          barcode: target.product.barcode,
+          seller_article: target.product.seller_article,
+        },
+        current_kiz: null,
+        needs_confirmation: false,
+        can_bind: true,
+        block_reason: null,
+      }
+    },
+  },
+  {
+    method: 'POST',
+    path: /^\/operations\/fbs-orders\/kiz\/validate/,
+    handler: () => ({ ok: true, hints: [] }),
+  },
+  {
+    method: 'POST',
+    path: /^\/operations\/fbs-orders\/kiz\/commit/,
+    handler: (_match, init) => {
+      const body = requestBody(init)
+      const pairs = Array.isArray(body.pairs) ? body.pairs as Array<{ order_id: string; value: string }> : []
+      pairs.forEach((pair) => MOCK_BOUND_KIZ.set(pair.order_id, pair.value))
+      return pairs.map((pair) => ({
+        order_id: pair.order_id,
+        status: 'ok',
+        code: null,
+        message: null,
+        meta_status: 'accepted',
+      }))
+    },
+  },
 ]
 
-export function FbsMarkingScene() {
+export function FbsMarkingScene({
+  mockupReprintKiz,
+}: {
+  mockupReprintKiz?: (rawKiz: string) => Promise<boolean>
+} = {}) {
   return (
     <StubbedScene routes={MARKING_ROUTES} route="/app/ff/fbs">
       <FfFbsSupplyWorkspace
         token="demo"
         authHeaders={authHeaders}
         supplyId={SUPPLY_ID}
+        mockupReprintKiz={mockupReprintKiz}
         open
         onClose={() => {}}
       />

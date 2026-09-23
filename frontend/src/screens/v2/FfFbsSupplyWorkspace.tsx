@@ -117,6 +117,7 @@ type Props = {
   authHeaders: (token: string) => Record<string, string>
   supplyId: string | null
   initialWorkspace?: FbsWorkspace | null
+  mockupReprintKiz?: (rawKiz: string) => Promise<boolean>
   open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
   onDirtyChange?: (dirty: boolean) => void
@@ -445,6 +446,7 @@ export function FfFbsSupplyWorkspace({
   authHeaders,
   supplyId,
   initialWorkspace,
+  mockupReprintKiz,
   open, addressStorageEnabled = true,
   onClose,
   onDirtyChange,
@@ -499,6 +501,7 @@ export function FfFbsSupplyWorkspace({
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const [autoPrintOrderQr, setAutoPrintOrderQr] = useState(false)
   const [autoPrintHonestSign, setAutoPrintHonestSign] = useState(false)
+  const [autoReprintHonestSign, setAutoReprintHonestSign] = useState(false)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const kizSelectedStickerRef = useRef('')
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
@@ -926,6 +929,9 @@ export function FfFbsSupplyWorkspace({
             ? `Код принят Ozon · ${fbsKizOrderNumber(kizScanActive)}`
             : `Код сохранён · Ozon проверяет · ${fbsKizOrderNumber(kizScanActive)}`
           : null)
+        const reprinted = autoReprintHonestSign && mockupReprintKiz
+          ? await mockupReprintKiz(raw)
+          : false
         setKizScanActive(null)
         kizSelectedStickerRef.current = ''
         setKizScanValue('')
@@ -938,6 +944,9 @@ export function FfFbsSupplyWorkspace({
             if (verdict.tone === 'error') setKizScanError({ text, debug: null })
             else setKizScanNotice(text)
           }
+        }
+        if (reprinted) {
+          setKizScanNotice(`Честный знак сохранён и перепечатан · ${fbsKizOrderNumber(kizScanActive)}`)
         }
         // Native scanner typing can bring the input back into view. After the
         // updated row renders, return to the order whose KIZ was just saved.
@@ -953,8 +962,33 @@ export function FfFbsSupplyWorkspace({
         refocusKizInput()
       }
     },
-    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName],
+    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName, autoReprintHonestSign, mockupReprintKiz],
   )
+
+  const scanStickerOrMockupReprint = useCallback(async (raw: string) => {
+    if (!autoReprintHonestSign || !mockupReprintKiz) {
+      await scanKizSticker(raw)
+      return
+    }
+    setKizScanBusy(true)
+    setKizScanError(null)
+    setKizScanNotice(null)
+    try {
+      if (await mockupReprintKiz(raw)) {
+        setKizScanValue('')
+        setKizScanNotice(`Честный знак ${raw} перепечатан.`)
+        return
+      }
+    } catch (cause) {
+      setKizScanValue('')
+      setKizScanError({ text: cause instanceof Error ? cause.message : 'Не удалось перепечатать Честный знак.', debug: null })
+      return
+    } finally {
+      setKizScanBusy(false)
+      refocusKizInput()
+    }
+    await scanKizSticker(raw)
+  }, [autoReprintHonestSign, mockupReprintKiz, refocusKizInput, scanKizSticker])
 
   // WMS-403: restore the original reset from 2ef9c0d3; it only clears scanner UI.
   const dropKizScanActive = useCallback(() => {
@@ -988,9 +1022,9 @@ export function FfFbsSupplyWorkspace({
         return
       }
       if (kizScanActive) void scanKizCode(raw)
-      else void scanKizSticker(raw)
+      else void scanStickerOrMockupReprint(raw)
     },
-    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker, dropKizScanActive],
+    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanStickerOrMockupReprint, dropKizScanActive],
   )
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
@@ -2311,10 +2345,28 @@ export function FfFbsSupplyWorkspace({
                           control={(
                             <Checkbox
                               checked={autoPrintHonestSign}
-                              onChange={(event) => setAutoPrintHonestSign(event.target.checked)}
+                              disabled={autoReprintHonestSign}
+                              onChange={(event) => {
+                                setAutoPrintHonestSign(event.target.checked)
+                                if (event.target.checked) setAutoReprintHonestSign(false)
+                              }}
                             />
                           )}
                           label="Печатать ЧЗ"
+                          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                        />
+                        <FormControlLabel
+                          control={(
+                            <Checkbox
+                              checked={autoReprintHonestSign}
+                              disabled={autoPrintHonestSign}
+                              onChange={(event) => {
+                                setAutoReprintHonestSign(event.target.checked)
+                                if (event.target.checked) setAutoPrintHonestSign(false)
+                              }}
+                            />
+                          )}
+                          label="Перепечатывать ЧЗ"
                           sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                         />
                         {kizScanActive ? (
