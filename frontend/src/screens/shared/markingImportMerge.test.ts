@@ -11,8 +11,13 @@ import {
   paginateProductSearchResults,
   PRODUCT_SEARCH_INITIAL_LIMIT,
   removeImportFileAt,
+  createAssignmentAttempt,
   keepAssignmentRequestId,
+  markAssignmentResponseApplied,
+  mergeAssignmentResponse,
+  runAssignmentAttempt,
   runAutomaticImportAttempt,
+  type AutoImportResponse,
   type ImportCatalogRow,
 } from './MarkingImportDialog'
 
@@ -126,12 +131,69 @@ describe('automatic import recovery', () => {
     expect(outcome).toEqual({ stage: 'auto-result', data: response })
   })
 
-  it('keeps assignment request identity when returning from an unknown result', () => {
-    const create = vi.fn(() => 'new-request-id')
+  it('recovers an immutable lost-response attempt once before a new assignment', async () => {
+    const attempt = createAssignmentAttempt('original-request-id', 'product-a', ['0', '1'])
+    const response = {
+      import_id: 'original-request-id',
+      document_number: 'МК-2',
+      product: {
+        product_id: 'product-a', sku: 'SKU-A', product_name: 'Product A',
+        size: 'M', barcode: '4600000000001', loaded_count: 2,
+      },
+      assigned_keys: ['0', '1'],
+    }
+    const sentBodies: Array<{ requestId: FormDataEntryValue | null; productId: FormDataEntryValue | null; rowKeys: FormDataEntryValue | null }> = []
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_input, init) => {
+      const form = init?.body as FormData
+      sentBodies.push({
+        requestId: form.get('request_id'),
+        productId: form.get('product_id'),
+        rowKeys: form.get('row_keys_json'),
+      })
+      if (sentBodies.length === 1) throw new TypeError('response lost')
+      return new Response(JSON.stringify(response), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    const request = {
+      attempt,
+      files: [new File(['pdf'], 'labels.pdf', { type: 'application/pdf' })],
+      sellerId: 'seller-id',
+      token: 'token',
+      fetchImpl,
+    }
 
-    expect(keepAssignmentRequestId('original-request-id', create)).toBe('original-request-id')
-    expect(create).not.toHaveBeenCalled()
-    expect(keepAssignmentRequestId(null, create)).toBe('new-request-id')
+    expect(await runAssignmentAttempt(request)).toEqual({
+      status: 'unknown', message: 'response lost',
+    })
+    const recovered = await runAssignmentAttempt(request)
+    expect(recovered).toEqual({ status: 'success', data: response })
+    expect(sentBodies).toEqual([
+      { requestId: 'original-request-id', productId: 'product-a', rowKeys: '["0","1"]' },
+      { requestId: 'original-request-id', productId: 'product-a', rowKeys: '["0","1"]' },
+    ])
+
+    let result: AutoImportResponse = {
+      import_id: 'auto-id', document_number: 'МК-1',
+      groups: [{ ...response.product, loaded_count: 1 }],
+      unmatched: [
+        { key: '0', marking_code: 'code-0', article: 'A', size: 'M', reason: 'Нет товара', eligible_for_assignment: true, has_label_artifact: true },
+        { key: '1', marking_code: 'code-1', article: 'A', size: 'M', reason: 'Нет товара', eligible_for_assignment: true, has_label_artifact: true },
+        { key: '2', marking_code: 'code-2', article: 'B', size: 'L', reason: 'Нет товара', eligible_for_assignment: true, has_label_artifact: true },
+      ],
+    }
+    const applied = new Set<string>()
+    if (markAssignmentResponseApplied(applied, response.import_id)) {
+      result = mergeAssignmentResponse(result, response)
+    }
+    if (markAssignmentResponseApplied(applied, response.import_id)) {
+      result = mergeAssignmentResponse(result, response)
+    }
+    expect(result.groups[0]?.loaded_count).toBe(3)
+    expect(result.unmatched.map((row) => row.key)).toEqual(['2'])
+
+    const create = vi.fn(() => 'next-request-id')
+    expect(keepAssignmentRequestId(null, create)).toBe('next-request-id')
     expect(create).toHaveBeenCalledOnce()
   })
 })

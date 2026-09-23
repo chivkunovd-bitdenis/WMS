@@ -73,7 +73,7 @@ export type AutoImportResponse = {
   groups: AutoProductGroup[]
   unmatched: AutoUnmatchedRow[]
 }
-type AssignResponse = {
+export type AssignResponse = {
   import_id: string
   document_number: string
   product: AutoProductGroup
@@ -239,6 +239,82 @@ export function keepAssignmentRequestId(
   return current ?? create()
 }
 
+export type AssignmentAttempt = Readonly<{
+  requestId: string
+  productId: string
+  rowKeys: readonly string[]
+}>
+
+export function createAssignmentAttempt(
+  requestId: string,
+  productId: string,
+  rowKeys: Iterable<string>,
+): AssignmentAttempt {
+  return Object.freeze({
+    requestId,
+    productId,
+    rowKeys: Object.freeze([...rowKeys]),
+  })
+}
+
+type AssignmentAttemptOutcome =
+  | { status: 'success'; data: AssignResponse }
+  | { status: 'known-error' | 'unknown'; message: string }
+
+export async function runAssignmentAttempt({
+  attempt, files, sellerId, token, fetchImpl = fetch,
+}: {
+  attempt: AssignmentAttempt
+  files: File[]
+  sellerId: string
+  token: string
+  fetchImpl?: typeof fetch
+}): Promise<AssignmentAttemptOutcome> {
+  try {
+    const form = new FormData()
+    form.append('seller_id', sellerId)
+    form.append('request_id', attempt.requestId)
+    form.append('product_id', attempt.productId)
+    form.append('row_keys_json', JSON.stringify(attempt.rowKeys))
+    appendFiles(form, files)
+    const res = await fetchImpl(apiUrl('/operations/marking-codes/import/assign'), {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    })
+    if (!res.ok) {
+      return { status: 'known-error', message: await readApiErrorMessage(res) }
+    }
+    return { status: 'success', data: (await res.json()) as AssignResponse }
+  } catch (err) {
+    return {
+      status: 'unknown',
+      message: err instanceof Error ? err.message : 'Не удалось добавить КИЗ к товару.',
+    }
+  }
+}
+
+export function markAssignmentResponseApplied(applied: Set<string>, requestId: string): boolean {
+  if (applied.has(requestId)) return false
+  applied.add(requestId)
+  return true
+}
+
+export function mergeAssignmentResponse(
+  result: AutoImportResponse,
+  data: AssignResponse,
+): AutoImportResponse {
+  const assigned = new Set(data.assigned_keys)
+  const exists = result.groups.some((row) => row.product_id === data.product.product_id)
+  const groups = exists
+    ? result.groups.map((row) => row.product_id === data.product.product_id
+        ? { ...row, loaded_count: row.loaded_count + data.product.loaded_count } : row)
+    : [...result.groups, data.product]
+  return {
+    ...result,
+    groups,
+    unmatched: result.unmatched.filter((row) => !assigned.has(row.key)),
+  }
+}
+
 export function MarkingImportDialog(props: Props) {
   return (
     <ErrorBoundary component="MarkingImportDialog" resetKey={String(props.open)}>
@@ -266,8 +342,10 @@ function MarkingImportDialogContent({
   const [selectedUnmatchedKeys, setSelectedUnmatchedKeys] = useState<Set<string>>(new Set())
   const [assignmentProductId, setAssignmentProductId] = useState<string | null>(null)
   const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null)
+  const [pendingAssignmentAttempt, setPendingAssignmentAttempt] = useState<AssignmentAttempt | null>(null)
   const previewAbortRef = useRef<AbortController | null>(null)
   const autoRequestIdRef = useRef(newRequestId())
+  const appliedAssignmentRequestIdsRef = useRef(new Set<string>())
 
   const sellerCatalogProducts = useMemo(
     () => catalog.filter((row) => row.seller_id == null || row.seller_id === sellerId),
@@ -295,6 +373,8 @@ function MarkingImportDialogContent({
     setSelectedUnmatchedKeys(new Set())
     setAssignmentProductId(null)
     setAssignmentRequestId(null)
+    setPendingAssignmentAttempt(null)
+    appliedAssignmentRequestIdsRef.current.clear()
     autoRequestIdRef.current = newRequestId()
   }, [poolContext])
 
@@ -438,38 +518,46 @@ function MarkingImportDialogContent({
     setError(null); setStage('assign')
   }
 
+  const completeAssignmentAttempt = async (attempt: AssignmentAttempt) => {
+    setActionBusy(true); setError(null)
+    const outcome = await runAssignmentAttempt({ attempt, files, sellerId, token })
+    if (outcome.status === 'success') {
+      const data = outcome.data
+      const assigned = new Set(data.assigned_keys)
+      if (markAssignmentResponseApplied(appliedAssignmentRequestIdsRef.current, data.import_id)) {
+        setAutoResult((prev) => prev ? mergeAssignmentResponse(prev, data) : prev)
+        onImported(`Добавлено к товару: ${data.assigned_keys.length} КИЗ`)
+      }
+      setSelectedUnmatchedKeys((prev) => new Set([...prev].filter((key) => !assigned.has(key))))
+      setAssignmentProductId(null); setAssignmentRequestId(null)
+      setPendingAssignmentAttempt(null); setStage('auto-result'); onError?.(null)
+    } else {
+      if (outcome.status === 'known-error') {
+        setPendingAssignmentAttempt(null)
+        setAssignmentRequestId(newRequestId())
+      }
+      setError(outcome.message); onError?.(outcome.message)
+    }
+    setActionBusy(false)
+  }
+
   const confirmAssignment = async () => {
     if (!assignmentProductId || !assignmentRequestId || selectedUnmatchedKeys.size === 0) return
-    setActionBusy(true); setError(null)
-    try {
-      const form = new FormData()
-      form.append('seller_id', sellerId)
-      form.append('request_id', assignmentRequestId)
-      form.append('product_id', assignmentProductId)
-      form.append('row_keys_json', JSON.stringify([...selectedUnmatchedKeys]))
-      appendFiles(form, files)
-      const res = await fetch(apiUrl('/operations/marking-codes/import/assign'), {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const data = (await res.json()) as AssignResponse
-      const assigned = new Set(data.assigned_keys)
-      setAutoResult((prev) => {
-        if (!prev) return prev
-        const exists = prev.groups.some((row) => row.product_id === data.product.product_id)
-        const nextGroups = exists
-          ? prev.groups.map((row) => row.product_id === data.product.product_id
-              ? { ...row, loaded_count: row.loaded_count + data.product.loaded_count } : row)
-          : [...prev.groups, data.product]
-        return { ...prev, groups: nextGroups, unmatched: prev.unmatched.filter((row) => !assigned.has(row.key)) }
-      })
-      setSelectedUnmatchedKeys(new Set()); setAssignmentProductId(null)
-      setAssignmentRequestId(null); setStage('auto-result')
-      onImported(`Добавлено к товару: ${data.assigned_keys.length} КИЗ`); onError?.(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Не удалось добавить КИЗ к товару.'
-      setError(message); onError?.(message)
-    } finally { setActionBusy(false) }
+    const attempt = pendingAssignmentAttempt ?? createAssignmentAttempt(
+      assignmentRequestId,
+      assignmentProductId,
+      selectedUnmatchedKeys,
+    )
+    if (pendingAssignmentAttempt === null) setPendingAssignmentAttempt(attempt)
+    await completeAssignmentAttempt(attempt)
+  }
+
+  const returnFromAssignment = async () => {
+    if (pendingAssignmentAttempt !== null) {
+      await completeAssignmentAttempt(pendingAssignmentAttempt)
+      return
+    }
+    setError(null); setStage('auto-result')
   }
 
   const downloadUnmatched = async () => {
@@ -591,9 +679,8 @@ function MarkingImportDialogContent({
           <Button variant="contained" onClick={onClose} disabled={busy}>Готово</Button>
         </> : null}
         {stage === 'assign' ? <>
-          <Button variant="outlined" disabled={busy} onClick={() => {
-            setError(null); setStage('auto-result')
-          }}>Назад</Button>
+          <Button variant="outlined" disabled={busy}
+            onClick={() => void returnFromAssignment()}>Назад</Button>
           <Button variant="contained" disabled={!assignmentProductId || busy}
             onClick={() => void confirmAssignment()}>Добавить к выбранному товару</Button>
         </> : null}
