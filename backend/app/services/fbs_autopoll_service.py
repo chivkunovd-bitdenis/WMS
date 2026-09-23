@@ -207,7 +207,8 @@ async def list_active_stock_sync_bindings(
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id)
     rows = list((await session.execute(stmt)).all())
-    return [binding for binding, warehouse in rows if not is_auto_fbs_wms_warehouse(warehouse)]
+    return [binding for binding, warehouse in rows
+            if warehouse.is_operational and not is_auto_fbs_wms_warehouse(warehouse)]
 
 
 async def sync_seller_stocks(

@@ -5,9 +5,11 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
@@ -117,6 +119,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     install_document_event_tracking()
     app = FastAPI(title="WMS API", lifespan=lifespan)
+
+    @app.exception_handler(IntegrityError)
+    async def physical_warehouse_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        if "physical_warehouse_required" not in str(exc.orig):
+            raise exc
+        return JSONResponse(status_code=409, content={"detail": {
+            "code": "physical_warehouse_required",
+            "message": "Выберите физический склад фулфилмента. Склад маркетплейса "
+                       "не может хранить товар; старые документы требуют переноса на склад ФФ.",
+        }})
     app.add_middleware(DocumentEventActorMiddleware)
     app.add_middleware(
         CORSMiddleware,

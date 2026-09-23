@@ -796,6 +796,32 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     assert "wb-test-token-secret" not in str(result)
 
 
+@pytest.mark.parametrize("duplicate_chrt", [False, True])
+async def test_repair_subset_publishes_only_selected_and_keeps_duplicate_guard(
+    db_session: AsyncSession, duplicate_chrt: bool,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    selected = _product(tenant_id=ctx.tenant.id, seller_id=ctx.seller.id,
+                        chrt_id=516001, sku_suffix="selected")
+    untouched = _product(tenant_id=ctx.tenant.id, seller_id=ctx.seller.id,
+                         chrt_id=516001 if duplicate_chrt else 516002, sku_suffix="untouched")
+    db_session.add_all([selected, untouched])
+    await db_session.commit()
+    await _configure_bulk_rule_amount(db_session, ctx, [selected, untouched], 7)
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session, ctx.tenant.id, ctx.seller.id, ctx.binding, http_client,
+            marketplace_api_base="https://wb-mock.test", product_ids={selected.id},
+        )
+    if duplicate_chrt:
+        assert transport.put_calls == []
+        assert result.conflicts > 0
+    else:
+        assert transport.stored == {516001: 7}
+        assert result.products_confirmed == 1
+
+
 # Новое правило — единственный источник: 100% от свободных 200 штук дают 200.
 @pytest.mark.asyncio
 async def test_sync_publishes_amount_calculated_by_rule(

@@ -319,6 +319,8 @@ async def sync_ozon_stocks(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     provider: OzonMarketplaceProvider,
+    *, product_ids: set[uuid.UUID] | None = None,
+    binding_ids: set[uuid.UUID] | None = None,
 ) -> SellerStockSyncResult:
     """Publish each Ozon binding's explicitly allocated pool through the provider boundary."""
     bindings = list(
@@ -341,6 +343,8 @@ async def sync_ozon_stocks(
         .all()
     )
     result = SellerStockSyncResult()
+    if binding_ids is not None:
+        bindings = [binding for binding in bindings if binding.id in binding_ids]
     if not bindings:
         return result
 
@@ -376,6 +380,8 @@ async def sync_ozon_stocks(
         )
         from app.services.fbs_stock_rule_service import publish_amounts_for_binding
 
+        if product_ids is not None:
+            rows = [row for row in rows if row[0].id in product_ids]
         products = [product for product, _ in rows]
         amounts = await publish_amounts_for_binding(session, binding, products)
         stocks: list[dict[str, object]] = []
@@ -500,7 +506,13 @@ async def _binding_for_row(
     external_warehouse_id = _warehouse_id(row)
     if external_warehouse_id is None:
         return None
-    stmt = select(FbsWarehouseBinding).where(
+    from app.models.warehouse import Warehouse
+
+    stmt = select(FbsWarehouseBinding).join(
+        Warehouse, Warehouse.id == FbsWarehouseBinding.wms_warehouse_id,
+    ).where(
+        Warehouse.tenant_id == tenant_id,
+        Warehouse.is_operational.is_(True),
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.marketplace == "ozon",

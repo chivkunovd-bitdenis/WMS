@@ -60,6 +60,8 @@ async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[W
 async def create_warehouse(
     session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str, commit: bool = True
 ) -> Warehouse:
+    if code.strip().lower() == "fbs-wb" or code.strip().lower().startswith("fbs-wb-"):
+        raise CatalogError("warehouse_code_reserved")
     wh = Warehouse(
         tenant_id=tenant_id,
         name=name.strip(),
@@ -120,10 +122,16 @@ async def resolve_warehouse_scan(
 
 
 async def get_warehouse(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID,
+    *, include_non_operational: bool = False,
 ) -> Warehouse | None:
     wh = await session.get(Warehouse, warehouse_id)
-    if wh is None or wh.tenant_id != tenant_id:
+    if wh is None or wh.tenant_id != tenant_id or (
+        not include_non_operational and (
+            not wh.is_operational or wh.code.lower() == "fbs-wb"
+            or wh.code.lower().startswith("fbs-wb-")
+        )
+    ):
         return None
     return wh
 

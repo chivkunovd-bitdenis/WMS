@@ -124,7 +124,7 @@ async def test_inventory_balances_summary_seller_scope(async_client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_available_matches_mp_reserve_only_after_putaway(
+async def test_available_includes_sorting_before_and_after_putaway(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
@@ -194,7 +194,7 @@ async def test_available_matches_mp_reserve_only_after_putaway(
     row_v = next(x for x in after_verify.json() if x["product_id"] == pid)
     assert row_v["quantity"] == 10
     assert row_v["quantity_in_sorting"] == 10
-    assert row_v["available"] == 0
+    assert row_v["available"] == 10
 
     mp = await async_client.post(
         "/operations/marketplace-unload-requests/seller",

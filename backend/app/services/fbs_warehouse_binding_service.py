@@ -49,8 +49,10 @@ class FbsStockPoolSummary(TypedDict):
 
 
 def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
-    return warehouse.code.startswith(f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-") or (
-        warehouse.name.startswith("FBS WB ")
+    # The reserved legacy identity is distinct from the stock-bearing defect area.
+    code = warehouse.code.lower()
+    return code == AUTO_FBS_WAREHOUSE_CODE_PREFIX or code.startswith(
+        f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-"
     )
 
 
