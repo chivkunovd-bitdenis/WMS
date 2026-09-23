@@ -76,7 +76,20 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     )
     expect(asyncScans).not.toContain("setKizScanValue('')")
     expect(enter).toContain('scanInput.blur()')
-    expect(source).toContain('target !== kizScanInputRef.current')
+  })
+
+  it('preserves a busy hardware prefix across busy to idle without an idle global listener', () => {
+    const busyCapture = source.slice(
+      source.indexOf('// The baseline scanner input is disabled while its request is running.'),
+      source.indexOf("useEffect(() => {\n    if (!kizScanBusy) return"),
+    )
+    expect(busyCapture).toContain('useLayoutEffect(() => {')
+    expect(busyCapture).toContain('&& busyHardwareCaptureEnabledRef.current')
+    expect(busyCapture).toContain('if (!kizScanBusy) {')
+    expect(busyCapture).toContain('mergeFbsBufferedHardwareScan(prefix, current)')
+    expect(busyCapture.indexOf('if (!kizScanBusy) {'))
+      .toBeLessThan(busyCapture.indexOf("document.addEventListener('keydown'"))
+    expect(busyCapture).not.toContain('target !== kizScanInputRef.current')
   })
 
   it('routes product QR and CHZ through durable target claims in the shared queue', () => {
@@ -102,7 +115,7 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
 
   it('keeps the existing replacement confirmation for a product-selected order with KIZ', () => {
     const reprintTarget = source.slice(
-      source.indexOf('if (plan.reprintChz) {'),
+      source.indexOf('if (waitingForReprintKiz) {'),
       source.indexOf('const printErrors: string[]'),
     )
     expect(reprintTarget).toContain('result.binding_target.needs_confirmation')
@@ -113,6 +126,25 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       source.indexOf('const onKizScanEnter = useCallback'),
     )
     expect(dismiss).toContain('completeFbsPendingProductScan(')
+  })
+
+  it('retains a QR plus reprint attempt until both targets definitely started', () => {
+    const idleScan = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const scanKizCode = useCallback'),
+    )
+    expect(idleScan).toContain('const waitingForReprintKiz = plan.reprintChz && !attempt.chzStarted')
+    expect(idleScan).toContain('const attemptComplete = fbsPendingProductScanComplete(attempt)')
+
+    const kizScan = source.slice(
+      source.indexOf('const scanKizCode = useCallback'),
+      source.indexOf('const dropKizScanActive = useCallback'),
+    )
+    expect(kizScan).toContain('const pendingProductAttempt = productBarcode && workspace?.supply.id')
+    expect(kizScan).toContain('const effectivePreferences = pendingProductAttempt?.preferences ?? preferences')
+    expect(kizScan).toContain('boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue')
+    expect(kizScan).toContain('pendingProductAttempt.chzStarted = true')
+    expect(kizScan).toContain('if (fbsPendingProductScanComplete(pendingProductAttempt))')
   })
 
   it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {

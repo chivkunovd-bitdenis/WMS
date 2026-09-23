@@ -18,7 +18,6 @@ export type FbsProductScanPrintPlan = {
 
 const PREFERENCE_PREFIX = 'wms:fbs:scan-auto-print'
 const PENDING_ATTEMPT_PREFIX = 'wms:fbs:scan-auto-print:pending'
-const PENDING_ATTEMPT_TTL_MS = 12 * 60 * 60 * 1000
 
 export type FbsPendingProductScanAttempt = {
   barcode: string
@@ -74,7 +73,6 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
     const raw = window.localStorage.getItem(fbsPendingProductScanStorageKey(token, supplyId))
     const parsed = raw ? JSON.parse(raw) : []
     if (!Array.isArray(parsed)) return []
-    const now = Date.now()
     return parsed.flatMap((value): FbsPendingProductScanAttempt[] => {
       if (!value || typeof value !== 'object') return []
       const row = value as Partial<FbsPendingProductScanAttempt>
@@ -84,7 +82,6 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
         || typeof row.idempotencyKey !== 'string'
         || typeof row.createdAt !== 'number'
         || !preferences
-        || now - row.createdAt > PENDING_ATTEMPT_TTL_MS
       ) return []
       return [{
         barcode: row.barcode,
@@ -176,6 +173,28 @@ export function completeFbsPendingProductScan(
     supplyId,
     readPendingAttempts(token, supplyId).filter((attempt) => attempt.barcode !== barcode),
   )
+}
+
+/**
+ * A durable product attempt is complete only after every output captured in
+ * its original checkbox snapshot definitely reached the browser print path.
+ * The same CHZ flag represents either a newly allocated code or an exact
+ * bound-code reprint because those modes are mutually exclusive.
+ */
+export function fbsPendingProductScanComplete(
+  attempt: FbsPendingProductScanAttempt,
+): boolean {
+  const plan = productScanPrintPlan(attempt.preferences)
+  return (
+    (!plan.printQr || attempt.qrStarted)
+    && (!plan.printChz || attempt.chzStarted)
+    && (!plan.reprintChz || attempt.chzStarted)
+  )
+}
+
+/** Preserve a scanner burst that began while the controlled input was busy. */
+export function mergeFbsBufferedHardwareScan(prefix: string, current: string): string {
+  return `${prefix}${current}`
 }
 
 export function loadFbsScanPrintPreferences(token: string): FbsScanPrintPreferences {

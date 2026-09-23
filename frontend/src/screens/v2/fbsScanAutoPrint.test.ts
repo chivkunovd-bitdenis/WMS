@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   claimFbsPendingProductScan,
   completeFbsPendingProductScan,
+  fbsPendingProductScanComplete,
   fbsScanPrintPreferencesStorageKey,
   loadFbsScanPrintPreferences,
+  mergeFbsBufferedHardwareScan,
   peekFbsPendingProductScan,
   productScanPrintPlan,
   saveFbsScanPrintPreferences,
@@ -106,6 +108,54 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
     })
     expect(peekFbsPendingProductScan(token('ff-a', 'operator-b'), 'supply-a', '4600123')).toBeNull()
     expect(peekFbsPendingProductScan(token(), 'supply-b', '4600123')).toBeNull()
+  })
+
+  it('keeps an incomplete attempt across days until explicit completion or cancellation', () => {
+    const original = { printQr: true, printChz: false, reprintChz: true }
+    const first = claimFbsPendingProductScan(token(), 'supply-a', '4600123', original, () => 'request-a')
+    first.createdAt = Date.now() - (7 * 24 * 60 * 60 * 1000)
+    first.scanId = 'scan-a'
+    first.orderId = 'order-a'
+    first.qrStarted = true
+    first.chzStarted = false
+    updateFbsPendingProductScan(token(), 'supply-a', first)
+
+    const recovered = claimFbsPendingProductScan(
+      token(),
+      'supply-a',
+      '4600123',
+      { printQr: false, printChz: true, reprintChz: false },
+      () => 'must-not-be-used',
+    )
+    expect(recovered).toEqual(first)
+    expect(recovered.idempotencyKey).toBe('request-a')
+    expect(recovered.preferences).toEqual(original)
+  })
+
+  it('completes reprint attempts only after every captured target started', () => {
+    const qrAndReprint = claimFbsPendingProductScan(
+      token(),
+      'supply-a',
+      '4600123',
+      { printQr: true, printChz: false, reprintChz: true },
+      () => 'request-a',
+    )
+    qrAndReprint.chzStarted = true
+    expect(fbsPendingProductScanComplete(qrAndReprint)).toBe(false)
+    qrAndReprint.qrStarted = true
+    expect(fbsPendingProductScanComplete(qrAndReprint)).toBe(true)
+
+    const reprintOnly = {
+      ...qrAndReprint,
+      preferences: { printQr: false, printChz: false, reprintChz: true },
+      qrStarted: false,
+    }
+    expect(fbsPendingProductScanComplete(reprintOnly)).toBe(true)
+  })
+
+  it('joins a busy scanner prefix with the suffix accepted after idle', () => {
+    expect(mergeFbsBufferedHardwareScan('FAST-', 'B')).toBe('FAST-B')
+    expect(mergeFbsBufferedHardwareScan('0104600', '00000121ABC')).toBe('010460000000121ABC')
   })
 
   it('uses a new request and current snapshot only after the prior attempt completes', () => {
