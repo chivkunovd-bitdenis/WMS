@@ -670,3 +670,146 @@ async def test_historical_movement_container_is_not_current_placement(db_session
     assert (await repair.apply(session, run))["status"] == "completed"
     assert await session.scalar(select(WarehouseBox.warehouse_id).where(
         WarehouseBox.id == historical_box.id)) == third.id
+
+
+@pytest.mark.parametrize("ledger_state", ["staged", "written_off", "reversed"])
+@pytest.mark.parametrize("foreign_tenant", [False, True])
+async def test_reversal_ledger_container_is_historical_only_after_completion(
+    db_session, ledger_state, foreign_tenant,
+):
+    from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+
+    session = db_session
+    tenant, legacy, target, old_loc, _, product, _ = await seed(session)
+    owner = tenant
+    if foreign_tenant:
+        owner = Tenant(name="Foreign", slug=uuid.uuid4().hex)
+        session.add(owner)
+        await session.flush()
+    third = Warehouse(tenant_id=owner.id, code="third", name="Third")
+    session.add(third)
+    await session.flush()
+    box = WarehouseBox(tenant_id=owner.id, warehouse_id=third.id, internal_barcode="MOVED")
+    session.add(box)
+    await session.flush()
+    order_id = await session.scalar(select(FbsOrder.id))
+    movement_id = await session.scalar(select(InventoryMovement.id))
+    ledger = FbsShipmentReversalLedger(
+        tenant_id=tenant.id, fbs_order_id=order_id, product_id=product.id,
+        storage_location_id=old_loc.id, source_warehouse_id=legacy.id,
+        container_kind="box", container_id=box.id,
+        shipment_movement_id=movement_id if ledger_state == "written_off" else None,
+        reversed_at=datetime.now(UTC) if ledger_state == "reversed" else None,
+    )
+    session.add(ledger)
+    await session.commit()
+    run = uuid.uuid4()
+    report = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                  source_id=legacy.id, target_id=target.id)
+    blocked = ledger_state == "staged" or foreign_tenant
+    assert report["status"] == ("blocked" if blocked else "prepared"), report
+    if not blocked:
+        await session.commit()
+        assert (await repair.apply(session, run))["status"] == "completed"
+        assert await session.scalar(select(WarehouseBox.warehouse_id).where(
+            WarehouseBox.id == box.id)) == third.id
+
+
+@pytest.mark.parametrize(("reference", "history_state"), [
+    (reference, state)
+    for reference in ["wb_pick", "ozon_pick", "count_line", "count_box", "allocation"]
+    for state in ["active", "terminal", "cancelled", "written_off"]
+    if state != "written_off" or reference.endswith("pick")
+])
+async def test_container_reference_lifecycle(db_session, reference, history_state):
+    from app.models.fbs_order import FbsOrderProduct, FbsOrderProductPick
+    from app.models.fbs_order_pick import FbsOrderPick
+    from app.models.fbs_supply import FbsSupply
+    from app.models.inventory_count import (
+        InventoryCount,
+        InventoryCountCreatedContainer,
+        InventoryCountLine,
+    )
+    from app.models.marketplace_unload import (
+        MarketplaceUnloadPickAllocation,
+        MarketplaceUnloadRequest,
+    )
+    from app.models.user import User
+
+    session = db_session
+    tenant, legacy, target, old_loc, _, product, _ = await seed(session)
+    third = Warehouse(tenant_id=tenant.id, code="third", name="Third")
+    session.add(third)
+    await session.flush()
+    box = WarehouseBox(tenant_id=tenant.id, warehouse_id=third.id, internal_barcode="MOVED")
+    session.add(box)
+    await session.flush()
+    if reference.endswith("pick"):
+        supply = FbsSupply(tenant_id=tenant.id, seller_id=product.seller_id,
+                           warehouse_id=legacy.id, name="Supply", delivery_type="warehouse_sc",
+                           status="done" if history_state == "terminal" else "assembling")
+        session.add(supply)
+        await session.flush()
+        order_id = await session.scalar(select(FbsOrder.id))
+        values = dict(tenant_id=tenant.id, product_id=product.id, fbs_supply_id=supply.id,
+                      source_storage_location_id=old_loc.id, sorting_storage_location_id=old_loc.id,
+                      source_container_kind="box", source_container_id=box.id,
+                      picked_at=datetime.now(UTC), scan_idempotency_key=uuid.uuid4().hex,
+                      undone_at=datetime.now(UTC) if history_state == "cancelled" else None)
+        if reference == "wb_pick":
+            session.add(FbsOrderPick(fbs_order_id=order_id, **values))
+        else:
+            position = FbsOrderProduct(order_id=order_id, product_id=product.id,
+                                       quantity=1, position_index=1)
+            session.add(position)
+            await session.flush()
+            session.add(FbsOrderProductPick(order_product_id=position.id, **values))
+        if history_state == "written_off":
+            from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+
+            session.add(FbsShipmentReversalLedger(
+                tenant_id=tenant.id, fbs_order_id=order_id, product_id=product.id,
+                storage_location_id=old_loc.id, source_warehouse_id=legacy.id,
+                container_kind="box", container_id=box.id,
+                shipment_movement_id=await session.scalar(select(InventoryMovement.id)),
+            ))
+    elif reference.startswith("count"):
+        actor = User(tenant_id=tenant.id, role="ff_admin", password_hash="test-only")
+        session.add(actor)
+        await session.flush()
+        count = InventoryCount(tenant_id=tenant.id, warehouse_id=legacy.id, source="warehouse",
+                               created_by_user_id=actor.id, status={
+                                   "active": "draft", "terminal": "posted",
+                                   "cancelled": "cancelled",
+                               }[history_state])
+        session.add(count)
+        await session.flush()
+        if reference == "count_line":
+            session.add(InventoryCountLine(count_id=count.id, product_id=product.id,
+                                           storage_location_id=old_loc.id, container_kind="box",
+                                           container_id=box.id, expected_quantity=1))
+        else:
+            session.add(InventoryCountCreatedContainer(tenant_id=tenant.id, count_id=count.id,
+                                                       container_kind="box", container_id=box.id))
+    else:
+        request = MarketplaceUnloadRequest(tenant_id=tenant.id, warehouse_id=legacy.id,
+                                            seller_id=product.seller_id, status={
+                                                "active": "collecting", "terminal": "shipped",
+                                                "cancelled": "cancelled",
+                                            }[history_state])
+        session.add(request)
+        await session.flush()
+        session.add(MarketplaceUnloadPickAllocation(
+            request_id=request.id, product_id=product.id, storage_location_id=old_loc.id,
+            container_kind="box", container_id=box.id, quantity=1,
+        ))
+    await session.commit()
+    run = uuid.uuid4()
+    report = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                  source_id=legacy.id, target_id=target.id)
+    assert report["status"] == ("blocked" if history_state == "active" else "prepared"), report
+    if history_state != "active":
+        await session.commit()
+        assert (await repair.apply(session, run))["status"] == "completed"
+        assert await session.scalar(select(WarehouseBox.warehouse_id).where(
+            WarehouseBox.id == box.id)) == third.id

@@ -189,6 +189,10 @@ async def _reference_state(
     placement_edges: dict[tuple[str, str], set[tuple[str, str]]] = {}
     state: dict[tuple[str, str], Row] = {}
     missing: set[tuple[str, str]] = set()
+    semantic_fields = {
+        "status", "movement_type", "reversed_at", "undone_at", "shipment_movement_id",
+        "written_off_at", "posted_at", "delivered_at", "shipped_at", "cancelled_at",
+    }
 
     async def parent(name: str, identity: str) -> Row | None:
         key = (name, identity)
@@ -198,6 +202,7 @@ async def _reference_state(
             return None
         table = Base.metadata.tables[name]
         fields = {"id", "tenant_id", "seller_id", "container_id", "container_kind"}
+        fields |= semantic_fields
         fields |= {fk.parent.name for fk in table.foreign_keys}
         fields |= {c.name for c in table.c
                    if c.name.endswith(("_container_id", "_container_kind"))}
@@ -211,6 +216,39 @@ async def _reference_state(
         queue.append(key)
         return cache[key]
 
+    async def historical_container(name: str, column: str, row: Row) -> bool:
+        # Only the recorded source field becomes historical, never all physical
+        # references of a table. Staged/active rows keep their placement checks.
+        if name == "inventory_movements" and column == "container_id":
+            return row.get("movement_type") is not None  # persisted stock event
+        if name == "fbs_shipment_reversal_ledger" and column == "container_id":
+            return row.get("reversed_at") is not None or row.get("shipment_movement_id") is not None
+        if name in {"fbs_order_picks", "fbs_order_product_picks"} and (
+            column == "source_container_id"
+        ):
+            if row.get("undone_at") is not None:
+                return True
+            supply = await parent("fbs_supplies", row["fbs_supply_id"])
+            if supply and supply.get("status") == "done":
+                return True
+            order_id = row.get("fbs_order_id")
+            if name == "fbs_order_product_picks":
+                position = await parent("fbs_order_products", row["order_product_id"])
+                order_id = (position or {}).get("order_id")
+            return any(ledger.get("fbs_order_id") == order_id and (
+                ledger.get("shipment_movement_id") is not None
+                or ledger.get("reversed_at") is not None
+            ) for ledger in snapshot.get("fbs_shipment_reversal_ledger", []))
+        if name in {"inventory_count_lines", "inventory_count_created_containers"} and (
+            column == "container_id"
+        ):
+            count = await parent("inventory_counts", row["count_id"])
+            return bool(count and count.get("status") in {"posted", "cancelled"})
+        if name == "marketplace_unload_pick_allocations" and column == "container_id":
+            request = await parent("marketplace_unload_requests", row["request_id"])
+            return bool(request and request.get("status") in {"shipped", "cancelled"})
+        return False
+
     while queue:
         name, identity = queue.pop()
         if (name, identity) in state:
@@ -220,6 +258,7 @@ async def _reference_state(
         table = Base.metadata.tables[name]
         blockers: list[str] = []
         fields = {"id", "tenant_id", "seller_id", "container_id", "container_kind"}
+        fields |= semantic_fields
         fields |= {fk.parent.name for fk in table.foreign_keys}
         fields |= {key for key in row if key.endswith(("_container_id", "_container_kind"))}
         values = {key: value for key, value in row.items() if key in fields}
@@ -265,7 +304,7 @@ async def _reference_state(
                     found.append((candidate, container))
             if len(found) != 1:
                 blockers.append(f"unresolved_container:{name}:{column}")
-            elif name != "inventory_movements":
+            elif not await historical_container(name, column, row):
                 container_name, container = found[0]
                 placement.add((container_name, container["id"]))
         if row.get("product_id") and row.get("seller_id"):
