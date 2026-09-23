@@ -518,3 +518,73 @@ async def test_prepare_evaluates_expression_unique_allocation_index(db_session):
     assert report["status"] == "blocked"
     assert ("unique_index_collision:marketplace_unload_pick_allocations:"
             "uq_mp_unload_pick_req_product_loc_container") in report["blockers"]
+
+
+@pytest.mark.parametrize("invalid_parent", ["seller", "pallet", "container", "third_warehouse"])
+async def test_repair_rejects_foreign_parent_outside_source_target(db_session, invalid_parent):
+    from app.models.pallet import Pallet
+
+    session = db_session
+    tenant, legacy, _, old_loc, _, _, box = await seed(session)
+    foreign = Tenant(name="Foreign", slug=uuid.uuid4().hex)
+    session.add(foreign)
+    await session.flush()
+    parent_tenant = tenant.id if invalid_parent == "third_warehouse" else foreign.id
+    seller = Seller(tenant_id=parent_tenant, name="Foreign seller")
+    warehouse = Warehouse(tenant_id=parent_tenant, code="foreign", name="Foreign warehouse")
+    session.add_all([seller, warehouse])
+    await session.flush()
+    pallet = Pallet(tenant_id=parent_tenant, warehouse_id=warehouse.id,
+                    code="FOREIGN", barcode="FOREIGN")
+    foreign_box = WarehouseBox(tenant_id=parent_tenant, warehouse_id=warehouse.id,
+                               internal_barcode="FOREIGN")
+    session.add_all([pallet, foreign_box])
+    await session.flush()
+    if invalid_parent == "seller":
+        await session.execute(update(InventoryMovement).values(seller_id=seller.id))
+    elif invalid_parent == "pallet":
+        box.pallet_id = pallet.id
+    else:
+        await session.execute(update(InventoryBalance).where(
+            InventoryBalance.storage_location_id == old_loc.id,
+            InventoryBalance.container_id == box.id,
+        ).values(container_id=foreign_box.id))
+    await session.commit()
+    report = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                  source_id=legacy.id)
+    assert report["status"] == "blocked", report
+
+
+async def test_repair_parent_ownership_drift_between_prepare_and_apply(db_session):
+    session = db_session
+    tenant, legacy, _, _, _, product, _ = await seed(session)
+    foreign = Tenant(name="Foreign", slug=uuid.uuid4().hex)
+    session.add(foreign)
+    await session.commit()
+    run = uuid.uuid4()
+    await repair.prepare(session, run_id=run, tenant_id=tenant.id, source_id=legacy.id)
+    await session.commit()
+    await session.execute(update(Seller).where(Seller.id == product.seller_id)
+                          .values(tenant_id=foreign.id))
+    await session.commit()
+    assert (await repair.apply(session, run))["status"] == "stale"
+    assert await session.get(Warehouse, legacy.id) is not None
+
+
+async def test_repair_checks_all_columns_of_composite_parent(db_session):
+    session = db_session
+    tenant, _, _, _, _, _, _ = await seed(session)
+    foreign = Tenant(name="Foreign", slug=uuid.uuid4().hex)
+    session.add(foreign)
+    await session.flush()
+    product = Product(tenant_id=foreign.id, name="Foreign", sku_code="foreign")
+    session.add(product)
+    await session.commit()
+    # An enabled composite SQL FK already rejects this row. Validate a legacy
+    # snapshot defensively too, e.g. imported while constraints were disabled.
+    state = await repair._reference_state(session, tenant.id, {
+        "billing_ledger_lines": [{"id": str(uuid.uuid4()), "tenant_id": str(tenant.id),
+                                  "product_id": str(product.id)}],
+    })
+    assert any("composite_parent_mismatch:billing_ledger_lines:" in blocker
+               for row in state for blocker in row["blockers"])

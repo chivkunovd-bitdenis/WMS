@@ -167,8 +167,112 @@ async def _snapshot(
                     changed = True
         if not changed:
             break
-    return {name: sorted(rows.values(), key=lambda r: r["id"])
-            for name, rows in rows_by_table.items()}
+    snapshot = {name: sorted(rows.values(), key=lambda r: r["id"])
+                for name, rows in rows_by_table.items()}
+    snapshot["__reference_state"] = await _reference_state(session, tenant_id, snapshot)
+    return snapshot
+
+
+async def _reference_state(
+    session: AsyncSession, tenant_id: uuid.UUID, snapshot: dict[str, list[Row]],
+) -> list[Row]:
+    """Validate/fingerprint ancestors without silently adding them to repair scope.
+
+    Descendants alone do not include an external pallet, seller or a polymorphic
+    container. Read their ownership/FK fields under row locks, not credentials or
+    unrelated seller data. apply repeats this read while holding maintenance locks.
+    """
+    physical = {t.name for t in _tables()}
+    cache = {(name, row["id"]): row for name, rows in snapshot.items() for row in rows}
+    queue = list(cache)
+    state: dict[tuple[str, str], Row] = {}
+    missing: set[tuple[str, str]] = set()
+
+    async def parent(name: str, identity: str) -> Row | None:
+        key = (name, identity)
+        if key in cache:
+            return cache[key]
+        if key in missing:
+            return None
+        table = Base.metadata.tables[name]
+        fields = {"id", "tenant_id", "seller_id", "container_id", "container_kind"}
+        fields |= {fk.parent.name for fk in table.foreign_keys}
+        fields |= {c.name for c in table.c
+                   if c.name.endswith(("_container_id", "_container_kind"))}
+        statement = select(*(c for c in table.c if c.name in fields)).where(
+            table.c.id == uuid.UUID(identity)).with_for_update(read=True)
+        row = (await session.execute(statement)).mappings().first()
+        if row is None:
+            missing.add(key)
+            return None
+        cache[key] = _json(dict(row))
+        queue.append(key)
+        return cache[key]
+
+    while queue:
+        name, identity = queue.pop()
+        if (name, identity) in state:
+            continue
+        row = cache[name, identity]
+        table = Base.metadata.tables[name]
+        blockers: list[str] = []
+        fields = {"id", "tenant_id", "seller_id", "container_id", "container_kind"}
+        fields |= {fk.parent.name for fk in table.foreign_keys}
+        fields |= {key for key in row if key.endswith(("_container_id", "_container_kind"))}
+        values = {key: value for key, value in row.items() if key in fields}
+        if row.get("tenant_id") not in (None, str(tenant_id)):
+            blockers.append(f"cross_tenant_parent:{name}:{identity}")
+        for constraint in table.foreign_key_constraints:
+            elements = list(constraint.elements)
+            id_fk = next((fk for fk in elements if fk.column.name == "id"), None)
+            if id_fk is None or any(row.get(fk.parent.name) is None for fk in elements):
+                continue
+            parent_name = id_fk.column.table.name
+            if parent_name not in physical | {"sellers"} and len(elements) == 1:
+                continue
+            ancestor = await parent(parent_name, row[id_fk.parent.name])
+            if ancestor is None:
+                blockers.append(f"missing_parent:{name}:{id_fk.parent.name}")
+            elif any(row[fk.parent.name] != ancestor.get(fk.column.name) for fk in elements):
+                blockers.append(f"composite_parent_mismatch:{name}:{constraint.name}")
+        for column in sorted(fields):
+            if not column.endswith("container_id") or not row.get(column):
+                continue
+            kind = row.get(column[:-2] + "kind")
+            candidates = {
+                "pallet": ["pallets"],
+                "box": ["warehouse_boxes", "inbound_intake_boxes"],
+                "cargo_place": ["warehouse_boxes", "inbound_intake_cargo_places"],
+            }.get(str(kind), [])
+            found = []
+            for candidate in candidates:
+                container = await parent(candidate, row[column])
+                if container and (candidate != "warehouse_boxes"
+                                  or container.get("container_kind") == kind):
+                    found.append((candidate, container))
+            if len(found) != 1:
+                blockers.append(f"unresolved_container:{name}:{column}")
+            elif name == "inventory_balances":
+                container_name, container = found[0]
+                # A live balance and its container must end on the same physical
+                # source/target group. Historical movements may refer to moved
+                # containers; their current warehouse is not rewritten by repair.
+                container_warehouse = container.get("warehouse_id")
+                if container_warehouse is None:
+                    location = await parent("storage_locations", container["storage_location_id"]) \
+                        if container.get("storage_location_id") else None
+                    request = await parent("inbound_intake_requests", container["request_id"])
+                    container_warehouse = (location or request or {}).get("warehouse_id")
+                if container_warehouse not in {w["id"] for w in snapshot["warehouses"]}:
+                    blockers.append(f"container_outside_repair_scope:{container_name}:{row[column]}")
+        if row.get("product_id") and row.get("seller_id"):
+            product = await parent("products", row["product_id"])
+            if product and product.get("seller_id") != row["seller_id"]:
+                blockers.append(f"product_seller_mismatch:{name}:{identity}")
+        state[name, identity] = {
+            "table": name, "id": identity, "values": values, "blockers": sorted(set(blockers)),
+        }
+    return [state[key] for key in sorted(state)]
 
 
 def _fingerprint(snapshot: dict[str, list[Row]]) -> str:
@@ -247,6 +351,7 @@ def _plan(
         owned_products = {p["id"] for p in snapshot["products"]}
         if any(r.get("product_id") and r["product_id"] not in owned_products for r in rows):
             blockers.append(f"cross_tenant_product:{name}")
+    blockers.extend(blocker for row in snapshot["__reference_state"] for blocker in row["blockers"])
     if blockers:
         return [], blockers
 
