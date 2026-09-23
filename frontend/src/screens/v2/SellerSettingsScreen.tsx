@@ -125,7 +125,7 @@ const MARKETPLACE_OPTIONS = [
 
 function humanSellerStaffError(message: string): string {
   if (message.includes('Этот сотрудник уже добавлен') || message.includes('email_taken')) {
-    return 'Этот сотрудник уже добавлен'
+    return 'Этот email уже используется'
   }
   if (message.includes('Нет доступа') || message.includes('forbidden') || message.includes('seller_not_linked')) {
     return 'Нет доступа к сотрудникам'
@@ -143,6 +143,9 @@ function humanSellerStaffError(message: string): string {
   if (message.includes('self_update_forbidden')) {
     return 'Нельзя изменить собственный доступ'
   }
+  if (message.includes('email_already_set')) return 'Email уже задан. Обновите список сотрудников.'
+  if (message.includes('account_already_active')) return 'Сотрудник уже активировал доступ. Для восстановления пароля используйте «Забыли пароль» при входе.'
+  if (message.includes('email_required')) return 'Сначала добавьте email сотрудника.'
   return message || 'Не удалось сохранить. Попробуйте еще раз'
 }
 
@@ -185,6 +188,7 @@ export function SellerSettingsScreen({
   const [staffRows, setStaffRows] = useState<SellerStaffAccountRow[]>([])
   const [staffBusy, setStaffBusy] = useState(false)
   const [staffPermBusyId, setStaffPermBusyId] = useState<string | null>(null)
+  const [staffInviteBusyId, setStaffInviteBusyId] = useState<string | null>(null)
   const [staffError, setStaffError] = useState<string | null>(null)
   const [staffOk, setStaffOk] = useState<string | null>(null)
   const [staffCreatePerms, setStaffCreatePerms] = useState<SellerPermissions>(
@@ -196,6 +200,7 @@ export function SellerSettingsScreen({
   const [editingStaff, setEditingStaff] = useState<SellerStaffAccountRow | null>(null)
   const [editingStaffName, setEditingStaffName] = useState('')
   const [editingStaffTitle, setEditingStaffTitle] = useState('')
+  const [editingStaffEmail, setEditingStaffEmail] = useState('')
   const [editingStaffBusy, setEditingStaffBusy] = useState(false)
 
   useEffect(() => {
@@ -553,9 +558,10 @@ export function SellerSettingsScreen({
     const fd = new FormData(form)
     const fullName = String(fd.get('seller_staff_full_name') ?? '').trim()
     const jobTitle = String(fd.get('seller_staff_job_title') ?? '').trim()
-    const password = String(fd.get('seller_staff_password') ?? '')
-    if (!fullName || !password) {
-      setStaffError('Укажите ФИО и пароль сотрудника.')
+    const email = String(fd.get('seller_staff_email') ?? '').trim()
+    if (!fullName || !email || !form.checkValidity()) {
+      setStaffError('Укажите ФИО и корректный email сотрудника.')
+      form.reportValidity()
       return
     }
     setStaffBusy(true)
@@ -568,7 +574,7 @@ export function SellerSettingsScreen({
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ full_name: fullName, job_title: jobTitle || null, password, permissions: staffCreatePerms }),
+        body: JSON.stringify({ full_name: fullName, job_title: jobTitle || null, email, permissions: staffCreatePerms }),
       })
       if (!res.ok) {
         setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
@@ -578,11 +584,28 @@ export function SellerSettingsScreen({
       setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
       await loadStaffRows()
       await onStaffChanged?.()
-      setStaffOk(`Сотрудник добавлен: ${fullName}`)
+      setStaffOk(`Сотрудник добавлен: ${fullName}. Приглашение на ${email} передано на отправку.`)
     } catch (e) {
       setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
     } finally {
       setStaffBusy(false)
+    }
+  }
+
+  async function resendStaffInvite(row: SellerStaffAccountRow): Promise<void> {
+    setStaffInviteBusyId(row.id)
+    setStaffError(null)
+    setStaffOk(null)
+    try {
+      const response = await fetch(apiUrl(`/auth/seller-staff-accounts/${row.id}/invite`), {
+        method: 'POST', headers: authHeaders(token),
+      })
+      if (!response.ok) throw new Error(humanSellerStaffError(await readApiErrorMessage(response)))
+      setStaffOk(`Приглашение на ${row.email} передано на отправку.`)
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Не удалось отправить приглашение.')
+    } finally {
+      setStaffInviteBusyId(null)
     }
   }
 
@@ -646,6 +669,9 @@ export function SellerSettingsScreen({
     setEditingStaff(row)
     setEditingStaffName(row.full_name ?? '')
     setEditingStaffTitle(row.job_title ?? '')
+    setEditingStaffEmail('')
+    setStaffError(null)
+    setStaffOk(null)
   }
 
   async function saveStaffProfile() {
@@ -655,18 +681,26 @@ export function SellerSettingsScreen({
       setStaffError('Укажите ФИО сотрудника.')
       return
     }
+    const email = editingStaffEmail.trim()
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStaffError('Укажите корректный email сотрудника.')
+      return
+    }
+    setStaffError(null)
     setEditingStaffBusy(true)
     try {
       const res = await fetch(apiUrl(`/auth/seller-staff-accounts/${editingStaff.id}/profile`), {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, job_title: editingStaffTitle.trim() || null }),
+        body: JSON.stringify({ full_name: fullName, job_title: editingStaffTitle.trim() || null,
+          ...(!editingStaff.email && !editingStaff.is_owner && email ? { email } : {}),
+        }),
       })
       if (!res.ok) throw new Error(humanSellerStaffError(await readApiErrorMessage(res)))
       const updated = (await res.json()) as SellerStaffAccountRow
       setStaffRows((previous) => previous.map((row) => row.id === updated.id ? updated : row))
       setEditingStaff(null)
-      setStaffOk('Данные сотрудника сохранены')
+      setStaffOk(email ? `Данные сотрудника сохранены. Приглашение на ${email} передано на отправку.` : 'Данные сотрудника сохранены')
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Не удалось сохранить сотрудника.')
     } finally {
@@ -757,7 +791,9 @@ export function SellerSettingsScreen({
                       data-staff-id={row.id}
                     >
                       <TableCell>
+                        <Stack spacing={0.5} sx={{ overflowWrap: 'anywhere', maxWidth: 320 }}>
                         <Typography variant="body2">{row.display_name}</Typography>
+                        {row.email ? <Typography variant="caption" color="text.secondary">{row.email}</Typography> : null}
                         {row.job_title ? <Typography variant="caption" color="text.secondary">{row.job_title}</Typography> : null}
                         <Button size="small" variant="text" onClick={() => openStaffProfile(row)} sx={{ px: 0, minWidth: 0 }}>Изменить</Button>
                         <Typography
@@ -767,9 +803,18 @@ export function SellerSettingsScreen({
                           {row.is_owner
                             ? 'владелец селлера'
                             : row.must_set_password
-                              ? 'ожидает первый вход'
+                              ? 'ожидает активации'
                               : 'сотрудник'}
                         </Typography>
+                        {!row.is_owner && row.email && row.must_set_password ? (
+                          <Button size="small" variant="text" disabled={staffInviteBusyId !== null}
+                            onClick={() => void resendStaffInvite(row)}
+                            data-testid={`seller-staff-invite-${row.id}`}
+                            sx={{ px: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
+                            {staffInviteBusyId === row.id ? 'Отправка…' : 'Отправить приглашение ещё раз'}
+                          </Button>
+                        ) : null}
+                        </Stack>
                       </TableCell>
                       {SELLER_PERMISSION_BLOCKS.map((block) => (
                         <TableCell key={block.key} align="center" padding="checkbox">
@@ -833,7 +878,7 @@ export function SellerSettingsScreen({
                     sx={{ flex: 1 }}
                   />
                   <TextField name="seller_staff_job_title" label="Должность" fullWidth size="small" sx={{ flex: 1 }} />
-                  <TextField name="seller_staff_password" label="Пароль" type="password" required fullWidth size="small" autoComplete="new-password" sx={{ flex: 1 }} />
+                  <TextField name="seller_staff_email" label="Email" type="email" required fullWidth size="small" autoComplete="email" sx={{ flex: 1 }} slotProps={{ htmlInput: { 'data-testid': 'seller-staff-email' } }} />
                   <Button
                     type="submit"
                     variant="contained"
@@ -1247,7 +1292,15 @@ export function SellerSettingsScreen({
       ) : null}
       <Dialog open={editingStaff !== null} onClose={() => !editingStaffBusy && setEditingStaff(null)} fullWidth maxWidth="xs">
         <DialogTitle>Данные сотрудника</DialogTitle>
-        <DialogContent><Stack spacing={2} sx={{ pt: 1 }}><TextField autoFocus label="ФИО" required value={editingStaffName} onChange={(e) => setEditingStaffName(e.target.value)} /><TextField label="Должность" value={editingStaffTitle} onChange={(e) => setEditingStaffTitle(e.target.value)} /></Stack></DialogContent>
+        <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField autoFocus label="ФИО" required value={editingStaffName} onChange={(e) => setEditingStaffName(e.target.value)} />
+          <TextField label="Должность" value={editingStaffTitle} onChange={(e) => setEditingStaffTitle(e.target.value)} />
+          {editingStaff && !editingStaff.is_owner && !editingStaff.email ? (
+            <TextField label="Email" type="email" value={editingStaffEmail} onChange={(e) => setEditingStaffEmail(e.target.value)}
+              helperText="После добавления email сотрудник получит приглашение и задаст новый пароль. Старый пароль перестанет действовать, в том числе на ТСД." />
+          ) : null}
+          {staffError ? <Alert severity="error">{staffError}</Alert> : null}
+        </Stack></DialogContent>
         <DialogActions><Button onClick={() => setEditingStaff(null)} disabled={editingStaffBusy}>Отмена</Button><Button variant="contained" onClick={() => void saveStaffProfile()} disabled={editingStaffBusy}>Сохранить</Button></DialogActions>
       </Dialog>
     </Box>
