@@ -17,13 +17,14 @@ type Props = {
   error: string | null
   notice: string | null
   authBusy: boolean
+  onRegister?: (e: React.FormEvent<HTMLFormElement>) => void
   onLogin: (e: React.FormEvent<HTMLFormElement>) => void
   onSetPasswordByLink: (e: React.FormEvent<HTMLFormElement>, linkToken: string) => void
   onRequestPasswordReset: (e: React.FormEvent<HTMLFormElement>) => void
   clearNotice: () => void
 }
 
-type AuthMode = 'login' | 'forgot'
+type AuthMode = 'login' | 'forgot' | 'register'
 
 const fieldStackSx = { display: 'flex', flexDirection: 'column', gap: 2 } as const
 
@@ -44,6 +45,7 @@ export function PublicAuthScreen({
   error,
   notice,
   authBusy,
+  onRegister,
   onLogin,
   onSetPasswordByLink,
   onRequestPasswordReset,
@@ -205,6 +207,66 @@ export function PublicAuthScreen({
     )
   }
 
+  if (mode === 'register' && isFf && onRegister) {
+    return shell(
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Регистрация организации
+        </Typography>
+        <form data-testid="register-form" noValidate onSubmit={onRegister}>
+          <Box sx={fieldStackSx}>
+            <TextField
+              name="organization_name"
+              label="Организация"
+              required
+              fullWidth
+              autoComplete="organization"
+            />
+            <TextField
+              name="admin_email"
+              type="email"
+              label="Email администратора"
+              required
+              fullWidth
+              autoComplete="email"
+            />
+            <TextField
+              name="password"
+              type="password"
+              label="Пароль"
+              required
+              fullWidth
+              autoComplete="new-password"
+              helperText="Минимум 8 символов."
+              slotProps={{ htmlInput: { minLength: 8 } }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={authBusy}
+              fullWidth
+              size="large"
+              data-testid="register-submit"
+            >
+              {authBusy ? 'Регистрация…' : 'Создать аккаунт'}
+            </Button>
+            <Button
+              type="button"
+              variant="text"
+              onClick={() => {
+                clearNotice()
+                setMode('login')
+              }}
+              fullWidth
+            >
+              Назад ко входу
+            </Button>
+          </Box>
+        </form>
+      </Paper>,
+    )
+  }
+
   return shell(
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -271,6 +333,22 @@ export function PublicAuthScreen({
           fullWidth
         >
           Вход для селлера (портал /seller/)
+        </Button>
+      ) : null}
+      {isFf && onRegister ? (
+        <Button
+          type="button"
+          variant="text"
+          color="primary"
+          data-testid="go-to-register"
+          onClick={() => {
+            clearNotice()
+            setMode('register')
+          }}
+          sx={{ mt: 1.5 }}
+          fullWidth
+        >
+          Регистрация фулфилмента
         </Button>
       ) : null}
     </Paper>,

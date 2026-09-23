@@ -20,7 +20,6 @@ from app.services.seller_shop_service import (
     SellerShopError,
     assert_can_act_as_seller,
     user_can_manage_seller_shops,
-    uses_home_seller_scope,
 )
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS, get_seller_permissions
 from app.services.staff_permissions_service import (
@@ -49,8 +48,6 @@ async def resolve_effective_seller_id(
     home_seller_id = user.seller_id
     if home_seller_id is None:
         return None
-    if await uses_home_seller_scope(session, user):
-        return home_seller_id
     if not user_can_manage_seller_shops(user):
         return home_seller_id
     if credentials is None or credentials.scheme.lower() != "bearer":

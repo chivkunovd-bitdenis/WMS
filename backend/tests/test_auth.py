@@ -2,10 +2,23 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.core.settings import Settings, settings
+from app.db.session import SessionLocal
+from app.models.tenant import Tenant
+from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_register_login_me(async_client: AsyncClient) -> None:
+async def test_register_login_me(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The public form must work with the shipped default, independently of
+    # conftest's explicit registration override used by other API tests.
+    default_enabled = Settings.model_fields["allow_public_registration"].default
+    assert default_enabled is True
+    monkeypatch.setattr(settings, "allow_public_registration", default_enabled)
     reg = await async_client.post(
         "/auth/register",
         json={
@@ -86,3 +99,28 @@ async def test_register_duplicate_slug(async_client: AsyncClient) -> None:
         },
     )
     assert r2.status_code == 409
+    assert r2.json()["detail"] == "slug_or_email_taken"
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Tenant)) == 1
+        assert await session.scalar(select(func.count()).select_from(User)) == 1
+
+
+@pytest.mark.asyncio
+async def test_register_duplicate_email_rolls_back_new_organization(
+    async_client: AsyncClient,
+) -> None:
+    payload = {
+        "organization_name": "Original",
+        "slug": "original",
+        "admin_email": "existing@example.com",
+        "password": "password123",
+    }
+    assert (await async_client.post("/auth/register", json=payload)).status_code == 200
+    duplicate = await async_client.post(
+        "/auth/register", json={**payload, "slug": "duplicate", "organization_name": "Duplicate"}
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "slug_or_email_taken"
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Tenant)) == 1
+        assert await session.scalar(select(func.count()).select_from(User)) == 1

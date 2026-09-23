@@ -281,6 +281,7 @@ export default function App() {
     loading,
     authBusy,
     notice,
+    onRegister,
     onLogin,
     onSetPasswordByLink,
     onRequestPasswordReset,
@@ -2887,6 +2888,7 @@ export default function App() {
           error={portalMismatch ?? error}
           notice={notice}
           authBusy={authBusy}
+          onRegister={(e) => void onRegister(e)}
           onLogin={(e) => void onLogin(e)}
           onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
           onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
