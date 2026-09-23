@@ -253,6 +253,22 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("WMS_SUBSCRIPTION_PRICE_RUB", "SUBSCRIPTION_PRICE_RUB"),
         description="Сумма к оплате за месяц подписки, рублей (WMS-381).",
     )
+    google_sheets_client_registry_sheet_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_GOOGLE_SHEETS_CLIENT_REGISTRY_SHEET_ID"),
+        description=(
+            "ID Google-таблицы реестра клиентов (WMS-515). Пусто — плановая выгрузка "
+            "безопасно не запускается."
+        ),
+    )
+    google_sheets_service_account_file: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE"),
+        description=(
+            "Путь к смонтированному JSON credentials отдельного Google service account. "
+            "Значение и содержимое файла не попадают в логи."
+        ),
+    )
     allow_public_registration: bool = Field(
         default=True,
         validation_alias=AliasChoices(

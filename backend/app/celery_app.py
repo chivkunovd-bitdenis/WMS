@@ -66,4 +66,8 @@ celery_app.conf.beat_schedule = {
         "task": "wms.billing_storage_daily",
         "schedule": crontab(hour=0, minute=0, nowfun=moscow_now),
     },
+    "client-registry-google-sheets": {
+        "task": "wms.client_registry_google_sheets_sync",
+        "schedule": crontab(hour=[9, 15, 21], minute=0, nowfun=moscow_now),
+    },
 }
