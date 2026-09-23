@@ -290,17 +290,16 @@ def _client_registry_lock_key(scope: str) -> int:
 
 @asynccontextmanager
 async def _client_registry_lock(session: AsyncSession, scope: str) -> AsyncIterator[None]:
-    """Hold a PostgreSQL advisory lock for one configured Google Sheet sync."""
+    """Hold a transaction-scoped lock for one configured Google Sheet sync."""
     connection = await session.connection()
     if connection.dialect.name != "postgresql":
         yield
         return
     lock_key = _client_registry_lock_key(scope)
-    await session.scalar(text("select pg_advisory_lock(:lock_key)"), {"lock_key": lock_key})
-    try:
-        yield
-    finally:
-        await session.scalar(text("select pg_advisory_unlock(:lock_key)"), {"lock_key": lock_key})
+    # The AsyncSession exits by committing or rolling back its transaction, which
+    # releases pg_advisory_xact_lock even if a preceding SQL statement aborted.
+    await session.scalar(text("select pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+    yield
 
 
 class GoogleSheetsClientRegistryGateway:

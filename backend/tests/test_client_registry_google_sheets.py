@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from app.services.client_registry_google_sheets_service import (
     GoogleSheetsClientRegistryGateway,
     RegistrySheetSnapshot,
     RegistrySyncPlan,
+    _client_registry_lock,
     _summary_values,
     _update_cells_request,
     build_registry_sync_plan,
@@ -182,6 +184,29 @@ def test_insert_and_client_values_share_one_google_batch_update() -> None:
     assert any("insertDimension" in request for request in requests)
     update_cells = next(request["updateCells"] for request in requests if "updateCells" in request)
     assert update_cells["rows"][0]["values"][1]["userEnteredValue"] == {"stringValue": "=FF name"}
+
+
+class _PostgresLockSession:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def connection(self) -> SimpleNamespace:
+        return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+    async def scalar(self, statement: object, _params: object) -> None:
+        self.calls.append(str(statement))
+
+
+@pytest.mark.asyncio
+async def test_registry_lock_is_transaction_scoped_without_explicit_unlock() -> None:
+    session = _PostgresLockSession()
+
+    async with _client_registry_lock(session, "sheet-id"):  # type: ignore[arg-type]
+        pass
+
+    assert len(session.calls) == 1
+    assert "pg_advisory_xact_lock" in session.calls[0]
+    assert "pg_advisory_unlock" not in session.calls[0]
 
 
 @pytest.mark.asyncio
