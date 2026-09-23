@@ -43,6 +43,7 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
+from app.services.defect_warehouse_service import defect_service_write
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.inventory_balance_upsert import (
     build_positive_balance_upsert as _build_positive_balance_upsert,
@@ -1414,6 +1415,7 @@ async def apply_putaway_from_sorting(
     )
 
 
+@defect_service_write
 async def apply_return_defect_putaway(
     session: AsyncSession,
     tenant_id: uuid.UUID,

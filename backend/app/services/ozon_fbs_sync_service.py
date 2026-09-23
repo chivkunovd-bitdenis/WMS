@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -513,6 +513,8 @@ async def _binding_for_row(
     ).where(
         Warehouse.tenant_id == tenant_id,
         Warehouse.is_operational.is_(True),
+        func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+        ~func.lower(Warehouse.code).startswith("fbs-wb-"),
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.marketplace == "ozon",

@@ -192,9 +192,14 @@ async def test_already_repaired_stock_is_not_added_again(db_session):
 
 
 @pytest.mark.parametrize("via_location", [False, True])
-async def test_bulk_writes_to_known_legacy_uuid_are_rejected(db_session, via_location):
+@pytest.mark.parametrize("operational_legacy", [False, True])
+async def test_bulk_writes_to_known_legacy_uuid_are_rejected(
+    db_session, via_location, operational_legacy,
+):
     session = db_session
     tenant, legacy, _target, old_loc, _, product, _ = await seed(session)
+    legacy.is_operational = operational_legacy
+    await session.commit()
     tenant_id, legacy_id, loc_id, product_id = tenant.id, legacy.id, old_loc.id, product.id
     await (await session.connection()).run_sync(install_guards)
     await session.commit()
@@ -210,10 +215,12 @@ async def test_bulk_writes_to_known_legacy_uuid_are_rejected(db_session, via_loc
         await session.rollback()
         defect = await get_or_create_defect_location(session, tenant_id)
         assert not is_auto_fbs_wms_warehouse(await session.get(Warehouse, defect.warehouse_id))
-        await session.execute(insert(InventoryBalance).values(
-            id=uuid.uuid4(), tenant_id=tenant_id, product_id=product_id,
-            storage_location_id=defect.id, quantity=1))
         await session.commit()
+        with pytest.raises(IntegrityError, match="physical_warehouse_required"):
+            async with session.begin_nested():
+                await session.execute(insert(InventoryBalance).values(
+                    id=uuid.uuid4(), tenant_id=tenant_id, product_id=product_id,
+                    storage_location_id=defect.id, quantity=1))
         assert await catalog_service.get_warehouse(session, tenant_id, legacy_id) is None
         assert await catalog_service.get_warehouse(
             session, tenant_id, legacy_id, include_non_operational=True) is not None
@@ -316,6 +323,9 @@ async def test_publication_is_scoped_and_recoverable_after_provider_failure(
 
     monkeypatch.setattr(publisher, "sync_binding_stocks", fake_sync)
     assert (await publisher.publish(run))["publication"] == "pending"
+    with pytest.raises(repair.WarehouseRepairError, match="rollback_blocked_after_publication"):
+        await repair.rollback(db_session, run)
+    await db_session.commit()
     assert await db_session.scalar(select(func.sum(InventoryBalance.quantity))) == 1019
     assert (await publisher.publish(run))["publication"] == "confirmed"
     assert (await publisher.publish(run))["publication"] == "confirmed"
@@ -334,3 +344,177 @@ async def test_binding_rejects_legacy_and_defect_but_defect_service_works(db_ses
             await upsert_binding(db_session, tenant.id, product.seller_id, 999,
                                  wms_warehouse_id=warehouse_id, stock_sync_enabled=False,
                                  marketplace=marketplace, external_warehouse_id="999")
+
+
+async def nested_intake(session, tenant, legacy, product):
+    from app.models.inbound_intake import (
+        InboundIntakeBox,
+        InboundIntakeBoxLine,
+        InboundIntakeRequest,
+    )
+    request = InboundIntakeRequest(tenant_id=tenant.id, warehouse_id=legacy.id,
+                                  seller_id=product.seller_id, status="sorting")
+    session.add(request)
+    await session.flush()
+    box = InboundIntakeBox(tenant_id=tenant.id, request_id=request.id,
+                          box_number=1, internal_barcode="NESTED")
+    session.add(box)
+    await session.flush()
+    line = InboundIntakeBoxLine(box_id=box.id, product_id=product.id, quantity=1)
+    session.add(line)
+    await session.commit()
+    return request, box, line
+
+
+async def test_nested_document_write_is_guarded_without_location(db_session):
+    from app.models.inbound_intake import InboundIntakeBoxLine
+
+    session = db_session
+    tenant, legacy, _, _, _, product, _ = await seed(session)
+    _, _, line = await nested_intake(session, tenant, legacy, product)
+    line_id = line.id
+    await (await session.connection()).run_sync(install_guards)
+    await session.commit()
+    try:
+        with pytest.raises(IntegrityError, match="physical_warehouse_required"):
+            await session.execute(update(InboundIntakeBoxLine).where(
+                InboundIntakeBoxLine.id == line_id).values(quantity=2))
+    finally:
+        await cleanup(session)
+
+
+@pytest.mark.parametrize("insert_new", [False, True])
+async def test_nested_document_drift_blocks_rollback(db_session, insert_new):
+    from app.models.inbound_intake import InboundIntakeBoxLine
+
+    session = db_session
+    tenant, legacy, _, _, _, product, _ = await seed(session)
+    _, box, line = await nested_intake(session, tenant, legacy, product)
+    run = uuid.uuid4()
+    await repair.prepare(session, run_id=run, tenant_id=tenant.id, source_id=legacy.id)
+    await session.commit()
+    await repair.apply(session, run)
+    await session.commit()
+    if insert_new:
+        other = await session.scalar(select(Product.id).where(Product.id != product.id))
+        session.add(InboundIntakeBoxLine(box_id=box.id, product_id=other, quantity=2))
+    else:
+        line.quantity = 2
+    await session.commit()
+    with pytest.raises(repair.WarehouseRepairError, match="rollback_blocked_by_later_changes"):
+        await repair.rollback(session, run)
+
+
+async def test_legacy_identity_cannot_be_reactivated_or_renamed(db_session):
+    if db_session.get_bind().dialect.name != "postgresql":
+        pytest.skip("PostgreSQL immutable warehouse identity")
+    session = db_session
+    tenant, legacy, _, _old, _, product, _ = await seed(session)
+    legacy_id = legacy.id
+    await (await session.connection()).run_sync(install_guards)
+    await session.commit()
+    try:
+        for values in ({"is_operational": True}, {"code": "ordinary"}):
+            with pytest.raises(IntegrityError, match="warehouse_code_reserved"):
+                async with session.begin_nested():
+                    await session.execute(update(Warehouse).where(
+                        Warehouse.id == legacy_id).values(**values))
+        defect = await get_or_create_defect_location(session, tenant.id)
+        await session.execute(update(Warehouse).where(
+            Warehouse.id == defect.warehouse_id).values(is_operational=True))
+        await session.commit()
+        assert await catalog_service.get_warehouse(
+            session, tenant.id, defect.warehouse_id) is None
+        with pytest.raises(IntegrityError, match="physical_warehouse_required"):
+            async with session.begin_nested():
+                await session.execute(insert(InventoryBalance).values(
+                    tenant_id=tenant.id, product_id=product.id,
+                    storage_location_id=defect.id, quantity=1))
+    finally:
+        await cleanup(session)
+
+
+@pytest.mark.parametrize("source_default", [False, True])
+async def test_prepare_evaluates_partial_unique_print_index(db_session, source_default):
+    from app.models.print_connection import PrintConnection
+
+    session = db_session
+    tenant, legacy, target, *_ = await seed(session)
+    for wh, default in [(legacy, source_default), (target, True)]:
+        session.add(PrintConnection(
+            id=uuid.uuid4(), tenant_id=tenant.id, warehouse_id=wh.id,
+            token_hash=uuid.uuid4().hex, pairing_expires_at=datetime.now(UTC),
+            queue_name="test", platform="test", is_default=default,
+        ))
+    await session.commit()
+    report = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                  source_id=legacy.id)
+    assert report["status"] == ("blocked" if source_default else "prepared")
+    if source_default:
+        assert "unique_index_collision:print_connections:uq_print_connection_destination" in (
+            report["blockers"])
+
+
+async def test_binding_rule_drift_blocks_rollback(db_session):
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+
+    session = db_session
+    tenant, legacy, _, _, _, product, _ = await seed(session)
+    run = uuid.uuid4()
+    await repair.prepare(session, run_id=run, tenant_id=tenant.id, source_id=legacy.id)
+    await session.commit()
+    await repair.apply(session, run)
+    await session.commit()
+    binding = await session.scalar(select(FbsWarehouseBinding))
+    session.add(FbsBindingStockPool(tenant_id=tenant.id, product_id=product.id,
+                                    binding_id=binding.id, quantity=1))
+    await session.commit()
+    with pytest.raises(repair.WarehouseRepairError, match="rollback_blocked_by_later_changes"):
+        await repair.rollback(session, run)
+
+
+@pytest.mark.parametrize("seller_specific", [False, True])
+async def test_prepare_evaluates_partial_unique_tariff_index(db_session, seller_specific):
+    from app.models.billing import BillingTariffVersion
+
+    session = db_session
+    tenant, legacy, target, _, _, product, _ = await seed(session)
+    for warehouse in (legacy, target):
+        session.add(BillingTariffVersion(
+            tenant_id=tenant.id, warehouse_id=warehouse.id,
+            seller_id=product.seller_id if seller_specific else None,
+            service_code="storage_liter_day", unit="liter_day", amount=1,
+            valid_from=datetime.now(UTC).date(),
+        ))
+    await session.commit()
+    report = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                  source_id=legacy.id)
+    assert report["status"] == "blocked"
+    suffix = "seller" if seller_specific else "common"
+    assert ("unique_index_collision:billing_tariff_versions:"
+            f"uq_billing_tariff_version_warehouse_{suffix}") in report["blockers"]
+
+
+async def test_prepare_evaluates_expression_unique_allocation_index(db_session):
+    from app.models.marketplace_unload import (
+        MarketplaceUnloadPickAllocation,
+        MarketplaceUnloadRequest,
+    )
+
+    session = db_session
+    tenant, legacy, _, old_loc, new_loc, product, _ = await seed(session)
+    request = MarketplaceUnloadRequest(tenant_id=tenant.id, warehouse_id=legacy.id,
+                                       seller_id=product.seller_id, status="draft")
+    session.add(request)
+    await session.flush()
+    for location in (old_loc, new_loc):
+        session.add(MarketplaceUnloadPickAllocation(
+            request_id=request.id, product_id=product.id,
+            storage_location_id=location.id, quantity=1,
+        ))
+    await session.commit()
+    report = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                  source_id=legacy.id)
+    assert report["status"] == "blocked"
+    assert ("unique_index_collision:marketplace_unload_pick_allocations:"
+            "uq_mp_unload_pick_req_product_loc_container") in report["blockers"]

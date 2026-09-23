@@ -20,12 +20,17 @@ from app.services.physical_warehouse_repair_service import JOB_TYPE, Row, Wareho
 
 async def publish(run_id: uuid.UUID) -> Row:
     async with SessionLocal() as session:
-        job = await session.get(BackgroundJob, run_id)
+        job = await session.get(BackgroundJob, run_id, with_for_update=True)
         if job is None or job.job_type != JOB_TYPE or job.status != "completed":
             raise WarehouseRepairError("completed_repair_required")
         result = dict(job.result_json or {})
         if result.get("publication") in {"confirmed", "not_needed"}:
             return result
+        # Persist before any external call. A lost response is already enough to
+        # make rollback unsafe; repeating publication remains recoverable.
+        result["publication_started"] = True
+        job.result_json = result
+        await session.commit()
         products = {uuid.UUID(p) for p in result.get("product_ids", [])}
         tenant_id = job.tenant_id
         target_id = uuid.UUID((job.payload_json or {})["target_id"])

@@ -130,6 +130,7 @@ async def _sole_physical_operational_warehouse(
     )
     physical_warehouses = [
         warehouse for warehouse in warehouses if not is_auto_fbs_wms_warehouse(warehouse)
+        and warehouse.code.lower() != "__defect__"
     ]
     if len(physical_warehouses) != 1:
         return None

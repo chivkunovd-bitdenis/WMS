@@ -50,7 +50,9 @@ SKIP = _SkipSentinel()
 async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[Warehouse]:
     stmt = (
         select(Warehouse)
-        .where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True))
+        .where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True),
+               func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+               ~func.lower(Warehouse.code).startswith("fbs-wb-"))
         .order_by(Warehouse.name)
     )
     res = await session.execute(stmt)
@@ -95,6 +97,8 @@ async def resolve_warehouse_scan(
                 select(Warehouse).where(
                     Warehouse.tenant_id == tenant_id,
                     Warehouse.is_operational.is_(True),
+                    func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+                    ~func.lower(Warehouse.code).startswith("fbs-wb-"),
                     (func.lower(Warehouse.code) == value.lower()) | (Warehouse.barcode == value),
                 )
             )
@@ -128,7 +132,7 @@ async def get_warehouse(
     wh = await session.get(Warehouse, warehouse_id)
     if wh is None or wh.tenant_id != tenant_id or (
         not include_non_operational and (
-            not wh.is_operational or wh.code.lower() == "fbs-wb"
+            not wh.is_operational or wh.code.lower() in {"fbs-wb", "__defect__"}
             or wh.code.lower().startswith("fbs-wb-")
         )
     ):
