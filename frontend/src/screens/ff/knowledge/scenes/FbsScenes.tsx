@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type ComponentProps, type ReactNode } from 'react'
 
 import { FfFbsOrdersScreen } from '../../../v2/FfFbsOrdersScreen'
 import { FfFbsSupplyWorkspace } from '../../../v2/FfFbsSupplyWorkspace'
@@ -6,6 +6,11 @@ import type { FbsPrintAsset, FbsWorklistOrder, FbsWorkspace } from '../../../v2/
 import { SceneShell } from './SceneShell'
 import { PRODUCTS, SELLERS } from './data'
 import { installStubFetch, type StubRoute } from './stubFetch'
+import {
+  WMS514_BOUND_KIZ,
+  WMS514_DIRECT_KIZ,
+  WMS514_ORDER_QR,
+} from '../../../../mockups/wms514Logic'
 
 /**
  * Живые макеты флоу «ФБС Wildberries»: заказы → подбор → упаковка и короба.
@@ -822,8 +827,19 @@ const MARKING_ROUTES: StubRoute[] = [
   { path: /^\/operations\/fbs-supplies\/[^/?]+\/workspace/, handler: () => workspace('packing') },
   { path: /^\/operations\/packaging-tasks\/[^/?]+/, handler: () => PACKAGING_TASK },
   {
-    path: /^\/operations\/fbs-orders\/kiz\/lookup/,
-    handler: () => {
+    path: /^\/operations\/fbs-orders\/kiz\/lookup\?(.*)$/,
+    handler: (match) => {
+      const sticker = new URLSearchParams(match[1]).get('sticker')
+      if (sticker !== WMS514_ORDER_QR) {
+        return new Response(JSON.stringify({
+          detail: {
+            code: 'sticker_not_found',
+            message: 'Стикер заказа не найден',
+            context: null,
+            retryable: false,
+          },
+        }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+      }
       const target = supplyOrders('packing')[MARKED_ORDERS]
       return {
         order_id: target.id,
@@ -844,7 +860,20 @@ const MARKING_ROUTES: StubRoute[] = [
   {
     method: 'POST',
     path: /^\/operations\/fbs-orders\/kiz\/validate/,
-    handler: () => ({ ok: true, hints: [] }),
+    handler: (_match, init) => {
+      const value = requestBody(init).value
+      if (value !== WMS514_BOUND_KIZ && value !== WMS514_DIRECT_KIZ) {
+        return new Response(JSON.stringify({
+          detail: {
+            code: 'invalid_kiz',
+            message: 'Используйте полный тестовый ЧЗ из README макета',
+            context: null,
+            retryable: false,
+          },
+        }), { status: 422, headers: { 'Content-Type': 'application/json' } })
+      }
+      return { ok: true, hints: [] }
+    },
   },
   {
     method: 'POST',
@@ -865,9 +894,9 @@ const MARKING_ROUTES: StubRoute[] = [
 ]
 
 export function FbsMarkingScene({
-  mockupReprintKiz,
+  mockupScanPrinting,
 }: {
-  mockupReprintKiz?: (rawKiz: string) => Promise<boolean>
+  mockupScanPrinting?: ComponentProps<typeof FfFbsSupplyWorkspace>['mockupScanPrinting']
 } = {}) {
   return (
     <StubbedScene routes={MARKING_ROUTES} route="/app/ff/fbs">
@@ -875,7 +904,7 @@ export function FbsMarkingScene({
         token="demo"
         authHeaders={authHeaders}
         supplyId={SUPPLY_ID}
-        mockupReprintKiz={mockupReprintKiz}
+        mockupScanPrinting={mockupScanPrinting}
         open
         onClose={() => {}}
       />

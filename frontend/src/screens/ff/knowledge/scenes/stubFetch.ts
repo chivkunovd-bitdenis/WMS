@@ -50,7 +50,8 @@ export function installStubFetch(routes: StubRoute[]): () => void {
       if (wanted !== '*' && wanted !== method) continue
       const match = path.match(route.path)
       if (!match) continue
-      return jsonResponse(await route.handler(match, init))
+      const result = await route.handler(match, init)
+      return result instanceof Response ? result : jsonResponse(result)
     }
     // Незнакомый запрос: пустой успешный ответ, чтобы экран не показывал ошибку.
     return jsonResponse(null)
