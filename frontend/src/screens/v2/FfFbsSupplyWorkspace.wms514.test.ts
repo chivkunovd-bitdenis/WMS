@@ -15,6 +15,8 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(scanBar).toContain('label="Перепечатывать ЧЗ"')
     expect(scanBar).toContain('disabled={scanPrintPreferences.reprintChz}')
     expect(scanBar).toContain('disabled={scanPrintPreferences.printChz}')
+    expect(scanBar.indexOf('data-testid="fbs-kiz-scan-input"'))
+      .toBeLessThan(scanBar.indexOf('data-testid="fbs-scan-print-qr-toggle"'))
   })
 
   it('keeps lookup before direct KIZ reprint and product barcode selection', () => {
@@ -42,10 +44,65 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       source.indexOf('const scanIdleCode = useCallback'),
       source.indexOf('const scanKizCode = useCallback'),
     )
-    const qrTarget = idleScan.indexOf('`${result.scan_id}:qr`')
-    const chzTarget = idleScan.indexOf('`${result.scan_id}:chz`')
+    const qrTarget = idleScan.indexOf('`${result.scan_id}:qr:')
+    const chzTarget = idleScan.indexOf('`${result.scan_id}:chz:')
     expect(qrTarget).toBeGreaterThan(-1)
     expect(chzTarget).toBeGreaterThan(qrTarget)
     expect(idleScan.slice(chzTarget)).toContain("{ units: [{ block: 'cz', copies: 1 }] }")
+  })
+
+  it('keeps 000 and Ozon on the old lookup error path without product selection', () => {
+    const idleScan = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const scanKizCode = useCallback'),
+    )
+    const fallback = idleScan.indexOf('if (\n          isOzonSupply')
+    const product = idleScan.indexOf('scanFbsProductForAutoPrint(')
+    expect(fallback).toBeGreaterThan(-1)
+    expect(idleScan.slice(fallback, product)).toContain('throw stickerNotFound')
+    expect(product).toBeGreaterThan(fallback)
+  })
+
+  it('clears an accepted scanner payload before async work and never clears it in async finally', () => {
+    const enter = source.slice(
+      source.indexOf('const onKizScanEnter = useCallback'),
+      source.indexOf('const requestPrintBatch = async'),
+    )
+    expect(enter.indexOf("setKizScanValue('')"))
+      .toBeLessThan(enter.indexOf('if (kizScanBusy)'))
+    const asyncScans = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const dropKizScanActive = useCallback'),
+    )
+    expect(asyncScans).not.toContain("setKizScanValue('')")
+    expect(enter).toContain('scanInput.blur()')
+    expect(source).toContain('target !== kizScanInputRef.current')
+  })
+
+  it('routes product QR and CHZ through durable target claims in the shared queue', () => {
+    const idleScan = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const scanKizCode = useCallback'),
+    )
+    expect(idleScan.match(/kizAutoPrintQueueRef\.current\.enqueue/g)).toHaveLength(3)
+    expect(idleScan).toContain('claimFbsScanAutoPrintTarget(')
+    expect(idleScan).toContain('markFbsScanAutoPrintTargetStarted(')
+    expect(idleScan).toContain('releaseFbsScanAutoPrintTargetClaim(')
+  })
+
+  it('finishes a cancelled product reprint attempt before clearing the active target', () => {
+    const reset = source.slice(
+      source.indexOf('const dropKizScanActive = useCallback'),
+      source.indexOf('const onKizScanEnter = useCallback'),
+    )
+    expect(reset).toContain('completeFbsPendingProductScan(')
+    expect(reset.indexOf('completeFbsPendingProductScan('))
+      .toBeLessThan(reset.indexOf('activeProductScanBarcodeRef.current = null'))
+  })
+
+  it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {
+    const scanBar = source.indexOf('data-testid="fbs-kiz-scan-bar"')
+    expect(source.slice(scanBar - 500, scanBar)).toContain('{anyOrderNeedsHonestSign ? (')
+    expect(source).not.toContain('fbs-kiz-auto-reprint-error')
   })
 })

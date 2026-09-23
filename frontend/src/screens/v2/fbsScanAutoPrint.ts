@@ -13,9 +13,23 @@ export type FbsScanPrintPreferences = {
 export type FbsProductScanPrintPlan = {
   printQr: boolean
   printChz: boolean
+  reprintChz: boolean
 }
 
 const PREFERENCE_PREFIX = 'wms:fbs:scan-auto-print'
+const PENDING_ATTEMPT_PREFIX = 'wms:fbs:scan-auto-print:pending'
+const PENDING_ATTEMPT_TTL_MS = 12 * 60 * 60 * 1000
+
+export type FbsPendingProductScanAttempt = {
+  barcode: string
+  idempotencyKey: string
+  preferences: FbsScanPrintPreferences
+  createdAt: number
+  scanId?: string
+  orderId?: string
+  qrStarted: boolean
+  chzStarted: boolean
+}
 
 type TokenClaims = { sub?: unknown; tenant_id?: unknown }
 
@@ -37,6 +51,131 @@ function tokenIdentity(token: string): { tenant: string; user: string } {
 export function fbsScanPrintPreferencesStorageKey(token: string): string {
   const identity = tokenIdentity(token)
   return `${PREFERENCE_PREFIX}:${identity.tenant}:${identity.user}`
+}
+
+export function fbsPendingProductScanStorageKey(token: string, supplyId: string): string {
+  const identity = tokenIdentity(token)
+  return `${PENDING_ATTEMPT_PREFIX}:${identity.tenant}:${identity.user}:${supplyId}`
+}
+
+function normalizePreferences(value: unknown): FbsScanPrintPreferences | null {
+  if (!value || typeof value !== 'object') return null
+  const saved = value as Partial<FbsScanPrintPreferences>
+  const printChz = saved.printChz === true
+  return {
+    printQr: saved.printQr === true,
+    printChz,
+    reprintChz: !printChz && saved.reprintChz === true,
+  }
+}
+
+function readPendingAttempts(token: string, supplyId: string): FbsPendingProductScanAttempt[] {
+  try {
+    const raw = window.localStorage.getItem(fbsPendingProductScanStorageKey(token, supplyId))
+    const parsed = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    const now = Date.now()
+    return parsed.flatMap((value): FbsPendingProductScanAttempt[] => {
+      if (!value || typeof value !== 'object') return []
+      const row = value as Partial<FbsPendingProductScanAttempt>
+      const preferences = normalizePreferences(row.preferences)
+      if (
+        typeof row.barcode !== 'string'
+        || typeof row.idempotencyKey !== 'string'
+        || typeof row.createdAt !== 'number'
+        || !preferences
+        || now - row.createdAt > PENDING_ATTEMPT_TTL_MS
+      ) return []
+      return [{
+        barcode: row.barcode,
+        idempotencyKey: row.idempotencyKey,
+        preferences,
+        createdAt: row.createdAt,
+        scanId: typeof row.scanId === 'string' ? row.scanId : undefined,
+        orderId: typeof row.orderId === 'string' ? row.orderId : undefined,
+        qrStarted: row.qrStarted === true,
+        chzStarted: row.chzStarted === true,
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
+function writePendingAttempts(
+  token: string,
+  supplyId: string,
+  attempts: FbsPendingProductScanAttempt[],
+): void {
+  try {
+    const key = fbsPendingProductScanStorageKey(token, supplyId)
+    if (attempts.length === 0) window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, JSON.stringify(attempts))
+  } catch {
+    // Server idempotency remains authoritative when workstation storage is unavailable.
+  }
+}
+
+/**
+ * A partial QR+CHZ attempt survives a workspace remount/browser reopen. The
+ * original request id and checkbox snapshot stay together until every target
+ * was handed to the browser.
+ */
+export function claimFbsPendingProductScan(
+  token: string,
+  supplyId: string,
+  barcode: string,
+  preferences: FbsScanPrintPreferences,
+  createId: () => string,
+): FbsPendingProductScanAttempt {
+  const attempts = readPendingAttempts(token, supplyId)
+  const existing = attempts.find((attempt) => attempt.barcode === barcode)
+  if (existing) {
+    writePendingAttempts(token, supplyId, attempts)
+    return existing
+  }
+  const created: FbsPendingProductScanAttempt = {
+    barcode,
+    idempotencyKey: createId(),
+    preferences: { ...preferences },
+    createdAt: Date.now(),
+    qrStarted: false,
+    chzStarted: false,
+  }
+  writePendingAttempts(token, supplyId, [...attempts, created])
+  return created
+}
+
+export function peekFbsPendingProductScan(
+  token: string,
+  supplyId: string,
+  barcode: string,
+): FbsPendingProductScanAttempt | null {
+  const attempts = readPendingAttempts(token, supplyId)
+  writePendingAttempts(token, supplyId, attempts)
+  return attempts.find((attempt) => attempt.barcode === barcode) ?? null
+}
+
+export function updateFbsPendingProductScan(
+  token: string,
+  supplyId: string,
+  attempt: FbsPendingProductScanAttempt,
+): void {
+  const attempts = readPendingAttempts(token, supplyId)
+  const next = attempts.filter((item) => item.barcode !== attempt.barcode)
+  writePendingAttempts(token, supplyId, [...next, attempt])
+}
+
+export function completeFbsPendingProductScan(
+  token: string,
+  supplyId: string,
+  barcode: string,
+): void {
+  writePendingAttempts(
+    token,
+    supplyId,
+    readPendingAttempts(token, supplyId).filter((attempt) => attempt.barcode !== barcode),
+  )
 }
 
 export function loadFbsScanPrintPreferences(token: string): FbsScanPrintPreferences {
@@ -83,6 +222,7 @@ export function productScanPrintPlan(
     printQr: preferences.printQr,
     // Reprint mode never invents a KIZ from a product barcode.
     printChz: preferences.printChz && !preferences.reprintChz,
+    reprintChz: preferences.reprintChz && !preferences.printChz,
   }
 }
 

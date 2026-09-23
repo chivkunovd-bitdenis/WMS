@@ -8,6 +8,71 @@ export type FbsKizAutoPrintSnapshot = {
 
 export type FbsKizAutoPrint = (kiz: string) => Promise<void>
 
+export type FbsAutomaticPrintClaimState = {
+  claimed: boolean
+  started: boolean
+}
+
+export type FbsAutomaticPrintClaimApi = {
+  claim: (attemptKey: string) => Promise<FbsAutomaticPrintClaimState>
+  markStarted: (attemptKey: string) => Promise<FbsAutomaticPrintClaimState>
+  releaseClaim: (attemptKey: string) => Promise<unknown>
+}
+
+export type FbsAutomaticPrintResult = {
+  started: boolean
+  printedNow: boolean
+}
+
+export class FbsPrintOutcomeUnknownError extends Error {
+  readonly printOutcomeUnknown = true
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'FbsPrintOutcomeUnknownError'
+  }
+}
+
+type PrintOutcomeError = Error & { printOutcomeUnknown?: boolean }
+
+function outcomeMayBeUnknown(cause: unknown): boolean {
+  return cause instanceof Error && (cause as PrintOutcomeError).printOutcomeUnknown === true
+}
+
+/**
+ * Persist a print claim around one browser print invocation. A target already
+ * marked started is complete without another copy; an outstanding foreign
+ * claim is an unknown physical outcome and must never be retried blindly.
+ */
+export async function startClaimedAutomaticPrint(
+  attemptKey: string,
+  print: () => Promise<void>,
+  api: FbsAutomaticPrintClaimApi,
+): Promise<FbsAutomaticPrintResult> {
+  const claim = await api.claim(attemptKey)
+  if (!claim.claimed) {
+    if (claim.started) return { started: true, printedNow: false }
+    throw new FbsPrintOutcomeUnknownError(
+      'Предыдущий запуск печати не подтверждён; автоматический повтор остановлен.',
+    )
+  }
+  try {
+    await print()
+  } catch (cause) {
+    await api.releaseClaim(attemptKey).catch(() => undefined)
+    throw cause
+  }
+  try {
+    const started = await api.markStarted(attemptKey)
+    return { started: started.started, printedNow: true }
+  } catch (cause) {
+    throw new FbsPrintOutcomeUnknownError(
+      'Печать была запущена, но подтверждение результата не получено.',
+      { cause },
+    )
+  }
+}
+
 const PREFERENCE_PREFIX = 'wms:fbs:kiz-auto-reprint:enabled'
 const ATTEMPT_PREFIX = 'wms:fbs:kiz-auto-reprint:started'
 
@@ -70,10 +135,9 @@ export class FbsKizAutoPrintQueue {
       try {
         await print(snapshot.kiz)
       } catch (cause) {
-        // Print callbacks in this queue reject only before window.print() was
-        // invoked.  Releasing that known-not-started target lets a retry of a
-        // partial QR+CHZ scan restore only the missing label.
-        this.release(snapshot.attemptId)
+        // Release only a proven pre-print failure. If window.print() may have
+        // run, retaining the claim is the only safe way to avoid a blind copy.
+        if (!outcomeMayBeUnknown(cause)) this.release(snapshot.attemptId)
         throw cause
       }
     })

@@ -24,9 +24,10 @@ describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
   })
 
   it('does not schedule an error or pending_confirmation outcome', () => {
+    const failureStart = source.indexOf("if (outcome.status !== 'ok')")
     const failureBranch = source.slice(
-      source.indexOf("if (outcome.status !== 'ok')"),
-      source.indexOf('void kizAutoPrintQueueRef.current.enqueue'),
+      failureStart,
+      source.indexOf('await kizAutoPrintQueueRef.current.enqueue', failureStart),
     )
     expect(failureBranch).toContain("outcome.code === 'needs_confirmation'")
     expect(failureBranch).toContain('return')

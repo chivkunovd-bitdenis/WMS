@@ -22,12 +22,19 @@ from app.models.document_event import (
     SOURCE_USER,
     DocumentEvent,
 )
-from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
+from app.models.fbs_order import (
+    FBS_ORDER_MARKING_FROZEN_STATUSES,
+    FBS_ORDER_MARKING_WRITE_STATUSES,
+    FBS_ORDER_STATUS_CANCELLED,
+    FbsOrder,
+)
 from app.models.fbs_supply import FbsSupply
 from app.services.document_event_service import record_document_event
 from app.services.fbs_picking_order_service import picking_list_order_key
 
 _EVENT_KIND = "wms514_scan_auto_print"
+_TARGET_EVENT_KIND = "wms514_scan_auto_print_target"
+_PRINT_TARGETS = frozenset({"qr", "chz"})
 
 
 class FbsScanAutoPrintError(Exception):
@@ -42,6 +49,12 @@ class FbsScanAutoPrintSelection:
     order_id: uuid.UUID
     wb_order_id: int
     replayed: bool
+
+
+@dataclass(frozen=True)
+class FbsScanAutoPrintTargetClaim:
+    claimed: bool
+    started: bool
 
 
 def _scan_request_digest(supply_id: uuid.UUID, key: str) -> str:
@@ -60,6 +73,7 @@ def _selection_payload(
     request_digest: str,
     print_qr: bool,
     print_chz: bool,
+    reprint_chz: bool,
 ) -> dict[str, object]:
     return {
         "kind": _EVENT_KIND,
@@ -69,6 +83,7 @@ def _selection_payload(
         "wb_order_id": int(order.wb_order_id),
         "print_qr": print_qr,
         "print_chz": print_chz,
+        "reprint_chz": reprint_chz,
     }
 
 
@@ -79,6 +94,7 @@ def _selection_from_event(
     barcode: str,
     print_qr: bool,
     print_chz: bool,
+    reprint_chz: bool,
 ) -> FbsScanAutoPrintSelection:
     payload = event.payload_json or {}
     if (
@@ -88,6 +104,7 @@ def _selection_from_event(
         or payload.get("barcode") != barcode
         or payload.get("print_qr") != print_qr
         or payload.get("print_chz") != print_chz
+        or payload.get("reprint_chz") != reprint_chz
     ):
         raise FbsScanAutoPrintError("idempotency_key_reused")
     try:
@@ -112,8 +129,14 @@ async def select_order_for_product_scan(
     idempotency_key: str,
     print_qr: bool,
     print_chz: bool,
+    reprint_chz: bool,
     actor_user_id: uuid.UUID,
 ) -> FbsScanAutoPrintSelection:
+    # Fail closed before even reading the supply.  The all-off workstation
+    # state is deliberately not a selection mode: it must leave no durable
+    # reservation/event and must not consume the first physical unit.
+    if not print_qr and not print_chz and not reprint_chz:
+        raise FbsScanAutoPrintError("scan_auto_print_disabled")
     raw_barcode = barcode.strip()
     key = idempotency_key.strip()
     if not raw_barcode:
@@ -155,6 +178,13 @@ async def select_order_for_product_scan(
         order
         for order in orders
         if order.status != FBS_ORDER_STATUS_CANCELLED
+        and (
+            not reprint_chz
+            or (
+                order.status in FBS_ORDER_MARKING_WRITE_STATUSES
+                and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
+            )
+        )
         and raw_barcode
         in {
             value
@@ -198,6 +228,7 @@ async def select_order_for_product_scan(
                     barcode=raw_barcode,
                     print_qr=print_qr,
                     print_chz=print_chz,
+                    reprint_chz=reprint_chz,
                 )
             try:
                 served_order_ids.add(uuid.UUID(str(payload["order_id"])))
@@ -215,6 +246,7 @@ async def select_order_for_product_scan(
             request_digest=request_digest,
             print_qr=print_qr,
             print_chz=print_chz,
+            reprint_chz=reprint_chz,
         )
         inserted = await record_document_event(
             session,
@@ -247,3 +279,259 @@ async def select_order_for_product_scan(
             wb_order_id=int(selected.wb_order_id),
             replayed=False,
         )
+
+
+def _target_attempt_digest(scan_id: uuid.UUID, target: str, attempt_key: str) -> str:
+    return hashlib.sha256(f"{scan_id}:{target}:{attempt_key}".encode()).hexdigest()
+
+
+def _target_event_key(
+    scan_id: uuid.UUID,
+    target: str,
+    action: str,
+    attempt_digest: str,
+) -> str:
+    digest = hashlib.sha256(
+        f"{scan_id}:{target}:{action}:{attempt_digest}".encode()
+    ).hexdigest()
+    return f"wms514-print:{digest}"
+
+
+async def _locked_selection_event(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+) -> DocumentEvent:
+    supply = await session.scalar(
+        select(FbsSupply)
+        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if supply is None:
+        raise FbsScanAutoPrintError("supply_not_found")
+    event = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.id == scan_id,
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+            DocumentEvent.document_id == supply_id,
+            DocumentEvent.event_type == EVENT_DATA_CHANGED,
+        )
+    )
+    if event is None or (event.payload_json or {}).get("kind") != _EVENT_KIND:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    return event
+
+
+async def _target_state(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    target: str,
+) -> tuple[bool, str | None]:
+    events = list(
+        (
+            await session.scalars(
+                select(DocumentEvent)
+                .where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+                    DocumentEvent.document_id == supply_id,
+                    DocumentEvent.event_type == EVENT_DATA_CHANGED,
+                )
+                .order_by(DocumentEvent.occurred_at, DocumentEvent.id)
+            )
+        ).all()
+    )
+    started = False
+    active_claim: str | None = None
+    for event in events:
+        payload = event.payload_json or {}
+        if (
+            payload.get("kind") != _TARGET_EVENT_KIND
+            or payload.get("scan_id") != str(scan_id)
+            or payload.get("target") != target
+        ):
+            continue
+        action = payload.get("action")
+        attempt_digest = payload.get("attempt_digest")
+        if not isinstance(attempt_digest, str):
+            continue
+        if action == "claim" and not started and active_claim is None:
+            active_claim = attempt_digest
+        elif action == "release" and active_claim == attempt_digest:
+            active_claim = None
+        elif action == "started":
+            started = True
+            active_claim = None
+    return started, active_claim
+
+
+def _validate_target(selection_event: DocumentEvent, target: str) -> None:
+    if target not in _PRINT_TARGETS:
+        raise FbsScanAutoPrintError("scan_print_target_invalid")
+    payload = selection_event.payload_json or {}
+    enabled = (
+        payload.get("print_qr") is True
+        if target == "qr"
+        else payload.get("print_chz") is True
+    )
+    if not enabled:
+        raise FbsScanAutoPrintError("scan_print_target_disabled")
+
+
+def _validate_attempt_key(attempt_key: str) -> str:
+    key = attempt_key.strip()
+    if not key:
+        raise FbsScanAutoPrintError("print_claim_key_required")
+    if len(key) > 128:
+        raise FbsScanAutoPrintError("print_claim_key_too_long")
+    return key
+
+
+async def claim_scan_print_target(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    *,
+    target: str,
+    attempt_key: str,
+    actor_user_id: uuid.UUID,
+) -> FbsScanAutoPrintTargetClaim:
+    key = _validate_attempt_key(attempt_key)
+    selection_event = await _locked_selection_event(
+        session, tenant_id, supply_id, scan_id
+    )
+    _validate_target(selection_event, target)
+    started, active_claim = await _target_state(
+        session, tenant_id, supply_id, scan_id, target
+    )
+    if started:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+    attempt_digest = _target_attempt_digest(scan_id, target, key)
+    if active_claim is not None:
+        return FbsScanAutoPrintTargetClaim(
+            claimed=active_claim == attempt_digest,
+            started=False,
+        )
+    inserted = await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        product_id=selection_event.product_id,
+        payload_json={
+            "kind": _TARGET_EVENT_KIND,
+            "scan_id": str(scan_id),
+            "target": target,
+            "action": "claim",
+            "attempt_digest": attempt_digest,
+        },
+        idempotency_key=_target_event_key(
+            scan_id, target, "claim", attempt_digest
+        ),
+    )
+    if not inserted:
+        replay_started, replay_claim = await _target_state(
+            session, tenant_id, supply_id, scan_id, target
+        )
+        return FbsScanAutoPrintTargetClaim(
+            claimed=not replay_started and replay_claim == attempt_digest,
+            started=replay_started,
+        )
+    return FbsScanAutoPrintTargetClaim(claimed=True, started=False)
+
+
+async def mark_scan_print_target_started(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    *,
+    target: str,
+    attempt_key: str,
+    actor_user_id: uuid.UUID,
+) -> FbsScanAutoPrintTargetClaim:
+    key = _validate_attempt_key(attempt_key)
+    selection_event = await _locked_selection_event(
+        session, tenant_id, supply_id, scan_id
+    )
+    _validate_target(selection_event, target)
+    started, active_claim = await _target_state(
+        session, tenant_id, supply_id, scan_id, target
+    )
+    if started:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+    attempt_digest = _target_attempt_digest(scan_id, target, key)
+    if active_claim != attempt_digest:
+        raise FbsScanAutoPrintError("scan_print_claim_not_owned")
+    await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        product_id=selection_event.product_id,
+        payload_json={
+            "kind": _TARGET_EVENT_KIND,
+            "scan_id": str(scan_id),
+            "target": target,
+            "action": "started",
+            "attempt_digest": attempt_digest,
+        },
+        idempotency_key=_target_event_key(scan_id, target, "started", "once"),
+    )
+    return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+
+
+async def release_scan_print_target_claim(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    *,
+    target: str,
+    attempt_key: str,
+    actor_user_id: uuid.UUID,
+) -> FbsScanAutoPrintTargetClaim:
+    key = _validate_attempt_key(attempt_key)
+    selection_event = await _locked_selection_event(
+        session, tenant_id, supply_id, scan_id
+    )
+    _validate_target(selection_event, target)
+    started, active_claim = await _target_state(
+        session, tenant_id, supply_id, scan_id, target
+    )
+    if started:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+    attempt_digest = _target_attempt_digest(scan_id, target, key)
+    if active_claim == attempt_digest:
+        await record_document_event(
+            session,
+            tenant_id=tenant_id,
+            document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+            document_id=supply_id,
+            event_type=EVENT_DATA_CHANGED,
+            source=SOURCE_USER,
+            actor_user_id=actor_user_id,
+            product_id=selection_event.product_id,
+            payload_json={
+                "kind": _TARGET_EVENT_KIND,
+                "scan_id": str(scan_id),
+                "target": target,
+                "action": "release",
+                "attempt_digest": attempt_digest,
+            },
+            idempotency_key=_target_event_key(
+                scan_id, target, "release", attempt_digest
+            ),
+        )
+    return FbsScanAutoPrintTargetClaim(claimed=False, started=False)

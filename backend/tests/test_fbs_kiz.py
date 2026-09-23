@@ -1344,6 +1344,8 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
             "status": "ok",
             "code": "ok",
             "message": "ok",
+            "newly_bound": True,
+            "bound_kiz": value,
         }
     ]
     assert sent == {order.wb_order_id: value}

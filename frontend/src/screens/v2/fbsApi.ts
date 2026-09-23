@@ -432,6 +432,7 @@ export type FbsScanAutoPrintRequest = {
   idempotency_key: string
   print_qr: boolean
   print_chz: boolean
+  reprint_chz: boolean
 }
 
 export type FbsScanAutoPrintResult = {
@@ -439,12 +440,20 @@ export type FbsScanAutoPrintResult = {
   order_id: string
   wb_order_id: number
   replayed: boolean
+  binding_target: FbsKizLookup | null
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
   codes: string[]
   printed_codes: FbsOrderPrintTapeOrder['printed_codes']
   shortage: number
   order_errors: FbsPrintBatch['order_errors']
+}
+
+export type FbsScanAutoPrintTarget = 'qr' | 'chz'
+
+export type FbsScanAutoPrintTargetClaim = {
+  claimed: boolean
+  started: boolean
 }
 
 export type FbsDirectKizReprint = {
@@ -1005,6 +1014,63 @@ export async function scanFbsProductForAutoPrint(
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
     }),
+  )
+}
+
+async function updateFbsScanAutoPrintTarget(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  action: 'print-claim' | 'print-started' | 'print-failed',
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return jsonOrThrow<FbsScanAutoPrintTargetClaim>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/${action}`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ target, attempt_key: attemptKey }),
+    }),
+  )
+}
+
+export function claimFbsScanAutoPrintTarget(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-claim', target, attemptKey,
+  )
+}
+
+export function markFbsScanAutoPrintTargetStarted(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-started', target, attemptKey,
+  )
+}
+
+export function releaseFbsScanAutoPrintTargetClaim(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-failed', target, attemptKey,
   )
 }
 

@@ -249,7 +249,10 @@ async def order_history(
         # existing document event stream.  It is an internal idempotency fact,
         # not a packing/status action and must not appear as a generic
         # "data changed" row in every order history of the supply.
-        if payload.get("kind") == "wms514_scan_auto_print":
+        if payload.get("kind") in {
+            "wms514_scan_auto_print",
+            "wms514_scan_auto_print_target",
+        }:
             continue
         # Строчные события поставки касаются конкретного заказа. Пока ссылки на
         # заказ в них не было, историю одного заказа засыпало добавлениями всех

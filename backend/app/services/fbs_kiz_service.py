@@ -651,6 +651,65 @@ def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     )
 
 
+async def _binding_lookup_for_order(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> FbsKizLookup:
+    if (
+        order.status in FBS_ORDER_MARKING_FROZEN_STATUSES
+        or order.status not in FBS_ORDER_MARKING_WRITE_STATUSES
+    ):
+        raise FbsKizError("order_frozen", context={"order_id": str(order.id)})
+
+    current = _current_sgtin_marking(order)
+    current_out = (
+        FbsKizCurrentMarking(
+            masked=_mask_kiz(current.value),
+            meta_status=current.meta_status,
+            from_pool=current.source == _POOL_MARKING_SOURCE,
+        )
+        if current is not None
+        else None
+    )
+    image_url = await _image_url_for_order(session, order)
+    return FbsKizLookup(
+        order_id=order.id,
+        wb_order_id=int(order.wb_order_id),
+        product=_product_payload(order, image_url),
+        current_kiz=current_out,
+        # Ozon replacement is decided after resolving the scanned code to a position.
+        needs_confirmation=current_out is not None and order.marketplace != "ozon",
+        can_bind=True,
+        block_reason=None,
+        marketplace=order.marketplace or "wb",
+        external_order_id=order.external_order_id,
+    )
+
+
+async def lookup_order_for_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> FbsKizLookup:
+    """Build the existing QR→KIZ target for an already selected supply order."""
+    order = await session.scalar(
+        select(FbsOrder)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+        )
+        .options(
+            selectinload(FbsOrder.product),
+            selectinload(FbsOrder.markings),
+        )
+    )
+    if order is None:
+        raise FbsKizError("order_not_found")
+    return await _binding_lookup_for_order(session, order)
+
+
 async def lookup_order_by_sticker(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -687,35 +746,7 @@ async def lookup_order_by_sticker(
     if order is None:
         raise FbsKizError("sticker_not_found")
 
-    if (
-        order.status in FBS_ORDER_MARKING_FROZEN_STATUSES
-        or order.status not in FBS_ORDER_MARKING_WRITE_STATUSES
-    ):
-        raise FbsKizError("order_frozen", context={"order_id": str(order.id)})
-
-    current = _current_sgtin_marking(order)
-    current_out = (
-        FbsKizCurrentMarking(
-            masked=_mask_kiz(current.value),
-            meta_status=current.meta_status,
-            from_pool=current.source == _POOL_MARKING_SOURCE,
-        )
-        if current is not None
-        else None
-    )
-    image_url = await _image_url_for_order(session, order)
-    return FbsKizLookup(
-        order_id=order.id,
-        wb_order_id=int(order.wb_order_id),
-        product=_product_payload(order, image_url),
-        current_kiz=current_out,
-        # Ozon replacement is decided after resolving the scanned code to a position.
-        needs_confirmation=current_out is not None and order.marketplace != "ozon",
-        can_bind=True,
-        block_reason=None,
-        marketplace=order.marketplace or "wb",
-        external_order_id=order.external_order_id,
-    )
+    return await _binding_lookup_for_order(session, order)
 
 
 def _error_message(exc: FbsKizError) -> str:

@@ -13,6 +13,15 @@ export type AutoKizReprintResult = {
   printStarted: boolean
 }
 
+export class KizPrintOutcomeUnknownError extends Error {
+  readonly printOutcomeUnknown = true
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'KizPrintOutcomeUnknownError'
+  }
+}
+
 /** A network replay must not cause a second automatic printer invocation. */
 export async function printScannedKiz(row: KizReprintRow, print: KizPrint): Promise<boolean> {
   if (row.replayed) return false
@@ -33,6 +42,11 @@ export async function startAutoKizReprintPrint(
 ): Promise<AutoKizReprintResult> {
   const claim = await api.claim(row, attemptKey)
   if (!claim.claimed) {
+    if (claim.row.print_started_at == null) {
+      throw new KizPrintOutcomeUnknownError(
+        'Предыдущий запуск печати не подтверждён; автоматический повтор остановлен.',
+      )
+    }
     return { row: claim.row, printStarted: false }
   }
   try {
@@ -41,7 +55,16 @@ export async function startAutoKizReprintPrint(
     await api.releaseClaim(claim.row, attemptKey).catch(() => undefined)
     throw cause
   }
-  return { row: await api.markStarted(claim.row), printStarted: true }
+  try {
+    return { row: await api.markStarted(claim.row), printStarted: true }
+  } catch (cause) {
+    // window.print() has already been called. A lost acknowledgement must not
+    // release either browser or server claim and cause a blind second copy.
+    throw new KizPrintOutcomeUnknownError(
+      'Печать была запущена, но подтверждение результата не получено.',
+      { cause },
+    )
+  }
 }
 
 export async function printKizHistory(rows: KizReprintRow[], print: KizPrint): Promise<void> {

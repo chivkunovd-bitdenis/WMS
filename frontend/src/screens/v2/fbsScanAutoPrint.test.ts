@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  claimFbsPendingProductScan,
+  completeFbsPendingProductScan,
   fbsScanPrintPreferencesStorageKey,
   loadFbsScanPrintPreferences,
+  peekFbsPendingProductScan,
   productScanPrintPlan,
   saveFbsScanPrintPreferences,
+  updateFbsPendingProductScan,
   type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
 
@@ -18,6 +22,7 @@ beforeEach(() => {
     localStorage: {
       getItem: (key: string) => local.get(key) ?? null,
       setItem: (key: string, value: string) => { local.set(key, value) },
+      removeItem: (key: string) => { local.delete(key) },
     },
   })
 })
@@ -26,14 +31,14 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
   it('maps all six allowed checkbox modes to product-scan outputs', () => {
     const cases: Array<{
       preferences: FbsScanPrintPreferences
-      expected: { printQr: boolean; printChz: boolean }
+      expected: { printQr: boolean; printChz: boolean; reprintChz: boolean }
     }> = [
-      { preferences: { printQr: false, printChz: false, reprintChz: false }, expected: { printQr: false, printChz: false } },
-      { preferences: { printQr: true, printChz: false, reprintChz: false }, expected: { printQr: true, printChz: false } },
-      { preferences: { printQr: false, printChz: true, reprintChz: false }, expected: { printQr: false, printChz: true } },
-      { preferences: { printQr: true, printChz: true, reprintChz: false }, expected: { printQr: true, printChz: true } },
-      { preferences: { printQr: false, printChz: false, reprintChz: true }, expected: { printQr: false, printChz: false } },
-      { preferences: { printQr: true, printChz: false, reprintChz: true }, expected: { printQr: true, printChz: false } },
+      { preferences: { printQr: false, printChz: false, reprintChz: false }, expected: { printQr: false, printChz: false, reprintChz: false } },
+      { preferences: { printQr: true, printChz: false, reprintChz: false }, expected: { printQr: true, printChz: false, reprintChz: false } },
+      { preferences: { printQr: false, printChz: true, reprintChz: false }, expected: { printQr: false, printChz: true, reprintChz: false } },
+      { preferences: { printQr: true, printChz: true, reprintChz: false }, expected: { printQr: true, printChz: true, reprintChz: false } },
+      { preferences: { printQr: false, printChz: false, reprintChz: true }, expected: { printQr: false, printChz: false, reprintChz: true } },
+      { preferences: { printQr: true, printChz: false, reprintChz: true }, expected: { printQr: true, printChz: false, reprintChz: true } },
     ]
 
     for (const item of cases) {
@@ -74,5 +79,52 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
       printChz: true,
       reprintChz: false,
     })
+  })
+
+  it('recovers one partial attempt after remount with its original request and snapshot', () => {
+    const original = { printQr: true, printChz: true, reprintChz: false }
+    const first = claimFbsPendingProductScan(token(), 'supply-a', '4600123', original, () => 'request-a')
+    first.scanId = 'scan-a'
+    first.orderId = 'order-a'
+    first.qrStarted = true
+    updateFbsPendingProductScan(token(), 'supply-a', first)
+
+    // A remounted workspace and changed toggles must resume only the missing
+    // CHZ with the old server key, not submit that key with a new payload.
+    const recovered = claimFbsPendingProductScan(
+      token(),
+      'supply-a',
+      '4600123',
+      { printQr: false, printChz: false, reprintChz: true },
+      () => 'must-not-be-used',
+    )
+    expect(recovered).toEqual({
+      ...first,
+      preferences: original,
+      qrStarted: true,
+      chzStarted: false,
+    })
+    expect(peekFbsPendingProductScan(token('ff-a', 'operator-b'), 'supply-a', '4600123')).toBeNull()
+    expect(peekFbsPendingProductScan(token(), 'supply-b', '4600123')).toBeNull()
+  })
+
+  it('uses a new request and current snapshot only after the prior attempt completes', () => {
+    const first = claimFbsPendingProductScan(
+      token(),
+      'supply-a',
+      '4600123',
+      { printQr: true, printChz: false, reprintChz: false },
+      () => 'request-a',
+    )
+    completeFbsPendingProductScan(token(), 'supply-a', first.barcode)
+    const next = claimFbsPendingProductScan(
+      token(),
+      'supply-a',
+      '4600123',
+      { printQr: false, printChz: true, reprintChz: false },
+      () => 'request-b',
+    )
+    expect(next.idempotencyKey).toBe('request-b')
+    expect(next.preferences).toEqual({ printQr: false, printChz: true, reprintChz: false })
   })
 })

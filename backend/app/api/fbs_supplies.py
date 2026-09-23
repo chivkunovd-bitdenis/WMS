@@ -20,6 +20,7 @@ from app.models.fbs_supply import FbsSupply
 from app.models.kiz_reprint import KizReprint
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_order_tape_print_service as order_tape_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
@@ -375,6 +376,38 @@ class FbsScanAutoPrintBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
     print_qr: bool = False
     print_chz: bool = False
+    reprint_chz: bool = False
+
+    @model_validator(mode="after")
+    def validate_chz_modes(self) -> FbsScanAutoPrintBody:
+        if self.print_chz and self.reprint_chz:
+            raise ValueError("print_chz and reprint_chz are mutually exclusive")
+        return self
+
+
+class FbsScanAutoPrintProductOut(BaseModel):
+    name: str
+    image_url: str | None
+    barcode: str | None
+    seller_article: str | None
+
+
+class FbsScanAutoPrintCurrentKizOut(BaseModel):
+    masked: str
+    meta_status: str
+    from_pool: bool
+
+
+class FbsScanAutoPrintBindingTargetOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    product: FbsScanAutoPrintProductOut
+    current_kiz: FbsScanAutoPrintCurrentKizOut | None
+    needs_confirmation: bool
+    can_bind: bool
+    block_reason: str | None
+    marketplace: Literal["wb"] = "wb"
+    external_order_id: str | None = None
 
 
 class FbsScanAutoPrintOut(BaseModel):
@@ -382,12 +415,23 @@ class FbsScanAutoPrintOut(BaseModel):
     order_id: str
     wb_order_id: int
     replayed: bool
+    binding_target: FbsScanAutoPrintBindingTargetOut | None
     requires_honest_sign: bool
     qr_asset: FbsPrintAssetOut | None
     codes: list[str]
     printed_codes: list[FbsOrderTapePrintedCodeOut]
     shortage: int
     order_errors: list[FbsPrintOrderErrorOut]
+
+
+class FbsScanAutoPrintTargetBody(BaseModel):
+    target: Literal["qr", "chz"]
+    attempt_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsScanAutoPrintTargetClaimOut(BaseModel):
+    claimed: bool
+    started: bool
 
 
 class FbsDirectKizReprintBody(BaseModel):
@@ -1099,17 +1143,60 @@ def _raise_from_picking(exc: picking_svc.FbsPickingError) -> None:
 
 
 def _raise_from_scan_auto_print(exc: scan_print_svc.FbsScanAutoPrintError) -> None:
-    if exc.code in {"supply_not_found", "scan_product_not_found"}:
+    if exc.code in {
+        "supply_not_found",
+        "scan_product_not_found",
+        "scan_selection_not_found",
+    }:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code in {
         "idempotency_key_reused",
         "scan_product_ambiguous",
         "scan_product_exhausted",
+        "scan_print_claim_not_owned",
+        "scan_print_target_disabled",
     }:
         raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
-    if exc.code in {"barcode_empty", "missing_idempotency_key", "scan_auto_print_wb_only"}:
+    if exc.code in {
+        "barcode_empty",
+        "missing_idempotency_key",
+        "print_claim_key_required",
+        "print_claim_key_too_long",
+        "scan_auto_print_disabled",
+        "scan_auto_print_wb_only",
+        "scan_print_target_invalid",
+    }:
         raise_fbs_http(status.HTTP_422_UNPROCESSABLE_CONTENT, exc.code)
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+
+
+def _scan_binding_target_out(
+    target: kiz_svc.FbsKizLookup,
+) -> FbsScanAutoPrintBindingTargetOut:
+    return FbsScanAutoPrintBindingTargetOut(
+        order_id=str(target.order_id),
+        wb_order_id=target.wb_order_id,
+        product=FbsScanAutoPrintProductOut(
+            name=target.product.name,
+            image_url=target.product.image_url,
+            barcode=target.product.barcode,
+            seller_article=target.product.seller_article,
+        ),
+        current_kiz=(
+            FbsScanAutoPrintCurrentKizOut(
+                masked=target.current_kiz.masked,
+                meta_status=target.current_kiz.meta_status,
+                from_pool=target.current_kiz.from_pool,
+            )
+            if target.current_kiz is not None
+            else None
+        ),
+        needs_confirmation=target.needs_confirmation,
+        can_bind=target.can_bind,
+        block_reason=target.block_reason,
+        marketplace="wb",
+        external_order_id=target.external_order_id,
+    )
 
 
 def _direct_kiz_reprint_out(
@@ -2192,11 +2279,28 @@ async def scan_fbs_supply_product_for_auto_print(
             idempotency_key=body.idempotency_key,
             print_qr=body.print_qr,
             print_chz=body.print_chz,
+            reprint_chz=body.reprint_chz,
             actor_user_id=user.id,
         )
     except scan_print_svc.FbsScanAutoPrintError as exc:
         _raise_from_scan_auto_print(exc)
     await session.commit()
+
+    binding_target: FbsScanAutoPrintBindingTargetOut | None = None
+    if body.reprint_chz:
+        try:
+            binding_target = _scan_binding_target_out(
+                await kiz_svc.lookup_order_for_binding(
+                    session,
+                    user.tenant_id,
+                    supply_id,
+                    selected.order_id,
+                )
+            )
+        except kiz_svc.FbsKizError as exc:
+            # Reprint-mode candidates are filtered to the existing binding
+            # status set before reservation, so this is a consistency error.
+            raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
 
     if not body.print_qr and not body.print_chz:
         return FbsScanAutoPrintOut(
@@ -2204,6 +2308,7 @@ async def scan_fbs_supply_product_for_auto_print(
             order_id=str(selected.order_id),
             wb_order_id=selected.wb_order_id,
             replayed=selected.replayed,
+            binding_target=binding_target,
             requires_honest_sign=False,
             qr_asset=None,
             codes=[],
@@ -2254,6 +2359,7 @@ async def scan_fbs_supply_product_for_auto_print(
         order_id=str(selected.order_id),
         wb_order_id=selected.wb_order_id,
         replayed=selected.replayed,
+        binding_target=binding_target,
         requires_honest_sign=(
             order_result.requires_honest_sign if order_result is not None else body.print_chz
         ),
@@ -2288,6 +2394,96 @@ async def scan_fbs_supply_product_for_auto_print(
             )
             for error in result.order_errors
         ],
+    )
+
+
+@router.post(
+    "/{supply_id}/scan-auto-print/{scan_id}/print-claim",
+    response_model=FbsScanAutoPrintTargetClaimOut,
+)
+async def claim_fbs_scan_auto_print_target(
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    body: FbsScanAutoPrintTargetBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsScanAutoPrintTargetClaimOut:
+    try:
+        result = await scan_print_svc.claim_scan_print_target(
+            session,
+            user.tenant_id,
+            supply_id,
+            scan_id,
+            target=body.target,
+            attempt_key=body.attempt_key,
+            actor_user_id=user.id,
+        )
+    except scan_print_svc.FbsScanAutoPrintError as exc:
+        _raise_from_scan_auto_print(exc)
+    await session.commit()
+    return FbsScanAutoPrintTargetClaimOut(
+        claimed=result.claimed,
+        started=result.started,
+    )
+
+
+@router.post(
+    "/{supply_id}/scan-auto-print/{scan_id}/print-started",
+    response_model=FbsScanAutoPrintTargetClaimOut,
+)
+async def mark_fbs_scan_auto_print_target_started(
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    body: FbsScanAutoPrintTargetBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsScanAutoPrintTargetClaimOut:
+    try:
+        result = await scan_print_svc.mark_scan_print_target_started(
+            session,
+            user.tenant_id,
+            supply_id,
+            scan_id,
+            target=body.target,
+            attempt_key=body.attempt_key,
+            actor_user_id=user.id,
+        )
+    except scan_print_svc.FbsScanAutoPrintError as exc:
+        _raise_from_scan_auto_print(exc)
+    await session.commit()
+    return FbsScanAutoPrintTargetClaimOut(
+        claimed=result.claimed,
+        started=result.started,
+    )
+
+
+@router.post(
+    "/{supply_id}/scan-auto-print/{scan_id}/print-failed",
+    response_model=FbsScanAutoPrintTargetClaimOut,
+)
+async def release_fbs_scan_auto_print_target_claim(
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    body: FbsScanAutoPrintTargetBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsScanAutoPrintTargetClaimOut:
+    try:
+        result = await scan_print_svc.release_scan_print_target_claim(
+            session,
+            user.tenant_id,
+            supply_id,
+            scan_id,
+            target=body.target,
+            attempt_key=body.attempt_key,
+            actor_user_id=user.id,
+        )
+    except scan_print_svc.FbsScanAutoPrintError as exc:
+        _raise_from_scan_auto_print(exc)
+    await session.commit()
+    return FbsScanAutoPrintTargetClaimOut(
+        claimed=result.claimed,
+        started=result.started,
     )
 
 
