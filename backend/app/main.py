@@ -34,6 +34,7 @@ from app.api.kiz_reprints import router as kiz_reprints_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
 from app.api.marking_credentials import router as marking_credentials_router
+from app.api.marking_withdrawals import router as marking_withdrawals_router
 from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.ozon_integration import router as ozon_integration_router
@@ -149,6 +150,7 @@ def create_app() -> FastAPI:
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
+    app.include_router(marking_withdrawals_router)
     app.include_router(marking_credentials_router)
     app.include_router(notifications_router)
     app.include_router(wb_mp_warehouses_router)

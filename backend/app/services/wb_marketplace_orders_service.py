@@ -52,6 +52,11 @@ from app.services.fbs_warehouse_binding_service import (
     is_auto_fbs_wms_warehouse,
 )
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
+from app.services.wb_order_price_service import (
+    WB_NEW_ORDERS_SOURCE,
+    WB_ORDERS_SOURCE,
+    capture_wb_price_snapshot,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
@@ -598,6 +603,7 @@ async def upsert_order_from_wb_row(
     row: dict[str, Any],
     *,
     preserve_unmapped_warehouse: bool = False,
+    price_source: str = WB_ORDERS_SOURCE,
 ) -> tuple[FbsOrder, bool]:
     """Returns (order, created).
 
@@ -628,6 +634,10 @@ async def upsert_order_from_wb_row(
             existing,
             row,
             preserve_unmapped_warehouse=preserve_unmapped_warehouse,
+        )
+        await capture_wb_price_snapshot(
+            session, tenant_id=tenant_id, seller_id=seller_id, order_id=existing.id,
+            row=row, source=price_source,
         )
         return existing, False
 
@@ -702,7 +712,15 @@ async def upsert_order_from_wb_row(
             row,
             preserve_unmapped_warehouse=preserve_unmapped_warehouse,
         )
+        await capture_wb_price_snapshot(
+            session, tenant_id=tenant_id, seller_id=seller_id, order_id=raced.id,
+            row=row, source=price_source,
+        )
         return raced, False
+    await capture_wb_price_snapshot(
+        session, tenant_id=tenant_id, seller_id=seller_id, order_id=order.id,
+        row=row, source=price_source,
+    )
     return order, True
 
 
@@ -1445,7 +1463,9 @@ async def sync_seller_orders(
     status_sync_error: str | None = None
     supply_link_result: dict[str, Any] = {}
 
-    await import_wb_order_rows(session, tenant_id, seller_id, new_rows, import_stats)
+    await import_wb_order_rows(
+        session, tenant_id, seller_id, new_rows, import_stats, price_source=WB_NEW_ORDERS_SOURCE
+    )
     if import_stats.received:
         await session.commit()
 
