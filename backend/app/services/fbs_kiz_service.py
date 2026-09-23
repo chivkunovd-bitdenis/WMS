@@ -54,7 +54,7 @@ from app.services import fbs_marking_service as marking_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
-from app.services.ozon_kiz_service import OzonKizError
+from app.services.ozon_kiz_service import OzonKizCommitOutcome, OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
 from app.services.ozon_marking_position_service import (
     OzonMarkingPositionError,
@@ -220,6 +220,15 @@ class FbsKizCommitRow:
     code: str
     message: str
     meta_status: str | None = None
+    newly_bound: bool = False
+    bound_kiz: str | None = None
+
+
+@dataclass(frozen=True)
+class _FbsKizCommitOutcome:
+    meta_status: str | None
+    newly_bound: bool
+    bound_kiz: str
 
 
 @dataclass(frozen=True)
@@ -1269,7 +1278,7 @@ async def _commit_one_kiz_pair(
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
     idempotency_key: str,
-) -> str | None:
+) -> _FbsKizCommitOutcome:
     validated = await _validate_kiz_pair(
         session,
         tenant_id,
@@ -1281,8 +1290,13 @@ async def _commit_one_kiz_pair(
     order = validated.order
     if order.marketplace == "ozon":
         try:
-            return await commit_ozon(
+            ozon_result: OzonKizCommitOutcome = await commit_ozon(
                 session, order, validated.value, pair.confirmed, actor_user_id, http_client
+            )
+            return _FbsKizCommitOutcome(
+                meta_status=ozon_result.meta_status,
+                newly_bound=ozon_result.newly_bound,
+                bound_kiz=ozon_result.bound_kiz,
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
@@ -1317,7 +1331,11 @@ async def _commit_one_kiz_pair(
                 document_number=line_ref.document_number, packaging_task=line_ref.line,
                 source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
-        return None
+        return _FbsKizCommitOutcome(
+            meta_status=None,
+            newly_bound=False,
+            bound_kiz=current.value,
+        )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
@@ -1432,16 +1450,28 @@ async def _commit_one_kiz_pair(
     await session.flush()
     if pending_error is not None:
         raise pending_error
-    return None
+    return _FbsKizCommitOutcome(
+        meta_status=None,
+        newly_bound=True,
+        bound_kiz=validated.value,
+    )
 
 
-def _ok_commit_row(order_id: uuid.UUID, meta_status: str | None = None) -> FbsKizCommitRow:
+def _ok_commit_row(
+    order_id: uuid.UUID,
+    meta_status: str | None = None,
+    *,
+    newly_bound: bool = False,
+    bound_kiz: str | None = None,
+) -> FbsKizCommitRow:
     return FbsKizCommitRow(
         order_id=order_id,
         status="ok",
         code="ok",
         message="ok",
         meta_status=meta_status,
+        newly_bound=newly_bound,
+        bound_kiz=bound_kiz,
     )
 
 
@@ -1467,7 +1497,7 @@ async def commit_kiz_pairs(
     rows: list[FbsKizCommitRow] = []
     for pair in pairs:
         try:
-            meta_status = await _commit_one_kiz_pair(
+            outcome = await _commit_one_kiz_pair(
                 session,
                 tenant_id,
                 actor_user_id,
@@ -1491,6 +1521,13 @@ async def commit_kiz_pairs(
                 await session.rollback()
             rows.append(_error_commit_row(pair.order_id, exc))
         else:
-            rows.append(_ok_commit_row(pair.order_id, meta_status))
+            rows.append(
+                _ok_commit_row(
+                    pair.order_id,
+                    outcome.meta_status,
+                    newly_bound=outcome.newly_bound,
+                    bound_kiz=outcome.bound_kiz,
+                )
+            )
 
     return rows
