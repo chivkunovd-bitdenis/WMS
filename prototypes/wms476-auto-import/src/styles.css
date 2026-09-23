@@ -732,10 +732,32 @@ table.wms-table {
   border-color: var(--color-primary);
   color: #fff;
 }
+.checkbox.is-disabled {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.18);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
 .checkbox-inner {
   width: 12px;
   height: 12px;
   fill: currentColor;
+}
+.checkbox-button {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.checkbox-button:disabled {
+  cursor: not-allowed;
+}
+.checkbox-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 7px;
 }
 
 /* Processing overlay */
@@ -794,6 +816,7 @@ table.wms-table {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex-shrink: 0;
 }
 .failed-block.is-empty {
   border-color: rgba(15, 23, 42, 0.12);
@@ -813,6 +836,26 @@ table.wms-table {
   font-size: 13.5px;
   font-weight: 700;
   color: #7f1d1d;
+}
+.failed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.failed-checkbox-col {
+  width: 48px;
+  min-width: 48px;
+  text-align: center !important;
+}
+.wms-table tr.is-ineligible {
+  background: rgba(15, 23, 42, 0.025);
+}
+.failed-unavailable {
+  margin-top: 4px;
+  color: var(--color-error);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .stack {

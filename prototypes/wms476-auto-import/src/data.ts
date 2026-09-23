@@ -173,6 +173,9 @@ export type FailedRow = {
   key: string
   markingCode: string
   reason: string
+  extractedArticle: string | null
+  extractedSize: string | null
+  eligibleForAssignment: boolean
   syntheticGtin: string
   syntheticVendorCode: string
   syntheticSize: string
@@ -183,6 +186,9 @@ export const autoFailedRows: FailedRow[] = [
     key: 'fail-1',
     markingCode: '010461234509876521Ax4CqEz9',
     reason: 'Не найден артикул в каталоге селлера',
+    extractedArticle: 'PAL-CHF-OASIS-70140',
+    extractedSize: '70×140',
+    eligibleForAssignment: true,
     syntheticGtin: '04612345098765',
     syntheticVendorCode: 'PAL-CHF-OASIS-70140',
     syntheticSize: '70×140',
@@ -191,14 +197,20 @@ export const autoFailedRows: FailedRow[] = [
     key: 'fail-2',
     markingCode: '010467659887654123Zp8LqMr1',
     reason: 'Совпадение неоднозначно: артикул есть, но размер не распознан',
+    extractedArticle: 'HDB-CSH-CL-BG',
+    extractedSize: null,
+    eligibleForAssignment: true,
     syntheticGtin: '04676598876541',
-    syntheticVendorCode: 'HDB-CSH-CL-BG-??',
+    syntheticVendorCode: 'HDB-CSH-CL-BG',
     syntheticSize: '—',
   },
   {
     key: 'fail-3',
     markingCode: '010467659887661201Bt2VkNw5',
     reason: 'Совпадение неоднозначно: два товара с одинаковым штрихкодом',
+    extractedArticle: 'SCR-SLK-SUN-90',
+    extractedSize: '90×90',
+    eligibleForAssignment: true,
     syntheticGtin: '04676598876612',
     syntheticVendorCode: 'SCR-SLK-SUN-90',
     syntheticSize: '90×90',
@@ -207,9 +219,12 @@ export const autoFailedRows: FailedRow[] = [
     key: 'fail-4',
     markingCode: '010461230001122344Fs7QpWx0',
     reason: 'В файле повреждён GTIN, распознать не удалось',
+    extractedArticle: null,
+    extractedSize: null,
+    eligibleForAssignment: false,
     syntheticGtin: '04612300011223',
-    syntheticVendorCode: 'DRS-LIN-SUM-42',
-    syntheticSize: '42',
+    syntheticVendorCode: '—',
+    syntheticSize: '—',
   },
 ]
 

@@ -27,6 +27,7 @@ type Stage =
   | 'result-auto-partial'
   | 'result-auto-full'
   | 'result-auto-error'
+  | 'assign-auto-product'
   | 'processing-manual'
   | 'result-manual'
 
@@ -53,9 +54,12 @@ function filterProducts(rows: CatalogRow[], search: string): CatalogRow[] {
   })
 }
 
-function CheckboxIcon({ checked }: { checked: boolean }) {
+function CheckboxIcon({ checked, disabled = false }: { checked: boolean; disabled?: boolean }) {
   return (
-    <span className={`checkbox${checked ? ' is-checked' : ''}`} role="presentation">
+    <span
+      className={`checkbox${checked ? ' is-checked' : ''}${disabled ? ' is-disabled' : ''}`}
+      role="presentation"
+    >
       {checked ? (
         <svg viewBox="0 0 12 12" className="checkbox-inner" aria-hidden>
           <path
@@ -82,6 +86,12 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
   const [processingProgress, setProcessingProgress] = useState(0)
   const [processingLine, setProcessingLine] = useState('')
   const [manualResult, setManualResult] = useState<ManualResult | null>(null)
+  const [autoGroups, setAutoGroups] = useState<AutoGroup[]>([])
+  const [failedRows, setFailedRows] = useState<FailedRow[]>([])
+  const [selectedFailedKeys, setSelectedFailedKeys] = useState<Set<string>>(new Set())
+  const [assignmentProductId, setAssignmentProductId] = useState<string | null>(null)
+  const [assignmentSearch, setAssignmentSearch] = useState('')
+  const [assignmentShowAll, setAssignmentShowAll] = useState(false)
   const processingTimersRef = useRef<number[]>([])
   const parsingTimerRef = useRef<number | null>(null)
 
@@ -112,6 +122,12 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     setShowAll(false)
     setParsingBusy(false)
     setManualResult(null)
+    setAutoGroups([])
+    setFailedRows([])
+    setSelectedFailedKeys(new Set())
+    setAssignmentProductId(null)
+    setAssignmentSearch('')
+    setAssignmentShowAll(false)
     setProcessingProgress(0)
     setProcessingLine('')
   }
@@ -206,6 +222,20 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
     const finalDelay = effective === 'error' ? 1900 : 2500
     const finalTimer = window.setTimeout(() => {
       setProcessingProgress(100)
+      if (effective === 'partial') {
+        setAutoGroups(autoSuccessGroupsPartial.map((group) => ({ ...group })))
+        setFailedRows(autoFailedRows.map((row) => ({ ...row })))
+      } else if (effective === 'full') {
+        setAutoGroups(autoSuccessGroupsFull.map((group) => ({ ...group })))
+        setFailedRows([])
+      } else {
+        setAutoGroups([])
+        setFailedRows([])
+      }
+      setSelectedFailedKeys(new Set())
+      setAssignmentProductId(null)
+      setAssignmentSearch('')
+      setAssignmentShowAll(false)
       setStage(stageForScenario(effective))
     }, finalDelay)
     processingTimersRef.current.push(finalTimer)
@@ -281,8 +311,80 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
   }
 
   const downloadFailedPdf = () => {
-    const blob = buildFailedCodesPdf(autoFailedRows)
+    if (failedRows.length === 0) return
+    const blob = buildFailedCodesPdf(failedRows)
     downloadBlob(blob, 'WMS-476-nepodgruzhennye-kizy.pdf')
+  }
+
+  const toggleFailedRow = (row: FailedRow) => {
+    if (!row.eligibleForAssignment) return
+    setSelectedFailedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(row.key)) next.delete(row.key)
+      else next.add(row.key)
+      return next
+    })
+  }
+
+  const toggleAllEligibleFailedRows = () => {
+    const eligibleKeys = failedRows
+      .filter((row) => row.eligibleForAssignment)
+      .map((row) => row.key)
+    const allSelected =
+      eligibleKeys.length > 0 && eligibleKeys.every((key) => selectedFailedKeys.has(key))
+    setSelectedFailedKeys(allSelected ? new Set() : new Set(eligibleKeys))
+  }
+
+  const beginFailedAssignment = () => {
+    if (selectedFailedKeys.size === 0) return
+    setAssignmentProductId(null)
+    setAssignmentSearch('')
+    setAssignmentShowAll(false)
+    setStage('assign-auto-product')
+  }
+
+  const cancelFailedAssignment = () => {
+    setAssignmentProductId(null)
+    setAssignmentSearch('')
+    setAssignmentShowAll(false)
+    setStage('result-auto-partial')
+  }
+
+  const confirmFailedAssignment = () => {
+    if (!assignmentProductId || selectedFailedKeys.size === 0) return
+    const product = catalog.find((row) => row.id === assignmentProductId)
+    if (!product) return
+    const assignedCount = failedRows.filter((row) => selectedFailedKeys.has(row.key)).length
+    if (assignedCount === 0) return
+
+    setAutoGroups((prev) => {
+      const existing = prev.find((group) => group.productId === product.id)
+      if (existing) {
+        return prev.map((group) =>
+          group.productId === product.id
+            ? { ...group, loadedCount: group.loadedCount + assignedCount }
+            : group,
+        )
+      }
+      return [
+        ...prev,
+        {
+          key: `assigned-${product.id}`,
+          productId: product.id,
+          sku: product.sku,
+          productName: product.name,
+          size: product.size,
+          barcode: product.barcode,
+          loadedCount: assignedCount,
+        },
+      ]
+    })
+    setFailedRows((prev) => prev.filter((row) => !selectedFailedKeys.has(row.key)))
+    setSelectedFailedKeys(new Set())
+    setAssignmentProductId(null)
+    setAssignmentSearch('')
+    setAssignmentShowAll(false)
+    setStage('result-auto-partial')
   }
 
   if (!open) return null
@@ -349,14 +451,35 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
 
           {stage === 'result-auto-partial' ? (
             <AutoResultBody
-              groups={autoSuccessGroupsPartial}
-              failed={autoFailedRows}
+              groups={autoGroups}
+              failed={failedRows}
+              selectedFailedKeys={selectedFailedKeys}
+              onToggleFailedRow={toggleFailedRow}
+              onToggleAllEligible={toggleAllEligibleFailedRows}
+              onBeginAssignment={beginFailedAssignment}
               onDownloadFailed={downloadFailedPdf}
             />
           ) : null}
 
           {stage === 'result-auto-full' ? (
-            <AutoResultBody groups={autoSuccessGroupsFull} failed={[]} />
+            <AutoResultBody groups={autoGroups} failed={failedRows} />
+          ) : null}
+
+          {stage === 'assign-auto-product' ? (
+            <AssignmentProductBody
+              selectedCount={selectedFailedKeys.size}
+              productSearch={assignmentSearch}
+              showAll={assignmentShowAll}
+              selectedProductId={assignmentProductId}
+              onSearchChange={(value) => {
+                setAssignmentSearch(value)
+                setAssignmentShowAll(false)
+              }}
+              onShowAll={() => setAssignmentShowAll(true)}
+              onToggleProduct={(productId) =>
+                setAssignmentProductId((current) => (current === productId ? null : productId))
+              }
+            />
           ) : null}
 
           {stage === 'result-auto-error' ? (
@@ -383,6 +506,9 @@ export function MarkingImportDialog({ open, scenario, onClose }: Props) {
             onBackToPicker={backToPicker}
             onClose={onClose}
             showBackToPicker={isResult && stage !== 'result-auto-error'}
+            assignmentProductSelected={assignmentProductId !== null}
+            onCancelAssignment={cancelFailedAssignment}
+            onConfirmAssignment={confirmFailedAssignment}
           />
         </footer>
       </div>
@@ -400,6 +526,9 @@ function ModalFooter({
   onBackToPicker,
   onClose,
   showBackToPicker,
+  assignmentProductSelected,
+  onCancelAssignment,
+  onConfirmAssignment,
 }: {
   stage: Stage
   canRunAuto: boolean
@@ -410,6 +539,9 @@ function ModalFooter({
   onBackToPicker: () => void
   onClose: () => void
   showBackToPicker: boolean
+  assignmentProductSelected: boolean
+  onCancelAssignment: () => void
+  onConfirmAssignment: () => void
 }) {
   if (stage === 'picker') {
     const showManual = selectedCount > 0
@@ -457,6 +589,24 @@ function ModalFooter({
     )
   }
 
+  if (stage === 'assign-auto-product') {
+    return (
+      <>
+        <button type="button" className="btn btn-outlined" onClick={onCancelAssignment}>
+          Назад
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!assignmentProductSelected}
+          onClick={onConfirmAssignment}
+        >
+          Добавить к выбранному товару
+        </button>
+      </>
+    )
+  }
+
   return (
     <>
       {showBackToPicker ? (
@@ -495,9 +645,6 @@ function PickerBody({
   onToggleProduct: (productId: string) => void
 }) {
   const showList = files.length > 0 && !parsingBusy
-  const filtered = filterProducts(catalog, productSearch)
-  const truncated = filtered.length > PRODUCT_SEARCH_INITIAL_LIMIT && !showAll
-  const visible = truncated ? filtered.slice(0, PRODUCT_SEARCH_INITIAL_LIMIT) : filtered
 
   return (
     <>
@@ -552,70 +699,139 @@ function PickerBody({
       ) : null}
 
       {showList ? (
-        <div className="paper paper-padded picker-products">
-          <label className="field-label" htmlFor="picker-product-search">
-            Поиск товаров
-          </label>
-          <div className="field-search">
-            <span className="field-search-icon" aria-hidden>
-              🔍
-            </span>
-            <input
-              id="picker-product-search"
-              className="input"
-              placeholder="Артикул, название или штрихкод"
-              value={productSearch}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
+        <ProductPicker
+          inputId="picker-product-search"
+          productSearch={productSearch}
+          showAll={showAll}
+          selectedIds={selectedIds}
+          onSearchChange={onSearchChange}
+          onShowAll={onShowAll}
+          onToggleProduct={onToggleProduct}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function ProductPicker({
+  inputId,
+  productSearch,
+  showAll,
+  selectedIds,
+  onSearchChange,
+  onShowAll,
+  onToggleProduct,
+}: {
+  inputId: string
+  productSearch: string
+  showAll: boolean
+  selectedIds: Set<string>
+  onSearchChange: (value: string) => void
+  onShowAll: () => void
+  onToggleProduct: (productId: string) => void
+}) {
+  const filtered = filterProducts(catalog, productSearch)
+  const truncated = filtered.length > PRODUCT_SEARCH_INITIAL_LIMIT && !showAll
+  const visible = truncated ? filtered.slice(0, PRODUCT_SEARCH_INITIAL_LIMIT) : filtered
+
+  return (
+    <div className="paper paper-padded picker-products">
+      <label className="field-label" htmlFor={inputId}>
+        Поиск товаров
+      </label>
+      <div className="field-search">
+        <span className="field-search-icon" aria-hidden>
+          🔍
+        </span>
+        <input
+          id={inputId}
+          className="input"
+          placeholder="Артикул, название или штрихкод"
+          value={productSearch}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
+      </div>
+      <div className="picker-product-list">
+        {visible.length === 0 ? (
+          <div className="product-row-empty">
+            По запросу ничего не нашли. Очистите поле или измените запрос.
           </div>
-          <div className="picker-product-list">
-            {visible.length === 0 ? (
-              <div className="product-row-empty">
-                По запросу ничего не нашли. Очистите поле или измените запрос.
-              </div>
-            ) : (
-              visible.map((product) => {
-                const checked = selectedIds.has(product.id)
-                return (
-                  <div
-                    key={product.id}
-                    className={`product-row${checked ? ' is-checked' : ''}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={checked}
-                    onClick={() => onToggleProduct(product.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === ' ' || e.key === 'Enter') {
-                        e.preventDefault()
-                        onToggleProduct(product.id)
-                      }
-                    }}
-                  >
-                    <CheckboxIcon checked={checked} />
-                    <div className="product-cell-name">
-                      <div className="product-sku">{product.sku}</div>
-                      <div className="product-name" title={product.name}>
-                        {product.name}
-                      </div>
-                    </div>
+        ) : (
+          visible.map((product) => {
+            const checked = selectedIds.has(product.id)
+            return (
+              <div
+                key={product.id}
+                className={`product-row${checked ? ' is-checked' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={checked}
+                onClick={() => onToggleProduct(product.id)}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault()
+                    onToggleProduct(product.id)
+                  }
+                }}
+              >
+                <CheckboxIcon checked={checked} />
+                <div className="product-cell-name">
+                  <div className="product-sku">{product.sku}</div>
+                  <div className="product-name" title={product.name}>
+                    {product.name}
                   </div>
-                )
-              })
-            )}
-          </div>
-          {truncated ? (
-            <div className="row" style={{ gap: 8 }}>
-              <span className="text-caption text-secondary">
-                Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {filtered.length}
-                {selectedIds.size > 0 ? ` · выбрано ${selectedIds.size}` : ''}
-              </span>
-              <button type="button" className="btn btn-text btn-sm" onClick={onShowAll}>
-                Показать ещё
-              </button>
-            </div>
-          ) : null}
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+      {truncated ? (
+        <div className="row" style={{ gap: 8 }}>
+          <span className="text-caption text-secondary">
+            Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {filtered.length}
+            {selectedIds.size > 0 ? ` · выбрано ${selectedIds.size}` : ''}
+          </span>
+          <button type="button" className="btn btn-text btn-sm" onClick={onShowAll}>
+            Показать ещё
+          </button>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function AssignmentProductBody({
+  selectedCount,
+  productSearch,
+  showAll,
+  selectedProductId,
+  onSearchChange,
+  onShowAll,
+  onToggleProduct,
+}: {
+  selectedCount: number
+  productSearch: string
+  showAll: boolean
+  selectedProductId: string | null
+  onSearchChange: (value: string) => void
+  onShowAll: () => void
+  onToggleProduct: (productId: string) => void
+}) {
+  return (
+    <>
+      <div className="alert alert-info">
+        Выбрано КИЗ: <strong>{selectedCount}</strong>. Выберите один товар для добавления.
+      </div>
+      <ProductPicker
+        inputId="assignment-product-search"
+        productSearch={productSearch}
+        showAll={showAll}
+        selectedIds={new Set(selectedProductId ? [selectedProductId] : [])}
+        onSearchChange={onSearchChange}
+        onShowAll={onShowAll}
+        onToggleProduct={onToggleProduct}
+      />
     </>
   )
 }
@@ -646,22 +862,32 @@ function ProcessingBody({
 function AutoResultBody({
   groups,
   failed,
+  selectedFailedKeys = new Set(),
+  onToggleFailedRow,
+  onToggleAllEligible,
+  onBeginAssignment,
   onDownloadFailed,
 }: {
   groups: AutoGroup[]
   failed: FailedRow[]
+  selectedFailedKeys?: Set<string>
+  onToggleFailedRow?: (row: FailedRow) => void
+  onToggleAllEligible?: () => void
+  onBeginAssignment?: () => void
   onDownloadFailed?: () => void
 }) {
   const totalLoaded = groups.reduce((sum, g) => sum + g.loadedCount, 0)
   const failedCount = failed.length
   const isEmptyFailed = failedCount === 0
+  const eligibleRows = failed.filter((row) => row.eligibleForAssignment)
+  const allEligibleSelected =
+    eligibleRows.length > 0 && eligibleRows.every((row) => selectedFailedKeys.has(row.key))
 
   return (
     <>
       <div className="alert alert-success">
         <div>
-          <strong>Загружено {totalLoaded} КИЗ</strong> · распознано и привязано автоматически к{' '}
-          {groups.length} товарам.
+          <strong>Загружено {totalLoaded} КИЗ</strong> · привязано к {groups.length} товарам.
         </div>
       </div>
 
@@ -702,14 +928,28 @@ function AutoResultBody({
       <div className={`failed-block${isEmptyFailed ? ' is-empty' : ''}`}>
         <div className="failed-header">
           <div className="failed-header-title">Не подгружено — {failedCount} КИЗ</div>
-          {!isEmptyFailed && onDownloadFailed ? (
-            <button
-              type="button"
-              className="btn btn-danger-outlined btn-sm"
-              onClick={onDownloadFailed}
-            >
-              Скачать PDF с неподгруженными КИЗами
-            </button>
+          {!isEmptyFailed ? (
+            <div className="failed-actions">
+              {onBeginAssignment ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={selectedFailedKeys.size === 0}
+                  onClick={onBeginAssignment}
+                >
+                  Добавить к товару
+                </button>
+              ) : null}
+              {onDownloadFailed ? (
+                <button
+                  type="button"
+                  className="btn btn-danger-outlined btn-sm"
+                  onClick={onDownloadFailed}
+                >
+                  Скачать PDF с неподгруженными КИЗами
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {isEmptyFailed ? (
@@ -725,19 +965,72 @@ function AutoResultBody({
               <table className="wms-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: 260 }}>Код маркировки</th>
-                    <th>Причина</th>
+                    <th className="failed-checkbox-col">
+                      {onToggleAllEligible ? (
+                        <button
+                          type="button"
+                          className="checkbox-button"
+                          aria-label={
+                            allEligibleSelected
+                              ? 'Снять выбор со всех доступных КИЗ'
+                              : 'Выбрать все доступные КИЗ'
+                          }
+                          disabled={eligibleRows.length === 0}
+                          onClick={onToggleAllEligible}
+                        >
+                          <CheckboxIcon
+                            checked={allEligibleSelected}
+                            disabled={eligibleRows.length === 0}
+                          />
+                        </button>
+                      ) : null}
+                    </th>
+                    <th style={{ minWidth: 250 }}>Код маркировки</th>
+                    <th style={{ minWidth: 180 }}>Артикул</th>
+                    <th style={{ minWidth: 90 }}>Размер</th>
+                    <th style={{ minWidth: 260 }}>Причина</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {failed.map((row) => (
-                    <tr key={row.key}>
-                      <td className="mono" style={{ wordBreak: 'break-all' }}>
-                        {row.markingCode}
-                      </td>
-                      <td>{row.reason}</td>
-                    </tr>
-                  ))}
+                  {failed.map((row) => {
+                    const checked = selectedFailedKeys.has(row.key)
+                    return (
+                      <tr
+                        key={row.key}
+                        className={row.eligibleForAssignment ? '' : 'is-ineligible'}
+                      >
+                        <td className="failed-checkbox-col">
+                          <button
+                            type="button"
+                            className="checkbox-button"
+                            disabled={!row.eligibleForAssignment || !onToggleFailedRow}
+                            aria-label={
+                              row.eligibleForAssignment
+                                ? `${checked ? 'Снять выбор' : 'Выбрать'} КИЗ ${row.markingCode}`
+                                : `КИЗ ${row.markingCode} нельзя добавить: код технически повреждён`
+                            }
+                            onClick={() => onToggleFailedRow?.(row)}
+                          >
+                            <CheckboxIcon
+                              checked={checked}
+                              disabled={!row.eligibleForAssignment}
+                            />
+                          </button>
+                        </td>
+                        <td className="mono" style={{ wordBreak: 'break-all' }}>
+                          {row.markingCode}
+                        </td>
+                        <td>{row.extractedArticle ?? '—'}</td>
+                        <td>{row.extractedSize ?? '—'}</td>
+                        <td>
+                          <div>{row.reason}</div>
+                          {!row.eligibleForAssignment ? (
+                            <div className="failed-unavailable">Нельзя добавить к товару</div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
