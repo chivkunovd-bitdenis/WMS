@@ -47,6 +47,18 @@ TOTAL_HEADER = "Сумма всего"
 EXPENSES_MARKER = "Расходы"
 EXPENSES_HEADER = "Статья расходов"
 FIRST_MONTH_COLUMN = "H"
+# These tenants were present before the owner selected the initial client register.
+# They must not be reintroduced by the scheduled export; new tenants remain eligible.
+IGNORED_EXISTING_REGISTRY_TENANT_IDS = frozenset(
+    {
+        uuid.UUID("d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe"),  # AVpack
+        uuid.UUID("e7ef1f3a-709b-4074-92b5-9b8653045316"),  # Diag Org
+        uuid.UUID("63979f0b-2405-4eeb-a000-541baa00b1da"),  # WMS Test
+        uuid.UUID("7b98a8aa-c03c-4649-9677-a645be45c622"),  # Империя ФФ
+        uuid.UUID("5fbf633c-3ea9-4c29-b5f5-f549b122bcae"),  # ИП Львова В.В.
+        uuid.UUID("6dc7a501-d500-4a96-a691-b31ff53ff7b9"),  # ИП Тестовый
+    }
+)
 
 
 
@@ -252,6 +264,7 @@ async def collect_client_registry_rows(
         .join(User, User.tenant_id == Tenant.id)
         .outerjoin(latest_activity, latest_activity.c.tenant_id == Tenant.id)
         .where(User.role == "fulfillment_admin")
+        .where(Tenant.id.not_in(IGNORED_EXISTING_REGISTRY_TENANT_IDS))
         .distinct()
         .order_by(Tenant.created_at, Tenant.id)
     )
