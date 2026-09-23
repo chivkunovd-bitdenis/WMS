@@ -19,7 +19,6 @@ from app.services.client_registry_google_sheets_service import (
     RegistrySheetSnapshot,
     RegistrySyncPlan,
     _client_registry_lock,
-    _initial_summary_requests,
     _update_cells_request,
     build_registry_sync_plan,
     collect_client_registry_rows,
@@ -27,13 +26,13 @@ from app.services.client_registry_google_sheets_service import (
 from app.tasks.billing_tasks import run_client_registry_google_sheets_sync_task
 
 
-def _registry_snapshot(*, tenant_id: str, manual_values: list[str]) -> RegistrySheetSnapshot:
+def _registry_snapshot(*, tenant_id: str, monthly_values: list[str]) -> RegistrySheetSnapshot:
     return RegistrySheetSnapshot(
         sheet_id=1,
         values=[
             [],
             [],
-            ["", "Доход", "=sum"],
+            ["", "Поступления", "Расходы", "Остаток"],
             [],
             ["Клиенты"],
             [
@@ -43,12 +42,13 @@ def _registry_snapshot(*, tenant_id: str, manual_values: list[str]) -> RegistryS
                 "Последняя активность",
                 "Доступ",
                 "Оплачено до",
-                "Следующая оплата",
+                "Сумма всего",
+                "Сентябрь 2026",
             ],
-            [tenant_id, "Старое имя", "01.01.2026", "", "Да", "", *manual_values],
-            ["Поступления и расходы"],
-            ["", "Дата", "Тип", "Клиент / на что", "Сумма, ₽"],
-            ["", "01.02.2026", "Расход", "Связь", "1500"],
+            [tenant_id, "Старое имя", "01.01.2026", "", "Да", "", "=SUM(H7:H7)", *monthly_values],
+            ["Расходы"],
+            ["", "Статья расходов", "", "", "", "", "Сумма всего", "Сентябрь 2026"],
+            ["", "Связь", "", "", "", "", "=SUM(H10:H10)", "1500"],
         ],
     )
 
@@ -74,7 +74,7 @@ def test_plan_updates_only_system_cells_and_inserts_before_money_flow() -> None:
     new_id = uuid.uuid4()
     snapshot = _registry_snapshot(
         tenant_id=str(existing_id),
-        manual_values=["11.03.2026"],
+        monthly_values=["12000"],
     )
 
     plan = build_registry_sync_plan(
@@ -86,45 +86,30 @@ def test_plan_updates_only_system_cells_and_inserts_before_money_flow() -> None:
     assert plan.existing_updates == {7: [str(existing_id), "Новое имя", "01.01.2026", "", "Да", ""]}
     assert plan.insert_at_row == 8
     assert plan.separator_row == 8
-    assert plan.new_rows == [[str(new_id), "Новый FF", "01.01.2026", "", "Да", "", ""]]
-    # The plan does not carry the manual next-payment cell of an existing row, so an API adapter cannot
-    # overwrite values entered by the owner while changing the fulfilment name.
-    assert snapshot.values[6][6:] == ["11.03.2026"]
-    assert snapshot.values[9] == ["", "01.02.2026", "Расход", "Связь", "1500"]
+    assert plan.new_rows == [[str(new_id), "Новый FF", "01.01.2026", "", "Да", "", "=SUM(H8:H8)"]]
+    # The plan does not carry formula or monthly cells of an existing row.
+    assert snapshot.values[6][6:] == ["=SUM(H7:H7)", "12000"]
+    assert snapshot.values[9] == ["", "Связь", "", "", "", "", "=SUM(H10:H10)", "1500"]
 
 
-def test_blank_sheet_initializes_one_list_with_no_manual_values() -> None:
+def test_blank_sheet_is_rejected_instead_of_creating_a_different_layout() -> None:
     tenant_id = uuid.uuid4()
-
-    plan = build_registry_sync_plan(
-        RegistrySheetSnapshot(sheet_id=1, values=[]),
-        [_client(tenant_id, name="Первый FF")],
-    )
-
-    assert plan.initialize
-    assert plan.insert_at_row == 7
-    assert plan.separator_row == 7
-    assert plan.new_rows == [[str(tenant_id), "Первый FF", "01.01.2026", "", "Да", "", ""]]
-
-
-def test_previous_payment_columns_are_rejected_to_protect_the_money_flow_layout() -> None:
-    tenant_id = uuid.uuid4()
-    snapshot = _registry_snapshot(tenant_id=str(tenant_id), manual_values=[""])
-    snapshot.values[5].insert(6, "Дата оплаты")
 
     with pytest.raises(ClientRegistryGoogleSheetsError, match="sheet_layout_conflict"):
-        build_registry_sync_plan(snapshot, [_client(tenant_id, name="FF")])
+        build_registry_sync_plan(
+            RegistrySheetSnapshot(sheet_id=1, values=[]),
+            [_client(tenant_id, name="Первый FF")],
+        )
 
 
-def test_summary_formulas_start_at_the_actual_money_flow_row() -> None:
-    requests = _initial_summary_requests(1, 24)
-    values = requests[1]["updateCells"]["rows"][0]["values"]
-    assert values[0]["userEnteredValue"] == {
-        "formulaValue": '=SUMIF(C24:C;"Поступление";E24:E)'
-    }
-    assert values[1]["userEnteredValue"] == {
-        "formulaValue": '=SUMIF(C24:C;"Расход";E24:E)'
-    }
+def test_new_client_gets_a_total_formula_for_visible_month_columns() -> None:
+    tenant_id = uuid.uuid4()
+    new_id = uuid.uuid4()
+    snapshot = _registry_snapshot(tenant_id=str(tenant_id), monthly_values=[""])
+
+    plan = build_registry_sync_plan(snapshot, [_client(new_id, name="Новый FF")])
+
+    assert plan.new_rows == [[str(new_id), "Новый FF", "01.01.2026", "", "Да", "", "=SUM(H8:H8)"]]
 
 
 def test_system_value_starting_with_equals_is_written_as_literal_string() -> None:
@@ -165,7 +150,7 @@ def test_insert_and_client_values_share_one_google_batch_update() -> None:
     plan = RegistrySyncPlan(
         initialize=False,
         existing_updates={},
-        new_rows=[["tenant-id", "=FF name", "01.01.2026", "", "Да", "", ""]],
+        new_rows=[["tenant-id", "=FF name", "01.01.2026", "", "Да", "", "=SUM(H22:H22)"]],
         insert_at_row=22,
         separator_row=22,
     )

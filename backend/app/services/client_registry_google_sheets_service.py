@@ -42,10 +42,12 @@ CLIENT_HEADERS = [
     "Последняя активность",
     "Доступ",
     "Оплачено до",
-    "Следующая оплата",
 ]
-CASHFLOW_MARKER = "Поступления и расходы"
-CASHFLOW_HEADERS = ["Дата", "Тип", "Клиент / на что", "Сумма, ₽"]
+TOTAL_HEADER = "Сумма всего"
+EXPENSES_MARKER = "Расходы"
+EXPENSES_HEADER = "Статья расходов"
+FIRST_MONTH_COLUMN = "H"
+
 
 
 class ClientRegistryGoogleSheetsError(Exception):
@@ -138,24 +140,21 @@ def build_registry_sync_plan(
 ) -> RegistrySyncPlan:
     """Build a non-destructive A:F upsert plan from current sheet values."""
     if _is_blank_sheet(snapshot.values):
-        return RegistrySyncPlan(
-            initialize=True,
-            existing_updates={},
-            new_rows=[[*client.system_values(), ""] for client in clients],
-            insert_at_row=FIRST_CLIENT_ROW,
-            separator_row=FIRST_CLIENT_ROW,
-        )
+        raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
 
     header_index = CLIENT_HEADER_ROW - 1
-    headers = snapshot.values[header_index][: len(CLIENT_HEADERS)]
-    if headers != CLIENT_HEADERS:
+    headers = snapshot.values[header_index]
+    if headers[: len(CLIENT_HEADERS)] != CLIENT_HEADERS or _cell(snapshot.values, header_index, 6) != TOTAL_HEADER:
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
+    if len(headers) <= 7:
+        raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
+    last_month_column = _column_name(len(headers))
 
     separator_index: int | None = None
     existing_rows: dict[str, int] = {}
     for row_index in range(FIRST_CLIENT_ROW - 1, len(snapshot.values)):
         first_cell = _cell(snapshot.values, row_index, 0)
-        if first_cell == CASHFLOW_MARKER:
+        if first_cell == EXPENSES_MARKER:
             separator_index = row_index
             break
         if not first_cell:
@@ -166,10 +165,10 @@ def build_registry_sync_plan(
 
     if separator_index is None:
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
-    if [
-        _cell(snapshot.values, separator_index + 1, column_index + 1)
-        for column_index in range(len(CASHFLOW_HEADERS))
-    ] != CASHFLOW_HEADERS:
+    if (
+        _cell(snapshot.values, separator_index + 1, 1) != EXPENSES_HEADER
+        or _cell(snapshot.values, separator_index + 1, 6) != TOTAL_HEADER
+    ):
         raise ClientRegistryGoogleSheetsError("sheet_layout_conflict")
 
     existing_updates: dict[int, list[str]] = {}
@@ -177,7 +176,10 @@ def build_registry_sync_plan(
     for client in clients:
         row = existing_rows.get(str(client.tenant_id))
         if row is None:
-            new_rows.append([*client.system_values(), ""])
+            new_row = separator_index + 1 + len(new_rows)
+            new_rows.append(
+                [*client.system_values(), f"=SUM({FIRST_MONTH_COLUMN}{new_row}:{last_month_column}{new_row})"]
+            )
         else:
             existing_updates[row] = client.system_values()
 
@@ -188,6 +190,16 @@ def build_registry_sync_plan(
         insert_at_row=separator_index + 1,
         separator_row=separator_index + 1,
     )
+
+
+def _column_name(column_count: int) -> str:
+    """Return the A1 column name for a one-based column count."""
+    result = ""
+    value = column_count
+    while value:
+        value, remainder = divmod(value - 1, 26)
+        result = chr(ord("A") + remainder) + result
+    return result
 
 
 def _activity_statement() -> Any:
@@ -358,7 +370,7 @@ class GoogleSheetsClientRegistryGateway:
                 .values()
                 .get(
                     spreadsheetId=self._spreadsheet_id,
-                    range=f"'{SHEET_TITLE}'!A1:I",
+                    range=f"'{SHEET_TITLE}'!A1:ZZ",
                 )
                 .execute()
             )
@@ -418,7 +430,8 @@ class GoogleSheetsClientRegistryGateway:
                 _update_cells_rows_request(
                     self._sheet_id,
                     first_row,
-                    [values[:6] for values in plan.new_rows],
+                    plan.new_rows,
+                    formula_indices=frozenset({6}),
                 )
             )
         try:
