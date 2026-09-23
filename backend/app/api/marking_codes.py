@@ -84,6 +84,39 @@ class MarkingImportPreviewOut(BaseModel):
     duplicates_in_file: int
 
 
+class AutoImportProductGroupOut(BaseModel):
+    product_id: str
+    sku: str
+    product_name: str
+    size: str | None
+    barcode: str | None
+    loaded_count: int
+
+
+class AutoImportUnmatchedOut(BaseModel):
+    key: str
+    marking_code: str
+    article: str | None
+    size: str | None
+    reason: str
+    eligible_for_assignment: bool
+    has_label_artifact: bool
+
+
+class AutoMarkingImportOut(BaseModel):
+    import_id: str
+    document_number: str
+    groups: list[AutoImportProductGroupOut]
+    unmatched: list[AutoImportUnmatchedOut]
+
+
+class AssignMarkingCodesOut(BaseModel):
+    import_id: str
+    document_number: str
+    product: AutoImportProductGroupOut
+    assigned_keys: list[str]
+
+
 class SharedBasketInventoryOut(BaseModel):
     pool_id: str
     gtin: str
@@ -503,6 +536,8 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
     if code in ("task_not_active",):
         status_code = status.HTTP_409_CONFLICT
+    if code == "import_request_conflict":
+        status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=code)
 
 
@@ -639,6 +674,45 @@ def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
     )
 
 
+def _auto_group_out(row: mc_svc.AutoImportProductGroup) -> AutoImportProductGroupOut:
+    return AutoImportProductGroupOut(
+        product_id=str(row.product_id),
+        sku=row.sku,
+        product_name=row.product_name,
+        size=row.size,
+        barcode=row.barcode,
+        loaded_count=row.loaded_count,
+    )
+
+
+def _auto_unmatched_out(row: mc_svc.AutoImportUnmatchedRow) -> AutoImportUnmatchedOut:
+    return AutoImportUnmatchedOut(
+        key=row.key,
+        marking_code=row.marking_code,
+        article=row.article,
+        size=row.size,
+        reason=row.reason,
+        eligible_for_assignment=row.eligible_for_assignment,
+        has_label_artifact=row.has_label_artifact,
+    )
+
+
+def _parse_row_keys_json(row_keys_json: str) -> list[str]:
+    try:
+        raw = json.loads(row_keys_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid_row_keys_json",
+        ) from exc
+    if not isinstance(raw, list) or not all(isinstance(value, str) for value in raw):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid_row_keys_json",
+        )
+    return list(dict.fromkeys(raw))
+
+
 @router.post("/import/preview", response_model=MarkingImportPreviewOut)
 async def preview_marking_import(
     user: Annotated[User, Depends(get_current_user)],
@@ -693,6 +767,129 @@ async def preview_marking_import(
         total_codes=result.total_codes,
         invalid_count=result.invalid_count,
         duplicates_in_file=result.duplicates_in_file,
+    )
+
+
+async def _read_import_uploads(files: list[UploadFile]) -> list[tuple[str, bytes]]:
+    payloads: list[tuple[str, bytes]] = []
+    for upload in files:
+        filename = (upload.filename or "upload").strip() or "upload"
+        content = await upload.read(_MAX_UPLOAD_BYTES + 1)
+        if len(content) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="file_too_large",
+            )
+        payloads.append((filename, content))
+    return payloads
+
+
+def _target_import_seller(
+    user: User,
+    effective_seller_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+) -> uuid.UUID:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        return effective_seller_id
+    if user.role == FULFILLMENT_ADMIN:
+        if seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="seller_id_required",
+            )
+        return seller_id
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+@router.post("/import/auto", response_model=AutoMarkingImportOut)
+async def auto_import_marking_codes(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    files: Annotated[list[UploadFile], File(...)],
+    request_id: Annotated[uuid.UUID, Form(...)],
+    seller_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> AutoMarkingImportOut:
+    target_seller_id = _target_import_seller(user, effective_seller_id, seller_id)
+    try:
+        result = await mc_svc.auto_import_marking_codes(
+            session,
+            user.tenant_id,
+            target_seller_id,
+            request_id=request_id,
+            files=await _read_import_uploads(files),
+            uploaded_by_user_id=user.id,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return AutoMarkingImportOut(
+        import_id=str(result.import_id),
+        document_number=result.document_number,
+        groups=[_auto_group_out(row) for row in result.groups],
+        unmatched=[_auto_unmatched_out(row) for row in result.unmatched],
+    )
+
+
+@router.post("/import/assign", response_model=AssignMarkingCodesOut)
+async def assign_marking_codes_to_product(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    files: Annotated[list[UploadFile], File(...)],
+    request_id: Annotated[uuid.UUID, Form(...)],
+    product_id: Annotated[uuid.UUID, Form(...)],
+    row_keys_json: Annotated[str, Form(...)],
+    seller_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> AssignMarkingCodesOut:
+    target_seller_id = _target_import_seller(user, effective_seller_id, seller_id)
+    try:
+        result = await mc_svc.assign_import_rows_to_product(
+            session,
+            user.tenant_id,
+            target_seller_id,
+            request_id=request_id,
+            files=await _read_import_uploads(files),
+            row_keys=_parse_row_keys_json(row_keys_json),
+            product_id=product_id,
+            uploaded_by_user_id=user.id,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return AssignMarkingCodesOut(
+        import_id=str(result.import_id),
+        document_number=result.document_number,
+        product=_auto_group_out(result.product),
+        assigned_keys=result.assigned_keys,
+    )
+
+
+@router.post("/import/unmatched-pdf")
+async def download_unmatched_import_pdf(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    files: Annotated[list[UploadFile], File(...)],
+    row_keys_json: Annotated[str, Form(...)],
+    seller_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> Response:
+    _target_import_seller(user, effective_seller_id, seller_id)
+    try:
+        pdf_bytes = await mc_svc.build_unmatched_import_pdf(
+            session,
+            user.tenant_id,
+            await _read_import_uploads(files),
+            _parse_row_keys_json(row_keys_json),
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="WMS-476-unmatched-kiz.pdf"',
+        },
     )
 
 
