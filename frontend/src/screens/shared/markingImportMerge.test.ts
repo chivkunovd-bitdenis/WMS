@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   applyPoolContextToGroup,
@@ -11,6 +11,8 @@ import {
   paginateProductSearchResults,
   PRODUCT_SEARCH_INITIAL_LIMIT,
   removeImportFileAt,
+  keepAssignmentRequestId,
+  runAutomaticImportAttempt,
   type ImportCatalogRow,
 } from './MarkingImportDialog'
 
@@ -89,6 +91,48 @@ describe('removeImportFileAt', () => {
     const files = [fileA, fileB]
     expect(removeImportFileAt(files, -1)).toEqual(files)
     expect(removeImportFileAt(files, 2)).toEqual(files)
+  })
+})
+
+describe('automatic import recovery', () => {
+  it('calls auto API and enters the result stage for an invalid-only preview', async () => {
+    const response = {
+      import_id: 'import-id',
+      document_number: 'МК-1',
+      groups: [],
+      unmatched: [{
+        key: '0', marking_code: '', article: null, size: null,
+        reason: 'DataMatrix повреждён', eligible_for_assignment: false,
+        has_label_artifact: true,
+      }],
+    }
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      JSON.stringify(response),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    const outcome = await runAutomaticImportAttempt({
+      files: [new File(['damaged'], 'damaged.pdf', { type: 'application/pdf' })],
+      previewComplete: true,
+      selectedProductCount: 0,
+      sellerId: 'seller-id',
+      token: 'token',
+      requestId: 'request-id',
+      fetchImpl,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledOnce()
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/operations/marking-codes/import/auto')
+    expect(outcome).toEqual({ stage: 'auto-result', data: response })
+  })
+
+  it('keeps assignment request identity when returning from an unknown result', () => {
+    const create = vi.fn(() => 'new-request-id')
+
+    expect(keepAssignmentRequestId('original-request-id', create)).toBe('original-request-id')
+    expect(create).not.toHaveBeenCalled()
+    expect(keepAssignmentRequestId(null, create)).toBe('new-request-id')
+    expect(create).toHaveBeenCalledOnce()
   })
 })
 

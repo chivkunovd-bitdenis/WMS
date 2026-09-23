@@ -52,17 +52,27 @@ def _label_pdf(cis: str, *, article: str | None, size: str | None = None) -> byt
         doc.close()
 
 
-def _mixed_readable_and_unreadable_pdf(cis: str) -> bytes:
+def _mixed_readable_and_unreadable_pdf(cis: str, *, damaged_first: bool = False) -> bytes:
     doc = fitz.open()
     try:
         page = doc.new_page(width=440, height=220)
         page.draw_rect(fitz.Rect(2, 2, 218, 218))
         page.draw_rect(fitz.Rect(222, 2, 438, 218))
-        page.insert_text((10, 18), "SKU: ARTICLE-A", fontsize=8)
-        page.insert_text((10, 30), "Size: M", fontsize=8)
-        page.insert_image(fitz.Rect(30, 45, 190, 205), stream=encode_datamatrix_png(cis))
-        page.insert_text((230, 18), "SKU: DAMAGED", fontsize=8)
-        page.insert_image(fitz.Rect(250, 45, 410, 205), stream=_damaged_matrix_png())
+        readable_x = 250 if damaged_first else 30
+        damaged_x = 30 if damaged_first else 250
+        readable_text_x = 230 if damaged_first else 10
+        damaged_text_x = 10 if damaged_first else 230
+        page.insert_text((readable_text_x, 18), "SKU: ARTICLE-A", fontsize=8)
+        page.insert_text((readable_text_x, 30), "Size: M", fontsize=8)
+        page.insert_image(
+            fitz.Rect(readable_x, 45, readable_x + 160, 205),
+            stream=encode_datamatrix_png(cis),
+        )
+        page.insert_text((damaged_text_x, 18), "SKU: DAMAGED", fontsize=8)
+        page.insert_image(
+            fitz.Rect(damaged_x, 45, damaged_x + 160, 205),
+            stream=_damaged_matrix_png(),
+        )
         return bytes(doc.tobytes())
     finally:
         doc.close()
@@ -78,6 +88,20 @@ def _single_damaged_label_pdf() -> bytes:
         return bytes(doc.tobytes())
     finally:
         doc.close()
+
+
+def _rasterize_pdf_to_one_image(content: bytes) -> bytes:
+    source = fitz.open(stream=content, filetype="pdf")
+    output = fitz.open()
+    try:
+        source_page = source[0]
+        pixmap = source_page.get_pixmap(matrix=fitz.Matrix(3, 3), alpha=False)
+        page = output.new_page(width=source_page.rect.width, height=source_page.rect.height)
+        page.insert_image(page.rect, stream=pixmap.tobytes("png"))
+        return bytes(output.tobytes())
+    finally:
+        output.close()
+        source.close()
 
 
 def _label_with_square_logo_pdf(cis: str) -> bytes:
@@ -169,6 +193,32 @@ def test_artifact_extractor_keeps_only_real_or_damaged_matrix_regions() -> None:
     ]
 
 
+def test_artifact_extractor_splits_one_image_page_and_preserves_source_order() -> None:
+    cis = "010460000000000121WMS476-RASTER-MIXED-01"
+    rasterized = _rasterize_pdf_to_one_image(
+        _mixed_readable_and_unreadable_pdf(cis, damaged_first=True),
+    )
+
+    artifacts = extract_label_artifacts_from_pdf(rasterized)
+
+    assert [(row.cis, row.code_valid) for row in artifacts] == [
+        ("", False),
+        (cis, True),
+    ]
+    label_codes: list[list[str]] = []
+    for artifact in artifacts:
+        with fitz.open(stream=artifact.label_pdf, filetype="pdf") as label_doc:
+            assert label_doc[0].rect.width < 300
+            label_codes.append(
+                [
+                    item.value
+                    for page in label_doc
+                    for item in decode_datamatrix_codes_on_pdf_page(page)
+                ],
+            )
+    assert label_codes == [[], [cis]]
+
+
 async def _product(
     client: AsyncClient,
     headers: dict[str, str],
@@ -194,6 +244,173 @@ async def _product(
     )
     assert response.status_code == 200, response.text
     return response.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_auto_match_combines_shared_article_with_gtin(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "WMS476 combined", "email": f"wms476-c-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    matched_product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="FAMILY-M",
+        barcode="04608888888881",
+        size="M",
+        vendor_code="FAMILY",
+    )
+    await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="FAMILY-L",
+        barcode="04608888888882",
+        size="L",
+        vendor_code="FAMILY",
+    )
+    cis = "010460888888888121COMBINED-MATCH-01"
+    response = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": str(uuid.uuid4())},
+        files=[("files", ("family.pdf", _label_pdf(cis, article="FAMILY"), "application/pdf"))],
+    )
+
+    assert response.status_code == 200, response.text
+    assert [(row["product_id"], row["loaded_count"]) for row in response.json()["groups"]] == [
+        (matched_product_id, 1),
+    ]
+    assert response.json()["unmatched"] == []
+
+
+@pytest.mark.asyncio
+async def test_lost_assignment_response_reuses_result_and_residual_is_authoritative(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "WMS476 recovery", "email": f"wms476-r-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    first_product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="RECOVERY-A",
+        barcode="04606666666661",
+        size="M",
+    )
+    second_product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="RECOVERY-B",
+        barcode="04606666666662",
+        size="L",
+    )
+    codes = [
+        "010460000000010121RECOVERY-ASSIGN-01",
+        "010460000000010221RECOVERY-ASSIGN-02",
+        "010460000000010321RECOVERY-ASSIGN-03",
+    ]
+    files = [
+        ("files", (f"{index}.pdf", _label_pdf(cis, article="UNKNOWN"), "application/pdf"))
+        for index, cis in enumerate(codes)
+    ]
+    auto_request_id = str(uuid.uuid4())
+    automatic = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": auto_request_id},
+        files=files,
+    )
+    assert automatic.status_code == 200, automatic.text
+    automatic_body = automatic.json()
+    keys = [row["key"] for row in automatic_body["unmatched"]]
+    assert keys == ["0", "1", "2"]
+
+    # The browser may lose the response after the transaction commits. Repeating
+    # the same automatic attempt after a full reload must reveal the saved outcome.
+    repeated_auto = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": auto_request_id},
+        files=files,
+    )
+    assert repeated_auto.status_code == 200, repeated_auto.text
+    assert repeated_auto.json() == automatic_body
+
+    assign_request_id = str(uuid.uuid4())
+    assignment_data = {
+        "seller_id": seller_id,
+        "request_id": assign_request_id,
+        "product_id": first_product_id,
+        "row_keys_json": json.dumps(keys[:2]),
+    }
+    committed = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data=assignment_data,
+        files=files,
+    )
+    assert committed.status_code == 200, committed.text
+
+    recovered = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data=assignment_data,
+        files=files,
+    )
+    assert recovered.status_code == 200, recovered.text
+    assert recovered.json() == committed.json()
+    assert recovered.json()["assigned_keys"] == keys[:2]
+
+    changed_product = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data={**assignment_data, "product_id": second_product_id},
+        files=files,
+    )
+    assert changed_product.status_code == 409
+    assert changed_product.json()["detail"] == "import_request_conflict"
+
+    stale_residual = await async_client.post(
+        "/operations/marking-codes/import/unmatched-pdf",
+        headers=headers,
+        data={"seller_id": seller_id, "row_keys_json": json.dumps(keys)},
+        files=files,
+    )
+    assert stale_residual.status_code == 200, stale_residual.text
+    with fitz.open(stream=stale_residual.content, filetype="pdf") as residual_doc:
+        assert residual_doc.page_count == 1
+        assert [
+            item.value
+            for page in residual_doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+        ] == [codes[2]]
+
+    next_assignment = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data={
+            "seller_id": seller_id,
+            "request_id": str(uuid.uuid4()),
+            "product_id": second_product_id,
+            "row_keys_json": json.dumps(keys[2:]),
+        },
+        files=files,
+    )
+    assert next_assignment.status_code == 200, next_assignment.text
+    assert next_assignment.json()["assigned_keys"] == keys[2:]
 
 
 @pytest.mark.asyncio
@@ -280,7 +497,11 @@ async def test_auto_import_partial_assignment_and_residual_pdf(
     files = [
         (
             "files",
-            ("01-mixed.pdf", _mixed_readable_and_unreadable_pdf(matched_cis), "application/pdf"),
+            (
+                "01-mixed.pdf",
+                _mixed_readable_and_unreadable_pdf(matched_cis, damaged_first=True),
+                "application/pdf",
+            ),
         ),
         (
             "files",

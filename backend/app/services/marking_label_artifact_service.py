@@ -508,6 +508,34 @@ def _vector_datamatrix_candidates(page: object, frames: list[object]) -> list[ob
     return candidates
 
 
+def _rows_in_source_order(
+    rows: list[tuple[str, str, bool, object]],
+) -> list[tuple[str, str, bool, object]]:
+    """Order symbols like labels on the source page: rows first, then left to right."""
+    import fitz  # pymupdf
+
+    grouped: list[tuple[fitz.Rect, list[tuple[str, str, bool, object]]]] = []
+    for row in sorted(rows, key=lambda item: cast(fitz.Rect, item[3]).y0):
+        box = cast(fitz.Rect, row[3])
+        target_index: int | None = None
+        for index, (row_bounds, _) in enumerate(grouped):
+            overlap = max(0.0, min(row_bounds.y1, box.y1) - max(row_bounds.y0, box.y0))
+            if overlap >= min(row_bounds.height, box.height) * 0.35:
+                target_index = index
+                break
+        if target_index is None:
+            grouped.append((fitz.Rect(box), [row]))
+            continue
+        bounds, members = grouped[target_index]
+        bounds |= box
+        members.append(row)
+
+    ordered: list[tuple[str, str, bool, object]] = []
+    for _, members in sorted(grouped, key=lambda group: group[0].y0):
+        ordered.extend(sorted(members, key=lambda item: cast(fitz.Rect, item[3]).x0))
+    return ordered
+
+
 def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtifact]:
     try:
         import fitz  # pymupdf
@@ -524,9 +552,9 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
         for page_index in range(doc.page_count):
             page = doc[page_index]
             frames = _drawing_rects(page)
-            decoded = decode_datamatrix_codes_on_pdf_page(page)
+            detected = decode_datamatrix_codes_on_pdf_page(page, include_errors=True)
+            decoded = [item for item in detected if item.valid]
             text_boxes = _find_cis_boxes_on_page(page)
-            cis_boxes: list[tuple[str, object]] = []
             decoded_rows: list[tuple[str, str, bool, object]] = []
             for item in decoded:
                 normalized = normalize_cis(item.value)
@@ -545,7 +573,6 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
                     box |= nearest
                 # Preserve the exact decoded payload. Validation and normalized lookup
                 # are separate concerns; downstream printing relies on these bytes.
-                cis_boxes.append((item.value, box))
                 decoded_rows.append(
                     (item.value, gtin or "", normalized is not None and bool(gtin), box)
                 )
@@ -558,7 +585,7 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
             # decode. Retain only matrix-like raster/vector regions from a different
             # label frame. A generic square logo or product photo must not become a
             # synthetic damaged KIZ.
-            damaged_boxes: list[fitz.Rect] = []
+            damaged_boxes = [fitz.Rect(item.page_rect) for item in detected if not item.valid]
             for image_info in page.get_image_info():
                 image_box = fitz.Rect(image_info["bbox"])
                 if image_box.width < 20 or image_box.height < 20:
@@ -576,6 +603,11 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
                     continue
                 frame = _frame_rect_for_cis(image_box, frames)
                 if frame is not None and _rect_key(frame) in decoded_frames:
+                    continue
+                if any(
+                    (image_box & existing).get_area() >= image_box.get_area() * 0.5
+                    for existing in damaged_boxes
+                ):
                     continue
                 damaged_boxes.append(image_box)
             for vector_box in _vector_datamatrix_candidates(page, frames):
@@ -596,9 +628,10 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
                     continue
                 damaged_boxes.append(candidate)
             for damaged_box in damaged_boxes:
-                cis_boxes.append(("", damaged_box))
                 decoded_rows.append(("", "", False, damaged_box))
-            if not cis_boxes:
+            decoded_rows = _rows_in_source_order(decoded_rows)
+            cis_boxes = [(cis, box) for cis, _, _, box in decoded_rows]
+            if not decoded_rows:
                 # No decoded or geometrically identified matrix exists on this page.
                 # Do not guess from arbitrary artwork: an ordinary square image is
                 # not evidence of a damaged marking code.

@@ -67,7 +67,7 @@ type AutoUnmatchedRow = {
   eligible_for_assignment: boolean
   has_label_artifact: boolean
 }
-type AutoImportResponse = {
+export type AutoImportResponse = {
   import_id: string
   document_number: string
   groups: AutoProductGroup[]
@@ -194,6 +194,49 @@ type Props = {
 function newRequestId(): string { return crypto.randomUUID() }
 function appendFiles(form: FormData, files: File[]): void {
   for (const file of files) form.append('files', file)
+}
+
+type AutomaticImportAttempt =
+  | { stage: 'auto-result'; data: AutoImportResponse }
+  | { stage: 'auto-error'; message: string }
+  | null
+
+export async function runAutomaticImportAttempt({
+  files, previewComplete, selectedProductCount, sellerId, token, requestId,
+  fetchImpl = fetch,
+}: {
+  files: File[]
+  previewComplete: boolean
+  selectedProductCount: number
+  sellerId: string
+  token: string
+  requestId: string
+  fetchImpl?: typeof fetch
+}): Promise<AutomaticImportAttempt> {
+  if (files.length === 0 || !previewComplete || selectedProductCount > 0) return null
+  try {
+    const form = new FormData()
+    form.append('seller_id', sellerId)
+    form.append('request_id', requestId)
+    appendFiles(form, files)
+    const res = await fetchImpl(apiUrl('/operations/marking-codes/import/auto'), {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    })
+    if (!res.ok) throw new Error(await readApiErrorMessage(res))
+    return { stage: 'auto-result', data: (await res.json()) as AutoImportResponse }
+  } catch (err) {
+    return {
+      stage: 'auto-error',
+      message: err instanceof Error ? err.message : 'Распознавание не завершено.',
+    }
+  }
+}
+
+export function keepAssignmentRequestId(
+  current: string | null,
+  create: () => string = newRequestId,
+): string {
+  return current ?? create()
 }
 
 export function MarkingImportDialog(props: Props) {
@@ -350,25 +393,26 @@ function MarkingImportDialogContent({
   }
 
   const autoUpload = async () => {
-    if (files.length === 0 || groups.length === 0 || selectedProductIds.size > 0) return
+    if (files.length === 0 || !previewComplete || selectedProductIds.size > 0) return
     setActionBusy(true); setError(null)
-    try {
-      const form = new FormData()
-      form.append('seller_id', sellerId)
-      form.append('request_id', autoRequestIdRef.current)
-      appendFiles(form, files)
-      const res = await fetch(apiUrl('/operations/marking-codes/import/auto'), {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const data = (await res.json()) as AutoImportResponse
+    const outcome = await runAutomaticImportAttempt({
+      files,
+      previewComplete,
+      selectedProductCount: selectedProductIds.size,
+      sellerId,
+      token,
+      requestId: autoRequestIdRef.current,
+    })
+    if (outcome?.stage === 'auto-result') {
+      const data = outcome.data
       setAutoResult(data); setSelectedUnmatchedKeys(new Set()); setStage('auto-result')
       onError?.(null)
       onImported(`Загружено ${data.groups.reduce((sum, row) => sum + row.loaded_count, 0)} КИЗ`)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Распознавание не завершено.'
+    } else if (outcome?.stage === 'auto-error') {
+      const message = outcome.message
       setError(message); setStage('auto-error'); onError?.(message)
-    } finally { setActionBusy(false) }
+    }
+    setActionBusy(false)
   }
 
   const toggleUnmatched = (row: AutoUnmatchedRow) => {
@@ -387,8 +431,11 @@ function MarkingImportDialogContent({
   }
   const beginAssignment = () => {
     if (selectedUnmatchedKeys.size === 0) return
-    setAssignmentProductId(null); setProductSearch(''); setShowAllProducts(false)
-    setAssignmentRequestId(newRequestId()); setError(null); setStage('assign')
+    if (assignmentRequestId === null) {
+      setAssignmentProductId(null); setProductSearch(''); setShowAllProducts(false)
+    }
+    setAssignmentRequestId((current) => keepAssignmentRequestId(current))
+    setError(null); setStage('assign')
   }
 
   const confirmAssignment = async () => {
@@ -545,7 +592,7 @@ function MarkingImportDialogContent({
         </> : null}
         {stage === 'assign' ? <>
           <Button variant="outlined" disabled={busy} onClick={() => {
-            setAssignmentProductId(null); setAssignmentRequestId(null); setError(null); setStage('auto-result')
+            setError(null); setStage('auto-result')
           }}>Назад</Button>
           <Button variant="contained" disabled={!assignmentProductId || busy}
             onClick={() => void confirmAssignment()}>Добавить к выбранному товару</Button>

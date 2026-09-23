@@ -1564,12 +1564,19 @@ def _resolve_auto_product(
             if not sized:
                 return None, "Артикул найден, но размер не совпадает"
             article_candidates = sized
-        if len(article_candidates) != 1:
-            return None, "Совпадение неоднозначно: найдено несколько товаров"
-        product = article_candidates[0]
-        if gtin_candidates and all(candidate.id != product.id for candidate in gtin_candidates):
+        if gtin_candidates:
+            gtin_ids = {candidate.id for candidate in gtin_candidates}
+            combined = [candidate for candidate in article_candidates if candidate.id in gtin_ids]
+            if len(combined) == 1:
+                return combined[0], ""
+            if len(combined) > 1:
+                return None, "Совпадение неоднозначно: найдено несколько товаров"
             return None, "Артикул и штрихкод указывают на разные товары"
-        return product, ""
+        # A Честный знак GTIN is allowed to differ from the WB barcode. When it
+        # does not identify any catalog row, article/size remains authoritative.
+        if len(article_candidates) == 1:
+            return article_candidates[0], ""
+        return None, "Совпадение неоднозначно: найдено несколько товаров"
 
     candidates = gtin_candidates
     if size_clean and candidates:
@@ -2059,6 +2066,8 @@ async def assign_import_rows_to_product(
 
 
 async def build_unmatched_import_pdf(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
     files: list[tuple[str, bytes]],
     row_keys: list[str],
 ) -> bytes:
@@ -2066,13 +2075,40 @@ async def build_unmatched_import_pdf(
         raise MarkingCodeServiceError("no_codes")
     parsed_rows = await asyncio.to_thread(_parse_import_files, files)
     wanted = set(row_keys)
+    selected = [row for index, row in enumerate(parsed_rows) if str(index) in wanted]
+    if len(selected) != len(wanted):
+        raise MarkingCodeServiceError("label_artifact_missing")
+    selected_codes = {
+        str(row.get("cis") or "")
+        for row in selected
+        if str(row.get("code_valid", "1")) == "1" and row.get("cis")
+    }
+    loaded_codes = set(
+        (
+            await session.scalars(
+                select(MarkingCode.cis_code).where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code.in_(selected_codes),
+                )
+            )
+        ).all()
+    ) if selected_codes else set()
+    remaining = [
+        row
+        for row in selected
+        if str(row.get("code_valid", "1")) != "1"
+        or not row.get("cis")
+        or str(row["cis"]) not in loaded_codes
+    ]
     parts = [
         row["label_pdf"]
-        for index, row in enumerate(parsed_rows)
-        if str(index) in wanted and isinstance(row.get("label_pdf"), bytes) and row["label_pdf"]
+        for row in remaining
+        if isinstance(row.get("label_pdf"), bytes) and row["label_pdf"]
     ]
-    if len(parts) != len(wanted):
+    if len(parts) != len(remaining):
         raise MarkingCodeServiceError("label_artifact_missing")
+    if not parts:
+        raise MarkingCodeServiceError("no_codes")
     from app.services.marking_label_artifact_service import merge_label_artifact_pdfs
 
     return await asyncio.to_thread(merge_label_artifact_pdfs, cast(list[bytes], parts))

@@ -868,6 +868,7 @@ async def assign_marking_codes_to_product(
 @router.post("/import/unmatched-pdf")
 async def download_unmatched_import_pdf(
     user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     files: Annotated[list[UploadFile], File(...)],
     row_keys_json: Annotated[str, Form(...)],
@@ -876,6 +877,8 @@ async def download_unmatched_import_pdf(
     _target_import_seller(user, effective_seller_id, seller_id)
     try:
         pdf_bytes = await mc_svc.build_unmatched_import_pdf(
+            session,
+            user.tenant_id,
             await _read_import_uploads(files),
             _parse_row_keys_json(row_keys_json),
         )
