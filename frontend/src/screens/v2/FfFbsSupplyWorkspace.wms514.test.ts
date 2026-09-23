@@ -100,6 +100,21 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       .toBeLessThan(reset.indexOf('activeProductScanBarcodeRef.current = null'))
   })
 
+  it('keeps the existing replacement confirmation for a product-selected order with KIZ', () => {
+    const reprintTarget = source.slice(
+      source.indexOf('if (plan.reprintChz) {'),
+      source.indexOf('const printErrors: string[]'),
+    )
+    expect(reprintTarget).toContain('result.binding_target.needs_confirmation')
+    expect(reprintTarget).toContain('setKizConfirmTarget(result.binding_target)')
+    expect(reprintTarget).toContain('setKizScanActive(result.binding_target)')
+    const dismiss = source.slice(
+      source.indexOf('const dismissKizConfirmation = useCallback'),
+      source.indexOf('const onKizScanEnter = useCallback'),
+    )
+    expect(dismiss).toContain('completeFbsPendingProductScan(')
+  })
+
   it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {
     const scanBar = source.indexOf('data-testid="fbs-kiz-scan-bar"')
     expect(source.slice(scanBar - 500, scanBar)).toContain('{anyOrderNeedsHonestSign ? (')

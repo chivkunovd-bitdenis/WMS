@@ -937,9 +937,9 @@ export function FfFbsSupplyWorkspace({
 
   // Return focus only while the scanner still owns it. A delayed print must
   // never pull the operator out of another control they deliberately chose.
-  const refocusKizInput = useCallback(() => {
+  const refocusKizInput = useCallback((force = false) => {
     window.setTimeout(() => {
-      if (!scannerShouldRefocusRef.current) return
+      if (!force && !scannerShouldRefocusRef.current) return
       const input = kizScanInputRef.current
       const active = document.activeElement
       const hiddenPrintFrame = (
@@ -948,7 +948,7 @@ export function FfFbsSupplyWorkspace({
       )
       if (
         input
-        && (active == null || active === document.body || active === input || hiddenPrintFrame)
+        && (force || active == null || active === document.body || active === input || hiddenPrintFrame)
       ) {
         input.focus({ preventScroll: true })
       }
@@ -1087,9 +1087,15 @@ export function FfFbsSupplyWorkspace({
           if (!result.binding_target) {
             throw new Error('Сервер не вернул выбранный заказ для скана ЧЗ.')
           }
-          setKizScanActive(result.binding_target)
           kizSelectedStickerRef.current = ''
           activeProductScanBarcodeRef.current = raw
+          // Product selection must not bypass the existing replacement
+          // confirmation when this exact order already has a KIZ.
+          if (result.binding_target.needs_confirmation) {
+            setKizConfirmTarget(result.binding_target)
+          } else {
+            setKizScanActive(result.binding_target)
+          }
         }
 
         const printErrors: string[] = []
@@ -1381,7 +1387,17 @@ export function FfFbsSupplyWorkspace({
     setKizScanDebugOpen(false)
     setKizConfirmTarget(null)
     setKizConfirmValue(null)
-    refocusKizInput()
+    refocusKizInput(true)
+  }, [refocusKizInput, token, workspace?.supply.id])
+
+  const dismissKizConfirmation = useCallback(() => {
+    const productBarcode = activeProductScanBarcodeRef.current
+    if (productBarcode && workspace?.supply.id) {
+      completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+      activeProductScanBarcodeRef.current = null
+    }
+    setKizConfirmTarget(null)
+    refocusKizInput(true)
   }, [refocusKizInput, token, workspace?.supply.id])
 
   const onKizScanEnter = useCallback(
@@ -3069,7 +3085,7 @@ export function FfFbsSupplyWorkspace({
                                   setKizScanNotice(null)
                                 } catch (cause) {
                                   setKizScanError({ text: kizErrorText(cause, providerName), debug: null })
-                                } finally { setKizScanBusy(false); refocusKizInput() }
+                                } finally { setKizScanBusy(false); refocusKizInput(true) }
                               }}>Проверить ЧЗ</Button>
                             </> : null}
                           </Box>
@@ -3496,7 +3512,7 @@ export function FfFbsSupplyWorkspace({
       {markingPrintDialog}
       {/* KIZ-01: единственный оставшийся модальный шаг скана КИЗ — редкое подтверждение
           замены уже внесённого кода. Основной цикл «стикер → ЧЗ» идёт инлайново на вкладке. */}
-      <Dialog open={Boolean(kizConfirmTarget)} onClose={() => { setKizConfirmTarget(null); refocusKizInput() }} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(kizConfirmTarget)} onClose={dismissKizConfirmation} maxWidth="xs" fullWidth>
         <DialogTitle>Заказ уже с ЧЗ</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
@@ -3506,7 +3522,7 @@ export function FfFbsSupplyWorkspace({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setKizConfirmTarget(null); refocusKizInput() }}>Отмена</Button>
+          <Button onClick={dismissKizConfirmation}>Отмена</Button>
           <Button
             variant="contained"
             data-testid="fbs-kiz-confirm-replace"
@@ -3515,7 +3531,7 @@ export function FfFbsSupplyWorkspace({
               else setKizScanActive(kizConfirmTarget)
               setKizConfirmValue(null)
               setKizConfirmTarget(null)
-              refocusKizInput()
+              refocusKizInput(true)
             }}
           >
             Внести
