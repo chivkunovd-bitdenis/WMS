@@ -3352,6 +3352,589 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Scan Fbs Supply Product For Auto Print",
+        "description": "Select one WB order for a physical product scan and prepare its labels.\n\nThe durable selection is committed before marketplace/network work.  A\nretry with the same key therefore recovers this order rather than consuming\nits neighbour even when sticker acquisition or KIZ allocation failed.",
+        "operationId": "scan_fbs_supply_product_for_auto_print_operations_fbs_supplies__supply_id__scan_auto_print_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/reprint-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Scan Auto Print Reprint",
+        "operationId": "claim_fbs_scan_auto_print_reprint_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__reprint_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintReprintClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Scan Auto Print Target",
+        "operationId": "claim_fbs_scan_auto_print_target_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-started": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Mark Fbs Scan Auto Print Target Started",
+        "operationId": "mark_fbs_scan_auto_print_target_started_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_started_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-failed": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Release Fbs Scan Auto Print Target Claim",
+        "operationId": "release_fbs_scan_auto_print_target_claim_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_failed_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Save Fbs Supply Direct Kiz Reprint",
+        "operationId": "save_fbs_supply_direct_kiz_reprint_operations_fbs_supplies__supply_id__scan_kiz_reprint_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizReprintBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Supply Direct Kiz Print",
+        "operationId": "claim_fbs_supply_direct_kiz_print_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizPrintClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-started": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Mark Fbs Supply Direct Kiz Print Started",
+        "operationId": "mark_fbs_supply_direct_kiz_print_started_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_started_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-failed": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Release Fbs Supply Direct Kiz Print Claim",
+        "operationId": "release_fbs_supply_direct_kiz_print_claim_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_failed_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/cargo-places/preflight": {
       "post": {
         "tags": [
@@ -4646,6 +5229,179 @@
   },
   "components": {
     "schemas": {
+      "AssignMarkingCodesOut": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "document_number": {
+            "type": "string",
+            "title": "Document Number"
+          },
+          "product": {
+            "$ref": "#/components/schemas/AutoImportProductGroupOut"
+          },
+          "assigned_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "document_number",
+          "product",
+          "assigned_keys"
+        ],
+        "title": "AssignMarkingCodesOut"
+      },
+      "AutoImportProductGroupOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "loaded_count": {
+            "type": "integer",
+            "title": "Loaded Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku",
+          "product_name",
+          "size",
+          "barcode",
+          "loaded_count"
+        ],
+        "title": "AutoImportProductGroupOut"
+      },
+      "AutoImportUnmatchedOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "marking_code": {
+            "type": "string",
+            "title": "Marking Code"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "eligible_for_assignment": {
+            "type": "boolean",
+            "title": "Eligible For Assignment"
+          },
+          "has_label_artifact": {
+            "type": "boolean",
+            "title": "Has Label Artifact"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "marking_code",
+          "article",
+          "size",
+          "reason",
+          "eligible_for_assignment",
+          "has_label_artifact"
+        ],
+        "title": "AutoImportUnmatchedOut"
+      },
+      "AutoMarkingImportOut": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "document_number": {
+            "type": "string",
+            "title": "Document Number"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/AutoImportProductGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "unmatched": {
+            "items": {
+              "$ref": "#/components/schemas/AutoImportUnmatchedOut"
+            },
+            "type": "array",
+            "title": "Unmatched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "document_number",
+          "groups",
+          "unmatched"
+        ],
+        "title": "AutoMarkingImportOut"
+      },
       "BackgroundJobOut": {
         "properties": {
           "id": {
@@ -4823,6 +5579,121 @@
           "file"
         ],
         "title": "Body_apply_marketplace_box_import_route_operations_marketplace_unload_requests__request_id__import_boxes_apply_post"
+      },
+      "Body_assign_marking_codes_to_product_operations_marking_codes_import_assign_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "row_keys_json": {
+            "type": "string",
+            "title": "Row Keys Json"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "request_id",
+          "product_id",
+          "row_keys_json"
+        ],
+        "title": "Body_assign_marking_codes_to_product_operations_marking_codes_import_assign_post"
+      },
+      "Body_auto_import_marking_codes_operations_marking_codes_import_auto_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "request_id"
+        ],
+        "title": "Body_auto_import_marking_codes_operations_marking_codes_import_auto_post"
+      },
+      "Body_download_unmatched_import_pdf_operations_marking_codes_import_unmatched_pdf_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "row_keys_json": {
+            "type": "string",
+            "title": "Row Keys Json"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "row_keys_json"
+        ],
+        "title": "Body_download_unmatched_import_pdf_operations_marking_codes_import_unmatched_pdf_post"
       },
       "Body_import_marking_codes_operations_marking_codes_import_post": {
         "properties": {
@@ -6939,6 +7810,105 @@
         ],
         "title": "FbsDeliveryPreflightOut"
       },
+      "FbsDirectKizPrintClaimBody": {
+        "properties": {
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_key"
+        ],
+        "title": "FbsDirectKizPrintClaimBody"
+      },
+      "FbsDirectKizPrintClaimOut": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+          },
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "claimed"
+        ],
+        "title": "FbsDirectKizPrintClaimOut"
+      },
+      "FbsDirectKizReprintBody": {
+        "properties": {
+          "kiz": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Kiz"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kiz",
+          "idempotency_key"
+        ],
+        "title": "FbsDirectKizReprintBody"
+      },
+      "FbsDirectKizReprintOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "title": "Kiz"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "print_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Print Started At"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "kiz",
+          "created_at",
+          "print_started_at"
+        ],
+        "title": "FbsDirectKizReprintOut"
+      },
       "FbsKizCommitBody": {
         "properties": {
           "pairs": {
@@ -6980,6 +7950,18 @@
             "type": "boolean",
             "title": "Confirmed",
             "default": false
+          },
+          "scan_auto_print_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Auto Print Id"
           }
         },
         "type": "object",
@@ -7017,6 +7999,22 @@
               }
             ],
             "title": "Meta Status"
+          },
+          "newly_bound": {
+            "type": "boolean",
+            "title": "Newly Bound",
+            "default": false
+          },
+          "bound_kiz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bound Kiz"
           }
         },
         "type": "object",
@@ -7813,6 +8811,22 @@
             "type": "boolean",
             "title": "Reprint",
             "default": false
+          },
+          "reprint_marking_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reprint Marking Ids"
           }
         },
         "type": "object",
@@ -9335,6 +10349,372 @@
           "message"
         ],
         "title": "FbsPrintOrderErrorOut"
+      },
+      "FbsScanAutoPrintBindingTargetOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/FbsScanAutoPrintProductOut"
+          },
+          "current_kiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintCurrentKizOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_confirmation": {
+            "type": "boolean",
+            "title": "Needs Confirmation"
+          },
+          "can_bind": {
+            "type": "boolean",
+            "title": "Can Bind"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          },
+          "marketplace": {
+            "type": "string",
+            "const": "wb",
+            "title": "Marketplace",
+            "default": "wb"
+          },
+          "external_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Order Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "product",
+          "current_kiz",
+          "needs_confirmation",
+          "can_bind",
+          "block_reason"
+        ],
+        "title": "FbsScanAutoPrintBindingTargetOut"
+      },
+      "FbsScanAutoPrintBody": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Barcode"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          },
+          "print_qr": {
+            "type": "boolean",
+            "title": "Print Qr",
+            "default": false
+          },
+          "print_chz": {
+            "type": "boolean",
+            "title": "Print Chz",
+            "default": false
+          },
+          "reprint_chz": {
+            "type": "boolean",
+            "title": "Reprint Chz",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode",
+          "idempotency_key"
+        ],
+        "title": "FbsScanAutoPrintBody"
+      },
+      "FbsScanAutoPrintCurrentKizOut": {
+        "properties": {
+          "masked": {
+            "type": "string",
+            "title": "Masked"
+          },
+          "meta_status": {
+            "type": "string",
+            "title": "Meta Status"
+          },
+          "from_pool": {
+            "type": "boolean",
+            "title": "From Pool"
+          }
+        },
+        "type": "object",
+        "required": [
+          "masked",
+          "meta_status",
+          "from_pool"
+        ],
+        "title": "FbsScanAutoPrintCurrentKizOut"
+      },
+      "FbsScanAutoPrintOut": {
+        "properties": {
+          "scan_id": {
+            "type": "string",
+            "title": "Scan Id"
+          },
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "binding_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintBindingTargetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reprint_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintReprintRecoveryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign"
+          },
+          "qr_asset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsPrintAssetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Codes"
+          },
+          "printed_codes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsOrderTapePrintedCodeOut"
+            },
+            "type": "array",
+            "title": "Printed Codes"
+          },
+          "shortage": {
+            "type": "integer",
+            "title": "Shortage"
+          },
+          "order_errors": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPrintOrderErrorOut"
+            },
+            "type": "array",
+            "title": "Order Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scan_id",
+          "order_id",
+          "wb_order_id",
+          "replayed",
+          "binding_target",
+          "reprint_recovery",
+          "requires_honest_sign",
+          "qr_asset",
+          "codes",
+          "printed_codes",
+          "shortage",
+          "order_errors"
+        ],
+        "title": "FbsScanAutoPrintOut"
+      },
+      "FbsScanAutoPrintProductOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "image_url",
+          "barcode",
+          "seller_article"
+        ],
+        "title": "FbsScanAutoPrintProductOut"
+      },
+      "FbsScanAutoPrintReprintClaimOut": {
+        "properties": {
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          },
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          },
+          "kiz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kiz"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claimed",
+          "started"
+        ],
+        "title": "FbsScanAutoPrintReprintClaimOut"
+      },
+      "FbsScanAutoPrintReprintRecoveryOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_attempted",
+              "available",
+              "started",
+              "outcome_unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "FbsScanAutoPrintReprintRecoveryOut"
+      },
+      "FbsScanAutoPrintTargetBody": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "qr",
+              "chz"
+            ],
+            "title": "Target"
+          },
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "attempt_key"
+        ],
+        "title": "FbsScanAutoPrintTargetBody"
+      },
+      "FbsScanAutoPrintTargetClaimOut": {
+        "properties": {
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          },
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claimed",
+          "started"
+        ],
+        "title": "FbsScanAutoPrintTargetClaimOut"
       },
       "FbsSellerOfficeOut": {
         "properties": {
@@ -16697,6 +18077,126 @@
           "lines"
         ],
         "title": "InvoiceV2Out"
+      },
+      "KizReprintCreateIn": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Kiz"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "kiz",
+          "idempotency_key"
+        ],
+        "title": "KizReprintCreateIn"
+      },
+      "KizReprintListOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/KizReprintOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "KizReprintListOut"
+      },
+      "KizReprintOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "title": "Kiz"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "print_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Print Started At"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "kiz",
+          "created_at",
+          "print_started_at"
+        ],
+        "title": "KizReprintOut"
+      },
+      "KizReprintPrintClaimIn": {
+        "properties": {
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_key"
+        ],
+        "title": "KizReprintPrintClaimIn"
+      },
+      "KizReprintPrintClaimOut": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/KizReprintOut"
+          },
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "claimed"
+        ],
+        "title": "KizReprintPrintClaimOut"
       },
       "LabelArtifactTapeIn": {
         "properties": {
@@ -26465,18 +27965,6 @@
       },
       "SellerStaffAccountCreate": {
         "properties": {
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "email"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          },
           "full_name": {
             "type": "string",
             "maxLength": 255,
@@ -26495,25 +27983,20 @@
             ],
             "title": "Job Title"
           },
-          "password": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Password"
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
           },
           "permissions": {
             "$ref": "#/components/schemas/SellerPermissionsBody"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "full_name"
+          "full_name",
+          "email"
         ],
         "title": "SellerStaffAccountCreate"
       },
@@ -26592,6 +28075,46 @@
           "permissions"
         ],
         "title": "SellerStaffAccountOut"
+      },
+      "SellerStaffProfilePatch": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "SellerStaffProfilePatch"
       },
       "SellerWbCatalogAdminOut": {
         "properties": {
