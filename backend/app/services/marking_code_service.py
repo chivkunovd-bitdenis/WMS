@@ -707,7 +707,7 @@ _ARTICLE_LABEL_RE = re.compile(
     r"(?im)(?:^|\s)(?:артикул|арт\.?|sku)\s*[:№#\-]?\s*([^\s,;|]+)"
 )
 _SIZE_LABEL_RE = re.compile(
-    r"(?im)(?:^|\s)(?:размер|разм\.?|size)\s*[:№#\-]?\s*([^\s,;|]+)"
+    r"(?im)(?:^|\s)(?:размер|разм\.?|size)\s*[:№#\-]?\s*((?:one[ \t]+size)|[^\s,;|]+)"
 )
 
 
@@ -1526,6 +1526,12 @@ def _product_article_values(product: Product) -> set[str]:
     }
 
 
+def _auto_size_matches(label_size: str, product_size: str | None) -> bool:
+    label_clean = _clean_match_value(label_size)
+    product_clean = _clean_match_value(product_size)
+    return product_clean == label_clean or (label_clean == "onesize" and product_clean == "0")
+
+
 def _resolve_auto_product(
     products: list[Product],
     *,
@@ -1552,7 +1558,7 @@ def _resolve_auto_product(
             sized = [
                 product
                 for product in article_candidates
-                if _clean_match_value(product.wb_size) == size_clean
+                if _auto_size_matches(size, product.wb_size)
             ]
             if not sized:
                 return None, "Артикул найден, но размер не совпадает"
