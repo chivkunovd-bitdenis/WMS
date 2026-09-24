@@ -102,6 +102,8 @@ class FbsStockSyncResult:
     errors: int = 0
     skipped_busy: bool = False
     error_code: str | None = None
+    retryable_errors: int = 0
+    retry_after_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -489,8 +491,8 @@ async def _put_batch_with_retry(
     batch: list[MarketplaceStockAmount],
     rate_limiter: StockSyncRateLimiter,
     marketplace_api_base: str | None,
-) -> str | None:
-    """PUT one batch; on 429 retry once after rate limiter wait. Returns error code or None."""
+) -> _PutBatchOutcome:
+    """PUT one batch; on 429 retry once after the provider's requested delay."""
     retried_429 = False
     while True:
         outcome = await _put_stocks_batch(
@@ -501,13 +503,22 @@ async def _put_batch_with_retry(
             marketplace_api_base=marketplace_api_base,
         )
         if outcome.error_code is None:
-            return None
+            return outcome
         if outcome.status_code == 429 and not retried_429:
             retried_429 = True
             wait_seconds = outcome.retry_after_seconds or DEFAULT_RATE_INTERVAL_SECONDS
             await rate_limiter.wait(wait_seconds)
             continue
-        return outcome.error_code
+        return outcome
+
+
+def _is_retryable_wb_failure(*, status_code: int | None, error_code: str) -> bool:
+    return (
+        status_code is None
+        or status_code == 429
+        or status_code >= 500
+        or error_code == ERROR_READBACK_MISMATCH
+    )
 
 
 def _compare_readback(
@@ -531,22 +542,24 @@ async def _publish_batches(
     api_token: str,
     rate_limiter: StockSyncRateLimiter,
     marketplace_api_base: str | None,
-) -> tuple[int, int, str | None]:
-    """Returns (confirmed_count, error_count, first_error_code)."""
+) -> tuple[int, int, str | None, int, float]:
+    """Return confirmations, errors, first code and retry metadata."""
     if not targets:
-        return 0, 0, None
+        return 0, 0, None, 0, 0.0
 
     amounts = [MarketplaceStockAmount(chrt_id=t.chrt_id, amount=t.amount) for t in targets]
     batches = split_marketplace_stocks_batches(amounts)
     confirmed = 0
     errors = 0
     first_error_code: str | None = None
+    retryable_errors = 0
+    retry_after_seconds = 0.0
 
     for batch_index, batch in enumerate(batches):
         if batch_index > 0:
             await rate_limiter.wait(DEFAULT_RATE_INTERVAL_SECONDS)
 
-        put_error = await _put_batch_with_retry(
+        outcome = await _put_batch_with_retry(
             http_client,
             api_token=api_token,
             warehouse_id=int(binding.wb_warehouse_id),
@@ -556,17 +569,26 @@ async def _publish_batches(
         )
         # An absolute zero may have reached WB even if its response was lost.
         # Read it back before another attempt, and only confirm an observed zero.
-        uncertain_zero = put_error == "wb_transport_error" and any(
+        uncertain_zero = outcome.error_code == "wb_transport_error" and any(
             entry.amount == 0 for entry in batch
         )
-        if put_error is not None and not uncertain_zero:
+        if outcome.error_code is not None and not uncertain_zero:
             if first_error_code is None:
-                first_error_code = put_error
+                first_error_code = outcome.error_code
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
-                item.last_error_code = put_error
+                item.last_error_code = outcome.error_code
             errors += len(batch)
+            if _is_retryable_wb_failure(
+                status_code=outcome.status_code,
+                error_code=outcome.error_code,
+            ):
+                retryable_errors += len(batch)
+                retry_after_seconds = max(
+                    retry_after_seconds,
+                    float(outcome.retry_after_seconds or 0.0),
+                )
             await session.commit()
             continue
 
@@ -590,17 +612,21 @@ async def _publish_batches(
                 item.status = STOCK_SYNC_STATUS_ERROR
                 item.last_error_code = err
             errors += len(batch)
+            if _is_retryable_wb_failure(status_code=exc.status_code, error_code=err):
+                retryable_errors += len(batch)
             await session.commit()
             continue
 
         if not _compare_readback(batch, readback):
+            mismatch_code = outcome.error_code or ERROR_READBACK_MISMATCH
             if first_error_code is None:
-                first_error_code = put_error or ERROR_READBACK_MISMATCH
+                first_error_code = mismatch_code
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
-                item.last_error_code = put_error or ERROR_READBACK_MISMATCH
+                item.last_error_code = mismatch_code
             errors += len(batch)
+            retryable_errors += len(batch)
             await session.commit()
             continue
 
@@ -621,7 +647,13 @@ async def _publish_batches(
                 confirmed_at + ZERO_REFRESH_INTERVAL,
             )
 
-    return confirmed, errors, first_error_code
+    return (
+        confirmed,
+        errors,
+        first_error_code,
+        retryable_errors,
+        retry_after_seconds,
+    )
 
 
 async def sync_binding_stocks(
@@ -752,7 +784,13 @@ async def sync_binding_stocks(
             session, binding.id, publish_targets, existing_items
         )
 
-        confirmed, errors, publish_error_code = await _publish_batches(
+        (
+            confirmed,
+            errors,
+            publish_error_code,
+            retryable_errors,
+            retry_after_seconds,
+        ) = await _publish_batches(
             session,
             binding=binding,
             targets=publish_targets,
@@ -765,6 +803,8 @@ async def sync_binding_stocks(
         result.products_confirmed = confirmed
         blocked_error_count = len(blocked_targets)
         result.errors = errors + result.conflicts + blocked_error_count
+        result.retryable_errors = retryable_errors
+        result.retry_after_seconds = retry_after_seconds
         result.bindings_processed = 1
 
         # Only the full reconcile can summarize the entire binding. Successful
@@ -879,7 +919,13 @@ async def publish_explicit_zero_for_binding(
             item.last_error_code = None
         await session.commit()
 
-        confirmed, errors, publish_error_code = await _publish_batches(
+        (
+            confirmed,
+            errors,
+            publish_error_code,
+            retryable_errors,
+            retry_after_seconds,
+        ) = await _publish_batches(
             session,
             binding=binding,
             targets=targets,
@@ -895,6 +941,8 @@ async def publish_explicit_zero_for_binding(
         result.products_confirmed = confirmed
         result.products_zeroed = confirmed
         result.errors = errors
+        result.retryable_errors = retryable_errors
+        result.retry_after_seconds = retry_after_seconds
 
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR

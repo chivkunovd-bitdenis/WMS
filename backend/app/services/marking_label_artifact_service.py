@@ -3,10 +3,13 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from statistics import median
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import fitz
+
+    from app.services.marking_datamatrix_service import DecodedDataMatrix
 
 
 @dataclass(frozen=True)
@@ -18,12 +21,18 @@ class ExtractedLabelArtifact:
     code_valid: bool = True
 
 
-def pdf_bytes_to_png(pdf_bytes: bytes, dpi: int = 600) -> bytes:
+def pdf_bytes_to_png(
+    pdf_bytes: bytes,
+    dpi: int = 600,
+    *,
+    cis_code: str | None = None,
+) -> bytes:
     try:
         import fitz  # pymupdf
     except ImportError as exc:
         raise RuntimeError("pdf_support_unavailable") from exc
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    prepared_pdf = _prepare_label_artifact_pdf(pdf_bytes, cis_code)
+    doc = fitz.open(stream=prepared_pdf, filetype="pdf")
     try:
         if doc.page_count < 1:
             raise ValueError("empty_pdf")
@@ -63,10 +72,214 @@ def _mm_to_pt(mm: float) -> float:
     return mm * 72.0 / 25.4
 
 
+def _edge_module_pitch(
+    samples: bytes,
+    stride: int,
+    bounds: tuple[int, int, int, int],
+    *,
+    horizontal: bool,
+) -> float | None:
+    min_x, min_y, max_x, max_y = bounds
+
+    def is_black(x: int, y: int) -> bool:
+        return samples[y * stride + x] < 128
+
+    edge_lines = (
+        (min_y, min(min_y + 1, max_y), max(max_y - 1, min_y), max_y)
+        if horizontal
+        else (min_x, min(min_x + 1, max_x), max(max_x - 1, min_x), max_x)
+    )
+    candidates: list[tuple[float, int, float]] = []
+    for edge in dict.fromkeys(edge_lines):
+        values = (
+            [is_black(x, edge) for x in range(min_x, max_x + 1)]
+            if horizontal
+            else [is_black(edge, y) for y in range(min_y, max_y + 1)]
+        )
+        if not values:
+            continue
+        runs: list[int] = []
+        previous = values[0]
+        start = 0
+        for index, value in enumerate(values[1:], 1):
+            if value == previous:
+                continue
+            run = index - start
+            if run >= 2:
+                runs.append(run)
+            previous = value
+            start = index
+        final_run = len(values) - start
+        if final_run >= 2:
+            runs.append(final_run)
+        # The alternating ECC200 finder edge has one run per module. Solid
+        # finder edges and arbitrary label artwork do not provide this signal.
+        if len(runs) < 8:
+            continue
+        pitch = float(median(runs))
+        deviation = float(median(abs(run - pitch) for run in runs)) / max(pitch, 1.0)
+        candidates.append((deviation, -len(runs), pitch))
+    return min(candidates)[2] if candidates else None
+
+
+def _datamatrix_module_pitches(
+    page: object,
+    rect: object,
+    dpi: int = 600,
+) -> tuple[float, float] | None:
+    """Measure physical X/Y module steps on the two alternating finder edges."""
+    import fitz  # pymupdf
+
+    pg = cast(fitz.Page, page)
+    box = fitz.Rect(rect) & pg.rect
+    if box.is_empty or box.width <= 0 or box.height <= 0:
+        return None
+    scale = dpi / 72.0
+    pix = pg.get_pixmap(
+        matrix=fitz.Matrix(scale, scale),
+        clip=box,
+        colorspace=fitz.csGRAY,
+        alpha=False,
+    )
+    samples = pix.samples
+    min_x, min_y = pix.width, pix.height
+    max_x = max_y = -1
+    for y in range(pix.height):
+        row_offset = y * pix.stride
+        for x in range(pix.width):
+            if samples[row_offset + x] >= 128:
+                continue
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x)
+            max_y = max(max_y, y)
+    if max_x < min_x or max_y < min_y:
+        return None
+    bounds = (min_x, min_y, max_x, max_y)
+    pitch_x = _edge_module_pitch(samples, pix.stride, bounds, horizontal=True)
+    pitch_y = _edge_module_pitch(samples, pix.stride, bounds, horizontal=False)
+    if pitch_x is None or pitch_y is None:
+        return None
+    return pitch_x, pitch_y
+
+
+def _square_datamatrix_pdf(cis_code: str) -> tuple[bytes, float]:
+    """Return a vector square Data Matrix and outer/inner side ratio (quiet zone included)."""
+    import fitz  # pymupdf
+    import zxingcpp
+
+    barcode = zxingcpp.create_barcode(
+        cis_code.encode("utf-8"),
+        format=zxingcpp.DataMatrix,
+        force_square=True,
+    )
+    raw = zxingcpp.write_barcode_to_image(barcode, scale=1, add_quiet_zones=False)
+    module_rows, module_columns = raw.shape
+    if module_rows != module_columns or module_rows < 1:
+        raise ValueError("datamatrix_square_encoding_failed")
+    svg = zxingcpp.write_barcode_to_svg(
+        barcode,
+        scale=1,
+        add_quiet_zones=True,
+    ).encode("utf-8")
+    svg_doc = fitz.open(stream=svg, filetype="svg")
+    try:
+        outer_side = float(svg_doc[0].rect.width)
+        return cast(bytes, svg_doc.convert_to_pdf()), outer_side / float(module_rows)
+    finally:
+        svg_doc.close()
+
+
+def _repair_distorted_datamatrix_pdf(pdf_bytes: bytes, cis_code: str) -> bytes:
+    """Replace only an anisotropically scaled Data Matrix inside a stored label PDF."""
+    import fitz  # pymupdf
+
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    replacement: fitz.Document | None = None
+    try:
+        if doc.page_count < 1:
+            return pdf_bytes
+        page = doc[0]
+        decoded = decode_datamatrix_codes_on_pdf_page(page, dpi=600)
+        matching = [item for item in decoded if item.value == cis_code]
+        distorted: list[DecodedDataMatrix] = []
+        for item in matching:
+            pitches = _datamatrix_module_pitches(page, item.page_rect)
+            if pitches is None:
+                continue
+            pitch_x, pitch_y = pitches
+            if max(pitch_x, pitch_y) / max(min(pitch_x, pitch_y), 0.01) >= 1.2:
+                distorted.append(item)
+        if not distorted:
+            return pdf_bytes
+
+        replacement_bytes, quiet_zone_ratio = _square_datamatrix_pdf(cis_code)
+        replacement = fitz.open(stream=replacement_bytes, filetype="pdf")
+        for item in distorted:
+            symbol = fitz.Rect(item.page_rect) & page.rect
+            # Preserve the smaller (not stretched) physical module step. The
+            # replacement side adds only the standard one-module quiet zone.
+            target_side = min(
+                symbol.width,
+                symbol.height,
+            ) * quiet_zone_ratio
+            target_side = min(target_side, page.rect.width, page.rect.height)
+            center = (symbol.tl + symbol.br) / 2
+            target = fitz.Rect(
+                center.x - target_side / 2,
+                center.y - target_side / 2,
+                center.x + target_side / 2,
+                center.y + target_side / 2,
+            )
+            dx = (
+                page.rect.x0 - target.x0
+                if target.x0 < page.rect.x0
+                else min(page.rect.x1 - target.x1, 0.0)
+            )
+            dy = (
+                page.rect.y0 - target.y0
+                if target.y0 < page.rect.y0
+                else min(page.rect.y1 - target.y1, 0.0)
+            )
+            target += (dx, dy, dx, dy)
+            erase = symbol | target
+            erase = fitz.Rect(
+                max(page.rect.x0, erase.x0 - 0.5),
+                max(page.rect.y0, erase.y0 - 0.5),
+                min(page.rect.x1, erase.x1 + 0.5),
+                min(page.rect.y1, erase.y1 + 0.5),
+            )
+            page.draw_rect(erase, color=None, fill=(1, 1, 1), overlay=True)
+            page.show_pdf_page(
+                target,
+                replacement,
+                0,
+                keep_proportion=True,
+                overlay=True,
+            )
+        return cast(bytes, doc.tobytes())
+    finally:
+        if replacement is not None:
+            replacement.close()
+        doc.close()
+
+
+def _prepare_label_artifact_pdf(pdf_bytes: bytes, cis_code: str | None) -> bytes:
+    """Repair only a proven distorted symbol; otherwise preserve the PDF exactly."""
+    return (
+        _repair_distorted_datamatrix_pdf(pdf_bytes, cis_code)
+        if cis_code
+        else pdf_bytes
+    )
+
+
 def fit_label_artifact_pdf_to_page(
     pdf_bytes: bytes,
     page_width_mm: float,
     page_height_mm: float,
+    cis_code: str | None = None,
 ) -> bytes:
     """Вписывает PDF селлера (обычно 60x40 альбом) на страницу выбранного размера наклейки."""
     import fitz  # pymupdf
@@ -74,7 +287,8 @@ def fit_label_artifact_pdf_to_page(
     if page_width_mm <= 0 or page_height_mm <= 0:
         raise ValueError("invalid_page_size")
 
-    src = fitz.open(stream=pdf_bytes, filetype="pdf")
+    prepared_pdf = _prepare_label_artifact_pdf(pdf_bytes, cis_code)
+    src = fitz.open(stream=prepared_pdf, filetype="pdf")
     try:
         if src.page_count < 1:
             raise ValueError("empty_pdf")
@@ -116,10 +330,20 @@ def merge_label_artifact_pdfs_for_print(
     parts: list[bytes],
     page_width_mm: float | None = None,
     page_height_mm: float | None = None,
+    *,
+    cis_codes: list[str] | None = None,
 ) -> bytes:
+    if cis_codes is not None and len(cis_codes) != len(parts):
+        raise ValueError("artifact_cis_count_mismatch")
     if page_width_mm is not None and page_height_mm is not None:
         fitted = [
-            fit_label_artifact_pdf_to_page(part, page_width_mm, page_height_mm) for part in parts
+            fit_label_artifact_pdf_to_page(
+                part,
+                page_width_mm,
+                page_height_mm,
+                cis_codes[index] if cis_codes is not None else None,
+            )
+            for index, part in enumerate(parts)
         ]
         return merge_label_artifact_pdfs(fitted)
     return merge_label_artifact_pdfs(parts)

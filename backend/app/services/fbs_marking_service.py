@@ -718,6 +718,7 @@ async def record_pending_kiz_operation(
     error_code: str,
     actor_user_id: uuid.UUID | None,
     idempotency_key: str,
+    scan_auto_print_id: uuid.UUID | None = None,
 ) -> None:
     marking.meta_status = META_STATUS_UNKNOWN
     marking.check_status = CHECK_STATUS_ERROR
@@ -740,6 +741,11 @@ async def record_pending_kiz_operation(
             local_entity_type="fbs_order_marking", local_entity_id=marking.id,
             wb_object_kind="order", wb_object_id=str(order.wb_order_id),
             created_by_user_id=actor_user_id,
+            request_summary_json=(
+                {"scan_auto_print_id": str(scan_auto_print_id)}
+                if scan_auto_print_id is not None
+                else None
+            ),
         )
         session.add(operation)
     # A later uncertain retry for the same binding reuses its existing key.
@@ -748,6 +754,41 @@ async def record_pending_kiz_operation(
     operation.error_context_json = None
     operation.confirmed_at = None
     operation.failed_at = None
+
+
+async def confirmed_kiz_operation_for_scan_auto_print(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    scan_auto_print_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> FbsWbOperation | None:
+    """Find the confirmed uncertain write owned by this exact product scan."""
+    result = await session.execute(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == order.tenant_id,
+            FbsWbOperation.seller_id == order.seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.wb_object_kind == "order",
+            FbsWbOperation.wb_object_id == str(order.wb_order_id),
+            FbsWbOperation.created_by_user_id == actor_user_id,
+            FbsWbOperation.request_hash
+            == hashlib.sha256(marking.value.encode()).hexdigest(),
+            FbsWbOperation.state == WB_OPERATION_STATE_CONFIRMED,
+            FbsWbOperation.confirmed_at.is_not(None),
+        )
+        .with_for_update()
+    )
+    matching = [
+        operation
+        for operation in result.scalars().all()
+        if (operation.request_summary_json or {}).get("scan_auto_print_id")
+        == str(scan_auto_print_id)
+    ]
+    return matching[0] if len(matching) == 1 else None
 
 
 async def pending_kiz_operation(

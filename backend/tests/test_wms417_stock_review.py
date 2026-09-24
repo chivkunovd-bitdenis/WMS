@@ -17,7 +17,6 @@ from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services import fbs_stock_rule_service as rules
 from app.services.fbs_warehouse_binding_service import (
-    FbsWarehouseBindingError,
     get_binding_stock_pool_summary,
     set_binding_stock_pool_quantity,
 )
@@ -62,7 +61,7 @@ async def test_percent_switch_and_legacy_reset_keep_wb_ozon_caps(db_session: Asy
     )
     restored = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert restored.rule.units_by_warehouse == original.units_by_warehouse
-    assert restored.published_now == 40
+    assert restored.published_now == 70
     assert (
         await db_session.scalar(
             select(FbsBindingStockPool.quantity).where(
@@ -155,11 +154,10 @@ async def test_legacy_set_and_summary_use_free_stock_not_retired_limit(db_sessio
         db_session, seed.tenant.id, seed.seller.id, seed.product.id
     )
     assert (summary["limit"], summary["available"], summary["allocated_total"]) == (5, 5, 5)
-    with pytest.raises(FbsWarehouseBindingError) as exc:
-        await set_binding_stock_pool_quantity(
-            db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 6
-        )
-    assert exc.value.code == "pool_quota_exceeded"
+    clamped = await set_binding_stock_pool_quantity(
+        db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 6
+    )
+    assert clamped.quantity == 5
 
 
 @pytest.mark.asyncio

@@ -245,6 +245,16 @@ async def order_history(
 
     for supply_event in supply_events:
         payload = supply_event.payload_json or {}
+        # WMS-514 keeps the deterministic product-scan selection in the
+        # existing document event stream.  It is an internal idempotency fact,
+        # not a packing/status action and must not appear as a generic
+        # "data changed" row in every order history of the supply.
+        if payload.get("kind") in {
+            "wms514_scan_auto_print",
+            "wms514_scan_auto_print_target",
+            "wms514_scan_auto_print_bound_target",
+        }:
+            continue
         # Строчные события поставки касаются конкретного заказа. Пока ссылки на
         # заказ в них не было, историю одного заказа засыпало добавлениями всех
         # соседей по поставке — по таким записям ничего не восстановишь. Чужие

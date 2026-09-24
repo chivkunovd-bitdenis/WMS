@@ -1,7 +1,4 @@
-import type { ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import { FbsStockDialog } from './FbsStockDialog'
+import { describe, expect, it } from 'vitest'
 import {
   buildSellerWarehouseRows,
   fbsWarehousesLoadError,
@@ -12,15 +9,6 @@ import {
   type CabinetList,
   type SavedWarehouseBinding,
 } from './fbsSellerWarehouseRows'
-import { toProduct, toRule, type ApiRule } from './FfProductsFbsPage'
-import type { Seller } from './stub'
-
-vi.mock('../../../ui-kit', async (original) => ({
-  ...await original<object>(),
-  // Only remove the portal for SSR; all fields and dialog content are real.
-  AppDialog: ({ children, actions }: { children: ReactNode; actions: ReactNode }) =>
-    <div>{children}{actions}</div>,
-}))
 
 const YARTSEVO = '441c8654-b6c2-48fe-950f-65acbc921118'
 const wbCabinet: CabinetList = {
@@ -93,60 +81,6 @@ describe('WMS-457 C7 seller warehouse rows for the stock window', () => {
       .toBe('Список складов из кабинета не получен, поэтому названия нет — причина в сообщении выше')
   })
 
-  it('renders the reason chips and hints next to the served checkbox', () => {
-    const seller: Seller = {
-      id: 'seller', name: 'ИП Тестовый Аудит', wbWarehouses: [{ id: YARTSEVO, name: 'Ярцево' }],
-      warehouses: buildSellerWarehouseRows({ wb: wbCabinet, ozon: { received: false } }, bindings),
-    }
-    const apiRule: ApiRule = {
-      publish: true, publish_ozon: true, same_everywhere: false, percent: 0,
-      by_warehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 }, units_mode: false,
-      units_by_warehouse: {}, units_remaining_by_warehouse: {}, on_hand: 100, reserved: 0,
-      free_stock: 100, published_now: 100,
-    }
-    const row = { id: 'product', seller_id: 'seller', name: 'Худи', sku_code: 'HD-GRY-L',
-      wb_primary_barcode: null, marketplaces: ['wb', 'ozon'] }
-    const markup = renderToStaticMarkup(<FbsStockDialog open
-      products={[toProduct(row, apiRule, 'seller')]} seller={seller}
-      rule={toRule(row.id, apiRule)} onClose={() => {}} onSave={() => {}} onBind={() => {}}
-      onServedChange={() => {}} ozonWarehousesError="Справочник складов Ozon недоступен" />)
-    expect(markup).toContain('Принимаем заказы продавца со склада «E2E Seller Warehouse»')
-    expect(markup).not.toContain('data-testid="fbs-stock-name-issue-wb:501001"')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 501999»')
-    expect(markup).toContain('data-testid="fbs-stock-name-issue-wb:501999"')
-    expect(markup).toContain('нет в кабинете')
-    expect(markup).toContain('заказы не принимаем')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 1020005029603630»')
-    expect(markup).toContain('data-testid="fbs-stock-name-issue-ozon:1020005029603630"')
-    expect(markup).toContain('название недоступно')
-    expect(markup).toContain('Справочник складов Ozon недоступен')
-    expect(markup).not.toContain('Склад Ozon 1020005029603630')
-    expect(markup).not.toContain('Склад WB 501999')
-  })
-
-  it('keeps the Wildberries reason banner apart from the save error', () => {
-    const seller: Seller = {
-      id: 'seller', name: 'ИП Без ключа', wbWarehouses: [{ id: YARTSEVO, name: 'Ярцево' }],
-      warehouses: buildSellerWarehouseRows(
-        { wb: { received: false }, ozon: { received: false } },
-        [{ wb_warehouse_id: 777001, wms_warehouse_id: YARTSEVO, is_active: true, served: true,
-          marketplace: 'wb' }],
-      ),
-    }
-    const row = { id: 'product', seller_id: 'seller', name: 'Кепка', sku_code: 'CAP-NOKEY',
-      wb_primary_barcode: null, marketplaces: ['wb'] }
-    const reason = fbsWarehousesLoadError({ status: 403, code: 'missing_marketplace_token',
-      message: 'Нет токена WB Marketplace.' })
-    const markup = renderToStaticMarkup(<FbsStockDialog open
-      products={[toProduct(row, undefined, 'seller')]} seller={seller}
-      rule={toRule(row.id, undefined)} onClose={() => {}} onSave={() => {}} onBind={() => {}}
-      onServedChange={() => {}} wbWarehousesError={reason} saveError={null} />)
-    expect(markup).toContain('data-testid="fbs-stock-wb-directory-error"')
-    expect(markup).toContain('У продавца не сохранён ключ Wildberries с правами «Маркетплейс»')
-    expect(markup).not.toContain('data-testid="fbs-stock-error"')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 777001»')
-    expect(markup).toContain('название недоступно')
-  })
 })
 
 describe('WMS-457 C6 reason of a failed Wildberries warehouse list by envelope code', () => {

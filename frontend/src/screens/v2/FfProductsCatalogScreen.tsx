@@ -39,13 +39,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import TuneOutlined from '@mui/icons-material/TuneOutlined'
 import { apiUrl } from '../../api'
-import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
-import { warehouseNumberFromRuleKey } from '../ff/products-fbs/fbsWarehouseRuleKeys'
-import {
-  loadFbsStockDialog,
-  type FbsStockDialogData,
-} from '../ff/products-fbs/fbsStockDialogLoader'
-import { fbsRuleBody } from '../ff/products-fbs/FfProductsFbsPage'
+import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
@@ -63,10 +57,6 @@ import { MarketplaceChip } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
-
-function isTechnicalFbsWarehouse(warehouse: WarehouseRow): boolean {
-  return warehouse.code.startsWith('fbs-wb-') || warehouse.name.startsWith('FBS WB ')
-}
 
 type FfCatalogRow = {
   id: string
@@ -256,15 +246,8 @@ export function FfProductsCatalogScreen({
 
   // ── Массовая простановка остатка FBS по фактическому остатку на складе ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  // Модалка «Задать остаток» — та же, что была на отдельном экране остатков FBS.
-  // Владелец просил, чтобы настройка жила в каталоге, а не отдельным разделом.
-  // Причины отказа справочников живут вместе с окном, а не в fbsDialogError:
-  // ту ошибку стирает любой удачный запрос по галке или сопоставлению, а
-  // причина отсутствия названий должна оставаться на месте, пока окно открыто —
-  // на неё ссылается чип «название недоступно» (WMS-457). Текст про Ozon
-  // показывается внутри озоновского блока, поэтому у продавца без озоновских
-  // складов блока нет и текста тоже — его окно остаётся прежним.
-  const [fbsDialog, setFbsDialog] = useState<FbsStockDialogData | null>(null)
+  // WMS-469: all three entries use one container; this screen owns selection only.
+  const [fbsDialogRows, setFbsDialogRows] = useState<FfCatalogRow[] | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
 
   // ── Ручное объединение двух карточек (WMS-349) ──────────────────────────
@@ -608,7 +591,7 @@ export function FfProductsCatalogScreen({
     }
   }, [authHeaders, load, mergeCandidates, token])
 
-  const openFbsStockDialog = useCallback(async (onlyIds?: string[]) => {
+  const openFbsStockDialog = useCallback((onlyIds?: string[]) => {
     setFbsDialogError(null)
     const pick = onlyIds ? new Set(onlyIds) : selectedIds
     const chosen = rows.filter((r) => pick.has(r.id) && r.seller_id)
@@ -629,110 +612,8 @@ export function FfProductsCatalogScreen({
       )
       return
     }
-    try {
-      // Правила обязательны, справочники кабинетов — нет: их отказ показывается
-      // внутри окна, а строки складов берутся из сохранённых привязок (WMS-457).
-      setFbsDialog(
-        await loadFbsStockDialog({
-          headers: authHeaders(token),
-          sellerId,
-          sellerName: chosen[0]!.seller_name ?? '—',
-          chosen,
-          // Технические fbs-wb-* и выключенные склады в выбор «Склад WMS» не попадают.
-          wmsWarehouses: warehouses
-            .filter((one) => one.is_operational && !isTechnicalFbsWarehouse(one))
-            .map((one) => ({ id: one.id, name: one.name })),
-        }),
-      )
-    } catch (e) {
-      setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
-    }
-  }, [authHeaders, rows, selectedIds, token, warehouses])
-
-  // Одна ручка на обе настройки склада продавца: сопоставление и «обслуживаем».
-  // Сервер принимает их вместе, поэтому при смене одного всегда отправляем и
-  // второе — иначе он затрёт то, что мы не прислали.
-  const saveFbsWarehouse = useCallback(
-    async (
-      wbWarehouseId: string,
-      next: { served?: boolean; wmsWarehouseId: string | null },
-      failureMessage: string,
-    ) => {
-      if (!fbsDialog) return
-      setFbsDialogError(null)
-      // Площадка склада. Без неё сервер искал бы привязку среди
-      // вайлдберрисовских и на озоновской строке завёл бы вместо неё
-      // склад-двойник на Wildberries.
-      const marketplace =
-        fbsDialog.seller.warehouses.find((one) => one.id === wbWarehouseId)?.marketplace ?? 'wb'
-      try {
-        const res = await fetch(
-          apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${warehouseNumberFromRuleKey(wbWarehouseId)}`),
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-            body: JSON.stringify({
-              ...(next.served === undefined ? {} : { served: next.served }),
-              wms_warehouse_id: next.wmsWarehouseId,
-              marketplace,
-            }),
-          },
-        )
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-        const saved = (await res.json()) as {
-          served: boolean
-          wms_warehouse_id: string | null
-        }
-        setFbsDialog((current) => {
-          if (!current) return current
-          return {
-            ...current,
-            seller: {
-              ...current.seller,
-              warehouses: current.seller.warehouses.map((one) =>
-                one.id === wbWarehouseId
-                  ? {
-                      ...one,
-                      boundTo: saved.wms_warehouse_id,
-                      fbsEnabled: saved.served,
-                    }
-                  : one,
-              ),
-            },
-          }
-        })
-      } catch (e) {
-        setFbsDialogError(e instanceof Error ? e.message : failureMessage)
-      }
-    },
-    [authHeaders, fbsDialog, token],
-  )
-
-  const bindFbsWarehouse = useCallback(async (wbWarehouseId: string, wmsWarehouseId: string) => {
-    if (!fbsDialog) return
-    // Пустое значение не превращаем в served=false: иначе обслуживаемое
-    // WB-направление исчезнет из dialog и вернуть его отсюда будет невозможно.
-    if (!wmsWarehouseId) return
-    // Сопоставление и решение обслуживать склад — два разных действия.
-    // Поэтому served здесь не отправляем: новая привязка останется выключенной,
-    // а существующая сохранит своё текущее состояние. После выбора WMS-склада
-    // оператор отдельно включает направление явной галочкой.
-    await saveFbsWarehouse(
-      wbWarehouseId,
-      { wmsWarehouseId },
-      'Не удалось сопоставить склад',
-    )
-  }, [fbsDialog, saveFbsWarehouse])
-
-  const setFbsWarehouseServed = useCallback(async (wbWarehouseId: string, served: boolean) => {
-    if (!fbsDialog) return
-    const current = fbsDialog.seller.warehouses.find((one) => one.id === wbWarehouseId)
-    await saveFbsWarehouse(
-      wbWarehouseId,
-      { served, wmsWarehouseId: current?.boundTo ?? null },
-      served ? 'Не удалось включить склад' : 'Не удалось отключить склад',
-    )
-  }, [fbsDialog, saveFbsWarehouse])
+    setFbsDialogRows(chosen)
+  }, [rows, selectedIds])
 
   // Ссылка ?fbs_limit=<id> ведёт сюда из раскладки остатка по складам WB.
   // Старая модалка абсолютного лимита убрана, ссылка открывает ту же модалку
@@ -743,7 +624,7 @@ export function FfProductsCatalogScreen({
     if (!targetId || catalog.length === 0) return
     if (fbsLimitAutoOpenedRef.current === targetId) return
     if (catalog.some((p) => p.id === targetId)) {
-      void openFbsStockDialog([targetId])
+      openFbsStockDialog([targetId])
     }
     fbsLimitAutoOpenedRef.current = targetId
     const next = new URLSearchParams(searchParams)
@@ -1964,51 +1845,17 @@ export function FfProductsCatalogScreen({
           </DialogActions>
         </Dialog>
 
-        {fbsDialog ? (
-          <FbsStockDialog
-            open
-            products={fbsDialog.products}
-            seller={fbsDialog.seller}
-            rule={fbsDialog.rule}
-            saveError={fbsDialogError}
-            wbWarehousesError={fbsDialog.wbWarehousesError ?? null}
-            ozonWarehousesError={fbsDialog.ozonWarehousesError ?? null}
-            onClose={() => {
-              setFbsDialog(null)
-              setFbsDialogError(null)
-            }}
-            onBind={(wbWarehouseId, wmsWarehouseId) => {
-              void bindFbsWarehouse(wbWarehouseId, wmsWarehouseId)
-            }}
-            onServedChange={(wbWarehouseId, served) => {
-              void setFbsWarehouseServed(wbWarehouseId, served)
-            }}
-            onSave={(rule) => {
-              const ids = fbsDialog.products.map((one) => one.id)
-              void (async () => {
-                try {
-                  const res = await fetch(apiUrl('/products/fbs-rule'), {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-                    // PUT /products/fbs-rule ждёт правило вложенным в rule
-                    // (ProductsFbsRuleBulkBody, extra="forbid"). Плоское тело
-                    // отбивалось как «rule: Field required».
-                    body: JSON.stringify({ product_ids: ids, rule: fbsRuleBody(rule) }),
-                  })
-                  if (!res.ok) {
-                    setFbsDialogError(await readApiErrorMessage(res))
-                    return
-                  }
-                  setFbsDialog(null)
-                  setFbsDialogError(null)
-                  await load()
-                } catch (e) {
-                  setFbsDialogError(
-                    e instanceof Error ? e.message : 'Не удалось сохранить правило',
-                  )
-                }
-              })()
-            }}
+        {fbsDialogRows ? (
+          <FbsStockDialogContainer
+            token={token}
+            sellerId={fbsDialogRows[0]!.seller_id as string}
+            sellerName={fbsDialogRows[0]!.seller_name ?? '—'}
+            chosen={fbsDialogRows}
+            warehouses={warehouses}
+            canEditBindings={canManageCatalog}
+            onClose={() => setFbsDialogRows(null)}
+            onChanged={() => void load()}
+            onLoadError={setFbsDialogError}
           />
         ) : null}
       </Box>

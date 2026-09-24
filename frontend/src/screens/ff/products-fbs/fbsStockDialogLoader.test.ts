@@ -1,32 +1,37 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadFbsStockDialog, type FbsStockDialogRow } from './fbsStockDialogLoader'
 
-// F2 ревью Astra: отклонённый fetch справочника (нет HTTP-ответа вовсе — обрыв,
-// тайм-аут) ронял открытие окна целиком, хотя правила и привязки приехали.
-// Здесь исполняется настоящий загрузчик с подменным fetch: каждый из двух
-// справочников отклоняется по отдельности, обязательный запрос правил —
-// отдельно.
+// F2 ревью Astra (WMS-457): отклонённый fetch справочника (нет HTTP-ответа
+// вовсе — обрыв, тайм-аут) ронял открытие окна целиком, хотя правила и
+// привязки приехали. Здесь исполняется настоящий загрузчик с подменным fetch:
+// каждый из двух справочников отклоняется по отдельности, обязательные запросы
+// правил и привязок — отдельно. Форма данных — блоки по привязкам (WMS-469).
 
 const YARTSEVO = '441c8654-b6c2-48fe-950f-65acbc921118'
 const SELLER = 'e17b9df9-ae52-4054-8f8f-faa9c7e737ec'
-const chosen: FbsStockDialogRow[] = [{
-  id: 'product-1', seller_id: SELLER, seller_name: 'ИП Тестовый Аудит', name: 'Худи',
-  sku_code: 'HD-GRY-L', wb_size: 'L', wb_primary_barcode: '4680123456796', marketplaces: ['wb', 'ozon'],
-}]
+const chosen: FbsStockDialogRow[] = [{ id: 'product-1', name: 'Худи', sku_code: 'HD-GRY-L', wb_size: 'L' }]
+const wbRule = {
+  publish: true, mode: 'units', value: 30, units_configured: true, marketplace: 'wb', external_warehouse_id: '501001',
+  wms_warehouse_id: YARTSEVO, served: true, applicable: true, on_hand: 100, reserved: 0,
+  free_stock: 100, published_now: 30,
+}
+const ozonRule = { ...wbRule, mode: 'percent', value: 40, units_configured: false, marketplace: 'ozon',
+  external_warehouse_id: '1020005029603630', published_now: 40 }
 const rulesPayload = { items: [{
   product_id: 'product-1', publish: true, publish_ozon: true, same_everywhere: false, percent: 0,
-  by_warehouse: { 501001: 60, 1020005029603630: 40 }, units_mode: false,
-  units_by_warehouse: {}, units_remaining_by_warehouse: {}, free_stock: 100, on_hand: 100,
-  reserved: 0, published_now: 100,
+  by_warehouse: {}, units_mode: false, units_by_warehouse: {}, units_remaining_by_warehouse: {},
+  free_stock: 100, on_hand: 100, reserved: 0, published_now: 70,
+  by_binding: { b1: wbRule, b2: ozonRule },
 }] }
 const wbPayload = [{ wb_warehouse_id: 501001, served: true, wms_warehouse_id: YARTSEVO,
   id: 501001, name: 'E2E Seller Warehouse' }]
 const bindingsPayload = [
   { id: 'b1', marketplace: 'wb', external_warehouse_id: null, wb_warehouse_id: 501001,
-    wms_warehouse_id: YARTSEVO, is_active: true, served: true, stock_sync_enabled: true },
+    wms_warehouse_id: YARTSEVO, wms_warehouse_name: 'Ярцево', is_active: true, served: true,
+    stock_sync_enabled: true, editable: true },
   { id: 'b2', marketplace: 'ozon', external_warehouse_id: '1020005029603630',
-    wb_warehouse_id: 1020005029603630, wms_warehouse_id: YARTSEVO, is_active: true,
-    served: true, stock_sync_enabled: true },
+    wb_warehouse_id: 1020005029603630, wms_warehouse_id: YARTSEVO, wms_warehouse_name: 'Ярцево',
+    is_active: true, served: true, stock_sync_enabled: true, editable: true },
 ]
 const ozonPayload = [{ warehouse_id: 1020005029603630, name: 'Хоругвино',
   has_entrusted_acceptance: false, is_rfbs: false, served: true, wms_warehouse_id: YARTSEVO }]
@@ -61,30 +66,31 @@ function stubFetch(answers: { rules?: Answer; wb?: Answer; bindings?: Answer; oz
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-const load = () => loadFbsStockDialog({
-  headers: { Authorization: 'Bearer token' }, sellerId: SELLER, sellerName: 'ИП Тестовый Аудит',
-  chosen, wmsWarehouses: [{ id: YARTSEVO, name: 'Ярцево' }],
-})
+const load = () => loadFbsStockDialog({ headers: { Authorization: 'Bearer token' }, sellerId: SELLER, chosen })
+const named = (data: Awaited<ReturnType<typeof load>>) =>
+  data.bindings.map((one) => [one.id, one.name, one.nameIssue])
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 describe('loadFbsStockDialog', () => {
-  it('names rows from both cabinets when everything answers', async () => {
+  it('names blocks from both cabinets when everything answers', async () => {
     const fetchMock = stubFetch({})
     const data = await load()
     expect(fetchMock).toHaveBeenCalledTimes(4)
     expect(data.wbWarehousesError).toBeNull()
     expect(data.ozonWarehousesError).toBeNull()
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['wb:501001', 'E2E Seller Warehouse', undefined],
-      ['ozon:1020005029603630', 'Хоругвино', undefined],
-    ])
-    expect(data.rule).toMatchObject({ sameEverywhere: false,
-      byWarehouse: { 'wb:501001': 60, 'ozon:1020005029603630': 40 } })
-    expect(data.products[0]).toMatchObject({ id: 'product-1', marketplaces: ['wb', 'ozon'], savedPublishedNow: 100 })
-    expect(data.seller.wbWarehouses).toEqual([{ id: YARTSEVO, name: 'Ярцево' }])
+    expect(named(data)).toEqual([['b1', 'E2E Seller Warehouse', undefined], ['b2', 'Хоругвино', undefined]])
+    expect(data.bindings[0]).toMatchObject({ marketplace: 'wb', externalId: '501001', wmsWarehouseId: YARTSEVO,
+      wmsWarehouseName: 'Ярцево', served: true, editable: true })
+    expect(data.products[0]).toMatchObject({ id: 'product-1', name: 'Худи', sku: 'HD-GRY-L', size: 'L' })
+    expect(data.products[0]!.byBinding).toEqual({
+      b1: { publish: true, mode: 'units', value: 30, unitsConfigured: true, applicable: true, onHand: 100, reserved: 0, freeStock: 100 },
+      b2: { publish: true, mode: 'percent', value: 40, unitsConfigured: false, applicable: true, onHand: 100, reserved: 0, freeStock: 100 },
+    })
+    expect(data.cabinets.wb).toMatchObject({ received: true })
+    expect(data.cabinets.ozon).toMatchObject({ received: true })
   })
 
   it('opens the window when the WB cabinet request never gets a response', async () => {
@@ -94,12 +100,14 @@ describe('loadFbsStockDialog', () => {
       'Wildberries не ответил на запрос складов: Failed to fetch. Ниже показаны сохранённые привязки без названий.',
     )
     expect(data.ozonWarehousesError).toContain('Справочник складов Ozon недоступен')
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['wb:501001', '№ 501001', 'list_unavailable'],
-      ['ozon:1020005029603630', '№ 1020005029603630', 'list_unavailable'],
+    expect(named(data)).toEqual([
+      ['b1', '№ 501001', 'list_unavailable'],
+      ['b2', '№ 1020005029603630', 'list_unavailable'],
     ])
-    expect(data.seller.warehouses.every((one) => one.fbsEnabled && one.boundTo === YARTSEVO)).toBe(true)
-    expect(data.rule.byWarehouse).toEqual({ 'wb:501001': 60, 'ozon:1020005029603630': 40 })
+    expect(data.bindings.every((one) => one.served && one.wmsWarehouseId === YARTSEVO)).toBe(true)
+    // Правила по привязкам приехали — блокам есть из чего строиться.
+    expect(Object.keys(data.products[0]!.byBinding)).toEqual(['b1', 'b2'])
+    expect(data.cabinets).toEqual({ wb: { received: false }, ozon: { received: false } })
   })
 
   it('opens the window when the Ozon directory request never gets a response', async () => {
@@ -109,10 +117,7 @@ describe('loadFbsStockDialog', () => {
     expect(data.ozonWarehousesError).toBe(
       'Справочник складов Ozon не получен: Failed to fetch. Ниже показаны сохранённые привязки без названий.',
     )
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['wb:501001', 'E2E Seller Warehouse', undefined],
-      ['ozon:1020005029603630', '№ 1020005029603630', 'list_unavailable'],
-    ])
+    expect(named(data)).toEqual([['b1', 'E2E Seller Warehouse', undefined], ['b2', '№ 1020005029603630', 'list_unavailable']])
   })
 
   it('opens the window when the WB cabinet response body breaks while being read', async () => {
@@ -122,11 +127,7 @@ describe('loadFbsStockDialog', () => {
       'Wildberries не ответил на запрос складов: terminated while reading response body. Ниже показаны сохранённые привязки без названий.',
     )
     expect(data.ozonWarehousesError).toBeNull()
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['ozon:1020005029603630', 'Хоругвино', undefined],
-      ['wb:501001', '№ 501001', 'list_unavailable'],
-    ])
-    expect(data.rule.byWarehouse).toEqual({ 'wb:501001': 60, 'ozon:1020005029603630': 40 })
+    expect(named(data)).toEqual([['b1', '№ 501001', 'list_unavailable'], ['b2', 'Хоругвино', undefined]])
   })
 
   it('opens the window when the Ozon directory response body breaks while being read', async () => {
@@ -136,10 +137,7 @@ describe('loadFbsStockDialog', () => {
     expect(data.ozonWarehousesError).toBe(
       'Справочник складов Ozon не получен: terminated while reading response body. Ниже показаны сохранённые привязки без названий.',
     )
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['wb:501001', 'E2E Seller Warehouse', undefined],
-      ['ozon:1020005029603630', '№ 1020005029603630', 'list_unavailable'],
-    ])
+    expect(named(data)).toEqual([['b1', 'E2E Seller Warehouse', undefined], ['b2', '№ 1020005029603630', 'list_unavailable']])
   })
 
   it('does not open the window when the rules response body breaks while being read', async () => {
@@ -154,11 +152,8 @@ describe('loadFbsStockDialog', () => {
     expect(data.wbWarehousesError).toBe(
       'Wildberries не принял ключ продавца — он отозван или недействителен. Пока ключ не заменят, названия складов, заказы и остатки FBS этого продавца не приходят.',
     )
-    // Порядок прежний: строки полученного кабинета (Ozon), затем привязки без строки.
-    expect(data.seller.warehouses.map((one) => [one.id, one.name, one.nameIssue])).toEqual([
-      ['ozon:1020005029603630', 'Хоругвино', undefined],
-      ['wb:501001', '№ 501001', 'list_unavailable'],
-    ])
+    // Порядок — порядок сервера по привязкам, а не по кабинетам.
+    expect(named(data)).toEqual([['b1', '№ 501001', 'list_unavailable'], ['b2', 'Хоругвино', undefined]])
   })
 
   it('does not open the window without the rules: the request is rejected', async () => {
@@ -170,42 +165,24 @@ describe('loadFbsStockDialog', () => {
     stubFetch({ rules: json({ detail: 'seller_not_found' }, 404) })
     await expect(load()).rejects.toThrow('seller_not_found')
   })
-})
 
-// Номера складов Wildberries и Ozon из разных пространств и совпадают. Площадку
-// номера в правиле определяют действующие привязки — ровно те, по которым его
-// собрал сервер. Справочник кабинета на эту роль не годится: отключённая
-// привязка остаётся в нём сопоставленной строкой, и её номер забирал себе
-// озоновский лимит.
-describe('loadFbsStockDialog при совпадении номеров складов', () => {
-  const collidingRules = () => json({ items: [{ ...rulesPayload.items[0]!, by_warehouse: {},
-    units_mode: true, units_by_warehouse: { 777: 0 }, units_remaining_by_warehouse: { 777: 0 } }] })
-  const collidingWb = () => json([{ wb_warehouse_id: 777, served: true, wms_warehouse_id: YARTSEVO,
-    id: 777, name: 'Коледино' }])
-  // Склада 777 в справочнике Ozon нет — его строка приходит сохранённой
-  // привязкой. В кабинете Wildberries номер есть: по одному только справочнику
-  // ноль выглядел бы лимитом склада Wildberries, и никакой ошибки бы не было.
-  const collidingOzon = () => json([])
-  const collidingBindings = () => json([
-    { id: 'b1', marketplace: 'wb', external_warehouse_id: null, wb_warehouse_id: 777,
-      wms_warehouse_id: YARTSEVO, is_active: false, served: true, stock_sync_enabled: true },
-    { id: 'b2', marketplace: 'ozon', external_warehouse_id: '777', wb_warehouse_id: 777,
-      wms_warehouse_id: YARTSEVO, is_active: true, served: true, stock_sync_enabled: true },
-  ])
-
-  it('отдаёт номер тому складу, чья привязка действует', async () => {
-    stubFetch({ rules: collidingRules(), wb: collidingWb(), ozon: collidingOzon(),
-      bindings: collidingBindings() })
-    const data = await load()
-    // Ноль оператора остаётся озоновским: строка Wildberries показывает пустое поле.
-    expect(data.rule.unitsByWarehouse).toEqual({ 'ozon:777': 0 })
+  it('does not open the window without the bindings: blocks have nothing to be built from', async () => {
+    stubFetch({ bindings: json({ detail: 'forbidden' }, 403) })
+    await expect(load()).rejects.toThrow('forbidden')
   })
 
-  it('не берёт площадку из справочника кабинета, когда привязки не отдали', async () => {
-    stubFetch({ rules: collidingRules(), wb: collidingWb(), ozon: collidingOzon(),
-      bindings: json({ detail: 'Не удалось прочитать привязки складов продавца.' }, 500) })
-    // Без привязок ноль выглядел бы лимитом склада Wildberries 777 и ушёл бы
-    // туда при сохранении, поэтому окно не открывается вовсе.
-    await expect(load()).rejects.toThrow('Не удалось прочитать привязки складов продавца.')
+  it('keeps a product without a rule entry with empty by_binding instead of inventing numbers', async () => {
+    stubFetch({ rules: json({ items: [] }) })
+    const data = await load()
+    expect(data.products[0]!.byBinding).toEqual({})
+  })
+
+  it('WMS-483 keeps an unset units limit distinct from an explicit zero', async () => {
+    const unset = { ...wbRule, value: 0, units_configured: false }
+    stubFetch({ rules: json({ items: [{ ...rulesPayload.items[0], by_binding: { b1: unset } }] }) })
+    const data = await load()
+    expect(data.products[0]!.byBinding.b1).toMatchObject({
+      mode: 'units', value: 0, unitsConfigured: false,
+    })
   })
 })

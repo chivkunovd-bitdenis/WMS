@@ -4,8 +4,9 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { ProductsScreen } from './ProductsScreen'
+import { FbsStockDialogContainer } from './FbsStockDialogContainer'
 import type { FbsRule, MarketplaceCode, Product, Seller } from './stub'
-import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey, warehouseRuleKey,
+import { qualifyWarehouseRuleValues, warehouseRuleKey,
   type WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 
 // Экран управления остатком FBS, подключённый к серверу.
@@ -138,9 +139,10 @@ export function fbsRuleBody(rule: FbsRule): {
 type Props = {
   token: string
   sellers: Array<{ id: string; name: string }>
+  warehouses: Array<{ id: string; name: string; code?: string; is_operational?: boolean }>
 }
 
-export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
+export function FfProductsFbsPage({ token, sellers: sellerList, warehouses }: Props) {
   // Список продавцов приходит сверху новым массивом на каждую перерисовку.
   // Если держать загрузку зависимой от самого массива, она перезапускает себя
   // бесконечно: загрузила — обновила состояние — перерисовка — новый массив —
@@ -154,6 +156,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
   const [sellers, setSellers] = useState<Seller[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [stockDialog, setStockDialog] = useState<Product[] | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -250,55 +253,6 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
     void load()
   }, [load])
 
-  async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
-    setError(null)
-    const body = fbsRuleBody(rule)
-    try {
-      if (productIds.length === 1) {
-        const res = await fetch(apiUrl(`/products/${productIds[0]}/fbs-rule`), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify(body),
-        })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      } else {
-        const res = await fetch(apiUrl('/products/fbs-rule'), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({ product_ids: productIds, rule: body }),
-        })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      }
-      await load()
-      return null
-    } catch (err) {
-      // Возвращаем текст наверх: окно правила покажет его у себя и останется
-      // открытым, чтобы не терять введённое.
-      return err instanceof Error ? err.message : 'Не удалось сохранить правило'
-    }
-  }
-
-  async function bindWarehouse(sellerId: string, warehouseId: string, wbWarehouseId: string) {
-    setError(null)
-    try {
-      const current = sellers
-        .find((one) => one.id === sellerId)
-        ?.warehouses.find((one) => one.id === warehouseId)
-      const res = await fetch(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${warehouseNumberFromRuleKey(warehouseId)}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headers(token) },
-        body: JSON.stringify({
-          served: current?.fbsEnabled ?? true,
-          wms_warehouse_id: wbWarehouseId || null,
-        }),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сопоставить склад')
-    }
-  }
-
   return (
     <Box>
       {error ? <ErrorNotice testId="products-fbs-error">{error}</ErrorNotice> : null}
@@ -308,11 +262,26 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         sellers={sellers}
         rules={rules}
         loading={loading}
-        onSaveRule={(ids, rule) => saveRule(ids, rule)}
-        onBindWarehouse={(sellerId, warehouseId, wbWarehouseId) =>
-          void bindWarehouse(sellerId, warehouseId, wbWarehouseId)
-        }
+        onOpenStockDialog={setStockDialog}
       />
+      {stockDialog ? (
+        <FbsStockDialogContainer
+          token={token}
+          sellerId={stockDialog[0]!.sellerId}
+          sellerName={sellers.find((one) => one.id === stockDialog[0]!.sellerId)?.name ?? '—'}
+          chosen={stockDialog.map((one) => ({
+            id: one.id,
+            name: one.name,
+            sku_code: one.sku,
+            wb_size: one.size,
+          }))}
+          warehouses={warehouses}
+          canEditBindings
+          onClose={() => setStockDialog(null)}
+          onChanged={() => void load()}
+          onLoadError={setError}
+        />
+      ) : null}
     </Box>
   )
 }
