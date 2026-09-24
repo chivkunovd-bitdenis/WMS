@@ -271,13 +271,13 @@ async def test_selected_tape_reuses_code_and_clear_never_changes_inventory(
     assert states[requested[1]][0]["value_tail"] is not None
     assert deleted == [orders[0].wb_order_id, orders[1].wb_order_id]
     async with SessionLocal() as session:
-        # WMS-084: a confirmed operator detach releases the binding, not the
-        # physical label. The code must also stay out of the available print pool.
+        # WMS-518: confirmed operator cancellation releases a transient pool
+        # code for reuse without changing physical inventory.
         detached = await session.scalar(
             select(MarkingCode).where(MarkingCode.cis_code == _cis("USED085"))
         )
         assert detached is not None
-        assert detached.status == "applied"
+        assert detached.status == "available"
         assert detached.source == "pool"
         assert detached.packaging_task_line_id is None
         assert await session.scalar(
@@ -376,7 +376,7 @@ async def test_clear_after_pool_to_external_replacement_releases_marking_need(
 
 
 @pytest.mark.asyncio
-async def test_clear_rejected_code_keeps_code_in_history(
+async def test_clear_rejected_pool_code_returns_available_and_keeps_history(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -402,7 +402,7 @@ async def test_clear_rejected_code_keeps_code_in_history(
             select(MarkingCode).where(MarkingCode.cis_code == _cis("USED085"))
         )
         assert detached is not None
-        assert detached.status == "applied"
+        assert detached.status == "available"
         assert detached.source == "pool"
         assert detached.packaging_task_line_id is None
         event = (await session.execute(

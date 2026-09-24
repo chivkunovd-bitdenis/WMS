@@ -127,34 +127,31 @@ async def create_seller_staff_user(
     session: AsyncSession,
     *,
     acting_user: User,
-    email: str | None,
+    email: str,
     full_name: str | None = None,
     job_title: str | None = None,
-    password: str | None,
     permissions: SellerPermissionsSnapshot,
 ) -> tuple[User, SellerPermissionsSnapshot]:
     if not await can_manage_seller_staff(session, acting_user):
         raise PermissionError("forbidden")
     if acting_user.seller_id is None:
         raise PermissionError("seller_not_linked")
-    if password and password.strip():
-        password_hash = hash_password(password)
-        must_set_password = False
-    else:
-        password_hash = hash_password(secrets.token_urlsafe(64))
-        must_set_password = True
     user = User(
         tenant_id=acting_user.tenant_id,
         seller_id=acting_user.seller_id,
-        email=email.strip().lower() if email else None,
+        email=email.strip().lower(),
         full_name=full_name,
         job_title=job_title,
-        password_hash=password_hash,
-        must_set_password=must_set_password,
+        password_hash=hash_password(secrets.token_urlsafe(64)),
+        must_set_password=True,
         role=FULFILLMENT_SELLER,
     )
     session.add(user)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ValueError("email_taken") from exc
     row = SellerStaffPermissions(
         user_id=user.id,
         can_documents=permissions.documents,
@@ -194,6 +191,73 @@ async def create_seller_staff_user(
     await session.refresh(user)
     await session.refresh(row)
     return user, _from_row(row)
+
+
+async def _seller_staff_target(
+    session: AsyncSession, *, acting_user: User, staff_user_id: uuid.UUID,
+    lock: bool = False,
+) -> User:
+    if not await can_manage_seller_staff(session, acting_user):
+        raise PermissionError("forbidden")
+    stmt = select(User).where(
+        User.id == staff_user_id,
+        User.tenant_id == acting_user.tenant_id,
+        User.seller_id == acting_user.seller_id,
+        User.role == FULFILLMENT_SELLER,
+    ).options(selectinload(User.seller_staff_permissions))
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    user = await session.scalar(stmt)
+    if user is None:
+        raise LookupError("user_not_found")
+    return user
+
+
+async def prepare_seller_staff_invite(
+    session: AsyncSession, *, acting_user: User, staff_user_id: uuid.UUID,
+) -> User:
+    user = await _seller_staff_target(
+        session, acting_user=acting_user, staff_user_id=staff_user_id,
+    )
+    if user.seller_staff_permissions is None:
+        raise ValueError("owner_protected")
+    if not user.email:
+        raise ValueError("email_required")
+    if not user.must_set_password:
+        raise ValueError("account_already_active")
+    return user
+
+
+async def update_seller_staff_profile(
+    session: AsyncSession, *, acting_user: User, staff_user_id: uuid.UUID,
+    full_name: str, job_title: str | None, email: str | None,
+) -> tuple[User, SellerPermissionsSnapshot, bool, bool]:
+    user = await _seller_staff_target(
+        session, acting_user=acting_user, staff_user_id=staff_user_id, lock=True,
+    )
+    is_owner = user.seller_staff_permissions is None
+    invite = email is not None
+    if invite:
+        if is_owner:
+            raise ValueError("owner_protected")
+        if user.email is not None:
+            raise ValueError("email_already_set")
+        # Adding a web identity is an explicit transition to self-set credentials.
+        # Lock the same User row as set_password_by_link so activation cannot race it.
+        assert email is not None
+        user.email = email.strip().lower()
+        user.password_hash = hash_password(secrets.token_urlsafe(64))
+        user.must_set_password = True
+    user.full_name = full_name
+    user.job_title = job_title
+    perms = _from_row(user.seller_staff_permissions)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ValueError("email_taken") from exc
+    await session.refresh(user)
+    return user, perms, is_owner, invite
 
 
 async def update_seller_staff_permissions(

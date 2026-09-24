@@ -11,6 +11,7 @@ from app.api.document_events import _event_out
 from app.db.session import SessionLocal
 from app.models.document_event import DocumentEvent
 from app.models.user import User
+from tests.auth_helpers import set_password_via_link
 
 
 async def register(client: AsyncClient, slug: str = "identity-one") -> dict[str, str]:
@@ -189,9 +190,18 @@ async def test_seller_named_staff_create_edit_and_other_seller_scope(async_clien
         })
         owners.append({"Authorization": f"Bearer {login.json()['access_token']}"})
     created = await async_client.post("/auth/seller-staff-accounts", headers=owners[0], json={
-        "full_name": "Джон Ли", "job_title": "Менеджер", "password": "test-password-443",
+        "full_name": "Джон Ли", "job_title": "Менеджер", "email": "john-443@example.com",
     })
-    assert created.status_code == 201 and created.json()["email"] is None
+    assert created.status_code == 201
+    activated = await set_password_via_link(
+        async_client, "john-443@example.com", "test-password-443",
+    )
+    assert activated.status_code == 200
+    # Existing named employees without email retain their TSD identity (WMS-463).
+    async with SessionLocal() as session:
+        legacy = await session.get(User, uuid.UUID(created.json()["id"]))
+        legacy.email = None
+        await session.commit()
     staff = created.json()
     response, profile = await by_name(async_client, "джон   ЛИ")
     assert response.status_code == 200 and profile["id"] == staff["id"]
