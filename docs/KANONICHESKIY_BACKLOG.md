@@ -13670,7 +13670,7 @@ C8 на шести конфигурациях галок; совместимос
 
 <a id="wms-520"></a>
 
-**Статус:** `ПРОГРАММНО ПРИНЯТО · PRODUCT SHA 1406aec3 · НЕ ВЫЛОЖЕНО` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-520.md)
+**Статус:** `DEPLOYED · PRODUCTION SHA ba75fe0b · OPERATOR LIVE IMPORT PENDING` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-520.md)
 
 При выборе файла production `POST
 /operations/marking-codes/import/preview` отвечает 500: после группировки
@@ -13687,6 +13687,13 @@ C8 на шести конфигурациях галок; совместимос
 
 На frozen product SHA `1406aec3` аналитик подтвердил C1–C7: адресные тесты
 manual preview/import 10/10 и регрессия WMS-476 5/5 прошли, `ruff` и `mypy`
-зелёные, Astra high завершила перекрёстное ревью итогом PASS. Это только
-программная приёмка: merge и production deploy не выполнялись, production
-readback после выкладки отсутствует.
+зелёные, Astra high завершила перекрёстное ревью итогом PASS.
+
+PR #245 смержен и развёрнут в production точным SHA
+`ba75fe0bca7fee9716bed833fc13edece02740c5`. На сервере подтверждены ветка
+`etalon`, успешный `/api/health`, HTTP 200 для корня и `/seller/`, а readback
+запущенного API показывает новую реализацию preview без `MarkingPool` и без
+`get_or_create_marking_pool`. Недавних preview 500 после deploy — 0.
+Авторизованный import реального файла не запускался, чтобы не мутировать
+production-данные: операторский повтор исходного preview и штатного import
+остаётся открытым условием live-приёмки.
