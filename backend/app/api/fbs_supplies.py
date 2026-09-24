@@ -646,6 +646,11 @@ class FbsPackingBoxDeleteBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
+class FbsOzonLabelErrorOut(BaseModel):
+    code: str
+    message: str
+
+
 class FbsPackingBoxOut(BaseModel):
     id: str
     box_number: int
@@ -657,6 +662,10 @@ class FbsPackingBoxOut(BaseModel):
     wb_trbx_id: str | None
     qr_asset: FbsWorkspacePrintAssetOut | None
     without_distribution: bool = False
+    # WMS-526 R12: last failed attempt to get this order's Ozon label — same
+    # value on every box of that order, null once a label is ready or there
+    # was no failed attempt. Always null for WB boxes.
+    ozon_label_error: FbsOzonLabelErrorOut | None = None
 
 
 class FbsDeliveryCheckOut(BaseModel):
@@ -729,6 +738,14 @@ class FbsWorkspaceOut(BaseModel):
     picking_auto_passed_reason: str | None = None
     wb_sync_stale: bool = False
     server_now: str
+
+
+class FbsAutoAssignBoxesOut(FbsWorkspaceOut):
+    """WMS-526 F2: same workspace snapshot as every other box operation, plus
+    how many boxes this specific auto-assign call created (not the supply's
+    total box count, which the base `boxes` field already carries)."""
+
+    created_boxes: int
 
 
 class FbsPickScanLocationBody(BaseModel):
@@ -972,8 +989,11 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "ozon_box_distribution_required",
         "ozon_order_positions_required",
         "order_positions_not_supported",
+        "auto_assign_requires_ozon",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    if exc.code == "auto_assign_box_mismatch":
+        raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
         raise_fbs_http(
             status.HTTP_409_CONFLICT, exc.code, retryable=exc.code == "box_cargo_place_unresolved"
@@ -1990,6 +2010,19 @@ async def clear_fbs_packing_box(
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
 
+def _ozon_label_error_from_exc(
+    exc: OzonFbsProcessError | MarketplaceAccountError | MarketplaceProviderError,
+) -> tuple[str, str]:
+    """Same (code, message) this handler's own except-clauses below turn
+    into the HTTP response for this exception — kept in sync with them so
+    the persisted R12 reason always matches what the operator just saw."""
+    if isinstance(exc, OzonFbsProcessError):
+        return exc.code, exc.message
+    if isinstance(exc, MarketplaceAccountError):
+        return exc.code, "Нет подключения к Ozon."
+    return exc.code, provider_error_message(exc)
+
+
 @router.post(
     "/{supply_id}/boxes/{box_id}/retry-qr",
     response_model=FbsWorkspaceOut,
@@ -2001,33 +2034,120 @@ async def retry_fbs_packing_box_qr(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
+    # Captured once, used everywhere below instead of `user.*`/`supply.*`:
+    # a rollback (see the assembly-failure branch) expires every ORM object
+    # already loaded in this session, `user` included — a later `user.tenant_id`
+    # would try to lazily refetch it outside an awaited context and crash
+    # with MissingGreenlet instead of returning the intended error response.
+    tenant_id = user.tenant_id
     supply = await session.scalar(
         select(FbsSupply).where(
             FbsSupply.id == supply_id,
-            FbsSupply.tenant_id == user.tenant_id,
+            FbsSupply.tenant_id == tenant_id,
         )
     )
+    is_ozon_supply = supply is not None and supply.marketplace == "ozon"
     async with httpx.AsyncClient() as http_client:
         try:
-            if supply is not None and supply.marketplace == "ozon":
-                order_id = await ozon_assembly_svc.assemble_box_order(
+            if is_ozon_supply:
+                try:
+                    order_id = await ozon_assembly_svc.assemble_box_order(
+                        session,
+                        tenant_id,
+                        supply_id,
+                        box_id,
+                    )
+                except (
+                    OzonFbsProcessError,
+                    MarketplaceAccountError,
+                    MarketplaceProviderError,
+                ) as exc:
+                    # WMS-526 F5: no pre-lock read of the box's order here —
+                    # between that read and the supply/order lock inside
+                    # assemble_box_order, another operator could clear the
+                    # box and assign a different order's position to it, so
+                    # a value resolved before the lock can name the wrong
+                    # order. assemble_box_order attaches the order id it
+                    # actually locked and checked (locked_order_id) to any
+                    # exception it raises past that point; an exception with
+                    # nothing attached (supply/box not found, empty/mixed
+                    # box, before any order was determined) writes nothing.
+                    box_order_id = getattr(exc, "locked_order_id", None)
+                    if box_order_id is not None:
+                        code, message = _ozon_label_error_from_exc(exc)
+                        # assemble_box_order already committed its own
+                        # intent/result before any of these can escape it, so
+                        # this rollback only discards this handler's own
+                        # unfinished, uncommitted work — never the assembly
+                        # marker. The label-error write is then a clean,
+                        # separate transaction. Only plain uuid.UUID values
+                        # (tenant_id, box_order_id) cross the rollback here.
+                        await session.rollback()
+                        await ozon_assembly_svc.set_order_label_error(
+                            session, tenant_id, box_order_id, code=code, message=message
+                        )
+                        await session.commit()
+                    raise
+                label_result = await request_supply_print_batch(
                     session,
-                    user.tenant_id,
-                    supply_id,
-                    box_id,
-                )
-                await request_supply_print_batch(
-                    session,
-                    user.tenant_id,
+                    tenant_id,
                     supply_id,
                     kind="order_sticker",
                     order_ids=[order_id],
                     retry_missing=True,
                     http_client=http_client,
                 )
+                # request_supply_print_batch swallows a per-order label fetch
+                # failure into order_errors instead of raising, so the caller
+                # has to check it explicitly — otherwise the operator gets a
+                # bare 200 with no reason the label never showed up.
+                label_error = next(
+                    (err for err in label_result.order_errors if err.order_id == order_id),
+                    None,
+                )
+                if label_error is not None:
+                    await ozon_assembly_svc.set_order_label_error(
+                        session,
+                        tenant_id,
+                        order_id,
+                        code=label_error.code,
+                        message=label_error.message,
+                    )
+                    # The assembly (ozon_assembly marker) already committed
+                    # inside assemble_box_order; this commit only persists the
+                    # label attempt's own state (sticker_status, print asset,
+                    # the new R12 label-error reason) before surfacing it.
+                    await session.commit()
+                    raise_fbs_http(
+                        status.HTTP_403_FORBIDDEN
+                        if label_error.code == "ozon_account_blocked"
+                        else status.HTTP_502_BAD_GATEWAY,
+                        label_error.code,
+                        message=label_error.message,
+                    )
+                if label_result.ready == 0:
+                    # No order_error but nothing ready either: Ozon accepted
+                    # the assembly/label request but hasn't produced a file
+                    # yet. Same operator outcome as any other failed attempt
+                    # — nothing to print, try again — so it gets the same
+                    # red-line treatment, without turning this into an HTTP
+                    # error (matches the pre-R12 200 response for this case).
+                    await ozon_assembly_svc.set_order_label_error(
+                        session,
+                        tenant_id,
+                        order_id,
+                        code="ozon_label_not_ready",
+                        message=(
+                            "Этикетка Ozon ещё не готова — повторите получение через минуту."
+                        ),
+                    )
+                else:
+                    await ozon_assembly_svc.clear_order_label_error(
+                        session, tenant_id, order_id
+                    )
             else:
                 await packing_box_svc.retry_box_qr(
-                    session, user.tenant_id, supply_id, box_id, http_client
+                    session, tenant_id, supply_id, box_id, http_client
                 )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)
@@ -2040,7 +2160,28 @@ async def retry_fbs_packing_box_qr(
         except FbsPrintAssetError as exc:
             raise_fbs_http(409, exc.code, message=exc.message)
     await session.commit()
-    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+    return await _workspace_after_packing_box_action(session, tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/auto-assign",
+    response_model=FbsAutoAssignBoxesOut,
+    summary="Auto-assign every unboxed Ozon position into a new box each",
+)
+async def auto_assign_fbs_packing_boxes(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsAutoAssignBoxesOut:
+    try:
+        created_boxes = await packing_box_svc.auto_assign_ozon_positions(
+            session, user.tenant_id, supply_id, actor_user_id=user.id
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    workspace = await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+    return FbsAutoAssignBoxesOut(**workspace.model_dump(), created_boxes=len(created_boxes))
 
 
 async def _workspace_after_packing_box_action(

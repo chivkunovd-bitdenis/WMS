@@ -495,6 +495,8 @@ export type FbsPackingBox = {
   assigned_order_ids: string[]
   assigned_order_product_ids?: string[]
   ozon_assembled?: boolean
+  /** WMS-526 R12: последняя неудачная попытка получить этикетку заказа Ozon этого короба; null — не было или успех. */
+  ozon_label_error?: { code: string; message: string } | null
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
@@ -962,6 +964,20 @@ export async function retryFbsPackingBoxQr(
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/retry-qr`), {
+      method: 'POST', headers: { ...ah(token) },
+    }),
+  )
+}
+
+// WMS-526: каждая неразложенная позиция неотменённого заказа Ozon — в свой
+// новый короб, одной операцией. К Ozon сервер здесь не обращается.
+export async function autoAssignFbsOzonBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+): Promise<FbsWorkspace & { created_boxes: number }> {
+  return jsonOrThrow<FbsWorkspace & { created_boxes: number }>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/auto-assign`), {
       method: 'POST', headers: { ...ah(token) },
     }),
   )

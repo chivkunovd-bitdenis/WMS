@@ -16,7 +16,10 @@ from app.schemas.ozon_fbs_api import (
     OzonFbsv4FbsPostingShipV4Request,
     OzonFbsv4FbsPostingShipV4Response,
 )
-from app.services.marketplace_account_service import MarketplaceAccountService
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
 from app.services.ozon_fbs_errors import OzonFbsProcessError
 from app.services.ozon_fbs_process_service import (
@@ -29,6 +32,63 @@ from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_ap
 
 ASSEMBLY_KEY = "ozon_assembly"
 _SHIPPED_STATUSES = {"awaiting_deliver", "delivering", "driver_pickup", "delivered"}
+
+# WMS-526 R12: the last failed label attempt for an order, shown as a red
+# line on every box row of that order. Lives on the same meta_details_json
+# the assembly marker already uses — no new table, column or status.
+LABEL_ERROR_KEY = "ozon_label_error"
+
+
+async def _locked_order_for_label_error(
+    session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
+) -> FbsOrder | None:
+    """Row-locked, force-refreshed read of the order before touching its
+    meta_details_json.  Without this, an order already loaded earlier in
+    this same process (or a stale identity-map copy) would have its whole
+    JSON blob overwritten with an outdated snapshot, silently discarding
+    whatever another transaction committed to it in the meantime — most
+    importantly ASSEMBLY_KEY, which guards against resending /ship. The
+    lock is order-only, taken after any supply lock upstream already
+    released its own (assemble_box_order's supply -> order order is
+    preserved: nothing here acquires a supply lock)."""
+    stmt = (
+        select(FbsOrder)
+        .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def set_order_label_error(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+    *,
+    code: str,
+    message: str,
+) -> None:
+    order = await _locked_order_for_label_error(session, tenant_id, order_id)
+    if order is None:
+        return
+    order.meta_details_json = {
+        **(order.meta_details_json or {}),
+        LABEL_ERROR_KEY: {"code": code, "message": message},
+    }
+    await session.flush()
+
+
+async def clear_order_label_error(
+    session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
+) -> None:
+    order = await _locked_order_for_label_error(session, tenant_id, order_id)
+    if order is None or LABEL_ERROR_KEY not in (order.meta_details_json or {}):
+        return
+    details = dict(order.meta_details_json or {})
+    details.pop(LABEL_ERROR_KEY, None)
+    order.meta_details_json = details
+    await session.flush()
 
 
 async def order_packages(session: AsyncSession, order: FbsOrder) -> list[dict[str, Any]]:
@@ -159,142 +219,163 @@ async def assemble_box_order(
         raise OzonFbsProcessError(
             "order_not_in_supply", "Заказ недоступен для сборки.", status_code=409
         )
-    assembly = (order.meta_details_json or {}).get(ASSEMBLY_KEY)
-    packages = await order_packages(session, order)
-    if provider is None:
-        if not ozon_live_api_enabled():
-            raise OzonFbsProcessError(
-                "ozon_live_handoff_blocked",
-                "Обмен с Ozon выключен настройкой.",
-                status_code=503,
-            )
-        provider = build_ozon_provider()
-    client_id, api_key = credentials or await MarketplaceAccountService(session).stored_credentials(
-        tenant_id,
-        supply.seller_id,
-    )
-    posting_number = order.external_order_id or ""
-    if not posting_number:
-        raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
-    posting = await _posting_readback(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        posting_number=posting_number,
-    )
-    result = posting.result
-    if result is not None and result.substatus == "ship_failed" and isinstance(assembly, dict):
-        # HTTP 200 from /ship is only acknowledgement. Ozon explicitly permits
-        # correction/reassembly after this terminal failure (Seller API contract).
-        details = dict(order.meta_details_json or {})
-        details.pop(ASSEMBLY_KEY, None)
-        order.meta_details_json = details
-        await _invalidate_old_label(session, order)
-        try:
-            _apply_posting_readback(order, posting, require_shipped=False)
-        except OzonFbsProcessError:
-            await session.commit()
-            raise
-    if (
-        result is not None
-        and result.status in _SHIPPED_STATUSES
-        and result.substatus != "ship_failed"
-    ):
-        related = result.related_postings
-        saved_numbers = list(dict.fromkeys(assembly.get("posting_numbers") or [])) if isinstance(
-            assembly, dict
-        ) else []
-        numbers = saved_numbers if len(saved_numbers) == len(packages) else list(
-            dict.fromkeys((related.related_posting_numbers or []) if related is not None else [])
+    try:
+        assembly = (order.meta_details_json or {}).get(ASSEMBLY_KEY)
+        packages = await order_packages(session, order)
+        if provider is None:
+            if not ozon_live_api_enabled():
+                raise OzonFbsProcessError(
+                    "ozon_live_handoff_blocked",
+                    "Обмен с Ozon выключен настройкой.",
+                    status_code=503,
+                )
+            provider = build_ozon_provider()
+        client_id, api_key = credentials or await MarketplaceAccountService(
+            session
+        ).stored_credentials(
+            tenant_id,
+            supply.seller_id,
         )
-        if len(packages) == 1 and not numbers:
-            numbers = [posting_number]
-        if len(numbers) < len(packages):
-            raise OzonFbsProcessError(
-                "ozon_assembly_unconfirmed",
-                "Ozon уже собрал заказ, но пока не вернул номера всех упаковок. "
-                "Повторите QR позже.",
-                status_code=409,
+        posting_number = order.external_order_id or ""
+        if not posting_number:
+            raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
+        posting = await _posting_readback(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            posting_number=posting_number,
+        )
+        result = posting.result
+        if result is not None and result.substatus == "ship_failed" and isinstance(assembly, dict):
+            # HTTP 200 from /ship is only acknowledgement. Ozon explicitly permits
+            # correction/reassembly after this terminal failure (Seller API contract).
+            details = dict(order.meta_details_json or {})
+            details.pop(ASSEMBLY_KEY, None)
+            order.meta_details_json = details
+            await _invalidate_old_label(session, order)
+            try:
+                _apply_posting_readback(order, posting, require_shipped=False)
+            except OzonFbsProcessError:
+                await session.commit()
+                raise
+        if (
+            result is not None
+            and result.status in _SHIPPED_STATUSES
+            and result.substatus != "ship_failed"
+        ):
+            related = result.related_postings
+            saved_numbers = (
+                list(dict.fromkeys(assembly.get("posting_numbers") or []))
+                if isinstance(assembly, dict)
+                else []
             )
-        _apply_posting_readback(order, posting, require_shipped=False)
-        if len(saved_numbers) == len(packages):
+            numbers = (
+                saved_numbers
+                if len(saved_numbers) == len(packages)
+                else list(
+                    dict.fromkeys(
+                        (related.related_posting_numbers or []) if related is not None else []
+                    )
+                )
+            )
+            if len(packages) == 1 and not numbers:
+                numbers = [posting_number]
+            if len(numbers) < len(packages):
+                raise OzonFbsProcessError(
+                    "ozon_assembly_unconfirmed",
+                    "Ozon уже собрал заказ, но пока не вернул номера всех упаковок. "
+                    "Повторите QR позже.",
+                    status_code=409,
+                )
+            _apply_posting_readback(order, posting, require_shipped=False)
+            if len(saved_numbers) == len(packages):
+                await session.commit()
+                return order.id
+            order.meta_details_json = {
+                **(order.meta_details_json or {}),
+                ASSEMBLY_KEY: {
+                    "posting_numbers": numbers,
+                    "recovered_from_readback": True,
+                },
+            }
+            await _invalidate_old_label(session, order)
             await session.commit()
             return order.id
+        if isinstance(assembly, dict):
+            raise OzonFbsProcessError(
+                "ozon_assembly_unconfirmed",
+                "Ответ на сборку ещё не подтверждён Ozon. "
+                "Повторите QR позже: повторно заказ не отправлен.",
+                status_code=409,
+            )
+        await prepare_order_assembly(
+            session,
+            order,
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            posting=posting,
+        )
+        # Persist intent before the irreversible request. An ambiguous
+        # timeout only permits readback.
+        order.meta_details_json = {
+            **(order.meta_details_json or {}),
+            ASSEMBLY_KEY: {
+                "posting_numbers": [],
+            },
+        }
+        await session.commit()
+        await session.scalar(
+            select(FbsSupply.id).where(FbsSupply.id == supply_id).with_for_update()
+        )
+        try:
+            response = await _call(
+                provider,
+                client_id=client_id,
+                api_key=api_key,
+                path="/v4/posting/fbs/ship",
+                request=OzonFbsv4FbsPostingShipV4Request.model_validate(
+                    {
+                        "posting_number": posting_number,
+                        "packages": packages,
+                        "with": {"additional_data": True},
+                    }
+                ),
+                response_type=OzonFbsv4FbsPostingShipV4Response,
+                read=False,
+            )
+        except MarketplaceProviderError as exc:
+            # Explicit rejection permits correcting the contents; timeout/5xx remains uncertain.
+            if exc.status_code in {400, 401, 403, 404, 409, 422, 429}:
+                details = dict(order.meta_details_json or {})
+                details.pop(ASSEMBLY_KEY, None)
+                order.meta_details_json = details
+                await session.commit()
+            raise
+        numbers = list(dict.fromkeys(response.result or []))
         order.meta_details_json = {
             **(order.meta_details_json or {}),
             ASSEMBLY_KEY: {
                 "posting_numbers": numbers,
-                "recovered_from_readback": True,
+                "ship_response": response.model_dump(by_alias=True, exclude_none=True),
             },
         }
         await _invalidate_old_label(session, order)
         await session.commit()
+        if len(numbers) != len(packages):
+            raise OzonFbsProcessError(
+                "ozon_assembly_unconfirmed",
+                "Ozon принял запрос, но не вернул номера всех упаковок. Повторите QR позже.",
+                status_code=409,
+            )
         return order.id
-    if isinstance(assembly, dict):
-        raise OzonFbsProcessError(
-            "ozon_assembly_unconfirmed",
-            "Ответ на сборку ещё не подтверждён Ozon. "
-            "Повторите QR позже: повторно заказ не отправлен.",
-            status_code=409,
-        )
-    await prepare_order_assembly(
-        session,
-        order,
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        posting=posting,
-    )
-    # Persist intent before the irreversible request. An ambiguous timeout only permits readback.
-    order.meta_details_json = {
-        **(order.meta_details_json or {}),
-        ASSEMBLY_KEY: {
-            "posting_numbers": [],
-        },
-    }
-    await session.commit()
-    await session.scalar(select(FbsSupply.id).where(FbsSupply.id == supply_id).with_for_update())
-    try:
-        response = await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v4/posting/fbs/ship",
-            request=OzonFbsv4FbsPostingShipV4Request.model_validate(
-                {
-                    "posting_number": posting_number,
-                    "packages": packages,
-                    "with": {"additional_data": True},
-                }
-            ),
-            response_type=OzonFbsv4FbsPostingShipV4Response,
-            read=False,
-        )
-    except MarketplaceProviderError as exc:
-        # Explicit rejection permits correcting the contents; timeout/5xx remains uncertain.
-        if exc.status_code in {400, 401, 403, 404, 409, 422, 429}:
-            details = dict(order.meta_details_json or {})
-            details.pop(ASSEMBLY_KEY, None)
-            order.meta_details_json = details
-            await session.commit()
+    except (OzonFbsProcessError, MarketplaceAccountError, MarketplaceProviderError) as exc:
+        # WMS-526 F5: the order this exception is about is exactly the one
+        # just locked and verified above under the supply lock -- attach it
+        # so a caller attributes a failure reason to that order even if the
+        # box's contents changed between its own pre-lock read and here.
+        exc.locked_order_id = order.id  # type: ignore[union-attr]
         raise
-    numbers = list(dict.fromkeys(response.result or []))
-    order.meta_details_json = {
-        **(order.meta_details_json or {}),
-        ASSEMBLY_KEY: {
-            "posting_numbers": numbers,
-            "ship_response": response.model_dump(by_alias=True, exclude_none=True),
-        },
-    }
-    await _invalidate_old_label(session, order)
-    await session.commit()
-    if len(numbers) != len(packages):
-        raise OzonFbsProcessError(
-            "ozon_assembly_unconfirmed",
-            "Ozon принял запрос, но не вернул номера всех упаковок. Повторите QR позже.",
-            status_code=409,
-        )
-    return order.id
 
 
 async def _invalidate_old_label(session: AsyncSession, order: FbsOrder) -> None:

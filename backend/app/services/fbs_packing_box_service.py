@@ -20,7 +20,12 @@ from app.models.document_event import (
     EVENT_BOX_DISTRIBUTION_CHANGED,
     EVENT_BOX_ITEM_REMOVED,
 )
-from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_CANCELLED,
+    PACK_STATUS_PACKED,
+    FbsOrder,
+    FbsOrderProduct,
+)
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_DONE,
@@ -486,6 +491,103 @@ async def _assign_ozon_positions(
     session.expire(box, ["items"])
 
 
+async def auto_assign_ozon_positions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> list[FbsPackingBox]:
+    """WMS-526: put every still-unboxed position of an Ozon supply into its
+    own new box, one position per box, in a single transaction.
+
+    Reuses create_boxes (box creation/numbering) and _assign_ozon_positions
+    (position assignment) under the same supply row lock those already take,
+    so a doubled click or a second concurrent call is safe: the second
+    caller re-reads the unboxed set after the first one's changes and finds
+    nothing left to place.  create_boxes has no upper bound on `count`
+    itself — the API's 100-per-request cap is only a request schema limit —
+    so this can create more than 100 boxes in one call.
+
+    Returns only the boxes this call created (empty when there was nothing
+    to place), so a caller can report exactly how many were added — the
+    supply's full box list is unaffected and already available separately.
+    """
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
+    _assert_supply_mutable(supply)
+    if supply.marketplace != "ozon":
+        raise FbsPackingBoxError("auto_assign_requires_ozon")
+
+    positions = await _unassigned_ozon_positions(session, tenant_id, supply_id)
+    if not positions:
+        return []
+
+    before_number = int(
+        await session.scalar(
+            select(func.max(FbsPackingBox.box_number)).where(
+                FbsPackingBox.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+            )
+        )
+        or 0
+    )
+    idempotency_key = f"auto-assign:{uuid.uuid4()}"
+    all_boxes = await create_boxes(
+        session,
+        tenant_id,
+        supply_id,
+        len(positions),
+        idempotency_key,
+        actor_user_id=actor_user_id,
+    )
+    new_boxes = sorted(
+        (box for box in all_boxes if box.box_number > before_number),
+        key=lambda box: box.box_number,
+    )
+    if len(new_boxes) != len(positions):
+        # Defensive only: the fresh idempotency key and the supply row lock
+        # already held above make this unreachable in practice.
+        raise FbsPackingBoxError("auto_assign_box_mismatch")
+
+    for box, position in zip(new_boxes, positions, strict=True):
+        await _assign_ozon_positions(
+            session, tenant_id, supply_id, box, [position.id], actor_user_id
+        )
+
+    # _assign_ozon_positions expired each box's .items as it went, so reload
+    # fresh (eager-loaded) box objects rather than returning the stale ones.
+    reloaded = await _load_boxes(session, tenant_id, supply_id)
+    return [box for box in reloaded if box.box_number > before_number]
+
+
+async def _unassigned_ozon_positions(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> list[FbsOrderProduct]:
+    assigned_position_ids = (
+        select(FbsPackingBoxItem.order_product_id)
+        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+        .where(
+            FbsPackingBoxItem.tenant_id == tenant_id,
+            FbsPackingBox.supply_id == supply_id,
+            FbsPackingBoxItem.order_product_id.is_not(None),
+        )
+    )
+    result = await session.execute(
+        select(FbsOrderProduct)
+        .join(FbsOrder, FbsOrder.id == FbsOrderProduct.order_id)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+            FbsOrder.status != FBS_ORDER_STATUS_CANCELLED,
+            FbsOrderProduct.id.not_in(assigned_position_ids),
+        )
+        # Positions of one order stay consecutive: same (deadline_at, id) for
+        # every position of that order, then ordered by position within it.
+        .order_by(FbsOrder.deadline_at, FbsOrder.id, FbsOrderProduct.position_index)
+    )
+    return list(result.scalars().all())
+
+
 async def remove_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -630,6 +732,10 @@ async def get_boxes_for_workspace(
             # creation-key prefix remains readable only for migration/cleanup
             # compatibility and must not affect operator-visible state.
             "without_distribution": supply_without_distribution,
+            # WMS-526 R12: defaulted here so the key always exists (WB boxes
+            # never touch it); the Ozon-specific workspace builder overwrites
+            # it per order.
+            "ozon_label_error": None,
         }
         for box in boxes
     ]

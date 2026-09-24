@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { FbsOrderMetadata } from './fbsApi'
-import { fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
+import { fbsOzonAutoBoxesPlan, fbsOzonLabelFailuresText, fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -29,6 +29,46 @@ describe('Ozon position distribution', () => {
   })
 })
 
+
+describe('WMS-526 Ozon auto boxes plan', () => {
+  const ready = { status: 'ready', preview_url: '/label.pdf' }
+  const box = (id: string, number: number, orderId: string, positionIds: string[], qr: typeof ready | null = null) => ({
+    id, box_number: number, assigned_order_ids: [orderId], assigned_order_product_ids: positionIds, qr_asset: qr,
+  })
+
+  it('asks one label per fully distributed order without a ready label', () => {
+    const orders = [
+      { id: 'two-goods', status: 'new', external_order_id: 'A-1', positions: [{ id: 'a1', quantity: 1 }, { id: 'a2', quantity: 1 }] },
+      { id: 'labelled', status: 'new', external_order_id: 'B-1', positions: [{ id: 'b1', quantity: 2 }] },
+      { id: 'partial', status: 'new', external_order_id: 'C-1', positions: [{ id: 'c1', quantity: 1 }, { id: 'c2', quantity: 1 }] },
+      { id: 'cancelled', status: 'cancelled', external_order_id: 'D-1', positions: [{ id: 'd1', quantity: 1 }] },
+    ]
+    const boxes = [
+      box('box-a2', 4, 'two-goods', ['a2']),
+      box('box-a1', 3, 'two-goods', ['a1']),
+      box('box-b1', 1, 'labelled', ['b1'], ready),
+      box('box-c1', 2, 'partial', ['c1']),
+    ]
+    const plan = fbsOzonAutoBoxesPlan(orders, boxes)
+    expect(plan.labelTargets).toEqual([{ orderId: 'two-goods', externalOrderId: 'A-1', boxId: 'box-a1' }])
+    // c2 ещё не разложен; позиция отменённого заказа не считается.
+    expect(plan.unassignedPositions).toBe(1)
+  })
+
+  it('has nothing to do when all positions are boxed and labelled', () => {
+    const orders = [{ id: 'o', status: 'new', external_order_id: 'E-1', positions: [{ id: 'e1', quantity: 1 }] }]
+    const plan = fbsOzonAutoBoxesPlan(orders, [box('b', 1, 'o', ['e1'], ready)])
+    expect(plan).toEqual({ unassignedPositions: 0, labelTargets: [] })
+  })
+
+  it('names failed Ozon orders grouped by reason', () => {
+    expect(fbsOzonLabelFailuresText([
+      { externalOrderId: 'X-1', reason: 'Обмен с Ozon выключен настройкой.' },
+      { externalOrderId: 'Y-1', reason: 'Обмен с Ozon выключен настройкой.' },
+      { externalOrderId: 'Z-1', reason: 'Таймаут' },
+    ])).toBe('Без этикетки заказов: 3. Ozon №X-1, №Y-1 — Обмен с Ozon выключен настройкой; Ozon №Z-1 — Таймаут.')
+  })
+})
 
 describe('WMS-086 marking verdict presentation', () => {
   it.each(['assigned', 'sending', 'pending', 'unknown', 'allowed_without_check'] as const)(
