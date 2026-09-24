@@ -371,6 +371,70 @@ async def test_partial_save_materializes_legacy_by_warehouse_neighbour(
 
 
 @pytest.mark.asyncio
+async def test_partial_save_preserves_explicit_neighbour_while_transport_is_off(
+    db_session: AsyncSession,
+) -> None:
+    """R8/R24: transport OFF must not erase an untouched operator decision."""
+    case = await _seed_case(db_session)
+    wb, ozon = case.bindings
+    product = case.products[0]
+    product.fbs_stock_sync_enabled = True
+    product.fbs_ozon_stock_sync_enabled = True
+    product.fbs_units_mode = False
+    ozon.stock_sync_enabled = False
+    db_session.add_all(
+        [
+            FbsBindingStockPool(
+                tenant_id=case.tenant.id,
+                binding_id=binding.id,
+                product_id=product.id,
+                publish_enabled=True,
+                percent=50,
+                quantity=0,
+            )
+            for binding in (wb, ozon)
+        ]
+    )
+    await db_session.commit()
+
+    assert await rules.publish_amounts_for_binding(db_session, ozon, [product]) == {}
+
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        rules.FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                wb.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="percent",
+                    value=60,
+                )
+            },
+        ),
+    )
+
+    ozon_pool = await db_session.scalar(
+        select(FbsBindingStockPool).where(
+            FbsBindingStockPool.binding_id == ozon.id,
+            FbsBindingStockPool.product_id == product.id,
+        )
+    )
+    assert ozon_pool is not None
+    assert ozon_pool.publish_enabled is True
+    assert ozon_pool.percent == 50
+
+    ozon.stock_sync_enabled = True
+    await db_session.commit()
+    assert await rules.publish_amounts_for_binding(db_session, ozon, [product]) == {
+        product.id: 25
+    }
+
+
+@pytest.mark.asyncio
 async def test_ozon_transport_stays_off_without_applicable_product(
     db_session: AsyncSession,
 ) -> None:

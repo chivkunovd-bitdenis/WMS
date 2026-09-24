@@ -1067,6 +1067,9 @@ async def set_rule_for_products(
                 for binding_id, binding_rule in combined.items():
                     requested = binding_id in applied[product.id]
                     pool = pool_rows.get(binding_id)
+                    has_explicit_publish = (
+                        pool is not None and pool.publish_enabled is not None
+                    )
                     if pool is None:
                         pool = FbsBindingStockPool(
                             tenant_id=tenant_id,
@@ -1075,7 +1078,14 @@ async def set_rule_for_products(
                         )
                         session.add(pool)
                         pool_rows[binding_id] = pool
-                    pool.publish_enabled = binding_rule.publish
+                    # ``binding_rule.publish`` is effective state: a technical
+                    # transport OFF makes it false even when the operator's
+                    # explicit per-binding decision remains ON. A partial save
+                    # may materialize a missing legacy decision, but must not
+                    # overwrite an untouched explicit decision with transport
+                    # state (R8/R24, D7/R26).
+                    if requested or not has_explicit_publish:
+                        pool.publish_enabled = binding_rule.publish
                     if binding_rule.mode == "percent":
                         pool.percent = binding_rule.value
                         pool.units_configured = False
