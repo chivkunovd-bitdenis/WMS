@@ -2,7 +2,7 @@
 
 ## WMS-527 · Выпустить остатки и печать КИЗ без вывода из оборота
 
-**Статус:** `EXACT b930a56e · SOFTWARE/CI/OPUS PASS · EXACT STAGING INFRA PASS · К MERGE/PRODUCTION ПРИНЯТО · AUTH/LIVE OZON/PHYSICAL POSTDEPLOY ОТКРЫТЫ · WMS-517 ИСКЛЮЧЕНА` · появилась 25.09.2026 · [требования и проверки](requirements/WMS-527.md).
+**Статус:** `НА PRODUCTION ПО КОДУ · MERGE 29e7b663 СОДЕРЖИТ b930a56e · DEPLOY/HEALTH/MIGRATION PASS · AUTH/LIVE OZON/PHYSICAL НЕ ПРОВЕРЕНЫ · WMS-517 ИСКЛЮЧЕНА` · появилась 25.09.2026 · [требования и проверки](requirements/WMS-527.md).
 
 В один актуальный кандидат входят WMS-469 (распределение и публикация остатков),
 WMS-514 (скан и мгновенная печать QR/ЧЗ) и узкая серверная защита legacy-импорта
