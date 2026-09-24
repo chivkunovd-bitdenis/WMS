@@ -690,6 +690,7 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
     assert result.products_zeroed == 1
     assert result.errors == 1
     assert result.binding_errors == 1
+    assert result.retryable_errors == 0
     await db_session.refresh(binding)
     assert binding.last_sync_status == "error"
     assert binding.last_error_code == "ozon_stock_rejected"

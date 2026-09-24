@@ -12,3 +12,7 @@ class SellerStockSyncResult:
     conflicts: int = 0
     errors: int = 0
     binding_errors: int = 0
+    # Only failures that can change without operator action belong here:
+    # network/5xx/timeout, rate limit and an incomplete confirmation.
+    retryable_errors: int = 0
+    retry_after_seconds: float = 0.0

@@ -16,20 +16,26 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.products import ProductFbsRuleBody, _rule_from_body
 from app.db.session import SessionLocal, engine
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import fbs_stock_publish_service as publish_service
 from app.services import fbs_stock_rule_service as rules
 from app.services import fbs_warehouse_binding_service as bindings_service
+from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerPollTarget
+from app.services.integration_fernet import encrypt_secret
+from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
 from tests.test_product_fbs_rule_bulk_read_api import (
     _create_product,
     _create_seller,
@@ -249,6 +255,7 @@ async def test_c22_identical_repeat_is_idempotent_without_duplicate_pools(
     assert {binding_id for binding_id, _product_ids in zeroed} == {
         binding.id for binding in case.bindings
     }
+    assert len(zeroed) == 2
     expected_products = {product.id for product in case.products}
     assert all(product_ids == expected_products for _, product_ids in zeroed)
     reread = await rules.get_rule_views(
@@ -261,6 +268,207 @@ async def test_c22_identical_repeat_is_idempotent_without_duplicate_pools(
         for item in reread.values()
         for binding in case.bindings
     )
+
+
+@pytest.mark.asyncio
+async def test_partial_save_materializes_legacy_same_everywhere_neighbour(
+    db_session: AsyncSession,
+) -> None:
+    """B1: a partial WB edit preserves an untouched legacy Ozon percentage."""
+    case = await _seed_case(db_session)
+    wb, ozon = case.bindings
+    product = case.products[0]
+    product.fbs_same_everywhere = True
+    product.fbs_percent = 50
+    product.fbs_stock_sync_enabled = True
+    product.fbs_ozon_stock_sync_enabled = True
+    product.fbs_units_mode = False
+    await db_session.commit()
+
+    before = await rules.publish_amounts_for_binding(db_session, ozon, [product])
+    assert before == {product.id: 25}
+
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        rules.FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                wb.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="units",
+                    value=10,
+                )
+            },
+        ),
+    )
+
+    view = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+    after = await rules.publish_amounts_for_binding(db_session, ozon, [product])
+    assert view.by_binding[ozon.id].mode == "percent"
+    assert view.by_binding[ozon.id].value == 50
+    assert view.by_binding[ozon.id].published_now == 25
+    assert after == before
+
+
+@pytest.mark.asyncio
+async def test_partial_save_materializes_legacy_by_warehouse_neighbour(
+    db_session: AsyncSession,
+) -> None:
+    """B1: a partial WB edit preserves an untouched legacy Ozon pool row."""
+    case = await _seed_case(db_session)
+    wb, ozon = case.bindings
+    product = case.products[0]
+    product.fbs_same_everywhere = False
+    product.fbs_percent = 0
+    product.fbs_stock_sync_enabled = True
+    product.fbs_ozon_stock_sync_enabled = True
+    product.fbs_units_mode = False
+    db_session.add_all(
+        [
+            FbsBindingStockPool(
+                tenant_id=case.tenant.id,
+                binding_id=binding.id,
+                product_id=product.id,
+                percent=40,
+                quantity=0,
+            )
+            for binding in (wb, ozon)
+        ]
+    )
+    await db_session.commit()
+
+    before = await rules.publish_amounts_for_binding(db_session, ozon, [product])
+    assert before == {product.id: 20}
+
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        rules.FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                wb.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="units",
+                    value=10,
+                )
+            },
+        ),
+    )
+
+    view = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+    after = await rules.publish_amounts_for_binding(db_session, ozon, [product])
+    assert view.by_binding[ozon.id].mode == "percent"
+    assert view.by_binding[ozon.id].value == 40
+    assert view.by_binding[ozon.id].published_now == 20
+    assert after == before
+
+
+@pytest.mark.asyncio
+async def test_ozon_transport_stays_off_without_applicable_product(
+    db_session: AsyncSession,
+) -> None:
+    """D3: a WB-only product cannot turn on the Ozon binding transport."""
+    case = await _seed_case(db_session)
+    _wb, ozon = case.bindings
+    product = case.products[0]
+    links = list(
+        await db_session.scalars(
+            select(ProductMarketplaceLink).where(
+                ProductMarketplaceLink.product_id == product.id
+            )
+        )
+    )
+    for link in links:
+        await db_session.delete(link)
+    ozon.stock_sync_enabled = False
+    await db_session.commit()
+
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        rules.FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                ozon.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="percent",
+                    value=50,
+                )
+            },
+        ),
+    )
+
+    await db_session.refresh(ozon)
+    view = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+    assert view.by_binding[ozon.id].applicable is False
+    assert view.by_binding[ozon.id].publish is False
+    assert ozon.stock_sync_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_explicit_empty_by_binding_payload_changes_nothing(
+    db_session: AsyncSession,
+) -> None:
+    """F1: `by_binding: {}` is the new form with no visible edits, not legacy reset."""
+    case = await _seed_case(db_session)
+    product = case.products[0]
+    initial = rules.FbsRule(
+        publish=None,
+        same_everywhere=False,
+        percent=0,
+        by_binding={
+            binding.id: rules.FbsBindingRule(
+                publish=True,
+                mode="percent",
+                value=value,
+            )
+            for binding, value in zip(case.bindings, (35, 65), strict=True)
+        },
+    )
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        initial,
+    )
+    before = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+
+    parsed = _rule_from_body(ProductFbsRuleBody.model_validate({"by_binding": {}}))
+    assert parsed.by_binding_present is True
+    result = await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        parsed,
+    )
+    after = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+
+    assert result.updated_count == 0
+    assert {
+        binding.id: (
+            after.by_binding[binding.id].publish,
+            after.by_binding[binding.id].mode,
+            after.by_binding[binding.id].value,
+        )
+        for binding in case.bindings
+    } == {
+        binding.id: (
+            before.by_binding[binding.id].publish,
+            before.by_binding[binding.id].mode,
+            before.by_binding[binding.id].value,
+        )
+        for binding in case.bindings
+    }
 
 
 @pytest.mark.asyncio
@@ -418,32 +626,118 @@ async def test_c16_r20_event_publish_starts_within_five_and_confirms_within_ten_
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C16/R20: after commit, both fast providers receive the event in time."""
-    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    """C16/R20: a committed stock movement runs real calculation and provider paths."""
+    case = await _seed_case(db_session)
+    wb, ozon = case.bindings
+    product = case.products[0]
+    product.wb_chrt_id = 469001
+    db_session.add_all(
+        [
+            SellerWildberriesCredentials(
+                seller_id=case.seller.id,
+                marketplace_token_encrypted=encrypt_secret("wms469-wb-token"),
+            ),
+            MarketplaceAccount(
+                tenant_id=case.tenant.id,
+                seller_id=case.seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="wms469-ozon-client",
+                secret_encrypted=encrypt_secret("wms469-ozon-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+        ]
+    )
+    await db_session.commit()
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        rules.FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                wb.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="percent",
+                    value=100,
+                ),
+                ozon.id: rules.FbsBindingRule(
+                    publish=True,
+                    mode="percent",
+                    value=100,
+                ),
+            },
+        ),
+    )
+
     starts: dict[str, float] = {}
     confirmations: dict[str, float] = {}
+    wb_batch: list[Any] = []
 
-    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
-        return [
-            SellerPollTarget(tenant_id, seller_id, "wb"),
-            SellerPollTarget(tenant_id, seller_id, "ozon"),
-        ]
+    from app.services import fbs_autopoll_service, fbs_stock_sync_service
 
-    async def sync(_session: AsyncSession, target: SellerPollTarget, _client: Any) -> Any:
-        starts[target.marketplace] = time.monotonic()
-        confirmations[target.marketplace] = time.monotonic()
-        return SimpleNamespace(
-            bindings_processed=1,
-            products_targeted=1,
-            products_confirmed=1,
-            binding_errors=0,
+    async def put_wb_batch(
+        _client: Any,
+        **kwargs: Any,
+    ) -> Any:
+        starts.setdefault("wb", time.monotonic())
+        wb_batch[:] = list(kwargs["batch"])
+        return fbs_stock_sync_service._PutBatchOutcome(
+            error_code=None,
+            status_code=None,
+            retry_after_seconds=None,
         )
 
-    from app.services import fbs_autopoll_service
+    async def read_wb_batch(*_args: Any, **_kwargs: Any) -> list[Any]:
+        confirmations["wb"] = time.monotonic()
+        return list(wb_batch)
 
-    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
-    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
-    publish_service.schedule_seller_stock_publish(db_session, tenant_id, seller_id)
+    class TimedOzonTransport(FakeMarketplaceTransport):
+        async def publish_stocks(
+            self,
+            *,
+            client_id: str,
+            api_key: str,
+            stocks: Any,
+        ) -> int:
+            starts.setdefault("ozon", time.monotonic())
+            confirmed = await super().publish_stocks(
+                client_id=client_id,
+                api_key=api_key,
+                stocks=stocks,
+            )
+            confirmations["ozon"] = time.monotonic()
+            return confirmed
+
+    ozon_transport = TimedOzonTransport()
+    monkeypatch.setattr(fbs_stock_sync_service, "_put_stocks_batch", put_wb_batch)
+    monkeypatch.setattr(
+        fbs_stock_sync_service,
+        "fetch_marketplace_stocks",
+        read_wb_batch,
+    )
+    monkeypatch.setattr(
+        fbs_autopoll_service,
+        "_blocked_ozon_provider",
+        lambda _operation: OzonMarketplaceProvider(transport=ozon_transport),
+    )
+
+    balance = await db_session.scalar(
+        select(InventoryBalance).where(InventoryBalance.product_id == product.id)
+    )
+    assert balance is not None
+    await inventory_service.record_movement_and_adjust_balance(
+        db_session,
+        tenant_id=case.tenant.id,
+        product_id=product.id,
+        storage_location_id=balance.storage_location_id,
+        quantity_delta=-1,
+        movement_type="wms469_event_test",
+        actor_user_id=None,
+    )
     await db_session.commit()
     committed_at = time.monotonic()
     await publish_service.drain_background_stock_publish_tasks()
@@ -451,6 +745,8 @@ async def test_c16_r20_event_publish_starts_within_five_and_confirms_within_ten_
     assert set(starts) == {"wb", "ozon"}
     assert all(start - committed_at <= 5 for start in starts.values())
     assert all(confirmed - committed_at <= 10 for confirmed in confirmations.values())
+    assert [(item.chrt_id, item.amount) for item in wb_batch] == [(469001, 49)]
+    assert [stock["stock"] for stock in ozon_transport.published_stocks] == [49]
 
 
 @pytest.mark.asyncio
@@ -514,6 +810,9 @@ async def test_c20_c21_busy_provider_retries_while_other_provider_proceeds(
         marketplace: str,
         **_kwargs: Any,
     ) -> AsyncIterator[bool]:
+        if marketplace.endswith(":event-follow-up"):
+            yield True
+            return
         attempts[marketplace] += 1
         yield marketplace == "ozon" or attempts[marketplace] > 1
 
@@ -526,6 +825,8 @@ async def test_c20_c21_busy_provider_retries_while_other_provider_proceeds(
             products_confirmed=0 if incomplete else 1,
             errors=1 if incomplete else 0,
             binding_errors=1 if incomplete else 0,
+            retryable_errors=1 if incomplete else 0,
+            retry_after_seconds=0,
         )
 
     async def no_delay(_seconds: float) -> None:
@@ -543,6 +844,196 @@ async def test_c20_c21_busy_provider_retries_while_other_provider_proceeds(
     assert calls[0] == "ozon"
     assert calls.count("ozon") == 2
     assert calls.count("wb") == 1
+
+
+@pytest.mark.asyncio
+async def test_busy_provider_stops_after_bounded_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
+) -> None:
+    """B2: a permanently busy provider lock cannot keep a worker forever."""
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    attempts = 0
+    sync_calls = 0
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "wb")]
+
+    @asynccontextmanager
+    async def always_busy(
+        _session: AsyncSession,
+        _seller_id: uuid.UUID,
+        marketplace: str,
+        **_kwargs: Any,
+    ) -> AsyncIterator[bool]:
+        nonlocal attempts
+        if marketplace.endswith(":event-follow-up"):
+            yield True
+            return
+        attempts += 1
+        yield False
+
+    async def sync(*_args: Any, **_kwargs: Any) -> Any:
+        nonlocal sync_calls
+        sync_calls += 1
+        return SimpleNamespace()
+
+    async def no_delay(_seconds: float) -> None:
+        return None
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+    monkeypatch.setattr(publish_service, "marketplace_seller_lock", always_busy)
+    monkeypatch.setattr(publish_service.asyncio, "sleep", no_delay)
+
+    await asyncio.wait_for(
+        publish_service.publish_seller_stocks_now(tenant_id, seller_id),
+        timeout=0.5,
+    )
+    assert attempts == publish_service._EVENT_PUBLISH_ATTEMPTS
+    assert sync_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_five_events_coalesce_into_one_follow_up_publish(
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
+) -> None:
+    """B2: an event burst causes one active pass and at most one fresh pass."""
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    first_pass_started = asyncio.Event()
+    release_first_pass = asyncio.Event()
+    calls = 0
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "wb")]
+
+    async def sync(_session: AsyncSession, _target: SellerPollTarget, _client: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_pass_started.set()
+            await release_first_pass.wait()
+        return SimpleNamespace(
+            bindings_processed=1,
+            products_targeted=1,
+            products_confirmed=1,
+            errors=0,
+            binding_errors=0,
+            retryable_errors=0,
+        )
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+
+    first = asyncio.create_task(
+        publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    )
+    await first_pass_started.wait()
+    piled_up = [
+        asyncio.create_task(
+            publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+        )
+        for _ in range(4)
+    ]
+    await asyncio.sleep(0)
+    release_first_pass.set()
+    await asyncio.gather(first, *piled_up)
+
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_permanent_publish_error_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
+) -> None:
+    """B2: 401/404/conflict/mapping failures remain a single full pass."""
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    calls = 0
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "ozon")]
+
+    async def sync(*_args: Any, **_kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return SimpleNamespace(
+            bindings_processed=1,
+            products_targeted=1,
+            products_confirmed=0,
+            errors=1,
+            binding_errors=1,
+            retryable_errors=0,
+        )
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+
+    await publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_retry_respects_provider_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
+) -> None:
+    """B2: a retryable 429 waits for Retry-After before the second full pass."""
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    calls = 0
+    sleeps: list[float] = []
+    recorded: list[float] = []
+
+    async def targets(_session: AsyncSession) -> list[SellerPollTarget]:
+        return [SellerPollTarget(tenant_id, seller_id, "ozon")]
+
+    async def sync(*_args: Any, **_kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        retryable = calls == 1
+        return SimpleNamespace(
+            bindings_processed=1,
+            products_targeted=1,
+            products_confirmed=0 if retryable else 1,
+            errors=1 if retryable else 0,
+            binding_errors=1 if retryable else 0,
+            retryable_errors=1 if retryable else 0,
+            retry_after_seconds=7 if retryable else 0,
+        )
+
+    class Backoff:
+        def remaining_seconds(self, _marketplace: str) -> float:
+            return 0.0
+
+        def record_rate_limit(
+            self,
+            _marketplace: str,
+            *,
+            retry_after_seconds: float,
+        ) -> None:
+            recorded.append(retry_after_seconds)
+
+    async def record_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    from app.services import fbs_autopoll_service
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+    monkeypatch.setattr(fbs_autopoll_service, "_MARKETPLACE_BACKOFF", Backoff())
+    monkeypatch.setattr(publish_service.asyncio, "sleep", record_sleep)
+
+    await publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    assert calls == 2
+    assert recorded == [7]
+    assert sleeps == [7]
 
 
 @pytest.mark.asyncio
@@ -663,6 +1154,56 @@ async def test_c26_seller_reads_own_bindings_but_cannot_write_them(
         },
     )
     assert denied.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_c25_foreign_seller_and_tenant_cannot_read_any_warehouse_endpoint(
+    async_client: AsyncClient,
+) -> None:
+    """C25: all three dialog reads keep seller and tenant boundaries."""
+    admin_a, suffix_a = await _register_tenant(async_client, "WMS469ScopeA")
+    seller_a = await _create_seller(async_client, admin_a, name="Seller A")
+    seller_b = await _create_seller(async_client, admin_a, name="Seller B")
+    seller_b_headers = await _seller_headers(
+        async_client,
+        admin_a,
+        seller_id=seller_b,
+        suffix=f"{suffix_a}-b",
+    )
+
+    admin_c, suffix_c = await _register_tenant(async_client, "WMS469ScopeC")
+    seller_c = await _create_seller(async_client, admin_c, name="Seller C")
+    seller_c_headers = await _seller_headers(
+        async_client,
+        admin_c,
+        seller_id=seller_c,
+        suffix=f"{suffix_c}-c",
+    )
+
+    for path in ("warehouse-bindings", "warehouses", "ozon-warehouses"):
+        foreign_seller = await async_client.get(
+            f"/operations/fbs-sellers/{seller_a}/{path}",
+            headers=seller_b_headers,
+        )
+        assert foreign_seller.status_code == 403, (path, foreign_seller.text)
+
+        foreign_tenant_seller = await async_client.get(
+            f"/operations/fbs-sellers/{seller_a}/{path}",
+            headers=seller_c_headers,
+        )
+        assert foreign_tenant_seller.status_code in (403, 404), (
+            path,
+            foreign_tenant_seller.text,
+        )
+
+        foreign_tenant_admin = await async_client.get(
+            f"/operations/fbs-sellers/{seller_a}/{path}",
+            headers=admin_c,
+        )
+        assert foreign_tenant_admin.status_code in (403, 404), (
+            path,
+            foreign_tenant_admin.text,
+        )
 
 
 @pytest.mark.asyncio

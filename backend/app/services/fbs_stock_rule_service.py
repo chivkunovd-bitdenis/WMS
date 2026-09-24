@@ -87,9 +87,11 @@ class FbsRule:
     # Потолок публикации; резерв и физический расход учитывает inventory_service.
     units_by_warehouse: dict[int | str, int] = field(default_factory=dict)
     publish_ozon: bool | None = None
-    # UUID не зависит от совпадающих внешних номеров WB и Ozon. Пустой словарь
-    # означает запрос старого формата и сохраняет совместимость старого экрана.
+    # UUID не зависит от совпадающих внешних номеров WB и Ozon.
     by_binding: dict[uuid.UUID, FbsBindingRule] = field(default_factory=dict)
+    # Старый JSON без `by_binding` и новая форма с явным `by_binding: {}` имеют
+    # разный смысл. Второй вариант означает «видимых строк нет, ничего не менять».
+    by_binding_present: bool = False
 
     def publishes(self, marketplace: str) -> bool:
         if marketplace == "ozon" and self.publish_ozon is not None:
@@ -159,7 +161,7 @@ def validate_rule(
 ) -> None:
     """Проверить диапазон одного значения без общего потолка между связками."""
     if rule.units_mode:
-        _validate_units(rule, free_stock)
+        _validate_units(rule)
         return
     _check_percent(rule.percent)
     for percent in rule.by_warehouse.values():
@@ -181,7 +183,7 @@ def _check_percent(percent: int) -> None:
         )
 
 
-def _validate_units(rule: FbsRule, free_stock: int | None) -> None:
+def _validate_units(rule: FbsRule) -> None:
     for quantity in rule.units_by_warehouse.values():
         if quantity < 0:
             raise FbsStockRuleError(
@@ -232,6 +234,59 @@ async def _pool_rows(
         FbsBindingStockPool.binding_id.in_(binding_ids),
     ).execution_options(populate_existing=True)
     return {row.binding_id: row for row in (await session.execute(stmt)).scalars().all()}
+
+
+async def _pool_rows_for_products(
+    session: AsyncSession,
+    product_ids: list[uuid.UUID],
+    binding_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, dict[uuid.UUID, FbsBindingStockPool]]:
+    """Read all product x binding rows in one query for a bulk save."""
+    rows_by_product: dict[
+        uuid.UUID, dict[uuid.UUID, FbsBindingStockPool]
+    ] = {product_id: {} for product_id in product_ids}
+    if not product_ids or not binding_ids:
+        return rows_by_product
+    stmt = (
+        select(FbsBindingStockPool)
+        .where(
+            FbsBindingStockPool.product_id.in_(product_ids),
+            FbsBindingStockPool.binding_id.in_(binding_ids),
+        )
+        .execution_options(populate_existing=True)
+    )
+    for row in (await session.execute(stmt)).scalars().all():
+        rows_by_product[row.product_id][row.binding_id] = row
+    return rows_by_product
+
+
+async def _free_stock_by_product_for_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+    binding: FbsWarehouseBinding,
+) -> dict[uuid.UUID, int]:
+    """Read one binding's free stock for a whole bulk selection without N+1 queries."""
+    breakdown = await fbs_stock_breakdown_by_product(
+        session,
+        tenant_id,
+        binding.wms_warehouse_id,
+        product_ids,
+        include_global_direction_reserve=False,
+    )
+    directions = await stock_direction_service.direction_totals_by_product(
+        session,
+        tenant_id,
+        product_ids,
+    )
+    free_by_product: dict[uuid.UUID, int] = {}
+    for product_id in product_ids:
+        row = breakdown.get(product_id)
+        free = row.free if row is not None else 0
+        direction = directions.get(product_id)
+        direction_reserved = int(direction.total) if direction is not None else 0
+        free_by_product[product_id] = max(0, free - direction_reserved)
+    return free_by_product
 
 
 async def _free_stock_for_bindings(
@@ -826,12 +881,20 @@ async def set_rule_for_products(
         ozon_links = await list_ozon_product_links(
             session, tenant_id, {product.id for product in products}
         )
+        binding_ids = [binding.id for binding in bindings]
+        pools_by_product = await _pool_rows_for_products(
+            session,
+            [product.id for product in products],
+            binding_ids,
+        )
         old_rules = {}
         for product in products:
-            pools = await _pool_rows(session, product.id, [b.id for b in bindings])
             old_rules[product.id] = _qualified_rule(
                 rule_from_product(
-                    product, pools, bindings, has_ozon_link=product.id in ozon_links
+                    product,
+                    pools_by_product[product.id],
+                    bindings,
+                    has_ozon_link=product.id in ozon_links,
                 ),
                 bindings,
             )
@@ -860,7 +923,12 @@ async def set_rule_for_products(
         if rule is None:
             raise FbsStockRuleError("rule_not_configured")
 
-        if rule.by_binding:
+        if rule.by_binding_present and not rule.by_binding:
+            # Новая форма явно прислала пустой набор видимых блоков. Это не
+            # legacy-запрос и не команда сбросить соседние независимые правила.
+            return FbsRuleSaveResult(updated_count=0)
+
+        if rule.by_binding_present or rule.by_binding:
             binding_by_id = {binding.id: binding for binding in bindings}
             unknown = set(rule.by_binding) - set(binding_by_id)
             if unknown:
@@ -894,15 +962,15 @@ async def set_rule_for_products(
                 if not value_changed:
                     continue
                 binding = binding_by_id[binding_id]
-                free_rows: list[tuple[Product, int]] = []
-                for product in products:
-                    _on_hand, _reserved, free = await _free_stock_for_bindings(
-                        session,
-                        tenant_id,
-                        product.id,
-                        [binding],
-                    )
-                    free_rows.append((product, free))
+                free_by_product = await _free_stock_by_product_for_binding(
+                    session,
+                    tenant_id,
+                    [product.id for product in products],
+                    binding,
+                )
+                free_rows = [
+                    (product, free_by_product[product.id]) for product in products
+                ]
                 limiting_product, minimum_free = min(
                     free_rows,
                     key=lambda item: item[1],
@@ -946,15 +1014,19 @@ async def set_rule_for_products(
 
             changed_marketplaces: set[str] = set()
             for product in products:
-                pool_rows = await _pool_rows(
-                    session,
-                    product.id,
-                    [binding.id for binding in bindings],
-                )
+                pool_rows = pools_by_product[product.id]
                 for binding_id, binding_rule in applied[product.id].items():
                     old_binding_rule = old_rules[product.id].by_binding[binding_id]
                     if old_binding_rule != binding_rule:
                         changed_marketplaces.add(binding_by_id[binding_id].marketplace)
+
+                combined = dict(old_rules[product.id].by_binding)
+                combined.update(applied[product.id])
+                # До смены product-level режима каждая соседняя legacy-привязка
+                # становится явной строкой. Иначе глобальные поля ниже задним
+                # числом меняют не присланный оператором WB/Ozon-блок.
+                for binding_id, binding_rule in combined.items():
+                    requested = binding_id in applied[product.id]
                     pool = pool_rows.get(binding_id)
                     if pool is None:
                         pool = FbsBindingStockPool(
@@ -963,17 +1035,21 @@ async def set_rule_for_products(
                             product_id=product.id,
                         )
                         session.add(pool)
+                        pool_rows[binding_id] = pool
                     pool.publish_enabled = binding_rule.publish
                     if binding_rule.mode == "percent":
                         pool.percent = binding_rule.value
-                        pool.quantity = 0
+                        # У явного нового правила источник один. У нетронутой
+                        # legacy-строки сохраняем неактивное старое число: оно
+                        # не влияет на процент, но старый скрытый endpoint
+                        # продолжает видеть свой прежний операторский потолок.
+                        if requested:
+                            pool.quantity = 0
                     else:
                         pool.percent = None
                         pool.quantity = binding_rule.value
                     pool.updated_by = updated_by
 
-                combined = dict(old_rules[product.id].by_binding)
-                combined.update(applied[product.id])
                 product.fbs_stock_sync_enabled = any(
                     combined[binding.id].publish
                     for binding in bindings
@@ -990,8 +1066,11 @@ async def set_rule_for_products(
                 product.fbs_same_everywhere = False
                 product.fbs_percent = 0
 
-            for binding_id, binding_rule in saved_rules.items():
-                if binding_rule.publish:
+            for binding_id in saved_rules:
+                if any(
+                    per_product_rules[binding_id].publish
+                    for per_product_rules in applied.values()
+                ):
                     binding_by_id[binding_id].stock_sync_enabled = True
 
             for marketplace in sorted(changed_marketplaces):
@@ -1036,69 +1115,11 @@ async def set_rule_for_products(
                 for p in products
             )
         }
-        # Свободный остаток читается ЗДЕСЬ, в той же транзакции, что и запись, а не
-        # берётся с экрана: между открытием окна и нажатием «Сохранить» мог приехать
-        # заказ, и проверка по показанному числу пропустила бы перебор.
         if rule.units_mode:
-            # Проверяем КАЖДЫЙ товар отдельно: в штуках у каждого свой остаток, и
-            # одно число на всех сойдётся у одного, а у соседнего окажется перебором.
-            for product in products:
-                effective_rule = product_rules[product.id]
-                enabled_keys = {
-                    _binding_key(b) for b in served if effective_rule.publishes(b.marketplace)
-                }
-                validation_rule = replace(effective_rule, units_by_warehouse={
-                    key: value for key, value in effective_rule.units_by_warehouse.items()
-                    if key in enabled_keys
-                })
-                _, _, product_free = await _free_stock_for_bindings(
-                    session, tenant_id, product.id, bindings
-                )
-                # Caps are publication settings, not physical reservations.
-                # Unchanged/decreased caps remain valid when stock falls. A new
-                # or increased cap must fit current free stock, under Product lock.
-                old_rule = old_rules[product.id]
-                old_enabled_keys = {
-                    _binding_key(b) for b in served if old_rule.publishes(b.marketplace)
-                }
-                _validate_units(effective_rule, None)
-                # Disabled settings are retained, but do not reserve capacity
-                # for the marketplace that is publishing. New disabled caps
-                # still must individually fit the physical stock at input.
-                for key, value in effective_rule.units_by_warehouse.items():
-                    if key not in enabled_keys and value > old_rule.units_by_warehouse.get(key, 0):
-                        local_bindings = [b for b in bindings if _binding_key(b) == key]
-                        _, _, local_free = await _free_stock_for_bindings(
-                            session, tenant_id, product.id, local_bindings
-                        )
-                        _validate_units(
-                            replace(effective_rule, units_by_warehouse={key: value}),
-                            min(product_free, local_free),
-                        )
-                if any(
-                    key not in old_enabled_keys or value > old_rule.units_by_warehouse.get(key, 0)
-                    for key, value in validation_rule.units_by_warehouse.items()
-                ):
-                    _validate_units(validation_rule, product_free)
-                for warehouse_id in {b.wms_warehouse_id for b in bindings}:
-                    local_bindings = [b for b in bindings if b.wms_warehouse_id == warehouse_id]
-                    local_keys = {_binding_key(b) for b in local_bindings}
-                    increases = any(
-                        key not in old_enabled_keys
-                        or value > old_rule.units_by_warehouse.get(key, 0)
-                        for key, value in validation_rule.units_by_warehouse.items()
-                        if key in local_keys
-                    )
-                    if not increases:
-                        continue
-                    _, _, local_free = await _free_stock_for_bindings(
-                        session, tenant_id, product.id, local_bindings
-                    )
-                    local_rule = replace(validation_rule, units_by_warehouse={
-                        key: value for key, value in validation_rule.units_by_warehouse.items()
-                        if key in local_keys
-                    })
-                    _validate_units(local_rule, min(product_free, local_free))
+            # Legacy clients still get sign validation, but no fake stock
+            # validation: the old calls calculated free stock and then ignored it.
+            for effective_rule in product_rules.values():
+                _validate_units(effective_rule)
 
         else:
             for effective_rule in product_rules.values():

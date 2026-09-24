@@ -1065,6 +1065,7 @@ async def test_sync_marks_error_on_readback_mismatch(db_session: AsyncSession) -
 
     assert result.products_confirmed == 0
     assert result.errors == 1
+    assert result.retryable_errors == 1
     item = (
         await db_session.execute(
             select(FbsStockSyncItem).where(FbsStockSyncItem.binding_id == ctx.binding.id)
@@ -1249,6 +1250,8 @@ async def test_sync_upstream_error_marks_batch_error(
 
     assert result.products_confirmed == 0
     assert result.errors == 1
+    assert result.retryable_errors == 0
+    assert result.retry_after_seconds == 0
     assert "wb-test-token-secret" not in str(result)
     item = (
         await db_session.execute(
@@ -1292,6 +1295,8 @@ async def test_sync_429_after_retry_marks_binding_upstream_error(
 
     assert result.products_confirmed == 0
     assert result.errors == 1
+    assert result.retryable_errors == 1
+    assert result.retry_after_seconds == 1
     await db_session.refresh(ctx.binding)
     assert ctx.binding.last_error_code == "wb_upstream_error_429"
     assert ctx.binding.last_error_code != ERROR_READBACK_MISMATCH
@@ -1334,6 +1339,7 @@ async def test_sync_transport_error_marks_binding_not_readback_mismatch(
 
     assert result.products_confirmed == 0
     assert result.errors == 1
+    assert result.retryable_errors == 1
     await db_session.refresh(ctx.binding)
     assert ctx.binding.last_error_code == "wb_transport_error"
     assert ctx.binding.last_error_code != ERROR_READBACK_MISMATCH

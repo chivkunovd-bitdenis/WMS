@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import httpx
@@ -38,13 +40,25 @@ _EVENT_PUBLISH_ATTEMPTS = 3
 _EVENT_PUBLISH_RETRY_SECONDS = 1.0
 
 
-async def publish_seller_stocks_now(
+@dataclass
+class _CoalescedPublish:
+    task: asyncio.Task[None] | None = None
+    rerun_requested: bool = False
+
+
+_COALESCED_REQUESTS: dict[
+    tuple[uuid.UUID, uuid.UUID, str | None], _CoalescedPublish
+] = {}
+
+
+async def _publish_seller_stocks_pass(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     marketplace: str | None = None,
 ) -> None:
     """Republish independently for every connected provider after movement commit."""
     from app.services.fbs_autopoll_service import (
+        _MARKETPLACE_BACKOFF,
         SellerPollTarget,
         list_marketplace_poll_targets,
         sync_marketplace_stocks_for_target,
@@ -82,84 +96,175 @@ async def publish_seller_stocks_now(
         if marketplace is None or target.marketplace == marketplace
     ]
 
-    async def publish_target(
+    async def publish_target_once(
         target: SellerPollTarget, http_client: httpx.AsyncClient
     ) -> None:
-        # A busy provider lock is not a reason to drop the event. Wait on this
-        # provider's own coroutine; the other marketplace runs independently.
-        failed_attempts = 0
-        while True:
-            try:
-                async with (
-                    SessionLocal() as session,
-                    AsyncSession(bind=session.bind) as lock_session,
-                    marketplace_seller_lock(
-                        lock_session,
-                        target.seller_id,
-                        target.marketplace,
-                        wait_timeout_sec=1,
-                    ) as acquired,
-                ):
-                    if not acquired:
-                        logger.warning(
-                            "fbs stock publish waiting: seller=%s marketplace=%s busy",
-                            seller_id,
+        async with AsyncExitStack() as coalescing_stack:
+            follow_up_claimed = False
+            for attempt in range(1, _EVENT_PUBLISH_ATTEMPTS + 1):
+                provider_backoff = _MARKETPLACE_BACKOFF.remaining_seconds(target.marketplace)
+                if provider_backoff > 0:
+                    await asyncio.sleep(provider_backoff)
+                try:
+                    async with (
+                        SessionLocal() as session,
+                        AsyncSession(bind=session.bind) as lock_session,
+                        marketplace_seller_lock(
+                            lock_session,
+                            target.seller_id,
                             target.marketplace,
+                            wait_timeout_sec=0 if attempt == 1 else 1,
+                        ) as acquired,
+                    ):
+                        if not acquired and not follow_up_claimed:
+                            # Cross-process/Celery coalescing without a table:
+                            # one contender owns the follow-up advisory lock and
+                            # waits for the active publisher; every later event
+                            # joins that pending pass by returning immediately.
+                            follow_up_session = await coalescing_stack.enter_async_context(
+                                SessionLocal()
+                            )
+                            follow_up_lock_session = await coalescing_stack.enter_async_context(
+                                AsyncSession(bind=follow_up_session.bind)
+                            )
+                            follow_up_claimed = await coalescing_stack.enter_async_context(
+                                marketplace_seller_lock(
+                                    follow_up_lock_session,
+                                    target.seller_id,
+                                    f"{target.marketplace}:event-follow-up",
+                                    wait_timeout_sec=0,
+                                )
+                            )
+                            if not follow_up_claimed:
+                                logger.info(
+                                    "fbs stock publish coalesced: seller=%s marketplace=%s",
+                                    seller_id,
+                                    target.marketplace,
+                                )
+                                return
+                        if not acquired:
+                            logger.warning(
+                                "fbs stock publish busy: seller=%s marketplace=%s attempt=%s",
+                                seller_id,
+                                target.marketplace,
+                                attempt,
+                            )
+                            if attempt < _EVENT_PUBLISH_ATTEMPTS:
+                                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
+                            continue
+                        result = await sync_marketplace_stocks_for_target(
+                            session,
+                            target,
+                            http_client,
                         )
-                        continue
-                    result = await sync_marketplace_stocks_for_target(
-                        session,
-                        target,
-                        http_client,
+                        await session.commit()
+                except Exception:
+                    # One provider must never roll back the physical movement or suppress
+                    # publication to another provider. Periodic reconcile remains the safety net.
+                    logger.exception(
+                        "fbs stock publish transient failure for seller %s "
+                        "marketplace %s (tenant %s) attempt=%s",
+                        seller_id,
+                        target.marketplace,
+                        tenant_id,
+                        attempt,
                     )
-                    await session.commit()
-            except Exception:
-                # One provider must never roll back the physical movement or suppress
-                # publication to another provider. Periodic reconcile remains the safety net.
-                logger.exception(
-                    "fbs stock publish failed for seller %s marketplace %s (tenant %s)",
+                    if attempt >= _EVENT_PUBLISH_ATTEMPTS:
+                        return
+                    await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
+                    continue
+                errors = int(getattr(result, "errors", 0))
+                binding_errors = int(getattr(result, "binding_errors", 0))
+                retryable_errors = int(getattr(result, "retryable_errors", 0))
+                if retryable_errors:
+                    retry_after_seconds = max(
+                        0.0,
+                        float(getattr(result, "retry_after_seconds", 0.0)),
+                    )
+                    if retry_after_seconds > 0:
+                        _MARKETPLACE_BACKOFF.record_rate_limit(
+                            target.marketplace,
+                            retry_after_seconds=retry_after_seconds,
+                        )
+                    logger.warning(
+                        "fbs stock publish temporarily incomplete: seller=%s marketplace=%s "
+                        "attempt=%s errors=%s binding_errors=%s retryable_errors=%s",
+                        seller_id,
+                        target.marketplace,
+                        attempt,
+                        errors,
+                        binding_errors,
+                        retryable_errors,
+                    )
+                    if attempt >= _EVENT_PUBLISH_ATTEMPTS:
+                        return
+                    await asyncio.sleep(
+                        max(_EVENT_PUBLISH_RETRY_SECONDS, retry_after_seconds)
+                    )
+                    continue
+                if errors or binding_errors:
+                    logger.warning(
+                        "fbs stock publish permanent failure: seller=%s marketplace=%s "
+                        "errors=%s binding_errors=%s",
+                        seller_id,
+                        target.marketplace,
+                        errors,
+                        binding_errors,
+                    )
+                    return
+                logger.info(
+                    "fbs stock publish done: seller=%s marketplace=%s bindings=%s "
+                    "targeted=%s confirmed=%s errors=%s",
                     seller_id,
                     target.marketplace,
-                    tenant_id,
+                    result.bindings_processed,
+                    result.products_targeted,
+                    result.products_confirmed,
+                    result.binding_errors,
                 )
-                failed_attempts += 1
-                if failed_attempts >= _EVENT_PUBLISH_ATTEMPTS:
-                    return
-                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
-                continue
-            errors = int(getattr(result, "errors", 0))
-            binding_errors = int(getattr(result, "binding_errors", 0))
-            if errors or binding_errors:
-                failed_attempts += 1
-                logger.warning(
-                    "fbs stock publish incomplete: seller=%s marketplace=%s "
-                    "attempt=%s errors=%s binding_errors=%s",
-                    seller_id,
-                    target.marketplace,
-                    failed_attempts,
-                    errors,
-                    binding_errors,
-                )
-                if failed_attempts >= _EVENT_PUBLISH_ATTEMPTS:
-                    return
-                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
-                continue
-            logger.info(
-                "fbs stock publish done: seller=%s marketplace=%s bindings=%s "
-                "targeted=%s confirmed=%s errors=%s",
-                seller_id,
-                target.marketplace,
-                result.bindings_processed,
-                result.products_targeted,
-                result.products_confirmed,
-                result.binding_errors,
-            )
-            return
+                return
 
     async with httpx.AsyncClient() as http_client:
         await asyncio.gather(
-            *(publish_target(target, http_client) for target in targets)
+            *(publish_target_once(target, http_client) for target in targets)
         )
+
+
+async def publish_seller_stocks_now(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    marketplace: str | None = None,
+) -> None:
+    """Coalesce a burst into one current-state pass and at most one follow-up pass."""
+    key = (tenant_id, seller_id, marketplace)
+    existing = _COALESCED_REQUESTS.get(key)
+    if existing is not None and existing.task is not None and not existing.task.done():
+        existing.rerun_requested = True
+        await asyncio.shield(existing.task)
+        return
+
+    state = _CoalescedPublish()
+
+    async def run() -> None:
+        for pass_number in range(2):
+            state.rerun_requested = False
+            await _publish_seller_stocks_pass(tenant_id, seller_id, marketplace)
+            if not state.rerun_requested:
+                return
+            if pass_number == 1:
+                logger.warning(
+                    "fbs stock publish request burst capped: seller=%s marketplace=%s",
+                    seller_id,
+                    marketplace or "all",
+                )
+
+    state.task = asyncio.create_task(run())
+    _COALESCED_REQUESTS[key] = state
+    try:
+        await asyncio.shield(state.task)
+    finally:
+        if _COALESCED_REQUESTS.get(key) is state:
+            _COALESCED_REQUESTS.pop(key, None)
 
 
 def _dispatch(

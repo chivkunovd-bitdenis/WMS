@@ -313,6 +313,7 @@ async def test_c4_real_mapping_error_still_reported(db_session: AsyncSession) ->
     assert result.products_confirmed == 1
     assert result.errors == 1
     assert result.binding_errors == 1
+    assert result.retryable_errors == 0
     await db_session.refresh(case.ozon_binding)
     assert case.ozon_binding.last_error_code == "product_mapping_missing"
 
