@@ -15,7 +15,9 @@ dependencies = [
   "python-multipart>=0.0.9",
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
-  "sqlalchemy>=2.0",
+  # WMS-527: the typed query contract is verified on SQLAlchemy 2.0;
+  # 2.1 changes Select/result typing and requires a separate migration.
+  "sqlalchemy>=2.0,<2.1",
   "greenlet>=3.0",
   "alembic>=1.13",
   "psycopg[binary]>=3.1",

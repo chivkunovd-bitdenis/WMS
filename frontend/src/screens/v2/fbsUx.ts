@@ -37,6 +37,63 @@ export function fbsUnassignedPositionQuantity(
   return positions.reduce((sum, position) => sum + (position.id && assignedPositionIds.has(position.id) ? 0 : position.quantity), 0)
 }
 
+type OzonAutoBoxOrder = {
+  id: string
+  status: string
+  external_order_id: string | null
+  positions: Array<{ id?: string | null; quantity: number }>
+}
+
+type OzonAutoBox = {
+  id: string
+  box_number: number
+  assigned_order_ids: string[]
+  assigned_order_product_ids?: string[]
+  qr_asset: { status: string; preview_url: string | null } | null
+}
+
+/** Готовая этикетка Ozon короба — то же условие, по которому кнопка короба открывает печать, а не сборку. */
+export function fbsOzonBoxLabelReady(box: Pick<OzonAutoBox, 'qr_asset'>): boolean {
+  return box.qr_asset?.status === 'ready' && Boolean(box.qr_asset.preview_url)
+}
+
+/**
+ * WMS-526: что осталось сделать кнопке «Создать автоматически».
+ * unassignedPositions — позиции неотменённых заказов, не лежащие ни в одном коробе.
+ * labelTargets — неотменённые заказы, все позиции которых разложены, а готовой
+ * этикетки нет: по одному коробу на заказ (сборка Ozon одним запросом берёт все короба заказа).
+ */
+export function fbsOzonAutoBoxesPlan(
+  orders: OzonAutoBoxOrder[],
+  boxes: OzonAutoBox[],
+): { unassignedPositions: number; labelTargets: Array<{ orderId: string; externalOrderId: string | null; boxId: string }> } {
+  const assignedPositionIds = new Set(boxes.flatMap((box) => box.assigned_order_product_ids ?? []))
+  const sortedBoxes = [...boxes].sort((a, b) => a.box_number - b.box_number)
+  let unassignedPositions = 0
+  const labelTargets: Array<{ orderId: string; externalOrderId: string | null; boxId: string }> = []
+  for (const order of orders) {
+    if (order.status === 'cancelled') continue
+    unassignedPositions += order.positions.filter((position) => position.id && !assignedPositionIds.has(position.id)).length
+    if (order.positions.length === 0 || fbsUnassignedPositionQuantity(order.positions, assignedPositionIds) > 0) continue
+    const orderBoxes = sortedBoxes.filter((box) => box.assigned_order_ids.includes(order.id))
+    if (orderBoxes.length === 0 || orderBoxes.some(fbsOzonBoxLabelReady)) continue
+    labelTargets.push({ orderId: order.id, externalOrderId: order.external_order_id, boxId: orderBoxes[0].id })
+  }
+  return { unassignedPositions, labelTargets }
+}
+
+/** Итог сбоев этикеток: причины с номерами Ozon, одинаковые причины — одной строкой. */
+export function fbsOzonLabelFailuresText(failures: Array<{ externalOrderId: string | null; reason: string }>): string {
+  const byReason = new Map<string, string[]>()
+  for (const failure of failures) {
+    const numbers = byReason.get(failure.reason) ?? []
+    numbers.push(failure.externalOrderId ? `№${failure.externalOrderId}` : 'без номера')
+    byReason.set(failure.reason, numbers)
+  }
+  const details = [...byReason.entries()].map(([reason, numbers]) => `Ozon ${numbers.join(', ')} — ${reason.replace(/[.\s]+$/, '')}`)
+  return `Без этикетки заказов: ${failures.length}. ${details.join('; ')}.`
+}
+
 export function fbsOrdersAvailableForBox<T extends { id: string }>(
   orders: T[],
   assignedOrderIds: Set<string>,

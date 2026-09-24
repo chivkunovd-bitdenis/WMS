@@ -16,6 +16,7 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
     MarkingCodeImport,
+    MarkingCodeImportFile,
     MarkingPool,
     MarkingPoolProduct,
 )
@@ -27,6 +28,85 @@ def _pools_json(specs: list[dict[str, object]]) -> str:
     return json.dumps(specs)
 
 
+async def _create_product(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    seller_id: str,
+    *,
+    name: str,
+) -> str:
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": name,
+            "sku_code": f"IMP-{uuid.uuid4().hex[:10]}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert product.status_code == 200, product.text
+    return str(product.json()["id"])
+
+
+async def _seller_marking_write_counts(seller_id: str) -> dict[str, int]:
+    seller_uuid = uuid.UUID(seller_id)
+    async with SessionLocal() as session:
+        queries = {
+            "imports": select(func.count(MarkingCodeImport.id)).where(
+                MarkingCodeImport.seller_id == seller_uuid
+            ),
+            "source_files": select(func.count(MarkingCodeImportFile.id))
+            .join(
+                MarkingCodeImport,
+                MarkingCodeImport.id == MarkingCodeImportFile.import_batch_id,
+            )
+            .where(MarkingCodeImport.seller_id == seller_uuid),
+            "pools": select(func.count(MarkingPool.id)).where(MarkingPool.seller_id == seller_uuid),
+            "pool_products": select(func.count(MarkingPoolProduct.id))
+            .join(MarkingPool, MarkingPool.id == MarkingPoolProduct.pool_id)
+            .where(MarkingPool.seller_id == seller_uuid),
+            "codes": select(func.count(MarkingCode.id)).where(MarkingCode.seller_id == seller_uuid),
+            "events": select(func.count(MarkingCodeEvent.id)).where(
+                MarkingCodeEvent.seller_id == seller_uuid
+            ),
+        }
+        return {
+            name: int((await session.execute(query)).scalar_one())
+            for name, query in queries.items()
+        }
+
+
+async def _seller_marking_write_ids(seller_id: str) -> dict[str, set[uuid.UUID]]:
+    seller_uuid = uuid.UUID(seller_id)
+    async with SessionLocal() as session:
+        queries = {
+            "imports": select(MarkingCodeImport.id).where(
+                MarkingCodeImport.seller_id == seller_uuid
+            ),
+            "source_files": select(MarkingCodeImportFile.id)
+            .join(
+                MarkingCodeImport,
+                MarkingCodeImport.id == MarkingCodeImportFile.import_batch_id,
+            )
+            .where(MarkingCodeImport.seller_id == seller_uuid),
+            "pools": select(MarkingPool.id).where(MarkingPool.seller_id == seller_uuid),
+            "pool_products": select(MarkingPoolProduct.id)
+            .join(MarkingPool, MarkingPool.id == MarkingPoolProduct.pool_id)
+            .where(MarkingPool.seller_id == seller_uuid),
+            "codes": select(MarkingCode.id).where(MarkingCode.seller_id == seller_uuid),
+            "events": select(MarkingCodeEvent.id).where(
+                MarkingCodeEvent.seller_id == seller_uuid
+            ),
+        }
+        return {
+            name: set((await session.execute(query)).scalars().all())
+            for name, query in queries.items()
+        }
+
+
 async def _import_files(
     async_client: AsyncClient,
     headers: dict[str, str],
@@ -35,15 +115,171 @@ async def _import_files(
     pools: list[dict[str, object]],
     files: list[tuple[str, bytes]],
 ) -> Response:
-    multipart_files = [
-        ("files", (name, content, "text/csv")) for name, content in files
-    ]
+    multipart_files = [("files", (name, content, "text/csv")) for name, content in files]
     return await async_client.post(
         "/operations/marking-codes/import",
         headers=headers,
         data={"seller_id": seller_id, "pools_json": _pools_json(pools)},
         files=multipart_files,
     )
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_all_empty_product_assignments_before_writes(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "Empty assignments", "email": f"empty-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = str(seller.json()["id"])
+    gtin_a = "00000000000101"
+    gtin_b = "00000000000102"
+    codes = [f"01{gtin_a}21{'E' * 20}0001", f"01{gtin_b}21{'F' * 20}0002"]
+    persistence_calls: list[object] = []
+
+    monkeypatch.setattr(
+        mc_svc,
+        "_persist_import_source_pdfs",
+        lambda *args, **kwargs: persistence_calls.append((args, kwargs)),
+    )
+    response = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[
+            {"gtin": gtin_a, "title": "Empty A", "product_ids": []},
+            {"gtin": gtin_b, "title": "Empty B", "product_ids": []},
+        ],
+        files=[("empty.csv", ("cis\n" + "\n".join(codes)).encode())],
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "manual_import_product_required"
+    assert persistence_calls == []
+    assert await _seller_marking_write_counts(seller_id) == {
+        "imports": 0,
+        "source_files": 0,
+        "pools": 0,
+        "pool_products": 0,
+        "codes": 0,
+        "events": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_mixed_covered_and_uncovered_gtins_before_writes(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={
+            "name": "Partial assignments",
+            "email": f"partial-{uuid.uuid4().hex[:8]}@example.com",
+        },
+    )
+    seller_id = str(seller.json()["id"])
+    product_id = await _create_product(async_client, headers, seller_id, name="Assigned product")
+    gtin_a = "00000000000201"
+    gtin_b = "00000000000202"
+    codes = [f"01{gtin_a}21{'G' * 20}0001", f"01{gtin_b}21{'H' * 20}0002"]
+    persistence_calls: list[object] = []
+
+    monkeypatch.setattr(
+        mc_svc,
+        "_persist_import_source_pdfs",
+        lambda *args, **kwargs: persistence_calls.append((args, kwargs)),
+    )
+    response = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[{"gtin": gtin_a, "title": "Covered A", "product_ids": [product_id]}],
+        files=[("partial.csv", ("cis\n" + "\n".join(codes)).encode())],
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "manual_import_product_required"
+    assert persistence_calls == []
+    assert await _seller_marking_write_counts(seller_id) == {
+        "imports": 0,
+        "source_files": 0,
+        "pools": 0,
+        "pool_products": 0,
+        "codes": 0,
+        "events": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_explicit_empty_mixed_spec_without_changing_existing_data(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={
+            "name": "Existing marking data",
+            "email": f"existing-{uuid.uuid4().hex[:8]}@example.com",
+        },
+    )
+    seller_id = str(seller.json()["id"])
+    product_id = await _create_product(async_client, headers, seller_id, name="Existing product")
+    existing_gtin = "00000000000300"
+    existing_code = f"01{existing_gtin}21{'I' * 20}0000"
+    existing = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[
+            {
+                "gtin": existing_gtin,
+                "title": "Existing pool",
+                "product_ids": [product_id],
+            }
+        ],
+        files=[("existing.csv", f"cis\n{existing_code}".encode())],
+    )
+    assert existing.status_code == 200, existing.text
+    before_ids = await _seller_marking_write_ids(seller_id)
+    assert all(
+        before_ids[entity]
+        for entity in ("imports", "pools", "pool_products", "codes", "events")
+    )
+
+    gtin_a = "00000000000301"
+    gtin_b = "00000000000302"
+    codes = [f"01{gtin_a}21{'J' * 20}0001", f"01{gtin_b}21{'K' * 20}0002"]
+    persistence_calls: list[object] = []
+    monkeypatch.setattr(
+        mc_svc,
+        "_persist_import_source_pdfs",
+        lambda *args, **kwargs: persistence_calls.append((args, kwargs)),
+    )
+
+    response = await _import_files(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        pools=[
+            {"gtin": gtin_a, "title": "Covered A", "product_ids": [product_id]},
+            {"gtin": gtin_b, "title": "Explicitly empty B", "product_ids": []},
+        ],
+        files=[("mixed-explicit-empty.csv", ("cis\n" + "\n".join(codes)).encode())],
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "manual_import_product_required"
+    assert persistence_calls == []
+    assert await _seller_marking_write_ids(seller_id) == before_ids
 
 
 @pytest.mark.asyncio
@@ -123,10 +359,14 @@ async def test_import_single_gtin_creates_pool_and_links_products(
         assert pool is not None
         assert pool.title == "Куртки зима"
         links = (
-            await session.execute(
-                select(MarkingPoolProduct).where(MarkingPoolProduct.pool_id == pool_id)
+            (
+                await session.execute(
+                    select(MarkingPoolProduct).where(MarkingPoolProduct.pool_id == pool_id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(links) == 3
         available = (
             await session.execute(
@@ -157,6 +397,7 @@ async def test_import_two_gtins_creates_two_pools(async_client: AsyncClient) -> 
         json={"name": "2GTIN", "email": f"2g-{uuid.uuid4().hex[:8]}@example.com"},
     )
     seller_id = seller.json()["id"]
+    product_id = await _create_product(async_client, h, seller_id, name="Two GTIN product")
     gtin_a = "00000000000001"
     gtin_b = "00000000000002"
     codes = [
@@ -169,8 +410,8 @@ async def test_import_two_gtins_creates_two_pools(async_client: AsyncClient) -> 
         h,
         seller_id=seller_id,
         pools=[
-            {"gtin": gtin_a, "title": "Пул A", "product_ids": []},
-            {"gtin": gtin_b, "title": "Пул B", "product_ids": []},
+            {"gtin": gtin_a, "title": "Пул A", "product_ids": [product_id]},
+            {"gtin": gtin_b, "title": "Пул B", "product_ids": [product_id]},
         ],
         files=[("codes.csv", csv_body.encode())],
     )
@@ -188,6 +429,7 @@ async def test_import_duplicates_and_invalid(async_client: AsyncClient) -> None:
         json={"name": "Dup", "email": f"dup-{uuid.uuid4().hex[:8]}@example.com"},
     )
     seller_id = seller.json()["id"]
+    product_id = await _create_product(async_client, h, seller_id, name="Duplicate product")
     gtin = "00000000009999"
     cis = f"01{gtin}21{'D' * 20}0001"
     csv_first = f"cis\n{cis}\nshort"
@@ -195,7 +437,7 @@ async def test_import_duplicates_and_invalid(async_client: AsyncClient) -> None:
         async_client,
         h,
         seller_id=seller_id,
-        pools=[{"title": "Dup pool", "product_ids": []}],
+        pools=[{"title": "Dup pool", "product_ids": [product_id]}],
         files=[("codes.csv", csv_first.encode())],
     )
     assert imp1.status_code == 200, imp1.text
@@ -206,7 +448,7 @@ async def test_import_duplicates_and_invalid(async_client: AsyncClient) -> None:
         async_client,
         h,
         seller_id=seller_id,
-        pools=[{"title": "Dup pool", "product_ids": []}],
+        pools=[{"title": "Dup pool", "product_ids": [product_id]}],
         files=[("codes.csv", f"cis\n{cis}".encode())],
     )
     assert imp2.status_code == 200, imp2.text
@@ -224,13 +466,14 @@ async def test_import_assigns_document_number_on_batch(async_client: AsyncClient
         json={"name": "Doc", "email": f"doc-{uuid.uuid4().hex[:8]}@example.com"},
     )
     seller_id = seller.json()["id"]
+    product_id = await _create_product(async_client, h, seller_id, name="Document product")
     gtin = "00000000005555"
     cis = f"01{gtin}21{'E' * 20}0001"
     imp = await _import_files(
         async_client,
         h,
         seller_id=seller_id,
-        pools=[{"title": "Doc pool", "product_ids": []}],
+        pools=[{"title": "Doc pool", "product_ids": [product_id]}],
         files=[("codes.csv", f"cis\n{cis}".encode())],
     )
     assert imp.status_code == 200, imp.text
@@ -682,9 +925,10 @@ async def test_import_same_cis_twice_idempotent(async_client: AsyncClient) -> No
         json={"name": "Idem", "email": f"idem-{uuid.uuid4().hex[:8]}@example.com"},
     )
     seller_id = seller.json()["id"]
+    product_id = await _create_product(async_client, h, seller_id, name="Idempotent product")
     gtin = "00000000007777"
     cis = f"01{gtin}21{'F' * 20}0001"
-    pools: list[dict[str, object]] = [{"title": "Idem pool", "product_ids": []}]
+    pools: list[dict[str, object]] = [{"title": "Idem pool", "product_ids": [product_id]}]
     csv_body = f"cis\n{cis}".encode()
 
     first = await _import_files(
