@@ -8,11 +8,21 @@ import fitz
 import pytest
 from httpx import AsyncClient
 from marking_datamatrix_test_helpers import encode_datamatrix_png
-from sqlalchemy import select
-from test_packaging_tasks import _register_admin
+from sqlalchemy import func, select
+from test_packaging_tasks import _inventory_at_location, _register_admin
 
 from app.db.session import SessionLocal
-from app.models.marking_code import MarkingCode, MarkingPool
+from app.models.marking_code import (
+    EVENT_IMPORTED,
+    STATUS_AVAILABLE,
+    MarkingCode,
+    MarkingCodeEvent,
+    MarkingCodeImport,
+    MarkingPool,
+    MarkingPoolProduct,
+)
+from app.models.seller import Seller
+from app.services import marking_code_service as marking_svc
 from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
 from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
 
@@ -244,6 +254,339 @@ async def _product(
     )
     assert response.status_code == 200, response.text
     return response.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_auto_import_fresh_pools_are_counted_and_issued_across_uploads(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "WMS523 seller", "email": f"wms523-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    other_seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={
+            "name": "WMS523 other seller",
+            "email": f"wms523-other-{uuid.uuid4().hex[:8]}@example.com",
+        },
+    )
+    seller_id = seller.json()["id"]
+    other_seller_id = other_seller.json()["id"]
+    gtin = "04601234567890"
+    product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="WMS523-ARTICLE",
+        barcode=gtin,
+        size="M",
+    )
+    other_product_id = await _product(
+        async_client,
+        headers,
+        seller_id=other_seller_id,
+        sku="WMS523-ARTICLE",
+        barcode=gtin,
+        size="M",
+    )
+    old_cis = f"01{gtin}21WMS523-OLD-0001"
+    other_seller_cis = f"01{gtin}21WMS523-OTHER-0001"
+
+    for import_seller_id, import_product_id, cis in (
+        (seller_id, product_id, old_cis),
+        (other_seller_id, other_product_id, other_seller_cis),
+    ):
+        imported = await async_client.post(
+            "/operations/marking-codes/import",
+            headers=headers,
+            data={
+                "seller_id": import_seller_id,
+                "pools_json": json.dumps(
+                    [{"title": "Existing pool", "product_ids": [import_product_id]}]
+                ),
+            },
+            files=[("files", ("existing.csv", f"cis\n{cis}".encode(), "text/csv"))],
+        )
+        assert imported.status_code == 200, imported.text
+        assert imported.json()["accepted_count"] == 1
+
+    upload_codes = [
+        [f"01{gtin}21WMS523-A-{index:04d}" for index in range(2)],
+        [f"01{gtin}21WMS523-B-{index:04d}" for index in range(2)],
+    ]
+    import_ids: list[uuid.UUID] = []
+    for upload_index, codes in enumerate(upload_codes):
+        response = await async_client.post(
+            "/operations/marking-codes/import/auto",
+            headers=headers,
+            data={"seller_id": seller_id, "request_id": str(uuid.uuid4())},
+            files=[
+                (
+                    "files",
+                    (
+                        f"upload-{upload_index}-{code_index}.pdf",
+                        _label_pdf(code, article="WMS523-ARTICLE", size="M"),
+                        "application/pdf",
+                    ),
+                )
+                for code_index, code in enumerate(codes)
+            ],
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["unmatched"] == []
+        assert response.json()["groups"][0]["loaded_count"] == 2
+        import_ids.append(uuid.UUID(response.json()["import_id"]))
+
+    duplicate = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": str(uuid.uuid4())},
+        files=[
+            (
+                "files",
+                (
+                    "duplicate.pdf",
+                    _label_pdf(upload_codes[0][0], article="WMS523-ARTICLE", size="M"),
+                    "application/pdf",
+                ),
+            )
+        ],
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["groups"] == []
+    assert duplicate.json()["unmatched"][0]["reason"] == "Код уже загружен"
+
+    product_uuid = uuid.UUID(product_id)
+    other_product_uuid = uuid.UUID(other_product_id)
+    expected_codes = {old_cis, *(code for upload in upload_codes for code in upload)}
+    async with SessionLocal() as session:
+        seller_row = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller_row is not None
+        tenant_id = seller_row.tenant_id
+        linked_pools = list(
+            (
+                await session.scalars(
+                    select(MarkingPool)
+                    .join(MarkingPoolProduct, MarkingPoolProduct.pool_id == MarkingPool.id)
+                    .where(MarkingPoolProduct.product_id == product_uuid)
+                    .order_by(MarkingPool.created_at, MarkingPool.id)
+                )
+            ).all()
+        )
+        assert len(linked_pools) == 3
+        assert {pool.seller_id for pool in linked_pools} == {uuid.UUID(seller_id)}
+        assert len({pool.id for pool in linked_pools}) == 3
+        auto_codes = list(
+            (
+                await session.scalars(
+                    select(MarkingCode).where(MarkingCode.import_batch_id.in_(import_ids))
+                )
+            ).all()
+        )
+        assert {code.cis_code for code in auto_codes} == expected_codes - {old_cis}
+        assert all(code.product_id == product_uuid for code in auto_codes)
+        assert all(code.pool_id is not None for code in auto_codes)
+        assert all(code.label_artifact_pdf for code in auto_codes)
+        assert all(code.status == STATUS_AVAILABLE for code in auto_codes)
+        assert {code.import_batch_id for code in auto_codes} == set(import_ids)
+        imported_events = int(
+            await session.scalar(
+                select(func.count(MarkingCodeEvent.id)).where(
+                    MarkingCodeEvent.code_id.in_([code.id for code in auto_codes]),
+                    MarkingCodeEvent.event_type == EVENT_IMPORTED,
+                )
+            )
+            or 0
+        )
+        assert imported_events == 4
+        assert await marking_svc.count_available_for_products_batch(
+            session,
+            tenant_id,
+            {product_uuid, other_product_uuid},
+        ) == {product_uuid: 5, other_product_uuid: 1}
+        assert await marking_svc.count_available_for_product(session, tenant_id, product_uuid) == 5
+
+    warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WMS523 warehouse", "code": f"wms523-{uuid.uuid4().hex[:8]}"},
+    )
+    assert warehouse.status_code == 200, warehouse.text
+    location_id = await _inventory_at_location(
+        async_client,
+        headers,
+        warehouse_id=warehouse.json()["id"],
+        product_id=product_id,
+        qty=5,
+        location_code=f"wms523-{uuid.uuid4().hex[:8]}",
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=headers,
+        json={
+            "warehouse_id": warehouse.json()["id"],
+            "lines": [
+                {"product_id": product_id, "storage_location_id": location_id, "quantity": 5}
+            ],
+        },
+    )
+    assert task.status_code == 201, task.text
+    line_id = task.json()["lines"][0]["id"]
+    assert task.json()["lines"][0]["marking_available_count"] == 5
+    printed = await async_client.post(
+        f"/operations/marking-codes/packaging-lines/{line_id}/print",
+        headers=headers,
+        json={"duplicate_copies": 1, "reprint": False},
+    )
+    assert printed.status_code == 200, printed.text
+    assert printed.json()["quantity"] == 5
+    assert set(printed.json()["codes"]) == expected_codes
+    assert len(printed.json()["codes"]) == len(set(printed.json()["codes"]))
+
+    async with SessionLocal() as session:
+        seller_row = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller_row is not None
+        assert await marking_svc.count_available_for_product(
+            session, seller_row.tenant_id, product_uuid
+        ) == 0
+        assert await marking_svc.count_available_for_product(
+            session, seller_row.tenant_id, other_product_uuid
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_assign_unmatched_groups_pools_and_retry_does_not_duplicate(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "WMS523 assign", "email": f"wms523-a-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="WMS523-ASSIGN",
+        barcode="04601234567001",
+        size="M",
+    )
+    codes = [
+        "010460123456700121WMS523-ASSIGN-A",
+        "010460123456701821WMS523-ASSIGN-B",
+    ]
+    files = [
+        (
+            "files",
+            (f"assign-{index}.pdf", _label_pdf(code, article="UNKNOWN"), "application/pdf"),
+        )
+        for index, code in enumerate(codes)
+    ]
+    automatic = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": str(uuid.uuid4())},
+        files=files,
+    )
+    assert automatic.status_code == 200, automatic.text
+    assert automatic.json()["groups"] == []
+    row_keys = [row["key"] for row in automatic.json()["unmatched"]]
+    request_id = str(uuid.uuid4())
+    assign_data = {
+        "seller_id": seller_id,
+        "request_id": request_id,
+        "product_id": product_id,
+        "row_keys_json": json.dumps(row_keys),
+    }
+    assigned = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data=assign_data,
+        files=files,
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["assigned_keys"] == row_keys
+
+    product_uuid = uuid.UUID(product_id)
+    async with SessionLocal() as session:
+        pool_ids = set(
+            (
+                await session.scalars(
+                    select(MarkingPoolProduct.pool_id).where(
+                        MarkingPoolProduct.product_id == product_uuid
+                    )
+                )
+            ).all()
+        )
+        assert len(pool_ids) == 2
+        assert int(
+            await session.scalar(
+                select(func.count(MarkingCode.id)).where(MarkingCode.pool_id.in_(pool_ids))
+            )
+            or 0
+        ) == 2
+
+    repeated = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data=assign_data,
+        files=files,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json() == assigned.json()
+    conflict = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data={**assign_data, "row_keys_json": json.dumps(row_keys[:1])},
+        files=files,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == "import_request_conflict"
+
+    duplicate_assign = await async_client.post(
+        "/operations/marking-codes/import/assign",
+        headers=headers,
+        data={**assign_data, "request_id": str(uuid.uuid4())},
+        files=files,
+    )
+    assert duplicate_assign.status_code == 200, duplicate_assign.text
+    assert duplicate_assign.json()["assigned_keys"] == []
+
+    async with SessionLocal() as session:
+        seller_row = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller_row is not None
+        assert set(
+            (
+                await session.scalars(
+                    select(MarkingPoolProduct.pool_id).where(
+                        MarkingPoolProduct.product_id == product_uuid
+                    )
+                )
+            ).all()
+        ) == pool_ids
+        assert int(
+            await session.scalar(
+                select(func.count(MarkingPool.id)).where(
+                    MarkingPool.tenant_id == seller_row.tenant_id,
+                    MarkingPool.seller_id == seller_row.id,
+                )
+            )
+            or 0
+        ) == 2
+        assert int(
+            await session.scalar(
+                select(func.count(MarkingCodeImport.id)).where(
+                    MarkingCodeImport.id == uuid.UUID(request_id)
+                )
+            )
+            or 0
+        ) == 1
 
 
 @pytest.mark.asyncio
@@ -769,7 +1112,8 @@ async def test_auto_import_partial_assignment_and_residual_pdf(
         )
         assert {code.cis_code for code in codes} == {matched_cis, ambiguous_cis, foreign_cis}
         assert {code.product_id for code in codes} == {uuid.UUID(matched_product_id)}
-        assert all(code.pool_id is None for code in codes)
+        assert all(code.pool_id is not None for code in codes)
+        assert len({code.pool_id for code in codes}) == 3
         pools = list(
             (
                 await session.scalars(
@@ -777,4 +1121,13 @@ async def test_auto_import_partial_assignment_and_residual_pdf(
                 )
             ).all()
         )
-        assert pools == []
+        assert {pool.id for pool in pools} == {code.pool_id for code in codes}
+        assert set(
+            (
+                await session.scalars(
+                    select(MarkingPoolProduct.pool_id).where(
+                        MarkingPoolProduct.product_id == uuid.UUID(matched_product_id)
+                    )
+                )
+            ).all()
+        ) == {pool.id for pool in pools}
