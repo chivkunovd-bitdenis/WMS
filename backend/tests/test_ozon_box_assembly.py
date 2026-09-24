@@ -5,21 +5,28 @@ from __future__ import annotations
 import base64
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import fitz
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.fbs_supplies import retry_fbs_packing_box_qr
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import FbsSupply
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
+from app.services import fbs_print_asset_service as print_asset_svc
+from app.services import ozon_box_assembly_service as assembly_svc
 from app.services.fbs_print_asset_service import combine_ozon_order_labels
+from app.services.integration_fernet import encrypt_secret
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
     MarketplaceProviderError,
@@ -375,3 +382,68 @@ async def test_confirmed_ship_failure_unfreezes_contents_and_allows_retry(
     }
     await assemble_box_order(*args, provider=provider, credentials=("c", "k"))
     assert len([p for p, _ in transport.endpoint_calls if p.endswith("/ship")]) == 2
+
+
+async def test_retry_qr_surfaces_ozon_label_error_and_keeps_assembly(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WMS-526 F1: retry-qr used to swallow a failed label fetch and answer 200
+    with no reason, leaving the operator unable to tell why the label never
+    showed up. The assembly (ozon_assembly marker + /ship) must still be kept
+    and never resent, but the endpoint now surfaces the label error."""
+    order, supply, boxes = await _seed(db_session)
+    db_session.add(
+        MarketplaceAccount(
+            tenant_id=order.tenant_id,
+            seller_id=order.seller_id,
+            marketplace="ozon",
+            account_slot="primary",
+            external_account_id="ozon-client",
+            secret_encrypted=encrypt_secret("ozon-key"),
+            is_active=True,
+            validation_status="valid",
+        )
+    )
+    await db_session.commit()
+
+    transport = _transport()
+    transport.errors["fetch_order_labels"] = MarketplaceProviderError("ozon", 502, {})
+    provider = OzonMarketplaceProvider(transport=transport)
+
+    # The endpoint calls assemble_box_order/ozon_order_label_fetcher without a
+    # provider of its own, so it resolves one through these two factory hooks
+    # exactly like production does once the live-API switch is on.
+    monkeypatch.setattr(assembly_svc, "ozon_live_api_enabled", lambda: True)
+    monkeypatch.setattr(assembly_svc, "build_ozon_provider", lambda: provider)
+    monkeypatch.setattr(print_asset_svc, "ozon_live_api_enabled", lambda: True)
+    monkeypatch.setattr(print_asset_svc, "build_ozon_provider", lambda: provider)
+
+    user = SimpleNamespace(tenant_id=order.tenant_id, id=uuid.uuid4())
+
+    with pytest.raises(HTTPException) as first_error:
+        await retry_fbs_packing_box_qr(supply.id, boxes[0].id, user, db_session)
+    assert first_error.value.status_code == 502
+    detail = first_error.value.detail
+    assert detail["code"] == "ozon_upstream_error"
+    assert detail["message"] and detail["message"] != detail["code"]
+
+    ship_calls = [path for path, _ in transport.endpoint_calls if path.endswith("/ship")]
+    assert len(ship_calls) == 1
+
+    await db_session.refresh(order)
+    assert order.meta_details_json["ozon_assembly"]["posting_numbers"] == ["POSTING-1", "POSTING-2"]
+
+    # Ozon now reports the posting as shipped, same as the real flow: a second
+    # retry-qr must not resend /ship, only re-read and re-try the label.
+    transport.endpoint_responses["/v3/posting/fbs/get"] = {
+        "result": {"posting_number": "POSTING", "status": "awaiting_deliver"}
+    }
+    with pytest.raises(HTTPException) as second_error:
+        await retry_fbs_packing_box_qr(supply.id, boxes[0].id, user, db_session)
+    assert second_error.value.status_code == 502
+    assert second_error.value.detail["code"] == "ozon_upstream_error"
+
+    ship_calls_after_retry = [
+        path for path, _ in transport.endpoint_calls if path.endswith("/ship")
+    ]
+    assert len(ship_calls_after_retry) == 1

@@ -508,6 +508,10 @@ async def auto_assign_ozon_positions(
     nothing left to place.  create_boxes has no upper bound on `count`
     itself — the API's 100-per-request cap is only a request schema limit —
     so this can create more than 100 boxes in one call.
+
+    Returns only the boxes this call created (empty when there was nothing
+    to place), so a caller can report exactly how many were added — the
+    supply's full box list is unaffected and already available separately.
     """
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
@@ -516,7 +520,7 @@ async def auto_assign_ozon_positions(
 
     positions = await _unassigned_ozon_positions(session, tenant_id, supply_id)
     if not positions:
-        return await _load_boxes(session, tenant_id, supply_id)
+        return []
 
     before_number = int(
         await session.scalar(
@@ -550,7 +554,10 @@ async def auto_assign_ozon_positions(
             session, tenant_id, supply_id, box, [position.id], actor_user_id
         )
 
-    return await _load_boxes(session, tenant_id, supply_id)
+    # _assign_ozon_positions expired each box's .items as it went, so reload
+    # fresh (eager-loaded) box objects rather than returning the stale ones.
+    reloaded = await _load_boxes(session, tenant_id, supply_id)
+    return [box for box in reloaded if box.box_number > before_number]
 
 
 async def _unassigned_ozon_positions(

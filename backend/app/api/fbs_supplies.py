@@ -731,6 +731,14 @@ class FbsWorkspaceOut(BaseModel):
     server_now: str
 
 
+class FbsAutoAssignBoxesOut(FbsWorkspaceOut):
+    """WMS-526 F2: same workspace snapshot as every other box operation, plus
+    how many boxes this specific auto-assign call created (not the supply's
+    total box count, which the base `boxes` field already carries)."""
+
+    created_boxes: int
+
+
 class FbsPickScanLocationBody(BaseModel):
     location_barcode: str = Field(min_length=1, max_length=64)
 
@@ -2019,7 +2027,7 @@ async def retry_fbs_packing_box_qr(
                     supply_id,
                     box_id,
                 )
-                await request_supply_print_batch(
+                label_result = await request_supply_print_batch(
                     session,
                     user.tenant_id,
                     supply_id,
@@ -2028,6 +2036,27 @@ async def retry_fbs_packing_box_qr(
                     retry_missing=True,
                     http_client=http_client,
                 )
+                # request_supply_print_batch swallows a per-order label fetch
+                # failure into order_errors instead of raising, so the caller
+                # has to check it explicitly — otherwise the operator gets a
+                # bare 200 with no reason the label never showed up.
+                label_error = next(
+                    (err for err in label_result.order_errors if err.order_id == order_id),
+                    None,
+                )
+                if label_error is not None:
+                    # The assembly (ozon_assembly marker) already committed
+                    # inside assemble_box_order; this commit only persists the
+                    # label attempt's own state (sticker_status, print asset)
+                    # before surfacing the error.
+                    await session.commit()
+                    raise_fbs_http(
+                        status.HTTP_403_FORBIDDEN
+                        if label_error.code == "ozon_account_blocked"
+                        else status.HTTP_502_BAD_GATEWAY,
+                        label_error.code,
+                        message=label_error.message,
+                    )
             else:
                 await packing_box_svc.retry_box_qr(
                     session, user.tenant_id, supply_id, box_id, http_client
@@ -2048,22 +2077,23 @@ async def retry_fbs_packing_box_qr(
 
 @router.post(
     "/{supply_id}/boxes/auto-assign",
-    response_model=FbsWorkspaceOut,
+    response_model=FbsAutoAssignBoxesOut,
     summary="Auto-assign every unboxed Ozon position into a new box each",
 )
 async def auto_assign_fbs_packing_boxes(
     supply_id: uuid.UUID,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> FbsWorkspaceOut:
+) -> FbsAutoAssignBoxesOut:
     try:
-        await packing_box_svc.auto_assign_ozon_positions(
+        created_boxes = await packing_box_svc.auto_assign_ozon_positions(
             session, user.tenant_id, supply_id, actor_user_id=user.id
         )
     except packing_box_svc.FbsPackingBoxError as exc:
         _raise_from_packing_box_service(exc)
     await session.commit()
-    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+    workspace = await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+    return FbsAutoAssignBoxesOut(**workspace.model_dump(), created_boxes=len(created_boxes))
 
 
 async def _workspace_after_packing_box_action(

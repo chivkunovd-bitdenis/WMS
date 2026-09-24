@@ -9,11 +9,13 @@ from __future__ import annotations
 import itertools
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.fbs_supplies import auto_assign_fbs_packing_boxes
 from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
@@ -209,8 +211,7 @@ async def test_repeat_call_does_not_duplicate_boxes_or_positions(db_session: Asy
     second = await boxes_svc.auto_assign_ozon_positions(
         db_session, tenant.id, supply.id, actor_user_id=None
     )
-    assert len(second) == 1
-    assert [b.id for b in second] == [b.id for b in first]
+    assert second == []
 
     boxes = await _boxes_for_supply(db_session, supply.id)
     assert len(boxes) == 1
@@ -273,10 +274,9 @@ async def test_partial_layout_and_existing_empty_box_are_left_alone(
     )
 
     # Only the still-unboxed second position of the split order got a new box.
-    assert len(boxes) == 4
-    new_boxes = [box for box in boxes if box.box_number > 3]
-    assert len(new_boxes) == 1
-    assert [item.order_product_id for item in new_boxes[0].items] == [split_positions[1].id]
+    assert len(boxes) == 1
+    assert boxes[0].box_number > 3
+    assert [item.order_product_id for item in boxes[0].items] == [split_positions[1].id]
 
     # Existing boxes untouched: manual assignment intact, empty box still empty.
     items = await _box_items_for_supply(db_session, supply.id)
@@ -402,3 +402,33 @@ async def test_failure_partway_leaves_no_new_boxes_or_assignments(
         select(func.count(FbsPackingBox.id)).where(FbsPackingBox.supply_id == supply.id)
     )
     assert remaining_boxes == 0
+
+
+@pytest.mark.asyncio
+async def test_endpoint_reports_boxes_created_by_this_call(db_session: AsyncSession) -> None:
+    """WMS-526 F2: the response carries how many boxes THIS call created, not
+    the supply's running total, so a repeat call correctly reports 0.
+
+    One order with three positions (not three orders): get_supply_workspace's
+    nearest_deadline comparison (app/services/fbs_workspace_service.py:145)
+    raises "can't compare offset-naive and offset-aware datetimes" as soon as
+    two or more ORM-seeded orders exist in the same SQLite test session —
+    reproduced independently of this change (single order, no comparison,
+    or two-plus orders freshly built with plain datetime.now(UTC) deadlines,
+    both crash the same way before this call is ever reached). That is a
+    pre-existing gap in the workspace builder, not in auto-assign, so this
+    test sticks to one order to stay clear of it.
+    """
+    tenant, supply = await _ozon_supply(db_session)
+    order = await _order(db_session, tenant, supply, external_id="multi-position")
+    await _positions(db_session, order, [1, 1, 1])
+    await db_session.commit()
+    user = SimpleNamespace(tenant_id=tenant.id, id=uuid.uuid4())
+
+    first = await auto_assign_fbs_packing_boxes(supply.id, user, db_session)
+    assert first.created_boxes == 3
+    assert len(first.boxes) == 3
+
+    second = await auto_assign_fbs_packing_boxes(supply.id, user, db_session)
+    assert second.created_boxes == 0
+    assert len(second.boxes) == 3
