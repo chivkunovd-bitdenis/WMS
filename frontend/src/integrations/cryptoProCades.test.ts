@@ -1,9 +1,21 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CryptoProCadesAdapter, CryptoProError } from './cryptoProCades'
 
 const CERT_THUMBPRINT = 'AABBCCDD'
-const PAYLOAD_BASE64 = 'eyJiIjoyLCJhIjoxfQ=='
+const DOCUMENT_CRYPTO_FIXTURE = JSON.parse(
+  readFileSync(
+    resolve(
+      process.cwd(),
+      'src/integrations/fixtures/wms517WithdrawalDocumentCryptoFixture.json',
+    ),
+    'utf8',
+  ),
+) as { payload_utf8: string; payload_base64: string; payload_sha256: string }
+const PAYLOAD_BASE64 = DOCUMENT_CRYPTO_FIXTURE.payload_base64
 
 type FakeOptions = {
   hasPrivateKey?: boolean
@@ -391,6 +403,9 @@ describe('CryptoPro exact detached document signing', () => {
     expect(fake.signer.propset_KeyPin).not.toHaveBeenCalled()
     expect(fake.privateKeyRead).not.toHaveBeenCalled()
     expect(fake.store.Close).toHaveBeenCalledTimes(1)
+    expect(Buffer.from(PAYLOAD_BASE64, 'base64').toString('utf8')).toBe(
+      DOCUMENT_CRYPTO_FIXTURE.payload_utf8,
+    )
   })
 
   it('fails before signer creation when certificate chain validation fails', async () => {
