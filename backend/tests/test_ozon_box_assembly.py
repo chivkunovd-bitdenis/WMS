@@ -854,39 +854,76 @@ async def _extra_order_in_same_supply(
     return position_b
 
 
+async def _box_actual_order_id(session: AsyncSession, box_id: uuid.UUID) -> uuid.UUID | None:
+    order_ids = list(
+        (
+            await session.scalars(
+                select(FbsPackingBoxItem.fbs_order_id)
+                .where(FbsPackingBoxItem.box_id == box_id)
+                .distinct()
+            )
+        ).all()
+    )
+    return order_ids[0] if len(order_ids) == 1 else None
+
+
 async def test_error_follows_the_order_actually_locked_after_box_contents_change(
-    db_session: AsyncSession,
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """WMS-526 F5, remainder (Astra round 3): assemble_box_order determines
+    """WMS-526 F5, remainder (Astra round 3/4): assemble_box_order determines
     the order strictly under its own supply/order lock, and retry-qr no
-    longer reads the box's order beforehand at all — there is nothing left
-    to go stale between a pre-lock read and the lock, because that read is
-    gone. Reproduces the review's exact interleaving: another operator
-    clears the box that held order A's first position and puts order B's
-    (same supply) position there instead, using the same clear_box/
-    assign_orders the box screen itself uses, each in its own committed
-    session, before the handler even starts. The failure (live API off)
-    must be attributed to B — the order the box actually held when
-    assemble_box_order ran — never to A."""
+    longer reads the box's order beforehand at all. Astra round 4 (T1) found
+    that changing the box's contents *before calling the handler* does not
+    exercise this at all — both the fixed and the previously defective code
+    would already see the final state and (accidentally) pass. The box must
+    still hold A's original position when retry_fbs_packing_box_qr is
+    entered; the reassignment has to happen *inside* the running request,
+    after the handler has started but before the real assemble_box_order
+    (and its supply/order lock) runs. Reproduced here by monkeypatching
+    ozon_assembly_svc.assemble_box_order to first run the real
+    clear_box/assign_orders (each in its own committed session, exactly
+    what the box screen itself calls) and only then hand off to the
+    original service function. The failure (live API off) must land on B —
+    the order the box actually held when the real assembly ran — never A."""
     order_a, supply, boxes_a = await _seed(db_session)
     position_b = await _extra_order_in_same_supply(db_session, order_a, supply.id)
     tenant_id, supply_id = order_a.tenant_id, supply.id
     changed_box_id = boxes_a[0].id
+    order_a_id = order_a.id
+    order_b_id = position_b.order_id
+    position_b_id = position_b.id
 
-    async with SessionLocal() as clearing_session:
-        await boxes_svc.clear_box(clearing_session, tenant_id, supply_id, changed_box_id)
-        await clearing_session.commit()
-    async with SessionLocal() as assigning_session:
-        await boxes_svc.assign_orders(
-            assigning_session,
-            tenant_id,
-            supply_id,
-            changed_box_id,
-            [],
-            actor_user_id=None,
-            order_product_ids=[position_b.id],
+    # Box still holds A's original position at this point — unlike the
+    # version Astra round 4 flagged, nothing about the box has changed yet.
+    assert await _box_actual_order_id(db_session, changed_box_id) == order_a_id
+
+    real_assemble_box_order = assembly_svc.assemble_box_order
+
+    async def reassign_box_then_assemble(
+        session: AsyncSession, call_tenant_id: uuid.UUID, call_supply_id: uuid.UUID,
+        call_box_id: uuid.UUID, **kwargs: object,
+    ) -> uuid.UUID:
+        # Runs from inside the handler, after it has started but strictly
+        # before the real service (and its supply/order lock) does anything.
+        async with SessionLocal() as clearing_session:
+            await boxes_svc.clear_box(clearing_session, tenant_id, supply_id, changed_box_id)
+            await clearing_session.commit()
+        async with SessionLocal() as assigning_session:
+            await boxes_svc.assign_orders(
+                assigning_session,
+                tenant_id,
+                supply_id,
+                changed_box_id,
+                [],
+                actor_user_id=None,
+                order_product_ids=[position_b_id],
+            )
+            await assigning_session.commit()
+        return await real_assemble_box_order(
+            session, call_tenant_id, call_supply_id, call_box_id, **kwargs
         )
-        await assigning_session.commit()
+
+    monkeypatch.setattr(assembly_svc, "assemble_box_order", reassign_box_then_assemble)
 
     user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
     with pytest.raises(HTTPException) as error:
@@ -898,26 +935,34 @@ async def test_error_follows_the_order_actually_locked_after_box_contents_change
         "code": "ozon_live_handoff_blocked",
         "message": "Обмен с Ozon выключен настройкой.",
     }
-    box_rows = await _workspace_box_rows(db_session, tenant_id, supply_id)
-    assert box_rows[str(changed_box_id)]["ozon_label_error"] == expected_error
-    refreshed_a = await db_session.get(FbsOrder, order_a.id)
-    assert refreshed_a is not None
-    assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
-    refreshed_b = await db_session.get(FbsOrder, position_b.order_id)
-    assert refreshed_b is not None
-    assert (refreshed_b.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) == (
-        expected_error
-    )
+    async with SessionLocal() as check_session:
+        assert await _box_actual_order_id(check_session, changed_box_id) == order_b_id
+        box_rows = await _workspace_box_rows(check_session, tenant_id, supply_id)
+        assert box_rows[str(changed_box_id)]["ozon_label_error"] == expected_error
+        refreshed_a = await check_session.get(FbsOrder, order_a_id)
+        assert refreshed_a is not None
+        assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
+        refreshed_b = await check_session.get(FbsOrder, order_b_id)
+        assert refreshed_b is not None
+        assert (refreshed_b.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) == (
+            expected_error
+        )
 
 
 async def test_error_on_a_box_assigned_after_being_empty_follows_the_new_order(
-    db_session: AsyncSession,
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """WMS-526 F5, remainder: same fix, starting from a box that was empty
-    (never held any order) rather than one cleared of a previous order."""
+    """WMS-526 F5, remainder: same fix and the same T1 correction, starting
+    from a box that was still empty when the handler was entered (never
+    held any order) rather than one cleared of a previous order — the
+    reassignment (assign_orders only) again happens inside the running
+    request, before the real assembly locks anything."""
     order_a, supply, _boxes_a = await _seed(db_session)
     position_b = await _extra_order_in_same_supply(db_session, order_a, supply.id)
     tenant_id, supply_id = order_a.tenant_id, supply.id
+    order_a_id = order_a.id
+    order_b_id = position_b.order_id
+    position_b_id = position_b.id
 
     async with SessionLocal() as create_session:
         new_boxes = await boxes_svc.create_boxes(
@@ -925,28 +970,50 @@ async def test_error_on_a_box_assigned_after_being_empty_follows_the_new_order(
         )
         empty_box_id = new_boxes[-1].id
         await create_session.commit()
-    async with SessionLocal() as assigning_session:
-        await boxes_svc.assign_orders(
-            assigning_session,
-            tenant_id,
-            supply_id,
-            empty_box_id,
-            [],
-            actor_user_id=None,
-            order_product_ids=[position_b.id],
+    # Still empty at handler entry.
+    assert await _box_actual_order_id(db_session, empty_box_id) is None
+
+    real_assemble_box_order = assembly_svc.assemble_box_order
+
+    async def assign_to_empty_box_then_assemble(
+        session: AsyncSession, call_tenant_id: uuid.UUID, call_supply_id: uuid.UUID,
+        call_box_id: uuid.UUID, **kwargs: object,
+    ) -> uuid.UUID:
+        async with SessionLocal() as assigning_session:
+            await boxes_svc.assign_orders(
+                assigning_session,
+                tenant_id,
+                supply_id,
+                empty_box_id,
+                [],
+                actor_user_id=None,
+                order_product_ids=[position_b_id],
+            )
+            await assigning_session.commit()
+        return await real_assemble_box_order(
+            session, call_tenant_id, call_supply_id, call_box_id, **kwargs
         )
-        await assigning_session.commit()
+
+    monkeypatch.setattr(assembly_svc, "assemble_box_order", assign_to_empty_box_then_assemble)
 
     user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
     with pytest.raises(HTTPException) as error:
         await retry_fbs_packing_box_qr(supply_id, empty_box_id, user, db_session)
     assert error.value.status_code == 503
 
-    box_rows = await _workspace_box_rows(db_session, tenant_id, supply_id)
-    assert box_rows[str(empty_box_id)]["ozon_label_error"] == {
+    expected_error = {
         "code": "ozon_live_handoff_blocked",
         "message": "Обмен с Ozon выключен настройкой.",
     }
-    refreshed_a = await db_session.get(FbsOrder, order_a.id)
-    assert refreshed_a is not None
-    assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
+    async with SessionLocal() as check_session:
+        assert await _box_actual_order_id(check_session, empty_box_id) == order_b_id
+        box_rows = await _workspace_box_rows(check_session, tenant_id, supply_id)
+        assert box_rows[str(empty_box_id)]["ozon_label_error"] == expected_error
+        refreshed_a = await check_session.get(FbsOrder, order_a_id)
+        assert refreshed_a is not None
+        assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
+        refreshed_b = await check_session.get(FbsOrder, order_b_id)
+        assert refreshed_b is not None
+        assert (refreshed_b.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) == (
+            expected_error
+        )
