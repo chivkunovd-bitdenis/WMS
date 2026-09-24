@@ -1867,6 +1867,9 @@ export function FfFbsSupplyWorkspace({
     const next = await run(
       () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
       '',
+      // WMS-526 R12: причина отказа сохраняется у заказа на сервере — перечитываем
+      // снимок, чтобы красная строка у коробов заказа появилась сразу.
+      isOzonSupply ? () => refreshAfterLostRace() : undefined,
     )
     if (!next) return
     setStage('boxes')
@@ -1884,7 +1887,6 @@ export function FfFbsSupplyWorkspace({
     ozonAutoBoxesRunningRef.current = true
     const session = beginWorkspaceWrite()
     const supplyIdAtStart = workspace.supply.id
-    const boxIdsBefore = new Set(workspace.boxes.map((box) => box.id))
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -1900,7 +1902,7 @@ export function FfFbsSupplyWorkspace({
     }
     try {
       let write = beginWorkspaceWrite()
-      let assigned: FbsWorkspace
+      let assigned: FbsWorkspace & { created_boxes: number }
       try {
         assigned = await autoAssignFbsOzonBoxes(token, authHeaders, supplyIdAtStart)
       } catch (cause) {
@@ -1908,7 +1910,9 @@ export function FfFbsSupplyWorkspace({
         return
       }
       if (!applyResponse(write, assigned)) return
-      const created = assigned.boxes.filter((box) => !boxIdsBefore.has(box.id)).length
+      // Число коробов, созданных именно этим вызовом, называет сервер: разница
+      // со своим снимком ошиблась бы, если короба добавил другой оператор.
+      const created = assigned.created_boxes
       const { labelTargets } = fbsOzonAutoBoxesPlan(assigned.orders, assigned.boxes)
       let received = 0
       const failures: Array<{ externalOrderId: string | null; reason: string }> = []
@@ -3506,6 +3510,11 @@ export function FfFbsSupplyWorkspace({
                               Короб {box.box_number} <Box component="span" sx={{ color: 'text.secondary' }}>· {boxQuantity} шт</Box>
                             </Typography>
                             {isOzonSupply && assigned.length > 0 ? <Typography variant="caption" color="text.secondary">Ozon №{assigned[0].external_order_id}{remainingOrderQuantity > 0 ? ` · осталось разложить ${remainingOrderQuantity} шт` : ''}</Typography> : null}
+                            {isOzonSupply && assigned.length > 0 && box.ozon_label_error ? (
+                              <Typography variant="caption" color="error" sx={{ display: 'block', overflowWrap: 'anywhere' }} data-testid={`fbs-box-ozon-label-error-${box.id}`}>
+                                Ozon не отдал этикетку: {box.ozon_label_error.message || box.ozon_label_error.code}
+                              </Typography>
+                            ) : null}
                           </Box>
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <Button
