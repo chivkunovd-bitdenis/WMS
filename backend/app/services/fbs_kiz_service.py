@@ -230,7 +230,7 @@ class FbsKizCommitRow:
 class _FbsKizCommitOutcome:
     meta_status: str | None
     newly_bound: bool
-    bound_kiz: str
+    bound_kiz: str | None
     marking_id: uuid.UUID | None
     associate_scan_auto_print: bool = False
 
@@ -1343,7 +1343,10 @@ async def _commit_one_kiz_pair(
             return _FbsKizCommitOutcome(
                 meta_status=ozon_result.meta_status,
                 newly_bound=ozon_result.newly_bound,
-                bound_kiz=ozon_result.bound_kiz,
+                # WMS-514 exposes the canonical code only for its WB reprint
+                # flow. Ozon keeps the same bind result without adding the
+                # full scanned code to the shared HTTP response.
+                bound_kiz=None,
                 marking_id=None,
             )
         except OzonKizError as exc:
