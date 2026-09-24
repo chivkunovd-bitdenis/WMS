@@ -718,6 +718,7 @@ async def record_pending_kiz_operation(
     error_code: str,
     actor_user_id: uuid.UUID | None,
     idempotency_key: str,
+    scan_auto_print_id: uuid.UUID | None = None,
 ) -> None:
     marking.meta_status = META_STATUS_UNKNOWN
     marking.check_status = CHECK_STATUS_ERROR
@@ -740,6 +741,11 @@ async def record_pending_kiz_operation(
             local_entity_type="fbs_order_marking", local_entity_id=marking.id,
             wb_object_kind="order", wb_object_id=str(order.wb_order_id),
             created_by_user_id=actor_user_id,
+            request_summary_json=(
+                {"scan_auto_print_id": str(scan_auto_print_id)}
+                if scan_auto_print_id is not None
+                else None
+            ),
         )
         session.add(operation)
     # A later uncertain retry for the same binding reuses its existing key.
@@ -748,6 +754,31 @@ async def record_pending_kiz_operation(
     operation.error_context_json = None
     operation.confirmed_at = None
     operation.failed_at = None
+
+
+async def kiz_operation_for_attempt(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    idempotency_key: str,
+) -> FbsWbOperation | None:
+    """Return the durable WB bind attempt for this exact local write."""
+    operation_key = hashlib.sha256(
+        f"{idempotency_key}:{order.id}:{marking.id}".encode()
+    ).hexdigest()
+    result = await session.execute(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == order.tenant_id,
+            FbsWbOperation.seller_id == order.seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.idempotency_key == operation_key,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+        )
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
 
 
 async def pending_kiz_operation(

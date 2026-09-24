@@ -457,6 +457,55 @@ async def test_successful_product_bind_atomically_prepares_reprint_recovery(
     }
 
 
+async def test_bound_target_event_stays_out_of_target_and_neighbour_history(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, barcode = await _seed_wb_supply(
+        async_client, order_count=2
+    )
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    selected = await async_client.post(
+        url,
+        headers=headers,
+        json={
+            "barcode": barcode,
+            "idempotency_key": "history-hidden-bound-target",
+            "print_qr": False,
+            "print_chz": False,
+            "reprint_chz": True,
+        },
+    )
+    assert selected.status_code == 200, selected.text
+    await _bind_canonical_kiz(
+        supply_id,
+        "010460000000000121WMS514-HISTORY-HIDDEN",
+        scan_id=uuid.UUID(selected.json()["scan_id"]),
+    )
+
+    async with SessionLocal() as session:
+        order_ids = list(
+            await session.scalars(
+                select(FbsOrder.id)
+                .where(FbsOrder.supply_id == supply_id)
+                .order_by(FbsOrder.wb_order_id)
+            )
+        )
+    assert len(order_ids) == 2
+    histories = [
+        await async_client.get(
+            f"/operations/fbs-orders/{order_id}/history",
+            headers=headers,
+        )
+        for order_id in order_ids
+    ]
+    assert all(response.status_code == 200 for response in histories)
+    assert all(
+        event["title"] != "data_changed"
+        for response in histories
+        for event in response.json()["events"]
+    )
+
+
 async def test_reprint_product_recovers_only_released_canonical_kiz(
     async_client: AsyncClient,
 ) -> None:

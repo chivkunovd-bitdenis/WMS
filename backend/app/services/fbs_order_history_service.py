@@ -252,6 +252,7 @@ async def order_history(
         if payload.get("kind") in {
             "wms514_scan_auto_print",
             "wms514_scan_auto_print_target",
+            "wms514_scan_auto_print_bound_target",
         }:
             continue
         # Строчные события поставки касаются конкретного заказа. Пока ссылки на

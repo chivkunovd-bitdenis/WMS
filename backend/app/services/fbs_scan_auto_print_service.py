@@ -517,12 +517,11 @@ async def record_bound_reprint_target(
     order_id: uuid.UUID,
     marking_id: uuid.UUID,
 ) -> None:
-    """Atomically associate a newly-bound marking with its product scan.
+    """Atomically associate a proven new binding with its product scan.
 
-    The caller holds the order lock and commits this event in the same
-    transaction as the marking.  A generic duplicate commit is deliberately
-    not eligible: only the transaction that created/replaced the marking calls
-    this function.
+    The caller holds the order lock and commits this event either with the new
+    marking or with the WB reconciliation that proved an earlier uncertain
+    write.  A generic duplicate commit is deliberately not eligible.
     """
     selection_event = await validate_bound_reprint_context(
         session,

@@ -3770,6 +3770,26 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         wb_barcode="UNCERTAIN-BAR",
         with_packaging=True,
     )
+    scan_auto_print_url = (
+        f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    )
+    scan_auto_print_body = {
+        "barcode": order.product_barcode,
+        "idempotency_key": "uncertain-product-scan",
+        "print_qr": False,
+        "print_chz": False,
+        "reprint_chz": True,
+    }
+    scan_auto_print_id: uuid.UUID | None = None
+    if failure == "transport" and resolution == "filled":
+        selected = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert selected.status_code == 200, selected.text
+        assert selected.json()["order_id"] == str(order.order_id)
+        scan_auto_print_id = uuid.UUID(selected.json()["scan_id"])
     value = _cis("UNCERTAIN")
     if failure != "read":
         async with SessionLocal() as session:
@@ -3817,9 +3837,16 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
     monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
     monkeypatch.setattr(kiz_svc, "delete_marketplace_order_meta", fake_delete)
+    pair: dict[str, Any] = {
+        "order_id": str(order.order_id),
+        "value": value,
+        "confirmed": False,
+    }
+    if scan_auto_print_id is not None:
+        pair["scan_auto_print_id"] = str(scan_auto_print_id)
     payload = {
         "idempotency_key": "uncertain-binding",
-        "pairs": [{"order_id": str(order.order_id), "value": value, "confirmed": False}],
+        "pairs": [pair],
     }
     response = await async_client.post(
         "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
@@ -3834,6 +3861,25 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         return
     assert response.json()[0]["code"] == "wb_pending_confirmation"
     assert "сверка" in response.json()[0]["message"]
+    if scan_auto_print_id is not None:
+        unresolved = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert unresolved.json()["reprint_recovery"] == {
+            "status": "not_attempted"
+        }
+        blocked_claim = await async_client.post(
+            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
+            headers=headers,
+            json={"attempt_key": "still-unknown"},
+        )
+        assert blocked_claim.json() == {
+            "claimed": False,
+            "started": False,
+            "kiz": None,
+        }
     async with SessionLocal() as session:
         marking = (
             await session.scalars(
@@ -3918,6 +3964,23 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         )
         assert duplicate.status_code == 409, duplicate.text
         assert duplicate.json()["detail"]["code"] == "duplicate_kiz"
+    if scan_auto_print_id is not None:
+        recovered = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert recovered.json()["reprint_recovery"] == {"status": "available"}
+        recovered_claim = await async_client.post(
+            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
+            headers=headers,
+            json={"attempt_key": "reconciled-exact-bind"},
+        )
+        assert recovered_claim.json() == {
+            "claimed": True,
+            "started": False,
+            "kiz": value,
+        }
     assert calls.count("put") == 1
     async with SessionLocal() as session:
         operation = await session.get(FbsWbOperation, operation_id)

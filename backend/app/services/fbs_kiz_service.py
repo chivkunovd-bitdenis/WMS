@@ -31,6 +31,7 @@ from app.models.fbs_order import (
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
@@ -232,6 +233,7 @@ class _FbsKizCommitOutcome:
     newly_bound: bool
     bound_kiz: str
     marking_id: uuid.UUID | None
+    associate_scan_auto_print: bool = False
 
 
 @dataclass(frozen=True)
@@ -1352,6 +1354,28 @@ async def _commit_one_kiz_pair(
                 raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
             if operation.state == WB_OPERATION_STATE_FAILED:
                 raise FbsKizError("meta_validation_fail", persist_failure_state=True)
+        associate_scan_auto_print = False
+        if pair.scan_auto_print_id is not None and actor_user_id is not None:
+            exact_operation = await marking_svc.kiz_operation_for_attempt(
+                session,
+                order,
+                current,
+                idempotency_key,
+            )
+            summary = (
+                exact_operation.request_summary_json
+                if exact_operation is not None
+                else None
+            ) or {}
+            associate_scan_auto_print = bool(
+                exact_operation is not None
+                and exact_operation.state == WB_OPERATION_STATE_CONFIRMED
+                and exact_operation.created_by_user_id == actor_user_id
+                and exact_operation.request_hash
+                == hashlib.sha256(current.value.encode()).hexdigest()
+                and summary.get("scan_auto_print_id")
+                == str(pair.scan_auto_print_id)
+            )
         code = await _get_marking_code_by_cis(session, tenant_id, validated.value, for_update=True)
         if (
             code is not None
@@ -1371,6 +1395,7 @@ async def _commit_one_kiz_pair(
             newly_bound=False,
             bound_kiz=current.value,
             marking_id=current.id,
+            associate_scan_auto_print=associate_scan_auto_print,
         )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
@@ -1443,6 +1468,7 @@ async def _commit_one_kiz_pair(
         await marking_svc.record_pending_kiz_operation(
             session, order, marking, error_code=new_error.code,
             actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+            scan_auto_print_id=pair.scan_auto_print_id,
         )
         pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
     elif new_error is not None and current is not None:
@@ -1555,7 +1581,9 @@ async def commit_kiz_pairs(
                 http_client,
                 idempotency_key,
             )
-            if pair.scan_auto_print_id is not None and outcome.newly_bound:
+            if pair.scan_auto_print_id is not None and (
+                outcome.newly_bound or outcome.associate_scan_auto_print
+            ):
                 if actor_user_id is None or outcome.marking_id is None:
                     raise FbsKizError("scan_bound_marking_mismatch")
                 try:
