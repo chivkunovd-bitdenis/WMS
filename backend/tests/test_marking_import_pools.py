@@ -21,7 +21,6 @@ from app.models.marking_code import (
     MarkingPoolProduct,
 )
 from app.models.seller import Seller
-from app.services import marking_code_service as mc_svc
 from app.services import marking_code_service as marking_service
 
 
@@ -133,7 +132,7 @@ async def test_existing_cis_lookup_chunks_above_postgresql_parameter_limit() -> 
     session.scalars.return_value = empty_rows
     cis_codes = [f"cis-{index}" for index in range(65_536)]
 
-    existing = await mc_svc._existing_import_cis_codes(
+    existing = await marking_service._existing_import_cis_codes(
         session,
         uuid.uuid4(),
         cis_codes,
