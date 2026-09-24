@@ -181,6 +181,7 @@ Ozon:
           "publish": true,
           "mode": "units",
           "value": 30,
+          "units_configured": true,
           "marketplace": "wb",
           "external_warehouse_id": "501001",
           "wms_warehouse_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -195,6 +196,7 @@ Ozon:
           "publish": true,
           "mode": "percent",
           "value": 90,
+          "units_configured": false,
           "marketplace": "ozon",
           "external_warehouse_id": "1020005028840530",
           "wms_warehouse_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -220,6 +222,8 @@ Ozon:
 - `publish` — публикация этого товара только в этой привязке;
 - `mode` — ровно один режим: `percent` или `units`;
 - `value` — сохранённый процент либо сохранённый ручной потолок;
+- `units_configured` различает пустой поштучный лимит и явное число:
+  `false` означает пустое поле, `true` вместе с `value=0` — явно введённый ноль;
 - `on_hand`, `reserved`, `free_stock` — числа товара именно на связанном складе
   ФФ; глобальный резерв направления уже учтён;
 - `published_now` — серверный расчёт для текущего сохранённого правила:
@@ -350,12 +354,20 @@ Ozon:
       "11111111-1111-4111-8111-111111111111": {
         "publish": true,
         "mode": "units",
-        "value": 50
+        "value": 50,
+        "units_configured": true
       }
     }
   }
 }
 ```
+
+Чтобы очистить поштучный лимит и вернуть пустое поле, клиент отправляет тот же
+блок с `mode="units"`, `units_configured=false`; `value` при этом нормализуется
+сервером к нулю и не считается командой публикации нуля. `units_configured=true`
+с `value=0` сохраняет именно явный операторский ноль и включает правила WMS-483.
+Старый клиент WMS-469, который не передаёт `units_configured`, остаётся
+совместимым: для режима `units` переданный `value` считается явным значением.
 
 Если на связанном складе ФФ у первого товара свободно 50, а у второго 30,
 сервер сохраняет 30 каждому товару и отвечает фактически сохранённым состоянием:
@@ -428,7 +440,8 @@ Ozon:
       "11111111-1111-4111-8111-111111111111": {
         "publish": false,
         "mode": "units",
-        "value": 30
+        "value": 30,
+        "units_configured": true
       }
     }
   }

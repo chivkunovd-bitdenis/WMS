@@ -472,6 +472,110 @@ async def test_explicit_empty_by_binding_payload_changes_nothing(
 
 
 @pytest.mark.asyncio
+async def test_wms483_units_configured_distinguishes_blank_from_explicit_zero(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-483/WMS-469: blank units never become a managed zero on save/read."""
+    case = await _seed_case(db_session)
+    binding = case.bindings[0]
+    product = case.products[0]
+
+    explicit_zero = _rule_from_body(
+        ProductFbsRuleBody.model_validate(
+            {
+                "by_binding": {
+                    str(binding.id): {
+                        "publish": True,
+                        "mode": "units",
+                        "value": 0,
+                        "units_configured": True,
+                    }
+                }
+            }
+        )
+    )
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        explicit_zero,
+    )
+    refresh_zero_ids: set[uuid.UUID] = set()
+    assert await rules.publish_amounts_for_binding(
+        db_session,
+        binding,
+        [product],
+        refresh_zero_product_ids=refresh_zero_ids,
+    ) == {product.id: 0}
+    assert refresh_zero_ids == {product.id}
+    explicit_view = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+    assert explicit_view.by_binding[binding.id].units_configured is True
+    pool = await db_session.scalar(
+        select(FbsBindingStockPool).where(
+            FbsBindingStockPool.product_id == product.id,
+            FbsBindingStockPool.binding_id == binding.id,
+        )
+    )
+    assert pool is not None
+    assert pool.units_configured is True
+    assert pool.quantity == 0
+
+    blank = _rule_from_body(
+        ProductFbsRuleBody.model_validate(
+            {
+                "by_binding": {
+                    str(binding.id): {
+                        "publish": True,
+                        "mode": "units",
+                        "value": 0,
+                        "units_configured": False,
+                    }
+                }
+            }
+        )
+    )
+    await rules.set_rule_for_products(
+        db_session,
+        case.tenant.id,
+        [product.id],
+        blank,
+    )
+    refresh_zero_ids = set()
+    assert await rules.publish_amounts_for_binding(
+        db_session,
+        binding,
+        [product],
+        refresh_zero_product_ids=refresh_zero_ids,
+    ) == {}
+    assert refresh_zero_ids == set()
+    blank_view = await rules.get_rule_view(db_session, case.tenant.id, product.id)
+    assert blank_view.by_binding[binding.id].units_configured is False
+    assert blank_view.by_binding[binding.id].value == 0
+    await db_session.refresh(pool)
+    assert pool.units_configured is False
+    assert pool.quantity == 0
+
+
+def test_wms469_legacy_units_payload_defaults_to_configured() -> None:
+    """Old WMS-469 clients omit the field; their numeric units stay explicit."""
+    binding_id = uuid.uuid4()
+    parsed = _rule_from_body(
+        ProductFbsRuleBody.model_validate(
+            {
+                "by_binding": {
+                    str(binding_id): {
+                        "publish": True,
+                        "mode": "units",
+                        "value": 0,
+                    }
+                }
+            }
+        )
+    )
+    assert parsed.by_binding[binding_id].units_configured is True
+
+
+@pytest.mark.asyncio
 async def test_c31_off_on_preserves_manual_cap_after_stock_drop(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

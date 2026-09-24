@@ -68,6 +68,10 @@ class FbsBindingRule:
     publish: bool
     mode: Literal["percent", "units"]
     value: int
+    # WMS-483: в режиме штук отсутствие лимита и явный ноль — разные состояния.
+    # Default сохраняет совместимость с клиентами WMS-469, которые до объединения
+    # всегда присылали value и не знали отдельного признака.
+    units_configured: bool = True
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,7 @@ class FbsBindingRuleView:
     publish: bool
     mode: Literal["percent", "units"]
     value: int
+    units_configured: bool
     on_hand: int
     reserved: int
     free_stock: int
@@ -407,13 +412,16 @@ def _binding_rule_from_state(
         if pool.percent is None:
             mode: Literal["percent", "units"] = "units"
             value = int(pool.quantity or 0)
+            units_configured = bool(pool.units_configured or value > 0)
         else:
             mode = "percent"
             value = int(pool.percent)
+            units_configured = False
         return FbsBindingRule(
             publish=bool(pool.publish_enabled and binding.stock_sync_enabled and applicable),
             mode=mode,
             value=value,
+            units_configured=units_configured,
         )
 
     publish = (
@@ -423,17 +431,26 @@ def _binding_rule_from_state(
     )
     publish = bool(publish and binding.stock_sync_enabled and applicable)
     if product.fbs_units_mode:
+        value = int(pool.quantity or 0) if pool is not None else 0
         return FbsBindingRule(
             publish=publish,
             mode="units",
-            value=int(pool.quantity or 0) if pool is not None else 0,
+            value=value,
+            units_configured=bool(
+                pool is not None and (pool.units_configured or value > 0)
+            ),
         )
     percent = (
         int(product.fbs_percent or 0)
         if product.fbs_same_everywhere
         else int(pool.percent or 0) if pool is not None else 0
     )
-    return FbsBindingRule(publish=publish, mode="percent", value=percent)
+    return FbsBindingRule(
+        publish=publish,
+        mode="percent",
+        value=percent,
+        units_configured=False,
+    )
 
 
 def rule_from_product(
@@ -503,10 +520,17 @@ def _binding_has_rule(
     """
     pool = pool_rows.get(binding_id)
     if pool is not None and pool.publish_enabled is not None:
-        return bool(pool.publish_enabled)
+        if not pool.publish_enabled:
+            return False
+        if pool.percent is not None:
+            # WMS-469 D6: включённые 0% — явное активное правило нуля.
+            return True
+        return bool(pool.units_configured or int(pool.quantity or 0) > 0)
     if product.fbs_units_mode:
         # Режим штук: само значение живёт в строке этой привязки. Новая
         # привязка без строки пула не получает неявную команду опубликовать ноль.
+        # Legacy-строка с quantity=0 сохраняет прежний одноразовый переходный
+        # ноль, но units_configured ниже не включает для неё периодический цикл.
         return pool is not None
     if product.fbs_percent is None:
         return False
@@ -533,6 +557,8 @@ def split_amounts(
         if binding_rule is not None:
             if not binding_rule.publish:
                 amounts[binding.id] = 0
+                continue
+            if binding_rule.mode == "units" and not binding_rule.units_configured:
                 continue
             share = (
                 amount_from_percent(available, binding_rule.value)
@@ -723,6 +749,9 @@ async def get_rule_views(
                     publish=bool(binding_rule.publish and applicable),
                     mode=binding_rule.mode,
                     value=binding_rule.value,
+                    units_configured=(
+                        binding_rule.mode == "units" and binding_rule.units_configured
+                    ),
                     on_hand=local_on_hand,
                     reserved=local_reserved,
                     free_stock=local_free,
@@ -938,6 +967,14 @@ async def set_rule_for_products(
                 )
 
             saved_rules = dict(rule.by_binding)
+            saved_rules = {
+                binding_id: replace(binding_rule, units_configured=False)
+                if binding_rule.mode == "percent"
+                else replace(binding_rule, value=0)
+                if not binding_rule.units_configured
+                else binding_rule
+                for binding_id, binding_rule in saved_rules.items()
+            }
             clamps: dict[uuid.UUID, FbsRuleClamp] = {}
             for binding_id, binding_rule in rule.by_binding.items():
                 if binding_rule.value < 0:
@@ -950,6 +987,8 @@ async def set_rule_for_products(
                     continue
                 if binding_rule.mode != "units":
                     raise FbsStockRuleError("invalid_rule_mode")
+                if not binding_rule.units_configured:
+                    continue
                 # A stock event may make an already saved operator cap larger
                 # than today's free stock. OFF/ON must preserve that cap (R8,
                 # R14); clamp only a newly entered manual value.
@@ -1039,6 +1078,7 @@ async def set_rule_for_products(
                     pool.publish_enabled = binding_rule.publish
                     if binding_rule.mode == "percent":
                         pool.percent = binding_rule.value
+                        pool.units_configured = False
                         # У явного нового правила источник один. У нетронутой
                         # legacy-строки сохраняем неактивное старое число: оно
                         # не влияет на процент, но старый скрытый endpoint
@@ -1047,7 +1087,10 @@ async def set_rule_for_products(
                             pool.quantity = 0
                     else:
                         pool.percent = None
-                        pool.quantity = binding_rule.value
+                        pool.units_configured = binding_rule.units_configured
+                        pool.quantity = (
+                            binding_rule.value if binding_rule.units_configured else 0
+                        )
                     pool.updated_by = updated_by
 
                 product.fbs_stock_sync_enabled = any(
@@ -1339,22 +1382,16 @@ async def publish_amounts_for_binding(
         amounts[product.id] = split.get(binding.id, 0)
         # WMS-483: use the same free-stock snapshot as the published amount.
         # A missing allocation is not an explicit zero-unit operator limit.
-        pool = pool_rows.get(binding.id)
-        if rule.units_mode:
-            has_binding_rule = pool is not None and (
-                pool.units_configured or int(pool.quantity or 0) > 0
-            )
-        elif rule.same_everywhere:
-            has_binding_rule = rule.percent > 0
-        else:
-            has_binding_rule = pool is not None and int(pool.percent or 0) > 0
+        has_binding_rule = _binding_has_rule(product, binding.id, pool_rows)
         explicit_zero_units = (
-            rule.units_mode and pool is not None and pool.units_configured and pool.quantity == 0
+            binding_rule.mode == "units"
+            and binding_rule.units_configured
+            and binding_rule.value == 0
         )
         if (
             refresh_zero_product_ids is not None
             and binding.marketplace == "wb"
-            and rule.publish
+            and binding_rule.publish
             and has_binding_rule
             and (free == 0 or explicit_zero_units)
         ):

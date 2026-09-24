@@ -379,9 +379,14 @@ class ProductFbsBindingRuleBody(BaseModel):
     publish: bool
     mode: Literal["percent", "units"]
     value: int = Field(ge=0)
+    # WMS-483: false в режиме units означает «поле пустое», а true + value=0
+    # означает явно сохранённый оператором нулевой лимит. Старый WMS-469
+    # клиент не присылал поле; такой units-запрос остаётся явным значением.
+    units_configured: bool | None = None
 
 
 class ProductFbsBindingRuleOut(ProductFbsBindingRuleBody):
+    units_configured: bool
     marketplace: str
     external_warehouse_id: str
     wms_warehouse_id: str
@@ -1641,6 +1646,11 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
                 publish=item.publish,
                 mode=item.mode,
                 value=item.value,
+                units_configured=(
+                    item.units_configured
+                    if item.units_configured is not None
+                    else item.mode == "units"
+                ),
             )
             for binding_id, item in body.by_binding.items()
         },
@@ -1675,6 +1685,7 @@ def _rule_view_out(
                 publish=item.publish,
                 mode=item.mode,
                 value=item.value,
+                units_configured=item.units_configured,
                 marketplace=item.marketplace,
                 external_warehouse_id=item.external_warehouse_id,
                 wms_warehouse_id=str(item.wms_warehouse_id),
@@ -1748,6 +1759,7 @@ async def get_product_fbs_rule(
                 publish=item.publish,
                 mode=item.mode,
                 value=item.value,
+                units_configured=item.units_configured,
                 marketplace=item.marketplace,
                 external_warehouse_id=item.external_warehouse_id,
                 wms_warehouse_id=str(item.wms_warehouse_id),
