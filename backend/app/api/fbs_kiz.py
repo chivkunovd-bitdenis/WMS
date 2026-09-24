@@ -61,6 +61,7 @@ class FbsKizCommitPairIn(BaseModel):
     order_id: uuid.UUID
     value: str = Field(max_length=512)
     confirmed: bool = False
+    scan_auto_print_id: uuid.UUID | None = None
 
 
 class FbsKizCommitBody(BaseModel):
@@ -74,6 +75,8 @@ class FbsKizCommitRowOut(BaseModel):
     code: str
     message: str
     meta_status: str | None = None
+    newly_bound: bool = False
+    bound_kiz: str | None = None
 
 
 def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
@@ -149,6 +152,8 @@ def _commit_row_out(result: kiz_svc.FbsKizCommitRow) -> FbsKizCommitRowOut:
         code=result.code,
         message=result.message,
         meta_status=result.meta_status,
+        newly_bound=result.newly_bound,
+        bound_kiz=result.bound_kiz,
     )
 
 
@@ -202,6 +207,7 @@ async def commit_fbs_order_kiz(
             order_id=item.order_id,
             value=item.value,
             confirmed=item.confirmed,
+            scan_auto_print_id=item.scan_auto_print_id,
         )
         for item in body.pairs
     ]

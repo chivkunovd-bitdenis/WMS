@@ -1344,6 +1344,8 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
             "status": "ok",
             "code": "ok",
             "message": "ok",
+            "newly_bound": True,
+            "bound_kiz": value,
         }
     ]
     assert sent == {order.wb_order_id: value}
@@ -1535,6 +1537,7 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
     )
     assert order.packaging_task_line_id is not None
     value = _cis("IDEMPOTENT")
+    scanned = f"]d2{value.replace(_GS, '<GS>')}"
     sent: list[tuple[int, str]] = []
 
     async def fake_put(
@@ -1586,7 +1589,7 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
         "pairs": [
             {
                 "order_id": str(order.order_id),
-                "value": value,
+                "value": scanned,
                 "confirmed": False,
             }
         ],
@@ -1606,6 +1609,10 @@ async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
     assert second.status_code == 200, second.text
     assert first.json()[0]["status"] == "ok"
     assert second.json()[0]["status"] == "ok"
+    assert first.json()[0]["newly_bound"] is True
+    assert second.json()[0]["newly_bound"] is False
+    assert first.json()[0]["bound_kiz"] == value
+    assert second.json()[0]["bound_kiz"] == value
     assert sent == [(order.wb_order_id, value)]
     async with SessionLocal() as session:
         markings = list(
@@ -3763,6 +3770,26 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         wb_barcode="UNCERTAIN-BAR",
         with_packaging=True,
     )
+    scan_auto_print_url = (
+        f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    )
+    scan_auto_print_body = {
+        "barcode": order.product_barcode,
+        "idempotency_key": "uncertain-product-scan",
+        "print_qr": False,
+        "print_chz": False,
+        "reprint_chz": True,
+    }
+    scan_auto_print_id: uuid.UUID | None = None
+    if failure == "transport" and resolution == "filled":
+        selected = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert selected.status_code == 200, selected.text
+        assert selected.json()["order_id"] == str(order.order_id)
+        scan_auto_print_id = uuid.UUID(selected.json()["scan_id"])
     value = _cis("UNCERTAIN")
     if failure != "read":
         async with SessionLocal() as session:
@@ -3810,12 +3837,24 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
     monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
     monkeypatch.setattr(kiz_svc, "delete_marketplace_order_meta", fake_delete)
-    payload = {
-        "idempotency_key": "uncertain-binding",
-        "pairs": [{"order_id": str(order.order_id), "value": value, "confirmed": False}],
+    pair: dict[str, Any] = {
+        "order_id": str(order.order_id),
+        "value": value,
+        "confirmed": False,
     }
+    if scan_auto_print_id is not None:
+        pair["scan_auto_print_id"] = str(scan_auto_print_id)
+    commit_keys: list[str] = []
+
+    def next_commit_payload() -> dict[str, Any]:
+        key = f"uncertain-binding-{len(commit_keys) + 1}"
+        commit_keys.append(key)
+        return {"idempotency_key": key, "pairs": [pair]}
+
     response = await async_client.post(
-        "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json=next_commit_payload(),
     )
     assert response.status_code == 200, response.text
     if resolution == "refused":
@@ -3827,6 +3866,25 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         return
     assert response.json()[0]["code"] == "wb_pending_confirmation"
     assert "сверка" in response.json()[0]["message"]
+    if scan_auto_print_id is not None:
+        unresolved = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert unresolved.json()["reprint_recovery"] == {
+            "status": "not_attempted"
+        }
+        blocked_claim = await async_client.post(
+            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
+            headers=headers,
+            json={"attempt_key": "still-unknown"},
+        )
+        assert blocked_claim.json() == {
+            "claimed": False,
+            "started": False,
+            "kiz": None,
+        }
     async with SessionLocal() as session:
         marking = (
             await session.scalars(
@@ -3885,7 +3943,9 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         )
         assert validated.status_code == 200, validated.text
         retry = await async_client.post(
-            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+            "/operations/fbs-orders/kiz/commit",
+            headers=headers,
+            json=next_commit_payload(),
         )
         assert retry.json()[0]["code"] == "wb_pending_confirmation", retry.text
         async with SessionLocal() as session:
@@ -3899,7 +3959,9 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     else:
         remote_order_id, remote_value, remote_decision = order.wb_order_id, value, resolution
         retry = await async_client.post(
-            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+            "/operations/fbs-orders/kiz/commit",
+            headers=headers,
+            json=next_commit_payload(),
         )
         assert retry.json()[0]["code"] == (
             "ok" if resolution == "filled" else "meta_validation_fail"
@@ -3911,7 +3973,25 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         )
         assert duplicate.status_code == 409, duplicate.text
         assert duplicate.json()["detail"]["code"] == "duplicate_kiz"
+    if scan_auto_print_id is not None:
+        recovered = await async_client.post(
+            scan_auto_print_url,
+            headers=headers,
+            json=scan_auto_print_body,
+        )
+        assert recovered.json()["reprint_recovery"] == {"status": "available"}
+        recovered_claim = await async_client.post(
+            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
+            headers=headers,
+            json={"attempt_key": "reconciled-exact-bind"},
+        )
+        assert recovered_claim.json() == {
+            "claimed": True,
+            "started": False,
+            "kiz": value,
+        }
     assert calls.count("put") == 1
+    assert len(commit_keys) == len(set(commit_keys))
     async with SessionLocal() as session:
         operation = await session.get(FbsWbOperation, operation_id)
         foreign = await session.get(FbsWbOperation, foreign_id)
