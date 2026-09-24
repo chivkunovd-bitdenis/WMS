@@ -13,8 +13,8 @@ export type FbsAutomaticPrintClaimState = {
   started: boolean
 }
 
-export type FbsAutomaticPrintClaimApi = {
-  claim: (attemptKey: string) => Promise<FbsAutomaticPrintClaimState>
+export type FbsAutomaticPrintClaimApi<TClaim extends FbsAutomaticPrintClaimState> = {
+  claim: (attemptKey: string) => Promise<TClaim>
   markStarted: (attemptKey: string) => Promise<FbsAutomaticPrintClaimState>
   releaseClaim: (attemptKey: string) => Promise<unknown>
 }
@@ -44,10 +44,12 @@ function outcomeMayBeUnknown(cause: unknown): boolean {
  * marked started is complete without another copy; an outstanding foreign
  * claim is an unknown physical outcome and must never be retried blindly.
  */
-export async function startClaimedAutomaticPrint(
+export async function startClaimedAutomaticPrint<
+  TClaim extends FbsAutomaticPrintClaimState = FbsAutomaticPrintClaimState,
+>(
   attemptKey: string,
-  print: () => Promise<void>,
-  api: FbsAutomaticPrintClaimApi,
+  print: (claim: TClaim) => Promise<void>,
+  api: FbsAutomaticPrintClaimApi<TClaim>,
 ): Promise<FbsAutomaticPrintResult> {
   const claim = await api.claim(attemptKey)
   if (!claim.claimed) {
@@ -57,7 +59,7 @@ export async function startClaimedAutomaticPrint(
     )
   }
   try {
-    await print()
+    await print(claim)
   } catch (cause) {
     await api.releaseClaim(attemptKey).catch(() => undefined)
     throw cause

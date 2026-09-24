@@ -51,6 +51,7 @@ from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_marking_service as marking_svc
+from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
@@ -211,6 +212,7 @@ class FbsKizCommitPair:
     order_id: uuid.UUID
     value: str
     confirmed: bool
+    scan_auto_print_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -229,6 +231,7 @@ class _FbsKizCommitOutcome:
     meta_status: str | None
     newly_bound: bool
     bound_kiz: str
+    marking_id: uuid.UUID | None
 
 
 @dataclass(frozen=True)
@@ -1328,6 +1331,7 @@ async def _commit_one_kiz_pair(
                 meta_status=ozon_result.meta_status,
                 newly_bound=ozon_result.newly_bound,
                 bound_kiz=ozon_result.bound_kiz,
+                marking_id=None,
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
@@ -1366,6 +1370,7 @@ async def _commit_one_kiz_pair(
             meta_status=None,
             newly_bound=False,
             bound_kiz=current.value,
+            marking_id=current.id,
         )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
@@ -1485,6 +1490,7 @@ async def _commit_one_kiz_pair(
         meta_status=None,
         newly_bound=True,
         bound_kiz=validated.value,
+        marking_id=marking.id,
     )
 
 
@@ -1528,6 +1534,19 @@ async def commit_kiz_pairs(
     rows: list[FbsKizCommitRow] = []
     for pair in pairs:
         try:
+            if pair.scan_auto_print_id is not None:
+                if actor_user_id is None:
+                    raise FbsKizError("scan_selection_not_found")
+                try:
+                    await scan_print_svc.validate_bound_reprint_context(
+                        session,
+                        tenant_id,
+                        actor_user_id,
+                        pair.scan_auto_print_id,
+                        pair.order_id,
+                    )
+                except scan_print_svc.FbsScanAutoPrintError as exc:
+                    raise FbsKizError(exc.code) from exc
             outcome = await _commit_one_kiz_pair(
                 session,
                 tenant_id,
@@ -1536,6 +1555,20 @@ async def commit_kiz_pairs(
                 http_client,
                 idempotency_key,
             )
+            if pair.scan_auto_print_id is not None and outcome.newly_bound:
+                if actor_user_id is None or outcome.marking_id is None:
+                    raise FbsKizError("scan_bound_marking_mismatch")
+                try:
+                    await scan_print_svc.record_bound_reprint_target(
+                        session,
+                        tenant_id,
+                        actor_user_id,
+                        pair.scan_auto_print_id,
+                        pair.order_id,
+                        outcome.marking_id,
+                    )
+                except scan_print_svc.FbsScanAutoPrintError as exc:
+                    raise FbsKizError(exc.code) from exc
             await session.commit()
         except IntegrityError:
             await session.rollback()

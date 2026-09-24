@@ -38,6 +38,7 @@ from app.services.fbs_picking_order_service import picking_list_order_key
 
 _EVENT_KIND = "wms514_scan_auto_print"
 _TARGET_EVENT_KIND = "wms514_scan_auto_print_target"
+_BOUND_TARGET_EVENT_KIND = "wms514_scan_auto_print_bound_target"
 _PRINT_TARGETS = frozenset({"qr", "chz"})
 
 
@@ -59,12 +60,12 @@ class FbsScanAutoPrintSelection:
 class FbsScanAutoPrintTargetClaim:
     claimed: bool
     started: bool
+    kiz: str | None = None
 
 
 @dataclass(frozen=True)
 class FbsScanAutoPrintReprintRecovery:
     status: Literal["not_attempted", "available", "started", "outcome_unknown"]
-    kiz: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,8 @@ class _FbsScanAutoPrintTargetState:
     started: bool
     active_claim: str | None
     active_marking_id: uuid.UUID | None
-    had_release: bool
+    prepared_marking_id: uuid.UUID | None
+    release_count: int
     released_marking_id: uuid.UUID | None
 
 
@@ -316,6 +318,22 @@ def _target_event_key(
     return f"wms514-print:{digest}"
 
 
+def _bound_target_event_key(scan_id: uuid.UUID, marking_id: uuid.UUID) -> str:
+    digest = hashlib.sha256(f"{scan_id}:chz:{marking_id}".encode()).hexdigest()
+    return f"wms514-bound:{digest}"
+
+
+def _reprint_claim_slot_event_key(
+    scan_id: uuid.UUID,
+    marking_id: uuid.UUID,
+    release_count: int,
+) -> str:
+    digest = hashlib.sha256(
+        f"{scan_id}:chz:{marking_id}:{release_count}".encode()
+    ).hexdigest()
+    return f"wms514-reprint-claim:{digest}"
+
+
 async def _selection_event(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -385,10 +403,21 @@ async def _target_state(
     started = False
     active_claim: str | None = None
     active_marking_id: uuid.UUID | None = None
-    had_release = False
+    prepared_marking_id: uuid.UUID | None = None
+    release_count = 0
     released_marking_id: uuid.UUID | None = None
     for event in events:
         payload = event.payload_json or {}
+        if (
+            payload.get("kind") == _BOUND_TARGET_EVENT_KIND
+            and payload.get("scan_id") == str(scan_id)
+            and payload.get("target") == target
+        ):
+            try:
+                prepared_marking_id = uuid.UUID(str(payload["marking_id"]))
+            except (KeyError, TypeError, ValueError):
+                prepared_marking_id = None
+            continue
         if (
             payload.get("kind") != _TARGET_EVENT_KIND
             or payload.get("scan_id") != str(scan_id)
@@ -406,7 +435,7 @@ async def _target_state(
             except (KeyError, TypeError, ValueError):
                 active_marking_id = None
         elif action == "release" and active_claim == attempt_digest:
-            had_release = True
+            release_count += 1
             released_marking_id = active_marking_id
             active_claim = None
             active_marking_id = None
@@ -418,7 +447,8 @@ async def _target_state(
         started=started,
         active_claim=active_claim,
         active_marking_id=active_marking_id,
-        had_release=had_release,
+        prepared_marking_id=prepared_marking_id,
+        release_count=release_count,
         released_marking_id=released_marking_id,
     )
 
@@ -428,26 +458,148 @@ async def _current_reprint_marking(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     selection_event: DocumentEvent,
+    *,
+    for_update: bool = False,
 ) -> FbsOrderMarking | None:
     try:
         order_id = uuid.UUID(str((selection_event.payload_json or {})["order_id"]))
     except (KeyError, TypeError, ValueError):
         raise FbsScanAutoPrintError("scan_selection_corrupt") from None
-    marking: FbsOrderMarking | None = await session.scalar(
+    order_stmt = (
+        select(FbsOrder)
+        .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+            FbsOrder.seller_id == FbsSupply.seller_id,
+            FbsOrder.marketplace == "wb",
+            FbsOrder.status.in_(FBS_ORDER_MARKING_WRITE_STATUSES),
+            FbsOrder.status.not_in(FBS_ORDER_MARKING_FROZEN_STATUSES),
+            FbsSupply.id == supply_id,
+            FbsSupply.tenant_id == tenant_id,
+            FbsSupply.marketplace == "wb",
+        )
+    )
+    if for_update:
+        order_stmt = order_stmt.with_for_update(of=FbsOrder)
+    order = await session.scalar(order_stmt)
+    if order is None:
+        return None
+    marking_stmt = (
         select(FbsOrderMarking)
-        .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
         .where(
             FbsOrderMarking.tenant_id == tenant_id,
             FbsOrderMarking.order_id == order_id,
             FbsOrderMarking.kind == MARKING_KIND_SGTIN,
             FbsOrderMarking.meta_status != META_STATUS_REJECTED,
-            FbsOrder.tenant_id == tenant_id,
-            FbsOrder.supply_id == supply_id,
         )
         .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
         .limit(1)
     )
+    if for_update:
+        marking_stmt = marking_stmt.with_for_update()
+    marking: FbsOrderMarking | None = await session.scalar(marking_stmt)
     return marking
+
+
+def _candidate_reprint_marking_id(
+    state: _FbsScanAutoPrintTargetState,
+) -> uuid.UUID | None:
+    return state.released_marking_id or state.prepared_marking_id
+
+
+async def record_bound_reprint_target(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    order_id: uuid.UUID,
+    marking_id: uuid.UUID,
+) -> None:
+    """Atomically associate a newly-bound marking with its product scan.
+
+    The caller holds the order lock and commits this event in the same
+    transaction as the marking.  A generic duplicate commit is deliberately
+    not eligible: only the transaction that created/replaced the marking calls
+    this function.
+    """
+    selection_event = await validate_bound_reprint_context(
+        session,
+        tenant_id,
+        actor_user_id,
+        scan_id,
+        order_id,
+    )
+    current = await _current_reprint_marking(
+        session,
+        tenant_id,
+        selection_event.document_id,
+        selection_event,
+        for_update=False,
+    )
+    if current is None or current.id != marking_id:
+        raise FbsScanAutoPrintError("scan_bound_marking_mismatch")
+    await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=selection_event.document_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        product_id=selection_event.product_id,
+        payload_json={
+            "kind": _BOUND_TARGET_EVENT_KIND,
+            "scan_id": str(scan_id),
+            "target": "chz",
+            "order_id": str(order_id),
+            "marking_id": str(marking_id),
+        },
+        idempotency_key=_bound_target_event_key(scan_id, marking_id),
+    )
+
+
+async def validate_bound_reprint_context(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> DocumentEvent:
+    selection_event = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.id == scan_id,
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+            DocumentEvent.event_type == EVENT_DATA_CHANGED,
+        )
+    )
+    payload = selection_event.payload_json if selection_event is not None else {}
+    if (
+        selection_event is None
+        or payload.get("kind") != _EVENT_KIND
+        or payload.get("reprint_chz") is not True
+        or payload.get("order_id") != str(order_id)
+        or selection_event.actor_user_id != actor_user_id
+    ):
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    scoped_order = await session.scalar(
+        select(FbsOrder.id)
+        .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == selection_event.document_id,
+            FbsOrder.seller_id == FbsSupply.seller_id,
+            FbsOrder.marketplace == "wb",
+            FbsSupply.tenant_id == tenant_id,
+            FbsSupply.marketplace == "wb",
+        )
+    )
+    if scoped_order is None:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    return selection_event
 
 
 async def recover_released_reprint_kiz(
@@ -455,13 +607,12 @@ async def recover_released_reprint_kiz(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     scan_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
 ) -> FbsScanAutoPrintReprintRecovery:
-    """Return only the canonical KIZ of this scan's released print claim.
+    """Report recoverability without exposing printable KIZ bytes.
 
-    A missing claim means the operator still has to scan a KIZ.  An active
-    claim is an unknown physical outcome and a started target is already done;
-    neither may produce another copy.  A released claim is retryable only while
-    its exact marking remains the current active marking of the selected order.
+    Printable bytes are returned only by ``claim_reprint_kiz_recovery``, which
+    validates the current marking and persists its claim atomically.
     """
     selection_event = await _selection_event(
         session,
@@ -470,6 +621,8 @@ async def recover_released_reprint_kiz(
         scan_id,
         lock_supply=False,
     )
+    if selection_event.actor_user_id != actor_user_id:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
     if (selection_event.payload_json or {}).get("reprint_chz") is not True:
         return FbsScanAutoPrintReprintRecovery(status="not_attempted")
     state = await _target_state(session, tenant_id, supply_id, scan_id, "chz")
@@ -477,16 +630,88 @@ async def recover_released_reprint_kiz(
         return FbsScanAutoPrintReprintRecovery(status="started")
     if state.active_claim is not None:
         return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
-    if not state.had_release:
+    candidate_marking_id = _candidate_reprint_marking_id(state)
+    if candidate_marking_id is None:
         return FbsScanAutoPrintReprintRecovery(status="not_attempted")
-    if state.released_marking_id is None:
-        return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
     current = await _current_reprint_marking(
         session, tenant_id, supply_id, selection_event
     )
-    if current is None or current.id != state.released_marking_id:
+    if current is None or current.id != candidate_marking_id:
         return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
-    return FbsScanAutoPrintReprintRecovery(status="available", kiz=current.value)
+    return FbsScanAutoPrintReprintRecovery(status="available")
+
+
+async def claim_reprint_kiz_recovery(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    *,
+    attempt_key: str,
+    actor_user_id: uuid.UUID,
+) -> FbsScanAutoPrintTargetClaim:
+    """Atomically claim and return the exact current KIZ for one product scan."""
+    key = _validate_attempt_key(attempt_key)
+    selection_event = await _selection_event(
+        session,
+        tenant_id,
+        supply_id,
+        scan_id,
+        lock_supply=False,
+    )
+    if selection_event.actor_user_id != actor_user_id:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    _validate_target(selection_event, "chz")
+    current = await _current_reprint_marking(
+        session,
+        tenant_id,
+        supply_id,
+        selection_event,
+        for_update=True,
+    )
+    state = await _target_state(session, tenant_id, supply_id, scan_id, "chz")
+    if state.started:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+    if state.active_claim is not None:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=False)
+    candidate_marking_id = _candidate_reprint_marking_id(state)
+    if (
+        candidate_marking_id is None
+        or current is None
+        or current.id != candidate_marking_id
+    ):
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=False)
+    attempt_digest = _target_attempt_digest(scan_id, "chz", key)
+    inserted = await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        product_id=selection_event.product_id,
+        payload_json={
+            "kind": _TARGET_EVENT_KIND,
+            "scan_id": str(scan_id),
+            "target": "chz",
+            "action": "claim",
+            "attempt_digest": attempt_digest,
+            "marking_id": str(current.id),
+        },
+        idempotency_key=_reprint_claim_slot_event_key(
+            scan_id,
+            current.id,
+            state.release_count,
+        ),
+    )
+    if not inserted:
+        return FbsScanAutoPrintTargetClaim(claimed=False, started=False)
+    return FbsScanAutoPrintTargetClaim(
+        claimed=True,
+        started=False,
+        kiz=current.value,
+    )
 
 
 def _validate_target(selection_event: DocumentEvent, target: str) -> None:
@@ -526,6 +751,11 @@ async def claim_scan_print_target(
         session, tenant_id, supply_id, scan_id
     )
     _validate_target(selection_event, target)
+    if (
+        target == "chz"
+        and (selection_event.payload_json or {}).get("reprint_chz") is True
+    ):
+        raise FbsScanAutoPrintError("scan_reprint_claim_requires_atomic")
     state = await _target_state(
         session, tenant_id, supply_id, scan_id, target
     )
@@ -537,14 +767,6 @@ async def claim_scan_print_target(
             claimed=state.active_claim == attempt_digest,
             started=False,
         )
-    marking = (
-        await _current_reprint_marking(
-            session, tenant_id, supply_id, selection_event
-        )
-        if target == "chz"
-        and (selection_event.payload_json or {}).get("reprint_chz") is True
-        else None
-    )
     inserted = await record_document_event(
         session,
         tenant_id=tenant_id,
@@ -560,7 +782,7 @@ async def claim_scan_print_target(
             "target": target,
             "action": "claim",
             "attempt_digest": attempt_digest,
-            "marking_id": str(marking.id) if marking is not None else None,
+            "marking_id": None,
         },
         idempotency_key=_target_event_key(
             scan_id, target, "claim", attempt_digest

@@ -61,6 +61,7 @@ class FbsKizCommitPairIn(BaseModel):
     order_id: uuid.UUID
     value: str = Field(max_length=512)
     confirmed: bool = False
+    scan_auto_print_id: uuid.UUID | None = None
 
 
 class FbsKizCommitBody(BaseModel):
@@ -206,6 +207,7 @@ async def commit_fbs_order_kiz(
             order_id=item.order_id,
             value=item.value,
             confirmed=item.confirmed,
+            scan_auto_print_id=item.scan_auto_print_id,
         )
         for item in body.pairs
     ]

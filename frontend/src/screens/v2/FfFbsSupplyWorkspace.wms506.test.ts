@@ -23,7 +23,8 @@ describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
     expect(refresh).toBeGreaterThan(print)
     expect(kizScan.slice(failureBranch, print)).toContain('outcome.newly_bound === true')
     expect(kizScan.slice(failureBranch, print)).toContain('!outcome.bound_kiz')
-    expect(kizScan.slice(failureBranch, print)).toContain('kiz: outcome.bound_kiz')
+    expect(kizScan.slice(failureBranch, print)).toContain('durableScanId ? durableScanId : outcome.bound_kiz!')
+    expect(kizScan.slice(failureBranch, print)).toContain('if (!durableScanId || !workspace?.supply.id)')
     expect(kizScan.slice(kizScan.indexOf('const scan ='), failureBranch)).not.toContain('kiz: raw')
   })
 

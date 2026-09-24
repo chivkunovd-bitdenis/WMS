@@ -123,6 +123,28 @@ describe('WMS-506 · automatic KIZ duplicate after FBS scan', () => {
 })
 
 describe('WMS-514 · durable automatic print target', () => {
+  it('passes only the payload returned together with the durable claim to print', async () => {
+    const print = vi.fn(async (_claim: { claimed: boolean; started: boolean; kiz: string }) => undefined)
+    await startClaimedAutomaticPrint(
+      'atomic-recovery',
+      print,
+      {
+        claim: async () => ({
+          claimed: true,
+          started: false,
+          kiz: '010460000000000121CANONICAL\u001d91TAIL',
+        }),
+        markStarted: async () => ({ claimed: false, started: true }),
+        releaseClaim: async () => undefined,
+      },
+    )
+    expect(print).toHaveBeenCalledWith({
+      claimed: true,
+      started: false,
+      kiz: '010460000000000121CANONICAL\u001d91TAIL',
+    })
+  })
+
   it('does not invoke the browser again after the server recorded a launch', async () => {
     const print = vi.fn(async () => undefined)
     const result = await startClaimedAutomaticPrint('retry', print, {

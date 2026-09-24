@@ -152,9 +152,11 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       source.indexOf('const scanIdleCode = useCallback'),
       source.indexOf('const scanKizCode = useCallback'),
     )
-    expect(idleScan).toContain("recovery?.status === 'available' && recovery.kiz")
+    expect(idleScan).toContain("recovery?.status === 'available'")
     expect(idleScan).toContain("recovery?.status === 'outcome_unknown'")
-    expect(idleScan).toContain('async () => printMarkingCodeLabels([kiz], { duplicateCopies: 1 })')
+    expect(idleScan).toContain('claimFbsScanAutoPrintReprint(')
+    expect(idleScan).toContain('printMarkingCodeLabels([claim.kiz], { duplicateCopies: 1 })')
+    expect(idleScan).not.toContain('recovery.kiz')
     expect(idleScan).toContain("result.scan_id,\n                        'chz',")
 
     const kizScan = source.slice(
@@ -163,7 +165,9 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     )
     expect(kizScan).toContain('if (outcome.newly_bound === true && scan.enabled)')
     expect(kizScan).toContain('const durableScanId = pendingProductAttempt?.scanId')
-    expect(kizScan).toContain('startClaimedAutomaticPrint(')
+    expect(kizScan).toContain('scan_auto_print_id: pendingProductAttempt.scanId')
+    expect(kizScan).toContain('claimFbsScanAutoPrintReprint(')
+    expect(kizScan).toContain('startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(')
     expect(kizScan).not.toContain('outcome.newly_bound !== false')
   })
 

@@ -412,7 +412,6 @@ class FbsScanAutoPrintBindingTargetOut(BaseModel):
 
 class FbsScanAutoPrintReprintRecoveryOut(BaseModel):
     status: Literal["not_attempted", "available", "started", "outcome_unknown"]
-    kiz: str | None = None
 
 
 class FbsScanAutoPrintOut(BaseModel):
@@ -438,6 +437,10 @@ class FbsScanAutoPrintTargetBody(BaseModel):
 class FbsScanAutoPrintTargetClaimOut(BaseModel):
     claimed: bool
     started: bool
+
+
+class FbsScanAutoPrintReprintClaimOut(FbsScanAutoPrintTargetClaimOut):
+    kiz: str | None = None
 
 
 class FbsDirectKizReprintBody(BaseModel):
@@ -1161,6 +1164,7 @@ def _raise_from_scan_auto_print(exc: scan_print_svc.FbsScanAutoPrintError) -> No
         "scan_product_exhausted",
         "scan_print_claim_not_owned",
         "scan_print_target_disabled",
+        "scan_reprint_claim_requires_atomic",
     }:
         raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
     if exc.code in {
@@ -2313,10 +2317,10 @@ async def scan_fbs_supply_product_for_auto_print(
             user.tenant_id,
             supply_id,
             selected.scan_id,
+            user.id,
         )
         reprint_recovery = FbsScanAutoPrintReprintRecoveryOut(
             status=recovery.status,
-            kiz=recovery.kiz,
         )
 
     if not body.print_qr and not body.print_chz:
@@ -2413,6 +2417,36 @@ async def scan_fbs_supply_product_for_auto_print(
             )
             for error in result.order_errors
         ],
+    )
+
+
+@router.post(
+    "/{supply_id}/scan-auto-print/{scan_id}/reprint-claim",
+    response_model=FbsScanAutoPrintReprintClaimOut,
+)
+async def claim_fbs_scan_auto_print_reprint(
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    body: FbsDirectKizPrintClaimBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsScanAutoPrintReprintClaimOut:
+    try:
+        result = await scan_print_svc.claim_reprint_kiz_recovery(
+            session,
+            user.tenant_id,
+            supply_id,
+            scan_id,
+            attempt_key=body.attempt_key,
+            actor_user_id=user.id,
+        )
+    except scan_print_svc.FbsScanAutoPrintError as exc:
+        _raise_from_scan_auto_print(exc)
+    await session.commit()
+    return FbsScanAutoPrintReprintClaimOut(
+        claimed=result.claimed,
+        started=result.started,
+        kiz=result.kiz,
     )
 
 

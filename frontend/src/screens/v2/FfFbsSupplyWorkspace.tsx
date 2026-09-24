@@ -81,6 +81,7 @@ import {
   assignFbsPackingBoxOrders,
   clearFbsPackingBox,
   claimFbsDirectKizPrint,
+  claimFbsScanAutoPrintReprint,
   claimFbsScanAutoPrintTarget,
   commitFbsKiz,
   fbsKizOrderNumber,
@@ -118,6 +119,7 @@ import {
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsDeliveryPreflight,
+  type FbsScanAutoPrintReprintClaim,
   type FbsWorkspace,
   type FbsWorklistOrder,
 } from './fbsApi'
@@ -1245,27 +1247,34 @@ export function FfFbsSupplyWorkspace({
         }
         if (waitingForReprintKiz) {
           const recovery = result.reprint_recovery
-          if (recovery?.status === 'available' && recovery.kiz) {
+          if (recovery?.status === 'available') {
             try {
               const printAttemptKey = createFbsIdempotencyKey()
               await kizAutoPrintQueueRef.current.enqueue(
                 {
                   attemptId: `${result.scan_id}:reprint:${printAttemptKey}`,
                   orderId: result.order_id,
-                  kiz: recovery.kiz,
+                  // Printable bytes are returned only by the atomic claim
+                  // inside this queued job; the product response never carries
+                  // a stale KIZ across the recovery→claim boundary.
+                  kiz: result.scan_id,
                   enabled: true,
                 },
-                async (kiz) => {
-                  const printResult = await startClaimedAutomaticPrint(
+                async () => {
+                  const printResult = await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(
                     printAttemptKey,
-                    async () => printMarkingCodeLabels([kiz], { duplicateCopies: 1 }),
+                    async (claim) => {
+                      if (!claim.kiz) {
+                        throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
+                      }
+                      await printMarkingCodeLabels([claim.kiz], { duplicateCopies: 1 })
+                    },
                     {
-                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                      claim: (attemptKey) => claimFbsScanAutoPrintReprint(
                         token,
                         authHeaders,
                         workspace.supply.id,
                         result.scan_id,
-                        'chz',
                         attemptKey,
                       ),
                       markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
@@ -1297,8 +1306,6 @@ export function FfFbsSupplyWorkspace({
             } catch (cause) {
               printErrors.push(cause instanceof Error ? cause.message : 'Не удалось запустить перепечать ЧЗ.')
             }
-          } else if (recovery?.status === 'available') {
-            printErrors.push('Сервер не вернул сохранённый ЧЗ для безопасной перепечати.')
           } else if (recovery?.status === 'outcome_unknown') {
             printErrors.push('Исход предыдущего запуска перепечати ЧЗ неизвестен; автоматический повтор остановлен.')
           } else {
@@ -1401,7 +1408,14 @@ export function FfFbsSupplyWorkspace({
         const results = await commitFbsKiz(
           token,
           authHeaders,
-          [{ order_id: kizScanActive.order_id, value: raw, confirmed: confirmed || kizScanActive.needs_confirmation }],
+          [{
+            order_id: kizScanActive.order_id,
+            value: raw,
+            confirmed: confirmed || kizScanActive.needs_confirmation,
+            ...(pendingProductAttempt?.scanId
+              ? { scan_auto_print_id: pendingProductAttempt.scanId }
+              : {}),
+          }],
           scan.attemptId,
         )
         const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
@@ -1421,7 +1435,8 @@ export function FfFbsSupplyWorkspace({
         }
         let boundReprintStarted = false
         if (outcome.newly_bound === true && scan.enabled) {
-          if (!outcome.bound_kiz) {
+          const durableScanId = pendingProductAttempt?.scanId
+          if (!durableScanId && !outcome.bound_kiz) {
             setKizScanError({
               text: `ЧЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но перепечатка не запущена: сервер не вернул сохранённый код.`,
               debug: null,
@@ -1429,30 +1444,33 @@ export function FfFbsSupplyWorkspace({
           } else {
             try {
               const printAttemptKey = createFbsIdempotencyKey()
-              const durableScanId = pendingProductAttempt?.scanId
               boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue(
                 {
                   ...scan,
                   attemptId: durableScanId
                     ? `${durableScanId}:reprint:${printAttemptKey}`
                     : scan.attemptId,
-                  kiz: outcome.bound_kiz,
+                  kiz: durableScanId ? durableScanId : outcome.bound_kiz!,
                 },
                 async (kiz) => {
                   if (!durableScanId || !workspace?.supply.id) {
                     await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
                     return
                   }
-                  const printResult = await startClaimedAutomaticPrint(
+                  const printResult = await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(
                     printAttemptKey,
-                    async () => printMarkingCodeLabels([kiz], { duplicateCopies: 1 }),
+                    async (claim) => {
+                      if (!claim.kiz) {
+                        throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
+                      }
+                      await printMarkingCodeLabels([claim.kiz], { duplicateCopies: 1 })
+                    },
                     {
-                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                      claim: (attemptKey) => claimFbsScanAutoPrintReprint(
                         token,
                         authHeaders,
                         workspace.supply.id,
                         durableScanId,
-                        'chz',
                         attemptKey,
                       ),
                       markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(

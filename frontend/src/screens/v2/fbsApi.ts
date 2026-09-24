@@ -443,7 +443,6 @@ export type FbsScanAutoPrintResult = {
   binding_target: FbsKizLookup | null
   reprint_recovery: {
     status: 'not_attempted' | 'available' | 'started' | 'outcome_unknown'
-    kiz: string | null
   } | null
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
@@ -458,6 +457,10 @@ export type FbsScanAutoPrintTarget = 'qr' | 'chz'
 export type FbsScanAutoPrintTargetClaim = {
   claimed: boolean
   started: boolean
+}
+
+export type FbsScanAutoPrintReprintClaim = FbsScanAutoPrintTargetClaim & {
+  kiz: string | null
 }
 
 export type FbsDirectKizReprint = {
@@ -1052,6 +1055,22 @@ export function claimFbsScanAutoPrintTarget(
   )
 }
 
+export async function claimFbsScanAutoPrintReprint(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintReprintClaim> {
+  return jsonOrThrow<FbsScanAutoPrintReprintClaim>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/reprint-claim`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ attempt_key: attemptKey }),
+    }),
+  )
+}
+
 export function markFbsScanAutoPrintTargetStarted(
   token: string,
   ah: AuthHeaders,
@@ -1398,7 +1417,12 @@ export type FbsKizLookup = {
   block_reason: string | null
 }
 
-export type FbsKizPair = { order_id: string; value: string; confirmed: boolean }
+export type FbsKizPair = {
+  order_id: string
+  value: string
+  confirmed: boolean
+  scan_auto_print_id?: string
+}
 
 export type FbsKizValidateResult = {
   ok: boolean
