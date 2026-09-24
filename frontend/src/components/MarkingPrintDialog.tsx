@@ -41,6 +41,7 @@ import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
+  cancelPendingPrintWindow,
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
   printCzArtifactTape,
@@ -1316,6 +1317,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
             : 'Не удалось напечатать этикетки.',
       )
     } finally {
+      cancelPendingPrintWindow()
       onBusyChange(false)
     }
   }
@@ -1356,6 +1358,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
     } finally {
+      cancelPendingPrintWindow()
       onBusyChange(false)
     }
   }

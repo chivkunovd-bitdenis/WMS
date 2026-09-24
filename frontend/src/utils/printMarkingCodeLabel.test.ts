@@ -20,6 +20,8 @@ import {
   buildCzLabelHtml,
   buildMarkingTapeDocument,
   buildWbOrderQrLabelHtml,
+  beginPrintUserGesture,
+  cancelPendingPrintWindow,
   printHtmlInIframe,
   resolveCzArtifactTapeCodeIds,
 } from './printMarkingCodeLabel'
@@ -30,6 +32,7 @@ const LONG_GS1_CIS = `0104630321689835215TVsOggEdo6!!\u001d91ABCD\u001d92${'x'.r
 const MATRIX_STUB = 'data:image/png;base64,stub'
 
 afterEach(() => {
+  cancelPendingPrintWindow()
   vi.unstubAllGlobals()
 })
 
@@ -207,6 +210,53 @@ describe('parseGs1Cis', () => {
 })
 
 describe('printHtmlInIframe launch acknowledgement', () => {
+  it('fills and prints the window opened by the click for a mixed FBS tape', async () => {
+    const print = vi.fn()
+    stubIframePrint(print)
+    const write = vi.fn()
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      focus: vi.fn(),
+      print,
+      onload: null as (() => void) | null,
+      document: {
+        title: '', body: { innerHTML: '' },
+        open: vi.fn(), write,
+        close: () => queueMicrotask(() => { popup.onload?.(); popup.onload?.() }),
+        querySelectorAll: () => [],
+      },
+    }
+    Object.assign(window, { open: () => popup })
+    const createFrame = vi.spyOn(document, 'createElement')
+    beginPrintUserGesture()
+    const html = '<html><body><section>ЧЗ</section><section>ШК</section></body></html>'
+    await printHtmlInIframe(html)
+    expect(write).toHaveBeenCalledWith(html)
+    expect(createFrame).not.toHaveBeenCalled()
+    expect(print).toHaveBeenCalledOnce()
+    cancelPendingPrintWindow()
+    expect(popup.close).not.toHaveBeenCalled()
+  })
+
+  it('closes the unused reserved window when label preparation fails', () => {
+    const close = vi.fn()
+    vi.stubGlobal('window', { open: () => ({ closed: false, close, document: { body: {} } }) })
+    beginPrintUserGesture()
+    cancelPendingPrintWindow()
+    cancelPendingPrintWindow()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to the iframe when popups are blocked', async () => {
+    const print = vi.fn()
+    stubIframePrint(print)
+    Object.assign(window, { open: () => null })
+    beginPrintUserGesture()
+    await printHtmlInIframe('<html><body>ЧЗ</body></html>')
+    expect(print).toHaveBeenCalledOnce()
+  })
+
   it('resolves only after the browser print form is invoked', async () => {
     const print = vi.fn()
     stubIframePrint(print)
