@@ -171,7 +171,7 @@ WMS-406/409/410 не повторять как операции с клиент�
 
 | Задача | Суть | Текущий статус |
 |---|---|---|
-| [WMS-517](#wms-517) | Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота | ЛОКАЛЬНЫЙ INTERNAL/EMULATOR/BROWSER SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH · PRODUCTION НЕ ПРИНЯТ · LIVE GATES B2/B3 · POSTGRES/PHYSICAL/SANDBOX/ДЕПЛОЯ НЕТ · [Требования и проверки](requirements/WMS-517.md) |
+| [WMS-517](#wms-517) | Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота | LOCAL CODE/EMULATOR/OPENSSL/POSTGRESQL SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH/PR · PRODUCTION НЕ ПРИНЯТ · LIVE GATE B2 · PHYSICAL CRYPTOPRO/ГОСТ/RAILWAY/FULL CI НЕ ПРОВЕРЕНЫ · PRODUCTION SUBMIT ЗАПРЕЩЁН · [Требования и проверки](requirements/WMS-517.md) |
 | [WMS-093](#wms-093) | Массовое снятие кодов упирается в лимит Wildberries | РЕШЕНИЕ ВЛАДЕЛЬЦА: WMS-085 вернул массовое снятие; текущий stop-and-resume без retry нужно принять или доработать |
 | [WMS-210](#wms-210) | Конструктор состава этикетки | ЧАСТИЧНО В PRODUCTION SOURCE · 4 ИЗ 8 ПОЛЕЙ, RUNTIME-ФЛАГ ВЫКЛЮЧЕН 09.09.2026 19:57 UTC |
 | [WMS-211](#wms-211) | Кнопки «Сохранить макет» в конструкторе нет | КНОПКА ЕСТЬ В PRODUCTION SOURCE, НО ПАНЕЛЬ ВЫКЛЮЧЕНА RUNTIME-ФЛАГОМ |
@@ -13496,7 +13496,7 @@ api/worker/beat/web пересозданы и Up, `/`, `/seller/`, `/api/health`
 
 <a id="wms-517"></a>
 
-**Статус:** `ЛОКАЛЬНЫЙ INTERNAL/EMULATOR/BROWSER SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH · PRODUCTION НЕ ПРИНЯТ · LIVE GATES B2/B3 · POSTGRES/PHYSICAL/SANDBOX/ДЕПЛОЯ НЕТ` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
+**Статус:** `LOCAL CODE/EMULATOR/OPENSSL/POSTGRESQL SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH/PR · PRODUCTION НЕ ПРИНЯТ · LIVE GATE B2 · PHYSICAL CRYPTOPRO/ГОСТ/RAILWAY/FULL CI НЕ ПРОВЕРЕНЫ · PRODUCTION SUBMIT ЗАПРЕЩЁН` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
 
 В кабинете селлера нужен экран «Честный знак → Вывод из оборота»: плоский плотный реестр
 только тех FBS-КИЗ, по заказам которых уже нажали «Отгрузить» и подтверждена передача WB.
@@ -13532,9 +13532,20 @@ B1 закрыт постановкой: `/mods/list` остаётся тольк
 её `fiasId`/`kpp`; 0 или несколько блокируют только документ этой группы. WMS не создаёт
 warehouse→MOD mapping, настройку или новый шаг UI. Группа без обязательного МОД идёт
 без этих полей.
-Открыты два live gate: назначенный sandbox participant/сертификат/МЧД/test data (B2) и
-точный browser-профиль attached auth signature (B3), подтверждаемый sandbox либо
-письменно CRPT/CryptoPro. Реальные auth и submit до B3 закрыты. Также остаются
-PostgreSQL-конкурентный прогон, software/physical browser-token matrix, sandbox/live
-acceptance и деплой. Локальный diff можно сохранить commit/push как результат
-разработки, но production readiness, live-интеграция и деплой не приняты.
+B3 закрыт официальным приложением 2 True API и рекомендованным CRPT browser-helper:
+auth challenge подписывается как исходная JS-строка с default UCS-2LE, CAdES-BES,
+attached. В текущем локальном diff реализованы adapter и закреплённый browser asset,
+нормализация `statusEx=EMPTY`, provider CIS из полного GS1 без изменения исходника,
+reauth/reconcile после 401 и согласованные API/worker/beat/Redis runtime guards.
+Независимый OpenSSL-runner подтвердил attached CMS и exact UCS-2LE только на
+одноразовом RSA-сертификате — не КриптоПро/ГОСТ/USB-токен.
+
+Локальный technical recheck прошёл: frontend `53 passed`, TypeScript/ESLint/build и
+diff-check; backend трижды `195 passed, 4 skipped` на SQLite. Исполнитель отдельно
+получил PostgreSQL 16 `5 passed` и Alembic head/downgrade/upgrade; reviewer этот PG-run
+независимо не воспроизвёл. Поэтому diff можно сохранять commit, push и PR, но текущий
+результат пока локальный и незакоммиченный. Внешние gate остаются прежними: B2 sandbox,
+физическая КриптоПро/browser/token/PIN-матрица, ГОСТ, фактическая Railway topology/deploy,
+полный удалённый GitHub CI и production. Production-submit выключен; production
+withdrawal не выполнялся. Внешняя интеграция Честного знака относится к WMS-517 и не
+смешивается с WMS-514.
