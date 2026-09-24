@@ -1,7 +1,7 @@
 """Allow one email in the FF portal and one in the seller portal.
 
 Revision ID: 20260924_0525
-Revises: 20260920_0307
+Revises: 20260921_0490
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20260924_0525"
-down_revision = "20260920_0307"
+down_revision = "20260921_0490"
 branch_labels = None
 depends_on = None
 
