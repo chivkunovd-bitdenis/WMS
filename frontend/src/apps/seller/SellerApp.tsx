@@ -17,6 +17,7 @@ import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
+import { SellerKizWithdrawalScreen } from '../../screens/v2/SellerKizWithdrawalScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
@@ -497,6 +498,20 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
             element={
               <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/honest-sign/withdrawals"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
+                <SellerKizWithdrawalScreen
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}

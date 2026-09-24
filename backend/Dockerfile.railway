@@ -4,6 +4,8 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV WITHDRAWAL_ENVIRONMENT=production
+ENV WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED=false
 
 RUN pip install --no-cache-dir -U pip
 
@@ -15,4 +17,4 @@ COPY app /app/app
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["python", "-m", "app.railway_entrypoint"]

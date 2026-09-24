@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.services.wb_order_price_service import WB_ORDERS_SOURCE, capture_wb_price_snapshot
 
 
 @dataclass
@@ -31,6 +32,8 @@ async def import_wb_order_rows(
     seller_id: uuid.UUID,
     rows: list[dict[str, Any]],
     stats: FbsOrderImportStats,
+    *,
+    price_source: str = WB_ORDERS_SOURCE,
 ) -> None:
     """Импортировать только заказы явно обслуживаемых WB-складов."""
     from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
@@ -64,11 +67,26 @@ async def import_wb_order_rows(
         ]),
     ))).all())
     await lock_order_batch_packaging_rows(session, tenant_id, existing_ids)
+    # Historical fulfilled orders still need price evidence after a warehouse binding
+    # becomes inactive. This does not import unserved orders or change their workflow.
+    known_orders = {wb_id: order_id for wb_id, order_id in (await session.execute(
+        select(FbsOrder.wb_order_id, FbsOrder.id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
+        FbsOrder.marketplace == "wb", FbsOrder.wb_order_id.in_([
+            int(row["id"]) for row in rows if row.get("id") is not None
+        ]),
+    ))).all()}
     stats.received += len(rows)
     for row in rows:
         warehouse_id = _warehouse_id(row)
         scope = scopes.get(warehouse_id) if warehouse_id is not None else None
         if scope is not True:
+            existing_id = known_orders.get(int(row["id"])) if row.get("id") is not None else None
+            if existing_id is not None:
+                await capture_wb_price_snapshot(
+                    session, tenant_id=tenant_id, seller_id=seller_id, order_id=existing_id,
+                    row=row, source=price_source,
+                )
             stats.skipped_unserved += 1
             continue
         _order, was_created = await upsert_order_from_wb_row(
@@ -77,6 +95,7 @@ async def import_wb_order_rows(
             seller_id,
             row,
             preserve_unmapped_warehouse=False,
+            price_source=price_source,
         )
         stats.upserted += 1
         stats.created += int(was_created)
