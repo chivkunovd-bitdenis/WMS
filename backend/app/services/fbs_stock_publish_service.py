@@ -38,6 +38,7 @@ _PENDING_KEY = "fbs_stock_publish_pending"
 _HOOKED_KEY = "fbs_stock_publish_hooked"
 _EVENT_PUBLISH_ATTEMPTS = 3
 _EVENT_PUBLISH_RETRY_SECONDS = 1.0
+_EVENT_FOLLOW_UP_WAIT_SECONDS = 30.0
 
 
 @dataclass
@@ -101,10 +102,14 @@ async def _publish_seller_stocks_pass(
     ) -> None:
         async with AsyncExitStack() as coalescing_stack:
             follow_up_claimed = False
-            for attempt in range(1, _EVENT_PUBLISH_ATTEMPTS + 1):
+            attempt = 1
+            while attempt <= _EVENT_PUBLISH_ATTEMPTS:
                 provider_backoff = _MARKETPLACE_BACKOFF.remaining_seconds(target.marketplace)
                 if provider_backoff > 0:
                     await asyncio.sleep(provider_backoff)
+                lock_wait_timeout = (
+                    _EVENT_FOLLOW_UP_WAIT_SECONDS if follow_up_claimed else 0.0
+                )
                 try:
                     async with (
                         SessionLocal() as session,
@@ -113,7 +118,7 @@ async def _publish_seller_stocks_pass(
                             lock_session,
                             target.seller_id,
                             target.marketplace,
-                            wait_timeout_sec=0 if attempt == 1 else 1,
+                            wait_timeout_sec=lock_wait_timeout,
                         ) as acquired,
                     ):
                         if not acquired and not follow_up_claimed:
@@ -142,16 +147,22 @@ async def _publish_seller_stocks_pass(
                                     target.marketplace,
                                 )
                                 return
+                            continue
                         if not acquired:
                             logger.warning(
-                                "fbs stock publish busy: seller=%s marketplace=%s attempt=%s",
+                                "fbs stock publish follow-up timed out: "
+                                "seller=%s marketplace=%s wait_seconds=%s",
                                 seller_id,
                                 target.marketplace,
-                                attempt,
+                                _EVENT_FOLLOW_UP_WAIT_SECONDS,
                             )
-                            if attempt < _EVENT_PUBLISH_ATTEMPTS:
-                                await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
-                            continue
+                            return
+                        if follow_up_claimed:
+                            # The waiting pass now owns the main lock. Release its
+                            # follow-up claim before provider I/O so an event that
+                            # arrives during this pass can reserve the next pass.
+                            await coalescing_stack.aclose()
+                            follow_up_claimed = False
                         result = await sync_marketplace_stocks_for_target(
                             session,
                             target,
@@ -171,6 +182,7 @@ async def _publish_seller_stocks_pass(
                     )
                     if attempt >= _EVENT_PUBLISH_ATTEMPTS:
                         return
+                    attempt += 1
                     await asyncio.sleep(_EVENT_PUBLISH_RETRY_SECONDS)
                     continue
                 errors = int(getattr(result, "errors", 0))
@@ -198,6 +210,7 @@ async def _publish_seller_stocks_pass(
                     )
                     if attempt >= _EVENT_PUBLISH_ATTEMPTS:
                         return
+                    attempt += 1
                     await asyncio.sleep(
                         max(_EVENT_PUBLISH_RETRY_SECONDS, retry_after_seconds)
                     )
@@ -235,7 +248,7 @@ async def publish_seller_stocks_now(
     seller_id: uuid.UUID,
     marketplace: str | None = None,
 ) -> None:
-    """Coalesce a burst into one current-state pass and at most one follow-up pass."""
+    """Coalesce each burst, then keep publishing while a later event requests a pass."""
     key = (tenant_id, seller_id, marketplace)
     existing = _COALESCED_REQUESTS.get(key)
     if existing is not None and existing.task is not None and not existing.task.done():
@@ -246,17 +259,11 @@ async def publish_seller_stocks_now(
     state = _CoalescedPublish()
 
     async def run() -> None:
-        for pass_number in range(2):
+        while True:
             state.rerun_requested = False
             await _publish_seller_stocks_pass(tenant_id, seller_id, marketplace)
             if not state.rerun_requested:
                 return
-            if pass_number == 1:
-                logger.warning(
-                    "fbs stock publish request burst capped: seller=%s marketplace=%s",
-                    seller_id,
-                    marketplace or "all",
-                )
 
     state.task = asyncio.create_task(run())
     _COALESCED_REQUESTS[key] = state
