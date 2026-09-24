@@ -51,10 +51,11 @@ from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_marking_service as marking_svc
+from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
-from app.services.ozon_kiz_service import OzonKizError
+from app.services.ozon_kiz_service import OzonKizCommitOutcome, OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
 from app.services.ozon_marking_position_service import (
     OzonMarkingPositionError,
@@ -211,6 +212,7 @@ class FbsKizCommitPair:
     order_id: uuid.UUID
     value: str
     confirmed: bool
+    scan_auto_print_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +222,17 @@ class FbsKizCommitRow:
     code: str
     message: str
     meta_status: str | None = None
+    newly_bound: bool = False
+    bound_kiz: str | None = None
+
+
+@dataclass(frozen=True)
+class _FbsKizCommitOutcome:
+    meta_status: str | None
+    newly_bound: bool
+    bound_kiz: str | None
+    marking_id: uuid.UUID | None
+    associate_scan_auto_print: bool = False
 
 
 @dataclass(frozen=True)
@@ -642,6 +655,65 @@ def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     )
 
 
+async def _binding_lookup_for_order(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> FbsKizLookup:
+    if (
+        order.status in FBS_ORDER_MARKING_FROZEN_STATUSES
+        or order.status not in FBS_ORDER_MARKING_WRITE_STATUSES
+    ):
+        raise FbsKizError("order_frozen", context={"order_id": str(order.id)})
+
+    current = _current_sgtin_marking(order)
+    current_out = (
+        FbsKizCurrentMarking(
+            masked=_mask_kiz(current.value),
+            meta_status=current.meta_status,
+            from_pool=current.source == _POOL_MARKING_SOURCE,
+        )
+        if current is not None
+        else None
+    )
+    image_url = await _image_url_for_order(session, order)
+    return FbsKizLookup(
+        order_id=order.id,
+        wb_order_id=int(order.wb_order_id),
+        product=_product_payload(order, image_url),
+        current_kiz=current_out,
+        # Ozon replacement is decided after resolving the scanned code to a position.
+        needs_confirmation=current_out is not None and order.marketplace != "ozon",
+        can_bind=True,
+        block_reason=None,
+        marketplace=order.marketplace or "wb",
+        external_order_id=order.external_order_id,
+    )
+
+
+async def lookup_order_for_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> FbsKizLookup:
+    """Build the existing QR→KIZ target for an already selected supply order."""
+    order = await session.scalar(
+        select(FbsOrder)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+        )
+        .options(
+            selectinload(FbsOrder.product),
+            selectinload(FbsOrder.markings),
+        )
+    )
+    if order is None:
+        raise FbsKizError("order_not_found")
+    return await _binding_lookup_for_order(session, order)
+
+
 async def lookup_order_by_sticker(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -678,35 +750,7 @@ async def lookup_order_by_sticker(
     if order is None:
         raise FbsKizError("sticker_not_found")
 
-    if (
-        order.status in FBS_ORDER_MARKING_FROZEN_STATUSES
-        or order.status not in FBS_ORDER_MARKING_WRITE_STATUSES
-    ):
-        raise FbsKizError("order_frozen", context={"order_id": str(order.id)})
-
-    current = _current_sgtin_marking(order)
-    current_out = (
-        FbsKizCurrentMarking(
-            masked=_mask_kiz(current.value),
-            meta_status=current.meta_status,
-            from_pool=current.source == _POOL_MARKING_SOURCE,
-        )
-        if current is not None
-        else None
-    )
-    image_url = await _image_url_for_order(session, order)
-    return FbsKizLookup(
-        order_id=order.id,
-        wb_order_id=int(order.wb_order_id),
-        product=_product_payload(order, image_url),
-        current_kiz=current_out,
-        # Ozon replacement is decided after resolving the scanned code to a position.
-        needs_confirmation=current_out is not None and order.marketplace != "ozon",
-        can_bind=True,
-        block_reason=None,
-        marketplace=order.marketplace or "wb",
-        external_order_id=order.external_order_id,
-    )
+    return await _binding_lookup_for_order(session, order)
 
 
 def _error_message(exc: FbsKizError) -> str:
@@ -1281,7 +1325,7 @@ async def _commit_one_kiz_pair(
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
     idempotency_key: str,
-) -> str | None:
+) -> _FbsKizCommitOutcome:
     validated = await _validate_kiz_pair(
         session,
         tenant_id,
@@ -1293,8 +1337,17 @@ async def _commit_one_kiz_pair(
     order = validated.order
     if order.marketplace == "ozon":
         try:
-            return await commit_ozon(
+            ozon_result: OzonKizCommitOutcome = await commit_ozon(
                 session, order, validated.value, pair.confirmed, actor_user_id, http_client
+            )
+            return _FbsKizCommitOutcome(
+                meta_status=ozon_result.meta_status,
+                newly_bound=ozon_result.newly_bound,
+                # WMS-514 exposes the canonical code only for its WB reprint
+                # flow. Ozon keeps the same bind result without adding the
+                # full scanned code to the shared HTTP response.
+                bound_kiz=None,
+                marking_id=None,
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
@@ -1315,6 +1368,18 @@ async def _commit_one_kiz_pair(
                 raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
             if operation.state == WB_OPERATION_STATE_FAILED:
                 raise FbsKizError("meta_validation_fail", persist_failure_state=True)
+        associate_scan_auto_print = False
+        if pair.scan_auto_print_id is not None and actor_user_id is not None:
+            exact_operation = (
+                await marking_svc.confirmed_kiz_operation_for_scan_auto_print(
+                    session,
+                    order,
+                    current,
+                    pair.scan_auto_print_id,
+                    actor_user_id,
+                )
+            )
+            associate_scan_auto_print = exact_operation is not None
         code = await _get_marking_code_by_cis(session, tenant_id, validated.value, for_update=True)
         if (
             code is not None
@@ -1329,7 +1394,13 @@ async def _commit_one_kiz_pair(
                 document_number=line_ref.document_number, packaging_task=line_ref.line,
                 source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
-        return None
+        return _FbsKizCommitOutcome(
+            meta_status=None,
+            newly_bound=False,
+            bound_kiz=current.value,
+            marking_id=current.id,
+            associate_scan_auto_print=associate_scan_auto_print,
+        )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
@@ -1401,6 +1472,7 @@ async def _commit_one_kiz_pair(
         await marking_svc.record_pending_kiz_operation(
             session, order, marking, error_code=new_error.code,
             actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+            scan_auto_print_id=pair.scan_auto_print_id,
         )
         pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
     elif new_error is not None and current is not None:
@@ -1444,16 +1516,29 @@ async def _commit_one_kiz_pair(
     await session.flush()
     if pending_error is not None:
         raise pending_error
-    return None
+    return _FbsKizCommitOutcome(
+        meta_status=None,
+        newly_bound=True,
+        bound_kiz=validated.value,
+        marking_id=marking.id,
+    )
 
 
-def _ok_commit_row(order_id: uuid.UUID, meta_status: str | None = None) -> FbsKizCommitRow:
+def _ok_commit_row(
+    order_id: uuid.UUID,
+    meta_status: str | None = None,
+    *,
+    newly_bound: bool = False,
+    bound_kiz: str | None = None,
+) -> FbsKizCommitRow:
     return FbsKizCommitRow(
         order_id=order_id,
         status="ok",
         code="ok",
         message="ok",
         meta_status=meta_status,
+        newly_bound=newly_bound,
+        bound_kiz=bound_kiz,
     )
 
 
@@ -1479,7 +1564,20 @@ async def commit_kiz_pairs(
     rows: list[FbsKizCommitRow] = []
     for pair in pairs:
         try:
-            meta_status = await _commit_one_kiz_pair(
+            if pair.scan_auto_print_id is not None:
+                if actor_user_id is None:
+                    raise FbsKizError("scan_selection_not_found")
+                try:
+                    await scan_print_svc.validate_bound_reprint_context(
+                        session,
+                        tenant_id,
+                        actor_user_id,
+                        pair.scan_auto_print_id,
+                        pair.order_id,
+                    )
+                except scan_print_svc.FbsScanAutoPrintError as exc:
+                    raise FbsKizError(exc.code) from exc
+            outcome = await _commit_one_kiz_pair(
                 session,
                 tenant_id,
                 actor_user_id,
@@ -1487,6 +1585,22 @@ async def commit_kiz_pairs(
                 http_client,
                 idempotency_key,
             )
+            if pair.scan_auto_print_id is not None and (
+                outcome.newly_bound or outcome.associate_scan_auto_print
+            ):
+                if actor_user_id is None or outcome.marking_id is None:
+                    raise FbsKizError("scan_bound_marking_mismatch")
+                try:
+                    await scan_print_svc.record_bound_reprint_target(
+                        session,
+                        tenant_id,
+                        actor_user_id,
+                        pair.scan_auto_print_id,
+                        pair.order_id,
+                        outcome.marking_id,
+                    )
+                except scan_print_svc.FbsScanAutoPrintError as exc:
+                    raise FbsKizError(exc.code) from exc
             await session.commit()
         except IntegrityError:
             await session.rollback()
@@ -1503,6 +1617,13 @@ async def commit_kiz_pairs(
                 await session.rollback()
             rows.append(_error_commit_row(pair.order_id, exc))
         else:
-            rows.append(_ok_commit_row(pair.order_id, meta_status))
+            rows.append(
+                _ok_commit_row(
+                    pair.order_id,
+                    outcome.meta_status,
+                    newly_bound=outcome.newly_bound,
+                    bound_kiz=outcome.bound_kiz,
+                )
+            )
 
     return rows

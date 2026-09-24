@@ -765,6 +765,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       20_000,
     )
     const printNow = () => {
+      if (settled) return
       const frameWindow = iframe.contentWindow
       if (!frameWindow) {
         fail('Не удалось открыть форму печати КИЗ.')
@@ -776,6 +777,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
         // Browser focus can be denied while the print form itself remains usable.
       }
       window.setTimeout(() => {
+        if (settled) return
         try {
           frameWindow.print()
         } catch {
@@ -793,6 +795,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
 
     iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
     iframe.onload = () => {
+      if (settled) return
       const doc = iframe.contentDocument
       const imgs = doc?.querySelectorAll('img') ?? []
       if (imgs.length === 0) {
@@ -801,6 +804,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       }
       let pending = imgs.length
       const done = () => {
+        if (settled) return
         pending -= 1
         if (pending <= 0) printNow()
       }

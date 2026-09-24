@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { KizReprintRow } from './kizReprintApi'
-import { printKizHistory, printScannedKiz, startAutoKizReprintPrint } from './kizReprintPrint'
+import {
+  KizPrintOutcomeUnknownError,
+  printKizHistory,
+  printScannedKiz,
+  startAutoKizReprintPrint,
+} from './kizReprintPrint'
 
 const GS = '\x1d'
 const KIZ_A = `010460000000000121SERIAL-A${GS}91ABCD${GS}92${'A'.repeat(44)}`
@@ -93,5 +98,40 @@ describe('KIZ reprint printing', () => {
     )
     expect(print).not.toHaveBeenCalled()
     expect(result).toEqual({ row: started, printStarted: false })
+  })
+
+  it('marks a lost post-print acknowledgement as unknown and never releases the claim', async () => {
+    const pending = row('lost-started-ack', KIZ_A)
+    const releaseClaim = vi.fn(async () => undefined)
+    const error = await startAutoKizReprintPrint(
+      pending,
+      'unknown-attempt',
+      async () => undefined,
+      {
+        claim: async () => ({ row: pending, claimed: true }),
+        markStarted: async () => { throw new Error('network lost') },
+        releaseClaim,
+      },
+    ).catch((cause: unknown) => cause)
+    expect(error).toBeInstanceOf(KizPrintOutcomeUnknownError)
+    expect((error as KizPrintOutcomeUnknownError).printOutcomeUnknown).toBe(true)
+    expect(releaseClaim).not.toHaveBeenCalled()
+  })
+
+  it('stops instead of retrying an unconfirmed outstanding server claim', async () => {
+    const pending = row('unknown-prior-attempt', KIZ_A, true)
+    const print = vi.fn(async () => undefined)
+    const error = await startAutoKizReprintPrint(
+      pending,
+      'new-browser-attempt',
+      print,
+      {
+        claim: async () => ({ row: pending, claimed: false }),
+        markStarted: async () => pending,
+        releaseClaim: async () => undefined,
+      },
+    ).catch((cause: unknown) => cause)
+    expect(error).toBeInstanceOf(KizPrintOutcomeUnknownError)
+    expect(print).not.toHaveBeenCalled()
   })
 })
