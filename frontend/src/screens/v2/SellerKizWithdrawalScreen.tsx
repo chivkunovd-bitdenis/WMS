@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -19,7 +19,6 @@ import {
   Paper,
   Radio,
   RadioGroup,
-  Snackbar,
   Stack,
   Switch,
   Tab,
@@ -59,22 +58,22 @@ import {
   type SellerWithdrawalApi,
   type WithdrawalCertificateBinding,
   type WithdrawalOperation,
-  type WithdrawalOperationItem,
   type WithdrawalProductOption,
   type WithdrawalRow,
   withdrawalApiErrorMessage,
   withdrawalErrorMessage,
 } from './sellerKizWithdrawalApi'
 import {
+  applyOperationItemsToRows,
   compactKiz,
-  failedWithdrawalItems,
   getOrCreateClientRequest,
+  isRowInFlight,
+  isRowSelectable,
   isWithdrawalProductionSubmitBlocked,
   isTerminalWithdrawalOperation,
   normalizeThumbprint,
   parsePendingRequest,
   sha256Base64Payload,
-  shouldPollWithdrawalOperation,
 } from './sellerKizWithdrawalState'
 
 type AuthChallengeToSign = {
@@ -103,13 +102,13 @@ type Props = {
   routeBase?: string
 }
 
-type OperationFailure = WithdrawalOperationItem & { operationId: string; attempt: number }
-
 const statusView = {
   not_withdrawn: { label: 'Не выведен', color: 'warning' as const },
+  transferring: { label: 'Передаётся', color: 'info' as const },
+  awaiting_crpt: { label: 'Ожидает обработки ЧЗ', color: 'info' as const },
   withdrawn: { label: 'Выведен', color: 'success' as const },
   error: { label: 'Ошибка', color: 'error' as const },
-}
+} as const
 
 const formatDate = (value: string): string =>
   new Intl.DateTimeFormat('ru-RU').format(new Date(value))
@@ -247,25 +246,52 @@ export function SellerKizWithdrawalScreen({
   const [selectedCertificateThumbprint, setSelectedCertificateThumbprint] = useState('')
   const [certificateError, setCertificateError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [activeOperationId, setActiveOperationId] = useState<string | null>(null)
-  const [retryTarget, setRetryTarget] = useState<{ operationId: string; attempt: number } | null>(null)
-  const [failedItems, setFailedItems] = useState<OperationFailure[]>([])
-  const [toast, setToast] = useState('')
 
   const selectedRows = useMemo(
-    () => rows.filter((row) => selected.includes(row.row_id) && row.status !== 'withdrawn'),
+    () => rows.filter((row) => selected.includes(row.row_id) && isRowSelectable(row)),
     [rows, selected],
   )
   const eligibleIds = useMemo(
-    () => rows.filter((row) => row.status !== 'withdrawn').map((row) => row.row_id),
+    () => rows.filter((row) => isRowSelectable(row)).map((row) => row.row_id),
     [rows],
   )
+  const hasInFlightRows = useMemo(() => rows.some(isRowInFlight), [rows])
+
+  // Button label mirrors the actual action the click will perform. It never opens
+  // a different code path — `startOrResumeOperation` already decides retry vs.
+  // reauth vs. new create — but it removes a foot-gun where the operator does not
+  // see that "Вывести из оборота" is really a retry or a reauth in disguise.
+  const submitButtonLabel = useMemo(() => {
+    const count = selectedRows.length
+    if (count === 0) return `Вывести из оборота (0)`
+    const operationIds = new Set(
+      selectedRows
+        .map((row) => row.operation_id)
+        .filter((value): value is string => Boolean(value)),
+    )
+    if (
+      selectedRows.every((row) => row.status === 'error' && row.operation_id) &&
+      operationIds.size === 1
+    ) {
+      return `Повторить (${count})`
+    }
+    if (selectedRows.every((row) => row.resume_required === true)) {
+      return `Продолжить (${count})`
+    }
+    return `Вывести из оборота (${count})`
+  }, [selectedRows])
   const allVisibleSelected =
     eligibleIds.length > 0 && eligibleIds.every((rowId) => selected.includes(rowId))
   const someVisibleSelected =
     eligibleIds.some((rowId) => selected.includes(rowId)) && !allVisibleSelected
 
+  // Monotonic version guards against out-of-order writes. Every filter change and
+  // every optimistic post-signature update bumps it, so any response that started
+  // before the bump is discarded on write instead of overwriting fresher rows.
+  const requestVersionRef = useRef(0)
   const refreshRegistry = useCallback(async (signal?: AbortSignal) => {
+    requestVersionRef.current += 1
+    const version = requestVersionRef.current
     const response = await api.list(
       {
         dateFrom,
@@ -278,6 +304,7 @@ export function SellerKizWithdrawalScreen({
       },
       signal,
     )
+    if (signal?.aborted || version !== requestVersionRef.current) return
     setRows(response.rows)
     setTotal(response.total)
   }, [api, dateFrom, dateTo, debouncedQuery, onlyNotWithdrawn, page, productId, rowsPerPage])
@@ -294,7 +321,12 @@ export function SellerKizWithdrawalScreen({
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
       })
-    return () => controller.abort()
+    return () => {
+      controller.abort()
+      // Filter changed: also invalidate any response that has already left the
+      // network but not yet resolved without a signal (manual button, poll tick).
+      requestVersionRef.current += 1
+    }
   }, [refreshRegistry])
 
   useEffect(() => {
@@ -334,58 +366,44 @@ export function SellerKizWithdrawalScreen({
   }, [page, rowsPerPage, total])
 
   const applyTerminalOperation = useCallback((operation: WithdrawalOperation) => {
-    const failures = failedWithdrawalItems(operation).map((item) => ({
-      ...item,
-      operationId: operation.operation_id,
-      attempt: operation.attempt,
-    }))
-    const succeeded = operation.items.filter((item) => item.status === 'withdrawn').length
-    setFailedItems(failures)
-    if (succeeded > 0) {
-      setToast(
-        failures.length > 0
-          ? `Выведено: ${succeeded}. Ошибок: ${failures.length}`
-          : `КИЗ выведены из оборота: ${succeeded}`,
-      )
-    } else if (operation.auth_error) {
+    if (operation.auth_error) {
+      // Auth error surfaces once here because it does not project onto a row until
+      // the operation actually built a document. Per-KIZ failures live on the row.
       setPageError(withdrawalErrorMessage(operation.auth_error))
     }
-    setActiveOperationId(null)
     safeStorageRemove(keys.operation)
     safeStorageRemove(keys.request)
     void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
   }, [keys.operation, keys.request, refreshRegistry])
 
+  // Registry is the source of truth for row status. While any KIZ is transferring
+  // or awaiting CRPT — from this tab's just-signed operation or from another tab's
+  // in-flight operation on the same visible rows — refresh at a steady cadence.
+  // The tick continues on transient failures so a single 5xx does not park the row
+  // in "передаётся" until the user manually reloads. Concurrent refreshes are made
+  // safe by the monotonic version in refreshRegistry, not by an extra mutex.
   useEffect(() => {
-    const storedOperationId = safeStorageGet(keys.operation)
-    setActiveOperationId(storedOperationId)
-  }, [keys.operation])
-
-  useEffect(() => {
-    if (!activeOperationId) return
+    if (!hasInFlightRows) return
     const controller = new AbortController()
     let timerId: number | undefined
-    const read = async () => {
-      try {
-        const operation = await api.getOperation(activeOperationId, controller.signal)
-        if (isTerminalWithdrawalOperation(operation)) {
-          applyTerminalOperation(operation)
-          return
+    const tick = () => {
+      timerId = window.setTimeout(async () => {
+        if (controller.signal.aborted) return
+        try {
+          await refreshRegistry(controller.signal)
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') return
+          // Do not surface transient poll failures as a page-level error.
         }
-        if (shouldPollWithdrawalOperation(operation)) {
-          timerId = window.setTimeout(() => void read(), 3_000)
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setPageError(withdrawalApiErrorMessage(error))
-      }
+        if (!controller.signal.aborted) tick()
+      }, 5_000)
     }
-    void read()
+    tick()
     return () => {
       controller.abort()
       if (timerId !== undefined) window.clearTimeout(timerId)
     }
-  }, [activeOperationId, api, applyTerminalOperation])
+  }, [hasInFlightRows, refreshRegistry])
 
   const resetSelectionAndPage = () => {
     setSelected([])
@@ -396,8 +414,8 @@ export function SellerKizWithdrawalScreen({
     setSelected(allVisibleSelected ? [] : eligibleIds)
   }
 
-  const openCertificateDialog = async (retry?: { operationId: string; attempt: number }) => {
-    setRetryTarget(retry ?? null)
+  const openCertificateDialog = async () => {
+    // Only opened by an explicit user click; background polling never opens it.
     setCertificateOpen(true)
     setCertificatesLoading(true)
     setCertificateError('')
@@ -419,31 +437,25 @@ export function SellerKizWithdrawalScreen({
     setCertificateOpen(false)
     setCertificateError('')
     setSelectedCertificateThumbprint('')
-    setRetryTarget(null)
   }
 
   const rememberOperation = (operation: WithdrawalOperation) => {
+    // Persist across reload so an interrupted signing flow keeps the same
+    // client_request_id (BR11) instead of creating a second document.
     safeStorageSet(keys.operation, operation.operation_id)
-    setActiveOperationId(operation.operation_id)
   }
 
   const startOrResumeOperation = async (
     certificate: CryptoProCertificate,
   ): Promise<WithdrawalOperation> => {
     const binding = certificateBinding(certificate)
-    if (retryTarget) {
-      return api.retryOperation({
-        operationId: retryTarget.operationId,
-        expectedAttempt: retryTarget.attempt,
-        certificate: binding,
-      })
-    }
-
     const operationIds = new Set(
       selectedRows.map((row) => row.operation_id).filter((value): value is string => Boolean(value)),
     )
     if (operationIds.size === 1 && selectedRows.every((row) => row.operation_id)) {
       const operation = await api.getOperation([...operationIds][0])
+      // Only failed/partial_failed rows are selectable when they carry an
+      // operation_id; an in-flight row would not be selectable at all.
       if (operation.state === 'failed' || operation.state === 'partial_failed') {
         return api.retryOperation({
           operationId: operation.operation_id,
@@ -551,16 +563,8 @@ export function SellerKizWithdrawalScreen({
         setSelected([])
         setCertificateOpen(false)
         setSelectedCertificateThumbprint('')
-        setRetryTarget(null)
         safeStorageRemove(keys.request)
         void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
-        return
-      }
-      if (shouldPollWithdrawalOperation(operation)) {
-        setSelected([])
-        setCertificateOpen(false)
-        setSelectedCertificateThumbprint('')
-        setRetryTarget(null)
         return
       }
       if (operation.auth_error) {
@@ -610,29 +614,32 @@ export function SellerKizWithdrawalScreen({
       setSelected([])
       setCertificateOpen(false)
       setSelectedCertificateThumbprint('')
-      setRetryTarget(null)
       safeStorageRemove(keys.request)
-      if (isTerminalWithdrawalOperation(operation)) applyTerminalOperation(operation)
-      else void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
+      if (isTerminalWithdrawalOperation(operation)) {
+        applyTerminalOperation(operation)
+      } else {
+        // Docs are now durably signed. Copy each item's authoritative status from
+        // the accepted-signature response onto its row — the backend projects
+        // signed pending items as "transferring" but keeps prior-attempt succeeded
+        // and preflight-failed items on their real terminal status. This seeds
+        // polling for the actual in-flight rows and never rewinds a real
+        // withdrawn/error back to pending. Bump the version so any stale older
+        // list response cannot overwrite the seed.
+        const localOperation = operation
+        requestVersionRef.current += 1
+        setRows((current) =>
+          applyOperationItemsToRows(current, localOperation.items, localOperation.operation_id),
+        )
+        void refreshRegistry().catch((error: unknown) =>
+          setPageError(withdrawalApiErrorMessage(error)),
+        )
+      }
     } catch (error) {
       setCertificateError(withdrawalApiErrorMessage(error))
     } finally {
       setSubmitting(false)
     }
   }
-
-  const retryFailure = () => {
-    const operationIds = new Set(failedItems.map((item) => item.operationId))
-    const attempts = new Set(failedItems.map((item) => item.attempt))
-    if (operationIds.size !== 1 || attempts.size !== 1) return
-    const retry = { operationId: [...operationIds][0], attempt: [...attempts][0] }
-    setFailedItems([])
-    void openCertificateDialog(retry)
-  }
-
-  const retryAvailable =
-    new Set(failedItems.map((item) => item.operationId)).size === 1 &&
-    new Set(failedItems.map((item) => item.attempt)).size === 1
 
   return (
     <Stack spacing={2.5} sx={{ minWidth: 0, maxWidth: '100%' }} data-testid="seller-kiz-withdrawal-page">
@@ -753,12 +760,19 @@ export function SellerKizWithdrawalScreen({
                   <Typography variant="subtitle2">По выбранным фильтрам ничего не найдено</Typography>
                 </TableCell></TableRow>
               ) : rows.map((row) => {
-                const eligible = row.status !== 'withdrawn'
+                const eligible = isRowSelectable(row)
                 const checked = selected.includes(row.row_id)
+                const tooltip = eligible
+                  ? row.resume_required
+                    ? 'Возобновить операцию тем же сертификатом'
+                    : 'Выбрать КИЗ'
+                  : row.status === 'withdrawn'
+                    ? 'КИЗ уже выведен'
+                    : 'КИЗ передан в Честный знак, дождитесь результата'
                 return (
                   <TableRow key={row.row_id} hover selected={checked}>
                     <TableCell padding="checkbox">
-                      <Tooltip title={eligible ? 'Выбрать КИЗ' : 'КИЗ уже выведен'}>
+                      <Tooltip title={tooltip}>
                         <span>
                           <Checkbox
                             checked={checked}
@@ -814,7 +828,7 @@ export function SellerKizWithdrawalScreen({
                 onClick={() => void openCertificateDialog()}
                 startIcon={<KeyOutlined />}
               >
-                Вывести из оборота ({selectedRows.length})
+                {submitButtonLabel}
               </Button>
             </span>
           </Tooltip>
@@ -885,34 +899,6 @@ export function SellerKizWithdrawalScreen({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={failedItems.length > 0} onClose={() => setFailedItems([])} fullWidth maxWidth="md" aria-labelledby="withdrawal-error-dialog-title">
-        <DialogTitle id="withdrawal-error-dialog-title" sx={{ pr: 6 }}>
-          Не удалось вывести часть КИЗ
-          <IconButton aria-label="Закрыть" onClick={() => setFailedItems([])} sx={{ position: 'absolute', right: 12, top: 12 }}><CloseOutlined /></IconButton>
-        </DialogTitle>
-        <DialogContent dividers sx={{ p: { xs: 1, sm: 2 } }}>
-          <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-            <Table size="small" aria-label="Ошибки вывода из оборота" sx={{ minWidth: 680 }}>
-              <TableHead><TableRow><TableCell>КИЗ</TableCell><TableCell>Заказ WB</TableCell><TableCell>Причина</TableCell></TableRow></TableHead>
-              <TableBody>
-                {failedItems.map((item) => (
-                  <TableRow key={`${item.operationId}:${item.row_id}`}>
-                    <TableCell><Tooltip title={item.cis}><Typography component="code" variant="caption" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{compactKiz(item.cis)}</Typography></Tooltip></TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>№ {item.wb_order_id}</TableCell>
-                    <TableCell>{withdrawalErrorMessage(item.error) || 'Причина не передана'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFailedItems([])}>Закрыть</Button>
-          {retryAvailable ? <Button variant="contained" onClick={retryFailure}>Повторить</Button> : null}
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar open={Boolean(toast)} autoHideDuration={3200} onClose={() => setToast('')} message={toast} />
     </Stack>
   )
 }

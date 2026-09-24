@@ -1,13 +1,32 @@
-import type { WithdrawalOperation, WithdrawalOperationItem } from './sellerKizWithdrawalApi'
+import type {
+  WithdrawalOperation,
+  WithdrawalOperationItem,
+  WithdrawalRow,
+} from './sellerKizWithdrawalApi'
+
+// The submit response is the authoritative per-KIZ projection — an operation
+// carries pending, failed-preflight and succeeded prior-attempt items in the
+// same array. Copy each item's real status/error onto its row and stamp the
+// operation_id; rows the operation does not touch are left untouched.
+export const applyOperationItemsToRows = (
+  rows: WithdrawalRow[],
+  items: WithdrawalOperationItem[],
+  operationId: string,
+): WithdrawalRow[] => {
+  const byRowId = new Map(items.map((item) => [item.row_id, item] as const))
+  return rows.map((row) => {
+    const item = byRowId.get(row.row_id)
+    if (!item) return row
+    return { ...row, status: item.status, error: item.error, operation_id: operationId }
+  })
+}
 
 const TERMINAL_OPERATION_STATES = new Set(['succeeded', 'partial_failed', 'failed', 'cancelled'])
-const POLLING_OPERATION_STATES = new Set(['submitting', 'submitted', 'reconciling'])
+const IN_FLIGHT_ROW_STATUSES = new Set(['transferring', 'awaiting_crpt'])
+const SELECTABLE_ROW_STATUSES = new Set(['not_withdrawn', 'error'])
 
 export const isTerminalWithdrawalOperation = (operation: WithdrawalOperation): boolean =>
   TERMINAL_OPERATION_STATES.has(operation.state)
-
-export const shouldPollWithdrawalOperation = (operation: WithdrawalOperation): boolean =>
-  POLLING_OPERATION_STATES.has(operation.state) && !operation.reauth_required
 
 export const isWithdrawalProductionSubmitBlocked = (operation: WithdrawalOperation): boolean =>
   operation.integration_gate === 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED' &&
@@ -15,6 +34,15 @@ export const isWithdrawalProductionSubmitBlocked = (operation: WithdrawalOperati
 
 export const failedWithdrawalItems = (operation: WithdrawalOperation): WithdrawalOperationItem[] =>
   operation.items.filter((item) => item.status === 'error')
+
+export const isRowInFlight = (row: WithdrawalRow): boolean =>
+  IN_FLIGHT_ROW_STATUSES.has(row.status)
+
+// Fresh and terminal-error rows are eligible for a new/retry submit. An in-flight
+// row is only eligible when the same operation needs same-cert reauth (BR14): that
+// path is GET-only reconciliation, it never creates a second document.
+export const isRowSelectable = (row: WithdrawalRow): boolean =>
+  SELECTABLE_ROW_STATUSES.has(row.status) || row.resume_required === true
 
 export const compactKiz = (value: string): string =>
   value.length <= 24 ? value : `${value.slice(0, 18)}…${value.slice(-4)}`

@@ -34,6 +34,7 @@ from app.db.withdrawal_repository import (
     current_items,
     eligible_rows,
     get_operation,
+    project_item_status,
     registry,
 )
 from app.models.fbs_order import FbsOrder
@@ -93,6 +94,7 @@ async def _output(
         ).all()
     }
     documents = await scoped_documents(session, scope, operation)
+    docs_by_id = {doc.id: doc for doc in documents}
     return OperationOut(
         operation_id=operation.id,
         state=operation.state,
@@ -127,12 +129,18 @@ async def _output(
                 row_id=item.marking_id,
                 cis=item.cis,
                 wb_order_id=str(orders.get(item.order_id, "")),
-                status=(
-                    "withdrawn"
-                    if item.state == "succeeded"
-                    else "error"
-                    if item.state == "failed"
-                    else "not_withdrawn"
+                status=project_item_status(
+                    item.state,
+                    (
+                        docs_by_id[item.document_id].state
+                        if item.document_id and item.document_id in docs_by_id
+                        else None
+                    ),
+                    (
+                        docs_by_id[item.document_id].signature is not None
+                        if item.document_id and item.document_id in docs_by_id
+                        else False
+                    ),
                 ),
                 error=item.error if item.state == "failed" else None,
             )

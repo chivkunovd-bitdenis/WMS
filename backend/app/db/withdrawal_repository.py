@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Select, and_, exists, func, or_, select
@@ -14,7 +15,7 @@ from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import MarkingCode
-from app.models.marking_withdrawal import WithdrawalItem, WithdrawalOperation
+from app.models.marking_withdrawal import WithdrawalDocument, WithdrawalItem, WithdrawalOperation
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
@@ -35,6 +36,36 @@ class WithdrawalError(ValueError):
         self.code = code
         self.status_code = status_code
         super().__init__(code)
+
+
+ItemStatus = Literal["not_withdrawn", "transferring", "awaiting_crpt", "withdrawn", "error"]
+
+
+def project_item_status(
+    item_state: str | None,
+    document_state: str | None,
+    document_signed: bool,
+) -> ItemStatus:
+    # Per-KIZ status derived from existing durable state; no new DB column. Ambiguous
+    # in-flight statuses (transferring/awaiting_crpt) protect the row from a second
+    # retry that would duplicate the CRPT document.
+    if item_state == "succeeded":
+        return "withdrawn"
+    if item_state == "failed":
+        return "error"
+    if item_state != "pending":
+        return "not_withdrawn"
+    if document_state is None:
+        return "not_withdrawn"
+    if document_state == "pending_signature":
+        return "transferring" if document_signed else "not_withdrawn"
+    if document_state == "submitting":
+        return "transferring"
+    if document_state in {"submitted", "reconciling"}:
+        return "awaiting_crpt"
+    # doc.state in {succeeded, failed} while item still pending: recovery is running,
+    # keep the row in-flight until item state catches up. Never selectable for retry.
+    return "transferring"
 
 
 def eligible_rows(scope: WithdrawalScope) -> Select[tuple[FbsOrderMarking, FbsOrder, FbsSupply]]:
@@ -214,8 +245,33 @@ async def registry(
         .scalar_subquery()
     )
     query = query.outerjoin(WbOrderPriceSnapshot, WbOrderPriceSnapshot.id == latest_price_id)
+    # WithdrawalDocument is joined via WithdrawalItem.document_id only; scope columns
+    # (tenant/seller) are already enforced upstream on the item.
+    # Do not hydrate the ORM document — its exact_payload and signature can be up to
+    # 30 MB each. Select only the two scalar fields the projection needs.
+    doc_state = WithdrawalDocument.state.label("_doc_state")
+    doc_signed = (WithdrawalDocument.signature.is_not(None)).label("_doc_signed")
+    op_token_expires_at = WithdrawalOperation.token_expires_at.label("_op_token_expires_at")
+    query = query.outerjoin(
+        WithdrawalDocument, WithdrawalDocument.id == WithdrawalItem.document_id
+    ).outerjoin(
+        WithdrawalOperation,
+        and_(
+            WithdrawalOperation.id == WithdrawalItem.operation_id,
+            WithdrawalOperation.tenant_id == scope.tenant_id,
+            WithdrawalOperation.seller_id == scope.seller_id,
+        ),
+    )
+    now = datetime.now(UTC)
     rows = await session.execute(
-        query.add_columns(Product, WithdrawalItem, WbOrderPriceSnapshot)
+        query.add_columns(
+            Product,
+            WithdrawalItem,
+            WbOrderPriceSnapshot,
+            doc_state,
+            doc_signed,
+            op_token_expires_at,
+        )
         .order_by(
             FbsSupply.delivered_at.desc(),
             FbsOrderMarking.id,
@@ -224,7 +280,17 @@ async def registry(
         .limit(limit)
     )
     result: list[dict[str, object]] = []
-    for marking, order, supply, product, item, price in rows:
+    for (
+        marking,
+        order,
+        supply,
+        product,
+        item,
+        price,
+        doc_state_value,
+        doc_signed_value,
+        token_expires_at,
+    ) in rows:
         error = item.error if item and item.state == "failed" else None
         if item is None:
             try:
@@ -235,6 +301,29 @@ async def registry(
                 product_cost_from_snapshot(price)
             except WbPriceDataError as exc:
                 error = {"source": "local", "code": exc.code, "message": str(exc)}
+        status = (
+            "error"
+            if item is None and error is not None
+            else project_item_status(
+                item.state if item else None,
+                doc_state_value,
+                bool(doc_signed_value),
+            )
+        )
+        # An in-flight row invites a duplicate create by default. Only surface it as
+        # resumable when the same operation is stuck on token expiry — the existing
+        # same-op reauth path is safe (BR14: no new POST, GET-only reconciliation).
+        expiry_utc = token_expires_at.replace(tzinfo=UTC) if (
+            token_expires_at is not None and token_expires_at.tzinfo is None
+        ) else token_expires_at
+        token_expired = token_expires_at is None or (
+            expiry_utc is not None and expiry_utc <= now
+        )
+        resume_required = bool(
+            status in {"transferring", "awaiting_crpt"}
+            and doc_state_value in {"submitting", "submitted", "reconciling"}
+            and token_expired
+        )
         result.append(
             {
                 "row_id": marking.id,
@@ -244,15 +333,10 @@ async def registry(
                 "sku": product.sku_code if product else order.wb_article or "",
                 "product_name": product.name if product else "",
                 "cis": marking.value,
-                "status": (
-                    "withdrawn"
-                    if item and item.state == "succeeded"
-                    else "error"
-                    if error is not None
-                    else "not_withdrawn"
-                ),
+                "status": status,
                 "error": error,
                 "operation_id": item.operation_id if item else None,
+                "resume_required": resume_required,
             }
         )
     return result, total

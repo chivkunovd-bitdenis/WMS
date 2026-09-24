@@ -1,7 +1,12 @@
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
-export type WithdrawalStatus = 'not_withdrawn' | 'withdrawn' | 'error'
+export type WithdrawalStatus =
+  | 'not_withdrawn'
+  | 'transferring'
+  | 'awaiting_crpt'
+  | 'withdrawn'
+  | 'error'
 
 export type WithdrawalErrorDetail = {
   source?: string
@@ -21,6 +26,7 @@ export type WithdrawalRow = {
   status: WithdrawalStatus
   error: WithdrawalErrorDetail | null
   operation_id: string | null
+  resume_required?: boolean
 }
 
 export type WithdrawalPage = {
