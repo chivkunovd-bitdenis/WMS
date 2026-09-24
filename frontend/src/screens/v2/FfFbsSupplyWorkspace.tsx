@@ -70,6 +70,9 @@ import {
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
+  fbsOzonAutoBoxesPlan,
+  fbsOzonBoxLabelReady,
+  fbsOzonLabelFailuresText,
   fbsUnassignedPositionQuantity,
   fbsStageAfterWorkspaceRefresh,
   ordersWord,
@@ -79,6 +82,7 @@ import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
   assignFbsPackingBoxOrders,
+  autoAssignFbsOzonBoxes,
   clearFbsPackingBox,
   claimFbsDirectKizPrint,
   claimFbsScanAutoPrintReprint,
@@ -503,6 +507,9 @@ export function FfFbsSupplyWorkspace({
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
+  // WMS-526: ход «Создать автоматически» в тексте кнопки; ref держит одно выполнение на двойной клик.
+  const [ozonAutoBoxesProgress, setOzonAutoBoxesProgress] = useState<string | null>(null)
+  const ozonAutoBoxesRunningRef = useRef(false)
   const deliveryKeyRef = useRef(createFbsIdempotencyKey())
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [deliverConfirmOpen, setDeliverConfirmOpen] = useState(false)
@@ -674,6 +681,7 @@ export function FfFbsSupplyWorkspace({
     setBoxSelectedPositionIds(new Set())
     setBoxMenu(null)
     setExpandedBoxIds(new Set())
+    setOzonAutoBoxesProgress(null)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
     setTzLine(null)
@@ -1867,6 +1875,75 @@ export function FfFbsSupplyWorkspace({
     else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетка Ozon ещё не готова — повторите получение через минуту.')
   }
 
+  // WMS-526: одна серверная операция раскладывает каждую неразложенную позицию
+  // Ozon в свой новый короб; затем этикетки запрашиваются тем же запросом, что у
+  // кнопки короба «Собрать и получить этикетку», — по одному на заказ, по очереди.
+  // Сбой заказа не останавливает остальные; окна печати не открываются.
+  const autoCreateOzonBoxes = async () => {
+    if (!workspace || !isOzonSupply || boxEditingDisabled || ozonAutoBoxesRunningRef.current) return
+    ozonAutoBoxesRunningRef.current = true
+    const session = beginWorkspaceWrite()
+    const supplyIdAtStart = workspace.supply.id
+    const boxIdsBefore = new Set(workspace.boxes.map((box) => box.id))
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    setRetryAction(null)
+    setOzonAutoBoxesProgress('Раскладка…')
+    // Ответ ложится на экран, только если открыта та же поставка и он последний
+    // из начатых; иначе состав восстановит новое чтение, как в run().
+    const applyResponse = (write: ReturnType<typeof beginWorkspaceWrite>, next: FbsWorkspace) => {
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return false
+      if (write.isLatest()) setWorkspace(next)
+      else refreshAfterLostRace()
+      return true
+    }
+    try {
+      let write = beginWorkspaceWrite()
+      let assigned: FbsWorkspace
+      try {
+        assigned = await autoAssignFbsOzonBoxes(token, authHeaders, supplyIdAtStart)
+      } catch (cause) {
+        if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Короба не созданы.')
+        return
+      }
+      if (!applyResponse(write, assigned)) return
+      const created = assigned.boxes.filter((box) => !boxIdsBefore.has(box.id)).length
+      const { labelTargets } = fbsOzonAutoBoxesPlan(assigned.orders, assigned.boxes)
+      let received = 0
+      const failures: Array<{ externalOrderId: string | null; reason: string }> = []
+      for (const [index, target] of labelTargets.entries()) {
+        setOzonAutoBoxesProgress(`Этикетки ${index + 1} из ${labelTargets.length}`)
+        write = beginWorkspaceWrite()
+        try {
+          const next = await retryFbsPackingBoxQr(token, authHeaders, supplyIdAtStart, target.boxId)
+          if (!applyResponse(write, next)) return
+          const ready = next.boxes.some((box) => box.assigned_order_ids.includes(target.orderId) && fbsOzonBoxLabelReady(box))
+          if (ready) received += 1
+          else failures.push({ externalOrderId: target.externalOrderId, reason: 'Этикетка Ozon ещё не готова — повторите получение через минуту.' })
+        } catch (cause) {
+          if (!write.isCurrent()) return
+          failures.push({
+            externalOrderId: target.externalOrderId,
+            reason: cause instanceof Error ? fbsErrorText(cause.message) : 'Этикетка не получена.',
+          })
+        }
+      }
+      setNotice(`Создано коробов: ${created}. Этикетки Ozon получены для заказов: ${received}.`)
+      if (failures.length > 0) {
+        setError(fbsOzonLabelFailuresText(failures))
+        // Неудачный запрос не вернул снимок, а сборка могла успеть изменить заказ.
+        refreshAfterLostRace()
+      }
+    } finally {
+      ozonAutoBoxesRunningRef.current = false
+      if (session.isCurrent()) {
+        setBusy(false)
+        setOzonAutoBoxesProgress(null)
+      }
+    }
+  }
+
   const deliver = async () => {
     if (!workspace || deliveryConfirmed) return
     const next = await run(
@@ -2409,6 +2486,9 @@ export function FfFbsSupplyWorkspace({
   const boxDistributedCount = isOzonSupply ? ozonPositionRows.reduce((sum, row) => sum + (assignedBoxPositionIds.has(row.id) ? row.position.quantity : 0), 0) : assignedBoxOrderIds.size
   const boxTotalCount = isOzonSupply ? (workspace?.orders ?? []).reduce((sum, order) => sum + order.positions.reduce((qty, position) => qty + position.quantity, 0), 0) : workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
+  const ozonAutoBoxesPlan = isOzonSupply && workspace ? fbsOzonAutoBoxesPlan(workspace.orders, workspace.boxes) : null
+  const ozonAutoBoxesNothingToDo = !ozonAutoBoxesPlan
+    || (ozonAutoBoxesPlan.unassignedPositions === 0 && ozonAutoBoxesPlan.labelTargets.length === 0)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = Boolean(workspace?.supply)
   // A cargo-place QR is available per-box whenever WB registered a cargo
@@ -3334,6 +3414,15 @@ export function FfFbsSupplyWorkspace({
                           ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
                           : `Печать всех QR (${workspace.boxes.length})`}
                       </Button>
+                      {isOzonSupply ? (
+                        <Button
+                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
+                          onClick={() => void autoCreateOzonBoxes()}
+                          data-testid="fbs-boxes-ozon-auto-create"
+                        >
+                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
+                        </Button>
+                      ) : null}
                       {!isOzonSupply ? <FormControlLabel
                         control={(
                           <Checkbox
@@ -3351,7 +3440,7 @@ export function FfFbsSupplyWorkspace({
                         data-task-id="FBS-12"
                       /> : null}
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>

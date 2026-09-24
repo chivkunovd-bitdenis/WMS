@@ -967,6 +967,20 @@ export async function retryFbsPackingBoxQr(
   )
 }
 
+// WMS-526: каждая неразложенная позиция неотменённого заказа Ozon — в свой
+// новый короб, одной операцией. К Ozon сервер здесь не обращается.
+export async function autoAssignFbsOzonBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/auto-assign`), {
+      method: 'POST', headers: { ...ah(token) },
+    }),
+  )
+}
+
 export async function fetchFbsOrderMetadata(
   token: string,
   ah: AuthHeaders,
