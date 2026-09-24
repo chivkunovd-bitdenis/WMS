@@ -143,8 +143,18 @@ const makeFakeRuntime = (options: FakeOptions = {}) => {
   }
 }
 
-const installRuntime = (runtime: unknown, userAgent = CHROME_120_MACOS_14) => {
-  vi.stubGlobal('window', { cadesplugin: runtime, navigator: { userAgent } })
+const installRuntime = (
+  runtime: unknown,
+  userAgent = CHROME_120_MACOS_14,
+  userAgentData?: {
+    platform?: string
+    getHighEntropyValues?: (hints: string[]) => Promise<{
+      platform?: string
+      platformVersion?: string
+    }>
+  },
+) => {
+  vi.stubGlobal('window', { cadesplugin: runtime, navigator: { userAgent, userAgentData } })
 }
 
 const expectCryptoProCode = async (promise: Promise<unknown>, code: CryptoProError['code']) => {
@@ -304,7 +314,25 @@ describe('CryptoPro CAdES readiness', () => {
     expect(caught).not.toHaveProperty('technicalDetail')
   })
 
-  it('uses a scoped tested-OS confirmation for a frozen macOS user-agent only', async () => {
+  it('uses Chrome platformVersion and reaches Store with the default adapter on frozen macOS UA', async () => {
+    const fake = makeFakeRuntime()
+    const getHighEntropyValues = vi.fn().mockResolvedValue({
+      platform: 'macOS',
+      platformVersion: '14.6.0',
+    })
+    installRuntime(
+      fake.runtime,
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      { platform: 'macOS', getHighEntropyValues },
+    )
+
+    await expect(new CryptoProCadesAdapter().listCertificates()).resolves.toHaveLength(1)
+    expect(getHighEntropyValues).toHaveBeenCalledWith(['platformVersion'])
+    expect(fake.store.Open).toHaveBeenCalledWith(2, 'My', 2)
+    expect(fake.privateKeyRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps the scoped confirmation fallback when frozen macOS client hints are unavailable', async () => {
     const fake = makeFakeRuntime()
     installRuntime(
       fake.runtime,
@@ -317,6 +345,27 @@ describe('CryptoPro CAdES readiness', () => {
         testedOperatingSystem: { family: 'macos', major: 14, evidenceId: 'BC14-macos14-chrome-2026-09-23' },
       }).checkReadiness(),
     ).resolves.toEqual({ pluginVersion: '2.0.15003', cspVersion: '5.0.13003' })
+  })
+
+  it('rejects a frozen macOS user-agent when Chrome reports an unsupported platformVersion', async () => {
+    const fake = makeFakeRuntime()
+    installRuntime(
+      fake.runtime,
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      {
+        platform: 'macOS',
+        getHighEntropyValues: vi.fn().mockResolvedValue({
+          platform: 'macOS',
+          platformVersion: '15.0.0',
+        }),
+      },
+    )
+
+    await expectCryptoProCode(
+      new CryptoProCadesAdapter().checkReadiness(),
+      'unsupported_operating_system',
+    )
+    expect(fake.store.Open).not.toHaveBeenCalled()
   })
 
   it('rejects unsupported runtime before Store access or signing', async () => {

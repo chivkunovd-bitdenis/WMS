@@ -112,7 +112,18 @@ type CadesRuntime = {
 
 type ReadyCadesRuntime = Omit<CadesRuntime, 'then'>
 
-type RuntimeWindow = Window & { cadesplugin?: unknown }
+type UserAgentDataLike = {
+  platform?: string
+  getHighEntropyValues?: (hints: string[]) => Promise<{
+    platform?: string
+    platformVersion?: string
+  }>
+}
+
+type RuntimeWindow = Window & {
+  cadesplugin?: unknown
+  navigator: Navigator & { userAgentData?: UserAgentDataLike }
+}
 
 const asObject = (value: unknown, _label: string): CadesObject => {
   void _label
@@ -249,10 +260,33 @@ const confirmedOperatingSystem = (confirmation: TestedOperatingSystem | undefine
   return `macos-${confirmation.major}`
 }
 
-const detectSupportedOperatingSystem = (
-  userAgent: string,
+const clientHintMacOperatingSystem = async (
+  browserWindow: RuntimeWindow,
+): Promise<RuntimeEnvironment['operatingSystem'] | null> => {
+  const userAgentData = browserWindow.navigator.userAgentData
+  if (!userAgentData || typeof userAgentData.getHighEntropyValues !== 'function') return null
+  try {
+    const values = await userAgentData.getHighEntropyValues(['platformVersion'])
+    const platform = values.platform ?? userAgentData.platform
+    if (platform?.toLowerCase() !== 'macos') return null
+    const major = Number(values.platformVersion?.match(/^\d+/)?.[0])
+    if (major >= 11 && major <= 14) {
+      return `macos-${major}` as RuntimeEnvironment['operatingSystem']
+    }
+    if (Number.isSafeInteger(major)) throw new CryptoProError('unsupported_operating_system')
+    return null
+  } catch (error) {
+    if (error instanceof CryptoProError) throw error
+    return null
+  }
+}
+
+const detectSupportedOperatingSystem = async (
+  browserWindow: RuntimeWindow,
+  browser: SupportedBrowser,
   confirmation: TestedOperatingSystem | undefined,
-): RuntimeEnvironment['operatingSystem'] => {
+): Promise<RuntimeEnvironment['operatingSystem']> => {
+  const userAgent = browserWindow.navigator?.userAgent ?? ''
   if (/Windows NT 10\.0/.test(userAgent)) return 'windows-10-or-11'
   if (/Windows NT/.test(userAgent)) throw new CryptoProError('unsupported_operating_system')
 
@@ -260,9 +294,17 @@ const detectSupportedOperatingSystem = (
   if (macos) {
     const major = Number(macos[1])
     if (major >= 11 && major <= 14) return `macos-${major}` as RuntimeEnvironment['operatingSystem']
-    // Chromium may freeze the macOS token at 10_15 even on a newer OS. Only a scoped,
-    // evidence-bearing confirmation may resolve that ambiguity; it cannot override macOS 15+.
-    if (major === 10) return confirmedOperatingSystem(confirmation)
+    // Chromium freezes the legacy UA token at 10_15_7 on newer macOS. Use its
+    // structured high-entropy platformVersion when available; this is runtime
+    // information supplied by the browser, not an invented acceptance marker.
+    if (
+      major === 10
+      && /Mac OS X 10_15_7/.test(userAgent)
+      && (browser === 'chrome' || browser === 'edge')
+    ) {
+      return (await clientHintMacOperatingSystem(browserWindow))
+        ?? confirmedOperatingSystem(confirmation)
+    }
     throw new CryptoProError('unsupported_operating_system')
   }
   if (/Macintosh|MacIntel/.test(userAgent)) throw new CryptoProError('untested_operating_system')
@@ -270,14 +312,14 @@ const detectSupportedOperatingSystem = (
   return confirmedOperatingSystem(confirmation)
 }
 
-const assertRuntimeSupport = (
+const assertRuntimeSupport = async (
   browserWindow: RuntimeWindow,
   readiness: CryptoProReadiness,
   confirmation: TestedOperatingSystem | undefined,
-): RuntimeEnvironment => {
+): Promise<RuntimeEnvironment> => {
   const userAgent = browserWindow.navigator?.userAgent ?? ''
   const { browser, major: browserMajor } = detectSupportedBrowser(userAgent)
-  const operatingSystem = detectSupportedOperatingSystem(userAgent, confirmation)
+  const operatingSystem = await detectSupportedOperatingSystem(browserWindow, browser, confirmation)
   if (!isVersionAtLeast(readiness.pluginVersion, MINIMUM_PLUGIN_VERSION)) {
     throw new CryptoProError('plugin_version_unsupported')
   }
@@ -457,7 +499,7 @@ export class CryptoProCadesAdapter {
         CRYPTO_PRO_2012_PROVIDER_TYPE,
       )
       const readiness = { pluginVersion, cspVersion: await versionToString(cspVersionObject) }
-      assertRuntimeSupport(window as RuntimeWindow, readiness, this.#testedOperatingSystem)
+      await assertRuntimeSupport(window as RuntimeWindow, readiness, this.#testedOperatingSystem)
       return { runtime, readiness }
     } catch (error) {
       throw mapRuntimeError(runtime, error, 'plugin_unavailable')
