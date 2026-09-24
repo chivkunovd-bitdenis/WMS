@@ -1173,7 +1173,19 @@ async def _void_existing_sgtin_marking_locally(
         )
         if operator_detach:
             if code.status in {STATUS_RESERVED, STATUS_PRINTED, STATUS_APPLIED, STATUS_INTRODUCED}:
-                if code.status != STATUS_INTRODUCED:
+                if code.source == _POOL_MARKING_SOURCE and code.status != STATUS_INTRODUCED:
+                    # WB metadata was removed successfully. These states describe
+                    # server-side preparation, not confirmed physical printing.
+                    # Keep the event history while releasing this same pool unit.
+                    # The code lock and unique marking_code_id binding keep the
+                    # detach and release exclusive until this transaction commits.
+                    code.status = STATUS_AVAILABLE
+                    code.reserved_at = None
+                    code.reserved_by_user_id = None
+                    code.printed_at = None
+                    code.printed_by_user_id = None
+                    code.applied_at = None
+                elif code.status != STATUS_INTRODUCED:
                     code.status = STATUS_APPLIED
                 code.packaging_task_line_id = None
             # Terminal/defective codes keep their state; detaching never revives them.
@@ -1301,7 +1313,7 @@ async def cancel_order_kiz(
                 count for source, count in counts.items() if source != _EXTERNAL_FBS_MARKING_SOURCE
             )
         await session.commit()
-    except FbsKizError:
+    except Exception:
         await session.rollback()
         raise
 
