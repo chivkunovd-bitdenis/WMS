@@ -13,7 +13,6 @@ migrations; old staging databases stamped at ``20260921_0491`` continue from it.
 
 from __future__ import annotations
 
-
 revision = "20260921_0491"
 down_revision = "20260921_0490"
 branch_labels = None
