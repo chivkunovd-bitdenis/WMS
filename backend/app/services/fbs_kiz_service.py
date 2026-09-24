@@ -31,7 +31,6 @@ from app.models.fbs_order import (
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
-    WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
@@ -1356,26 +1355,16 @@ async def _commit_one_kiz_pair(
                 raise FbsKizError("meta_validation_fail", persist_failure_state=True)
         associate_scan_auto_print = False
         if pair.scan_auto_print_id is not None and actor_user_id is not None:
-            exact_operation = await marking_svc.kiz_operation_for_attempt(
-                session,
-                order,
-                current,
-                idempotency_key,
+            exact_operation = (
+                await marking_svc.confirmed_kiz_operation_for_scan_auto_print(
+                    session,
+                    order,
+                    current,
+                    pair.scan_auto_print_id,
+                    actor_user_id,
+                )
             )
-            summary = (
-                exact_operation.request_summary_json
-                if exact_operation is not None
-                else None
-            ) or {}
-            associate_scan_auto_print = bool(
-                exact_operation is not None
-                and exact_operation.state == WB_OPERATION_STATE_CONFIRMED
-                and exact_operation.created_by_user_id == actor_user_id
-                and exact_operation.request_hash
-                == hashlib.sha256(current.value.encode()).hexdigest()
-                and summary.get("scan_auto_print_id")
-                == str(pair.scan_auto_print_id)
-            )
+            associate_scan_auto_print = exact_operation is not None
         code = await _get_marking_code_by_cis(session, tenant_id, validated.value, for_update=True)
         if (
             code is not None

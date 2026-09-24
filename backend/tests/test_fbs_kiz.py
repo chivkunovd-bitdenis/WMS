@@ -3844,12 +3844,17 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     }
     if scan_auto_print_id is not None:
         pair["scan_auto_print_id"] = str(scan_auto_print_id)
-    payload = {
-        "idempotency_key": "uncertain-binding",
-        "pairs": [pair],
-    }
+    commit_keys: list[str] = []
+
+    def next_commit_payload() -> dict[str, Any]:
+        key = f"uncertain-binding-{len(commit_keys) + 1}"
+        commit_keys.append(key)
+        return {"idempotency_key": key, "pairs": [pair]}
+
     response = await async_client.post(
-        "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json=next_commit_payload(),
     )
     assert response.status_code == 200, response.text
     if resolution == "refused":
@@ -3938,7 +3943,9 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         )
         assert validated.status_code == 200, validated.text
         retry = await async_client.post(
-            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+            "/operations/fbs-orders/kiz/commit",
+            headers=headers,
+            json=next_commit_payload(),
         )
         assert retry.json()[0]["code"] == "wb_pending_confirmation", retry.text
         async with SessionLocal() as session:
@@ -3952,7 +3959,9 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     else:
         remote_order_id, remote_value, remote_decision = order.wb_order_id, value, resolution
         retry = await async_client.post(
-            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+            "/operations/fbs-orders/kiz/commit",
+            headers=headers,
+            json=next_commit_payload(),
         )
         assert retry.json()[0]["code"] == (
             "ok" if resolution == "filled" else "meta_validation_fail"
@@ -3982,6 +3991,7 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
             "kiz": value,
         }
     assert calls.count("put") == 1
+    assert len(commit_keys) == len(set(commit_keys))
     async with SessionLocal() as session:
         operation = await session.get(FbsWbOperation, operation_id)
         foreign = await session.get(FbsWbOperation, foreign_id)
