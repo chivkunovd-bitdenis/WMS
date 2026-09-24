@@ -14,14 +14,21 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_supplies import retry_fbs_packing_box_qr
+from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
+from app.models.fbs_print_asset import (
+    PRINT_ASSET_KIND_ORDER_STICKER,
+    PRINT_ASSET_STATUS_READY,
+    FbsPrintAsset,
+)
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
+from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_print_asset_service as print_asset_svc
@@ -527,20 +534,34 @@ async def test_label_error_persists_on_every_box_of_the_order_until_a_label_succ
     assert len(ship_calls) == 1
 
 
-async def test_assembly_failure_persists_its_own_reason_including_live_api_disabled(
+async def test_assembly_failure_with_a_real_session_user_returns_the_original_error(
     db_session: AsyncSession,
 ) -> None:
-    """WMS-526 R12: a failure inside assemble_box_order itself (here, the
-    live-API switch being off — exactly what the stand shows) still records
-    the R12 reason on every box of the order, not only failures from the
-    later label-fetch step."""
+    """WMS-526 F3 (Astra round 2): a SimpleNamespace stand-in for `user`
+    hides a real bug — require_fbs_operator_access loads an actual ORM
+    `User` into the same request session, and the handler's `session.rollback()`
+    (needed so the R12 write below is a clean transaction) expires it exactly
+    like every other object in that session. Before the fix, the very next
+    `user.tenant_id` tried an implicit sync refresh and crashed with
+    MissingGreenlet -> bare 500, and no reason was ever saved. This seeds a
+    real, committed `User` in the same session `retry_fbs_packing_box_qr`
+    runs against (the live-API switch being off is the exact failure the
+    stand hit) and checks both the original 503 and the saved reason survive."""
     order, supply, boxes = await _seed(db_session)
+    user = User(
+        tenant_id=order.tenant_id,
+        email=f"retry-qr-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="unused-test-password",
+        role="fulfillment_staff",
+    )
+    db_session.add(user)
+    await db_session.commit()
     # Captured before the call: the handler's own rollback (needed so the
     # R12 write is a clean transaction, not tangled with the failed attempt)
-    # expires every attribute on ORM objects this test already holds.
+    # expires every attribute on every ORM object this test already holds,
+    # `user` included — that is exactly the bug this test guards against.
     tenant_id, supply_id, order_id = order.tenant_id, supply.id, order.id
     box_ids = [box.id for box in boxes]
-    user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
 
     with pytest.raises(HTTPException) as error:
         await retry_fbs_packing_box_qr(supply_id, box_ids[0], user, db_session)
@@ -618,3 +639,180 @@ async def test_wb_box_rows_never_carry_an_ozon_label_error(db_session: AsyncSess
 
     box_rows = await _workspace_box_rows(session, tenant.id, supply.id)
     assert box_rows[str(box.id)]["ozon_label_error"] is None
+
+
+async def test_ready_label_hides_a_stale_remembered_error(db_session: AsyncSession) -> None:
+    """WMS-526 D2: a ready label always wins, even if meta_details_json still
+    has a reason from an earlier failed attempt (e.g. clear_order_label_error
+    has not run for this exact asset yet) — the operator has something to
+    print, so the red line must not show."""
+    order, supply, boxes = await _seed(db_session)
+    order.meta_details_json = {
+        **(order.meta_details_json or {}),
+        assembly_svc.LABEL_ERROR_KEY: {"code": "stale", "message": "Устаревшая причина"},
+    }
+    db_session.add(
+        FbsPrintAsset(
+            tenant_id=order.tenant_id,
+            seller_id=order.seller_id,
+            kind=PRINT_ASSET_KIND_ORDER_STICKER,
+            status=PRINT_ASSET_STATUS_READY,
+            fbs_order_id=order.id,
+        )
+    )
+    await db_session.commit()
+
+    box_rows = await _workspace_box_rows(db_session, order.tenant_id, supply.id)
+    for box in boxes:
+        assert box_rows[str(box.id)]["ozon_label_error"] is None
+
+
+async def test_label_error_write_never_clobbers_a_concurrently_saved_assembly_marker(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-526 F4 (Astra round 2): set_order_label_error/clear_order_label_error
+    must read the order's meta_details_json fresh (locked + populate_existing),
+    not spread a stale in-memory copy back over the column — otherwise they
+    silently drop whatever another transaction committed to it meanwhile,
+    most importantly ASSEMBLY_KEY (the guard against resending /ship)."""
+    order, _supply, _boxes = await _seed(db_session)
+    order.meta_details_json = {"other": "keep"}
+    await db_session.commit()
+    order_id, tenant_id = order.id, order.tenant_id
+
+    # set_order_label_error: session A holds a stale snapshot loaded before
+    # session B commits a new assembly marker to the same row.
+    async with SessionLocal() as session_a:
+        stale = await session_a.get(FbsOrder, order_id)
+        assert stale is not None and stale.meta_details_json == {"other": "keep"}
+
+        async with SessionLocal() as session_b:
+            fresh = await session_b.get(FbsOrder, order_id)
+            assert fresh is not None
+            fresh.meta_details_json = {
+                "other": "keep",
+                assembly_svc.ASSEMBLY_KEY: {"posting_numbers": ["NEW"]},
+            }
+            await session_b.commit()
+
+        # Session A never re-reads `stale` itself — it only calls the
+        # helper, which must fetch the current row on its own.
+        await assembly_svc.set_order_label_error(
+            session_a, tenant_id, order_id, code="failed", message="failed"
+        )
+        await session_a.commit()
+
+    async with SessionLocal() as check:
+        reread = await check.get(FbsOrder, order_id)
+        assert reread is not None
+        assert reread.meta_details_json["other"] == "keep"
+        assert reread.meta_details_json[assembly_svc.ASSEMBLY_KEY] == {
+            "posting_numbers": ["NEW"]
+        }
+        assert reread.meta_details_json[assembly_svc.LABEL_ERROR_KEY] == {
+            "code": "failed",
+            "message": "failed",
+        }
+
+    # clear_order_label_error: same reproduction, a newer marker from
+    # session B must survive session A's clear.
+    async with SessionLocal() as session_a2:
+        stale2 = await session_a2.get(FbsOrder, order_id)
+        assert stale2 is not None
+
+        async with SessionLocal() as session_b2:
+            fresh2 = await session_b2.get(FbsOrder, order_id)
+            assert fresh2 is not None
+            fresh2.meta_details_json = {
+                **(fresh2.meta_details_json or {}),
+                assembly_svc.ASSEMBLY_KEY: {"posting_numbers": ["NEWER"]},
+            }
+            await session_b2.commit()
+
+        await assembly_svc.clear_order_label_error(session_a2, tenant_id, order_id)
+        await session_a2.commit()
+
+    async with SessionLocal() as check2:
+        reread2 = await check2.get(FbsOrder, order_id)
+        assert reread2 is not None
+        assert assembly_svc.LABEL_ERROR_KEY not in reread2.meta_details_json
+        assert reread2.meta_details_json[assembly_svc.ASSEMBLY_KEY] == {
+            "posting_numbers": ["NEWER"]
+        }
+        assert reread2.meta_details_json["other"] == "keep"
+
+
+async def _second_ozon_supply_same_tenant(
+    session: AsyncSession, order_a: FbsOrder
+) -> tuple[FbsOrder, FbsSupply, list[FbsPackingBox]]:
+    """A second, independent Ozon supply for the same tenant/seller/warehouse
+    as order_a's — for proving a box from one supply never leaks into the
+    other's order state."""
+    supply = FbsSupply(
+        tenant_id=order_a.tenant_id,
+        seller_id=order_a.seller_id,
+        warehouse_id=order_a.warehouse_id,
+        marketplace="ozon",
+        name="Second supply",
+        status="assembling",
+        delivery_type="warehouse_sc",
+    )
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        tenant_id=order_a.tenant_id,
+        seller_id=order_a.seller_id,
+        warehouse_id=order_a.warehouse_id,
+        product_id=order_a.product_id,
+        supply=supply,
+        marketplace="ozon",
+        external_order_id="POSTING-B",
+        wb_order_id=-456,
+        mapping_status="mapped",
+        reserve_status="reserved",
+        created_at_wb=now,
+        deadline_at=now + timedelta(days=1),
+    )
+    session.add_all([supply, order])
+    await session.flush()
+    session.add(
+        FbsOrderProduct(
+            order_id=order.id,
+            product_id=order_a.product_id,
+            ozon_sku=4001,
+            quantity=1,
+            offer_id="SKU-B",
+            name="Product B",
+            position_index=0,
+        )
+    )
+    await session.commit()
+    return order, supply, await seed_boxes(session, order, supply)
+
+
+async def test_error_is_never_saved_to_a_different_supplys_order(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-526 F5 (Astra round 2): supply_id and box_id must belong together.
+    A box_id from a different Ozon supply of the same tenant must not get
+    its order blamed for a request that was actually scoped to another
+    supply — the resolved order is None, so no write happens at all."""
+    order_a, supply_a, _boxes_a = await _seed(db_session)
+    order_b, supply_b, boxes_b = await _second_ozon_supply_same_tenant(db_session, order_a)
+    tenant_id = order_a.tenant_id
+    supply_a_id, supply_b_id = supply_a.id, supply_b.id
+    order_b_id = order_b.id
+    box_b_ids = [box.id for box in boxes_b]
+    user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
+
+    # supply_a's id combined with a box that actually belongs to supply_b.
+    with pytest.raises(HTTPException) as error:
+        await retry_fbs_packing_box_qr(supply_a_id, box_b_ids[0], user, db_session)
+    assert error.value.status_code == 404
+    assert error.value.detail["code"] == "box_not_found"
+
+    refreshed_order_b = await db_session.get(FbsOrder, order_b_id)
+    assert refreshed_order_b is not None
+    assert not (refreshed_order_b.meta_details_json or {})
+    box_rows_b = await _workspace_box_rows(db_session, tenant_id, supply_b_id)
+    for box_id in box_b_ids:
+        assert box_rows_b[str(box_id)]["ozon_label_error"] is None

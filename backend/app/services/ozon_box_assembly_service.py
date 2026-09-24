@@ -36,6 +36,28 @@ _SHIPPED_STATUSES = {"awaiting_deliver", "delivering", "driver_pickup", "deliver
 LABEL_ERROR_KEY = "ozon_label_error"
 
 
+async def _locked_order_for_label_error(
+    session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
+) -> FbsOrder | None:
+    """Row-locked, force-refreshed read of the order before touching its
+    meta_details_json.  Without this, an order already loaded earlier in
+    this same process (or a stale identity-map copy) would have its whole
+    JSON blob overwritten with an outdated snapshot, silently discarding
+    whatever another transaction committed to it in the meantime — most
+    importantly ASSEMBLY_KEY, which guards against resending /ship. The
+    lock is order-only, taken after any supply lock upstream already
+    released its own (assemble_box_order's supply -> order order is
+    preserved: nothing here acquires a supply lock)."""
+    stmt = (
+        select(FbsOrder)
+        .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def set_order_label_error(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -44,9 +66,7 @@ async def set_order_label_error(
     code: str,
     message: str,
 ) -> None:
-    order = await session.scalar(
-        select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
-    )
+    order = await _locked_order_for_label_error(session, tenant_id, order_id)
     if order is None:
         return
     order.meta_details_json = {
@@ -59,9 +79,7 @@ async def set_order_label_error(
 async def clear_order_label_error(
     session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
 ) -> None:
-    order = await session.scalar(
-        select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
-    )
+    order = await _locked_order_for_label_error(session, tenant_id, order_id)
     if order is None or LABEL_ERROR_KEY not in (order.meta_details_json or {}):
         return
     details = dict(order.meta_details_json or {})

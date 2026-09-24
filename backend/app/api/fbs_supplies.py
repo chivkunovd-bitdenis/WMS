@@ -2011,18 +2011,24 @@ async def clear_fbs_packing_box(
 
 
 async def _resolve_ozon_box_order_id(
-    session: AsyncSession, tenant_id: uuid.UUID, box_id: uuid.UUID
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, box_id: uuid.UUID
 ) -> uuid.UUID | None:
     """The order a box's items belong to — resolved without assuming
     assembly succeeded, so a failed assemble_box_order can still be blamed
-    on the right order's R12 red line. None only if the box is empty or
-    (should never happen for Ozon) spans more than one order."""
+    on the right order's R12 red line. Requires the box to actually belong
+    to supply_id (a box_id from a different supply of the same tenant must
+    not attribute an error to that other supply's order) — joined the same
+    way assemble_box_order itself scopes a box to its supply. None if the
+    box is empty, belongs to another supply, or (should never happen for
+    Ozon) spans more than one order."""
     order_ids = list(
         (
             await session.scalars(
                 select(FbsPackingBoxItem.fbs_order_id)
+                .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
                 .where(
                     FbsPackingBoxItem.tenant_id == tenant_id,
+                    FbsPackingBox.supply_id == supply_id,
                     FbsPackingBoxItem.box_id == box_id,
                 )
                 .distinct()
@@ -2056,22 +2062,31 @@ async def retry_fbs_packing_box_qr(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
+    # Captured once, used everywhere below instead of `user.*`/`supply.*`:
+    # a rollback (see the assembly-failure branch) expires every ORM object
+    # already loaded in this session, `user` included — a later `user.tenant_id`
+    # would try to lazily refetch it outside an awaited context and crash
+    # with MissingGreenlet instead of returning the intended error response.
+    tenant_id = user.tenant_id
     supply = await session.scalar(
         select(FbsSupply).where(
             FbsSupply.id == supply_id,
-            FbsSupply.tenant_id == user.tenant_id,
+            FbsSupply.tenant_id == tenant_id,
         )
     )
+    is_ozon_supply = supply is not None and supply.marketplace == "ozon"
     async with httpx.AsyncClient() as http_client:
         try:
-            if supply is not None and supply.marketplace == "ozon":
+            if is_ozon_supply:
                 # Resolved up front: if assembly itself fails below, we still
                 # need to know which order's red line (R12) to update.
-                box_order_id = await _resolve_ozon_box_order_id(session, user.tenant_id, box_id)
+                box_order_id = await _resolve_ozon_box_order_id(
+                    session, tenant_id, supply_id, box_id
+                )
                 try:
                     order_id = await ozon_assembly_svc.assemble_box_order(
                         session,
-                        user.tenant_id,
+                        tenant_id,
                         supply_id,
                         box_id,
                     )
@@ -2087,16 +2102,17 @@ async def retry_fbs_packing_box_qr(
                         # this rollback only discards this handler's own
                         # unfinished, uncommitted work — never the assembly
                         # marker. The label-error write is then a clean,
-                        # separate transaction.
+                        # separate transaction. Only plain uuid.UUID values
+                        # (tenant_id, box_order_id) cross the rollback here.
                         await session.rollback()
                         await ozon_assembly_svc.set_order_label_error(
-                            session, user.tenant_id, box_order_id, code=code, message=message
+                            session, tenant_id, box_order_id, code=code, message=message
                         )
                         await session.commit()
                     raise
                 label_result = await request_supply_print_batch(
                     session,
-                    user.tenant_id,
+                    tenant_id,
                     supply_id,
                     kind="order_sticker",
                     order_ids=[order_id],
@@ -2114,7 +2130,7 @@ async def retry_fbs_packing_box_qr(
                 if label_error is not None:
                     await ozon_assembly_svc.set_order_label_error(
                         session,
-                        user.tenant_id,
+                        tenant_id,
                         order_id,
                         code=label_error.code,
                         message=label_error.message,
@@ -2140,7 +2156,7 @@ async def retry_fbs_packing_box_qr(
                     # error (matches the pre-R12 200 response for this case).
                     await ozon_assembly_svc.set_order_label_error(
                         session,
-                        user.tenant_id,
+                        tenant_id,
                         order_id,
                         code="ozon_label_not_ready",
                         message=(
@@ -2149,11 +2165,11 @@ async def retry_fbs_packing_box_qr(
                     )
                 else:
                     await ozon_assembly_svc.clear_order_label_error(
-                        session, user.tenant_id, order_id
+                        session, tenant_id, order_id
                     )
             else:
                 await packing_box_svc.retry_box_qr(
-                    session, user.tenant_id, supply_id, box_id, http_client
+                    session, tenant_id, supply_id, box_id, http_client
                 )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)
@@ -2166,7 +2182,7 @@ async def retry_fbs_packing_box_qr(
         except FbsPrintAssetError as exc:
             raise_fbs_http(409, exc.code, message=exc.message)
     await session.commit()
-    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+    return await _workspace_after_packing_box_action(session, tenant_id, supply_id)
 
 
 @router.post(

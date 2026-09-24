@@ -627,7 +627,16 @@ async def _build_boxes(
             if assigned:
                 box["ozon_assembled"] = assembled.get(assigned[0], False)
                 box["qr_asset"] = _map_print_asset(assets_by_order.get(assigned[0]))
-                box["ozon_label_error"] = label_errors.get(assigned[0])
+                # R12 contract: null once a ready label exists, even if a
+                # stale reason is still sitting in meta_details_json (e.g.
+                # clear_order_label_error hasn't run for this particular
+                # asset yet) — a ready label always wins over a remembered
+                # failure.
+                box["ozon_label_error"] = (
+                    None
+                    if assigned[0] in assets_by_order
+                    else label_errors.get(assigned[0])
+                )
         return boxes
     result = await session.execute(
         select(FbsPrintAsset).where(
