@@ -1,4 +1,4 @@
-"""Registered durable sweeper; all provider I/O remains B3 gated."""
+"""Registered durable sweeper; production create has a separate release gate."""
 
 from __future__ import annotations
 
@@ -29,8 +29,6 @@ async def run_withdrawal_recovery(*, batch_size: int = 100) -> int:
     """
     if not 1 <= batch_size <= 1000:
         raise ValueError("invalid_withdrawal_batch_size")
-    if not settings.withdrawal_browser_auth_profile_verified:
-        return 0
     async with SessionLocal() as session:
         await purge_expired_tokens(session)
         exists = await session.scalar(
@@ -70,8 +68,6 @@ async def run_withdrawal_jobs(*, batch_size: int = 100) -> int:
         raise ValueError("invalid_withdrawal_batch_size")
     submitted = 0
     async with withdrawal_runtime() as runtime:
-        if not runtime.enabled:
-            return 0
         for _ in range(batch_size):
             if not await submit_one(SessionLocal, runtime):
                 break

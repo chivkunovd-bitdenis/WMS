@@ -1,3 +1,7 @@
+x-withdrawal-environment: &withdrawal-environment
+  WITHDRAWAL_ENVIRONMENT: ${WITHDRAWAL_ENVIRONMENT:-production}
+  WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: ${WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED:-false}
+
 services:
   db:
     image: postgres:16
@@ -27,6 +31,7 @@ services:
     build:
       context: ./backend
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
@@ -93,6 +98,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
@@ -114,6 +120,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}

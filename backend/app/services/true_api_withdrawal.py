@@ -12,9 +12,11 @@ import asyncio
 import base64
 import binascii
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -38,9 +40,7 @@ class Environment(StrEnum):
 class TrueApiConfig:
     environment: Environment
     timeout_seconds: float = 30.0
-    # B3: explicitly enabled by trusted server configuration only after the
-    # browser auth profile has evidence. No profile parameters are guessed here.
-    browser_auth_profile_verified: bool = False
+    production_submit_enabled: bool = False
 
     def __post_init__(self) -> None:
         if self.environment not in {Environment.SANDBOX, Environment.PRODUCTION}:
@@ -58,9 +58,9 @@ class TrueApiConfig:
         )
         return f"https://{host}/api/v{version}/true-api"
 
-    def require_verified_auth_profile(self) -> None:
-        if self.browser_auth_profile_verified is not True:
-            raise ValueError("B3: browser authentication signature profile is not verified")
+    def require_create_enabled(self) -> None:
+        if self.environment == Environment.PRODUCTION and not self.production_submit_enabled:
+            raise ValueError("WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED")
 
 
 class SharedParticipantLimiter(Protocol):
@@ -86,6 +86,17 @@ redis.call('SET', KEYS[1], string.format('%.0f', now), 'PX', 2000)
 return 0
 """
 
+_DEFER_SCRIPT = """
+local t = redis.call('TIME')
+local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+local until_at = now + tonumber(ARGV[1]) * 1000000
+local last = tonumber(redis.call('GET', KEYS[1]) or '0')
+if until_at > last then
+  redis.call('SET', KEYS[1], string.format('%.0f', until_at), 'PX', ARGV[2])
+end
+return 0
+"""
+
 
 class RedisParticipantLimiter:
     """Uses the existing Redis service; never falls back to local pacing.
@@ -108,6 +119,16 @@ class RedisParticipantLimiter:
                 raise RuntimeError("Invalid True API limiter response")
             await asyncio.sleep(wait_us / 1_000_000)
 
+    async def defer(self, environment: Environment, participant_inn: str, seconds: float) -> None:
+        _validate_inn(participant_inn)
+        await self._redis.eval(
+            _DEFER_SCRIPT,
+            1,
+            f"wms:true-api:rate:{environment}:{participant_inn}",
+            str(seconds),
+            str(math.ceil(seconds * 1000) + 2000),
+        )
+
 
 class CreateOutcome(StrEnum):
     DEFINITE_REJECT = "definite_reject"
@@ -124,12 +145,45 @@ class TrueApiError(Exception):
         status_code: int | None = None,
         response_body: bytes = b"",
         create_outcome: CreateOutcome | None = None,
+        retry_after: float | None = None,
     ) -> None:
         self.reason = reason
         self.status_code = status_code
         self.response_body = response_body
         self.create_outcome = create_outcome
+        self.retry_after = retry_after
         super().__init__(f"True API {reason}; HTTP {status_code}")
+
+
+def safe_provider_error(body: bytes) -> dict[str, Any]:
+    """Only published error fields, never arbitrary auth response/token material."""
+    try:
+        value = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return {}
+    if not isinstance(value, dict):
+        return {}
+    result = {
+        key: value[key]
+        for key in ("code", "error_message", "description")
+        if isinstance(value.get(key), (str, int))
+    }
+    if result.get("error_message") is not None:
+        result["message"] = result["error_message"]
+    elif result.get("description") is not None:
+        result["message"] = result["description"]
+    return result
+
+
+def retry_after_seconds(value: str | None) -> float:
+    try:
+        delay = float(value or "60")
+    except ValueError:
+        try:
+            delay = (parsedate_to_datetime(value or "") - datetime.now(UTC)).total_seconds()
+        except (ValueError, TypeError):
+            delay = 60
+    return max(1, delay) if math.isfinite(delay) else 60
 
 
 @dataclass(frozen=True)
@@ -296,7 +350,7 @@ def parse_cises(data: Any, requested: list[str], status_code: int = 200) -> Cise
             product_group_id=group_id if type(group_id) is int else None,
             owner_inn=_string(info.get("ownerInn")),
             status=_string(info.get("status")),
-            status_ex=_string(info.get("statusEx")),
+            status_ex=None if info.get("statusEx") == "EMPTY" else _string(info.get("statusEx")),
             gtin=_string(info.get("gtin")),
             error_code=row.get("errorCode"),
             error_message=row.get("errorMessage"),
@@ -372,6 +426,12 @@ class TrueApiWithdrawalClient:
                 create_outcome=CreateOutcome.UNCERTAIN if create else None,
             ) from None
         if response.status_code not in allowed_statuses:
+            retry_after = None
+            if response.status_code == 429:
+                retry_after = retry_after_seconds(response.headers.get("Retry-After"))
+                defer = getattr(self._limiter, "defer", None)
+                if defer is not None:
+                    await defer(self.config.environment, self.participant_inn, retry_after)
             outcome = None
             if create:
                 outcome = (
@@ -382,8 +442,13 @@ class TrueApiWithdrawalClient:
             raise TrueApiError(
                 "http_failure",
                 status_code=response.status_code,
-                response_body=response.content,
+                response_body=(
+                    json.dumps(safe_provider_error(response.content)).encode()
+                    if path.startswith("/auth/")
+                    else response.content
+                ),
                 create_outcome=outcome,
+                retry_after=retry_after,
             )
         return response
 
@@ -405,7 +470,13 @@ class TrueApiWithdrawalClient:
             "invalid_contract",
             status_code=response.status_code,
             # Successful auth responses contain secrets; don't put them in audit errors.
-            response_body=b"" if auth else response.content,
+            response_body=(
+                json.dumps(safe_provider_error(response.content)).encode()
+                if auth and safe_provider_error(response.content)
+                else b""
+                if auth
+                else response.content
+            ),
         )
 
     async def challenge(self) -> AuthChallenge:
@@ -426,29 +497,24 @@ class TrueApiWithdrawalClient:
         attached_signature: str,
         *,
         certificate_expires_at: datetime,
-        mchd_inn: str | None = None,
-        mchd_expires_at: datetime | None = None,
     ) -> AuthSession:
-        self.config.require_verified_auth_profile()
         started_at = datetime.now(UTC)
         expiry_bounds = [started_at + timedelta(hours=10), _aware(certificate_expires_at)]
         payload: dict[str, Any] = {
             "uuid": _uuid(challenge_uuid),
             "data": _signature(attached_signature),
             "unitedToken": True,
+            "inn": self.participant_inn,
         }
-        if mchd_inn is not None:
-            if mchd_inn != self.participant_inn or mchd_expires_at is None:
-                raise ValueError("MChD must belong to participant and have a known expiry")
-            payload["inn"] = mchd_inn
-            expiry_bounds.append(_aware(mchd_expires_at))
-        elif mchd_expires_at is not None:
-            raise ValueError("MChD expiry requires participant INN")
         if min(expiry_bounds) <= started_at:
-            raise ValueError("Certificate or MChD expired")
+            raise ValueError("Certificate expired")
         response = await self._request("POST", 3, "/auth/simpleSignIn", payload=payload)
         try:
             data = response.json()
+            if not isinstance(data, dict) or any(
+                key in data for key in ("code", "error_message", "description")
+            ):
+                raise ValueError
             token = _uuid(data["uuidToken"])
             expiry_bounds.append(_aware(datetime.fromisoformat(data["expireDate"])))
             expires_at = min(expiry_bounds)
@@ -476,7 +542,7 @@ class TrueApiWithdrawalClient:
     async def create_document(
         self, auth: AuthSession, *, pg: str, exact_payload: bytes, detached_signature: str
     ) -> str:
-        self.config.require_verified_auth_profile()
+        self.config.require_create_enabled()
         if not pg:
             raise ValueError("Product group is required")
         if not exact_payload or len(exact_payload) > MAX_DOCUMENT_BYTES:

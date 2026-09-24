@@ -16,7 +16,10 @@ class WithdrawalCertificate(StrictInput):
     expires_at: AwareDatetime
     subject: str | None = Field(default=None, max_length=2048)
     issuer: str | None = Field(default=None, max_length=2048)
-    mchd_expires_at: AwareDatetime | None = None
+
+
+class ReauthWithdrawal(StrictInput):
+    certificate: WithdrawalCertificate
 
 
 class CreateWithdrawal(StrictInput):
@@ -90,7 +93,9 @@ class OperationOut(BaseModel):
     operation_id: uuid.UUID
     state: str
     attempt: int
-    integration_gate: Literal["B3_AUTH_PROFILE_UNCONFIRMED"] | None
+    integration_gate: Literal["WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"] | None
+    reauth_required: bool = False
+    certificate_thumbprint: str | None = None
     items: list[OperationItem]
     auth_challenge: WithdrawalChallenge | None = None
     documents: list[WithdrawalDocumentBlob] = Field(default_factory=list)

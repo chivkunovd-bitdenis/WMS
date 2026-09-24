@@ -35,6 +35,7 @@ from app.services.withdrawal_orchestration import (
     authenticate_and_build,
     cis_error,
     prepare_challenge,
+    prepare_reauth,
     scoped_documents,
 )
 from app.services.withdrawal_recovery import claim_work, recover_one
@@ -61,13 +62,25 @@ class Emulator:
         self.identifier = str(uuid.uuid4())
         self.challenge = str(uuid.uuid4())
         self.payload: dict[str, Any] | None = None
+        self.reject_read = False
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         self.calls.append(path)
+        if self.reject_read and "/api/v4/" in path:
+            self.reject_read = False
+            return httpx.Response(
+                401,
+                json={
+                    "code": "TOKEN_EXPIRED",
+                    "error_message": "Session expired",
+                    "description": "Authenticate again",
+                },
+            )
         if path.endswith("/auth/key"):
             return httpx.Response(200, json={"uuid": self.challenge, "data": "exact challenge"})
         if path.endswith("/auth/simpleSignIn"):
+            assert json.loads(request.content)["inn"] == INN
             return httpx.Response(
                 200,
                 json={
@@ -76,6 +89,7 @@ class Emulator:
                 },
             )
         if path.endswith("/cises/info"):
+            assert all("\x1d" not in code for code in json.loads(request.content))
             return httpx.Response(
                 200,
                 json=[
@@ -126,12 +140,10 @@ class Emulator:
         raise AssertionError(path)
 
     def runtime(self, http: httpx.AsyncClient) -> WithdrawalRuntime:
-        config = TrueApiConfig(Environment.SANDBOX, browser_auth_profile_verified=True)
+        config = TrueApiConfig(Environment.SANDBOX)
         return WithdrawalRuntime(
             config,
             lambda inn: TrueApiWithdrawalClient(http, config, FixtureLimiter(), inn),
-            "emulator-explicit-metadata-v1",
-            {"lp": "started"},
         )
 
 
@@ -223,10 +235,13 @@ def test_builder_group_split_exact_bytes_and_moscow_date() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("lose_create", [False, True])
+@pytest.mark.parametrize("reauth", [None, "expired", "401"])
 async def test_emulator_sign_submit_recover_once(
-    db_session: AsyncSession, lose_create: bool
+    db_session: AsyncSession, lose_create: bool, reauth: str | None
 ) -> None:
     scope, marking, order, _ = await seed(db_session)
+    ki = marking.value
+    marking.value = ki + "\x1d91fixture\x1d92fixture-crypto"
     db_session.add(
         BillingProfile(
             tenant_id=scope.tenant_id, seller_id=scope.seller_id, legal_name="Fixture", inn=INN
@@ -263,7 +278,8 @@ async def test_emulator_sign_submit_recover_once(
         document = documents[0]
         body = json.loads(document.exact_payload)
         assert body["fias_id"] == FIAS
-        assert body["products"] == [{"cis": marking.value, "product_cost": 99999999999999999}]
+        assert body["products"] == [{"cis": ki, "product_cost": 99999999999999999}]
+        assert (await current_items(db_session, scope, operation.id))[0].cis == marking.value
         output = await _output(db_session, scope, operation, runtime)
         assert output.items[0].wb_order_id == str(order.wb_order_id)
         assert base64.b64decode(output.documents[0].payload_base64) == document.exact_payload
@@ -282,6 +298,77 @@ async def test_emulator_sign_submit_recover_once(
         await accept_document_signatures(db_session, scope, operation_id, [signed], runtime)
         assert await submit_one(SessionLocal, runtime)
         assert not await submit_one(SessionLocal, runtime)
+        if reauth:
+            order_id = order.id
+            before = (document.exact_payload, document.payload_sha256, document.signature)
+            await db_session.rollback()
+            operation = await get_operation(db_session, scope, operation_id)
+            if reauth == "expired":
+                operation.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            else:
+                emulator.reject_read = True
+            order = await db_session.get(type(order), order_id)
+            assert order is not None
+            order.status = "cancelled"
+            order.wb_status = "canceled"
+            await db_session.commit()
+            async with SessionLocal() as expired_session:
+                expired_work = await claim_work(
+                    expired_session, now=datetime.now(UTC) + timedelta(seconds=3)
+                )
+            assert expired_work is not None
+            await recover_one(SessionLocal, expired_work, runtime.client(INN, "sandbox"))
+            await db_session.rollback()
+            db_session.expire_all()
+            operation = await get_operation(db_session, scope, operation_id)
+            assert (await _output(db_session, scope, operation, runtime)).reauth_required
+            if reauth == "401":
+                assert operation.workflow_error["error_message"] == "Session expired"
+                assert operation.workflow_error["description"] == "Authenticate again"
+            for certificate, other_scope, error in [
+                (
+                    CertificateSelection("wrong", datetime.now(UTC) + timedelta(hours=1)),
+                    scope,
+                    "withdrawal_reauth_certificate_mismatch",
+                ),
+                (
+                    CertificateSelection("fixture-thumb", datetime.now(UTC) + timedelta(hours=1)),
+                    replace(scope, user_id=uuid.uuid4()),
+                    "withdrawal_reauth_user_mismatch",
+                ),
+            ]:
+                with pytest.raises(WithdrawalError, match=error):
+                    await prepare_reauth(
+                        db_session, other_scope, operation_id, certificate, runtime
+                    )
+                await db_session.rollback()
+            count = len(emulator.calls)
+            operation = await prepare_reauth(
+                db_session,
+                scope,
+                operation_id,
+                CertificateSelection("fixture-thumb", datetime.now(UTC) + timedelta(hours=1)),
+                runtime,
+            )
+            output = await _output(db_session, scope, operation, runtime)
+            assert output.auth_challenge is not None and output.documents == []
+            operation = await authenticate_and_build(
+                db_session,
+                scope,
+                operation_id,
+                thumbprint="fixture-thumb",
+                challenge_uuid=uuid.UUID(emulator.challenge),
+                expected_attempt=1,
+                signature=SIGNATURE,
+                runtime=runtime,
+            )
+            assert emulator.calls[count:] == [
+                "/api/v3/true-api/auth/key",
+                "/api/v3/true-api/auth/simpleSignIn",
+            ]
+            assert not (await _output(db_session, scope, operation, runtime)).reauth_required
+            document = (await scoped_documents(db_session, scope, operation))[0]
+            assert before == (document.exact_payload, document.payload_sha256, document.signature)
         async with SessionLocal() as recovery_session:
             work = await claim_work(recovery_session, now=datetime.now(UTC) + timedelta(seconds=3))
         assert work is not None

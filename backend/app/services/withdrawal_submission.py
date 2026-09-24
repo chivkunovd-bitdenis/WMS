@@ -113,6 +113,8 @@ async def submit_one(
     sessions: async_sessionmaker[AsyncSession],
     runtime: WithdrawalRuntime,
 ) -> bool:
+    if not runtime.enabled:
+        return False
     async with sessions() as session:
         work = await claim_submit(session, runtime)
     if work is None:

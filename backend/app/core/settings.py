@@ -44,15 +44,9 @@ class Settings(BaseSettings):
         "Unset: API runs background jobs via FastAPI BackgroundTasks.",
     )
     withdrawal_environment: Literal["sandbox", "production"] = "sandbox"
-    withdrawal_traceability_metadata_version: str | None = None
-    withdrawal_traceability_modes: dict[str, Literal["started", "not_started"]] = Field(
-        default_factory=dict,
-        description="Explicit officially verified pg modes; unknown groups fail closed.",
-    )
-    withdrawal_browser_auth_profile_verified: bool = Field(
+    withdrawal_production_submit_enabled: bool = Field(
         default=False,
-        description="B3 release gate. Enable only after the browser auth profile has evidence. "
-        "Tests inject an isolated runtime with a mocked HTTP transport.",
+        description="Production create requires separate release authorization; default closed.",
     )
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",

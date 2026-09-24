@@ -29,6 +29,7 @@ from app.services.true_api_withdrawal import (
     Environment,
     TrueApiError,
     TrueApiWithdrawalClient,
+    safe_provider_error,
 )
 
 
@@ -214,7 +215,13 @@ def provider_error_summary(errors: Any, common_errors: Any) -> dict[str, Any]:
                 collect(entry)
         elif isinstance(value, dict):
             code = value.get("code", value.get("errorCode"))
-            message = value.get("message", value.get("errorMessage", value.get("error")))
+            message = value.get(
+                "message",
+                value.get(
+                    "error_message",
+                    value.get("errorMessage", value.get("error", value.get("description"))),
+                ),
+            )
             if code is not None and str(code) not in codes:
                 codes.append(str(code))
             if isinstance(message, str) and message not in messages:
@@ -355,9 +362,18 @@ async def apply_recovery(
         document.state = "reconciling"
     else:
         document.state = "reconciling"
-    if incident == "auth_required" or (error and error.status_code in {401, 403}):
+    if (incident == "auth_required" or (error and error.status_code in {401, 403})) and (
+        operation.token_enc == work.token_enc
+    ):
         operation.token_enc = None
         operation.token_expires_at = None
+        operation.auth_uuid = None
+        operation.auth_challenge = None
+        operation.auth_signature_hash = None
+        operation.workflow_error = {
+            "code": "reauth_required",
+            **(safe_provider_error(error.response_body) if error else {}),
+        }
     session.add(
         WithdrawalObservation(
             document_id=document.id,
@@ -379,7 +395,10 @@ async def apply_recovery(
     document.next_poll_at = (
         None
         if document.state in {"failed", "succeeded"}
-        else now + timedelta(seconds=poll_delay(document.poll_count + 1))
+        else now
+        + timedelta(
+            seconds=max(poll_delay(document.poll_count + 1), error.retry_after or 0 if error else 0)
+        )
     )
     document.poll_count += 1
     document.lease_id = None
@@ -400,8 +419,8 @@ async def record_create_result(
 ) -> None:
     """Persist one already-started submit result. Never sends or retries a POST.
 
-    Future submit integration must persist state=submitting, request_started_at
-    and next_poll_at before network I/O. That path remains gated by B1/B3.
+    Submit persists state=submitting, request_started_at and next_poll_at before
+    network I/O. The production create path has a separate release gate.
     """
     if (gis_document_id is None) == (error is None):
         raise WithdrawalError("invalid_create_result")
@@ -443,7 +462,11 @@ async def record_create_result(
                 errors=document.errors,
             )
         )
-    document.next_poll_at = None if document.state == "failed" else now + timedelta(seconds=2)
+    document.next_poll_at = (
+        None
+        if document.state == "failed"
+        else now + timedelta(seconds=max(2, error.retry_after or 0 if error else 0))
+    )
     document.lease_id = None
     document.lease_until = None
     await _project(session, operation, document)

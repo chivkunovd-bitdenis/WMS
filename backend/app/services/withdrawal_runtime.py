@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import httpx
 from redis.asyncio import Redis
@@ -17,26 +17,26 @@ from app.services.true_api_withdrawal import (
     TrueApiConfig,
     TrueApiWithdrawalClient,
 )
-from app.services.withdrawal_service import INTEGRATION_GATE
+from app.services.withdrawal_traceability import SNAPSHOT_VERSION, traceability_mode
 
 
 @dataclass(frozen=True)
 class WithdrawalRuntime:
     config: TrueApiConfig
     client_factory: Callable[[str], TrueApiWithdrawalClient]
-    traceability_metadata_version: str | None = None
-    traceability_modes: dict[str, str] = field(default_factory=dict)
+    traceability_metadata_version = SNAPSHOT_VERSION
 
     def traceability_mode(self, pg: str | None) -> str | None:
-        return self.traceability_modes.get(pg or "") if self.traceability_metadata_version else None
+        return traceability_mode(pg)
 
     @property
     def enabled(self) -> bool:
-        return self.config.browser_auth_profile_verified
+        return (
+            self.config.environment != Environment.PRODUCTION
+            or self.config.production_submit_enabled
+        )
 
     def client(self, participant_inn: str, environment: str) -> TrueApiWithdrawalClient:
-        if not self.enabled:
-            raise WithdrawalError(INTEGRATION_GATE)
         if environment != self.config.environment:
             raise WithdrawalError("withdrawal_environment_mismatch")
         return self.client_factory(participant_inn)
@@ -46,18 +46,16 @@ class WithdrawalRuntime:
 async def withdrawal_runtime() -> AsyncIterator[WithdrawalRuntime]:
     config = TrueApiConfig(
         Environment(settings.withdrawal_environment),
-        browser_auth_profile_verified=settings.withdrawal_browser_auth_profile_verified,
+        production_submit_enabled=settings.withdrawal_production_submit_enabled,
     )
-    if not config.browser_auth_profile_verified:
-
-        def closed(inn: str) -> TrueApiWithdrawalClient:
-            raise WithdrawalError(INTEGRATION_GATE)
-
-        yield WithdrawalRuntime(config, closed)
-        return
     broker = settings.celery_broker_url
     if not broker or not broker.startswith(("redis://", "rediss://")):
-        raise WithdrawalError("withdrawal_shared_limiter_not_configured", 503)
+
+        def unavailable(inn: str) -> TrueApiWithdrawalClient:
+            raise WithdrawalError("withdrawal_shared_limiter_not_configured", 503)
+
+        yield WithdrawalRuntime(config, unavailable)
+        return
     async with Redis.from_url(broker, decode_responses=True) as redis, httpx.AsyncClient() as http:
         limiter = RedisParticipantLimiter(redis)
         yield WithdrawalRuntime(
@@ -68,8 +66,6 @@ async def withdrawal_runtime() -> AsyncIterator[WithdrawalRuntime]:
                 limiter,
                 inn,
             ),
-            settings.withdrawal_traceability_metadata_version,
-            dict(settings.withdrawal_traceability_modes),
         )
 
 

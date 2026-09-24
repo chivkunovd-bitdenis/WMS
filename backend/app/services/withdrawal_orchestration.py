@@ -30,7 +30,13 @@ from app.models.marking_withdrawal import (
     WithdrawalOperation,
 )
 from app.services.integration_fernet import decrypt_secret, encrypt_secret
-from app.services.true_api_withdrawal import AuthSession, CisInfo, Environment, TrueApiError
+from app.services.true_api_withdrawal import (
+    AuthSession,
+    CisInfo,
+    Environment,
+    TrueApiError,
+    safe_provider_error,
+)
 from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
 from app.services.withdrawal_document_builder import WithdrawalProduct, build_withdrawal_documents
 from app.services.withdrawal_mod_service import (
@@ -85,20 +91,14 @@ class CertificateSelection:
     expires_at: datetime
     subject: str | None = None
     issuer: str | None = None
-    mchd_expires_at: datetime | None = None
 
     def metadata(self) -> dict[str, Any]:
         if self.expires_at.tzinfo is None or aware(self.expires_at) <= datetime.now(UTC):
             raise WithdrawalError("certificate_expired")
-        if self.mchd_expires_at is not None and (
-            self.mchd_expires_at.tzinfo is None or aware(self.mchd_expires_at) <= datetime.now(UTC)
-        ):
-            raise WithdrawalError("mchd_expired")
         return {
             "expires_at": self.expires_at.isoformat(),
             "subject": self.subject,
             "issuer": self.issuer,
-            "mchd_expires_at": self.mchd_expires_at.isoformat() if self.mchd_expires_at else None,
         }
 
 
@@ -203,13 +203,70 @@ async def _auth_error(
         operation.workflow_error = {
             "code": error.reason if isinstance(error, TrueApiError) else error.code,
             "http_status": error.status_code,
+            **(safe_provider_error(error.response_body) if isinstance(error, TrueApiError) else {}),
         }
         operation.token_enc = None
         operation.token_expires_at = None
         operation.auth_signature_hash = None
         operation.auth_uuid = None
         operation.auth_challenge = None
-        operation.state = "auth_pending"
+        if operation.state not in {"submitting", "submitted", "reconciling"}:
+            operation.state = "auth_pending"
+        _clear_lease(operation)
+    await session.commit()
+    return operation
+
+
+def reauth_required(operation: WithdrawalOperation, documents: list[WithdrawalDocument]) -> bool:
+    return any(
+        doc.request_started_at is not None
+        and doc.state in {"submitting", "submitted", "reconciling"}
+        for doc in documents
+    ) and (
+        operation.token_enc is None
+        or operation.token_expires_at is None
+        or aware(operation.token_expires_at) <= datetime.now(UTC)
+    )
+
+
+async def prepare_reauth(
+    session: AsyncSession,
+    scope: WithdrawalScope,
+    operation_id: uuid.UUID,
+    certificate: CertificateSelection,
+    runtime: WithdrawalRuntime,
+) -> WithdrawalOperation:
+    operation = await get_operation(session, scope, operation_id, lock=True)
+    if operation.user_id != scope.user_id:
+        raise WithdrawalError("withdrawal_reauth_user_mismatch", 403)
+    if operation.certificate_thumbprint != certificate.thumbprint:
+        raise WithdrawalError("withdrawal_reauth_certificate_mismatch")
+    metadata = certificate.metadata()
+    documents = await scoped_documents(session, scope, operation)
+    if not reauth_required(operation, documents) or _has_lease(operation):
+        await session.commit()
+        return operation
+    # No eligible_rows: cancellation after a persisted submit cannot prevent reads.
+    inn = await participant_inn(session, scope)
+    if inn != operation.participant_inn:
+        raise WithdrawalError("withdrawal_auth_participant_mismatch")
+    operation.certificate_metadata = metadata
+    operation.token_enc = None
+    operation.token_expires_at = None
+    operation.auth_signature_hash = None
+    operation.auth_uuid = None
+    operation.auth_challenge = None
+    operation.workflow_error = {"code": "reauth_required"}
+    lease = _lease(operation)
+    client = runtime.client(inn, operation.environment)
+    await session.commit()
+    try:
+        challenge = await client.challenge()
+    except TrueApiError as exc:
+        return await _auth_error(session, scope, operation_id, lease, exc)
+    operation = await get_operation(session, scope, operation_id, lock=True)
+    if operation.workflow_lease_id == lease:
+        operation.auth_uuid, operation.auth_challenge = challenge.uuid, challenge.data
         _clear_lease(operation)
     await session.commit()
     return operation
@@ -393,7 +450,10 @@ async def authenticate_and_build(
     runtime: WithdrawalRuntime,
 ) -> WithdrawalOperation:
     operation = await get_operation(session, scope, operation_id, lock=True)
-    if not runtime.enabled:
+    recovery = operation.state in {"submitting", "submitted", "reconciling"}
+    if recovery and operation.user_id != scope.user_id:
+        raise WithdrawalError("withdrawal_reauth_user_mismatch", 403)
+    if not runtime.enabled and not recovery:
         raise WithdrawalError(INTEGRATION_GATE)
     if (
         operation.certificate_thumbprint != thumbprint
@@ -405,20 +465,26 @@ async def authenticate_and_build(
     digest = hashlib.sha256(signature.encode()).hexdigest()
     if operation.auth_signature_hash is not None and operation.auth_signature_hash != digest:
         raise WithdrawalError("withdrawal_auth_signature_mismatch")
-    if operation.state != "auth_pending" or _has_lease(operation):
+    if (
+        (operation.state != "auth_pending" and not recovery)
+        or _has_lease(operation)
+        or (
+            recovery
+            and operation.auth_signature_hash == digest
+            and operation.token_enc
+            and operation.token_expires_at
+            and aware(operation.token_expires_at) > datetime.now(UTC)
+        )
+    ):
         await session.commit()
         return operation
-    await _rows(session, scope, operation)
+    if not recovery:
+        await _rows(session, scope, operation)
     inn = await participant_inn(session, scope)
     if operation.participant_inn != inn or operation.certificate_metadata is None:
         raise WithdrawalError("withdrawal_auth_participant_mismatch")
     metadata = operation.certificate_metadata
     certificate_expiry = datetime.fromisoformat(metadata["expires_at"])
-    mchd_expiry = (
-        datetime.fromisoformat(metadata["mchd_expires_at"])
-        if metadata.get("mchd_expires_at")
-        else None
-    )
     client = runtime.client(inn, operation.environment)
     lease = _lease(operation)
     items = [
@@ -426,7 +492,7 @@ async def authenticate_and_build(
         for item in await current_items(session, scope, operation.id)
         if item.state == "pending"
     ]
-    codes = [item.cis for item in items]
+    codes = [item.provider_cis for item in items if item.provider_cis is not None]
     reusable = operation.token_enc is not None
     auth = current_auth(operation) if reusable else None
     await session.commit()
@@ -436,8 +502,6 @@ async def authenticate_and_build(
                 str(challenge_uuid),
                 signature,
                 certificate_expires_at=certificate_expiry,
-                mchd_inn=inn if mchd_expiry else None,
-                mchd_expires_at=mchd_expiry,
             )
             operation = await get_operation(session, scope, operation_id, lock=True)
             if operation.workflow_lease_id != lease:
@@ -446,7 +510,16 @@ async def authenticate_and_build(
             operation.token_enc = encrypt_secret(auth.token)
             operation.token_expires_at = auth.expires_at
             operation.auth_signature_hash = digest
+            if recovery:
+                operation.workflow_error = None
+                _clear_lease(operation)
+                documents = await scoped_documents(session, scope, operation)
+                for document in documents:
+                    if document.state in {"submitted", "reconciling"}:
+                        document.next_poll_at = datetime.now(UTC)
             await session.commit()
+        if recovery:
+            return operation  # Reauth can only wake persisted GET recovery, never builder/create.
         valid_codes = [code for code in codes if 18 <= len(code) <= 74]
         by_cis: dict[str, CisInfo] = {}
         for offset in range(0, len(valid_codes), 1000):
@@ -506,10 +579,11 @@ async def authenticate_and_build(
     for item in current:
         if item.state != "pending":
             continue
-        info = by_cis.get(item.cis)
+        info = by_cis.get(item.provider_cis or "")
         item.preflight_evidence = (
             {
                 "cis": info.raw,
+                "provider_cis": item.provider_cis,
                 "traceability_metadata_version": runtime.traceability_metadata_version,
                 "traceability_mode": runtime.traceability_mode(info.product_group),
                 "external_mods": discoveries.get(info.product_group or "", []),
@@ -550,7 +624,9 @@ async def authenticate_and_build(
             item.error = {"source": "local", "code": exc.code, "message": str(exc)}
             continue
         prepared.append(
-            WithdrawalProduct(item.id, item.cis, price.product_cost, info.product_group, fias, kpp)
+            WithdrawalProduct(
+                item.id, item.provider_cis or "", price.product_cost, info.product_group, fias, kpp
+            )
         )
     built = build_withdrawal_documents(
         inn=inn,

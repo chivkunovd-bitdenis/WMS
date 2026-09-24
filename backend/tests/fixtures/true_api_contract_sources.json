@@ -1,0 +1,23 @@
+{
+  "version": "731.0",
+  "reviewed_at": "2026-09-24",
+  "source": "https://docs.crpt.ru/gismt/True_API/",
+  "provenance": "Official request/response field contracts. Identities and errors in tests are synthetic; no live CRPT or certificate capture is implied. Original published examples are in true_api_v731.json.",
+  "contracts": [
+    {"method":"GET","path":"/api/v3/true-api/auth/key","request":[],"response":["uuid","data"],"fixture":"auth_key","test":"test_true_api_withdrawal.py::test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr"},
+    {"method":"POST","path":"/api/v3/true-api/auth/simpleSignIn","request":["uuid","data","unitedToken","inn"],"response":["uuidToken","expireDate"],"error":["code","error_message","description"],"fixture":"auth_uuid","test":"test_true_api_withdrawal.py::test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr"},
+    {"method":"POST","path":"/api/v3/true-api/cises/info","request":["array<KI>"],"response":["cisInfo.requestedCis","cisInfo.cis","cisInfo.productGroup","cisInfo.productGroupId","cisInfo.ownerInn","cisInfo.status","cisInfo.statusEx","errorCode","errorMessage"],"fixture":"cises_info","test":"test_true_api_withdrawal.py::test_cises_official_batch_preserves_nullable_facts_and_per_code_errors"},
+    {"method":"GET","path":"/api/v3/true-api/mods/list","request":["inns","pg","page","limit"],"response":["result","total","nextPage","result[].inn","result[].productGroups","result[].fiasId","result[].kpp"],"test":"test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total"},
+    {"method":"POST","path":"/api/v3/true-api/lk/documents/create","request":["pg","document_format","product_document","type","signature"],"response":["uuid string"],"fixture":"create_error","test":"test_true_api_withdrawal.py::test_create_sends_original_bytes_exact_four_fields_and_returns_only_id"},
+    {"method":"GET","path":"/api/v4/true-api/doc/list","request":["pg","senderInn","dateFrom","dateTo","documentType","documentFormat","limit","order","did","orderedColumnValue","pageDir"],"response":["results","nextPage","results[].number","results[].docDate"],"fixture":"document_list","test":"test_true_api_withdrawal.py::test_v4_list_exact_reconciliation_filters_and_cursor"},
+    {"method":"GET","path":"/api/v4/true-api/doc/{id}/info","request":["pg","body"],"response":["array","number","status","type","body","errors","commonErrors"],"fixture":"document_info_error","test":"test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses"}
+  ],
+  "failure_tests": {
+    "400/401/403/422/429/500/503": "test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens",
+    "Retry-After": "test_withdrawal_readiness.py::test_retry_after_defers_shared_participant_without_replay",
+    "shared limiter": "test_true_api_withdrawal.py::test_atomic_lua_limiter_across_three_clients_with_real_isolated_redis",
+    "lost create response/expired token/reload/cancelled order/reauth": "test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once",
+    "partial success/retry": "test_withdrawal_ledger.py::test_partial_success_survives_neighbour_failure_and_retry",
+    "tenant/seller isolation": "test_withdrawal_ledger.py::test_database_rejects_cross_seller_document_item_link"
+  }
+}

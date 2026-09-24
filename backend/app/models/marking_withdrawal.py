@@ -58,7 +58,7 @@ class WithdrawalOperation(Base):
     environment: Mapped[str] = mapped_column(String(16), default="sandbox")
     state: Mapped[str] = mapped_column(String(32), default="created")
     attempt: Mapped[int] = mapped_column(Integer, default=1)
-    # Auth is deliberately not populated by the B3-gated public API.
+    # Auth/token data remains server-only and bound to this operation.
     certificate_thumbprint: Mapped[str | None] = mapped_column(String(128))
     certificate_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     auth_uuid: Mapped[str | None] = mapped_column(String(36))
@@ -187,6 +187,14 @@ class WithdrawalItem(Base):
         CheckConstraint(
             "state IN ('pending','succeeded','failed')", name="ck_withdrawal_item_state"
         ),
+        Index(
+            "uq_withdrawal_provider_claim",
+            "tenant_id",
+            "provider_cis",
+            unique=True,
+            postgresql_where=text("holds_claim AND provider_cis IS NOT NULL"),
+            sqlite_where=text("holds_claim = 1 AND provider_cis IS NOT NULL"),
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     operation_id: Mapped[uuid.UUID] = mapped_column(Uuid)
@@ -199,6 +207,7 @@ class WithdrawalItem(Base):
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fbs_orders.id"))
     supply_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fbs_supplies.id"))
     cis: Mapped[str] = mapped_column(String(512))
+    provider_cis: Mapped[str | None] = mapped_column(String(74))
     source: Mapped[str] = mapped_column(String(16))
     delivered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     price_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(

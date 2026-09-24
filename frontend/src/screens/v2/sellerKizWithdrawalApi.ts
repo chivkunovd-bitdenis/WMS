@@ -39,7 +39,6 @@ export type WithdrawalCertificateBinding = {
   expires_at: string
   subject?: string
   issuer?: string
-  mchd_expires_at?: string
 }
 
 export type WithdrawalAuthChallenge = {
@@ -66,7 +65,9 @@ export type WithdrawalOperation = {
   operation_id: string
   state: string
   attempt: number
-  integration_gate: 'B3_AUTH_PROFILE_UNCONFIRMED' | null
+  integration_gate: 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED' | null
+  reauth_required: boolean
+  certificate_thumbprint: string | null
   auth_challenge: WithdrawalAuthChallenge | null
   documents: WithdrawalDocumentToSign[]
   auth_error: WithdrawalErrorDetail | null
@@ -91,8 +92,16 @@ export type WithdrawalDocumentSignatureInput = {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
-  B3_AUTH_PROFILE_UNCONFIRMED:
-    'Подписание авторизации Честного знака пока закрыто: браузерный профиль подписи не подтверждён.',
+  WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED:
+    'Отправка в Честный знак в этом контуре пока отключена.',
+  withdrawal_reauth_certificate_mismatch:
+    'Для продолжения выберите тот же сертификат, которым была начата операция.',
+  withdrawal_reauth_user_mismatch:
+    'Продолжить эту операцию может только начавший её пользователь.',
+  certificate_expired:
+    'Срок действия сертификата истёк. Выберите действующий сертификат.',
+  withdrawal_auth_signature_mismatch:
+    'Данные авторизации уже изменились. Повторите подпись с тем же сертификатом.',
   invalid_date_range: 'Дата начала периода должна быть не позже даты окончания.',
   invalid_pagination: 'Не удалось открыть эту страницу реестра. Обновите данные.',
   invalid_selection: 'Выберите от 1 до 250 КИЗ на текущей странице.',
@@ -164,6 +173,10 @@ export interface SellerWithdrawalApi {
   retryOperation(input: {
     operationId: string
     expectedAttempt: number
+    certificate: WithdrawalCertificateBinding
+  }): Promise<WithdrawalOperation>
+  requestReauthChallenge(input: {
+    operationId: string
     certificate: WithdrawalCertificateBinding
   }): Promise<WithdrawalOperation>
   submitAuthSignature(input: {
@@ -269,6 +282,23 @@ export class SameOriginSellerWithdrawalApi implements SellerWithdrawalApi {
     return jsonOrThrow<WithdrawalOperation>(response)
   }
 
+  async requestReauthChallenge(input: {
+    operationId: string
+    certificate: WithdrawalCertificateBinding
+  }): Promise<WithdrawalOperation> {
+    const response = await fetch(
+      apiUrl(
+        `/operations/marking-codes/self/withdrawals/operations/${encodeURIComponent(input.operationId)}/reauth-challenge`,
+      ),
+      {
+        method: 'POST',
+        headers: this.#headers(true),
+        body: JSON.stringify({ certificate: input.certificate }),
+      },
+    )
+    return jsonOrThrow<WithdrawalOperation>(response)
+  }
+
   async submitAuthSignature(input: {
     operationId: string
     thumbprint: string
@@ -336,6 +366,8 @@ const collectProviderReasons = (value: unknown, depth = 0): string[] => {
   const record = value as Record<string, unknown>
   const message =
     cleanProviderText(record.message) ??
+    cleanProviderText(record.error_message) ??
+    cleanProviderText(record.errorMessage) ??
     cleanProviderText(record.error) ??
     cleanProviderText(record.description)
   if (message) return [message]
@@ -355,6 +387,8 @@ export const withdrawalErrorMessage = (error: WithdrawalErrorDetail | null | und
   if (!error) return ''
 
   const directMessage = cleanProviderText(error.message)
+    ?? cleanProviderText(error.error_message)
+    ?? cleanProviderText(error.errorMessage)
   if (directMessage) return directMessage
 
   const reasons = [error.errors, error.commonErrors, error.common_errors]

@@ -10,6 +10,7 @@ type FakeOptions = {
   valid?: boolean
   signResult?: string
   signError?: Error
+  verifyError?: Error
   storeOpenError?: Error
   matchingCount?: number
   pluginVersion?: string
@@ -85,6 +86,10 @@ const makeFakeRuntime = (options: FakeOptions = {}) => {
       calls.push(`sign:${type}:${detached}`)
       if (options.signError) throw options.signError
       return options.signResult ?? 'QUJD\r\nRA=='
+    }),
+    VerifyCades: vi.fn().mockImplementation(async (signature: string, type: number, detached: boolean) => {
+      calls.push(`verify:${signature}:${type}:${detached}`)
+      if (options.verifyError) throw options.verifyError
     }),
   }
   const about = {
@@ -450,17 +455,77 @@ describe('CryptoPro exact detached document signing', () => {
     expect(fake.CreateObjectAsync).not.toHaveBeenCalled()
   })
 
-  it('keeps attached True API auth unavailable before any plugin or network call', async () => {
+  it('signs the exact raw True API challenge as attached CAdES-BES and verifies it locally', async () => {
     const fake = makeFakeRuntime()
-    const fetchMock = vi.fn()
     installRuntime(fake.runtime)
-    vi.stubGlobal('fetch', fetchMock)
+    const challenge = 'UUID:\u00a0АБВ\r\nexact challenge'
+
+    await expect(new CryptoProCadesAdapter().signAttachedAuthChallenge({
+      challengeData: challenge,
+      certificateThumbprint: 'aa bb cc dd',
+    })).resolves.toEqual({
+      signatureBase64: 'QUJDRA==',
+      certificateThumbprint: CERT_THUMBPRINT,
+    })
+
+    expect(fake.signedData.propset_ContentEncoding).not.toHaveBeenCalled()
+    expect(fake.signedData.propset_Content).toHaveBeenCalledWith(challenge)
+    expect(fake.signedData.SignCades).toHaveBeenCalledWith(fake.signer, 1, false)
+    expect(fake.signedData.VerifyCades).toHaveBeenCalledWith('QUJD\r\nRA==', 1, false)
+    expect(fake.calls.indexOf(`content:${challenge}`)).toBeLessThan(fake.calls.indexOf('sign:1:false'))
+    expect(fake.calls.indexOf('sign:1:false')).toBeLessThan(
+      fake.calls.indexOf('verify:QUJD\r\nRA==:1:false'),
+    )
+    expect(fake.signer.propset_CheckCertificate).toHaveBeenCalledWith(true)
+    expect(fake.signer.propset_KeyPin).not.toHaveBeenCalled()
+    expect(fake.privateKeyRead).not.toHaveBeenCalled()
+    expect(fake.store.Close).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed when local VerifyCades rejects the attached signature', async () => {
+    const fake = makeFakeRuntime({ verifyError: new Error('attached content was tampered') })
+    installRuntime(fake.runtime)
 
     await expectCryptoProCode(
-      new CryptoProCadesAdapter().signAttachedAuthChallenge(),
-      'attached_auth_profile_unverified',
+      new CryptoProCadesAdapter().signAttachedAuthChallenge({
+        challengeData: 'challenge-before-tamper',
+        certificateThumbprint: CERT_THUMBPRINT,
+      }),
+      'signature_failed',
+    )
+
+    expect(fake.signedData.SignCades).toHaveBeenCalledTimes(1)
+    expect(fake.signedData.VerifyCades).toHaveBeenCalledTimes(1)
+    expect(fake.store.Close).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not return an attached signature that is not valid base64', async () => {
+    const fake = makeFakeRuntime({ signResult: 'not-a-cms-signature' })
+    installRuntime(fake.runtime)
+
+    await expectCryptoProCode(
+      new CryptoProCadesAdapter().signAttachedAuthChallenge({
+        challengeData: 'exact challenge',
+        certificateThumbprint: CERT_THUMBPRINT,
+      }),
+      'signature_failed',
+    )
+
+    expect(fake.signedData.VerifyCades).toHaveBeenCalledWith('not-a-cms-signature', 1, false)
+    expect(fake.store.Close).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an empty auth challenge before opening the plugin', async () => {
+    const fake = makeFakeRuntime()
+    installRuntime(fake.runtime)
+
+    await expectCryptoProCode(
+      new CryptoProCadesAdapter().signAttachedAuthChallenge({
+        challengeData: '',
+        certificateThumbprint: CERT_THUMBPRINT,
+      }),
+      'invalid_payload',
     )
     expect(fake.CreateObjectAsync).not.toHaveBeenCalled()
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

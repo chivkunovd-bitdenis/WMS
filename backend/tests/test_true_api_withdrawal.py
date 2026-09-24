@@ -55,21 +55,22 @@ def session(**overrides: Any) -> api.AuthSession:
 def client(http: httpx.AsyncClient, limiter: Any = None) -> api.TrueApiWithdrawalClient:
     return api.TrueApiWithdrawalClient(
         http,
-        # Test-only contract exercise; this flag is NOT evidence that B3 is closed.
-        api.TrueApiConfig(api.Environment.SANDBOX, browser_auth_profile_verified=True),
+        # Mock transport exercises the contract, never a physical certificate.
+        api.TrueApiConfig(api.Environment.SANDBOX),
         limiter or RecordingLimiter(),
         INN,
     )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mchd", [False, True])
-async def test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr(mchd: bool) -> None:
+@pytest.mark.parametrize("certificate_hours", [2, 12])
+async def test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr(
+    certificate_hours: int,
+) -> None:
     calls = []
     limiter = RecordingLimiter()
     now = datetime.now(UTC)
-    cert_expiry = now + timedelta(hours=12)
-    mchd_expiry = now + timedelta(hours=2)
+    cert_expiry = now + timedelta(hours=certificate_hours)
     payload = {**FIXTURES["auth_uuid"], "expireDate": (now + timedelta(hours=15)).isoformat()}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -80,9 +81,9 @@ async def test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr(mchd: bo
             assert request.url.path == "/api/v3/true-api/auth/key"
             return httpx.Response(200, json=FIXTURES["auth_key"])
         assert request.url.path == "/api/v3/true-api/auth/simpleSignIn"
-        expected = dict(uuid=FIXTURES["auth_key"]["uuid"], data=SIGNATURE, unitedToken=True)
-        if mchd:
-            expected["inn"] = INN
+        expected = dict(
+            uuid=FIXTURES["auth_key"]["uuid"], data=SIGNATURE, unitedToken=True, inn=INN
+        )
         assert json.loads(request.content) == expected
         return httpx.Response(200, json=payload)
 
@@ -95,13 +96,11 @@ async def test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr(mchd: bo
             challenge.uuid,
             SIGNATURE,
             certificate_expires_at=cert_expiry,
-            mchd_inn=INN if mchd else None,
-            mchd_expires_at=mchd_expiry if mchd else None,
         )
     assert auth.token == TOKEN
     assert TOKEN not in repr(auth)
-    if mchd:
-        assert auth.expires_at == mchd_expiry
+    if certificate_hours == 2:
+        assert auth.expires_at == cert_expiry
     else:
         assert now + timedelta(hours=10) <= auth.expires_at < now + timedelta(hours=10, seconds=1)
     assert len(calls) == len(limiter.calls) == 2
@@ -234,7 +233,7 @@ async def test_cises_official_batch_preserves_nullable_facts_and_per_code_errors
     assert response.by_cis[CIS].product_group == "milk"
     assert response.by_cis[CIS].product_group_id == 8
     assert response.by_cis[CIS].owner_inn == INN
-    assert response.by_cis[CIS].status_ex == "EMPTY"
+    assert response.by_cis[CIS].status_ex is None
     assert response.by_cis[bad_code].product_group is None
     assert response.by_cis[bad_code].error_message == "КИ не найден"
     assert response.by_cis[bad_code].error_code == "404"
@@ -499,6 +498,13 @@ async def test_atomic_lua_limiter_across_three_clients_with_real_isolated_redis(
             assert len(times) == 75
             assert all(b - a >= 20001 for a, b in pairwise(times))
             assert all(times[i + 50] - times[i] > 1_000_000 for i in range(25))
+            # Retry-After on one client defers another process's same participant.
+            await api.RedisParticipantLimiter(connections[0]).defer(
+                api.Environment.SANDBOX, INN, 0.1
+            )
+            started = asyncio.get_running_loop().time()
+            await api.RedisParticipantLimiter(connections[1]).acquire(api.Environment.SANDBOX, INN)
+            assert asyncio.get_running_loop().time() - started >= 0.1
         finally:
             for connection in connections:
                 await connection.aclose()
@@ -575,7 +581,7 @@ async def test_info_contract_mismatch_is_not_success(mutation: str) -> None:
 @pytest.mark.parametrize("environment", list(api.Environment))
 @pytest.mark.parametrize("method", ["sign_in", "create_document"])
 @pytest.mark.parametrize("verified", [False, True])
-async def test_b3_gate_blocks_before_limiter_and_http_in_both_environments(
+async def test_production_create_gate_does_not_block_auth_or_sandbox(
     environment: api.Environment,
     method: str,
     verified: bool,
@@ -597,11 +603,11 @@ async def test_b3_gate_blocks_before_limiter_and_http_in_both_environments(
 
     # Omitting the field must be fail-closed by default, not only explicit False.
     config = (
-        api.TrueApiConfig(environment, browser_auth_profile_verified=True)
+        api.TrueApiConfig(environment, production_submit_enabled=True)
         if verified
         else api.TrueApiConfig(environment)
     )
-    assert config.browser_auth_profile_verified is verified
+    assert config.production_submit_enabled is verified
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
         transport = api.TrueApiWithdrawalClient(http, config, limiter, INN)
         if method == "sign_in":
@@ -617,11 +623,11 @@ async def test_b3_gate_blocks_before_limiter_and_http_in_both_environments(
                 exact_payload=EXACT,
                 detached_signature=SIGNATURE,
             )
-        if verified:
+        if verified or environment == api.Environment.SANDBOX or method == "sign_in":
             await action
             assert len(calls) == len(limiter.calls) == 1
         else:
-            with pytest.raises(ValueError, match="B3"):
+            with pytest.raises(ValueError, match="WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"):
                 await action
             assert calls == []
             assert limiter.calls == []

@@ -19,6 +19,7 @@ from app.api.withdrawal_schemas import (
     DocumentSignatures,
     OperationItem,
     OperationOut,
+    ReauthWithdrawal,
     RetryWithdrawal,
     WithdrawalChallenge,
     WithdrawalDocumentBlob,
@@ -46,6 +47,8 @@ from app.services.withdrawal_orchestration import (
     accept_document_signatures,
     authenticate_and_build,
     prepare_challenge,
+    prepare_reauth,
+    reauth_required,
     scoped_documents,
 )
 from app.services.withdrawal_runtime import WithdrawalRuntime, get_withdrawal_runtime
@@ -94,12 +97,13 @@ async def _output(
         operation_id=operation.id,
         state=operation.state,
         attempt=operation.attempt,
-        integration_gate=None if runtime.enabled else "B3_AUTH_PROFILE_UNCONFIRMED",
+        integration_gate=None if runtime.enabled else "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED",
+        reauth_required=reauth_required(operation, documents),
+        certificate_thumbprint=operation.certificate_thumbprint,
         auth_error=operation.workflow_error,
         auth_challenge=(
             WithdrawalChallenge(uuid=operation.auth_uuid, data=operation.auth_challenge)
-            if runtime.enabled
-            and operation.state == "auth_pending"
+            if (operation.state == "auth_pending" or reauth_required(operation, documents))
             and operation.token_enc is None
             and operation.auth_uuid
             and operation.auth_challenge
@@ -113,7 +117,10 @@ async def _output(
                 thumbprint=doc.certificate_thumbprint,
             )
             for doc in documents
-            if runtime.enabled and doc.state == "pending_signature" and doc.signature is None
+            if runtime.enabled
+            and operation.state == "documents_pending_signature"
+            and doc.state == "pending_signature"
+            and doc.signature is None
         ],
         items=[
             OperationItem(
@@ -234,6 +241,24 @@ async def retry_withdrawal(
     except WithdrawalError as exc:
         await session.rollback()
         raise HTTPException(exc.status_code, exc.code) from None
+    return await _output(session, scope, operation, runtime)
+
+
+@router.post("/operations/{operation_id}/reauth-challenge", response_model=OperationOut)
+async def reauth_challenge(
+    operation_id: uuid.UUID, payload: ReauthWithdrawal, session: Db, scope: Scope, runtime: Runtime
+) -> OperationOut:
+    try:
+        operation = await prepare_reauth(
+            session,
+            scope,
+            operation_id,
+            CertificateSelection(**payload.certificate.model_dump()),
+            runtime,
+        )
+    except WithdrawalError as exc:
+        await session.rollback()
+        raise HTTPException(exc.status_code, {"code": exc.code}) from None
     return await _output(session, scope, operation, runtime)
 
 

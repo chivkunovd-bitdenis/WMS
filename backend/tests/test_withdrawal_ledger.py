@@ -313,9 +313,12 @@ async def test_partial_success_survives_neighbour_failure_and_retry(
     item_values = {
         column.name: getattr(original, column.name)
         for column in WithdrawalItem.__table__.columns
-        if column.name not in {"id", "created_at", "marking_id", "cis", "document_id"}
+        if column.name
+        not in {"id", "created_at", "marking_id", "cis", "provider_cis", "document_id"}
     }
-    second_item = WithdrawalItem(**item_values, marking_id=marking.id, cis=marking.value)
+    second_item = WithdrawalItem(
+        **item_values, marking_id=marking.id, cis=marking.value, provider_cis=marking.value
+    )
     payload = json.loads(successful.exact_payload)
     payload["products"][0]["cis"] = marking.value
     exact = json.dumps(payload).encode()
@@ -596,21 +599,52 @@ async def test_database_prevents_second_claim(db_session: AsyncSession) -> None:
     await db_session.rollback()
 
 
-async def test_database_rejects_cross_seller_document_item_link(db_session: AsyncSession) -> None:
-    if engine.dialect.name == "sqlite":
-        await db_session.execute(text("PRAGMA foreign_keys=ON"))
+async def test_database_rejects_cross_seller_document_item_link(
+    db_session_with_foreign_keys: AsyncSession,
+) -> None:
+    db_session = db_session_with_foreign_keys
     _, _, doc = await document(db_session)
     other_scope, other_op = await operation(db_session)
     item = (await current_items(db_session, other_scope, other_op.id))[0]
+    if engine.dialect.name == "sqlite":
+        assert await db_session.scalar(text("PRAGMA foreign_keys")) == 1
     item.document_id = doc.id
     with pytest.raises(IntegrityError):
         await db_session.flush()
     await db_session.rollback()
 
 
+async def test_fk_session_stays_enabled_after_commits_and_pool_growth(
+    db_session_with_foreign_keys: AsyncSession,
+) -> None:
+    session = db_session_with_foreign_keys
+    if engine.dialect.name != "sqlite":
+        return  # PostgreSQL has no connection-local foreign_keys switch.
+    pinned = await session.connection()
+    async with engine.connect() as neighbour:
+        # Force at least two physical connections, the former order dependency.
+        assert pinned is not neighbour
+        neighbour_fk = (await neighbour.exec_driver_sql("PRAGMA foreign_keys")).scalar_one()
+    # Return the neighbour BEFORE commit: an engine-bound session would release
+    # its own connection behind the neighbour and next acquire a different one.
+    for _ in range(3):
+        await session.commit()
+        assert await session.connection() is pinned
+        assert await session.scalar(text("PRAGMA foreign_keys")) == 1
+    async with engine.connect() as neighbour:
+        assert (
+            await neighbour.exec_driver_sql("PRAGMA foreign_keys")
+        ).scalar_one() == neighbour_fk
+
+
 async def test_api_gates_signatures_scopes_and_never_returns_tokens(
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.core.settings import settings
+
+    monkeypatch.setattr(settings, "withdrawal_environment", "production")
+    monkeypatch.setattr(settings, "withdrawal_production_submit_enabled", False)
     scope, marking, _, _ = await seed(db_session)
     app = create_app()
     app.dependency_overrides[_scope] = lambda: scope
@@ -627,7 +661,7 @@ async def test_api_gates_signatures_scopes_and_never_returns_tokens(
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["integration_gate"] == "B3_AUTH_PROFILE_UNCONFIRMED"
+        assert data["integration_gate"] == "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
         assert data["items"][0]["status"] == "not_withdrawn"
         operation_id = data["operation_id"]
         response = await http.post(
@@ -635,7 +669,7 @@ async def test_api_gates_signatures_scopes_and_never_returns_tokens(
             json={"thumbprint": "cert", "signature": "ZmFrZQ=="},
         )
         assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "B3_AUTH_PROFILE_UNCONFIRMED"
+        assert response.json()["detail"]["code"] == "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
         response = await http.post(
             prefix + "/operations",
             json={
@@ -723,6 +757,12 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
     next_module = importlib.util.module_from_spec(next_spec)
     next_spec.loader.exec_module(next_module)
     assert next_module.down_revision == module.revision
+    ki_spec = importlib.util.spec_from_file_location(
+        "withdrawal_ki_migration", path.with_name("20260924_0520_withdrawal_provider_ki.py")
+    )
+    assert ki_spec is not None and ki_spec.loader is not None
+    ki_module = importlib.util.module_from_spec(ki_spec)
+    ki_spec.loader.exec_module(ki_module)
     names = {
         "withdrawal_operations",
         "withdrawal_documents",
@@ -738,6 +778,7 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
         with Operations.context(MigrationContext.configure(connection)):
             module.upgrade()
             next_module.upgrade()
+            ki_module.upgrade()
             inspector = inspect(connection)
             for name in names:
                 assert {column["name"] for column in inspector.get_columns(name)} == set(
@@ -782,6 +823,7 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
                     "possible_duplicate",
                     ["original-document"],
                 )
+            ki_module.downgrade()
             next_module.downgrade()
             module.downgrade()
             assert not names.intersection(inspect(connection).get_table_names())

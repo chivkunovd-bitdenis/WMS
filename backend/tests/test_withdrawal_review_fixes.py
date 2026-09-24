@@ -29,25 +29,27 @@ from app.tasks import withdrawal_recovery as worker
 
 
 @pytest.mark.asyncio
-async def test_b3_closes_worker_before_any_provider_resources(
+async def test_production_gate_blocks_submit_but_does_not_block_read_recovery(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    await document(db_session)  # Persisted, due provider document cannot bypass B3.
-    monkeypatch.setattr(settings, "withdrawal_browser_auth_profile_verified", False)
+    monkeypatch.setattr(settings, "withdrawal_environment", "production")
+    monkeypatch.setattr(settings, "withdrawal_production_submit_enabled", False)
 
     def forbidden(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("B3 must stop before DB leases/Redis/limiter/HTTP/recovery")
+        raise AssertionError("production create must stop before DB/HTTP")
 
     monkeypatch.setattr(worker, "SessionLocal", forbidden)
     monkeypatch.setattr(Redis, "from_url", forbidden)
     monkeypatch.setattr(worker, "RedisParticipantLimiter", forbidden)
     monkeypatch.setattr(httpx, "AsyncClient", forbidden)
     monkeypatch.setattr(worker, "TrueApiWithdrawalClient", forbidden)
-    monkeypatch.setattr(worker, "recover_one", forbidden)
-    monkeypatch.setattr(worker, "submit_one", forbidden)
-    assert await worker.run_withdrawal_recovery() == 0
-    assert await worker.run_withdrawal_jobs() == 0
+
+    async def read_only(*, batch_size: int) -> int:
+        return 1
+
+    monkeypatch.setattr(worker, "run_withdrawal_recovery", read_only)
+    assert await worker.run_withdrawal_jobs() == 1
 
 
 def test_no_persistent_mod_registry_or_api() -> None:

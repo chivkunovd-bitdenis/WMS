@@ -1,4 +1,4 @@
-"""Local operation creation/retry. B3 intentionally prevents auth and submission."""
+"""Server-owned operation creation and explicit terminal-reject retry."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.withdrawal_repository import (
@@ -21,8 +21,9 @@ from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_withdrawal import WithdrawalItem, WithdrawalOperation
 from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
+from app.services.withdrawal_provider_ki import provider_ki
 
-INTEGRATION_GATE = "B3_AUTH_PROFILE_UNCONFIRMED"
+INTEGRATION_GATE = "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
 
 
 async def _new_items(
@@ -50,6 +51,7 @@ async def _new_items(
             holds_claim=True,
         )
         try:
+            item.provider_cis = provider_ki(marking.value)
             price = await resolve_wb_product_cost(
                 session,
                 tenant_id=scope.tenant_id,
@@ -62,6 +64,9 @@ async def _new_items(
             item.price_snapshot_id = exc.snapshot_id
             item.state = "failed"
             item.error = {"source": "local", "code": exc.code, "message": str(exc)}
+        except ValueError as exc:
+            item.state = "failed"
+            item.error = {"source": "local", "code": str(exc)}
         session.add(item)
     await session.flush()
     items = await current_items(session, scope, operation.id)
@@ -116,11 +121,22 @@ async def create_operation(
     ]
     if len(rows) != len(row_ids):
         raise WithdrawalError("withdrawal_rows_not_found", 404)
+    projected = []
+    for row in rows:
+        try:
+            projected.append(provider_ki(row[0].value))
+        except ValueError:
+            continue  # Per-item preflight error, never an HTTP request.
+    if len(set(projected)) != len(projected):
+        raise WithdrawalError("duplicate_provider_ki", 422)
     claims = list(
         await session.scalars(
             select(WithdrawalItem).where(
                 WithdrawalItem.tenant_id == scope.tenant_id,
-                WithdrawalItem.cis.in_([row[0].value for row in rows]),
+                or_(
+                    WithdrawalItem.cis.in_([row[0].value for row in rows]),
+                    WithdrawalItem.provider_cis.in_(projected),
+                ),
                 WithdrawalItem.holds_claim.is_(True),
             )
         )
@@ -133,6 +149,7 @@ async def create_operation(
             len(operations) == 1
             and len(claims) == len(rows)
             and all(item.seller_id == scope.seller_id for item in claims)
+            and {item.marking_id for item in claims} == set(row_ids)
         ):
             return await get_operation(session, scope, next(iter(operations)))
         raise WithdrawalError("selection_overlaps_existing_operation")
@@ -208,5 +225,5 @@ async def retry_operation(
     operation.workflow_lease_until = None
     operation.attempt_started_at = datetime.now(UTC)
     await _new_items(session, scope, operation, rows)
-    # New pending items still need fresh cises/MOD, bytes and signatures after B3.
+    # New pending items need fresh cises/MOD, bytes and signatures.
     return operation

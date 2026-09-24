@@ -20,7 +20,6 @@ export type CryptoProErrorCode =
   | 'certificate_invalid'
   | 'invalid_payload'
   | 'signature_failed'
-  | 'attached_auth_profile_unverified'
 
 const ERROR_MESSAGES: Record<CryptoProErrorCode, string> = {
   plugin_script_missing: 'КриптоПро недоступен: локальный скрипт плагина не загружен.',
@@ -39,8 +38,6 @@ const ERROR_MESSAGES: Record<CryptoProErrorCode, string> = {
   certificate_invalid: 'Сертификат не прошёл проверку срока действия или цепочки доверия.',
   invalid_payload: 'Данные документа для подписи имеют неверный формат.',
   signature_failed: 'КриптоПро не смог подписать документ.',
-  attached_auth_profile_unverified:
-    'Подпись авторизации Честного знака отключена: точный браузерный профиль подписи не подтверждён.',
 }
 
 export class CryptoProError extends Error {
@@ -72,6 +69,16 @@ export type DetachedDocumentToSign = {
 }
 
 export type DetachedDocumentSignature = {
+  signatureBase64: string
+  certificateThumbprint: string
+}
+
+export type AttachedAuthChallengeToSign = {
+  challengeData: string
+  certificateThumbprint: string
+}
+
+export type AttachedAuthChallengeSignature = {
   signatureBase64: string
   certificateThumbprint: string
 }
@@ -392,6 +399,43 @@ const readCertificate = async (certificate: CadesObject): Promise<CryptoProCerti
   validTo: normalizeDate(await readMember(certificate, 'ValidToDate'), 'ValidToDate'),
 })
 
+const selectedCertificate = async (
+  runtime: ReadyCadesRuntime,
+  store: CadesObject,
+  thumbprint: string,
+): Promise<CadesObject> => {
+  const timeValid = await findTimeValidCertificates(runtime, store)
+  const matches = asObject(
+    await callMember(timeValid, 'Find', runtime.CAPICOM_CERTIFICATE_FIND_SHA1_HASH, thumbprint),
+    'matching Certificates',
+  )
+  if (Number(await readMember(matches, 'Count')) !== 1) {
+    throw new CryptoProError('certificate_not_found')
+  }
+
+  const certificate = asObject(await callMember(matches, 'Item', 1), 'Certificate')
+  if (!(await certificateHasPrivateKey(certificate))) {
+    throw new CryptoProError('certificate_has_no_private_key')
+  }
+  if (!(await certificateIsValid(certificate))) {
+    throw new CryptoProError('certificate_invalid')
+  }
+
+  const actualThumbprint = normalizeThumbprint(String(await readMember(certificate, 'Thumbprint')))
+  if (actualThumbprint !== thumbprint) throw new CryptoProError('certificate_not_found')
+  return certificate
+}
+
+const signerForCertificate = async (
+  runtime: ReadyCadesRuntime,
+  certificate: CadesObject,
+): Promise<CadesObject> => {
+  const signer = asObject(await runtime.CreateObjectAsync('CAdESCOM.CPSigner'), 'CAdESCOM.CPSigner')
+  await callMember(signer, 'propset_Certificate', certificate)
+  await callMember(signer, 'propset_CheckCertificate', true)
+  return signer
+}
+
 export class CryptoProCadesAdapter {
   readonly #timeoutMs: number
   readonly #testedOperatingSystem?: TestedOperatingSystem
@@ -457,29 +501,8 @@ export class CryptoProCadesAdapter {
     try {
       await openStore(runtime, store)
       opened = true
-      const timeValid = await findTimeValidCertificates(runtime, store)
-      const matches = asObject(
-        await callMember(timeValid, 'Find', runtime.CAPICOM_CERTIFICATE_FIND_SHA1_HASH, thumbprint),
-        'matching Certificates',
-      )
-      if (Number(await readMember(matches, 'Count')) !== 1) {
-        throw new CryptoProError('certificate_not_found')
-      }
-
-      const certificate = asObject(await callMember(matches, 'Item', 1), 'Certificate')
-      if (!(await certificateHasPrivateKey(certificate))) {
-        throw new CryptoProError('certificate_has_no_private_key')
-      }
-      if (!(await certificateIsValid(certificate))) {
-        throw new CryptoProError('certificate_invalid')
-      }
-
-      const actualThumbprint = normalizeThumbprint(String(await readMember(certificate, 'Thumbprint')))
-      if (actualThumbprint !== thumbprint) throw new CryptoProError('certificate_not_found')
-
-      const signer = asObject(await runtime.CreateObjectAsync('CAdESCOM.CPSigner'), 'CAdESCOM.CPSigner')
-      await callMember(signer, 'propset_Certificate', certificate)
-      await callMember(signer, 'propset_CheckCertificate', true)
+      const certificate = await selectedCertificate(runtime, store, thumbprint)
+      const signer = await signerForCertificate(runtime, certificate)
 
       const signedData = asObject(
         await runtime.CreateObjectAsync('CAdESCOM.CadesSignedData'),
@@ -507,9 +530,55 @@ export class CryptoProCadesAdapter {
     }
   }
 
-  async signAttachedAuthChallenge(): Promise<never> {
-    // True API v731.0 does not define enough browser-level details to choose the exact bytes,
-    // ContentEncoding and attached CAdES profile without a sandbox/vendor-confirmed fixture.
-    throw new CryptoProError('attached_auth_profile_unverified')
+  async signAttachedAuthChallenge(
+    input: AttachedAuthChallengeToSign,
+  ): Promise<AttachedAuthChallengeSignature> {
+    if (typeof input.challengeData !== 'string' || input.challengeData.length === 0) {
+      throw new CryptoProError('invalid_payload')
+    }
+    const thumbprint = normalizeThumbprint(input.certificateThumbprint)
+    if (!thumbprint) throw new CryptoProError('certificate_not_found')
+
+    const { runtime } = await this.#supportedRuntime()
+    const store = await getStore(runtime)
+    let opened = false
+    try {
+      await openStore(runtime, store)
+      opened = true
+      const certificate = await selectedCertificate(runtime, store, thumbprint)
+      const signer = await signerForCertificate(runtime, certificate)
+      const signedData = asObject(
+        await runtime.CreateObjectAsync('CAdESCOM.CadesSignedData'),
+        'CAdESCOM.CadesSignedData',
+      )
+
+      // True API Appendix 2 / @crpt/cades-pluginer 0.0.1 profile:
+      // pass the exact JS string, keep the default STRING_TO_UCS2LE encoding and create attached BES.
+      await callMember(signedData, 'propset_Content', input.challengeData)
+      const rawSignature = await callMember(
+        signedData,
+        'SignCades',
+        signer,
+        runtime.CADESCOM_CADES_BES,
+        false,
+      )
+      // Verify the attached CMS locally before its normalized base64 leaves the browser.
+      await callMember(
+        signedData,
+        'VerifyCades',
+        rawSignature,
+        runtime.CADESCOM_CADES_BES,
+        false,
+      )
+
+      return {
+        signatureBase64: normalizeSignature(rawSignature),
+        certificateThumbprint: thumbprint,
+      }
+    } catch (error) {
+      throw mapRuntimeError(runtime, error, 'signature_failed')
+    } finally {
+      if (opened) await closeStore(store)
+    }
   }
 }

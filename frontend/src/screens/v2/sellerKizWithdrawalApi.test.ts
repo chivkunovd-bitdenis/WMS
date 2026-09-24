@@ -7,6 +7,8 @@ const emptyOperation = {
   state: 'auth_pending',
   attempt: 1,
   integration_gate: null,
+  reauth_required: false,
+  certificate_thumbprint: null,
   auth_challenge: null,
   documents: [],
   auth_error: null,
@@ -109,9 +111,45 @@ describe('SameOriginSellerWithdrawalApi', () => {
     })
   })
 
-  it('maps the fail-closed B3 response to a human message', async () => {
+  it('requests reauthentication for the durable operation with public certificate metadata only', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        ...emptyOperation,
+        reauth_required: true,
+        certificate_thumbprint: 'AABB',
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new SameOriginSellerWithdrawalApi('seller-token')
+
+    await api.requestReauthChallenge({
+      operationId: 'operation-id',
+      certificate: {
+        thumbprint: 'AABB',
+        expires_at: '2027-01-01T00:00:00Z',
+        subject: 'CN=Seller',
+        issuer: 'CN=Issuer',
+      },
+    })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toContain('/operations/operation-id/reauth-challenge')
+    expect(JSON.parse(String(init.body))).toEqual({
+      certificate: {
+        thumbprint: 'AABB',
+        expires_at: '2027-01-01T00:00:00Z',
+        subject: 'CN=Seller',
+        issuer: 'CN=Issuer',
+      },
+    })
+  })
+
+  it('maps the fail-closed production-submit gate to a human message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ detail: { code: 'B3_AUTH_PROFILE_UNCONFIRMED' } }), {
+      new Response(JSON.stringify({ detail: { code: 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED' } }), {
         status: 409,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -125,7 +163,7 @@ describe('SameOriginSellerWithdrawalApi', () => {
       challengeUuid: 'challenge-id',
       expectedAttempt: 1,
     })).rejects.toMatchObject({
-      code: 'B3_AUTH_PROFILE_UNCONFIRMED',
+      code: 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED',
       status: 409,
     })
   })
@@ -151,6 +189,13 @@ describe('withdrawalErrorMessage', () => {
 
   it('uses a provider code when no safe message was returned', () => {
     expect(withdrawalErrorMessage({ errors: [{ code: 'E42' }] })).toBe('E42')
+  })
+
+  it('shows the factual True API auth error_message', () => {
+    expect(withdrawalErrorMessage({
+      code: 'AUTH_403',
+      error_message: 'У участника нет права на создание документа',
+    })).toBe('У участника нет права на создание документа')
   })
 
   it('falls back to a human terminal status without exposing unknown object fields', () => {

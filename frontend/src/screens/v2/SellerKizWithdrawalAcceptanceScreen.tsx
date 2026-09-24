@@ -91,6 +91,8 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
       state: 'auth_pending',
       attempt: 1,
       integration_gate: null,
+      reauth_required: false,
+      certificate_thumbprint: input.certificate.thumbprint,
       auth_challenge: { uuid: `challenge-${input.clientRequestId}`, data: `WMS517-${input.clientRequestId}` },
       documents: [],
       auth_error: null,
@@ -128,6 +130,21 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
     return copyOperation(operation)
   }
 
+  async requestReauthChallenge(input: {
+    operationId: string
+    certificate: WithdrawalCertificateBinding
+  }): Promise<WithdrawalOperation> {
+    const operation = await this.getOperation(input.operationId)
+    operation.reauth_required = true
+    operation.certificate_thumbprint = input.certificate.thumbprint
+    operation.auth_challenge = {
+      uuid: `reauth-${operation.attempt}`,
+      data: `WMS517-REAUTH-${operation.attempt}`,
+    }
+    this.#operations.set(operation.operation_id, operation)
+    return copyOperation(operation)
+  }
+
   async submitAuthSignature(input: {
     operationId: string
     thumbprint: string
@@ -138,6 +155,7 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
     const operation = await this.getOperation(input.operationId)
     const payloadBase64 = btoa(JSON.stringify({ action: 'DISTANCE', rows: this.#operationRows.get(input.operationId) }))
     operation.state = 'documents_pending_signature'
+    operation.reauth_required = false
     operation.auth_challenge = null
     operation.documents = [{
       document_id: `40000000-0000-4000-8000-${input.operationId.slice(-12)}`,

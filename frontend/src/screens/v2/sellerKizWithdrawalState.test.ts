@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { WithdrawalOperation } from './sellerKizWithdrawalApi'
 import {
   getOrCreateClientRequest,
+  isWithdrawalProductionSubmitBlocked,
   isTerminalWithdrawalOperation,
   parsePendingRequest,
   sha256Base64Payload,
@@ -14,6 +15,8 @@ const operation = (state: string): WithdrawalOperation => ({
   state,
   attempt: 1,
   integration_gate: null,
+  reauth_required: false,
+  certificate_thumbprint: null,
   auth_challenge: null,
   documents: [],
   auth_error: null,
@@ -41,6 +44,28 @@ describe('seller KIZ withdrawal state', () => {
     expect(shouldPollWithdrawalOperation(operation('documents_pending_signature'))).toBe(false)
     expect(isTerminalWithdrawalOperation(operation('partial_failed'))).toBe(true)
     expect(isTerminalWithdrawalOperation(operation('succeeded'))).toBe(true)
+  })
+
+  it('stops automatic polling when the durable operation needs an explicit certificate reauth', () => {
+    expect(shouldPollWithdrawalOperation({
+      ...operation('reconciling'),
+      reauth_required: true,
+      certificate_thumbprint: 'AABB',
+    })).toBe(false)
+  })
+
+  it('keeps new production submit fail-closed but permits certificate reauth for read-only recovery', () => {
+    const gated = {
+      ...operation('auth_pending'),
+      integration_gate: 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED' as const,
+    }
+    expect(isWithdrawalProductionSubmitBlocked(gated)).toBe(true)
+    expect(isWithdrawalProductionSubmitBlocked({
+      ...gated,
+      state: 'reconciling',
+      reauth_required: true,
+      certificate_thumbprint: 'AABB',
+    })).toBe(false)
   })
 
   it('hashes the exact bytes represented by base64', async () => {

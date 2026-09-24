@@ -69,6 +69,7 @@ import {
   compactKiz,
   failedWithdrawalItems,
   getOrCreateClientRequest,
+  isWithdrawalProductionSubmitBlocked,
   isTerminalWithdrawalOperation,
   normalizeThumbprint,
   parsePendingRequest,
@@ -484,10 +485,34 @@ export function SellerKizWithdrawalScreen({
         applyTerminalOperation(operation)
         return
       }
-      if (operation.integration_gate) {
-        throw new Error(
-          'Подписание авторизации Честного знака пока закрыто: браузерный профиль подписи не подтверждён.',
-        )
+      if (isWithdrawalProductionSubmitBlocked(operation)) {
+        throw new Error('Отправка в Честный знак в этом контуре пока отключена.')
+      }
+
+      const reauth = operation.reauth_required
+      if (reauth) {
+        if (
+          !operation.certificate_thumbprint ||
+          normalizeThumbprint(operation.certificate_thumbprint) !==
+            normalizeThumbprint(certificate.thumbprint)
+        ) {
+          throw new Error(
+            'Для продолжения выберите тот же сертификат, которым была начата операция.',
+          )
+        }
+        if (!operation.auth_challenge) {
+          operation = await api.requestReauthChallenge({
+            operationId: operation.operation_id,
+            certificate: certificateBinding(certificate),
+          })
+          rememberOperation(operation)
+          if (!operation.auth_challenge && operation.auth_error) {
+            throw new Error(
+              withdrawalErrorMessage(operation.auth_error) ||
+                'Честный знак не вернул данные для авторизации.',
+            )
+          }
+        }
       }
 
       if (operation.auth_challenge) {
@@ -515,6 +540,34 @@ export function SellerKizWithdrawalScreen({
         setCertificateOpen(false)
         applyTerminalOperation(operation)
         return
+      }
+      if (reauth) {
+        if (operation.reauth_required) {
+          throw new Error(
+            withdrawalErrorMessage(operation.auth_error) ||
+              'Не удалось возобновить доступ к Честному знаку. Повторите позже.',
+          )
+        }
+        setSelected([])
+        setCertificateOpen(false)
+        setSelectedCertificateThumbprint('')
+        setRetryTarget(null)
+        safeStorageRemove(keys.request)
+        void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
+        return
+      }
+      if (shouldPollWithdrawalOperation(operation)) {
+        setSelected([])
+        setCertificateOpen(false)
+        setSelectedCertificateThumbprint('')
+        setRetryTarget(null)
+        return
+      }
+      if (operation.auth_error) {
+        throw new Error(
+          withdrawalErrorMessage(operation.auth_error) ||
+            'Честный знак не принял подпись авторизации.',
+        )
       }
       if (operation.documents.length === 0) {
         throw new Error('Честный знак не подготовил документы для подписи. Повторите позже.')

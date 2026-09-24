@@ -7,7 +7,11 @@ export const isTerminalWithdrawalOperation = (operation: WithdrawalOperation): b
   TERMINAL_OPERATION_STATES.has(operation.state)
 
 export const shouldPollWithdrawalOperation = (operation: WithdrawalOperation): boolean =>
-  POLLING_OPERATION_STATES.has(operation.state)
+  POLLING_OPERATION_STATES.has(operation.state) && !operation.reauth_required
+
+export const isWithdrawalProductionSubmitBlocked = (operation: WithdrawalOperation): boolean =>
+  operation.integration_gate === 'WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED' &&
+  !operation.reauth_required
 
 export const failedWithdrawalItems = (operation: WithdrawalOperation): WithdrawalOperationItem[] =>
   operation.items.filter((item) => item.status === 'error')
