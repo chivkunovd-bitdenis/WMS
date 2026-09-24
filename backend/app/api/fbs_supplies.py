@@ -972,8 +972,11 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "ozon_box_distribution_required",
         "ozon_order_positions_required",
         "order_positions_not_supported",
+        "auto_assign_requires_ozon",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    if exc.code == "auto_assign_box_mismatch":
+        raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
         raise_fbs_http(
             status.HTTP_409_CONFLICT, exc.code, retryable=exc.code == "box_cargo_place_unresolved"
@@ -2039,6 +2042,26 @@ async def retry_fbs_packing_box_qr(
             raise_fbs_http(exc.status_code or 502, exc.code, message=provider_error_message(exc))
         except FbsPrintAssetError as exc:
             raise_fbs_http(409, exc.code, message=exc.message)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/auto-assign",
+    response_model=FbsWorkspaceOut,
+    summary="Auto-assign every unboxed Ozon position into a new box each",
+)
+async def auto_assign_fbs_packing_boxes(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.auto_assign_ozon_positions(
+            session, user.tenant_id, supply_id, actor_user_id=user.id
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
     await session.commit()
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
