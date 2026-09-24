@@ -15,7 +15,7 @@ from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
-from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.kiz_reprint import KizReprint
 from app.models.user import User
@@ -2010,34 +2010,6 @@ async def clear_fbs_packing_box(
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
 
-async def _resolve_ozon_box_order_id(
-    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, box_id: uuid.UUID
-) -> uuid.UUID | None:
-    """The order a box's items belong to — resolved without assuming
-    assembly succeeded, so a failed assemble_box_order can still be blamed
-    on the right order's R12 red line. Requires the box to actually belong
-    to supply_id (a box_id from a different supply of the same tenant must
-    not attribute an error to that other supply's order) — joined the same
-    way assemble_box_order itself scopes a box to its supply. None if the
-    box is empty, belongs to another supply, or (should never happen for
-    Ozon) spans more than one order."""
-    order_ids = list(
-        (
-            await session.scalars(
-                select(FbsPackingBoxItem.fbs_order_id)
-                .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
-                .where(
-                    FbsPackingBoxItem.tenant_id == tenant_id,
-                    FbsPackingBox.supply_id == supply_id,
-                    FbsPackingBoxItem.box_id == box_id,
-                )
-                .distinct()
-            )
-        ).all()
-    )
-    return order_ids[0] if len(order_ids) == 1 else None
-
-
 def _ozon_label_error_from_exc(
     exc: OzonFbsProcessError | MarketplaceAccountError | MarketplaceProviderError,
 ) -> tuple[str, str]:
@@ -2078,11 +2050,6 @@ async def retry_fbs_packing_box_qr(
     async with httpx.AsyncClient() as http_client:
         try:
             if is_ozon_supply:
-                # Resolved up front: if assembly itself fails below, we still
-                # need to know which order's red line (R12) to update.
-                box_order_id = await _resolve_ozon_box_order_id(
-                    session, tenant_id, supply_id, box_id
-                )
                 try:
                     order_id = await ozon_assembly_svc.assemble_box_order(
                         session,
@@ -2095,6 +2062,17 @@ async def retry_fbs_packing_box_qr(
                     MarketplaceAccountError,
                     MarketplaceProviderError,
                 ) as exc:
+                    # WMS-526 F5: no pre-lock read of the box's order here —
+                    # between that read and the supply/order lock inside
+                    # assemble_box_order, another operator could clear the
+                    # box and assign a different order's position to it, so
+                    # a value resolved before the lock can name the wrong
+                    # order. assemble_box_order attaches the order id it
+                    # actually locked and checked (locked_order_id) to any
+                    # exception it raises past that point; an exception with
+                    # nothing attached (supply/box not found, empty/mixed
+                    # box, before any order was determined) writes nothing.
+                    box_order_id = getattr(exc, "locked_order_id", None)
                     if box_order_id is not None:
                         code, message = _ozon_label_error_from_exc(exc)
                         # assemble_box_order already committed its own

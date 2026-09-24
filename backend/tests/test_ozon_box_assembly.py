@@ -31,6 +31,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
+from app.services import fbs_packing_box_service as boxes_svc
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import ozon_box_assembly_service as assembly_svc
 from app.services.fbs_print_asset_service import combine_ozon_order_labels
@@ -816,3 +817,136 @@ async def test_error_is_never_saved_to_a_different_supplys_order(
     box_rows_b = await _workspace_box_rows(db_session, tenant_id, supply_b_id)
     for box_id in box_b_ids:
         assert box_rows_b[str(box_id)]["ozon_label_error"] is None
+
+
+async def _extra_order_in_same_supply(
+    session: AsyncSession, order_a: FbsOrder, supply_id: uuid.UUID
+) -> FbsOrderProduct:
+    """A second order (B) in order_a's own supply, with one free position
+    not yet placed in any box."""
+    order_b = FbsOrder(
+        tenant_id=order_a.tenant_id,
+        seller_id=order_a.seller_id,
+        warehouse_id=order_a.warehouse_id,
+        product_id=order_a.product_id,
+        supply_id=supply_id,
+        marketplace="ozon",
+        external_order_id="POSTING-B",
+        wb_order_id=-654,
+        mapping_status="mapped",
+        reserve_status="reserved",
+        created_at_wb=datetime.now(UTC),
+        deadline_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    session.add(order_b)
+    await session.flush()
+    position_b = FbsOrderProduct(
+        order_id=order_b.id,
+        product_id=order_a.product_id,
+        ozon_sku=9001,
+        quantity=1,
+        offer_id="SKU-B",
+        name="Product B",
+        position_index=0,
+    )
+    session.add(position_b)
+    await session.commit()
+    return position_b
+
+
+async def test_error_follows_the_order_actually_locked_after_box_contents_change(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-526 F5, remainder (Astra round 3): assemble_box_order determines
+    the order strictly under its own supply/order lock, and retry-qr no
+    longer reads the box's order beforehand at all — there is nothing left
+    to go stale between a pre-lock read and the lock, because that read is
+    gone. Reproduces the review's exact interleaving: another operator
+    clears the box that held order A's first position and puts order B's
+    (same supply) position there instead, using the same clear_box/
+    assign_orders the box screen itself uses, each in its own committed
+    session, before the handler even starts. The failure (live API off)
+    must be attributed to B — the order the box actually held when
+    assemble_box_order ran — never to A."""
+    order_a, supply, boxes_a = await _seed(db_session)
+    position_b = await _extra_order_in_same_supply(db_session, order_a, supply.id)
+    tenant_id, supply_id = order_a.tenant_id, supply.id
+    changed_box_id = boxes_a[0].id
+
+    async with SessionLocal() as clearing_session:
+        await boxes_svc.clear_box(clearing_session, tenant_id, supply_id, changed_box_id)
+        await clearing_session.commit()
+    async with SessionLocal() as assigning_session:
+        await boxes_svc.assign_orders(
+            assigning_session,
+            tenant_id,
+            supply_id,
+            changed_box_id,
+            [],
+            actor_user_id=None,
+            order_product_ids=[position_b.id],
+        )
+        await assigning_session.commit()
+
+    user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
+    with pytest.raises(HTTPException) as error:
+        await retry_fbs_packing_box_qr(supply_id, changed_box_id, user, db_session)
+    assert error.value.status_code == 503
+    assert error.value.detail["code"] == "ozon_live_handoff_blocked"
+
+    expected_error = {
+        "code": "ozon_live_handoff_blocked",
+        "message": "Обмен с Ozon выключен настройкой.",
+    }
+    box_rows = await _workspace_box_rows(db_session, tenant_id, supply_id)
+    assert box_rows[str(changed_box_id)]["ozon_label_error"] == expected_error
+    refreshed_a = await db_session.get(FbsOrder, order_a.id)
+    assert refreshed_a is not None
+    assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
+    refreshed_b = await db_session.get(FbsOrder, position_b.order_id)
+    assert refreshed_b is not None
+    assert (refreshed_b.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) == (
+        expected_error
+    )
+
+
+async def test_error_on_a_box_assigned_after_being_empty_follows_the_new_order(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-526 F5, remainder: same fix, starting from a box that was empty
+    (never held any order) rather than one cleared of a previous order."""
+    order_a, supply, _boxes_a = await _seed(db_session)
+    position_b = await _extra_order_in_same_supply(db_session, order_a, supply.id)
+    tenant_id, supply_id = order_a.tenant_id, supply.id
+
+    async with SessionLocal() as create_session:
+        new_boxes = await boxes_svc.create_boxes(
+            create_session, tenant_id, supply_id, 1, f"extra-{uuid.uuid4()}", actor_user_id=None
+        )
+        empty_box_id = new_boxes[-1].id
+        await create_session.commit()
+    async with SessionLocal() as assigning_session:
+        await boxes_svc.assign_orders(
+            assigning_session,
+            tenant_id,
+            supply_id,
+            empty_box_id,
+            [],
+            actor_user_id=None,
+            order_product_ids=[position_b.id],
+        )
+        await assigning_session.commit()
+
+    user = SimpleNamespace(tenant_id=tenant_id, id=uuid.uuid4())
+    with pytest.raises(HTTPException) as error:
+        await retry_fbs_packing_box_qr(supply_id, empty_box_id, user, db_session)
+    assert error.value.status_code == 503
+
+    box_rows = await _workspace_box_rows(db_session, tenant_id, supply_id)
+    assert box_rows[str(empty_box_id)]["ozon_label_error"] == {
+        "code": "ozon_live_handoff_blocked",
+        "message": "Обмен с Ozon выключен настройкой.",
+    }
+    refreshed_a = await db_session.get(FbsOrder, order_a.id)
+    assert refreshed_a is not None
+    assert (refreshed_a.meta_details_json or {}).get(assembly_svc.LABEL_ERROR_KEY) is None
