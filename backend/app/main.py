@@ -97,7 +97,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await ensure_disabled_tariff_matrix(session, tenant=tenant)
                 await session.commit()
 
-            user_res = await session.execute(select(User).where(User.email == email))
+            user_res = await session.execute(select(User).where(
+                User.email == email, User.role == FULFILLMENT_ADMIN,
+            ))
             user = user_res.scalar_one_or_none()
             if user is None:
                 user = User(

@@ -87,7 +87,10 @@ async def register_fulfillment(
 _DUMMY_PASSWORD_HASH = hash_password("wms-270-dummy-timing-guard")
 
 
-async def login(session: AsyncSession, *, email: str, password: str) -> tuple[User, str]:
+async def login(
+    session: AsyncSession, *, email: str, password: str,
+    portal: Literal["fulfillment", "seller"] | None = None,
+) -> tuple[User, str]:
     """Единая проверка входа без утечки состояния аккаунта.
 
     Любой отказ уходит одинаковым `AuthError("invalid_credentials")`: нет такой
@@ -96,14 +99,28 @@ async def login(session: AsyncSession, *, email: str, password: str) -> tuple[Us
     перебора адресов и обнаружения аккаунтов с несозданным паролем (WMS-270).
     """
     stmt = select(User).where(User.email == email.strip().lower())
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    if portal == "seller":
+        stmt = stmt.where(User.role == FULFILLMENT_SELLER)
+    elif portal == "fulfillment":
+        stmt = stmt.where(User.role != FULFILLMENT_SELLER)
+    users = (await session.scalars(stmt)).all()
+    matches = [
+        candidate for candidate in users
+        if verify_password(
+            password,
+            _DUMMY_PASSWORD_HASH if candidate.must_set_password else candidate.password_hash,
+        ) and not candidate.must_set_password
+    ]
+    user = matches[0] if len(matches) == 1 else None
+    if user is None and portal is None and len(matches) > 1:
+        # Legacy clients do not send a portal. Keep their FF default when the
+        # same credentials now happen to exist in both portal accounts.
+        user = next((item for item in matches if item.role != FULFILLMENT_SELLER), None)
     # Всегда считаем bcrypt: это выравнивает время ответа для «нет пользователя»
     # и «пароль неверен». Без этого таймингом можно перебирать почты.
-    if user is None or user.must_set_password:
+    if not users:
         verify_password(password, _DUMMY_PASSWORD_HASH)
-        raise AuthError("invalid_credentials")
-    if not verify_password(password, user.password_hash):
+    if user is None:
         raise AuthError("invalid_credentials")
     token = create_access_token(
         user_id=user.id,
@@ -115,7 +132,9 @@ async def login(session: AsyncSession, *, email: str, password: str) -> tuple[Us
 
 
 async def _email_taken(session: AsyncSession, email: str) -> bool:
-    stmt = select(User).where(User.email == email.strip().lower())
+    stmt = select(User).where(
+        User.email == email.strip().lower(), User.role == FULFILLMENT_SELLER,
+    )
     result = await session.execute(stmt)
     return result.scalar_one_or_none() is not None
 
@@ -272,7 +291,9 @@ async def set_initial_password(
 ) -> User:
     stmt = select(User).where(User.email == email.strip().lower())
     result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    users = result.scalars().all()
+    eligible = [item for item in users if item.role in (FULFILLMENT_SELLER, FULFILLMENT_STAFF)]
+    user = eligible[0] if len(eligible) == 1 else None
     if user is None:
         raise AuthError("invalid_credentials")
     if user.role not in (FULFILLMENT_SELLER, FULFILLMENT_STAFF):
@@ -342,6 +363,7 @@ async def request_password_reset(
     session: AsyncSession,
     *,
     email: str,
+    portal: Literal["fulfillment", "seller"] | None = None,
     base_url: str,
     background_tasks: BackgroundTasks | None = None,
 ) -> None:
@@ -351,8 +373,14 @@ async def request_password_reset(
     проверялку «есть ли такая почта в системе».
     """
     stmt = select(User).where(User.email == email.strip().lower())
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    if portal == "seller":
+        stmt = stmt.where(User.role == FULFILLMENT_SELLER)
+    elif portal == "fulfillment":
+        stmt = stmt.where(User.role != FULFILLMENT_SELLER)
+    users = (await session.scalars(stmt)).all()
+    user = next((candidate for candidate in users if candidate.role != FULFILLMENT_SELLER), None)
+    if user is None and users:
+        user = users[0]
     if user is None:
         return
     if background_tasks is not None:
