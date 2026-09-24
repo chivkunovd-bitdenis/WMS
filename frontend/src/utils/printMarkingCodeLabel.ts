@@ -504,12 +504,19 @@ export function beginPrintUserGesture(): void {
   if (typeof window === 'undefined') {
     return
   }
+  cancelPendingPrintWindow()
   printWindowFromUserGesture = window.open('', '_blank')
   if (printWindowFromUserGesture) {
     printWindowFromUserGesture.document.title = 'Печать'
     printWindowFromUserGesture.document.body.innerHTML =
-      '<p style="font-family:sans-serif;padding:16px">Загрузка PDF…</p>'
+      '<p style="font-family:sans-serif;padding:16px">Подготовка этикеток…</p>'
   }
+}
+
+/** Close only a reserved window that no print renderer has consumed. */
+export function cancelPendingPrintWindow(): void {
+  const pending = takePrintWindowFromUserGesture()
+  if (pending && !pending.closed) pending.close()
 }
 
 function takePrintWindowFromUserGesture(): Window | null {
@@ -729,21 +736,25 @@ export async function printHtmlInIframe(html: string): Promise<void> {
     window.__WMS_LAST_PRINT_HTML__ = html
   }
 
+  const reservedWindow = takePrintWindowFromUserGesture()
+  const popup = reservedWindow && !reservedWindow.closed ? reservedWindow : null
   return new Promise<void>((resolve, reject) => {
-    const iframe = document.createElement('iframe')
-    iframe.setAttribute('aria-hidden', 'true')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    document.body.appendChild(iframe)
+    const iframe = popup ? null : document.createElement('iframe')
+    if (iframe) {
+      iframe.setAttribute('aria-hidden', 'true')
+      iframe.style.position = 'fixed'
+      iframe.style.left = '-10000px'
+      iframe.style.top = '0'
+      iframe.style.width = '210mm'
+      iframe.style.height = '297mm'
+      iframe.style.border = '0'
+    }
 
     let settled = false
+    let printScheduled = false
     const cleanup = () => {
       try {
-        document.body.removeChild(iframe)
+        if (iframe) document.body.removeChild(iframe)
       } catch {
         // ignore
       }
@@ -757,6 +768,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
     const fail = (message: string) => {
       finish(() => {
         cleanup()
+        if (popup && !popup.closed) popup.close()
         reject(new Error(message))
       })
     }
@@ -765,7 +777,9 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       20_000,
     )
     const printNow = () => {
-      const frameWindow = iframe.contentWindow
+      if (settled || printScheduled) return
+      printScheduled = true
+      const frameWindow = popup ?? iframe?.contentWindow
       if (!frameWindow) {
         fail('Не удалось открыть форму печати КИЗ.')
         return
@@ -776,6 +790,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
         // Browser focus can be denied while the print form itself remains usable.
       }
       window.setTimeout(() => {
+        if (settled) return
         try {
           frameWindow.print()
         } catch {
@@ -791,9 +806,11 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       }, 100)
     }
 
-    iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
-    iframe.onload = () => {
-      const doc = iframe.contentDocument
+    const onLoad = () => {
+      if (settled) return
+      const doc = popup?.document ?? iframe?.contentDocument
+      // An iframe's initial about:blank load is not the label document.
+      if (iframe && doc?.URL === 'about:blank') return
       const imgs = doc?.querySelectorAll('img') ?? []
       if (imgs.length === 0) {
         printNow()
@@ -814,6 +831,21 @@ export async function printHtmlInIframe(html: string): Promise<void> {
         el.addEventListener('error', done, { once: true })
       })
     }
-    iframe.srcdoc = html
+    if (popup) {
+      try {
+        popup.document.open()
+        popup.onload = onLoad
+        popup.document.write(html)
+        popup.document.close()
+      } catch {
+        fail('Не удалось загрузить форму печати КИЗ.')
+      }
+    } else if (iframe) {
+      iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
+      iframe.onload = onLoad
+      // Set the content before insertion, so we never print an empty document.
+      iframe.srcdoc = html
+      document.body.appendChild(iframe)
+    }
   })
 }
