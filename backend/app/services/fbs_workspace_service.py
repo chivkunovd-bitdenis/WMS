@@ -45,6 +45,7 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import fbs_packing_box_service as packing_box_svc
+from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_picking_order_service import picking_list_order_key
@@ -597,6 +598,15 @@ async def _build_boxes(
             str(order.id): bool((order.meta_details_json or {}).get("ozon_assembly"))
             for order in orders
         }
+        label_errors = {
+            str(order.id): label_error
+            for order in orders
+            if (
+                label_error := (order.meta_details_json or {}).get(
+                    ozon_assembly_svc.LABEL_ERROR_KEY
+                )
+            )
+        }
         ozon_assets = list(
             (
                 await session.scalars(
@@ -617,6 +627,7 @@ async def _build_boxes(
             if assigned:
                 box["ozon_assembled"] = assembled.get(assigned[0], False)
                 box["qr_asset"] = _map_print_asset(assets_by_order.get(assigned[0]))
+                box["ozon_label_error"] = label_errors.get(assigned[0])
         return boxes
     result = await session.execute(
         select(FbsPrintAsset).where(

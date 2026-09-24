@@ -732,6 +732,10 @@ async def get_boxes_for_workspace(
             # creation-key prefix remains readable only for migration/cleanup
             # compatibility and must not affect operator-visible state.
             "without_distribution": supply_without_distribution,
+            # WMS-526 R12: defaulted here so the key always exists (WB boxes
+            # never touch it); the Ozon-specific workspace builder overwrites
+            # it per order.
+            "ozon_label_error": None,
         }
         for box in boxes
     ]

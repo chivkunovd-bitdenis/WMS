@@ -30,6 +30,45 @@ from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_ap
 ASSEMBLY_KEY = "ozon_assembly"
 _SHIPPED_STATUSES = {"awaiting_deliver", "delivering", "driver_pickup", "delivered"}
 
+# WMS-526 R12: the last failed label attempt for an order, shown as a red
+# line on every box row of that order. Lives on the same meta_details_json
+# the assembly marker already uses — no new table, column or status.
+LABEL_ERROR_KEY = "ozon_label_error"
+
+
+async def set_order_label_error(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+    *,
+    code: str,
+    message: str,
+) -> None:
+    order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+    )
+    if order is None:
+        return
+    order.meta_details_json = {
+        **(order.meta_details_json or {}),
+        LABEL_ERROR_KEY: {"code": code, "message": message},
+    }
+    await session.flush()
+
+
+async def clear_order_label_error(
+    session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
+) -> None:
+    order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+    )
+    if order is None or LABEL_ERROR_KEY not in (order.meta_details_json or {}):
+        return
+    details = dict(order.meta_details_json or {})
+    details.pop(LABEL_ERROR_KEY, None)
+    order.meta_details_json = details
+    await session.flush()
+
 
 async def order_packages(session: AsyncSession, order: FbsOrder) -> list[dict[str, Any]]:
     """Compare position sets before reading credentials or calling Ozon."""
