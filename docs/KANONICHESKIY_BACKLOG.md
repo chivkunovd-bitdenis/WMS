@@ -13294,7 +13294,7 @@ production-сценарий не проверялись.
 
 <a id="wms-469"></a>
 
-**Статус:** `COMBINED SOFTWARE PASS: a8c14324 · ASTRA HIGH PASS · STAGING/LIVE WB+OZON ОТКРЫТЫ · НЕ ВЫЛОЖЕНО` · появилась 18.09.2026. [Требования и проверки](requirements/WMS-469.md).
+**Статус:** `FINAL CANDIDATE SOFTWARE PASS: 00bc9df6 · ASTRA HIGH PASS · STAGING/LIVE WB+OZON ОТКРЫТЫ · НЕ ВЫЛОЖЕНО` · появилась 18.09.2026. [Требования и проверки](requirements/WMS-469.md).
 
 Владелец потребовал сохранить выбор товаров и действие «Задать остаток», но перестроить окно:
 каждый блок соответствует одной связке склада селлера со складом ФФ; для WB или Ozon в блоке
@@ -13314,6 +13314,10 @@ Integrated software acceptance на exact SHA `a8c143247b7301b06f9daa49852c2dc75
 и совместимость `0 → пусто → 0` WMS-483. Адресные backend/frontend проверки,
 static checks и Astra high PASS зелёные; staging/browser и живые WB/Ozon не
 выполнялись, поэтому эксплуатационная приёмка открыта.
+
+Финальный merge `00bc9df62a887e8c5b1d80651009eff47e4dfa21` добавил принятую
+WMS-523 без изменения сервисов WMS-469/WMS-483; overlap-наборы developer и Astra
+прошли 185 и 114 тестов соответственно, Astra high приняла merge-стык.
 
 ## WMS-483 · WB FBS: повторно передавать нулевой остаток каждые 10 минут
 
@@ -13335,6 +13339,8 @@ static checks и Astra high PASS зелёные; staging/browser и живые W
 идемпотентным. 57 адресных backend-тестов и Astra high review exact SHA прошли.
 Это software compatibility evidence; живой WB payload/readback и staging worker
 в этой фазе не проверялись, поэтому прежние частичные C3/C8/C11 не закрыты.
+Финальный merge `00bc9df6` не меняет stock-rule/zero-refresh сервисы; 185 developer
+и 114 Astra overlap-тестов прошли, новых оснований менять live-границу нет.
 
 ## WMS-475 · FBS: заказ, добавленный в уже собираемую поставку, остаётся без стикера до следующего обращения к WB
 
@@ -13569,7 +13575,7 @@ api/worker/beat/web пересозданы и Up, `/`, `/seller/`, `/api/health`
 
 <a id="wms-514"></a>
 
-**Статус:** `COMBINED SOFTWARE PASS: a8c14324 · ASTRA HIGH PASS · PHYSICAL/OPERATOR/STAGING GATES ОТКРЫТЫ · НЕ ВЫЛОЖЕНО` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-514.md).
+**Статус:** `FINAL CANDIDATE SOFTWARE PASS: 00bc9df6 · ASTRA HIGH PASS · PHYSICAL/OPERATOR/STAGING GATES ОТКРЫТЫ · НЕ ВЫЛОЖЕНО` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-514.md).
 
 Актуальный контракт: в существующей строке сканирования ровно три галки — «Печатать QR», «Печатать ЧЗ» и «Перепечатывать ЧЗ»; QR независима, два режима ЧЗ взаимоисключающие. Для скана товара определены шесть комбинаций, товарный ШК не печатается. Прямая перепечать полного КИЗ и перепечать после QR→КИЗ выводят одну точную копию без выделения нового кода. Все автоматические печати должны запускаться мгновенно и тихо, без WMS-окна и системного окна печати. При трёх выключенных галках новый путь полностью инертен; Ozon, ручная/массовая печать, прежний QR→КИЗ, упаковка и соседние вкладки остаются исходными. Принятый изолированный макет на реальном рабочем пространстве фиксирует замысел и визуальную границу, но продуктовый API/WMS, реальный принтер и физическая печать ещё не приняты.
 
@@ -13584,6 +13590,12 @@ Astra high дала PASS после закрытия трёх findings combined 
 печати, упаковки, Ozon, seller-портала и соседних вкладок остаются открытыми;
 staging/browser и deploy exact SHA также не подтверждены. Поэтому software PASS
 не является полной эксплуатационной приёмкой.
+
+Финальный merge `00bc9df62a887e8c5b1d80651009eff47e4dfa21` сохраняет этот
+результат: относительно принятого docs-parent он добавляет только WMS-523, не
+меняет frontend/WMS-514 и общий WMS-519 renderer. Developer получил 185 passed,
+Astra — 114 overlap passed и high PASS стыка. Открытые physical/operator/staging
+gates остаются без изменений.
 
 ## WMS-518 · FBS: после явной отмены вернуть пуловый КИЗ в доступные
 
@@ -13631,7 +13643,7 @@ order/packaging links = 0, transient print/reserve-поля очищены; до
 
 <a id="wms-519"></a>
 
-**Статус:** `COMBINED SOFTWARE PASS: a8c14324 · PREVIOUS PROD INCIDENT OPEN · C6/C9/C10 STAGING+PHYSICAL GATES · НЕ ВЫЛОЖЕНО` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-519.md)
+**Статус:** `FINAL CANDIDATE SOFTWARE PASS: 00bc9df6 · PREVIOUS PROD INCIDENT OPEN · C6/C9/C10 STAGING+PHYSICAL GATES · НЕ ВЫЛОЖЕНО` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-519.md)
 
 На screenshot владельца Chrome print preview для перепечати ЧЗ из FF-раздела
 «Честный знак» показывает сжатый по высоте и растянутый по ширине Data Matrix;
@@ -13666,6 +13678,11 @@ Astra high дала PASS после закрытия native PDF и PNG bypass. C
 Chrome/Xprinter, печать на бумаге 58×40 и считывание складским сканером остаются
 обязательными C6/C9/C10. До них инцидент не закрыт, combined SHA не выложен и
 задача не имеет полной эксплуатационной/physical acceptance.
+
+В финальном merge `00bc9df6` WMS-523 меняет импортные pool/link только после
+успешной вставки кода; сохранение `label_artifact_pdf`, точного CIS и WMS-519
+PDF/PNG repair-путей не изменено. 185 developer и 114 Astra overlap-тестов прошли,
+Astra high дала PASS merge-стыка. C6/C9/C10 остаются открытыми.
 
 ## WMS-520 · Убрать 500 при preview и импорте готовых КИЗ
 
@@ -13703,7 +13720,7 @@ production-данные: операторский повтор исходног�
 
 <a id="wms-523"></a>
 
-**Статус:** `ПРОГРАММНО ПРИНЯТО 664f41b1 · OPUS PASS · AVPACK REPAIR 408/27/22 ЗАВЕРШЁН · PRODUCT НЕ ВЫЛОЖЕН` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-523.md)
+**Статус:** `В FINAL CANDIDATE 00bc9df6 · SOFTWARE PASS · ASTRA HIGH MERGE PASS · AVPACK REPAIR 408/27/22 ЗАВЕРШЁН · PRODUCT НЕ ВЫЛОЖЕН` · появилась 24.09.2026 · [требования и проверки](requirements/WMS-523.md)
 
 WMS-476 сейчас сохраняет автоматически сопоставленные и вручную назначенные остатки
 как прямые коды товара без `pool_id`. Если у товара уже есть связь с обычным пулом,
@@ -13725,3 +13742,8 @@ AVpack: 408 кодов получили 27 пулов по 22 товарам, `p
 readback catalog/package — 58 PAL_BROWN_AV, 64 XS и 68 L. Evidence сохранён в
 `d541c1be`; production-печать не выполнялась. Product commit ещё не развёрнут,
 поэтому защита будущих auto/assign-загрузок вступит в силу только после deploy.
+
+В финальном release candidate `00bc9df62a887e8c5b1d80651009eff47e4dfa21`
+WMS-523 сохранена без ослабления R1–R8. Developer получил 185 passed, Astra —
+114 overlap passed и high PASS merge-стыка; deploy и физическая печать этим не
+подтверждаются.
