@@ -209,15 +209,23 @@ export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
   const bwipjs = await import('bwip-js')
   const canvas = document.createElement('canvas')
   // scale 4 — запас разрешения: на крупных этикетках (60×80, 70×120) матрица
-  // растягивается до ~35–45 мм, при scale 2 модули замыливаются.
-  bwipjs.toCanvas(canvas, {
+  // растягивается до ~35–45 мм, при scale 2 модули замыливаются. Отдельный
+  // height здесь недопустим: bwip-js применяет его только по Y и превращает
+  // квадратные модули Data Matrix в прямоугольные. Два модуля белого поля
+  // оставляем внутри PNG, чтобы CSS-вписывание не могло обрезать quiet zone.
+  bwipjs.toCanvas(canvas, buildDataMatrixRenderOptions(cis))
+  return canvas.toDataURL('image/png')
+}
+
+export function buildDataMatrixRenderOptions(cis: string) {
+  return {
     bcid: 'datamatrix',
     text: cis,
     scale: 4,
-    height: 12,
+    padding: 4,
+    backgroundcolor: 'FFFFFF',
     includetext: false,
-  })
-  return canvas.toDataURL('image/png')
+  } as const
 }
 
 export function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
