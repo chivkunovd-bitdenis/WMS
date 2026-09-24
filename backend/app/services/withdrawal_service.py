@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,6 +83,7 @@ async def create_operation(
     *,
     row_ids: list[uuid.UUID],
     client_request_id: uuid.UUID,
+    environment: str = "sandbox",
 ) -> WithdrawalOperation:
     if not row_ids or len(row_ids) > 250 or len(set(row_ids)) != len(row_ids):
         raise WithdrawalError("invalid_selection", 422)
@@ -142,7 +144,8 @@ async def create_operation(
         selection_hash=selection_hash,
         state="created",
         attempt=1,
-        environment="sandbox",
+        environment=environment,
+        attempt_started_at=datetime.now(UTC),
     )
     session.add(operation)
     await session.flush()
@@ -199,6 +202,11 @@ async def retry_operation(
     operation.certificate_thumbprint = None
     operation.certificate_metadata = None
     operation.participant_inn = None
+    operation.auth_signature_hash = None
+    operation.workflow_error = None
+    operation.workflow_lease_id = None
+    operation.workflow_lease_until = None
+    operation.attempt_started_at = datetime.now(UTC)
     await _new_items(session, scope, operation, rows)
     # New pending items still need fresh cises/MOD, bytes and signatures after B3.
     return operation

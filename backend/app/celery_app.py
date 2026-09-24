@@ -12,6 +12,7 @@ from app.core.settings import settings
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
+
 def moscow_now() -> datetime:
     """Named callable survives Celery beat schedule persistence through pickle."""
     return datetime.now(MOSCOW)
@@ -21,10 +22,15 @@ _broker = settings.celery_broker_url or "memory://"
 celery_app = Celery(
     "wms",
     broker=_broker,
-    include=["app.tasks.background_jobs", "app.tasks.billing_tasks"],
+    include=[
+        "app.tasks.background_jobs",
+        "app.tasks.billing_tasks",
+        "app.tasks.withdrawal_recovery",
+    ],
 )
 celery_app.conf.task_ignore_result = True
 celery_app.conf.beat_schedule = {
+    "withdrawal-poll": {"task": "wms.withdrawal_poll", "schedule": 2.0},
     "wb-catalog-hourly": {
         "task": "wms.wb_catalog_hourly_sync",
         "schedule": crontab(minute=17),

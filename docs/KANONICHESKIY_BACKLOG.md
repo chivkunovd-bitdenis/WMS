@@ -171,7 +171,7 @@ WMS-406/409/410 не повторять как операции с клиент�
 
 | Задача | Суть | Текущий статус |
 |---|---|---|
-| [WMS-517](#wms-517) | Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота | FOUNDATION 1–4 ПРИНЯТ · ПОЛНАЯ ИНТЕГРАЦИЯ НЕ ПРИНЯТА · BLOCKER B1/B2/B3 · UI/POSTGRES/SANDBOX/ДЕПЛОЯ НЕТ · [Требования и проверки](requirements/WMS-517.md) |
+| [WMS-517](#wms-517) | Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота | ЛОКАЛЬНЫЙ INTERNAL/EMULATOR/BROWSER SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH · PRODUCTION НЕ ПРИНЯТ · LIVE GATES B2/B3 · POSTGRES/PHYSICAL/SANDBOX/ДЕПЛОЯ НЕТ · [Требования и проверки](requirements/WMS-517.md) |
 | [WMS-093](#wms-093) | Массовое снятие кодов упирается в лимит Wildberries | РЕШЕНИЕ ВЛАДЕЛЬЦА: WMS-085 вернул массовое снятие; текущий stop-and-resume без retry нужно принять или доработать |
 | [WMS-210](#wms-210) | Конструктор состава этикетки | ЧАСТИЧНО В PRODUCTION SOURCE · 4 ИЗ 8 ПОЛЕЙ, RUNTIME-ФЛАГ ВЫКЛЮЧЕН 09.09.2026 19:57 UTC |
 | [WMS-211](#wms-211) | Кнопки «Сохранить макет» в конструкторе нет | КНОПКА ЕСТЬ В PRODUCTION SOURCE, НО ПАНЕЛЬ ВЫКЛЮЧЕНА RUNTIME-ФЛАГОМ |
@@ -13496,7 +13496,7 @@ api/worker/beat/web пересозданы и Up, `/`, `/seller/`, `/api/health`
 
 <a id="wms-517"></a>
 
-**Статус:** `FOUNDATION 1–4 ПРИНЯТ · ПОЛНАЯ ИНТЕГРАЦИЯ НЕ ПРИНЯТА · BLOCKER B1/B2/B3 · UI/POSTGRES/SANDBOX/ДЕПЛОЯ НЕТ` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
+**Статус:** `ЛОКАЛЬНЫЙ INTERNAL/EMULATOR/BROWSER SLICE ПРИНЯТ · МОЖНО COMMIT/PUSH · PRODUCTION НЕ ПРИНЯТ · LIVE GATES B2/B3 · POSTGRES/PHYSICAL/SANDBOX/ДЕПЛОЯ НЕТ` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
 
 В кабинете селлера нужен экран «Честный знак → Вывод из оборота»: плоский плотный реестр
 только тех FBS-КИЗ, по заказам которых уже нажали «Отгрузить» и подтверждена передача WB.
@@ -13514,19 +13514,27 @@ sticky header, страницы 50/100/250 и выбор только текущ
 
 Боевой контракт зафиксирован по True API v731.0: challenge `/auth/key`, требование
 присоединённой auth-подписи, UUID-token через `/auth/simpleSignIn`, exact bytes и
-отсоединённая подпись `LK_RECEIPT`, create v3 и polling/reconciliation через v4. Цена
-берётся только из WB `finalPrice`/`convertedFinalPrice` в RUB; legacy `FbsOrder.price`
-не используется. Группа и owner читаются повторно из `cises/info`; внутренний ledger
-защищает от повторов и хранит audit, а private key/PIN остаются в CSP/криптоносителе.
+отсоединённая подпись `LK_RECEIPT`, create v3 и polling/reconciliation через v4.
+`action_date` — дата вывода, а не дата передачи WB или первичного документа; поля
+первичного документа в MVP не отправляются. Цена берётся только из WB
+`finalPrice`/`convertedFinalPrice` в RUB; legacy `FbsOrder.price` не используется.
+Группа и owner читаются повторно из `cises/info`; внутренний ledger защищает от повторов
+и хранит audit, а private key/PIN остаются в CSP/криптоносителе.
 
-Foundation-коммиты True API transport, B3-safe CryptoPro adapter, immutable WB price
-observations и operation/recovery ledger приняты в изолированной test/emulator-границе.
-Это не означает, что пользовательский путь или внешняя интеграция работают.
+Текущий локальный slice принят по internal/emulator/browser-границе: одна SQL-цепочка
+`eligible_rows` задаёт реестр и повторную проверку выбранных `row_ids`; business
+preflight, builder, operation/recovery ledger, scheduler и seller UI связаны. В браузере
+подтверждены плотный отчёт и единственная компактная модалка сертификата. Это не
+означает, что внешняя live-интеграция работает.
 
-Открыты три gate: правило выбора зарегистрированного МОД при нескольких ФИАС;
-назначенный sandbox participant, сертификат/МЧД, product groups и тестовые КИЗ/МОД;
-точный browser-профиль attached auth signature — encoding, `ContentEncoding`, CAdES
-subtype, CRLF и base64 — который должен быть подтверждён sandbox либо письменно
-CRPT/CryptoPro. До этого CryptoPro adapter обязан fail-closed и не выполнять реальную
-auth-подпись/live submit. Остаются UI/backend integration, PostgreSQL execution,
-software/physical browser-token matrix, scheduler, sandbox/live acceptance и деплой.
+B1 закрыт постановкой: `/mods/list` остаётся только технической проверкой внешнего МОД.
+Для обязательной группы ровно одна валидная запись exact seller INN+product group даёт
+её `fiasId`/`kpp`; 0 или несколько блокируют только документ этой группы. WMS не создаёт
+warehouse→MOD mapping, настройку или новый шаг UI. Группа без обязательного МОД идёт
+без этих полей.
+Открыты два live gate: назначенный sandbox participant/сертификат/МЧД/test data (B2) и
+точный browser-профиль attached auth signature (B3), подтверждаемый sandbox либо
+письменно CRPT/CryptoPro. Реальные auth и submit до B3 закрыты. Также остаются
+PostgreSQL-конкурентный прогон, software/physical browser-token matrix, sandbox/live
+acceptance и деплой. Локальный diff можно сохранить commit/push как результат
+разработки, но production readiness, live-интеграция и деплой не приняты.

@@ -485,6 +485,8 @@ class TrueApiWithdrawalClient:
         data = json.loads(exact_payload.decode("utf-8"))
         if not isinstance(data, dict) or data.get("inn") != self.participant_inn:
             raise ValueError("Document participant mismatch")
+        if set(data) - {"inn", "action", "action_date", "fias_id", "kpp", "products"}:
+            raise ValueError("Unsupported DISTANCE document fields")
         _validate_action_date(data.get("action_date"))
         products = data.get("products")
         if data.get("action") != "DISTANCE" or not isinstance(products, list):
@@ -495,6 +497,8 @@ class TrueApiWithdrawalClient:
         for product in products:
             if not isinstance(product, dict):
                 raise ValueError("Each document product must be an object")
+            if set(product) != {"cis", "product_cost"}:
+                raise ValueError("Unsupported DISTANCE product fields")
             code = product.get("cis")
             if not isinstance(code, str) or not code:
                 raise ValueError("Document CIS is required")
@@ -534,6 +538,48 @@ class TrueApiWithdrawalClient:
                 response_body=response.content,
                 create_outcome=CreateOutcome.UNCERTAIN,
             ) from None
+
+    async def registered_mods(self, auth: AuthSession, *, pg: str) -> list[dict[str, Any]]:
+        """True API v731: singular result, zero-based pages, no partial discovery."""
+        if not pg:
+            raise ValueError("Product group is required")
+        rows: list[dict[str, Any]] = []
+        total: int | None = None
+        for page in range(100):
+            response = await self._request(
+                "GET",
+                3,
+                "/mods/list",
+                auth=auth,
+                params={
+                    "inns": self.participant_inn,
+                    "productGroups": pg,
+                    "limit": "1000",
+                    "page": str(page),
+                },
+            )
+            data = self._json(response)
+            if (
+                not isinstance(data, dict)
+                or not isinstance(data.get("result"), list)
+                or type(data.get("nextPage")) is not bool
+                or type(data.get("total")) is not int
+                or data["total"] < 0
+                or any(not isinstance(row, dict) for row in data["result"])
+            ):
+                raise self._invalid(response)
+            if total is None:
+                total = data["total"]
+            elif data["total"] != total:
+                raise self._invalid(response)
+            rows.extend(data["result"])
+            if not data["nextPage"]:
+                if len(rows) != total:
+                    raise self._invalid(response)
+                return rows
+            if not data["result"] or len(rows) >= total:
+                raise self._invalid(response)
+        raise TrueApiError("incomplete_mod_discovery")
 
     async def list_documents(
         self,

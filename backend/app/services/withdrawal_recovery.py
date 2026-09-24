@@ -203,6 +203,36 @@ async def reconcile(
     return None, "possible_duplicate" if matches else None, list(matches)
 
 
+def provider_error_summary(errors: Any, common_errors: Any) -> dict[str, Any]:
+    """Project actual provider fields, retaining the complete raw lists separately."""
+    codes: list[str] = []
+    messages: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, list):
+            for entry in value:
+                collect(entry)
+        elif isinstance(value, dict):
+            code = value.get("code", value.get("errorCode"))
+            message = value.get("message", value.get("errorMessage", value.get("error")))
+            if code is not None and str(code) not in codes:
+                codes.append(str(code))
+            if isinstance(message, str) and message not in messages:
+                messages.append(message)
+            for key in ("errors", "commonErrors"):
+                if key in value:
+                    collect(value[key])
+        elif isinstance(value, str) and value not in messages:
+            messages.append(value)
+
+    collect(errors)
+    collect(common_errors)
+    return {
+        "code": ", ".join(codes) if codes else None,
+        "message": "\n".join(messages) if messages else None,
+    }
+
+
 async def _project(
     session: AsyncSession,
     operation: WithdrawalOperation,
@@ -232,6 +262,7 @@ async def _project(
                     "http_status": document.http_status,
                     "errors": document.errors,
                     "commonErrors": document.common_errors,
+                    **provider_error_summary(document.errors, document.common_errors),
                 }
             )
     await session.flush()
@@ -413,6 +444,8 @@ async def record_create_result(
             )
         )
     document.next_poll_at = None if document.state == "failed" else now + timedelta(seconds=2)
+    document.lease_id = None
+    document.lease_until = None
     await _project(session, operation, document)
     await session.commit()
 

@@ -652,9 +652,8 @@ async def test_api_gates_signatures_scopes_and_never_returns_tokens(
             scope.user_id,
         )
         assert (await http.get(prefix + f"/operations/{operation_id}")).status_code == 404
-        assert all(
-            key not in json.dumps(data) for key in ("token_enc", "auth_challenge", "signature")
-        )
+        assert data["auth_challenge"] is None  # A real public challenge is allowed only after B3.
+        assert all(key not in json.dumps(data) for key in ("token_enc", "signature"))
     assert await db_session.scalar(select(func.count()).select_from(WithdrawalDocument)) == 0
 
 
@@ -716,6 +715,14 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.down_revision == "20260923_0517"
+    next_path = path.with_name("20260924_0519_withdrawal_orchestration.py")
+    next_spec = importlib.util.spec_from_file_location(
+        "withdrawal_orchestration_migration", next_path
+    )
+    assert next_spec is not None and next_spec.loader is not None
+    next_module = importlib.util.module_from_spec(next_spec)
+    next_spec.loader.exec_module(next_module)
+    assert next_module.down_revision == module.revision
     names = {
         "withdrawal_operations",
         "withdrawal_documents",
@@ -730,6 +737,7 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
         )
         with Operations.context(MigrationContext.configure(connection)):
             module.upgrade()
+            next_module.upgrade()
             inspector = inspect(connection)
             for name in names:
                 assert {column["name"] for column in inspector.get_columns(name)} == set(
@@ -774,6 +782,7 @@ def test_migration_upgrade_and_downgrade_match_ledger_schema() -> None:
                     "possible_duplicate",
                     ["original-document"],
                 )
+            next_module.downgrade()
             module.downgrade()
             assert not names.intersection(inspect(connection).get_table_names())
             assert not connection.execute(

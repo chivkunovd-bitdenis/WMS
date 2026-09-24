@@ -110,7 +110,7 @@ async def get_operation(
     )
     if lock:
         query = query.with_for_update()
-    operation = await session.scalar(query)
+    operation = await session.scalar(query.execution_options(populate_existing=True))
     if operation is None:
         raise WithdrawalError("withdrawal_not_found", 404)
     return operation
@@ -238,6 +238,7 @@ async def registry(
         result.append(
             {
                 "row_id": marking.id,
+                "product_id": order.product_id,
                 "delivered_at": supply.delivered_at,
                 "wb_order_id": str(order.wb_order_id),
                 "sku": product.sku_code if product else order.wb_article or "",

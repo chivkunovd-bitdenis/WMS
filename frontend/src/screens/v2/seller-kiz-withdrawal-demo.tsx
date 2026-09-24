@@ -1,13 +1,14 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppBar, Box, Button, CssBaseline, GlobalStyles, Paper, ThemeProvider, Toolbar, Typography } from '@mui/material'
+import { MemoryRouter } from 'react-router-dom'
 
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { muiTheme } from '../../mui/theme'
-import { SellerKizWithdrawalDemoScreen } from './SellerKizWithdrawalDemoScreen'
+import { SellerKizWithdrawalAcceptanceScreen } from './SellerKizWithdrawalAcceptanceScreen'
 import '../../index.css'
 
-function LocalDemoShell() {
+export function LocalDemoShell() {
   return (
     <Box sx={{ minHeight: '100vh', maxWidth: '100vw', overflowX: 'hidden', bgcolor: 'background.default' }}>
       <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -34,7 +35,7 @@ function LocalDemoShell() {
         </Paper>
 
         <Box component="main" sx={{ minWidth: 0, width: { xs: '100%', md: 'calc(100% - 220px)' }, p: { xs: 1.25, sm: 2, md: 3 }, overflowX: 'hidden' }}>
-          <SellerKizWithdrawalDemoScreen />
+          <SellerKizWithdrawalAcceptanceScreen />
         </Box>
       </Box>
     </Box>
@@ -48,7 +49,9 @@ if (container) {
       <ThemeProvider theme={muiTheme}>
         <CssBaseline />
         <GlobalStyles styles={{ 'html, body, #root': { maxWidth: '100%', overflowX: 'hidden' } }} />
-        <LocalDemoShell />
+        <MemoryRouter>
+          <LocalDemoShell />
+        </MemoryRouter>
       </ThemeProvider>
     </StrictMode>,
   )
