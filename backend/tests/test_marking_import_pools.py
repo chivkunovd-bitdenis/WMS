@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient, Response
@@ -19,6 +20,7 @@ from app.models.marking_code import (
     MarkingPoolProduct,
 )
 from app.models.seller import Seller
+from app.services import marking_code_service as mc_svc
 
 
 def _pools_json(specs: list[dict[str, object]]) -> str:
@@ -42,6 +44,33 @@ async def _import_files(
         data={"seller_id": seller_id, "pools_json": _pools_json(pools)},
         files=multipart_files,
     )
+
+
+@pytest.mark.asyncio
+async def test_existing_cis_lookup_chunks_above_postgresql_parameter_limit() -> None:
+    session = AsyncMock()
+    empty_rows = MagicMock()
+    empty_rows.all.return_value = []
+    session.scalars.return_value = empty_rows
+    cis_codes = [f"cis-{index}" for index in range(65_536)]
+
+    existing = await mc_svc._existing_import_cis_codes(
+        session,
+        uuid.uuid4(),
+        cis_codes,
+    )
+
+    assert existing == set()
+    chunk_sizes: list[int] = []
+    for call in session.scalars.await_args_list:
+        statement = call.args[0]
+        list_parameters = [
+            value for value in statement.compile().params.values() if isinstance(value, list)
+        ]
+        assert len(list_parameters) == 1
+        chunk_sizes.append(len(list_parameters[0]))
+    assert chunk_sizes == [50_000, 15_536]
+    assert max(chunk_sizes) + 1 < 65_535
 
 
 @pytest.mark.asyncio
