@@ -55,6 +55,18 @@ async def test_create_seller_with_account_email_taken_no_orphan(
     h = {"Authorization": f"Bearer {token}"}
     taken_email = f"orphan-{suffix}@example.com"
 
+    # WMS-525 permits this address in the seller portal even though it already
+    # belongs to the FF admin. Only a second seller account is a conflict.
+    created = await async_client.post(
+        "/sellers/with-account",
+        headers=h,
+        json={"name": "Existing seller", "email": taken_email},
+    )
+    assert created.status_code == 201, created.text
+    before = await async_client.get("/sellers", headers=h)
+    assert before.status_code == 200, before.text
+    assert len(before.json()) == 1
+
     failed = await async_client.post(
         "/sellers/with-account",
         headers=h,
@@ -64,7 +76,8 @@ async def test_create_seller_with_account_email_taken_no_orphan(
     assert failed.json()["detail"] == "email_taken"
 
     listed = await async_client.get("/sellers", headers=h)
-    assert listed.json() == []
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == before.json()
 
 
 @pytest.mark.asyncio

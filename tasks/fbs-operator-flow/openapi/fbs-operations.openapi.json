@@ -3021,6 +3021,54 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/boxes/auto-assign": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Auto-assign every unboxed Ozon position into a new box each",
+        "operationId": "auto_assign_fbs_packing_boxes_operations_fbs_supplies__supply_id__boxes_auto_assign_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsAutoAssignBoxesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}": {
       "get": {
         "tags": [
@@ -6979,6 +7027,139 @@
         ],
         "title": "FbsAssemblyTimeOut"
       },
+      "FbsAutoAssignBoxesOut": {
+        "properties": {
+          "supply": {
+            "$ref": "#/components/schemas/FbsWorkspaceSupplyOut"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/FbsWorkspaceProgressOut"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorkspaceBlockerOut"
+            },
+            "type": "array",
+            "title": "Blockers"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorkspaceOrderOut"
+            },
+            "type": "array",
+            "title": "Orders"
+          },
+          "cargo_places": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCargoPlaceOut"
+            },
+            "type": "array",
+            "title": "Cargo Places"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPackingBoxOut"
+            },
+            "type": "array",
+            "title": "Boxes"
+          },
+          "marking_pool": {
+            "$ref": "#/components/schemas/FbsWorkspaceMarkingPoolOut"
+          },
+          "delivery_preflight": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Preflight"
+          },
+          "last_wb_sync_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Wb Sync At"
+          },
+          "tracking_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracking Summary"
+          },
+          "partial_rejection": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Rejection"
+          },
+          "picking_auto_passed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picking Auto Passed Reason"
+          },
+          "wb_sync_stale": {
+            "type": "boolean",
+            "title": "Wb Sync Stale",
+            "default": false
+          },
+          "server_now": {
+            "type": "string",
+            "title": "Server Now"
+          },
+          "created_boxes": {
+            "type": "integer",
+            "title": "Created Boxes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply",
+          "stage",
+          "progress",
+          "blockers",
+          "orders",
+          "cargo_places",
+          "boxes",
+          "marking_pool",
+          "delivery_preflight",
+          "last_wb_sync_at",
+          "server_now",
+          "created_boxes"
+        ],
+        "title": "FbsAutoAssignBoxesOut",
+        "description": "WMS-526 F2: same workspace snapshot as every other box operation, plus\nhow many boxes this specific auto-assign call created (not the supply's\ntotal box count, which the base `boxes` field already carries)."
+      },
       "FbsCancelledAfterPackItemOut": {
         "properties": {
           "order_id": {
@@ -8919,6 +9100,24 @@
         ],
         "title": "FbsOrderTapePrintedCodeOut"
       },
+      "FbsOzonLabelErrorOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "FbsOzonLabelErrorOut"
+      },
       "FbsPackingBoxAssignOrdersBody": {
         "properties": {
           "order_ids": {
@@ -9054,6 +9253,16 @@
             "type": "boolean",
             "title": "Without Distribution",
             "default": false
+          },
+          "ozon_label_error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsOzonLabelErrorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -12588,6 +12797,17 @@
             "type": "string",
             "title": "Wms Warehouse Id"
           },
+          "wms_warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Warehouse Name"
+          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
@@ -12638,6 +12858,11 @@
             "type": "integer",
             "title": "Allocated Pool Total",
             "default": 0
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable",
+            "default": true
           }
         },
         "type": "object",
@@ -18702,6 +18927,21 @@
             "maxLength": 128,
             "title": "Password",
             "default": ""
+          },
+          "portal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fulfillment",
+                  "seller"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portal"
           }
         },
         "type": "object",
@@ -22830,6 +23070,21 @@
             "type": "string",
             "format": "email",
             "title": "Email"
+          },
+          "portal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fulfillment",
+                  "seller"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portal"
           }
         },
         "type": "object",
@@ -24363,6 +24618,125 @@
         "type": "object",
         "title": "ProductDimensionsPatch"
       },
+      "ProductFbsBindingRuleBody": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "percent",
+              "units"
+            ],
+            "title": "Mode"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Value"
+          },
+          "units_configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "mode",
+          "value"
+        ],
+        "title": "ProductFbsBindingRuleBody"
+      },
+      "ProductFbsBindingRuleOut": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "percent",
+              "units"
+            ],
+            "title": "Mode"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Value"
+          },
+          "units_configured": {
+            "type": "boolean",
+            "title": "Units Configured"
+          },
+          "marketplace": {
+            "type": "string",
+            "title": "Marketplace"
+          },
+          "external_warehouse_id": {
+            "type": "string",
+            "title": "External Warehouse Id"
+          },
+          "wms_warehouse_id": {
+            "type": "string",
+            "title": "Wms Warehouse Id"
+          },
+          "served": {
+            "type": "boolean",
+            "title": "Served"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved"
+          },
+          "free_stock": {
+            "type": "integer",
+            "title": "Free Stock"
+          },
+          "published_now": {
+            "type": "integer",
+            "title": "Published Now"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "mode",
+          "value",
+          "units_configured",
+          "marketplace",
+          "external_warehouse_id",
+          "wms_warehouse_id",
+          "served",
+          "applicable",
+          "on_hand",
+          "reserved",
+          "free_stock",
+          "published_now"
+        ],
+        "title": "ProductFbsBindingRuleOut"
+      },
       "ProductFbsRuleBody": {
         "properties": {
           "publish": {
@@ -24389,13 +24763,15 @@
           },
           "same_everywhere": {
             "type": "boolean",
-            "title": "Same Everywhere"
+            "title": "Same Everywhere",
+            "default": false
           },
           "percent": {
             "type": "integer",
             "maximum": 100.0,
             "minimum": 0.0,
-            "title": "Percent"
+            "title": "Percent",
+            "default": 0
           },
           "by_warehouse": {
             "additionalProperties": {
@@ -24415,14 +24791,20 @@
             },
             "type": "object",
             "title": "Units By Warehouse"
+          },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleBody"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "By Binding"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "same_everywhere",
-          "percent"
-        ],
         "title": "ProductFbsRuleBody",
         "description": "Правило публикации остатка: доля свободного остатка, а не число штук."
       },
@@ -24456,8 +24838,6 @@
           },
           "percent": {
             "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
             "title": "Percent"
           },
           "by_warehouse": {
@@ -24502,12 +24882,18 @@
             "type": "object",
             "title": "Units Remaining By Warehouse"
           },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleOut"
+            },
+            "type": "object",
+            "title": "By Binding"
+          },
           "product_id": {
             "type": "string",
             "title": "Product Id"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "same_everywhere",
@@ -24550,8 +24936,6 @@
           },
           "percent": {
             "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
             "title": "Percent"
           },
           "by_warehouse": {
@@ -24595,9 +24979,15 @@
             },
             "type": "object",
             "title": "Units Remaining By Warehouse"
+          },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleOut"
+            },
+            "type": "object",
+            "title": "By Binding"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "same_everywhere",
@@ -25688,6 +26078,20 @@
           "updated_count": {
             "type": "integer",
             "title": "Updated Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFbsRuleBulkItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "clamps": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductsFbsRuleClampOut"
+            },
+            "type": "object",
+            "title": "Clamps"
           }
         },
         "type": "object",
@@ -25730,6 +26134,34 @@
           "items"
         ],
         "title": "ProductsFbsRuleBulkReadOut"
+      },
+      "ProductsFbsRuleClampOut": {
+        "properties": {
+          "requested_value": {
+            "type": "integer",
+            "title": "Requested Value"
+          },
+          "saved_value": {
+            "type": "integer",
+            "title": "Saved Value"
+          },
+          "limiting_product_id": {
+            "type": "string",
+            "title": "Limiting Product Id"
+          },
+          "limiting_product_name": {
+            "type": "string",
+            "title": "Limiting Product Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requested_value",
+          "saved_value",
+          "limiting_product_id",
+          "limiting_product_name"
+        ],
+        "title": "ProductsFbsRuleClampOut"
       },
       "ProductsLegacyFbsLimitsResetBody": {
         "properties": {
