@@ -76,6 +76,7 @@ from app.services.print_template_service import (
 
 _CIS_MIN_LEN = 15
 _CIS_MAX_LEN = 512
+_IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE = 50_000
 _GTIN_RE = re.compile(r"(?<!\d)(\d{14})(?!\d)")
 _GS1_GTIN_AI01_RE = re.compile(r"(?:^|\x1d)01(\d{14})")
 MARKING_SOURCE_CATALOG = "catalog"
@@ -1272,18 +1273,11 @@ async def preview_marking_import(
     groups: list[ImportPreviewGroup] = []
     total_codes = 0
     for gtin, cis_list in sorted(by_gtin.items()):
-        stmt = select(MarkingPool).where(
-            MarkingPool.tenant_id == tenant_id,
-            MarkingPool.seller_id == seller_id,
-            MarkingPool.gtin == gtin,
-        )
-        pool = (await session.execute(stmt)).scalar_one_or_none()
-        suggested = pool.title if pool is not None else f"GTIN …{gtin[-4:]}"
         groups.append(
             ImportPreviewGroup(
                 gtin=gtin,
                 codes_count=len(cis_list),
-                suggested_title=suggested,
+                suggested_title=f"GTIN …{gtin[-4:]}",
             )
         )
         total_codes += len(cis_list)
@@ -1308,34 +1302,20 @@ def _resolve_pool_spec(
     return None
 
 
-async def get_or_create_marking_pool(
+async def _existing_import_cis_codes(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    *,
-    gtin: str,
-    title: str,
-) -> MarkingPool:
-    stmt = select(MarkingPool).where(
-        MarkingPool.tenant_id == tenant_id,
-        MarkingPool.seller_id == seller_id,
-        MarkingPool.gtin == gtin,
-    )
-    pool = (await session.execute(stmt)).scalar_one_or_none()
-    title_clean = title.strip() or f"GTIN …{gtin[-4:]}"
-    if pool is not None:
-        if title_clean and pool.title != title_clean:
-            pool.title = title_clean
-        return pool
-    pool = MarkingPool(
-        tenant_id=tenant_id,
-        seller_id=seller_id,
-        gtin=gtin,
-        title=title_clean,
-    )
-    session.add(pool)
-    await session.flush()
-    return pool
+    cis_codes: list[str],
+) -> set[str]:
+    existing: set[str] = set()
+    for offset in range(0, len(cis_codes), _IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE):
+        chunk = cis_codes[offset : offset + _IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE]
+        stmt = select(MarkingCode.cis_code).where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.cis_code.in_(chunk),
+        )
+        existing.update((await session.scalars(stmt)).all())
+    return existing
 
 
 async def _pool_ids_for_product(
@@ -1435,21 +1415,26 @@ async def import_marking_codes(
         pool_spec = _resolve_pool_spec(gtin, pool_specs)
         title = pool_spec.title if pool_spec is not None else f"GTIN …{gtin[-4:]}"
         product_ids = pool_spec.product_ids if pool_spec is not None else []
-        pool = await get_or_create_marking_pool(
-            session,
-            tenant_id,
-            seller_id,
-            gtin=gtin,
-            title=title,
-        )
-        if product_ids:
-            await _apply_pool_products(session, tenant_id, pool.id, product_ids)
-
+        existing_cis = await _existing_import_cis_codes(session, tenant_id, cis_list)
+        new_cis = [cis for cis in cis_list if cis not in existing_cis]
         pool_accepted = 0
-        pool_duplicates = 0
+        pool_duplicates = len(cis_list) - len(new_cis)
         pool_invalid = 0
 
-        for cis in cis_list:
+        if not new_cis:
+            duplicate_count += pool_duplicates
+            continue
+
+        pool = MarkingPool(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            gtin=gtin,
+            title=title.strip() or f"GTIN …{gtin[-4:]}",
+        )
+        session.add(pool)
+        await session.flush()
+
+        for cis in new_cis:
             code = await _try_insert_imported_code(
                 session,
                 tenant_id=tenant_id,
@@ -1472,6 +1457,14 @@ async def import_marking_codes(
                 source_process=MARKING_SOURCE_CATALOG,
             )
             pool_accepted += 1
+
+        if pool_accepted == 0:
+            await session.delete(pool)
+            duplicate_count += pool_duplicates
+            continue
+
+        if product_ids:
+            await _apply_pool_products(session, tenant_id, pool.id, product_ids)
 
         pool_results.append(
             PoolImportResultRow(
