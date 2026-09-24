@@ -748,6 +748,13 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
         res = await session.execute(stmt_orders)
         orders = list(res.scalars().all())
 
+    # Stock fixture writes schedule publication independently of the worklist.
+    # Drain them before the engine-wide listener so it measures only this read.
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+    from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
+
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()
     query_count = 0
 
     def _count_query(
