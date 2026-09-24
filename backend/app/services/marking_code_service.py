@@ -1206,6 +1206,61 @@ async def _try_insert_imported_code(
     return code
 
 
+async def _product_import_pool(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_id: uuid.UUID,
+    gtin: str,
+    pools: dict[tuple[uuid.UUID, str], MarkingPool],
+) -> MarkingPool:
+    key = (product_id, gtin)
+    existing = pools.get(key)
+    if existing is not None:
+        return existing
+    pool = MarkingPool(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        gtin=gtin,
+        title=f"GTIN …{gtin[-4:]}",
+    )
+    session.add(pool)
+    await session.flush()
+    pools[key] = pool
+    return pool
+
+
+def _link_accepted_product_import_pool(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    pool: MarkingPool,
+    product_id: uuid.UUID,
+    accepted_pool_ids: set[uuid.UUID],
+) -> None:
+    if pool.id in accepted_pool_ids:
+        return
+    session.add(
+        MarkingPoolProduct(
+            tenant_id=tenant_id,
+            pool_id=pool.id,
+            product_id=product_id,
+        )
+    )
+    accepted_pool_ids.add(pool.id)
+
+
+async def _discard_empty_product_import_pools(
+    session: AsyncSession,
+    pools: dict[tuple[uuid.UUID, str], MarkingPool],
+    accepted_pool_ids: set[uuid.UUID],
+) -> None:
+    for pool in pools.values():
+        if pool.id not in accepted_pool_ids:
+            await session.delete(pool)
+
+
 def _persist_import_source_pdfs(
     session: AsyncSession,
     *,
@@ -1784,6 +1839,8 @@ async def auto_import_marking_codes(
         unmatched: list[AutoImportUnmatchedRow] = []
         seen: set[str] = set()
         accepted_count = 0
+        pools: dict[tuple[uuid.UUID, str], MarkingPool] = {}
+        accepted_pool_ids: set[uuid.UUID] = set()
         for index, row in enumerate(parsed_rows):
             key = str(index)
             raw_cis = str(row.get("cis") or "")
@@ -1861,11 +1918,19 @@ async def auto_import_marking_codes(
                     )
                 )
                 continue
+            pool = await _product_import_pool(
+                session,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=product.id,
+                gtin=gtin,
+                pools=pools,
+            )
             code = await _try_insert_imported_code(
                 session,
                 tenant_id=tenant_id,
                 seller_id=seller_id,
-                pool_id=None,
+                pool_id=pool.id,
                 product_id=product.id,
                 import_batch_id=batch.id,
                 cis_code=cis,
@@ -1885,6 +1950,13 @@ async def auto_import_marking_codes(
                     )
                 )
                 continue
+            _link_accepted_product_import_pool(
+                session,
+                tenant_id=tenant_id,
+                pool=pool,
+                product_id=product.id,
+                accepted_pool_ids=accepted_pool_ids,
+            )
             await record_event(
                 session,
                 code=code,
@@ -1895,6 +1967,7 @@ async def auto_import_marking_codes(
             )
             accepted_count += 1
 
+        await _discard_empty_product_import_pools(session, pools, accepted_pool_ids)
         batch.accepted_count = accepted_count
         batch.skipped_count = len(unmatched)
         batch.skip_reasons_json = json.dumps(
@@ -2007,6 +2080,8 @@ async def assign_import_rows_to_product(
         )
         assert document_number is not None
         assigned_keys = []
+        pools: dict[tuple[uuid.UUID, str], MarkingPool] = {}
+        accepted_pool_ids: set[uuid.UUID] = set()
         for key, row in selected:
             label_pdf = row.get("label_pdf")
             has_label = isinstance(label_pdf, bytes) and bool(label_pdf)
@@ -2019,11 +2094,19 @@ async def assign_import_rows_to_product(
                 gtin = extract_gtin_from_cis(cis) or ""
             if not gtin:
                 continue
+            pool = await _product_import_pool(
+                session,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=product.id,
+                gtin=gtin,
+                pools=pools,
+            )
             code = await _try_insert_imported_code(
                 session,
                 tenant_id=tenant_id,
                 seller_id=seller_id,
-                pool_id=None,
+                pool_id=pool.id,
                 product_id=product.id,
                 import_batch_id=batch.id,
                 cis_code=cis,
@@ -2032,6 +2115,13 @@ async def assign_import_rows_to_product(
             )
             if code is None:
                 continue
+            _link_accepted_product_import_pool(
+                session,
+                tenant_id=tenant_id,
+                pool=pool,
+                product_id=product.id,
+                accepted_pool_ids=accepted_pool_ids,
+            )
             await record_event(
                 session,
                 code=code,
@@ -2042,6 +2132,7 @@ async def assign_import_rows_to_product(
             )
             assigned_keys.append(key)
 
+        await _discard_empty_product_import_pools(session, pools, accepted_pool_ids)
         batch.accepted_count = len(assigned_keys)
         batch.skipped_count = len(selected) - len(assigned_keys)
         batch.skip_reasons_json = json.dumps(
