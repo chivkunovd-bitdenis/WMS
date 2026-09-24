@@ -1070,6 +1070,39 @@ async def set_rule_for_products(
                     has_explicit_publish = (
                         pool is not None and pool.publish_enabled is not None
                     )
+                    was_explicit_zero = bool(
+                        pool is not None
+                        and pool.publish_enabled
+                        and pool.percent is None
+                        and pool.units_configured
+                        and int(pool.quantity or 0) == 0
+                    )
+                    is_new_explicit_zero = bool(
+                        requested
+                        and binding_by_id[binding_id].marketplace == "wb"
+                        and binding_rule.publish
+                        and binding_rule.mode == "units"
+                        and binding_rule.units_configured
+                        and binding_rule.value == 0
+                        and not was_explicit_zero
+                    )
+                    if is_new_explicit_zero:
+                        # A cleared rule followed by an explicit zero is a new
+                        # operator decision. It must publish immediately instead
+                        # of inheriting the previous confirmed-zero suppression.
+                        # An exact explicit-zero replay remains idempotent.
+                        await session.execute(
+                            update(FbsStockSyncItem)
+                            .where(
+                                FbsStockSyncItem.binding_id == binding_id,
+                                FbsStockSyncItem.product_id == product.id,
+                            )
+                            .values(
+                                status=STOCK_SYNC_STATUS_PENDING,
+                                last_target_amount=0,
+                                last_error_code=None,
+                            )
+                        )
                     if pool is None:
                         pool = FbsBindingStockPool(
                             tenant_id=tenant_id,
