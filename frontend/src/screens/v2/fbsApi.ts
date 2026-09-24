@@ -441,6 +441,10 @@ export type FbsScanAutoPrintResult = {
   wb_order_id: number
   replayed: boolean
   binding_target: FbsKizLookup | null
+  reprint_recovery: {
+    status: 'not_attempted' | 'available' | 'started' | 'outcome_unknown'
+    kiz: string | null
+  } | null
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
   codes: string[]

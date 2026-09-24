@@ -1106,20 +1106,15 @@ export function FfFbsSupplyWorkspace({
         attempt.orderId = result.order_id
         updateFbsPendingProductScan(token, workspace.supply.id, attempt)
 
-        const waitingForReprintKiz = plan.reprintChz && !attempt.chzStarted
-        if (waitingForReprintKiz) {
-          if (!result.binding_target) {
-            throw new Error('Сервер не вернул выбранный заказ для скана ЧЗ.')
-          }
-          kizSelectedStickerRef.current = ''
-          activeProductScanBarcodeRef.current = raw
-          // Product selection must not bypass the existing replacement
-          // confirmation when this exact order already has a KIZ.
-          if (result.binding_target.needs_confirmation) {
-            setKizConfirmTarget(result.binding_target)
-          } else {
-            setKizScanActive(result.binding_target)
-          }
+        const qrStartedBefore = attempt.qrStarted
+        const chzStartedBefore = attempt.chzStarted
+        let reprintAlreadyStarted = false
+        let waitingForReprintKiz = plan.reprintChz && !attempt.chzStarted
+        if (waitingForReprintKiz && result.reprint_recovery?.status === 'started') {
+          attempt.chzStarted = true
+          updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+          reprintAlreadyStarted = true
+          waitingForReprintKiz = false
         }
 
         const printErrors: string[] = []
@@ -1248,6 +1243,79 @@ export function FfFbsSupplyWorkspace({
             }
           }
         }
+        if (waitingForReprintKiz) {
+          const recovery = result.reprint_recovery
+          if (recovery?.status === 'available' && recovery.kiz) {
+            try {
+              const printAttemptKey = createFbsIdempotencyKey()
+              await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  attemptId: `${result.scan_id}:reprint:${printAttemptKey}`,
+                  orderId: result.order_id,
+                  kiz: recovery.kiz,
+                  enabled: true,
+                },
+                async (kiz) => {
+                  const printResult = await startClaimedAutomaticPrint(
+                    printAttemptKey,
+                    async () => printMarkingCodeLabels([kiz], { duplicateCopies: 1 }),
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск перепечати ЧЗ.')
+                  }
+                },
+              )
+              attempt.chzStarted = true
+              updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+              waitingForReprintKiz = false
+            } catch (cause) {
+              printErrors.push(cause instanceof Error ? cause.message : 'Не удалось запустить перепечать ЧЗ.')
+            }
+          } else if (recovery?.status === 'available') {
+            printErrors.push('Сервер не вернул сохранённый ЧЗ для безопасной перепечати.')
+          } else if (recovery?.status === 'outcome_unknown') {
+            printErrors.push('Исход предыдущего запуска перепечати ЧЗ неизвестен; автоматический повтор остановлен.')
+          } else {
+            if (!result.binding_target) {
+              throw new Error('Сервер не вернул выбранный заказ для скана ЧЗ.')
+            }
+            kizSelectedStickerRef.current = ''
+            activeProductScanBarcodeRef.current = raw
+            // Product selection must not bypass the existing replacement
+            // confirmation when this exact order already has a KIZ.
+            if (result.binding_target.needs_confirmation) {
+              setKizConfirmTarget(result.binding_target)
+            } else {
+              setKizScanActive(result.binding_target)
+            }
+          }
+        }
         printErrors.push(...result.order_errors.map((item) => item.message))
 
         const attemptComplete = fbsPendingProductScanComplete(attempt)
@@ -1265,7 +1333,15 @@ export function FfFbsSupplyWorkspace({
           })
           return
         }
-        const sent = [plan.printQr ? 'QR' : null, plan.printChz && result.requires_honest_sign ? 'ЧЗ' : null]
+        const sent = [
+          plan.printQr && !qrStartedBefore && attempt.qrStarted ? 'QR' : null,
+          (plan.printChz || plan.reprintChz)
+            && !chzStartedBefore
+            && attempt.chzStarted
+            && !reprintAlreadyStarted
+            ? 'ЧЗ'
+            : null,
+        ]
           .filter(Boolean)
           .join(' → ')
         setKizScanNotice(
@@ -1273,6 +1349,8 @@ export function FfFbsSupplyWorkspace({
             ? `${sent ? `${sent} заказа WB № ${result.wb_order_id} отправлен в печать. ` : ''}Выбран заказ WB № ${result.wb_order_id}; сканируйте полный ЧЗ.`
             : sent
             ? `${sent} заказа WB № ${result.wb_order_id} отправлены в печать.`
+            : reprintAlreadyStarted
+            ? `Перепечать ЧЗ заказа WB № ${result.wb_order_id} уже была запущена; повторная копия не создана.`
             : `Выбран заказ WB № ${result.wb_order_id}; автоматическая печать выключена.`,
         )
         if (plan.printChz) await load(true)
@@ -1350,9 +1428,56 @@ export function FfFbsSupplyWorkspace({
             })
           } else {
             try {
-              boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue({ ...scan, kiz: outcome.bound_kiz }, async (kiz) => {
-                await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
-              })
+              const printAttemptKey = createFbsIdempotencyKey()
+              const durableScanId = pendingProductAttempt?.scanId
+              boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  ...scan,
+                  attemptId: durableScanId
+                    ? `${durableScanId}:reprint:${printAttemptKey}`
+                    : scan.attemptId,
+                  kiz: outcome.bound_kiz,
+                },
+                async (kiz) => {
+                  if (!durableScanId || !workspace?.supply.id) {
+                    await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
+                    return
+                  }
+                  const printResult = await startClaimedAutomaticPrint(
+                    printAttemptKey,
+                    async () => printMarkingCodeLabels([kiz], { duplicateCopies: 1 }),
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        'chz',
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        'chz',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        'chz',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск перепечати ЧЗ.')
+                  }
+                },
+              )
             } catch (cause) {
               if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
               const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать ЧЗ.'

@@ -12,10 +12,14 @@ from sqlalchemy import func, select
 from app.db.session import SessionLocal
 from app.models.document_event import DocumentEvent
 from app.models.fbs_order import (
+    CHECK_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
+    MARKING_KIND_SGTIN,
+    META_STATUS_ASSIGNED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
 from app.models.kiz_reprint import KizReprint
@@ -329,6 +333,132 @@ async def test_reprint_product_scan_selects_exact_order_without_allocating_code(
     async with SessionLocal() as session:
         after_codes = await session.scalar(select(func.count()).select_from(MarkingCode))
     assert after_codes == before_codes
+
+
+async def _bind_canonical_kiz(
+    supply_id: uuid.UUID,
+    value: str,
+) -> uuid.UUID:
+    async with SessionLocal() as session:
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.supply_id == supply_id)
+        )
+        assert order is not None
+        marking = FbsOrderMarking(
+            order_id=order.id,
+            tenant_id=order.tenant_id,
+            kind=MARKING_KIND_SGTIN,
+            value=value,
+            source="operator",
+            check_status=CHECK_STATUS_NEW,
+            meta_status=META_STATUS_ASSIGNED,
+        )
+        session.add(marking)
+        await session.flush()
+        marking_id = marking.id
+        await session.commit()
+        return marking_id
+
+
+async def test_reprint_product_recovers_only_released_canonical_kiz(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, barcode = await _seed_wb_supply(
+        async_client, order_count=1
+    )
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    body = {
+        "barcode": barcode,
+        "idempotency_key": "reprint-known-pre-print-failure",
+        "print_qr": False,
+        "print_chz": False,
+        "reprint_chz": True,
+    }
+    selected = await async_client.post(url, headers=headers, json=body)
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["reprint_recovery"] == {
+        "status": "not_attempted",
+        "kiz": None,
+    }
+
+    canonical_kiz = "010460000000000121WMS514-EXACT-BOUND\x1d91CRYPTO-TAIL"
+    await _bind_canonical_kiz(supply_id, canonical_kiz)
+    target_url = f"{url}/{selected.json()['scan_id']}"
+    first_attempt = {"target": "chz", "attempt_key": "browser-first"}
+    claim = await async_client.post(
+        f"{target_url}/print-claim", headers=headers, json=first_attempt
+    )
+    released = await async_client.post(
+        f"{target_url}/print-failed", headers=headers, json=first_attempt
+    )
+    assert claim.json() == {"claimed": True, "started": False}
+    assert released.json() == {"claimed": False, "started": False}
+
+    recovered = await async_client.post(url, headers=headers, json=body)
+    assert recovered.status_code == 200, recovered.text
+    assert recovered.json()["scan_id"] == selected.json()["scan_id"]
+    assert recovered.json()["order_id"] == selected.json()["order_id"]
+    assert recovered.json()["replayed"] is True
+    assert recovered.json()["reprint_recovery"] == {
+        "status": "available",
+        "kiz": canonical_kiz,
+    }
+
+    retry_attempt = {"target": "chz", "attempt_key": "browser-retry"}
+    retry_claim = await async_client.post(
+        f"{target_url}/print-claim", headers=headers, json=retry_attempt
+    )
+    started = await async_client.post(
+        f"{target_url}/print-started", headers=headers, json=retry_attempt
+    )
+    assert retry_claim.json() == {"claimed": True, "started": False}
+    assert started.json() == {"claimed": False, "started": True}
+
+    after_started = await async_client.post(url, headers=headers, json=body)
+    assert after_started.json()["reprint_recovery"] == {
+        "status": "started",
+        "kiz": None,
+    }
+    async with SessionLocal() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(FbsOrderMarking)
+        ) == 1
+        assert await session.scalar(select(func.count()).select_from(MarkingCode)) == 0
+
+
+async def test_reprint_product_blocks_unknown_print_outcome(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, barcode = await _seed_wb_supply(
+        async_client, order_count=1
+    )
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    body = {
+        "barcode": barcode,
+        "idempotency_key": "reprint-unknown-outcome",
+        "print_qr": False,
+        "print_chz": False,
+        "reprint_chz": True,
+    }
+    selected = await async_client.post(url, headers=headers, json=body)
+    assert selected.status_code == 200, selected.text
+    await _bind_canonical_kiz(
+        supply_id, "010460000000000121WMS514-UNKNOWN-BOUND"
+    )
+    target_url = f"{url}/{selected.json()['scan_id']}"
+    claimed = await async_client.post(
+        f"{target_url}/print-claim",
+        headers=headers,
+        json={"target": "chz", "attempt_key": "browser-unknown"},
+    )
+    assert claimed.json() == {"claimed": True, "started": False}
+
+    replay = await async_client.post(url, headers=headers, json=body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["reprint_recovery"] == {
+        "status": "outcome_unknown",
+        "kiz": None,
+    }
 
 
 async def test_print_target_claim_is_durable_and_never_blindly_retries(

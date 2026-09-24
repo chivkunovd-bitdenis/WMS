@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +27,10 @@ from app.models.fbs_order import (
     FBS_ORDER_MARKING_FROZEN_STATUSES,
     FBS_ORDER_MARKING_WRITE_STATUSES,
     FBS_ORDER_STATUS_CANCELLED,
+    MARKING_KIND_SGTIN,
+    META_STATUS_REJECTED,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_supply import FbsSupply
 from app.services.document_event_service import record_document_event
@@ -55,6 +59,21 @@ class FbsScanAutoPrintSelection:
 class FbsScanAutoPrintTargetClaim:
     claimed: bool
     started: bool
+
+
+@dataclass(frozen=True)
+class FbsScanAutoPrintReprintRecovery:
+    status: Literal["not_attempted", "available", "started", "outcome_unknown"]
+    kiz: str | None = None
+
+
+@dataclass(frozen=True)
+class _FbsScanAutoPrintTargetState:
+    started: bool
+    active_claim: str | None
+    active_marking_id: uuid.UUID | None
+    had_release: bool
+    released_marking_id: uuid.UUID | None
 
 
 def _scan_request_digest(supply_id: uuid.UUID, key: str) -> str:
@@ -297,17 +316,20 @@ def _target_event_key(
     return f"wms514-print:{digest}"
 
 
-async def _locked_selection_event(
+async def _selection_event(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     scan_id: uuid.UUID,
+    *,
+    lock_supply: bool,
 ) -> DocumentEvent:
-    supply = await session.scalar(
-        select(FbsSupply)
-        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
-        .with_for_update()
+    supply_stmt = select(FbsSupply).where(
+        FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id
     )
+    if lock_supply:
+        supply_stmt = supply_stmt.with_for_update()
+    supply = await session.scalar(supply_stmt)
     if supply is None:
         raise FbsScanAutoPrintError("supply_not_found")
     event = await session.scalar(
@@ -324,13 +346,28 @@ async def _locked_selection_event(
     return event
 
 
+async def _locked_selection_event(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+) -> DocumentEvent:
+    return await _selection_event(
+        session,
+        tenant_id,
+        supply_id,
+        scan_id,
+        lock_supply=True,
+    )
+
+
 async def _target_state(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     scan_id: uuid.UUID,
     target: str,
-) -> tuple[bool, str | None]:
+) -> _FbsScanAutoPrintTargetState:
     events = list(
         (
             await session.scalars(
@@ -347,6 +384,9 @@ async def _target_state(
     )
     started = False
     active_claim: str | None = None
+    active_marking_id: uuid.UUID | None = None
+    had_release = False
+    released_marking_id: uuid.UUID | None = None
     for event in events:
         payload = event.payload_json or {}
         if (
@@ -361,12 +401,92 @@ async def _target_state(
             continue
         if action == "claim" and not started and active_claim is None:
             active_claim = attempt_digest
+            try:
+                active_marking_id = uuid.UUID(str(payload["marking_id"]))
+            except (KeyError, TypeError, ValueError):
+                active_marking_id = None
         elif action == "release" and active_claim == attempt_digest:
+            had_release = True
+            released_marking_id = active_marking_id
             active_claim = None
+            active_marking_id = None
         elif action == "started":
             started = True
             active_claim = None
-    return started, active_claim
+            active_marking_id = None
+    return _FbsScanAutoPrintTargetState(
+        started=started,
+        active_claim=active_claim,
+        active_marking_id=active_marking_id,
+        had_release=had_release,
+        released_marking_id=released_marking_id,
+    )
+
+
+async def _current_reprint_marking(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    selection_event: DocumentEvent,
+) -> FbsOrderMarking | None:
+    try:
+        order_id = uuid.UUID(str((selection_event.payload_json or {})["order_id"]))
+    except (KeyError, TypeError, ValueError):
+        raise FbsScanAutoPrintError("scan_selection_corrupt") from None
+    marking: FbsOrderMarking | None = await session.scalar(
+        select(FbsOrderMarking)
+        .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
+        .where(
+            FbsOrderMarking.tenant_id == tenant_id,
+            FbsOrderMarking.order_id == order_id,
+            FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+        )
+        .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
+        .limit(1)
+    )
+    return marking
+
+
+async def recover_released_reprint_kiz(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+) -> FbsScanAutoPrintReprintRecovery:
+    """Return only the canonical KIZ of this scan's released print claim.
+
+    A missing claim means the operator still has to scan a KIZ.  An active
+    claim is an unknown physical outcome and a started target is already done;
+    neither may produce another copy.  A released claim is retryable only while
+    its exact marking remains the current active marking of the selected order.
+    """
+    selection_event = await _selection_event(
+        session,
+        tenant_id,
+        supply_id,
+        scan_id,
+        lock_supply=False,
+    )
+    if (selection_event.payload_json or {}).get("reprint_chz") is not True:
+        return FbsScanAutoPrintReprintRecovery(status="not_attempted")
+    state = await _target_state(session, tenant_id, supply_id, scan_id, "chz")
+    if state.started:
+        return FbsScanAutoPrintReprintRecovery(status="started")
+    if state.active_claim is not None:
+        return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
+    if not state.had_release:
+        return FbsScanAutoPrintReprintRecovery(status="not_attempted")
+    if state.released_marking_id is None:
+        return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
+    current = await _current_reprint_marking(
+        session, tenant_id, supply_id, selection_event
+    )
+    if current is None or current.id != state.released_marking_id:
+        return FbsScanAutoPrintReprintRecovery(status="outcome_unknown")
+    return FbsScanAutoPrintReprintRecovery(status="available", kiz=current.value)
 
 
 def _validate_target(selection_event: DocumentEvent, target: str) -> None:
@@ -376,7 +496,7 @@ def _validate_target(selection_event: DocumentEvent, target: str) -> None:
     enabled = (
         payload.get("print_qr") is True
         if target == "qr"
-        else payload.get("print_chz") is True
+        else payload.get("print_chz") is True or payload.get("reprint_chz") is True
     )
     if not enabled:
         raise FbsScanAutoPrintError("scan_print_target_disabled")
@@ -406,17 +526,25 @@ async def claim_scan_print_target(
         session, tenant_id, supply_id, scan_id
     )
     _validate_target(selection_event, target)
-    started, active_claim = await _target_state(
+    state = await _target_state(
         session, tenant_id, supply_id, scan_id, target
     )
-    if started:
+    if state.started:
         return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
     attempt_digest = _target_attempt_digest(scan_id, target, key)
-    if active_claim is not None:
+    if state.active_claim is not None:
         return FbsScanAutoPrintTargetClaim(
-            claimed=active_claim == attempt_digest,
+            claimed=state.active_claim == attempt_digest,
             started=False,
         )
+    marking = (
+        await _current_reprint_marking(
+            session, tenant_id, supply_id, selection_event
+        )
+        if target == "chz"
+        and (selection_event.payload_json or {}).get("reprint_chz") is True
+        else None
+    )
     inserted = await record_document_event(
         session,
         tenant_id=tenant_id,
@@ -432,18 +560,22 @@ async def claim_scan_print_target(
             "target": target,
             "action": "claim",
             "attempt_digest": attempt_digest,
+            "marking_id": str(marking.id) if marking is not None else None,
         },
         idempotency_key=_target_event_key(
             scan_id, target, "claim", attempt_digest
         ),
     )
     if not inserted:
-        replay_started, replay_claim = await _target_state(
+        replay_state = await _target_state(
             session, tenant_id, supply_id, scan_id, target
         )
         return FbsScanAutoPrintTargetClaim(
-            claimed=not replay_started and replay_claim == attempt_digest,
-            started=replay_started,
+            claimed=(
+                not replay_state.started
+                and replay_state.active_claim == attempt_digest
+            ),
+            started=replay_state.started,
         )
     return FbsScanAutoPrintTargetClaim(claimed=True, started=False)
 
@@ -463,13 +595,13 @@ async def mark_scan_print_target_started(
         session, tenant_id, supply_id, scan_id
     )
     _validate_target(selection_event, target)
-    started, active_claim = await _target_state(
+    state = await _target_state(
         session, tenant_id, supply_id, scan_id, target
     )
-    if started:
+    if state.started:
         return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
     attempt_digest = _target_attempt_digest(scan_id, target, key)
-    if active_claim != attempt_digest:
+    if state.active_claim != attempt_digest:
         raise FbsScanAutoPrintError("scan_print_claim_not_owned")
     await record_document_event(
         session,
@@ -507,13 +639,13 @@ async def release_scan_print_target_claim(
         session, tenant_id, supply_id, scan_id
     )
     _validate_target(selection_event, target)
-    started, active_claim = await _target_state(
+    state = await _target_state(
         session, tenant_id, supply_id, scan_id, target
     )
-    if started:
+    if state.started:
         return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
     attempt_digest = _target_attempt_digest(scan_id, target, key)
-    if active_claim == attempt_digest:
+    if state.active_claim == attempt_digest:
         await record_document_event(
             session,
             tenant_id=tenant_id,

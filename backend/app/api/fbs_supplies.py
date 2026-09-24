@@ -410,12 +410,18 @@ class FbsScanAutoPrintBindingTargetOut(BaseModel):
     external_order_id: str | None = None
 
 
+class FbsScanAutoPrintReprintRecoveryOut(BaseModel):
+    status: Literal["not_attempted", "available", "started", "outcome_unknown"]
+    kiz: str | None = None
+
+
 class FbsScanAutoPrintOut(BaseModel):
     scan_id: str
     order_id: str
     wb_order_id: int
     replayed: bool
     binding_target: FbsScanAutoPrintBindingTargetOut | None
+    reprint_recovery: FbsScanAutoPrintReprintRecoveryOut | None
     requires_honest_sign: bool
     qr_asset: FbsPrintAssetOut | None
     codes: list[str]
@@ -2287,6 +2293,7 @@ async def scan_fbs_supply_product_for_auto_print(
     await session.commit()
 
     binding_target: FbsScanAutoPrintBindingTargetOut | None = None
+    reprint_recovery: FbsScanAutoPrintReprintRecoveryOut | None = None
     if body.reprint_chz:
         try:
             binding_target = _scan_binding_target_out(
@@ -2301,6 +2308,16 @@ async def scan_fbs_supply_product_for_auto_print(
             # Reprint-mode candidates are filtered to the existing binding
             # status set before reservation, so this is a consistency error.
             raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        recovery = await scan_print_svc.recover_released_reprint_kiz(
+            session,
+            user.tenant_id,
+            supply_id,
+            selected.scan_id,
+        )
+        reprint_recovery = FbsScanAutoPrintReprintRecoveryOut(
+            status=recovery.status,
+            kiz=recovery.kiz,
+        )
 
     if not body.print_qr and not body.print_chz:
         return FbsScanAutoPrintOut(
@@ -2309,6 +2326,7 @@ async def scan_fbs_supply_product_for_auto_print(
             wb_order_id=selected.wb_order_id,
             replayed=selected.replayed,
             binding_target=binding_target,
+            reprint_recovery=reprint_recovery,
             requires_honest_sign=False,
             qr_asset=None,
             codes=[],
@@ -2360,6 +2378,7 @@ async def scan_fbs_supply_product_for_auto_print(
         wb_order_id=selected.wb_order_id,
         replayed=selected.replayed,
         binding_target=binding_target,
+        reprint_recovery=reprint_recovery,
         requires_honest_sign=(
             order_result.requires_honest_sign if order_result is not None else body.print_chz
         ),

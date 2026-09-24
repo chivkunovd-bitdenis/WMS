@@ -11,16 +11,20 @@ describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
   })
 
   it('queues one full KIZ only after a new successful bind and before refresh', () => {
-    const failureBranch = source.indexOf("if (outcome.status !== 'ok')")
-    const print = source.indexOf('printMarkingCodeLabels([kiz], { duplicateCopies: 1 })')
-    const refresh = source.indexOf('const refreshed = await load(true)')
+    const kizScan = source.slice(
+      source.indexOf('const scanKizCode = useCallback'),
+      source.indexOf('const dropKizScanActive = useCallback'),
+    )
+    const failureBranch = kizScan.indexOf("if (outcome.status !== 'ok')")
+    const print = kizScan.indexOf('printMarkingCodeLabels([kiz], { duplicateCopies: 1 })')
+    const refresh = kizScan.indexOf('const refreshed = await load(true)')
     expect(failureBranch).toBeGreaterThan(-1)
     expect(print).toBeGreaterThan(failureBranch)
     expect(refresh).toBeGreaterThan(print)
-    expect(source.slice(failureBranch, print)).toContain('outcome.newly_bound === true')
-    expect(source.slice(failureBranch, print)).toContain('!outcome.bound_kiz')
-    expect(source.slice(failureBranch, print)).toContain('{ ...scan, kiz: outcome.bound_kiz }')
-    expect(source.slice(source.indexOf('const scan ='), failureBranch)).not.toContain('kiz: raw')
+    expect(kizScan.slice(failureBranch, print)).toContain('outcome.newly_bound === true')
+    expect(kizScan.slice(failureBranch, print)).toContain('!outcome.bound_kiz')
+    expect(kizScan.slice(failureBranch, print)).toContain('kiz: outcome.bound_kiz')
+    expect(kizScan.slice(kizScan.indexOf('const scan ='), failureBranch)).not.toContain('kiz: raw')
   })
 
   it('does not schedule an error or pending_confirmation outcome', () => {
