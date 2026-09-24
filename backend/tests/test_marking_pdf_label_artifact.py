@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import fitz
 import pytest
+import zxingcpp
 from httpx import AsyncClient
 from marking_datamatrix_test_helpers import encode_datamatrix_png
 from sqlalchemy import select
@@ -40,6 +41,172 @@ def _build_two_label_pdf(cis_a: str, cis_b: str) -> bytes:
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
+
+
+def _build_stored_label_artifact(
+    cis: str,
+    *,
+    distorted: bool,
+) -> bytes:
+    """Production-like persisted PDF: exact CIS plus an embedded Data Matrix image."""
+    barcode = zxingcpp.create_barcode(
+        cis.encode("utf-8"),
+        format=zxingcpp.DataMatrix,
+        force_square=distorted,
+    )
+    image = zxingcpp.write_barcode_to_image(
+        barcode,
+        scale=8,
+        add_quiet_zones=True,
+    )
+    height, width = image.shape
+    png = fitz.Pixmap(fitz.csGRAY, width, height, bytes(image), 0).tobytes("png")
+
+    doc = fitz.open()
+    try:
+        page = doc.new_page(width=164, height=113)
+        page.insert_text((92, 14), "HONEST", fontsize=9)
+        page.insert_text((92, 27), "SIGN", fontsize=9)
+        page.insert_text((92, 43), "GTIN 4630321689835", fontsize=6)
+        page.insert_text((92, 55), "KM 5TVsOggEdo6!!", fontsize=6)
+        page.insert_text((92, 106), "crypto-tail-control", fontsize=5)
+        if distorted:
+            # Same defect as the production screenshot: a square symbol is
+            # embedded at 90x35 pt, so every module is ~2.5x wider than tall.
+            target = fitz.Rect(8, 45, 98, 80)
+            page.insert_image(target, stream=png, keep_proportion=False)
+        else:
+            # A valid rectangular ECC200 symbol keeps the source image aspect;
+            # its overall shape is wide but its individual modules are square.
+            target = fitz.Rect(8, 45, 98, 45 + 90 * height / width)
+            page.insert_image(target, stream=png, keep_proportion=True)
+        return bytes(doc.tobytes())
+    finally:
+        doc.close()
+
+
+def _rendered_module_pitches(pdf_bytes: bytes, cis: str) -> tuple[float, float, tuple[float, ...]]:
+    """Independent raster assertion over the actual PDF page sent to Chrome."""
+    from statistics import median
+
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        matches = [
+            (page, item)
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+            if item.value == cis
+        ]
+        assert len(matches) == 1
+        page, decoded = matches[0]
+        box = fitz.Rect(decoded.page_rect)
+        pix = page.get_pixmap(
+            matrix=fitz.Matrix(600 / 72, 600 / 72),
+            clip=box,
+            colorspace=fitz.csGRAY,
+            alpha=False,
+        )
+        samples = pix.samples
+
+        def is_black(x: int, y: int) -> bool:
+            return samples[y * pix.stride + x] < 128
+
+        dark = [
+            (x, y)
+            for y in range(pix.height)
+            for x in range(pix.width)
+            if is_black(x, y)
+        ]
+        min_x = min(x for x, _ in dark)
+        max_x = max(x for x, _ in dark)
+        min_y = min(y for _, y in dark)
+        max_y = max(y for _, y in dark)
+
+        def runs(values: list[bool]) -> list[int]:
+            result: list[int] = []
+            previous = values[0]
+            start = 0
+            for index, value in enumerate(values[1:], 1):
+                if value == previous:
+                    continue
+                result.append(index - start)
+                previous = value
+                start = index
+            result.append(len(values) - start)
+            return [value for value in result if value >= 2]
+
+        horizontal_edges = [
+            runs([is_black(x, y) for x in range(min_x, max_x + 1)])
+            for y in (min_y, max_y)
+        ]
+        vertical_edges = [
+            runs([is_black(x, y) for y in range(min_y, max_y + 1)])
+            for x in (min_x, max_x)
+        ]
+        horizontal = max(horizontal_edges, key=len)
+        vertical = max(vertical_edges, key=len)
+        assert len(horizontal) >= 8 and len(vertical) >= 8
+        return float(median(horizontal)), float(median(vertical)), decoded.page_rect
+    finally:
+        doc.close()
+
+
+def _assert_rendered_quiet_zone(
+    pdf_bytes: bytes,
+    cis: str,
+    module_pitch: float,
+) -> None:
+    """Assert one white module around the decoded symbol in the final PDF raster."""
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    scale = 600 / 72
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        matches = [
+            (page, item)
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+            if item.value == cis
+        ]
+        assert len(matches) == 1
+        page, decoded = matches[0]
+        pix = page.get_pixmap(
+            matrix=fitz.Matrix(scale, scale),
+            colorspace=fitz.csGRAY,
+            alpha=False,
+        )
+        x0, y0, x1, y1 = (round(value * scale) for value in decoded.page_rect)
+        width = max(round(module_pitch), 2)
+        # Decoder bounds can differ from the anti-aliased black edge by one
+        # pixel. Skip that edge pixel, then require a full module of white.
+        guard = 2
+        strips = [
+            [
+                pix.samples[y * pix.stride + x]
+                for y in range(y0 + guard, y1 - guard + 1)
+                for x in range(x0 - guard - width, x0 - guard)
+            ],
+            [
+                pix.samples[y * pix.stride + x]
+                for y in range(y0 + guard, y1 - guard + 1)
+                for x in range(x1 + guard, x1 + guard + width)
+            ],
+            [
+                pix.samples[y * pix.stride + x]
+                for y in range(y0 - guard - width, y0 - guard)
+                for x in range(x0 + guard, x1 - guard + 1)
+            ],
+            [
+                pix.samples[y * pix.stride + x]
+                for y in range(y1 + guard, y1 + guard + width)
+                for x in range(x0 + guard, x1 - guard + 1)
+            ],
+        ]
+        assert all(strip and min(strip) >= 240 for strip in strips)
+    finally:
+        doc.close()
 
 
 @pytest.mark.asyncio
@@ -731,10 +898,13 @@ async def test_label_artifact_tape_merges_outside_event_loop_thread(
         parts: list[bytes],
         page_width_mm: float | None,
         page_height_mm: float | None,
+        *,
+        cis_codes: list[str] | None = None,
     ) -> bytes:
         assert parts == [b"label-pdf"]
         assert page_width_mm == 60
         assert page_height_mm == 40
+        assert cis_codes == ["cis"]
         merge_thread_ids.append(threading.get_ident())
         return b"merged-pdf"
 
@@ -785,6 +955,114 @@ def test_fit_label_artifact_pdf_to_page_sets_tall_page_size() -> None:
         assert abs(rect.height - 80 * 72 / 25.4) < 1.5
     finally:
         fitted.close()
+
+
+@pytest.mark.parametrize(
+    "cis",
+    [
+        "010463032168983521ABC123",
+        "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "x" * 20,
+    ],
+    ids=["short", "long-with-gs"],
+)
+def test_native_artifact_print_repairs_anisotropic_modules_and_preserves_cis(
+    cis: str,
+) -> None:
+    from app.services.marking_label_artifact_service import fit_label_artifact_pdf_to_page
+
+    stored = _build_stored_label_artifact(cis, distorted=True)
+
+    # This is the deployed pre-hotfix behavior: uniform page fitting cannot
+    # undo distortion already embedded inside the stored seller PDF.
+    before = fit_label_artifact_pdf_to_page(stored, 58, 40)
+    before_x, before_y, _ = _rendered_module_pitches(before, cis)
+    assert before_x / before_y > 2
+
+    # The real artifact-tape path has the canonical CIS and can surgically
+    # replace only the distorted matrix before the same page fitting step.
+    after = fit_label_artifact_pdf_to_page(stored, 58, 40, cis)
+    after_x, after_y, bounds = _rendered_module_pitches(after, cis)
+    assert abs(after_x - after_y) <= 1
+    assert abs((bounds[2] - bounds[0]) - (bounds[3] - bounds[1])) <= 1.5
+    _assert_rendered_quiet_zone(after, cis, min(after_x, after_y))
+
+    repaired = fitz.open(stream=after, filetype="pdf")
+    try:
+        assert repaired.page_count == 1
+        assert abs(repaired[0].rect.width - 58 * 72 / 25.4) < 1.5
+        assert abs(repaired[0].rect.height - 40 * 72 / 25.4) < 1.5
+        text = repaired[0].get_text("text")
+        assert "HONEST" in text
+        assert "GTIN 4630321689835" in text
+        assert "crypto-tail-control" in text
+    finally:
+        repaired.close()
+
+
+def test_native_artifact_tape_repairs_each_page_in_order() -> None:
+    from app.services.marking_code_service import _validated_label_artifact_tape
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    cis_a = "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "a" * 20
+    cis_b = "0104630321689835215TVsOggEdo7!!\x1d91EFGH\x1d92" + "b" * 20
+    tape = _validated_label_artifact_tape(
+        [
+            (_build_stored_label_artifact(cis_a, distorted=True), cis_a),
+            (_build_stored_label_artifact(cis_b, distorted=True), cis_b),
+        ],
+        58,
+        40,
+    )
+
+    doc = fitz.open(stream=tape, filetype="pdf")
+    try:
+        assert doc.page_count == 2
+        assert [
+            [item.value for item in decode_datamatrix_codes_on_pdf_page(page)]
+            for page in doc
+        ] == [[cis_a], [cis_b]]
+    finally:
+        doc.close()
+    for cis in (cis_a, cis_b):
+        pitch_x, pitch_y, _ = _rendered_module_pitches(tape, cis)
+        assert abs(pitch_x - pitch_y) <= 1
+
+
+def test_native_artifact_keeps_valid_rectangular_datamatrix_modules() -> None:
+    from app.services.marking_label_artifact_service import fit_label_artifact_pdf_to_page
+
+    cis = "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "x" * 20
+    stored = _build_stored_label_artifact(cis, distorted=False)
+    fitted = fit_label_artifact_pdf_to_page(stored, 58, 40, cis)
+    pitch_x, pitch_y, bounds = _rendered_module_pitches(fitted, cis)
+
+    assert abs(pitch_x - pitch_y) <= 1
+    assert (bounds[2] - bounds[0]) / (bounds[3] - bounds[1]) > 2
+
+
+@pytest.mark.parametrize(
+    ("width_mm", "height_mm"),
+    [(58, 40), (60, 40), (60, 80), (70, 120)],
+)
+def test_native_artifact_repair_preserves_supported_page_sizes(
+    width_mm: int,
+    height_mm: int,
+) -> None:
+    from app.services.marking_label_artifact_service import fit_label_artifact_pdf_to_page
+
+    cis = "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "x" * 20
+    stored = _build_stored_label_artifact(cis, distorted=True)
+    fitted_bytes = fit_label_artifact_pdf_to_page(stored, width_mm, height_mm, cis)
+
+    fitted = fitz.open(stream=fitted_bytes, filetype="pdf")
+    try:
+        assert fitted.page_count == 1
+        assert abs(fitted[0].rect.width - width_mm * 72 / 25.4) < 1.5
+        assert abs(fitted[0].rect.height - height_mm * 72 / 25.4) < 1.5
+    finally:
+        fitted.close()
+    pitch_x, pitch_y, _ = _rendered_module_pitches(fitted_bytes, cis)
+    assert abs(pitch_x - pitch_y) <= 1
 
 
 @pytest.mark.parametrize(

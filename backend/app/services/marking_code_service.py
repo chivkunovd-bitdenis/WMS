@@ -776,6 +776,7 @@ def _validated_label_artifact_tape(
     from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
 
     parts: list[bytes] = []
+    cis_codes: list[str] = []
     for artifact in artifacts:
         if artifact is None:
             raise MarkingCodeServiceError("code_not_found")
@@ -783,7 +784,13 @@ def _validated_label_artifact_tape(
         if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, cis_code):
             raise MarkingCodeServiceError("label_artifact_missing")
         parts.append(pdf_bytes)
-    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
+        cis_codes.append(cis_code)
+    return merge_label_artifact_pdfs_for_print(
+        parts,
+        page_width_mm,
+        page_height_mm,
+        cis_codes=cis_codes,
+    )
 
 
 async def build_label_artifact_tape_pdf(
