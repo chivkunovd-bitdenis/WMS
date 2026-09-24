@@ -88,10 +88,7 @@ from app.services.fbs_supply_validator_service import (
     SupplyPreflightSummary,
     validate_supply_composition,
 )
-from app.services.fbs_warehouse_binding_service import (
-    FbsWarehouseBindingError,
-    set_binding_stock_pool_quantity,
-)
+from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
 from app.services.integration_fernet import encrypt_secret
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
@@ -693,6 +690,7 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
     assert result.products_zeroed == 1
     assert result.errors == 1
     assert result.binding_errors == 1
+    assert result.retryable_errors == 0
     await db_session.refresh(binding)
     assert binding.last_sync_status == "error"
     assert binding.last_error_code == "ozon_stock_rejected"
@@ -775,10 +773,10 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
 
 
 @pytest.mark.asyncio
-async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
+async def test_wb_and_ozon_may_publish_the_same_last_physical_unit(
     db_session: AsyncSession,
 ) -> None:
-    """TC-S04-OZON-031: one physical unit can belong to only one provider binding."""
+    """WMS-469 R13: both providers may publish the shared live unit."""
     tenant = Tenant(name="Shared FBS stock", slug=f"shared-stock-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
     warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
@@ -843,15 +841,15 @@ async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
         product.id,
         1,
     )
-    with pytest.raises(FbsWarehouseBindingError, match="pool_quota_exceeded"):
-        await set_binding_stock_pool_quantity(
-            db_session,
-            tenant.id,
-            seller.id,
-            ozon_binding.id,
-            product.id,
-            1,
-        )
+    ozon_pool = await set_binding_stock_pool_quantity(
+        db_session,
+        tenant.id,
+        seller.id,
+        ozon_binding.id,
+        product.id,
+        1,
+    )
+    assert ozon_pool.quantity == 1
 
 
 async def _sync_ozon_posting_with_products(
@@ -2517,8 +2515,10 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     scan_started_at = datetime.now(UTC)
     for scan_index, value in enumerate(values):
         # The UI validates before commit; direct commit alone missed the second-product bug.
-        assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)).ok
-        await kiz_svc._commit_one_kiz_pair(
+        assert (
+            await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)
+        ).ok
+        outcome = await kiz_svc._commit_one_kiz_pair(
             db_session,
             order.tenant_id,
             None,
@@ -2526,6 +2526,8 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             AsyncMock(),
             f"ozon-scan:{value}",
         )
+        assert outcome.newly_bound is True
+        assert outcome.bound_kiz is None
         scanned = await db_session.scalar(
             select(FbsOrderMarking).where(
                 FbsOrderMarking.order_id == order.id, FbsOrderMarking.value == value
@@ -2578,17 +2580,17 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     # Re-reading an already entered own code is safe and does not submit it again.
     calls_before_repeat = len(transport.endpoint_calls)
     assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, values[-1])).ok
-    assert (
-        await kiz_svc._commit_one_kiz_pair(
-            db_session,
-            order.tenant_id,
-            None,
-            kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
-            AsyncMock(),
-            "ozon-repeat",
-        )
-        == expected_status
+    repeat_outcome = await kiz_svc._commit_one_kiz_pair(
+        db_session,
+        order.tenant_id,
+        None,
+        kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
+        AsyncMock(),
+        "ozon-repeat",
     )
+    assert repeat_outcome.meta_status == expected_status
+    assert repeat_outcome.newly_bound is False
+    assert repeat_outcome.bound_kiz is None
     assert len(transport.endpoint_calls) == calls_before_repeat
     if expected_status == "pending":
         transport.endpoint_responses["/v5/fbs/posting/product/exemplar/status"]["status"] = (

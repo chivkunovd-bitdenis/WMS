@@ -304,6 +304,24 @@ def _stock_error_code(error: MarketplaceProviderError) -> str:
     return "ozon_unavailable"
 
 
+def _retryable_stock_error(error: MarketplaceProviderError) -> bool:
+    if error.code in {"ozon_stock_rejected", "ozon_stock_item_invalid"}:
+        return False
+    return (
+        error.status_code is None
+        or error.status_code == 429
+        or error.status_code >= 500
+        or error.code == "ozon_stock_unconfirmed"
+    )
+
+
+def _retry_after_seconds(error: MarketplaceProviderError) -> float:
+    if error.status_code != 429:
+        return 0.0
+    raw = error.payload.get("retry_after_seconds", 60.0)
+    return max(0.0, float(raw)) if isinstance(raw, (int, float)) else 60.0
+
+
 def _confirmed_from_error(
     error: MarketplaceProviderError, *, sent: int, field: str = "confirmed"
 ) -> int:
@@ -441,6 +459,12 @@ async def sync_ozon_stocks(
                 error, sent=min(confirmed, zeroes_targeted), field="confirmed_zeroed"
             )
             result.errors += len(stocks) - confirmed
+            if _retryable_stock_error(error):
+                result.retryable_errors += len(stocks) - confirmed
+                result.retry_after_seconds = max(
+                    result.retry_after_seconds,
+                    _retry_after_seconds(error),
+                )
             if not missing_links:
                 result.binding_errors += 1
             binding.last_sync_status = "error"
@@ -450,6 +474,7 @@ async def sync_ozon_stocks(
             result.products_confirmed += confirmed
             if confirmed != len(stocks):
                 result.errors += len(stocks) - confirmed
+                result.retryable_errors += len(stocks) - confirmed
                 if not missing_links:
                     result.binding_errors += 1
                 binding.last_sync_status = "error"

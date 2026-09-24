@@ -57,6 +57,7 @@ from app.services.catalog_service import (
     volume_liters_from_mm,
 )
 from app.services.fbs_stock_rule_service import (
+    FbsBindingRule,
     FbsRule,
     FbsRuleView,
     FbsStockRuleError,
@@ -372,6 +373,31 @@ class ProductFbsStockSyncPatch(BaseModel):
     fbs_stock_limit: int | None = Field(default=None, ge=0)
 
 
+class ProductFbsBindingRuleBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    publish: bool
+    mode: Literal["percent", "units"]
+    value: int = Field(ge=0)
+    # WMS-483: false в режиме units означает «поле пустое», а true + value=0
+    # означает явно сохранённый оператором нулевой лимит. Старый WMS-469
+    # клиент не присылал поле; такой units-запрос остаётся явным значением.
+    units_configured: bool | None = None
+
+
+class ProductFbsBindingRuleOut(ProductFbsBindingRuleBody):
+    units_configured: bool
+    marketplace: str
+    external_warehouse_id: str
+    wms_warehouse_id: str
+    served: bool
+    applicable: bool
+    on_hand: int
+    reserved: int
+    free_stock: int
+    published_now: int
+
+
 class ProductFbsRuleBody(BaseModel):
     """Правило публикации остатка: доля свободного остатка, а не число штук."""
 
@@ -379,8 +405,8 @@ class ProductFbsRuleBody(BaseModel):
 
     publish: bool | None = None
     publish_ozon: bool | None = None
-    same_everywhere: bool
-    percent: int = Field(ge=0, le=100)
+    same_everywhere: bool = False
+    percent: int = Field(default=0, ge=0, le=100)
     # Ключ — идентификатор склада в кабинете WB (он приходит числом, но в JSON
     # ключи объекта всегда строки). Также принимает wb:<id> / ozon:<id>
     # для складов разных площадок с одинаковыми номерами.
@@ -389,15 +415,25 @@ class ProductFbsRuleBody(BaseModel):
     units_mode: bool = False
     # Сколько штук выделено на каждый склад WB. Ключ — тот же номер склада.
     units_by_warehouse: dict[str, int] = Field(default_factory=dict)
+    # WMS-469: независимое правило пары товар x привязка. Если словарь задан,
+    # он является источником истины; старые поля выше остаются для совместимости.
+    by_binding: dict[uuid.UUID, ProductFbsBindingRuleBody] = Field(default_factory=dict)
 
 
-class ProductFbsRuleOut(ProductFbsRuleBody):
+class ProductFbsRuleOut(BaseModel):
     """То же правило плюс три числа, из которых видно, откуда взялось количество.
 
     `published_now` считает сервер тем же кодом, что и публикация: если бы экран
     пересчитывал долю своей формулой, две формулы однажды разошлись бы.
     """
 
+    publish: bool | None = None
+    publish_ozon: bool | None = None
+    same_everywhere: bool
+    percent: int
+    by_warehouse: dict[str, int] = Field(default_factory=dict)
+    units_mode: bool = False
+    units_by_warehouse: dict[str, int] = Field(default_factory=dict)
     free_stock: int
     on_hand: int
     reserved: int
@@ -405,6 +441,7 @@ class ProductFbsRuleOut(ProductFbsRuleBody):
     # Сколько от квоты каждого склада ещё осталось. Именно это подставляется в
     # поля ввода: оператор правит числа, глядя на сегодняшний расклад.
     units_remaining_by_warehouse: dict[str, int] = Field(default_factory=dict)
+    by_binding: dict[str, ProductFbsBindingRuleOut] = Field(default_factory=dict)
 
 
 FBS_RULE_BULK_READ_MAX_PRODUCTS = 200
@@ -441,8 +478,17 @@ class ProductsFbsRuleBulkBody(BaseModel):
     rule: ProductFbsRuleBody
 
 
+class ProductsFbsRuleClampOut(BaseModel):
+    requested_value: int
+    saved_value: int
+    limiting_product_id: str
+    limiting_product_name: str
+
+
 class ProductsFbsRuleBulkOut(BaseModel):
     updated_count: int
+    items: list[ProductFbsRuleBulkItemOut] = Field(default_factory=list)
+    clamps: dict[str, ProductsFbsRuleClampOut] = Field(default_factory=dict)
 
 
 class ProductFbsStockSyncBulkPatch(BaseModel):
@@ -1595,6 +1641,20 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
             int(key) if key.isdigit() else key: value
             for key, value in body.units_by_warehouse.items()
         },
+        by_binding={
+            binding_id: FbsBindingRule(
+                publish=item.publish,
+                mode=item.mode,
+                value=item.value,
+                units_configured=(
+                    item.units_configured
+                    if item.units_configured is not None
+                    else item.mode == "units"
+                ),
+            )
+            for binding_id, item in body.by_binding.items()
+        },
+        by_binding_present="by_binding" in body.model_fields_set,
     )
 
 
@@ -1619,6 +1679,24 @@ def _rule_view_out(
         units_remaining_by_warehouse={
             str(key): value
             for key, value in view.units_remaining_by_warehouse.items()
+        },
+        by_binding={
+            str(binding_id): ProductFbsBindingRuleOut(
+                publish=item.publish,
+                mode=item.mode,
+                value=item.value,
+                units_configured=item.units_configured,
+                marketplace=item.marketplace,
+                external_warehouse_id=item.external_warehouse_id,
+                wms_warehouse_id=str(item.wms_warehouse_id),
+                served=item.served,
+                applicable=item.applicable,
+                on_hand=item.on_hand,
+                reserved=item.reserved,
+                free_stock=item.free_stock,
+                published_now=item.published_now,
+            )
+            for binding_id, item in view.by_binding.items()
         },
     )
 
@@ -1676,6 +1754,24 @@ async def get_product_fbs_rule(
             str(key): value
             for key, value in view.units_remaining_by_warehouse.items()
         },
+        by_binding={
+            str(binding_id): ProductFbsBindingRuleOut(
+                publish=item.publish,
+                mode=item.mode,
+                value=item.value,
+                units_configured=item.units_configured,
+                marketplace=item.marketplace,
+                external_warehouse_id=item.external_warehouse_id,
+                wms_warehouse_id=str(item.wms_warehouse_id),
+                served=item.served,
+                applicable=item.applicable,
+                on_hand=item.on_hand,
+                reserved=item.reserved,
+                free_stock=item.free_stock,
+                published_now=item.published_now,
+            )
+            for binding_id, item in view.by_binding.items()
+        },
     )
 
 
@@ -1714,7 +1810,7 @@ async def put_products_fbs_rule(
     for product_id in body.product_ids:
         await _assert_product_rule_access(session, user, product_id, effective_seller_id)
     try:
-        await set_rule_for_products(
+        result = await set_rule_for_products(
             session,
             user.tenant_id,
             list(body.product_ids),
@@ -1725,7 +1821,21 @@ async def put_products_fbs_rule(
         raise HTTPException(
             status_code=_rule_error_status(exc.code), detail=exc.message
         ) from None
-    return ProductsFbsRuleBulkOut(updated_count=len(body.product_ids))
+    product_ids = list(dict.fromkeys(body.product_ids))
+    views = await get_rule_views(session, user.tenant_id, product_ids)
+    return ProductsFbsRuleBulkOut(
+        updated_count=result.updated_count,
+        items=[_rule_view_out(product_id, views[product_id]) for product_id in product_ids],
+        clamps={
+            str(binding_id): ProductsFbsRuleClampOut(
+                requested_value=clamp.requested_value,
+                saved_value=clamp.saved_value,
+                limiting_product_id=str(clamp.limiting_product_id),
+                limiting_product_name=clamp.limiting_product_name,
+            )
+            for binding_id, clamp in result.clamps.items()
+        },
+    )
 
 
 @router.patch("/fbs-stock-sync/bulk", response_model=ProductFbsStockSyncBulkOut)

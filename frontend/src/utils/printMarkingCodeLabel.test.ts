@@ -268,6 +268,38 @@ describe('printHtmlInIframe launch acknowledgement', () => {
     stubIframePrint(() => { throw new Error('print blocked') })
     await expect(printHtmlInIframe('<html></html>')).rejects.toThrow('Не удалось запустить печать КИЗ.')
   })
+
+  it('never invokes a late iframe load after the launch timeout', async () => {
+    const callbacks: Array<() => void> = []
+    const print = vi.fn()
+    const iframe = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      contentWindow: { focus: () => undefined, print },
+      contentDocument: { querySelectorAll: () => [] },
+      style: {} as Record<string, string>,
+      setAttribute: () => undefined,
+      srcdoc: '',
+    }
+    vi.stubGlobal('window', {
+      setTimeout: (callback: () => void) => {
+        callbacks.push(callback)
+        return callbacks.length
+      },
+      clearTimeout: () => undefined,
+    })
+    vi.stubGlobal('document', {
+      createElement: () => iframe,
+      body: { appendChild: () => iframe, removeChild: () => undefined },
+    })
+
+    const printing = printHtmlInIframe('<html></html>')
+    callbacks[0]?.()
+    await expect(printing).rejects.toThrow('таймаут')
+    iframe.onload?.()
+    for (const callback of callbacks.slice(1)) callback()
+    expect(print).not.toHaveBeenCalled()
+  })
 })
 
 // TC-NEW-CZ-PRINT-01 — CZ label HTML: DataMatrix left + info panel right, 58×40 layout.

@@ -32,12 +32,17 @@ export type CabinetList =
 
 /** Сохранённая привязка продавца — строка GET …/warehouse-bindings. */
 export type SavedWarehouseBinding = {
+  /** Stable binding UUID used by WMS-469 rules. */
+  id?: string
   wb_warehouse_id: number | string
   wms_warehouse_id: string | null
+  wms_warehouse_name?: string | null
   is_active: boolean
   served: boolean
   marketplace?: MarketplaceCode
   external_warehouse_id?: string | null
+  /** False in the seller cabinet; binding and served stay read-only there. */
+  editable?: boolean
 }
 
 /** Номер как номер, а не как название. */

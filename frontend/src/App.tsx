@@ -3362,6 +3362,7 @@ export default function App() {
                 <FfProductsFbsPage
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
+                  warehouses={warehouses}
                 />
               ) : (
                 ffAccessDenied

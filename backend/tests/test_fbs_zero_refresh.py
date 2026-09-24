@@ -85,6 +85,70 @@ async def test_zero_without_history_refreshes_after_ten_minutes_and_stops_on_res
 
 
 @pytest.mark.asyncio
+async def test_by_binding_zero_clear_and_reenable_resets_confirmed_item_once(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import fbs_stock_rule_service as rules
+
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    monkeypatch.setattr(sync, "_utcnow", lambda: now)
+    monkeypatch.setattr(rules, "schedule_seller_stock_publish", lambda *_args: None)
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=483,
+        sku_suffix="binding-zero-lifecycle",
+        fbs_percent=100,
+    )
+    db_session.add(product)
+    await _configure_rule_amount(db_session, ctx, product, 5)
+
+    async def save_zero(*, configured: bool) -> None:
+        await rules.set_rule_for_products(
+            db_session,
+            ctx.tenant.id,
+            [product.id],
+            rules.FbsRule(
+                publish=None,
+                same_everywhere=False,
+                percent=0,
+                by_binding={
+                    ctx.binding.id: rules.FbsBindingRule(
+                        publish=True,
+                        mode="units",
+                        value=0,
+                        units_configured=configured,
+                    )
+                },
+            ),
+        )
+
+    transport = _MockStocksTransport()
+    await save_zero(configured=True)
+    assert (await _run(db_session, ctx, transport)).products_confirmed == 1
+    assert transport.put_attempts == 1
+    item = (await db_session.scalars(select(FbsStockSyncItem))).one()
+    assert item.status == "confirmed"
+
+    # An exact replay is idempotent and keeps the ten-minute suppression.
+    await save_zero(configured=True)
+    await db_session.refresh(item)
+    assert item.status == "confirmed"
+    await _run(db_session, ctx, transport)
+    assert transport.put_attempts == 1
+
+    # Clearing and explicitly choosing zero again is a new operator decision.
+    await save_zero(configured=False)
+    await save_zero(configured=True)
+    await db_session.refresh(item)
+    assert item.status == "pending"
+    assert (await _run(db_session, ctx, transport)).products_confirmed == 1
+    assert transport.put_attempts == 2
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("kind", [
     "disabled_product", "zero_percent", "no_rule", "missing_units", "binding_off",
     "binding_inactive", "rounding", "zero_binding_percent", "missing_binding_percent",

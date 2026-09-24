@@ -1468,7 +1468,11 @@ async def get_marking_code_label_artifact(
     if format == "pdf":
         return Response(content=pdf_bytes, media_type="application/pdf")
     try:
-        png_bytes = await asyncio.to_thread(pdf_bytes_to_png, pdf_bytes)
+        png_bytes = await asyncio.to_thread(
+            pdf_bytes_to_png,
+            pdf_bytes,
+            cis_code=code.cis_code,
+        )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -818,6 +818,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       }
       let pending = imgs.length
       const done = () => {
+        if (settled) return
         pending -= 1
         if (pending <= 0) printNow()
       }
