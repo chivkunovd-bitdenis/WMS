@@ -318,7 +318,7 @@ async def test_c4_real_mapping_error_still_reported(db_session: AsyncSession) ->
 
 
 @pytest.mark.asyncio
-async def test_c5_percent_ceiling_counts_only_wb_for_the_unlinked_product(
+async def test_c5_ozon_applicability_without_common_percent_ceiling(
     db_session: AsyncSession,
 ) -> None:
     case = await _seed_case(db_session)
@@ -338,15 +338,15 @@ async def test_c5_percent_ceiling_counts_only_wb_for_the_unlinked_product(
         ),
     )
 
-    # B has a real card: the identical 100% "same everywhere" is still rejected,
-    # since it would double-book WB and Ozon - unchanged from before WMS-456.
-    with pytest.raises(rules.FbsStockRuleError) as exc:
-        await rules.set_rule_for_products(
-            db_session, case.tenant.id, [case.product_b.id],
-            rules.FbsRule(publish=True, same_everywhere=True, percent=100, by_warehouse={}),
-        )
-    assert exc.value.code == "percent_sum_exceeded"
-    assert exc.value.context == {"total": 200}
+    # WMS-469: a linked product may publish 100% to WB and Ozon at once; each
+    # binding is capped by the same live physical free stock, not by a summed
+    # configuration ceiling.
+    await rules.set_rule_for_products(
+        db_session, case.tenant.id, [case.product_b.id],
+        rules.FbsRule(publish=True, same_everywhere=True, percent=100, by_warehouse={}),
+    )
+    view = await rules.get_rule_view(db_session, case.tenant.id, case.product_b.id)
+    assert view.published_now == 200
 
 
 @pytest.mark.asyncio

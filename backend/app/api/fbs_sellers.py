@@ -10,8 +10,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fbs_operator_access, require_fulfillment_admin
+from app.api.deps import (
+    assert_seller_permission,
+    get_current_user,
+    get_effective_seller_id,
+    require_fbs_operator_access,
+    require_fulfillment_admin,
+)
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -21,6 +28,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services import background_job_service as job_svc
 from app.services import fbs_seller_warehouse_service as wh_svc
 from app.services import fbs_stock_rule_service as rule_svc
@@ -35,6 +43,7 @@ from app.services.fbs_stock_sync_service import (
     FbsStockSyncError,
     schedule_explicit_zero_publish,
 )
+from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.wb_card_enrichment import first_photo_url_from_card
 
 router = APIRouter(prefix="/operations/fbs-sellers", tags=["operations"])
@@ -115,6 +124,7 @@ class FbsWarehouseBindingOut(BaseModel):
     external_warehouse_id: str | None = None
     wb_warehouse_id: int
     wms_warehouse_id: str
+    wms_warehouse_name: str | None = None
     is_active: bool
     served: bool
     stock_sync_enabled: bool
@@ -122,6 +132,7 @@ class FbsWarehouseBindingOut(BaseModel):
     last_sync_at: datetime | None = None
     last_error_code: str | None = None
     allocated_pool_total: int = 0
+    editable: bool = True
 
 
 class FbsWarehouseBindingUpsert(BaseModel):
@@ -149,13 +160,20 @@ class FbsSellerWarehouseConfigure(BaseModel):
     marketplace: Literal["wb", "ozon"] = "wb"
 
 
-def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> FbsWarehouseBindingOut:
+def _binding_out(
+    row: FbsWarehouseBinding,
+    allocated_pool_total: int = 0,
+    *,
+    wms_warehouse_name: str | None = None,
+    editable: bool = True,
+) -> FbsWarehouseBindingOut:
     return FbsWarehouseBindingOut(
         id=str(row.id),
         marketplace=row.marketplace,
         external_warehouse_id=row.external_warehouse_id,
         wb_warehouse_id=row.wb_warehouse_id,
         wms_warehouse_id=str(row.wms_warehouse_id),
+        wms_warehouse_name=wms_warehouse_name,
         is_active=row.is_active,
         served=row.served,
         stock_sync_enabled=row.stock_sync_enabled,
@@ -163,7 +181,29 @@ def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> Fbs
         last_sync_at=row.last_sync_at,
         last_error_code=row.last_error_code,
         allocated_pool_total=allocated_pool_total,
+        editable=editable,
     )
+
+
+async def _assert_seller_read_scope(
+    session: AsyncSession,
+    user: User,
+    seller_id: uuid.UUID,
+    effective_seller_id: uuid.UUID | None,
+    *,
+    allow_ff_staff: bool = False,
+) -> None:
+    """Read-only warehouse data for FF admins or the active seller shop."""
+    if user.role == FULFILLMENT_ADMIN:
+        return
+    if user.role == FULFILLMENT_STAFF and allow_ff_staff:
+        await require_fbs_operator_access(user=user, session=session)
+        return
+    if user.role == FULFILLMENT_SELLER:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
+        if effective_seller_id == seller_id:
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
 def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> None:
@@ -245,9 +285,19 @@ class FbsStockSyncStatusOut(BaseModel):
 @router.get("/{seller_id}/warehouses", response_model=list[FbsSellerWarehouseOut])
 async def list_fbs_seller_warehouses(
     seller_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fbs_operator_access)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[
+        uuid.UUID | None, Depends(get_effective_seller_id)
+    ],
 ) -> list[FbsSellerWarehouseOut]:
+    await _assert_seller_read_scope(
+        session,
+        user,
+        seller_id,
+        effective_seller_id,
+        allow_ff_staff=True,
+    )
     async with httpx.AsyncClient() as http_client:
         try:
             rows = await wh_svc.list_seller_warehouses(
@@ -261,8 +311,11 @@ async def list_fbs_seller_warehouses(
 @router.get("/{seller_id}/ozon-warehouses", response_model=list[FbsSellerOzonWarehouseOut])
 async def list_fbs_seller_ozon_warehouses(
     seller_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[
+        uuid.UUID | None, Depends(get_effective_seller_id)
+    ],
 ) -> list[FbsSellerOzonWarehouseOut]:
     """Справочник складов Ozon для выбора вместо ручного ввода номера (WMS-362).
 
@@ -271,6 +324,7 @@ async def list_fbs_seller_ozon_warehouses(
     одной из площадок. Смешав их, мы бы уронили список Ozon вместе с
     вайлдберрисовским ключом, которого у продавца может не быть вовсе.
     """
+    await _assert_seller_read_scope(session, user, seller_id, effective_seller_id)
     try:
         rows = await wh_svc.list_ozon_seller_warehouses(session, user.tenant_id, seller_id)
     except wh_svc.FbsSellerWarehouseError as exc:
@@ -370,9 +424,13 @@ async def list_fbs_seller_offices(
 )
 async def list_fbs_warehouse_bindings(
     seller_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[
+        uuid.UUID | None, Depends(get_effective_seller_id)
+    ],
 ) -> list[FbsWarehouseBindingOut]:
+    await _assert_seller_read_scope(session, user, seller_id, effective_seller_id)
     try:
         rows = await binding_svc.list_bindings(session, user.tenant_id, seller_id)
     except binding_svc.FbsWarehouseBindingError as exc:
@@ -388,7 +446,22 @@ async def list_fbs_warehouse_bindings(
         totals = {
             row[0]: int(row[1]) for row in (await session.execute(totals_stmt)).all()
         }
-    return [_binding_out(row, totals.get(row.id, 0)) for row in rows]
+    warehouse_ids = {row.wms_warehouse_id for row in rows}
+    warehouse_names = {
+        warehouse.id: warehouse.name
+        for warehouse in (
+            await session.scalars(select(Warehouse).where(Warehouse.id.in_(warehouse_ids)))
+        ).all()
+    }
+    return [
+        _binding_out(
+            row,
+            totals.get(row.id, 0),
+            wms_warehouse_name=warehouse_names.get(row.wms_warehouse_id),
+            editable=user.role == FULFILLMENT_ADMIN,
+        )
+        for row in rows
+    ]
 
 
 @router.put(

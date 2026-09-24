@@ -189,7 +189,8 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
         "available": 5,
     }
     too_much = await async_client.put(url, headers=headers, json={"quantity": 6})
-    assert too_much.status_code == 409, too_much.text
+    assert too_much.status_code == 200, too_much.text
+    assert too_much.json()["quantity"] == 5
     percent = await async_client.put(
         f"/products/{pid}/fbs-rule",
         headers=headers,
@@ -240,7 +241,8 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
             )
         )
         await session.commit()
-    # Caps 5+3 survive depletion; real free is 2 minus an ordinary reserve of 1.
+    # Existing caps survive depletion until the operator edits them. A fresh
+    # manual edit is clamped to the current free stock (WMS-469 R12).
     listed = await async_client.get(url.rsplit("/", 1)[0], headers=headers)
     assert listed.status_code == 200, listed.text
     row = next(row for row in listed.json() if row["product_id"] == pid)
@@ -250,11 +252,12 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
     restored = await async_client.put(url, headers=headers, json={"quantity": 5})
     assert restored.status_code == 200, restored.text
     assert restored.json()["pool_limit"] == restored.json()["available"] == 1
-    assert restored.json()["allocated_total"] == 8
+    assert restored.json()["quantity"] == 1
+    assert restored.json()["allocated_total"] == 4
     rule = await async_client.get(f"/products/{pid}/fbs-rule", headers=headers)
     assert rule.status_code == 200, rule.text
     assert rule.json()["units_mode"] is True
-    assert rule.json()["units_by_warehouse"] == {"501001": 5, "501002": 3}
+    assert rule.json()["units_by_warehouse"] == {"501001": 1, "501002": 3}
     assert rule.json()["free_stock"] == 1
 
 

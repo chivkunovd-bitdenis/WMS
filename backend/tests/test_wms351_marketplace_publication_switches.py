@@ -203,13 +203,17 @@ async def test_disabled_allocation_is_preserved_without_blocking_other_marketpla
     # WMS-483: a percent-only pool is not an explicit zero-unit allocation.
     assert view.rule.units_by_warehouse == ({501001: 10, 501002: 10} if units else {})
     assert view.rule.by_warehouse[501001] == 100
-    with pytest.raises(rules.FbsStockRuleError):
-        await rules.set_rule_for_products(
-            db_session,
-            seed.tenant.id,
-            [seed.product.id],
-            replace(rule, publish=True),
-        )
+    # WMS-469 supersedes the old common 100% ceiling: both marketplaces may
+    # publish the whole current free stock because the first order reserves the
+    # shared physical unit and immediately triggers a lower publication.
+    await rules.set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        replace(rule, publish=True),
+    )
+    both = await rules.get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert both.published_now == 20
 
 
 @pytest.mark.asyncio

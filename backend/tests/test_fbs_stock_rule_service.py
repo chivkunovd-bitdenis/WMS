@@ -1,7 +1,7 @@
 """Правило остатка FBS: доля свободного остатка вместо сохранённого числа.
 
 TC-NEW-FBS-RULE-001: доля считается от свободного остатка на момент публикации.
-TC-NEW-FBS-RULE-002: сумма долей по складам не может превысить сто процентов.
+TC-NEW-FBS-RULE-002: каждая связка независимо ограничена свободным остатком.
 TC-NEW-FBS-RULE-003: массовое присвоение отказывает на товарах разных продавцов.
 TC-NEW-FBS-RULE-004: товар без доли не публикуется, старое число игнорируется.
 """
@@ -24,6 +24,7 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_rule_service import (
+    FbsBindingRule,
     FbsRule,
     FbsStockRuleError,
     amount_from_percent,
@@ -122,38 +123,34 @@ def test_amount_from_percent_rounds_down() -> None:
     assert amount_from_percent(-5, 50) == 0
 
 
-def test_validate_rule_rejects_sum_over_hundred() -> None:
-    # Дано: свои доли по двум складам, 100% и 70%.
+def test_validate_rule_allows_each_binding_up_to_hundred() -> None:
+    # WMS-469: свои доли по двум связкам не складываются в общий потолок.
     rule = FbsRule(
         publish=True,
         same_everywhere=False,
         percent=0,
         by_warehouse={1: 100, 2: 70},
     )
-    # Когда правило проверяют. Тогда: отказ — столько товара просто нет.
-    with pytest.raises(FbsStockRuleError) as exc:
-        validate_rule(rule, served_warehouse_count=2)
-    assert exc.value.code == "percent_sum_exceeded"
-
-    # Ограничение действует и на «одинаково везде»: 60% на два склада это 120%.
+    validate_rule(rule, served_warehouse_count=2)
     same = FbsRule(publish=True, same_everywhere=True, percent=60, by_warehouse={})
-    with pytest.raises(FbsStockRuleError):
-        validate_rule(same, served_warehouse_count=2)
-    # А на одном складе те же 60% допустимы.
+    validate_rule(same, served_warehouse_count=2)
     validate_rule(same, served_warehouse_count=1)
 
 
 def test_validate_rule_rejects_off_step_percent() -> None:
-    # Негатив: ползунок ходит шагом в десять процентов, 55 задать нельзя.
-    rule = FbsRule(publish=True, same_everywhere=True, percent=55, by_warehouse={})
+    # WMS-469: ползунок ходит шагом в пять процентов; 55 допустимо, 53 — нет.
+    validate_rule(
+        FbsRule(publish=True, same_everywhere=True, percent=55, by_warehouse={}),
+        served_warehouse_count=1,
+    )
+    rule = FbsRule(publish=True, same_everywhere=True, percent=53, by_warehouse={})
     with pytest.raises(FbsStockRuleError) as exc:
         validate_rule(rule, served_warehouse_count=1)
     assert exc.value.code == "invalid_percent"
 
 
-def test_split_amounts_never_exceeds_free_stock() -> None:
-    # Дано: правило в базе даёт в сумме больше ста процентов — так бывает, когда
-    # склад отметили нашим уже после сохранения правила.
+def test_split_amounts_caps_each_binding_by_free_stock() -> None:
+    # WMS-469: каждая связка видит один общий физический остаток независимо.
     bindings = [
         FbsWarehouseBinding(
             id=uuid.uuid4(),
@@ -166,10 +163,9 @@ def test_split_amounts_never_exceeds_free_stock() -> None:
     ]
     rule = FbsRule(publish=True, same_everywhere=True, percent=100, by_warehouse={})
     amounts = split_amounts(rule, 100, bindings)
-    # Ожидаемо: в сумме ровно свободный остаток, а не двести штук.
-    assert sum(amounts.values()) == 100
+    assert sum(amounts.values()) == 200
     assert amounts[bindings[0].id] == 100
-    assert amounts[bindings[1].id] == 0
+    assert amounts[bindings[1].id] == 100
 
 
 @pytest.mark.asyncio
@@ -432,7 +428,7 @@ async def test_product_without_rule_ignores_old_stored_number(
 # TC-NEW-FBS-UNITS-002: заказ съедает квоту только своего склада.
 # TC-NEW-FBS-UNITS-003: отмена до передачи возвращает квоту.
 # TC-NEW-FBS-UNITS-004: отмена после передачи квоту не возвращает.
-# TC-NEW-FBS-UNITS-005: сумма больше свободного остатка не сохраняется.
+# TC-NEW-FBS-UNITS-005: потолок каждой связки ограничивается при публикации.
 # TC-NEW-FBS-UNITS-006: приёмка квоту не поднимает.
 
 
@@ -644,13 +640,12 @@ async def test_inventory_deducts_allocation_and_receiving_does_not_restore_it(
 
 
 @pytest.mark.asyncio
-async def test_units_sum_over_free_stock_is_rejected(db_session: AsyncSession) -> None:
-    # Дано: свободно 1000, а оператор пытается раздать 600 и 600.
+async def test_units_caps_are_independent_between_bindings(db_session: AsyncSession) -> None:
+    # WMS-469: свободно 1000, обе связки могут иметь потолок 600.
     seed = await _units_seed(db_session)
-    with pytest.raises(FbsStockRuleError) as exc:
-        await _allocate(db_session, seed, {501001: 600, 501002: 600})
-    # Тогда: отказ. Склады делят один и тот же физический остаток.
-    assert exc.value.code == "units_sum_exceeded"
+    await _allocate(db_session, seed, {501001: 600, 501002: 600})
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.published_now == 1200
 
 
 @pytest.mark.asyncio
@@ -733,11 +728,8 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
     )
     assert location_id is not None
     # Резерв держит 1 единицу от свободного, потолки 100 + 200. Под каждый шаг
-    # публикация уедет min(cap, free), сначала первый потолок целиком, а
-    # хвост — второй потолок или остаток свободного, что меньше.
-    #   step 1: on_hand=380, reserved=1 → free=379, published = 100+min(200,279)=300
-    #   step 2: on_hand=250, reserved=1 → free=249, published = 100+min(200,149)=249
-    for delta, physical, available in [(-20, 380, 300), (-130, 250, 249)]:
+    # WMS-469: каждая связка публикует min(свой потолок, тот же free).
+    for delta, physical, available in [(-20, 380, 300), (-130, 250, 300)]:
         await record_movement_and_adjust_balance(
             db_session,
             tenant_id=seed.tenant.id,
@@ -1069,28 +1061,13 @@ async def test_share_rule_keeps_allocation_the_rule_does_not_reach(
 
 
 @pytest.mark.asyncio
-async def test_percent_ceiling_counts_wb_and_ozon_together(
+async def test_percent_rules_are_independent_for_wb_and_ozon(
     db_session: AsyncSession,
 ) -> None:
-    """WMS-350: сто процентов — на все склады всех площадок разом, а не на каждую."""
+    """WMS-469 supersedes the old combined 100% ceiling."""
     seed = await _seed(db_session, on_hand=100)
     ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=900201)
 
-    with pytest.raises(FbsStockRuleError) as over:
-        await set_rule_for_products(
-            db_session,
-            seed.tenant.id,
-            [seed.product.id],
-            FbsRule(
-                publish=True,
-                same_everywhere=False,
-                percent=0,
-                by_warehouse={501001: 60, 900201: 60},
-            ),
-        )
-    assert over.value.code == "percent_sum_exceeded"
-
-    # Ровно сто в сумме — принимается: это и есть весь свободный остаток.
     await set_rule_for_products(
         db_session,
         seed.tenant.id,
@@ -1099,18 +1076,18 @@ async def test_percent_ceiling_counts_wb_and_ozon_together(
             publish=True,
             same_everywhere=False,
             percent=0,
-            by_warehouse={501001: 60, 900201: 40},
+            by_warehouse={501001: 60, 900201: 60},
         ),
     )
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.rule.by_warehouse == {501001: 60, 900201: 40}
+    assert view.rule.by_warehouse == {501001: 60, 900201: 60}
     assert view.free_stock == 100
-    assert view.published_now == 100
+    assert view.published_now == 120
     assert ozon.marketplace == "ozon"
 
 
 @pytest.mark.asyncio
-async def test_same_everywhere_counts_the_ozon_warehouse_too(
+async def test_same_everywhere_may_publish_full_share_to_each_marketplace(
     db_session: AsyncSession,
 ) -> None:
     """WMS-350: «одинаково по всем складам» — это и озоновские склады тоже.
@@ -1121,15 +1098,14 @@ async def test_same_everywhere_counts_the_ozon_warehouse_too(
     seed = await _seed(db_session, on_hand=100)
     await _ozon_binding(db_session, seed, wb_warehouse_id=900301)
 
-    with pytest.raises(FbsStockRuleError) as over:
-        await set_rule_for_products(
-            db_session,
-            seed.tenant.id,
-            [seed.product.id],
-            FbsRule(publish=True, same_everywhere=True, percent=60, by_warehouse={}),
-        )
-    assert over.value.code == "percent_sum_exceeded"
-    assert over.value.context == {"total": 120}
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(publish=True, same_everywhere=True, percent=60, by_warehouse={}),
+    )
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.published_now == 120
 
 
 @pytest.mark.asyncio
@@ -1229,7 +1205,7 @@ async def test_existing_pools_do_not_alias_when_another_marketplace_uses_same_wa
     wb_amounts = await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product])
     ozon_amounts = await publish_amounts_for_binding(db_session, ozon, [seed.product])
     assert wb_amounts == {seed.product.id: 20}
-    assert ozon_amounts == {seed.product.id: 30 if ozon_has_pool else 0}
+    assert ozon_amounts == ({seed.product.id: 30} if ozon_has_pool else {})
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     views = await get_rule_views(db_session, seed.tenant.id, [seed.product.id])
     for current in (view, views[seed.product.id]):
@@ -1241,8 +1217,8 @@ async def test_existing_pools_do_not_alias_when_another_marketplace_uses_same_wa
         assert 501001 not in current.units_remaining_by_warehouse
 
 
-@pytest.mark.parametrize("free,expected", [(0, [0, 0]), (10, [8, 2]), (20, [8, 8])])
-def test_units_publication_caps_combined_marketplaces_after_outbound(free, expected) -> None:
+@pytest.mark.parametrize("free,expected", [(0, [0, 0]), (10, [8, 8]), (20, [8, 8])])
+def test_units_publication_caps_each_marketplace_after_outbound(free, expected) -> None:
     """Outbound reserves/movements must not leave stale allocated units publishable."""
     bindings = [
         FbsWarehouseBinding(
@@ -1333,17 +1309,17 @@ async def test_qualified_warehouse_keys_round_trip_both_marketplaces_and_keep_co
     assert await publish_amounts_for_binding(db_session, ozon, [seed.product]) == {
         seed.product.id: 30,
     }
-    # The newly distinguishable keys still share the existing quota limit.
+    # WMS-469: qualified WB/Ozon keys keep independent limits.
     oversized = ProductFbsRuleBody.model_validate({
         **body.model_dump(),
         "by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
         "units_by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
     })
-    with pytest.raises(FbsStockRuleError) as over:
-        await set_rule_for_products(
-            db_session, seed.tenant.id, [seed.product.id], _rule_from_body(oversized),
-        )
-    assert over.value.code == ("units_sum_exceeded" if units_mode else "percent_sum_exceeded")
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id], _rule_from_body(oversized),
+    )
+    updated = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert updated.published_now == 110
 
 
 @pytest.mark.parametrize("qualified", [False, True])
@@ -1392,7 +1368,7 @@ async def test_unused_mode_warehouse_keys_do_not_block_saving_the_active_rule(
 
 
 @pytest.mark.asyncio
-async def test_unchanged_or_lower_cap_can_be_saved_after_stock_falls(
+async def test_manual_cap_is_preserved_when_stock_falls(
     db_session: AsyncSession,
 ) -> None:
     from dataclasses import replace
@@ -1404,7 +1380,8 @@ async def test_unchanged_or_lower_cap_can_be_saved_after_stock_falls(
     await _place_order(db_session, seed, 501001)
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert (view.free_stock, view.published_now) == (4, 4)
-    # Reopen/save and edit another setting, retaining the original cap of five.
+    # Reopen/save another setting; the already saved operator cap must not be
+    # rewritten merely because current free stock became lower (WMS-469 R14).
     await set_rule_for_products(
         db_session, seed.tenant.id, [seed.product.id], replace(view.rule, percent=30),
     )
@@ -1412,25 +1389,29 @@ async def test_unchanged_or_lower_cap_can_be_saved_after_stock_falls(
         db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 5,
     )
     assert pool.quantity == 5
-    # Lowering an already valid cap is legal even if it still exceeds current stock.
+    refreshed = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert (refreshed.free_stock, refreshed.published_now) == (4, 4)
     balance = await db_session.scalar(select(InventoryBalance).where(
         InventoryBalance.product_id == seed.product.id,
     ))
     assert balance is not None
     balance.quantity = balance.quantity_unpacked = 2
     await db_session.commit()
-    await _allocate(db_session, seed, {501001: 4, 501002: 0})
+    pool = await set_binding_stock_pool_quantity(
+        db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 4,
+    )
+    assert pool.quantity == 1
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert (view.free_stock, view.published_now, view.reserved) == (1, 1, 1)
-    assert view.units_remaining_by_warehouse == {501001: 4, 501002: 0}
-    with pytest.raises(FbsStockRuleError) as exc:
-        await _allocate(db_session, seed, {501001: 5, 501002: 0})
-    assert exc.value.code == "units_sum_exceeded"
-    await db_session.rollback()
+    assert view.units_remaining_by_warehouse == {501001: 1, 501002: 0}
+    repeated = await set_binding_stock_pool_quantity(
+        db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 5,
+    )
+    assert repeated.quantity == 1
 
 
 @pytest.mark.asyncio
-async def test_bulk_new_cap_is_validated_for_each_product(db_session: AsyncSession) -> None:
+async def test_bulk_legacy_save_remains_atomic_for_each_product(db_session: AsyncSession) -> None:
     seed = await _units_seed(db_session, on_hand=5)
     await _allocate(db_session, seed, {501001: 5, 501002: 0})
     second = Product(tenant_id=seed.tenant.id, seller_id=seed.seller.id,
@@ -1438,11 +1419,10 @@ async def test_bulk_new_cap_is_validated_for_each_product(db_session: AsyncSessi
     db_session.add(second)
     await db_session.commit()
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    with pytest.raises(FbsStockRuleError) as exc:
-        await set_rule_for_products(db_session, seed.tenant.id,
-                                    [seed.product.id, second.id], view.rule)
-    assert exc.value.code == "units_sum_exceeded"
-    assert not (await db_session.scalars(select(FbsBindingStockPool).where(
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id, second.id], view.rule
+    )
+    assert (await db_session.scalars(select(FbsBindingStockPool).where(
         FbsBindingStockPool.product_id == second.id,
     ))).all()
 
@@ -1478,17 +1458,26 @@ async def test_cap_is_not_fbo_reservation_but_order_is(db_session: AsyncSession)
 
 
 @pytest.mark.asyncio
-async def test_disabled_publication_cannot_bypass_new_cap_validation(
+async def test_disabled_publication_still_clamps_manual_value(
     db_session: AsyncSession,
 ) -> None:
     seed = await _units_seed(db_session, on_hand=1)
-    with pytest.raises(FbsStockRuleError) as exc:
-        await set_rule_for_products(
-            db_session, seed.tenant.id, [seed.product.id],
-            FbsRule(publish=False, publish_ozon=False, same_everywhere=False, percent=0,
-                    units_mode=True, units_by_warehouse={501001: 2}),
-        )
-    assert exc.value.code == "units_sum_exceeded"
+    result = await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=None,
+            same_everywhere=False,
+            percent=0,
+            by_binding={
+                seed.bindings[0].id: FbsBindingRule(
+                    publish=False, mode="units", value=2
+                )
+            },
+        ),
+    )
+    assert result.clamps[seed.bindings[0].id].saved_value == 1
 
 
 @pytest.mark.asyncio
@@ -1510,7 +1499,7 @@ async def test_manual_cap_endpoint_keeps_marketplace_identity(db_session: AsyncS
 
 
 @pytest.mark.asyncio
-async def test_old_session_cap_is_refreshed_before_exempting_unchanged_save(
+async def test_old_session_cap_is_refreshed_before_clamping_save(
     db_session: AsyncSession,
 ) -> None:
     seed = await _units_seed(db_session, on_hand=5)
@@ -1531,9 +1520,16 @@ async def test_old_session_cap_is_refreshed_before_exempting_unchanged_save(
         pool.quantity = 4
         balance.quantity = balance.quantity_unpacked = 3
         await other.commit()
-    with pytest.raises(FbsStockRuleError) as exc:
-        await set_rule_for_products(
-            db_session, seed.tenant.id, [seed.product.id], original_view.rule,
-        )
-    assert exc.value.code == "units_sum_exceeded"
-    assert cached_pool.quantity == 4
+    from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
+
+    saved = await set_binding_stock_pool_quantity(
+        db_session,
+        seed.tenant.id,
+        seed.seller.id,
+        seed.bindings[0].id,
+        seed.product.id,
+        original_view.rule.units_by_warehouse[501001],
+    )
+    assert saved.quantity == 3
+    await db_session.refresh(cached_pool)
+    assert cached_pool.quantity == 3
