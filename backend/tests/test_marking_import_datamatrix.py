@@ -70,6 +70,20 @@ async def test_pdf_preview_import_and_artifact_keep_decoded_bytes(
     headers = await _register_admin(async_client)
     seller = await async_client.post("/sellers", headers=headers, json={"name": "DM seller"})
     seller_id = seller.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "DM product",
+            "sku_code": f"DM-{uuid.uuid4().hex[:10]}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert product.status_code == 200, product.text
+    product_id = product.json()["id"]
     pdf = build_datamatrix_pdf([FULL, OTHER], caption=caption)
     files = [("files", ("synthetic.pdf", pdf, "application/pdf"))]
     preview = await async_client.post(
@@ -85,7 +99,9 @@ async def test_pdf_preview_import_and_artifact_keep_decoded_bytes(
         headers=headers,
         data={
             "seller_id": seller_id,
-            "pools_json": json.dumps([{"title": "DM pool", "gtin": GTIN}]),
+            "pools_json": json.dumps(
+                [{"title": "DM pool", "gtin": GTIN, "product_ids": [product_id]}]
+            ),
         },
         files=files,
     )

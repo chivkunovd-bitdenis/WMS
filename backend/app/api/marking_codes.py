@@ -530,7 +530,11 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
     )
     if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
-    if code in ("product_seller_mismatch", "product_id_required"):
+    if code in (
+        "product_seller_mismatch",
+        "product_id_required",
+        "manual_import_product_required",
+    ):
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code == "unsupported_file_type":
         status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE

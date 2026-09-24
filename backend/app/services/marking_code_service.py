@@ -1376,6 +1376,16 @@ async def import_marking_codes(
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
 
+    by_gtin, invalid_count, duplicate_count, label_pdf_by_cis = _group_cis_codes_from_rows(
+        parsed_rows
+    )
+    resolved_pool_specs: dict[str, PoolImportSpec] = {}
+    for gtin in by_gtin:
+        pool_spec = _resolve_pool_spec(gtin, pool_specs)
+        if pool_spec is None or not pool_spec.product_ids:
+            raise MarkingCodeServiceError("manual_import_product_required")
+        resolved_pool_specs[gtin] = pool_spec
+
     for spec in pool_specs:
         await _validate_pool_products(session, tenant_id, seller_id, spec.product_ids)
 
@@ -1404,17 +1414,13 @@ async def import_marking_codes(
         files=files,
     )
 
-    by_gtin, invalid_count, duplicate_count, label_pdf_by_cis = _group_cis_codes_from_rows(
-        parsed_rows
-    )
-
     pool_results: list[PoolImportResultRow] = []
     total_accepted = 0
 
     for gtin, cis_list in sorted(by_gtin.items()):
-        pool_spec = _resolve_pool_spec(gtin, pool_specs)
-        title = pool_spec.title if pool_spec is not None else f"GTIN …{gtin[-4:]}"
-        product_ids = pool_spec.product_ids if pool_spec is not None else []
+        pool_spec = resolved_pool_specs[gtin]
+        title = pool_spec.title
+        product_ids = pool_spec.product_ids
         existing_cis = await _existing_import_cis_codes(session, tenant_id, cis_list)
         new_cis = [cis for cis in cis_list if cis not in existing_cis]
         pool_accepted = 0
