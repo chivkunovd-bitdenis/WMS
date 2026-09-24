@@ -1,0 +1,88 @@
+{
+  "source": "https://docs.crpt.ru/gismt/True_API/",
+  "version": "731.0 (2026-09-23)",
+  "provenance": "Public documentation examples, not captured live operations. Tests adapt placeholder identities, dates, document type and status explicitly.",
+  "auth_key": {
+    "uuid": "a63ff582-b723-4da7-958b-453da27a6c62",
+    "data": "GNUFBAZBMPIUUMLXNMIOGSHTGFXZMT"
+  },
+  "auth_uuid": {
+    "token": "string",
+    "uuidToken": "123e4567-e89b-12d3-a456-426655440000",
+    "expireDate": "2026-10-10T00:00:00.123Z"
+  },
+  "cises_info": [
+    {
+      "cisInfo": {
+        "requestedCis": "string",
+        "cis": "string",
+        "gtin": "string",
+        "productGroupId": 8,
+        "productGroup": "milk",
+        "ownerInn": "string",
+        "status": "INTRODUCED",
+        "statusEx": "EMPTY",
+        "markWithdraw": false
+      }
+    }
+  ],
+  "cises_not_found": [
+    {
+      "cisInfo": {"requestedCis": "string", "cis": "string", "gtin": "string", "packageType": null},
+      "errorMessage": "КИ не найден",
+      "errorCode": "404"
+    }
+  ],
+  "document_list": {
+    "results": [
+      {
+        "number": "00bec0ce-000b-0ad0-a000-a0ef000000c0",
+        "docDate": "2021-06-11T08:15:26.748Z",
+        "receivedAt": "2021-06-11T08:15:26.748Z",
+        "type": "LP_SHIP_GOODS",
+        "status": "ACCEPTED",
+        "senderInn": "0000000000",
+        "senderName": "string",
+        "receiverInn": "1111111111",
+        "receiverName": "string",
+        "invoiceNumber": null,
+        "relatedDocId": "b0af00ca-000d-0e00-a0b0-0b000000a0e0",
+        "downloadDesc": "",
+        "input": false,
+        "errors": null,
+        "productGroup": "lp",
+        "productGroupId": 1
+      }
+    ],
+    "nextPage": true
+  },
+  "document_info_error": [
+    {
+      "number": "50f6b645-09a8-4ee1-8bb4-e426274e82ee",
+      "docDate": "2024-03-29T13:28:35.615Z",
+      "receivedAt": "2024-03-29T13:28:35.615Z",
+      "type": "LP_INTRODUCE_GOODS",
+      "status": "PARSE_ERROR",
+      "senderInn": "0000000000",
+      "senderName": "string",
+      "receiverInn": null,
+      "receiverName": null,
+      "invoiceNumber": null,
+      "invoiceDate": null,
+      "relatedDocId": null,
+      "body": {},
+      "input": false,
+      "errors": ["29: Недопустимый формат передаваемого файла JSON."],
+      "commonErrors": [
+        {
+          "errorCode": "INTRO_ERROR",
+          "errorMessage": "29: Недопустимый формат передаваемого файла JSON.",
+          "errorObject": "50f6b645-09a8-4ee1-8bb4-e426274e82ee"
+        }
+      ],
+      "productGroup": ["lp"],
+      "productGroupId": [1]
+    }
+  ],
+  "create_error": {"error_message": "Отсутствует обязательное поле: signature"}
+}

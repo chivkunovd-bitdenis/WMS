@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/verify-cryptopro-vendor.mjs && tsc -b && vite build && node scripts/verify-cryptopro-vendor.mjs --dist",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:crypto-auth": "node scripts/verify-cryptopro-auth-cades.mjs",
     "test:unit": "vitest run"
   },
   "dependencies": {

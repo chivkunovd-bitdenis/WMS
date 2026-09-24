@@ -173,6 +173,7 @@ WMS-406/409/410 не повторять как операции с клиент�
 
 | Задача | Суть | Текущий статус |
 |---|---|---|
+| [WMS-517](#wms-517) | Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота | BASE SAVED 82889771/4A5BAD39 · ETALON MERGED 654A73F2 · BC7 DELTA LOCALLY ACCEPTED · AWAITS DELTA COMMIT/PUSH/PR CI · PRODUCTION НЕ ПРИНЯТ · LIVE GATE B2 · PHYSICAL CRYPTOPRO/ГОСТ/RAILWAY НЕ ПРОВЕРЕНЫ · [Требования и проверки](requirements/WMS-517.md) |
 | [WMS-093](#wms-093) | Массовое снятие кодов упирается в лимит Wildberries | РЕШЕНИЕ ВЛАДЕЛЬЦА: WMS-085 вернул массовое снятие; текущий stop-and-resume без retry нужно принять или доработать |
 | [WMS-210](#wms-210) | Конструктор состава этикетки | ЧАСТИЧНО В PRODUCTION SOURCE · 4 ИЗ 8 ПОЛЕЙ, RUNTIME-ФЛАГ ВЫКЛЮЧЕН 09.09.2026 19:57 UTC |
 | [WMS-211](#wms-211) | Кнопки «Сохранить макет» в конструкторе нет | КНОПКА ЕСТЬ В PRODUCTION SOURCE, НО ПАНЕЛЬ ВЫКЛЮЧЕНА RUNTIME-ФЛАГОМ |
@@ -13585,6 +13586,73 @@ api/worker/beat/web пересозданы и Up, `/`, `/seller/`, `/api/health`
 убрать автоматическое протухание сессий: после одного входа оператор продолжает работу до
 явного выхода либо отзыва доступа на сервере.
 
+## WMS-517 · Селлер: отчёт и локально подписанный вывод FBS-КИЗ из оборота
+
+<a id="wms-517"></a>
+
+**Статус:** `BASE SAVED 82889771/4A5BAD39 · ETALON MERGED 654A73F2 · BC7 DELTA LOCALLY ACCEPTED · AWAITS DELTA COMMIT/PUSH/PR CI · PRODUCTION НЕ ПРИНЯТ · LIVE GATE B2 · PHYSICAL CRYPTOPRO/ГОСТ/RAILWAY НЕ ПРОВЕРЕНЫ` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
+
+В кабинете селлера нужен экран «Честный знак → Вывод из оборота»: плоский плотный реестр
+только тех FBS-КИЗ, по заказам которых уже нажали «Отгрузить» и подтверждена передача WB.
+FBO/FBW, ещё не переданные и отменённые до передачи заказы, возвраты в экран не попадают.
+В таблице остаются дата передачи, номер заказа WB, раздельные артикул и наименование,
+КИЗ и простой статус «Не выведен»/«Выведен»/«Ошибка»; источник, схема, товарная группа,
+верхние status-карточки и пояснения штатных статусов убраны. Для больших объёмов нужны
+sticky header, страницы 50/100/250 и выбор только текущей видимой страницы после фильтров.
+
+По клику «Вывести из оборота» сразу открывается единственное компактное окно выбора
+сертификата с «Отмена» и «Подписать и отправить». Предпросмотра, stepper, предупреждений,
+причины, списка КИЗ, групп, документов и технических стадий в штатном пути нет. При
+успехе строки становятся «Выведен», а отдельная простая модалка появляется только при
+фактической ошибке Честного знака и показывает конкретные КИЗ с причиной по каждому.
+
+Боевой контракт зафиксирован по True API v731.0: challenge `/auth/key`, требование
+присоединённой auth-подписи, UUID-token через `/auth/simpleSignIn`, exact bytes и
+отсоединённая подпись `LK_RECEIPT`, create v3 и polling/reconciliation через v4.
+`action_date` — дата вывода, а не дата передачи WB или первичного документа; поля
+первичного документа в MVP не отправляются. Цена берётся только из WB
+`finalPrice`/`convertedFinalPrice` в RUB; legacy `FbsOrder.price` не используется.
+Группа и owner читаются повторно из `cises/info`; внутренний ledger защищает от повторов
+и хранит audit, а private key/PIN остаются в CSP/криптоносителе.
+
+Текущий локальный slice принят по internal/emulator/browser-границе: одна SQL-цепочка
+`eligible_rows` задаёт реестр и повторную проверку выбранных `row_ids`; business
+preflight, builder, operation/recovery ledger, scheduler и seller UI связаны. В браузере
+подтверждены плотный отчёт и единственная компактная модалка сертификата. Это не
+означает, что внешняя live-интеграция работает.
+
+B1 закрыт постановкой: `/mods/list` остаётся только технической проверкой внешнего МОД.
+Для обязательной группы ровно одна валидная запись exact seller INN+product group даёт
+её `fiasId`/`kpp`; 0 или несколько блокируют только документ этой группы. WMS не создаёт
+warehouse→MOD mapping, настройку или новый шаг UI. Группа без обязательного МОД идёт
+без этих полей.
+B3 закрыт официальным приложением 2 True API и рекомендованным CRPT browser-helper:
+auth challenge подписывается как исходная JS-строка с default UCS-2LE, CAdES-BES,
+attached. В сохранённой базовой реализации есть adapter и закреплённый browser asset,
+нормализация `statusEx=EMPTY`, provider CIS из полного GS1 без изменения исходника,
+reauth/reconcile после 401 и согласованные API/worker/beat/Redis runtime guards.
+Независимый OpenSSL-runner подтвердил attached CMS и exact UCS-2LE только на
+одноразовом RSA-сертификате — не КриптоПро/ГОСТ/USB-токен.
+
+Локальный technical recheck базовой реализации прошёл: frontend `53 passed`,
+TypeScript/ESLint/build и diff-check; backend трижды `195 passed, 4 skipped` на SQLite.
+Исполнитель отдельно получил PostgreSQL 16 `5 passed` и Alembic
+head/downgrade/upgrade; reviewer этот PG-run независимо не воспроизвёл. Базовый product
+сохранён в `82889771`, docs — в `4a5bad39`, актуальный `origin/etalon` объединён локальным
+merge `654a73f2`.
+
+Последняя BC7 delta также принята локально: единый fixture связывает adapter contract и
+independent OpenSSL-runner; exact 205 UTF-8 bytes подписаны detached CMS/CAdES-BES с
+`SigningCertificateV2`, без `eContent`, independent verify проходит, one-byte tamper
+отклоняется. Это RSA software-cert evidence, не КриптоПро/ГОСТ/token/sandbox. Локальный
+production-build preview дополнительно вернул vendor asset HTTP 200,
+`text/javascript`, 26 473 bytes, SHA-256 `3f9e438a…` и без HTML fallback.
+
+Следующий gate — отдельный commit принятой delta, push ветки и полный PR CI. Внешние
+gate остаются прежними: B2 sandbox, физическая КриптоПро/browser/token/PIN-матрица,
+ГОСТ, фактическая Railway topology/deploy и production. Production-submit выключен;
+production withdrawal не выполнялся. Внешняя интеграция Честного знака относится к
+WMS-517 и не смешивается с WMS-514.
 ## WMS-518 · FBS: после явной отмены вернуть пуловый КИЗ в доступные
 
 <a id="wms-518"></a>

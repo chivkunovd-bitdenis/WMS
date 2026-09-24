@@ -71,6 +71,12 @@ from app.models.marking_code import (
     MarkingPoolProduct,
     MarkingReprintRequest,
 )
+from app.models.marking_withdrawal import (
+    WithdrawalDocument,
+    WithdrawalItem,
+    WithdrawalObservation,
+    WithdrawalOperation,
+)
 from app.models.notification import Notification
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
@@ -102,6 +108,7 @@ from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_map_event import WarehouseMapEvent
 from app.models.warehouse_storage_rack import WarehouseStorageRack
+from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 __all__ = [
     "BackgroundJob",
@@ -208,4 +215,9 @@ __all__ = [
     "WarehouseBox",
     "WarehouseMapEvent",
     "WarehouseStorageRack",
+    "WbOrderPriceSnapshot",
+    "WithdrawalDocument",
+    "WithdrawalItem",
+    "WithdrawalObservation",
+    "WithdrawalOperation",
 ]
