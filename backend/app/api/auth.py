@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -60,6 +60,7 @@ class RegisterBody(BaseModel):
 class LoginBody(BaseModel):
     email: EmailStr
     password: str = Field(default="", max_length=128)
+    portal: Literal["fulfillment", "seller"] | None = None
 
 
 class NameLoginBody(BaseModel):
@@ -157,6 +158,7 @@ class SetPasswordByLinkBody(BaseModel):
 
 class PasswordResetRequestBody(BaseModel):
     email: EmailStr
+    portal: Literal["fulfillment", "seller"] | None = None
 
 
 class ResendInviteBody(BaseModel):
@@ -276,7 +278,7 @@ async def login_route(
     check_login_rate_limit(request=request, email=str(body.email))
     try:
         _user, token = await login(
-            session, email=str(body.email), password=body.password
+            session, email=str(body.email), password=body.password, portal=body.portal
         )
     except AuthError:
         # WMS-270. Все причины отказа (нет пользователя, пароль не установлен,
@@ -337,6 +339,7 @@ async def request_password_reset_route(
     await request_password_reset(
         session,
         email=str(body.email),
+        portal=body.portal,
         base_url=public_base_url(request),
         background_tasks=background_tasks,
     )

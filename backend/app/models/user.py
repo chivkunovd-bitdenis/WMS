@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, case, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Uuid, case, func, text
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.elements import SQLColumnExpression
@@ -21,6 +21,18 @@ if TYPE_CHECKING:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "ix_users_ff_email", "email", unique=True,
+            postgresql_where=text("role <> 'fulfillment_seller' AND email IS NOT NULL"),
+            sqlite_where=text("role <> 'fulfillment_seller' AND email IS NOT NULL"),
+        ),
+        Index(
+            "ix_users_seller_email", "email", unique=True,
+            postgresql_where=text("role = 'fulfillment_seller' AND email IS NOT NULL"),
+            sqlite_where=text("role = 'fulfillment_seller' AND email IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -34,7 +46,7 @@ class User(Base):
         nullable=True,
         index=True,
     )
-    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

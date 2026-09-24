@@ -402,7 +402,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const res = await fetch(apiUrl('/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, portal }),
         })
         if (res.status === 403) {
           const text = await res.text()
@@ -520,7 +520,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       const res = await fetch(apiUrl('/auth/request-password-reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, portal }),
       })
       if (!res.ok && res.status !== 204) {
         setError(await readApiErrorMessage(res))
@@ -538,7 +538,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     } finally {
       setAuthBusy(false)
     }
-  }, [])
+  }, [portal])
 
   const logout = useCallback(() => {
     setStoredToken(null, portal)
