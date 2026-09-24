@@ -291,6 +291,95 @@ async def test_auto_match_combines_shared_article_with_gtin(
 
 
 @pytest.mark.asyncio
+async def test_auto_match_treats_one_size_label_as_wb_size_zero_only(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=headers,
+        json={"name": "WMS476 One Size", "email": f"wms476-os-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    one_size_product_id = await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="GARMENT-ONE-SIZE",
+        barcode="04605555555551",
+        size="0",
+        vendor_code="GARMENT",
+    )
+    await _product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku="GARMENT-M",
+        barcode="04605555555552",
+        size="M",
+        vendor_code="GARMENT",
+    )
+    one_size_cis = "010460000000020121ONE-SIZE-WMS476-01"
+    other_size_cis = "010460000000020221OTHER-SIZE-WMS476-1"
+    missing_size_cis = "010460000000020321NO-SIZE-WMS476-0001"
+    gtin_only_cis = "010460555555555121GTIN-ONLY-WMS476-01"
+
+    response = await async_client.post(
+        "/operations/marking-codes/import/auto",
+        headers=headers,
+        data={"seller_id": seller_id, "request_id": str(uuid.uuid4())},
+        files=[
+            (
+                "files",
+                (
+                    "one-size.pdf",
+                    _label_pdf(one_size_cis, article="GARMENT", size="One Size"),
+                    "application/pdf",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "other-size.pdf",
+                    _label_pdf(other_size_cis, article="GARMENT", size="L"),
+                    "application/pdf",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "missing-size.pdf",
+                    _label_pdf(missing_size_cis, article="GARMENT"),
+                    "application/pdf",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "gtin-only.pdf",
+                    _label_pdf(gtin_only_cis, article=None, size="One Size"),
+                    "application/pdf",
+                ),
+            ),
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [(row["product_id"], row["loaded_count"]) for row in body["groups"]] == [
+        (one_size_product_id, 1),
+    ]
+    unmatched_by_code = {row["marking_code"]: row for row in body["unmatched"]}
+    assert unmatched_by_code[other_size_cis]["size"] == "L"
+    assert "размер не совпадает" in unmatched_by_code[other_size_cis]["reason"].lower()
+    assert unmatched_by_code[missing_size_cis]["size"] is None
+    assert "неоднозначно" in unmatched_by_code[missing_size_cis]["reason"].lower()
+    assert unmatched_by_code[gtin_only_cis]["article"] is None
+    assert unmatched_by_code[gtin_only_cis]["size"] == "One Size"
+    assert "размер не совпадает" in unmatched_by_code[gtin_only_cis]["reason"].lower()
+
+
+@pytest.mark.asyncio
 async def test_lost_assignment_response_reuses_result_and_residual_is_authoritative(
     async_client: AsyncClient,
 ) -> None:
