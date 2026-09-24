@@ -92,7 +92,8 @@ type SupportedBrowser = 'chrome' | 'edge' | 'firefox'
 type RuntimeEnvironment = {
   browser: SupportedBrowser
   browserMajor: number
-  operatingSystem: 'windows-10-or-11' | 'macos-11' | 'macos-12' | 'macos-13' | 'macos-14'
+  // Diagnostic only: compatibility is decided by browser/plugin/CSP/Store/sign capabilities.
+  operatingSystem: 'windows-10-or-11' | `macos-${string}`
 }
 
 type CadesObject = Record<string, unknown>
@@ -269,12 +270,9 @@ const clientHintMacOperatingSystem = async (
     const values = await userAgentData.getHighEntropyValues(['platformVersion'])
     const platform = values.platform ?? userAgentData.platform
     if (platform?.toLowerCase() !== 'macos') return null
-    const major = Number(values.platformVersion?.match(/^\d+/)?.[0])
-    if (major >= 11 && major <= 14) {
-      return `macos-${major}` as RuntimeEnvironment['operatingSystem']
-    }
-    if (Number.isSafeInteger(major)) throw new CryptoProError('unsupported_operating_system')
-    return null
+    const platformVersion = values.platformVersion
+    if (!platformVersion || !/^\d+(?:\.\d+){0,2}$/.test(platformVersion)) return null
+    return `macos-${platformVersion}`
   } catch (error) {
     if (error instanceof CryptoProError) throw error
     return null
@@ -290,10 +288,10 @@ const detectSupportedOperatingSystem = async (
   if (/Windows NT 10\.0/.test(userAgent)) return 'windows-10-or-11'
   if (/Windows NT/.test(userAgent)) throw new CryptoProError('unsupported_operating_system')
 
-  const macos = userAgent.match(/Mac OS X (\d+)[_.]/)
+  const macos = userAgent.match(/Mac OS X (\d+(?:[_.]\d+){0,2})/)
   if (macos) {
-    const major = Number(macos[1])
-    if (major >= 11 && major <= 14) return `macos-${major}` as RuntimeEnvironment['operatingSystem']
+    const version = macos[1].replaceAll('_', '.')
+    const major = Number(version.split('.')[0])
     // Chromium freezes the legacy UA token at 10_15_7 on newer macOS. Use its
     // structured high-entropy platformVersion when available; this is runtime
     // information supplied by the browser, not an invented acceptance marker.
@@ -303,11 +301,11 @@ const detectSupportedOperatingSystem = async (
       && (browser === 'chrome' || browser === 'edge')
     ) {
       return (await clientHintMacOperatingSystem(browserWindow))
-        ?? confirmedOperatingSystem(confirmation)
+        ?? `macos-${version}`
     }
-    throw new CryptoProError('unsupported_operating_system')
+    return `macos-${version}`
   }
-  if (/Macintosh|MacIntel/.test(userAgent)) throw new CryptoProError('untested_operating_system')
+  if (/Macintosh|MacIntel/.test(userAgent)) return 'macos-unknown'
 
   return confirmedOperatingSystem(confirmation)
 }

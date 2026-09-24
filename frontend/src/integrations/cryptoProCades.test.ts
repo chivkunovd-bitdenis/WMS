@@ -237,7 +237,19 @@ describe('CryptoPro CAdES readiness', () => {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) Gecko/20100101 Firefox/120.0',
     ],
     ['Chrome on macOS 14', CHROME_120_MACOS_14],
-  ])('accepts the tested runtime baseline: %s', async (_name, userAgent) => {
+    [
+      'Chrome on macOS 15 diagnostics',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    ],
+    [
+      'Chrome on macOS 26.3 diagnostics',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 26_3) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    ],
+    [
+      'Chrome on older macOS diagnostics',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    ],
+  ])('lets runtime capability checks decide on a recognized OS: %s', async (_name, userAgent) => {
     const fake = makeFakeRuntime()
     installRuntime(fake.runtime, userAgent)
 
@@ -260,8 +272,8 @@ describe('CryptoPro CAdES readiness', () => {
     ],
     ['unknown browser', 'UnknownBrowser/1.0 (Windows NT 10.0)', 'unsupported_browser'],
     [
-      'macOS 15',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      'Windows below supported baseline',
+      'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
       'unsupported_operating_system',
     ],
   ] as const)('rejects unsupported runtime: %s', async (_name, userAgent, code) => {
@@ -314,11 +326,11 @@ describe('CryptoPro CAdES readiness', () => {
     expect(caught).not.toHaveProperty('technicalDetail')
   })
 
-  it('uses Chrome platformVersion and reaches Store with the default adapter on frozen macOS UA', async () => {
+  it('uses Chrome macOS 26.3 diagnostics and completes both signatures with the default adapter', async () => {
     const fake = makeFakeRuntime()
     const getHighEntropyValues = vi.fn().mockResolvedValue({
       platform: 'macOS',
-      platformVersion: '14.6.0',
+      platformVersion: '26.3.0',
     })
     installRuntime(
       fake.runtime,
@@ -326,29 +338,40 @@ describe('CryptoPro CAdES readiness', () => {
       { platform: 'macOS', getHighEntropyValues },
     )
 
-    await expect(new CryptoProCadesAdapter().listCertificates()).resolves.toHaveLength(1)
+    const adapter = new CryptoProCadesAdapter()
+    await expect(adapter.listCertificates()).resolves.toHaveLength(1)
+    await expect(adapter.signAttachedAuthChallenge({
+      challengeData: 'macOS 26.3 capability smoke',
+      certificateThumbprint: CERT_THUMBPRINT,
+    })).resolves.toMatchObject({ certificateThumbprint: CERT_THUMBPRINT })
+    await expect(adapter.signDetachedDocument({
+      payloadBase64: PAYLOAD_BASE64,
+      certificateThumbprint: CERT_THUMBPRINT,
+    })).resolves.toMatchObject({ certificateThumbprint: CERT_THUMBPRINT })
     expect(getHighEntropyValues).toHaveBeenCalledWith(['platformVersion'])
-    expect(fake.store.Open).toHaveBeenCalledWith(2, 'My', 2)
+    expect(fake.store.Open).toHaveBeenCalledTimes(3)
+    expect(fake.signedData.SignCades).toHaveBeenCalledWith(fake.signer, 1, false)
+    expect(fake.signedData.SignCades).toHaveBeenCalledWith(fake.signer, 1, true)
+    expect(fake.signedData.VerifyCades).toHaveBeenCalledTimes(1)
     expect(fake.privateKeyRead).not.toHaveBeenCalled()
   })
 
-  it('keeps the scoped confirmation fallback when frozen macOS client hints are unavailable', async () => {
+  it('uses the frozen macOS token as diagnostics without inventing evidence when hints are unavailable', async () => {
     const fake = makeFakeRuntime()
     installRuntime(
       fake.runtime,
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
     )
 
-    await expectCryptoProCode(new CryptoProCadesAdapter().checkReadiness(), 'untested_operating_system')
-    await expect(
-      new CryptoProCadesAdapter({
-        testedOperatingSystem: { family: 'macos', major: 14, evidenceId: 'BC14-macos14-chrome-2026-09-23' },
-      }).checkReadiness(),
-    ).resolves.toEqual({ pluginVersion: '2.0.15003', cspVersion: '5.0.13003' })
+    await expect(new CryptoProCadesAdapter().checkReadiness()).resolves.toEqual({
+      pluginVersion: '2.0.15003',
+      cspVersion: '5.0.13003',
+    })
+    expect(fake.store.Open).not.toHaveBeenCalled()
   })
 
-  it('rejects a frozen macOS user-agent when Chrome reports an unsupported platformVersion', async () => {
-    const fake = makeFakeRuntime()
+  it('fails closed on an actual Store capability failure on frozen macOS 26.3', async () => {
+    const fake = makeFakeRuntime({ storeOpenError: new Error('native store unavailable') })
     installRuntime(
       fake.runtime,
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
@@ -356,16 +379,18 @@ describe('CryptoPro CAdES readiness', () => {
         platform: 'macOS',
         getHighEntropyValues: vi.fn().mockResolvedValue({
           platform: 'macOS',
-          platformVersion: '15.0.0',
+          platformVersion: '26.3.0',
         }),
       },
     )
 
     await expectCryptoProCode(
-      new CryptoProCadesAdapter().checkReadiness(),
-      'unsupported_operating_system',
+      new CryptoProCadesAdapter().listCertificates(),
+      'store_unavailable',
     )
-    expect(fake.store.Open).not.toHaveBeenCalled()
+    expect(fake.store.Open).toHaveBeenCalledTimes(1)
+    expect(fake.signedData.SignCades).not.toHaveBeenCalled()
+    expect(fake.privateKeyRead).not.toHaveBeenCalled()
   })
 
   it('rejects unsupported runtime before Store access or signing', async () => {
