@@ -20,7 +20,9 @@ import {
   buildCzLabelHtml,
   buildMarkingTapeDocument,
   buildWbOrderQrLabelHtml,
+  beginPrintUserGesture,
   printHtmlInIframe,
+  printPdfBlob,
   resolveCzArtifactTapeCodeIds,
 } from './printMarkingCodeLabel'
 import type { MarkingTapeUnitInput } from './printMarkingCodeLabel'
@@ -30,6 +32,7 @@ const LONG_GS1_CIS = `0104630321689835215TVsOggEdo6!!\u001d91ABCD\u001d92${'x'.r
 const MATRIX_STUB = 'data:image/png;base64,stub'
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -217,6 +220,144 @@ describe('printHtmlInIframe launch acknowledgement', () => {
   it('rejects when the browser cannot launch the print form', async () => {
     stubIframePrint(() => { throw new Error('print blocked') })
     await expect(printHtmlInIframe('<html></html>')).rejects.toThrow('Не удалось запустить печать КИЗ.')
+  })
+
+  it('never invokes a late iframe load after the launch timeout', async () => {
+    const callbacks: Array<() => void> = []
+    const print = vi.fn()
+    const iframe = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      contentWindow: { focus: () => undefined, print },
+      contentDocument: { querySelectorAll: () => [] },
+      style: {} as Record<string, string>,
+      setAttribute: () => undefined,
+      srcdoc: '',
+    }
+    vi.stubGlobal('window', {
+      setTimeout: (callback: () => void) => {
+        callbacks.push(callback)
+        return callbacks.length
+      },
+      clearTimeout: () => undefined,
+    })
+    vi.stubGlobal('document', {
+      createElement: () => iframe,
+      body: { appendChild: () => iframe, removeChild: () => undefined },
+    })
+
+    const printing = printHtmlInIframe('<html></html>')
+    callbacks[0]?.()
+    await expect(printing).rejects.toThrow('таймаут')
+    iframe.onload?.()
+    for (const callback of callbacks.slice(1)) callback()
+    expect(print).not.toHaveBeenCalled()
+  })
+})
+
+describe('native PDF print settlement', () => {
+  const installUrlStub = () => {
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:wms-test-pdf'),
+      revokeObjectURL,
+    })
+    return revokeObjectURL
+  }
+
+  it('does not print from a popup callback scheduled just before the load timeout', async () => {
+    vi.useFakeTimers()
+    const print = vi.fn()
+    const popup = {
+      closed: false,
+      document: { title: '', body: { innerHTML: '' } },
+      focus: vi.fn(),
+      print,
+      onload: null as (() => void) | null,
+      location: { href: '' },
+    }
+    const setTimeout = globalThis.setTimeout.bind(globalThis)
+    const clearTimeout = globalThis.clearTimeout.bind(globalThis)
+    vi.stubGlobal('window', { open: () => popup, setTimeout, clearTimeout })
+    installUrlStub()
+
+    beginPrintUserGesture()
+    const outcome = printPdfBlob(new Blob(['pdf'])).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    await vi.advanceTimersByTimeAsync(19_900)
+    popup.onload?.()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(await outcome).toMatchObject({ message: expect.stringContaining('таймаут') })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(print).not.toHaveBeenCalled()
+  })
+
+  it('does not print from an iframe callback scheduled just before the load timeout', async () => {
+    vi.useFakeTimers()
+    const print = vi.fn()
+    const iframe = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      contentWindow: { focus: vi.fn(), print },
+      style: {} as Record<string, string>,
+      setAttribute: vi.fn(),
+      src: '',
+    }
+    const setTimeout = globalThis.setTimeout.bind(globalThis)
+    const clearTimeout = globalThis.clearTimeout.bind(globalThis)
+    vi.stubGlobal('window', { setTimeout, clearTimeout })
+    vi.stubGlobal('document', {
+      createElement: () => iframe,
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+    })
+    installUrlStub()
+
+    const outcome = printPdfBlob(new Blob(['pdf'])).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    await vi.advanceTimersByTimeAsync(19_900)
+    iframe.onload?.()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(await outcome).toMatchObject({ message: expect.stringContaining('таймаут') })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(print).not.toHaveBeenCalled()
+  })
+
+  it('cancels an iframe print scheduled by onload when loading then reports an error', async () => {
+    vi.useFakeTimers()
+    const print = vi.fn()
+    const iframe = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      contentWindow: { focus: vi.fn(), print },
+      style: {} as Record<string, string>,
+      setAttribute: vi.fn(),
+      src: '',
+    }
+    const setTimeout = globalThis.setTimeout.bind(globalThis)
+    const clearTimeout = globalThis.clearTimeout.bind(globalThis)
+    vi.stubGlobal('window', { setTimeout, clearTimeout })
+    vi.stubGlobal('document', {
+      createElement: () => iframe,
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+    })
+    installUrlStub()
+
+    const outcome = printPdfBlob(new Blob(['pdf'])).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    iframe.onload?.()
+    iframe.onerror?.()
+
+    expect(await outcome).toMatchObject({ message: expect.stringContaining('загрузить PDF') })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(print).not.toHaveBeenCalled()
   })
 })
 

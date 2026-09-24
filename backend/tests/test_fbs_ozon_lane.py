@@ -2517,8 +2517,10 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     scan_started_at = datetime.now(UTC)
     for scan_index, value in enumerate(values):
         # The UI validates before commit; direct commit alone missed the second-product bug.
-        assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)).ok
-        await kiz_svc._commit_one_kiz_pair(
+        assert (
+            await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)
+        ).ok
+        outcome = await kiz_svc._commit_one_kiz_pair(
             db_session,
             order.tenant_id,
             None,
@@ -2526,6 +2528,8 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             AsyncMock(),
             f"ozon-scan:{value}",
         )
+        assert outcome.newly_bound is True
+        assert outcome.bound_kiz is None
         scanned = await db_session.scalar(
             select(FbsOrderMarking).where(
                 FbsOrderMarking.order_id == order.id, FbsOrderMarking.value == value
@@ -2578,17 +2582,17 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     # Re-reading an already entered own code is safe and does not submit it again.
     calls_before_repeat = len(transport.endpoint_calls)
     assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, values[-1])).ok
-    assert (
-        await kiz_svc._commit_one_kiz_pair(
-            db_session,
-            order.tenant_id,
-            None,
-            kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
-            AsyncMock(),
-            "ozon-repeat",
-        )
-        == expected_status
+    repeat_outcome = await kiz_svc._commit_one_kiz_pair(
+        db_session,
+        order.tenant_id,
+        None,
+        kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
+        AsyncMock(),
+        "ozon-repeat",
     )
+    assert repeat_outcome.meta_status == expected_status
+    assert repeat_outcome.newly_bound is False
+    assert repeat_outcome.bound_kiz is None
     assert len(transport.endpoint_calls) == calls_before_repeat
     if expected_status == "pending":
         transport.endpoint_responses["/v5/fbs/posting/product/exemplar/status"]["status"] = (

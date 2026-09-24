@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+startCommand = "env WMS_SERVICE_ROLE=worker python -m app.railway_entrypoint"
+restartPolicyType = "ON_FAILURE"
+numReplicas = 1

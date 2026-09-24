@@ -518,6 +518,46 @@ function takePrintWindowFromUserGesture(): Window | null {
   return w
 }
 
+function createPdfPrintSettlement() {
+  let settled = false
+  let timeoutId: number | null = null
+  let printDelayId: number | null = null
+
+  const clearTimer = (id: number | null) => {
+    if (id !== null) window.clearTimeout(id)
+  }
+
+  return {
+    isSettled: () => settled,
+    startTimeout: (callback: () => void) => {
+      const id = window.setTimeout(() => {
+        timeoutId = null
+        if (!settled) callback()
+      }, 20000)
+      if (settled) window.clearTimeout(id)
+      else timeoutId = id
+    },
+    schedulePrint: (callback: () => void) => {
+      if (settled) return
+      clearTimer(printDelayId)
+      printDelayId = window.setTimeout(() => {
+        printDelayId = null
+        if (!settled) callback()
+      }, 300)
+    },
+    settle: (callback: () => void) => {
+      if (settled) return false
+      settled = true
+      clearTimer(timeoutId)
+      clearTimer(printDelayId)
+      timeoutId = null
+      printDelayId = null
+      callback()
+      return true
+    },
+  }
+}
+
 /** Печать PDF как обычный файл (встроенный viewer браузера → print). */
 export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
   const url = URL.createObjectURL(pdfBlob)
@@ -525,46 +565,38 @@ export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
 
   if (targetWindow && !targetWindow.closed) {
     return new Promise<void>((resolve, reject) => {
-      let settled = false
-      const finish = (fn: () => void) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        window.clearTimeout(timeoutId)
-        fn()
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        finish(() => {
+      const settlement = createPdfPrintSettlement()
+      settlement.startTimeout(() => {
+        settlement.settle(() => {
           URL.revokeObjectURL(url)
           reject(new Error('Не удалось открыть PDF для печати (таймаут).'))
         })
-      }, 20000)
+      })
 
       targetWindow.onload = () => {
+        if (settlement.isSettled()) return
         try {
           targetWindow.focus()
         } catch {
           // ignore
         }
-        window.setTimeout(() => {
+        settlement.schedulePrint(() => {
           try {
             targetWindow.print()
           } catch {
-            finish(() => {
+            settlement.settle(() => {
               URL.revokeObjectURL(url)
               reject(new Error('Не удалось запустить печать PDF.'))
             })
             return
           }
-          finish(() => {
+          settlement.settle(() => {
             window.setTimeout(() => {
               URL.revokeObjectURL(url)
               resolve()
             }, 500)
           })
-        }, 300)
+        })
       }
 
       targetWindow.location.href = url
@@ -582,15 +614,7 @@ export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
     iframe.style.height = '297mm'
     iframe.style.border = '0'
 
-    let settled = false
-    const finish = (fn: () => void) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      window.clearTimeout(timeoutId)
-      fn()
-    }
+    const settlement = createPdfPrintSettlement()
 
     const cleanup = () => {
       URL.revokeObjectURL(url)
@@ -601,17 +625,18 @@ export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
       }
     }
 
-    const timeoutId = window.setTimeout(() => {
-      finish(() => {
+    settlement.startTimeout(() => {
+      settlement.settle(() => {
         cleanup()
         reject(new Error('Не удалось открыть PDF для печати (таймаут).'))
       })
-    }, 20000)
+    })
 
     const triggerPrint = () => {
+      if (settlement.isSettled()) return
       const w = iframe.contentWindow
       if (!w) {
-        finish(() => {
+        settlement.settle(() => {
           cleanup()
           reject(new Error('Не удалось открыть PDF для печати.'))
         })
@@ -622,28 +647,28 @@ export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
       } catch {
         // ignore
       }
-      window.setTimeout(() => {
+      settlement.schedulePrint(() => {
         try {
           w.print()
         } catch {
-          finish(() => {
+          settlement.settle(() => {
             cleanup()
             reject(new Error('Не удалось запустить печать PDF.'))
           })
           return
         }
-        finish(() => {
+        settlement.settle(() => {
           window.setTimeout(() => {
             cleanup()
             resolve()
           }, 500)
         })
-      }, 300)
+      })
     }
 
     iframe.onload = triggerPrint
     iframe.onerror = () => {
-      finish(() => {
+      settlement.settle(() => {
         cleanup()
         reject(new Error('Не удалось загрузить PDF для печати.'))
       })
@@ -765,6 +790,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       20_000,
     )
     const printNow = () => {
+      if (settled) return
       const frameWindow = iframe.contentWindow
       if (!frameWindow) {
         fail('Не удалось открыть форму печати КИЗ.')
@@ -776,6 +802,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
         // Browser focus can be denied while the print form itself remains usable.
       }
       window.setTimeout(() => {
+        if (settled) return
         try {
           frameWindow.print()
         } catch {
@@ -793,6 +820,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
 
     iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
     iframe.onload = () => {
+      if (settled) return
       const doc = iframe.contentDocument
       const imgs = doc?.querySelectorAll('img') ?? []
       if (imgs.length === 0) {
@@ -801,6 +829,7 @@ export async function printHtmlInIframe(html: string): Promise<void> {
       }
       let pending = imgs.length
       const done = () => {
+        if (settled) return
         pending -= 1
         if (pending <= 0) printNow()
       }
