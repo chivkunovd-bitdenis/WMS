@@ -21,12 +21,18 @@ class ExtractedLabelArtifact:
     code_valid: bool = True
 
 
-def pdf_bytes_to_png(pdf_bytes: bytes, dpi: int = 600) -> bytes:
+def pdf_bytes_to_png(
+    pdf_bytes: bytes,
+    dpi: int = 600,
+    *,
+    cis_code: str | None = None,
+) -> bytes:
     try:
         import fitz  # pymupdf
     except ImportError as exc:
         raise RuntimeError("pdf_support_unavailable") from exc
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    prepared_pdf = _prepare_label_artifact_pdf(pdf_bytes, cis_code)
+    doc = fitz.open(stream=prepared_pdf, filetype="pdf")
     try:
         if doc.page_count < 1:
             raise ValueError("empty_pdf")
@@ -260,6 +266,15 @@ def _repair_distorted_datamatrix_pdf(pdf_bytes: bytes, cis_code: str) -> bytes:
         doc.close()
 
 
+def _prepare_label_artifact_pdf(pdf_bytes: bytes, cis_code: str | None) -> bytes:
+    """Repair only a proven distorted symbol; otherwise preserve the PDF exactly."""
+    return (
+        _repair_distorted_datamatrix_pdf(pdf_bytes, cis_code)
+        if cis_code
+        else pdf_bytes
+    )
+
+
 def fit_label_artifact_pdf_to_page(
     pdf_bytes: bytes,
     page_width_mm: float,
@@ -272,11 +287,7 @@ def fit_label_artifact_pdf_to_page(
     if page_width_mm <= 0 or page_height_mm <= 0:
         raise ValueError("invalid_page_size")
 
-    prepared_pdf = (
-        _repair_distorted_datamatrix_pdf(pdf_bytes, cis_code)
-        if cis_code
-        else pdf_bytes
-    )
+    prepared_pdf = _prepare_label_artifact_pdf(pdf_bytes, cis_code)
     src = fitz.open(stream=prepared_pdf, filetype="pdf")
     try:
         if src.page_count < 1:

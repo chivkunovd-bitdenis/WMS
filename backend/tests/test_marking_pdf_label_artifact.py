@@ -999,6 +999,50 @@ def test_native_artifact_print_repairs_anisotropic_modules_and_preserves_cis(
         repaired.close()
 
 
+@pytest.mark.asyncio
+async def test_png_artifact_retrieval_repairs_distortion_without_mutating_storage() -> None:
+    from app.api import marking_codes as api
+
+    tenant_id = uuid.uuid4()
+    cis = "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "x" * 20
+    stored = _build_stored_label_artifact(cis, distorted=True)
+    code = SimpleNamespace(
+        tenant_id=tenant_id,
+        label_artifact_pdf=stored,
+        cis_code=cis,
+    )
+
+    class FakeSession:
+        async def get(self, _model: object, _code_id: uuid.UUID) -> object:
+            return code
+
+    response = await api.get_marking_code_label_artifact(
+        uuid.uuid4(),
+        SimpleNamespace(tenant_id=tenant_id),  # type: ignore[arg-type]
+        FakeSession(),  # type: ignore[arg-type]
+        format="png",
+    )
+
+    assert response.media_type == "image/png"
+    assert code.label_artifact_pdf == stored
+    image = fitz.open(stream=response.body, filetype="png")
+    try:
+        rendered_pdf = bytes(image.convert_to_pdf())
+    finally:
+        image.close()
+    pitch_x, pitch_y, _ = _rendered_module_pitches(rendered_pdf, cis)
+    assert abs(pitch_x - pitch_y) <= 1
+
+
+def test_png_artifact_retrieval_keeps_healthy_render_byte_exact() -> None:
+    from app.services.marking_label_artifact_service import pdf_bytes_to_png
+
+    cis = "0104630321689835215TVsOggEdo6!!\x1d91ABCD\x1d92" + "x" * 20
+    healthy = _build_stored_label_artifact(cis, distorted=False)
+
+    assert pdf_bytes_to_png(healthy, cis_code=cis) == pdf_bytes_to_png(healthy)
+
+
 def test_native_artifact_tape_repairs_each_page_in_order() -> None:
     from app.services.marking_code_service import _validated_label_artifact_tape
     from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
