@@ -1382,7 +1382,25 @@ async def publish_amounts_for_binding(
         amounts[product.id] = split.get(binding.id, 0)
         # WMS-483: use the same free-stock snapshot as the published amount.
         # A missing allocation is not an explicit zero-unit operator limit.
-        has_binding_rule = _binding_has_rule(product, binding.id, pool_rows)
+        pool = pool_rows.get(binding.id)
+        if pool is not None and pool.publish_enabled is not None:
+            has_refresh_rule = bool(
+                pool.publish_enabled
+                and (
+                    pool.percent is not None
+                    or pool.units_configured
+                    or int(pool.quantity or 0) > 0
+                )
+            )
+        elif binding_rule.mode == "units":
+            has_refresh_rule = bool(
+                pool is not None
+                and (pool.units_configured or int(pool.quantity or 0) > 0)
+            )
+        elif product.fbs_same_everywhere:
+            has_refresh_rule = int(product.fbs_percent or 0) > 0
+        else:
+            has_refresh_rule = bool(pool is not None and int(pool.percent or 0) > 0)
         explicit_zero_units = (
             binding_rule.mode == "units"
             and binding_rule.units_configured
@@ -1392,7 +1410,7 @@ async def publish_amounts_for_binding(
             refresh_zero_product_ids is not None
             and binding.marketplace == "wb"
             and binding_rule.publish
-            and has_binding_rule
+            and has_refresh_rule
             and (free == 0 or explicit_zero_units)
         ):
             refresh_zero_product_ids.add(product.id)
