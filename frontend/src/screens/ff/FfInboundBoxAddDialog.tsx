@@ -1,3 +1,5 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
+import { intakeMutation, readIntake, sendIntakeMutations } from "./inboundDraftPersistence"
 import {
   memo,
   useCallback,
@@ -172,6 +174,9 @@ type Props = {
    */
   containerKind?: 'box' | 'cargo_place'
   readOnly: boolean
+  ffDraft?: boolean
+  /** Документ ФФ: колонка итога — «Всего принято» в любом статусе (WMS-473). */
+  ffInbound?: boolean
   token: string
   requestLines: RequestLine[]
   boxLines: InboundBoxLine[]
@@ -180,7 +185,15 @@ type Props = {
   onMarkingScan?: (code: string, lineId: string | null) => Promise<void>
 }
 
-export function FfInboundBoxAddDialog({
+export function FfInboundBoxAddDialog(props: Props) {
+  return (
+    <ErrorBoundary component="FfInboundBoxAddDialog" resetKey={String(props.open)}>
+      <FfInboundBoxAddDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function FfInboundBoxAddDialogContent({
   open,
   onClose,
   requestId,
@@ -188,6 +201,8 @@ export function FfInboundBoxAddDialog({
   boxLabel,
   containerKind,
   readOnly,
+  ffDraft = false,
+  ffInbound = ffDraft,
   token,
   requestLines,
   boxLines,
@@ -266,8 +281,8 @@ export function FfInboundBoxAddDialog({
         return
       }
       const raw = rawOverride ?? draftQtyRef.current[productId] ?? '0'
-      const qty = Math.floor(Number(raw))
-      if (!Number.isFinite(qty) || qty < 0) {
+      const qty = Number(raw)
+      if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(qty) || qty < 0 || qty > 100000) {
         setError('Укажите целое количество ≥ 0.')
         return
       }
@@ -278,7 +293,7 @@ export function FfInboundBoxAddDialog({
       setBusy(true)
       setError(null)
       try {
-        const res = await fetch(
+        const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('PUT', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/lines/${productId}`, { quantity: qty })]) : await fetch(
           apiUrl(
             `/operations/inbound-intake-requests/${requestId}/${
               containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
@@ -301,7 +316,7 @@ export function FfInboundBoxAddDialog({
         setBusy(false)
       }
     },
-    [authHeaders, boxId, containerKind, onUpdated, qtyInBoxByProductId, readOnly, requestId],
+    [authHeaders, boxId, containerKind, ffDraft, token, onUpdated, qtyInBoxByProductId, readOnly, requestId],
   )
 
   // Стабильные обработчики — иначе memo у строки не срабатывает.
@@ -331,7 +346,9 @@ export function FfInboundBoxAddDialog({
     // Wait for the serialized scan request before reconciling the parent card,
     // otherwise the closed box can still render as empty until a page reload.
     await scanQueueRef.current
+    if (ffDraft && readIntake(token, requestId).pending?.length) { setError('Проверьте результат предыдущего запроса.'); return }
     await flushPendingQty()
+    if (ffDraft && readIntake(token, requestId).pending?.length) return
     await onUpdated()
     onClose()
   }
@@ -355,7 +372,7 @@ export function FfInboundBoxAddDialog({
       }
       lastProductLineId.current = null
       const productId = findInboundScanProductId(raw, scanProductByBarcode)
-      const res = await fetch(
+      const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/scan`, { barcode: raw, product_id: productId })]) : await fetch(
         apiUrl(
           `/operations/inbound-intake-requests/${requestId}/${
             containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
@@ -371,18 +388,28 @@ export function FfInboundBoxAddDialog({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
+      // WMS-473: сервер сам добавляет в документ товар из каталога селлера, которого
+      // в нём ещё не было. Ответ ручки — только строка тары; чтобы новая позиция
+      // появилась в таблице диалога, нужен состав документа — перечитываем его
+      // один раз, только для новой позиции (обычный скан родителя не трогает).
+      const payload = (await res.json()) as
+        | InboundBoxLine
+        | { lines?: InboundBoxLine[] }
+      const scannedProductId =
+        'product_id' in payload && payload.product_id
+          ? payload.product_id
+          : productId ?? ((payload as { lines?: InboundBoxLine[] }).lines ?? []).at(-1)?.product_id
+      const newLine = scannedProductId != null
+        && !requestLines.some((line) => line.product_id === scannedProductId)
       // Две ручки на одно действие отвечают по-разному: скан в короб отдаёт
       // строку товара, скан в грузоместо — весь объект со списком строк.
       // Читаем оба вида, иначе у грузоместа идентификатор товара оказывается
       // пустым и колонка «В коробе» остаётся пустой при принятом скане.
-      const payload = (await res.json()) as
-        | InboundBoxLine
-        | { lines?: InboundBoxLine[] }
       const scannedLine =
         'product_id' in payload && payload.product_id
           ? (payload as InboundBoxLine)
           : ((payload as { lines?: InboundBoxLine[] }).lines ?? []).find(
-              (line) => line.product_id === productId,
+              (line) => line.product_id === scannedProductId,
             )
       if (!scannedLine) {
         setError('Сервер принял скан, но не вернул строку товара.')
@@ -401,10 +428,13 @@ export function FfInboundBoxAddDialog({
       lastProductLineId.current = requestLines.find((line) => line.product_id === scannedLine.product_id)?.id ?? null
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
+      if (ffDraft || newLine) await onUpdated()
       // The POST response is authoritative for this box. Refresh the heavy parent
       // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
+      // В черновике ФФ запрос идёт через sendIntakeMutations, и код отказа сервера
+      // приходит текстом ошибки — переводим его той же картой, что и обычный ответ.
+      setError(scanErrorMessageRu(e instanceof Error ? e.message : 'Не удалось выполнить скан.'))
     }
   }
 
@@ -467,6 +497,12 @@ export function FfInboundBoxAddDialog({
           <CloseOutlined />
         </IconButton>
       </DialogTitle>
+      {ffDraft && readIntake(token, requestId).pending?.length ? <Alert severity="warning" action={<Button disabled={busy} onClick={async () => {
+        setBusy(true)
+        try { await sendIntakeMutations(token, requestId); await onUpdated(); setError(null) }
+        catch (e) { setError(e instanceof Error ? e.message : 'Не удалось проверить запрос.') }
+        finally { setBusy(false) }
+      }}>Проверить результат</Button>}>Предыдущий запрос требует проверки.</Alert> : null}
       <DialogContent dividers sx={boxFillDialogContentSx}>
         <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
           {readOnly ? (
@@ -521,7 +557,7 @@ export function FfInboundBoxAddDialog({
                 <TableRow>
                   <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={{ width: 80, whiteSpace: 'nowrap', px: 1 }}>
-                    Заявлено
+                    {ffInbound ? 'Всего принято' : 'Заявлено'}
                   </TableCell>
                   <TableCell align="right" sx={boxFillQtyCellSx}>
                     В коробе

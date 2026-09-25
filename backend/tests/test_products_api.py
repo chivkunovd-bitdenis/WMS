@@ -55,7 +55,7 @@ async def _create_staff_headers(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=admin_headers,
-        json={"email": email},
+        json={"full_name": "Иван Петров", "email": email},
     )
     assert created.status_code == 201, created.text
     patched = await async_client.patch(
@@ -120,7 +120,7 @@ async def test_inventory_staff_saves_both_measurements_and_reads_ui_history(
     assert history.status_code == 200, history.text
     assert history.json()[0]["source"] == "container"
     assert history.json()[0]["created_at"] is not None
-    assert history.json()[0]["author_name"].startswith("dimensions-staff-inventory-")
+    assert history.json()[0]["author_name"] == "Иван Петров"
     assert history.json()[0]["is_current"] is True
 
     invalid = await async_client.post(
@@ -162,7 +162,7 @@ async def test_inventory_staff_saves_both_measurements_and_reads_ui_history(
     rows = history.json()
     assert [row["source"] for row in rows] == ["manual", "container"]
     assert rows[0]["created_at"] >= rows[1]["created_at"]
-    assert rows[0]["author_name"].startswith("dimensions-staff-inventory-")
+    assert rows[0]["author_name"] == "Иван Петров"
     assert rows[0]["is_current"] is True
     assert rows[1]["is_current"] is False
     assert all("observed_at" not in row and "applied" not in row for row in rows)

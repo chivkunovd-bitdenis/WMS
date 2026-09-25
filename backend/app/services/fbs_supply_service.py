@@ -81,6 +81,7 @@ from app.services.fbs_supply_validator_service import (
     FbsSupplyValidationError,
     SupplyPreflightResult,
     load_orders_for_validation,
+    order_delivery_route,
     preflight_to_dict,
     validate_supply_composition,
 )
@@ -90,7 +91,11 @@ from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
-from app.services.marketplace_scope import is_wildberries, wrong_marketplace_message
+from app.services.marketplace_scope import (
+    MARKETPLACE_NAMES,
+    is_wildberries,
+    wrong_marketplace_message,
+)
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -701,8 +706,10 @@ async def create_supply_from_orders(
             raise FbsSupplyError(
                 "operation_in_progress",
                 message=(
-                    f"Синхронизация {marketplace.upper()} по селлеру ещё идёт — "
-                    "повторите через несколько секунд."
+                    "По этому селлеру идёт фоновый обмен с "
+                    f"{MARKETPLACE_NAMES.get(marketplace, marketplace)} — создание "
+                    f"поставки ждало его {int(WB_LOCK_WAIT_FOR_OPERATOR_SEC)} с и не "
+                    "дождалось. Повторите попытку позже."
                 ),
                 retryable=True,
                 http_status=503,
@@ -1253,8 +1260,11 @@ async def _request_order_stickers_for_picking(
     tenant_id: uuid.UUID,
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
+    *,
+    orders: list[FbsOrder] | None = None,
 ) -> None:
-    missing = [order.id for order in supply.orders if not order.sticker_code]
+    target_orders = supply.orders if orders is None else orders
+    missing = [order.id for order in target_orders if not order.sticker_code]
     if not missing:
         return
     try:
@@ -1274,7 +1284,7 @@ async def _request_order_stickers_for_picking(
         )
     except FbsPrintAssetError as exc:
         logger.warning(
-            "fbs supply start-work sticker prefetch skipped supply %s: %s",
+            "fbs supply sticker prefetch skipped supply %s: %s",
             supply.id,
             exc.code,
         )
@@ -1429,7 +1439,7 @@ async def list_supply_worklist(
         int(order.wb_warehouse_id)
         for supply in supplies
         for order in supply.orders
-        if order.wb_warehouse_id is not None
+        if order.wb_warehouse_id is not None and supply.marketplace != "ozon"
     }
     wb_names: dict[int, str | None] = {}
     if wb_ids:
@@ -1459,6 +1469,8 @@ async def list_supply_worklist(
                 "marketplace": supply.marketplace,
                 "wb_supply_id": supply.wb_supply_id,
                 "name": supply.display_number or supply.name,
+                "delivery_type": supply.delivery_type,
+                "delivery_route": order_delivery_route(first_order) if first_order else None,
                 "status": supply.status,
                 "seller": {
                     "id": str(supply.seller_id),
@@ -1968,7 +1980,11 @@ async def add_orders_to_existing_supply(
         if not wb_lock_acquired:
             raise FbsSupplyError(
                 "operation_in_progress",
-                message="WB-синхронизация по селлеру ещё идёт — повторите через несколько секунд.",
+                message=(
+                    "По этому селлеру идёт фоновый обмен с WB — добавление "
+                    f"заказов ждало его {int(WB_LOCK_WAIT_FOR_OPERATOR_SEC)} с и не "
+                    "дождалось. Повторите попытку позже."
+                ),
                 retryable=True,
                 http_status=503,
             )
@@ -2029,6 +2045,10 @@ async def add_orders_to_existing_supply(
         await _sync_existing_packaging_task_for_added_orders(
             session, tenant_id, supply, linked_orders
         )
+        if supply.status != FBS_SUPPLY_STATUS_DRAFT:
+            await _request_order_stickers_for_picking(
+                session, tenant_id, supply, http_client, orders=linked_orders
+            )
     partial_summary = None
     if len(accepted_orders) != len(orders):
         partial_summary = _partial_from_orders_summary(

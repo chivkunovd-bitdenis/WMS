@@ -15,7 +15,7 @@ from app.core.settings import settings
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.assistant_service import tenant_assistant_enabled
+from app.services.assistant_service import user_assistant_enabled
 from app.services.auth_service import get_user_by_id
 from app.services.seller_shop_service import (
     SellerShopError,
@@ -85,6 +85,7 @@ _SUBSCRIPTION_FREE_PATHS = frozenset(
         "/subscription/pay",
         "/subscription/sync",
         "/health",
+        "/client-errors",
     }
 )
 
@@ -206,7 +207,9 @@ async def require_assistant_enabled_ff_member(
 
     Тот же уровень доступа, что и раньше (``require_ff_portal_member`` — R20),
     плюс проверка, что тенант вошедшего пользователя есть в
-    ``WMS_ASSISTANT_ENABLED_TENANTS`` (или там ``*``). Выключенный тенант
+    ``WMS_ASSISTANT_ENABLED_TENANTS`` (или там ``*``), и необязательный фильтр
+    ``WMS_ASSISTANT_ENABLED_USER_EMAILS`` по email вошедшего пользователя (R24).
+    Пользователь вне допуска
     получает 403 с понятным кодом ``assistant_disabled`` — тем же кодом,
     который сервер отдаёт во ``/auth/me`` как ``assistant_enabled: false``,
     так что фронт может ни разу не показать кнопку и всё равно получить
@@ -219,12 +222,12 @@ async def require_assistant_enabled_ff_member(
     """
     tenant = await session.get(Tenant, user.tenant_id)
     tenant_slug = tenant.slug if tenant is not None else None
-    if not tenant_assistant_enabled(tenant_slug):
+    if not user_assistant_enabled(tenant_slug, user.email):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "assistant_disabled",
-                "message": "Помощник ИИ выключен для вашей организации.",
+                "message": "Помощник ИИ выключен для вашей учётной записи.",
             },
         )
     return user

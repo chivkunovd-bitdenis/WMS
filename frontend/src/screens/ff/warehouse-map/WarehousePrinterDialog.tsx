@@ -1,0 +1,218 @@
+import { Link, Stack, Typography } from '@mui/material'
+import { useEffect, useRef, useState } from 'react'
+import { apiUrl } from '../../../api'
+import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { ActionGroup, AppDialog, ErrorNotice, PrimaryAction, SecondaryAction, TextInput } from '../../../ui-kit'
+
+type Destination = { connection_id: string; queue_name: string; platform: string; warehouse_id: string; last_seen_at: string | null; online: boolean }
+export type PrinterPreview = Pick<Destination, 'connection_id' | 'queue_name' | 'platform'> & { pairingCode: string; warehouseId: string }
+type Preview = PrinterPreview
+const PRINT_PACKAGE_RELEASE_TAG = 'wms-print-v2026.09.13.1'
+const PRINT_PACKAGE_RELEASE_BASE = `https://github.com/chivkunovd-bitdenis/WMS/releases/download/${PRINT_PACKAGE_RELEASE_TAG}`
+
+/** Public release assets, deliberately not short-lived Actions artifacts. */
+export const printPackageDownloads = {
+  windows: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-Setup-Windows-x64.exe`,
+  macos: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-macOS.zip`,
+  instruction: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-Installation.md`,
+  checksums: `${PRINT_PACKAGE_RELEASE_BASE}/WMS-Print-SHA256SUMS.txt`,
+}
+
+export function previewMatchesContext(preview: PrinterPreview | null, code: string, warehouseId: string | null): preview is PrinterPreview {
+  return preview !== null && warehouseId !== null && preview.warehouseId === warehouseId && preview.pairingCode === code.trim()
+}
+/** A completion from an invalidated request must never release a newer request. */
+export function releasePrinterBusyRequest(activeRequest: number | null, finishedRequest: number): number | null {
+  return activeRequest === finishedRequest ? null : activeRequest
+}
+export async function refreshPrinterDestination(
+  read: () => Promise<unknown>,
+  onError: (error: string | null) => void,
+): Promise<boolean> {
+  try {
+    await read()
+    onError(null)
+    return true
+  } catch (cause) {
+    onError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.')
+    return false
+  }
+}
+const headers = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
+function message(raw: string) {
+  if (raw === 'pairing_not_found_or_expired') return 'Код не найден или истёк. Получите новый код в программе на ПК.'
+  if (raw === 'pairing_already_used') return 'Этот код уже использован для другого подключения.'
+  if (raw === 'Forbidden' || raw === 'forbidden') return 'У вас нет права подключать принтер.'
+  return raw
+}
+function state(destination: Destination) {
+  if (destination.online) return 'Программа на связи. Это не подтверждает выход бумаги.'
+  if (destination.last_seen_at) return `Программа была на связи: ${destination.last_seen_at}`
+  return 'Программа ещё не выходила на связь.'
+}
+
+export function WarehousePrinterDialog({ open, warehouseId, warehouseName, token, isAdmin, onClose }: { open: boolean; warehouseId: string | null; warehouseName: string; token: string; isAdmin: boolean; onClose: () => void }) {
+  const [destination, setDestination] = useState<Destination | null>(null)
+  const [destinationLoaded, setDestinationLoaded] = useState(false)
+  const [code, setCode] = useState('')
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busyRequest, setBusyRequest] = useState<number | null>(null)
+  const busy = busyRequest !== null
+  const version = useRef(0)
+  async function readDestination(request = version.current) {
+    if (!warehouseId) return null
+    const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/destination`), { headers: headers(token) })
+    if (!response.ok) throw new Error(message(await readApiErrorMessage(response)))
+    const data = await response.json() as { destination: Destination | null }
+    if (request === version.current) {
+      setDestination(data.destination)
+      setDestinationLoaded(true)
+    }
+    return data.destination
+  }
+  useEffect(() => {
+    if (!open || !warehouseId) { ++version.current; setBusyRequest(null); return }
+    const request = ++version.current
+    setBusyRequest(null); setDestination(null); setDestinationLoaded(false); setCode(''); setPreview(null); setError(null); setNotice(null)
+    void readDestination(request).catch((cause) => { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось прочитать назначение принтера.') })
+  // warehouseId resets all temporary pairing state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, warehouseId, token])
+  async function refreshDestination() {
+    const request = version.current
+    setBusyRequest(request); setDestination(null); setDestinationLoaded(false); setError(null); setNotice(null)
+    try {
+      await refreshPrinterDestination(
+        () => readDestination(request),
+        (nextError) => { if (request === version.current) setError(nextError) },
+      )
+    } finally {
+      setBusyRequest((active) => releasePrinterBusyRequest(active, request))
+    }
+  }
+  function changeCode(next: string) { ++version.current; setBusyRequest(null); setCode(next); setPreview(null); setError(null); setNotice(null) }
+  async function inspect() {
+    if (!warehouseId || !code.trim()) return
+    const request = ++version.current
+    setBusyRequest(request); setPreview(null); setError(null); setNotice(null)
+    try {
+      const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair/preview`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: code.trim() }) })
+      if (!response.ok) throw new Error(message(await readApiErrorMessage(response)))
+      const data = await response.json() as Destination
+      if (request === version.current) setPreview({ ...data, pairingCode: code.trim(), warehouseId })
+    } catch (cause) { if (request === version.current) setError(cause instanceof Error ? cause.message : 'Не удалось проверить код.') }
+    finally { setBusyRequest((active) => releasePrinterBusyRequest(active, request)) }
+  }
+  async function reconcile(checked: Preview, request: number) {
+    try {
+      const current = await readDestination(request)
+      if (request !== version.current) return
+      if (current?.connection_id === checked.connection_id) { setCode(''); setPreview(null); setNotice('Принтер подключён. Назначение подтверждено сервером.') }
+      else if (current) { setPreview(null); setNotice(`Сейчас назначен принтер ${current.queue_name}. Предыдущее назначение не возвращали.`) }
+      else setError('Не удалось подтвердить подключение. Проверьте состояние или повторите подключение тем же кодом.')
+    } catch { if (request === version.current) setError('Не удалось проверить подключение. Проверьте состояние перед повтором.') }
+  }
+  async function connect() {
+    if (!previewMatchesContext(preview, code, warehouseId)) return
+    const checked = preview
+    const request = ++version.current
+    setBusyRequest(request); setError(null)
+    try {
+      const response = await fetch(apiUrl(`/operations/print/warehouses/${warehouseId}/pair`), { method: 'POST', headers: headers(token), body: JSON.stringify({ pairing_code: checked.pairingCode }) })
+      if (!response.ok) {
+        const cause = message(await readApiErrorMessage(response))
+        if (request === version.current) setError(cause)
+        return
+      }
+      await reconcile(checked, request)
+    } catch { await reconcile(checked, request) }
+    finally { setBusyRequest((active) => releasePrinterBusyRequest(active, request)) }
+  }
+  return (
+    <AppDialog
+      open={open}
+      onClose={onClose}
+      title="Принтер"
+      testId="warehouse-printer-dialog"
+      actions={(
+        <ActionGroup>
+          <SecondaryAction onClick={onClose}>Закрыть</SecondaryAction>
+          {isAdmin ? (
+            <SecondaryAction
+              onClick={() => void refreshDestination()}
+              disabledReason={busy ? 'Проверяем подключение' : undefined}
+            >
+              Проверить состояние
+            </SecondaryAction>
+          ) : null}
+          {isAdmin && preview ? (
+            <PrimaryAction
+              onClick={() => void connect()}
+              disabledReason={busy ? 'Подключаем принтер' : undefined}
+              data-testid="warehouse-printer-connect"
+            >
+              {destination ? 'Заменить принтер' : 'Подключить'}
+            </PrimaryAction>
+          ) : null}
+        </ActionGroup>
+      )}
+    >
+      <Stack spacing={2}>
+        <Typography variant="body2">Склад: {warehouseName || 'не выбран'}</Typography>
+        {destination ? (
+          <Stack spacing={0.5} data-testid="warehouse-printer-destination">
+            <Typography>
+              Назначен: {destination.queue_name} · {destination.platform}. {state(destination)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" data-testid="warehouse-printer-connection-id">
+              Подключение: {destination.connection_id}
+            </Typography>
+          </Stack>
+        ) : destinationLoaded ? (
+          <Typography data-testid="warehouse-printer-empty">Принтер для этого склада не назначен.</Typography>
+        ) : (
+          <Typography data-testid="warehouse-printer-loading">Читаем назначение принтера…</Typography>
+        )}
+        {notice ? <Typography color="success.main">{notice}</Typography> : null}
+        {error ? <ErrorNotice>{error}</ErrorNotice> : null}
+        {isAdmin ? (
+          <>
+            <Typography variant="body2">Введите код из программы WMS Print на компьютере с принтером.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Скачайте{' '}
+              <Link href={printPackageDownloads.windows} target="_blank" rel="noreferrer">Windows x64</Link>
+              {' '}или{' '}
+              <Link href={printPackageDownloads.macos} target="_blank" rel="noreferrer">macOS arm64</Link>
+              . Перед установкой откройте{' '}
+              <Link href={printPackageDownloads.instruction} target="_blank" rel="noreferrer">инструкцию</Link>
+              {' '}и{' '}
+              <Link href={printPackageDownloads.checksums} target="_blank" rel="noreferrer">SHA256</Link>.
+            </Typography>
+            <TextInput label="Код подключения" value={code} onChange={changeCode} testId="warehouse-printer-code" />
+            <ActionGroup>
+              <SecondaryAction
+                onClick={() => void inspect()}
+                disabledReason={!code.trim() ? 'Введите код подключения' : busy ? 'Проверяем код' : undefined}
+                data-testid="warehouse-printer-preview"
+              >
+                Проверить
+              </SecondaryAction>
+            </ActionGroup>
+            {preview ? (
+              <Typography data-testid="warehouse-printer-preview-result">
+                Проверено: очередь {preview.queue_name} · {preview.platform}.{' '}
+                {destination && destination.connection_id !== preview.connection_id
+                  ? `Новые задания пойдут на ${preview.queue_name}; уже созданные сохранят прежний принтер.`
+                  : ''}
+              </Typography>
+            ) : null}
+          </>
+        ) : (
+          <Typography color="text.secondary">Статус доступен для просмотра. Подключить принтер может администратор.</Typography>
+        )}
+      </Stack>
+    </AppDialog>
+  )
+}

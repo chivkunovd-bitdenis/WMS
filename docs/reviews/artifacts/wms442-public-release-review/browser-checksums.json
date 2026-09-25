@@ -1,0 +1,18 @@
+[
+  {
+    "file": "WMS-Print-Setup-Windows-x64.exe",
+    "browser_matches_anonymous": true
+  },
+  {
+    "file": "WMS-Print-macOS.zip",
+    "browser_matches_anonymous": true
+  },
+  {
+    "file": "WMS-Print-Installation.md",
+    "browser_matches_anonymous": true
+  },
+  {
+    "file": "WMS-Print-SHA256SUMS.txt",
+    "browser_matches_anonymous": true
+  }
+]

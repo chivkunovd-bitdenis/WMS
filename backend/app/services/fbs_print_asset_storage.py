@@ -206,9 +206,12 @@ def save_print_file(
     if len(parts) < 2:
         raise FbsPrintAssetStorageError("invalid_storage_path")
     subdir = "/".join(parts[:-1])
-    target = validate_relative_storage_path(normalized, subdir=subdir)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(payload)
+    try:
+        target = validate_relative_storage_path(normalized, subdir=subdir)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
+    except OSError as exc:
+        raise FbsPrintAssetStorageError("file_write_failed") from exc
     return normalized
 
 
@@ -218,10 +221,15 @@ def read_print_file(
     checksum: str | None = None,
     content_type: str = ORDER_STICKER_CONTENT_TYPE,
 ) -> bytes:
-    target = resolve_existing_storage_path(relative_path)
-    if not target.is_file():
-        raise FbsPrintAssetStorageError("file_missing")
-    payload = target.read_bytes()
+    try:
+        target = resolve_existing_storage_path(relative_path)
+        if not target.is_file():
+            raise FbsPrintAssetStorageError("file_missing")
+        payload = target.read_bytes()
+    except FileNotFoundError as exc:
+        raise FbsPrintAssetStorageError("file_missing") from exc
+    except OSError as exc:
+        raise FbsPrintAssetStorageError("file_read_failed") from exc
     validate_print_bytes(payload, content_type=content_type)
     verify_checksum(payload, checksum)
     return payload

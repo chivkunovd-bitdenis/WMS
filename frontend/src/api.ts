@@ -34,6 +34,15 @@ export function getStoredToken(
   return null;
 }
 
+// Событие storage прилетает из соседней вкладки. `key === null` бывает при
+// localStorage.clear() — там тоже могла исчезнуть сессия портала.
+export function isAuthTokenStorageKey(
+  key: string | null,
+  portal: AuthStoragePortal = 'fulfillment',
+): boolean {
+  return key === null || key === TOKEN_KEYS[portal] || key === LEGACY_TOKEN_KEY;
+}
+
 export function setStoredToken(
   token: string | null,
   portal: AuthStoragePortal = 'fulfillment',

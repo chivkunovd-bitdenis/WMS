@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
@@ -127,6 +128,7 @@ async def test_autopoll_429_backoff_skips_only_limited_marketplace(
 @pytest.mark.asyncio
 async def test_movement_publish_attempts_each_marketplace_independently(
     monkeypatch: pytest.MonkeyPatch,
+    db_session: AsyncSession,
 ) -> None:
     from app.services import fbs_autopoll_service as autopoll
     from app.services import fbs_stock_publish_service as stock_publish
@@ -159,7 +161,8 @@ async def test_movement_publish_attempts_each_marketplace_independently(
 
     await stock_publish.publish_seller_stocks_now(tenant_id, seller_id)
 
-    assert calls == ["ozon", "wb"]
+    assert calls.count("ozon") == 3
+    assert calls.count("wb") == 1
 
 
 @pytest.mark.parametrize(

@@ -8,11 +8,12 @@ C20 (обрезка длинного текста экрана и длинног
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 
 from app.core.settings import settings
 from app.models.assistant_message import SCREEN_TEXT_MAX_CHARS
@@ -28,6 +29,7 @@ def _assistant_secret(monkeypatch: pytest.MonkeyPatch) -> str:
     # тенантам через "*". Тесты именно R23 (assist-rollout-* ниже)
     # переопределяют это значение под свой сценарий.
     monkeypatch.setattr(settings, "assistant_enabled_tenants", "*")
+    monkeypatch.setattr(settings, "assistant_enabled_user_emails", "")
     return secret
 
 
@@ -53,6 +55,128 @@ async def _register_tenant(async_client: AsyncClient, *, slug_prefix: str) -> di
 
 def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+async def test_user_email_rollout_enforces_identity_and_keeps_accepted_work(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R24: same-tenant denial, spoofing, parallel requests and disable/restore."""
+    from sqlalchemy import func, select
+
+    from app.db.session import SessionLocal
+    from app.models.assistant_message import AssistantMessage
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services.tokens import create_access_token
+
+    allowed_email = "staging-admin@example.com"
+    async with SessionLocal() as session:
+        tenant = Tenant(name="WMS Staging", slug="wms-staging")
+        other = Tenant(name="Other", slug="other-staging")
+        session.add_all([tenant, other])
+        await session.flush()
+        users = [
+            User(tenant_id=tenant.id, email=allowed_email, role="fulfillment_admin"),
+            User(tenant_id=tenant.id, email="staging-admin@wms.test", role="fulfillment_admin"),
+            User(tenant_id=other.id, email="other@example.com", role="fulfillment_admin"),
+        ]
+        for user in users:
+            user.password_hash = "not-used-token-auth"
+        session.add_all(users)
+        await session.flush()
+        headers = [
+            _auth(create_access_token(user_id=user.id, tenant_id=user.tenant_id, role=user.role))
+            for user in users
+        ]
+        await session.commit()
+
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", "wms-staging")
+    monkeypatch.setattr(settings, "assistant_enabled_user_emails", f" {allowed_email.upper()} ")
+    for index, auth in enumerate(headers):
+        me = await async_client.get("/auth/me", headers=auth)
+        assert me.status_code == 200, me.text
+        assert me.json()["assistant_enabled"] is (index == 0)
+
+    async def send(index: int) -> Response:
+        return await async_client.post(
+            "/assistant/messages",
+            headers={**headers[index], "X-User-Email": allowed_email},
+            json={
+                "client_message_id": f"rollout-{index}",
+                "message_text": "Как создать товар?",
+                "email": allowed_email,
+                "user_email": allowed_email,
+            },
+        )
+
+    responses = await asyncio.gather(*(send(i) for i in range(3)))
+    assert [response.status_code for response in responses] == [201, 403, 403]
+    message_id = responses[0].json()["id"]
+    reads = await asyncio.gather(
+        *(async_client.get("/assistant/messages", headers=auth) for auth in headers)
+    )
+    assert [response.status_code for response in reads] == [200, 403, 403]
+    for auth in headers[1:]:
+        direct = await async_client.get(f"/assistant/messages/{message_id}", headers=auth)
+        assert direct.status_code == 404
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(AssistantMessage)) == 1
+
+    monkeypatch.setattr(settings, "assistant_enabled_user_emails", "nobody@example.com")
+    assert (await async_client.get("/auth/me", headers=headers[0])).json()[
+        "assistant_enabled"
+    ] is False
+    assert (await async_client.get("/assistant/messages", headers=headers[0])).status_code == 403
+    secret_headers = {"X-WMS-Assistant-Secret": "test-assistant-secret-value"}
+    claim = await async_client.post("/assistant/executor/next", headers=secret_headers)
+    assert claim.json()["request"]["id"] == message_id
+    answer = await async_client.post(
+        f"/assistant/executor/{message_id}/result",
+        headers=secret_headers,
+        json={"answer_text": "Откройте Товары и нажмите Создать."},
+    )
+    assert answer.status_code == 200, answer.text
+    monkeypatch.setattr(settings, "assistant_enabled_user_emails", allowed_email)
+    assert (await async_client.get("/auth/me", headers=headers[0])).json()[
+        "assistant_enabled"
+    ] is True
+    restored = await async_client.get("/assistant/messages", headers=headers[0])
+    assert restored.json()["messages"][0]["answer_text"] == "Откройте Товары и нажмите Создать."
+
+
+@pytest.mark.parametrize(
+    ("tenants", "emails", "slug", "email", "expected"),
+    [
+        ("wms-staging", "", "wms-staging", None, True),
+        ("wms-staging", " ", "wms-staging", "other@example.com", True),
+        ("", "", "wms-staging", "staging-admin@example.com", False),
+        ("wms-staging", "staging-admin@example.com", "other", "staging-admin@example.com", False),
+        ("wms-staging", "staging-admin@example.com", "wms-staging", None, False),
+        ("wms-staging", ", ,", "wms-staging", "staging-admin@example.com", False),
+        ("wms-staging", "*", "wms-staging", "staging-admin@example.com", False),
+        (
+            "wms-staging",
+            "other@example.com, STAGING-ADMIN@EXAMPLE.COM ",
+            "wms-staging",
+            "staging-admin@example.com",
+            True,
+        ),
+    ],
+)
+def test_user_email_rollout_filter(
+    monkeypatch: pytest.MonkeyPatch,
+    tenants: str,
+    emails: str,
+    slug: str,
+    email: str | None,
+    expected: bool,
+) -> None:
+    from app.services.assistant_service import user_assistant_enabled
+
+    monkeypatch.setattr(settings, "assistant_enabled_tenants", tenants)
+    monkeypatch.setattr(settings, "assistant_enabled_user_emails", emails)
+    assert user_assistant_enabled(slug, email) is expected
 
 
 @pytest.mark.asyncio
@@ -262,9 +386,7 @@ async def test_executor_endpoints_reject_missing_or_wrong_secret(
 async def test_executor_endpoints_reject_regular_user_token(async_client: AsyncClient) -> None:
     """C17: обычный пользовательский токен (даже администратора) не открывает очередь."""
     admin = await _register_tenant(async_client, slug_prefix="assist-user-token")
-    resp = await async_client.post(
-        "/assistant/executor/next", headers=_auth(admin["access_token"])
-    )
+    resp = await async_client.post("/assistant/executor/next", headers=_auth(admin["access_token"]))
     assert resp.status_code == 401
 
 

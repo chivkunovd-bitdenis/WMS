@@ -13,6 +13,7 @@ from app.api.deps import (
     get_effective_seller_id,
     require_fbs_operator_access,
     require_fulfillment_admin,
+    require_reception_access,
 )
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
@@ -23,7 +24,9 @@ from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import (
     JOB_TYPE_FBS_LABEL_PRINT,
+    JOB_TYPE_FBS_STOCK_SYNC,
     JOB_TYPE_MOVEMENTS_DIGEST,
+    JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
     JOB_TYPE_WILDBERRIES_CARDS_SYNC,
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
     JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
@@ -171,9 +174,7 @@ async def start_background_job(
 
             run_wildberries_marketplace_orders_sync_task.delay(str(job.id))
         else:
-            background_tasks.add_task(
-                job_svc.run_wildberries_marketplace_orders_sync_job, job.id
-            )
+            background_tasks.add_task(job_svc.run_wildberries_marketplace_orders_sync_job, job.id)
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -225,6 +226,7 @@ async def get_background_job(
     job_id: uuid.UUID,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> BackgroundJobOut:
     job = await job_svc.get_job(session, user.tenant_id, job_id)
     if job is None:
@@ -233,5 +235,46 @@ async def get_background_job(
             detail="job_not_found",
         )
     if job.job_type == JOB_TYPE_FBS_LABEL_PRINT:
-        await require_fbs_operator_access(user=user, session=session)
+        if (job.payload_json or {}).get("request_id"):
+            await require_reception_access(user=user, session=session)
+            if (job.payload_json or {}).get("requested_by_user_id") != str(user.id):
+                raise HTTPException(404, "job_not_found")
+        else:
+            await require_fbs_operator_access(user=user, session=session)
+        output = _job_out(job)
+        output.payload_json = {
+            k: v for k, v in (output.payload_json or {}).items() if k != "storage_path"
+        }
+        output.result_json = {
+            k: v for k, v in (output.result_json or {}).items() if k != "claim_id"
+        }
+        return output
+    if user.role == FULFILLMENT_SELLER:
+        # These workers pass payload seller_id to their seller-scoped service.
+        # Unknown/general workers cannot establish ownership from an arbitrary field.
+        seller_job_types = {
+            JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+            JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
+            JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
+            JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
+            JOB_TYPE_FBS_STOCK_SYNC,
+        }
+        raw_seller_id = (job.payload_json or {}).get("seller_id")
+        try:
+            job_seller_id = uuid.UUID(raw_seller_id) if isinstance(raw_seller_id, str) else None
+        except ValueError:
+            job_seller_id = None
+        if (
+            job.job_type not in seller_job_types
+            or job_seller_id is None
+            or job_seller_id != effective_seller_id
+            or (job.result_json or {}).get("seller_id", str(job_seller_id)) != str(job_seller_id)
+        ):
+            raise HTTPException(404, "job_not_found")
+        output = _job_out(job)
+        # Historic failures include arbitrary str(exc), potentially SQL parameters.
+        # Keep the own job readable without exposing those unscoped diagnostics.
+        if output.error_message:
+            output.error_message = "Не удалось выполнить задачу"
+        return output
     return _job_out(job)

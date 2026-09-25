@@ -1,0 +1,61 @@
+"""WMS-444: retain the picked packed source in MP boxes.
+
+The existing pick allocation and box composition are the source of truth for an
+MP unload. These two counters preserve the already-packed portion at the moment
+it is picked, so later packaging/billing never infers it from unrelated
+remaining stock.
+
+Revision ID: 20260913_0306
+Revises: 20260913_0305
+Create Date: 2026-09-13 03:06:00.000000
+"""
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+
+from alembic import op
+
+revision: str = "20260913_0306"
+down_revision: str | Sequence[str] | None = "20260913_0305"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    # NULL marks a pre-WMS-444 row whose source split was never captured. The
+    # service preserves its persisted packing result instead of guessing it.
+    op.add_column(
+        "marketplace_unload_pick_allocations",
+        sa.Column("quantity_packed", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "marketplace_unload_pick_allocations",
+        sa.Column("quantity_source_known", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "marketplace_unload_box_lines",
+        sa.Column("quantity_packed", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "marketplace_unload_box_lines",
+        sa.Column("quantity_source_known", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "packaging_task_lines",
+        sa.Column("qty_legacy_confirmed_packed", sa.Integer(), nullable=True),
+    )
+    op.add_column(
+        "packaging_task_lines",
+        sa.Column("qty_legacy_packed_in_task", sa.Integer(), nullable=True),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("packaging_task_lines", "qty_legacy_packed_in_task")
+    op.drop_column("packaging_task_lines", "qty_legacy_confirmed_packed")
+    op.drop_column("marketplace_unload_box_lines", "quantity_source_known")
+    op.drop_column("marketplace_unload_box_lines", "quantity_packed")
+    op.drop_column("marketplace_unload_pick_allocations", "quantity_source_known")
+    op.drop_column("marketplace_unload_pick_allocations", "quantity_packed")

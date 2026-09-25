@@ -7,7 +7,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.inbound_intake import InboundIntakeCargoPlaceLine
+from app.models.inbound_intake import InboundIntakeCargoPlaceLine, InboundIntakeLine
+from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.services.tokens import decode_access_token
 
 BASE = "/operations/inbound-intake-requests"
 
@@ -97,6 +99,12 @@ async def _create_receiving_with_cargo_place(
         headers=headers,
     )
     assert submitted.status_code == 200, submitted.text
+    # Preserve a historical submitted document whose plan has no physical fact yet.
+    async with SessionLocal() as session:
+        legacy_line = await session.get(InboundIntakeLine, uuid.UUID(line.json()["id"]))
+        assert legacy_line is not None
+        legacy_line.actual_qty = None
+        await session.commit()
     places = await async_client.post(
         f"{BASE}/{request_id}/cargo-places",
         headers=headers,
@@ -311,7 +319,7 @@ async def test_box_and_cargo_place_are_counted_once_across_reopen(
 async def test_cargo_place_rejects_product_not_on_request(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-CARGO-002: foreign request product is rejected by PUT and scan."""
+    """TC-NEW-CARGO-002 / WMS-473: PUT needs a line; a scan adds the seller's product."""
     headers = await _register_admin(async_client, "foreign-product")
     request_id, place_id, _product_id, sku_code, seller_id = (
         await _create_receiving_with_cargo_place(
@@ -335,16 +343,70 @@ async def test_cargo_place_rejects_product_not_on_request(
         headers=headers,
         json={"barcode": sku_code, "product_id": foreign_product_id},
     )
-    assert scan.status_code == 422, scan.text
-    assert scan.json()["detail"] == "product_not_on_request"
+    assert scan.status_code == 200, scan.text
+    added = next(row for row in scan.json()["lines"] if row["product_id"] == foreign_product_id)
+    assert added["quantity"] == 1
 
     barcode_scan = await async_client.post(
         f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
         headers=headers,
         json={"barcode": foreign_sku},
     )
-    assert barcode_scan.status_code == 404, barcode_scan.text
-    assert barcode_scan.json()["detail"] == "barcode_unknown"
+    assert barcode_scan.status_code == 200, barcode_scan.text
+    again = next(
+        row for row in barcode_scan.json()["lines"] if row["product_id"] == foreign_product_id
+    )
+    assert again["quantity"] == 2
+    document = await async_client.get(f"{BASE}/{request_id}", headers=headers)
+    assert document.status_code == 200, document.text
+    line = next(row for row in document.json()["lines"] if row["product_id"] == foreign_product_id)
+    # FF-authored document: no seller plan, the stored number is the accepted total.
+    assert line["expected_qty"] == 2
+    assert line["added_by_fulfillment"] is False
+    assert line["effective_actual_qty"] == 2
+
+    outside = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": "4600000000000"},
+    )
+    assert outside.status_code == 422, outside.text
+    assert outside.json()["detail"] == "product_not_in_seller_catalog"
+
+
+@pytest.mark.asyncio
+async def test_cargo_place_scan_resolves_ozon_external_barcode(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "ozon-external")
+    request_id, place_id, product_id, _sku_code, seller_id = (
+        await _create_receiving_with_cargo_place(async_client, headers, "ozon-external")
+    )
+    tenant_id = uuid.UUID(
+        str(decode_access_token(headers["Authorization"].removeprefix("Bearer "))["tenant_id"])
+    )
+    barcode = f"OZN-CARGO-{uuid.uuid4().hex}"
+    async with SessionLocal() as session:
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                product_id=uuid.UUID(product_id),
+                marketplace="ozon",
+                external_barcodes=[barcode],
+            )
+        )
+        await session.commit()
+    scanned = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": barcode, "mutation_id": str(uuid.uuid4())},
+    )
+    assert scanned.status_code == 200, scanned.text
+    assert [
+        (line["product_id"], line["quantity"])
+        for line in scanned.json()["lines"]
+    ] == [(product_id, 1)]
 
 
 @pytest.mark.asyncio

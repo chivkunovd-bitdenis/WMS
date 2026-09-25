@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import binascii
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -137,6 +138,12 @@ class FbsPrintJobNextOut(BaseModel):
     job: FbsPrintJobOut | None
 
 
+def _utc_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
+
+
 def _job_out(job: BackgroundJob) -> FbsPrintJobOut:
     payload = job.payload_json or {}
     result = job.result_json or {}
@@ -154,9 +161,9 @@ def _job_out(job: BackgroundJob) -> FbsPrintJobOut:
         width_mm=width if isinstance(width, int) else None,
         height_mm=height if isinstance(height, int) else None,
         content_url=f"/operations/fbs-print-jobs/{job.id}/content",
-        created_at=job.created_at.isoformat(),
-        started_at=job.started_at.isoformat() if job.started_at else None,
-        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        created_at=_utc_iso(job.created_at),
+        started_at=_utc_iso(job.started_at) if job.started_at else None,
+        finished_at=_utc_iso(job.finished_at) if job.finished_at else None,
         queue_receipt=result.get("queue_receipt"),
         error_message=job.error_message,
     )
@@ -273,4 +280,6 @@ async def get_fbs_print_job(
         job = await get_print_job(session, user.tenant_id, job_id)
     except FbsPrintAssetError as exc:
         _raise_print_job_http(exc)
+    if (job.payload_json or {}).get("request_id"):
+        raise HTTPException(404, "print_job_not_found")
     return _job_out(job)

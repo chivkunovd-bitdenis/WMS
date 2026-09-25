@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import (
+    assert_product_catalog_read_access,
+    get_current_user,
+    seller_line_product_scope,
+)
 from app.db.session import get_db
 from app.models.user import User
 from app.services.scan_resolver_service import (
@@ -48,14 +52,17 @@ async def resolve_scan(
     code: Annotated[str, Query(min_length=1, max_length=512)],
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> ScanResolveOut:
+    await assert_product_catalog_read_access(session, user)
     try:
         match = await resolve_any_scan(
             session,
             user.tenant_id,
             code,
             warehouse_id=warehouse_id,
+            seller_id=seller_scope,
         )
     except ScanResolverError as exc:
         http_status = (

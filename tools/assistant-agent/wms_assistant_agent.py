@@ -1680,14 +1680,21 @@ def build_prompt(
 # R8/ревью Astra дефект №11: если в окружении процесса есть ключ API, `claude
 # -p` использует его вместо входа по подписке (ключ имеет приоритет) — тогда
 # оплата идёт по API, а не по подписке владельца, вопреки прямому требованию.
-# Явно убираем оба варианта переменной из окружения ДОЧЕРНЕГО процесса, а не
-# полагаемся на то, что их просто не будет — окружение агента могло унаследовать
-# их от какой-то другой активности на той же машине.
-_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+# Передаём дочернему процессу только обычное окружение CLI: родительский
+# исполнитель также содержит секрет очереди и может унаследовать доступы
+# WMS, базы или облака. Эти значения модели не нужны.
+_MODEL_ENV_VARS = frozenset({
+    "HOME", "PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP",
+    "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TERM", "COLORTERM", "NO_COLOR",
+    "SystemRoot", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT",
+    "APPDATA", "LOCALAPPDATA", "USERPROFILE",
+})
 
 
 def _subscription_only_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items() if k not in _API_KEY_ENV_VARS}
+    # The model needs normal CLI paths/locale and the existing subscription
+    # login in HOME, but never the runner's WMS, database or provider secrets.
+    return {k: v for k, v in os.environ.items() if k in _MODEL_ENV_VARS}
 
 
 def call_model(

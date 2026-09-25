@@ -95,6 +95,8 @@ type SortingScreenProps = {
     cellId: string | null
     toId: string | null
     qty: number
+    /** Holder before the move; only loose stock may be replayed after a lost reply. */
+    sourceHolder: Holder
   }) => void
 }
 
@@ -169,7 +171,7 @@ export function SortingObjectsScreen({
     // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
     // `object_not_found`: экран откатывал перенос и перечитывал склад, а
     // оператор видел, что строка «сбрасывается».
-    onPlace?.({ kind: 'product', id: line.id, qty, ...targetParts(target) })
+    onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
@@ -182,7 +184,7 @@ export function SortingObjectsScreen({
   }
 
   function moveObject(object: WarehouseObject, target: Holder, label: string) {
-    onPlace?.({ kind: object.kind, id: object.id, qty: 1, ...targetParts(target) })
+    onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })
     setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
     onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
   }

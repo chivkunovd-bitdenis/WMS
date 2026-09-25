@@ -1,5 +1,6 @@
+import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   Alert,
   Box,
@@ -42,11 +43,14 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
+import ReplayOutlinedIcon from '@mui/icons-material/ReplayOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { printMarkingCodeLabels, printMarkingCodeTape } from '../../utils/printMarkingCodeLabel'
+import { startAutoKizReprintPrint } from '../../utils/kizReprintPrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
@@ -60,11 +64,15 @@ import {
   fbsSameStickerScan,
   fbsOrderMarkingAccepted,
   fbsMarkingPresentation,
+  fbsMarkingVerdictsSummary,
   fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
+  fbsOzonAutoBoxesPlan,
+  fbsOzonBoxLabelReady,
+  fbsOzonLabelFailuresText,
   fbsUnassignedPositionQuantity,
   fbsStageAfterWorkspaceRefresh,
   ordersWord,
@@ -74,10 +82,15 @@ import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
   assignFbsPackingBoxOrders,
+  autoAssignFbsOzonBoxes,
   clearFbsPackingBox,
+  claimFbsDirectKizPrint,
+  claimFbsScanAutoPrintReprint,
+  claimFbsScanAutoPrintTarget,
   commitFbsKiz,
   fbsKizOrderNumber,
   syncFbsOrderMarkings,
+  syncFbsSupplyMarkings,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsOrderKiz,
@@ -89,11 +102,17 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   lookupFbsOrderBySticker,
+  markFbsDirectKizPrintStarted,
+  markFbsScanAutoPrintTargetStarted,
   printFbsOrderTape,
+  releaseFbsDirectKizPrintClaim,
+  releaseFbsScanAutoPrintTargetClaim,
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
   setFbsSupplyBoxesWithoutDistribution,
+  saveFbsDirectKizReprint,
+  scanFbsProductForAutoPrint,
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
@@ -104,9 +123,27 @@ import {
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsDeliveryPreflight,
+  type FbsScanAutoPrintReprintClaim,
   type FbsWorkspace,
   type FbsWorklistOrder,
 } from './fbsApi'
+import {
+  FbsKizAutoPrintQueue,
+  startClaimedAutomaticPrint,
+} from './fbsKizAutoReprint'
+import {
+  claimFbsPendingProductScan,
+  completeFbsPendingProductScan,
+  fbsPendingProductScanComplete,
+  loadFbsScanPrintPreferences,
+  mergeFbsBufferedHardwareScan,
+  peekFbsPendingProductScan,
+  printFbsOrderQrAsset,
+  productScanPrintPlan,
+  saveFbsScanPrintPreferences,
+  updateFbsPendingProductScan,
+  type FbsScanPrintPreferences,
+} from './fbsScanAutoPrint'
 
 type Props = {
   token: string
@@ -182,6 +219,21 @@ function hasRemovableKiz(order: FbsWorkspace['orders'][number], marketplace: 'wb
   )
 }
 
+/** The inline FBS reprint is intentionally only for an operator-bound KIZ.
+ * A pool code continues to use the existing order-level repeat flow. */
+function hasOperatorKiz(
+  state: FbsWorkspace['orders'][number]['metadata']['states'][number] | undefined,
+  marketplace: 'wb' | 'ozon',
+) {
+  return Boolean(
+    state?.id &&
+      state.kind === 'sgtin' &&
+      state.source === 'operator' &&
+      state.status !== 'missing' &&
+      (marketplace === 'wb' || state.status !== 'rejected'),
+  )
+}
+
 // KIZ-01: инлайновый скан «стикер заказа → Честный знак» прямо в списке упаковки,
 // без модалки. Логика ошибок/подсказок скана переиспользована из FbsKizScanDialog.tsx
 // (тот диалог не меняется и как запасной путь больше не используется).
@@ -194,6 +246,11 @@ type KizScannerDebug = {
 type KizScanError = {
   text: string
   debug: KizScannerDebug | null
+}
+
+type QueuedPackingScan = {
+  raw: string
+  preferences: FbsScanPrintPreferences
 }
 
 const KIZ_HINT_TEXT: Record<string, string> = {
@@ -219,6 +276,51 @@ export function stickerCodeParts(code: string | null): { head: string; tail: str
   }
   if (value.length <= 4) return { head: '', tail: value }
   return { head: value.slice(0, -4), tail: value.slice(-4) }
+}
+
+type PackingSizeOrder = {
+  product: { size: string | null }
+  positions: Array<{ size?: string | null }>
+}
+
+/**
+ * Размеры строки упаковки. У WB размер один на заказ, у Ozon свой у каждой
+ * позиции отправления, поэтому там список идёт в том же порядке, что и позиции
+ * на экране: размер первой позиции нельзя показывать за весь заказ.
+ */
+export function fbsPackingSizes(order: PackingSizeOrder, isOzon: boolean): Array<string | null> {
+  const clean = (value: string | null | undefined) => {
+    const text = (value ?? '').trim()
+    return text ? text : null
+  }
+  if (isOzon) return order.positions.map((position) => clean(position.size))
+  return [clean(order.product.size)]
+}
+
+/** Столбец «Размер» нужен, когда размер есть хотя бы у одной показанной строки. */
+export function fbsPackingShowsSize(orders: PackingSizeOrder[], isOzon: boolean): boolean {
+  return orders.some((order) => fbsPackingSizes(order, isOzon).some((size) => size !== null))
+}
+
+function PackingSizeCell({ value, withCaption, valueColor }: {
+  value: string | null
+  withCaption: boolean
+  valueColor: string
+}) {
+  return (
+    <Box sx={{ width: 76, flexShrink: 0, textAlign: 'right' }} data-testid="fbs-packing-size">
+      {withCaption ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+          Размер
+        </Typography>
+      ) : null}
+      {/* «универсальный» и «44/46/48/50/52/54» — одно слово без пробелов: без переноса
+          в любом месте оно вылезает из колонки на соседний текст. */}
+      <Typography variant="body2" sx={{ color: value ? valueColor : 'text.disabled', overflowWrap: 'anywhere' }}>
+        {value ?? '—'}
+      </Typography>
+    </Box>
+  )
 }
 
 function kizErrorTextByCode(code: string, message: string, context: unknown, provider = 'WB'): string {
@@ -305,9 +407,11 @@ function productLabelFromPosition(
     product_name: position.name,
     sku_code: position.sku ?? position.seller_article ?? order.product.sku ?? `WMS-${order.id}`,
     wb_vendor_code: position.seller_article,
-    // Ozon position DTO does not carry a size.  The compatibility product can
-    // describe another position, so an absent position size stays blank.
-    wb_size: null,
+    wb_size: position.size,
+    wb_color: position.color,
+    wb_brand: position.brand,
+    wb_composition: position.composition,
+    seller_name: order.seller.name,
     barcode,
   }
 }
@@ -340,7 +444,11 @@ function productLabelFromOrder(
     wb_vendor_code: marketplace === 'ozon'
       ? position?.seller_article ?? null
       : position?.seller_article ?? order.product.seller_article,
-    wb_size: order.product.size,
+    wb_size: position?.size ?? order.product.size,
+    wb_color: position?.color ?? order.product.color,
+    wb_brand: position?.brand ?? order.product.brand,
+    wb_composition: position?.composition ?? order.product.composition,
+    seller_name: order.seller.name,
     barcode,
   }
 }
@@ -399,6 +507,9 @@ export function FfFbsSupplyWorkspace({
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
+  // WMS-526: ход «Создать автоматически» в тексте кнопки; ref держит одно выполнение на двойной клик.
+  const [ozonAutoBoxesProgress, setOzonAutoBoxesProgress] = useState<string | null>(null)
+  const ozonAutoBoxesRunningRef = useRef(false)
   const deliveryKeyRef = useRef(createFbsIdempotencyKey())
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [deliverConfirmOpen, setDeliverConfirmOpen] = useState(false)
@@ -424,11 +535,24 @@ export function FfFbsSupplyWorkspace({
   const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
+  const [scanPrintPreferences, setScanPrintPreferences] = useState<FbsScanPrintPreferences>({
+    printQr: false,
+    printChz: false,
+    reprintChz: false,
+  })
   const [kizConfirmValue, setKizConfirmValue] = useState<string | null>(null)
   const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const kizSelectedStickerRef = useRef('')
+  const activeProductScanBarcodeRef = useRef<string | null>(null)
+  const kizAutoPrintQueueRef = useRef(new FbsKizAutoPrintQueue())
+  const pendingDirectReprintKeysRef = useRef(new Map<string, string>())
+  const queuedPackingScansRef = useRef<QueuedPackingScan[]>([])
+  const busyHardwareScanBufferRef = useRef('')
+  const busyHardwareCaptureEnabledRef = useRef(false)
+  const scannerShouldRefocusRef = useRef(false)
+  const [queuedPackingScanVersion, setQueuedPackingScanVersion] = useState(0)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -477,17 +601,47 @@ export function FfFbsSupplyWorkspace({
     workspaceOpenGeneration.current += 1
     return () => { workspaceOpenGeneration.current += 1 }
   }, [open, supplyId])
+  // Поставка, чей состав сейчас на экране. Ответ обязан назвать её сам: иначе
+  // сохранённое «Повторить» из прежней поставки занимает номер записи уже в новом
+  // открытии и её состав ложится на открытую поставку (WMS-477).
+  const shownSupplyId = useRef<string | null>(initialWorkspace?.supply.id ?? null)
+  useEffect(() => {
+    shownSupplyId.current = workspace?.supply.id ?? null
+  }, [workspace])
+
+  // Тихое обновление раз в 15 с идёт рядом с действиями оператора, и ответы
+  // возвращаются в произвольном порядке. Номер занимается в начале обращения,
+  // а применить свой ответ вправе только последнее из начатых: поэтому поздний
+  // снимок не возвращает вердикт, который на экране уже сменился, и не убирает
+  // заказ, добавленный после старта чтения (WMS-477).
+  const workspaceWriteSeq = useRef(0)
+  const beginWorkspaceWrite = useCallback(() => {
+    const seq = ++workspaceWriteSeq.current
+    const generation = workspaceOpenGeneration.current
+    return {
+      isCurrent: () => workspaceOpenGeneration.current === generation,
+      isLatest: () => seq === workspaceWriteSeq.current,
+      matchesShownSupply: (next: FbsWorkspace) => next.supply.id === shownSupplyId.current,
+    }
+  }, [])
+  // Ответ может идти дольше 15 с. Пока прежнее тихое обновление не вернулось,
+  // следующее не запускаем: иначе каждый ответ устаревает к своему приходу и
+  // строки не обновляются вообще.
+  const silentRefreshInFlight = useRef(false)
 
   const load = useCallback(
-    async (silent = false) => {
+    // onApplied вызывается только снимком, который действительно лёг на экран:
+    // по нему вызвавший вправе назвать оператору итог своей операции (WMS-477).
+    async (silent = false, onApplied?: (applied: FbsWorkspace) => void) => {
       if (!open || !supplyId) return
-      const generation = workspaceOpenGeneration.current
-      const isCurrent = () => workspaceOpenGeneration.current === generation
+      const write = beginWorkspaceWrite()
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
-        if (!isCurrent()) return
+        if (!write.isCurrent()) return
+        if (!write.isLatest()) return next
         setWorkspace(next)
+        onApplied?.(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
             next.supply.marketplace,
@@ -497,12 +651,12 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
-        if (isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
+        if (write.isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
-        if (isCurrent() && !silent) setBusy(false)
+        if (write.isCurrent() && !silent) setBusy(false)
       }
     },
-    [open, supplyId, token, authHeaders],
+    [open, supplyId, token, authHeaders, beginWorkspaceWrite],
   )
 
   useEffect(() => {
@@ -510,6 +664,9 @@ export function FfFbsSupplyWorkspace({
     setBusy(false)
     setError(null)
     setNotice(null)
+    // «Повторить» держит операцию прежней поставки. Оставленная кнопка либо
+    // отправила бы её из открытой поставки, либо висела бы мёртвой.
+    setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
@@ -524,15 +681,28 @@ export function FfFbsSupplyWorkspace({
     setBoxSelectedPositionIds(new Set())
     setBoxMenu(null)
     setExpandedBoxIds(new Set())
+    setOzonAutoBoxesProgress(null)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
     setTzLine(null)
     setReprintMenu(null)
     setAddOrdersOpen(false)
+    setAddOrdersBusy(false)
     setAddableOrders([])
     setAddableSelected(new Set())
+    // Занятость диалогов принадлежит прежнему открытию: ответ той поставки её
+    // уже не снимет, а у открытого окна снятия ЧЗ обе кнопки и закрытие
+    // отключены по занятости — оператор остался бы без выхода.
+    setSkipHonestSignOpen(false)
+    setSkipHonestSignBusy(false)
     setKizScanActive(null)
     kizSelectedStickerRef.current = ''
+    activeProductScanBarcodeRef.current = null
+    queuedPackingScansRef.current = []
+    busyHardwareScanBufferRef.current = ''
+    busyHardwareCaptureEnabledRef.current = false
+    scannerShouldRefocusRef.current = false
+    pendingDirectReprintKeysRef.current.clear()
     setKizScanValue('')
     setKizScanBusy(false)
     setKizScanError(null)
@@ -553,9 +723,81 @@ export function FfFbsSupplyWorkspace({
   }, [workspace?.supply.planned_shipment_date])
 
   useEffect(() => {
-    if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
+    setScanPrintPreferences(loadFbsScanPrintPreferences(token))
+  }, [token])
+
+  // The baseline scanner input is disabled while its request is running.
+  // Native scanners then emit into document.body, so buffer only that case and
+  // feed the same ordered queue. Ozon retains its pre-WMS-514 behaviour.
+  useLayoutEffect(() => {
+    const captureScope = (
+      !isOzonSupply
+      && open
+      && stage === 'packing'
+      && busyHardwareCaptureEnabledRef.current
+    )
+    if (!captureScope) {
+      busyHardwareScanBufferRef.current = ''
+      return
+    }
+    if (!kizScanBusy) {
+      const prefix = busyHardwareScanBufferRef.current
+      busyHardwareScanBufferRef.current = ''
+      busyHardwareCaptureEnabledRef.current = false
+      if (prefix) {
+        setKizScanValue((current) => mergeFbsBufferedHardwareScan(prefix, current))
+      }
+      return
+    }
+    const onBusyHardwareKey = (event: globalThis.KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target
+      if (
+        target !== document.body
+        && target !== document.documentElement
+      ) return
+      if (event.key === 'Enter') {
+        const raw = busyHardwareScanBufferRef.current.replace(/[ \t\r\n\v\f]+$/, '')
+        busyHardwareScanBufferRef.current = ''
+        if (!raw) return
+        event.preventDefault()
+        scannerShouldRefocusRef.current = true
+        queuedPackingScansRef.current.push({ raw, preferences: { ...scanPrintPreferences } })
+        setQueuedPackingScanVersion((current) => current + 1)
+        return
+      }
+      if (event.key.length === 1) busyHardwareScanBufferRef.current += event.key
+    }
+    document.addEventListener('keydown', onBusyHardwareKey)
+    return () => document.removeEventListener('keydown', onBusyHardwareKey)
+  }, [kizScanBusy, isOzonSupply, open, stage, scanPrintPreferences])
+
+  useEffect(() => {
+    if (!kizScanBusy) return
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target
+      if (target === kizScanInputRef.current) return
+      if (
+        target instanceof HTMLIFrameElement
+        && target.getAttribute('aria-hidden') === 'true'
+      ) return
+      if (target instanceof HTMLElement && target !== document.body) {
+        scannerShouldRefocusRef.current = false
+      }
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [kizScanBusy])
+
+  // Тихое обновление раз в 15 с при видимом окне. На «Упаковке и маркировке»
+  // (WMS-477) так сами зеленеют строки, чей Честный знак WB подтвердил в фоне;
+  // load(true) не трогает вкладку, полосу прогресса и состояние скана.
+  useEffect(() => {
+    if (!open || !supplyId || !['picking', 'packing', 'boxes'].includes(stage)) return
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load(true)
+      if (document.visibilityState !== 'visible' || silentRefreshInFlight.current) return
+      silentRefreshInFlight.current = true
+      void load(true).finally(() => { silentRefreshInFlight.current = false })
     }, 15_000)
     return () => window.clearInterval(timer)
   }, [open, supplyId, stage, load])
@@ -582,34 +824,73 @@ export function FfFbsSupplyWorkspace({
     }
   }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
 
+  // Пересечение запросов не даёт применить свой ответ, но и чужой свежим не
+  // делает: чтение, начатое позже нашей записи, могло прочитать базу до неё.
+  // Поэтому вместо собственного снимка просим новое чтение — оно начинается
+  // после успеха операции, поэтому видит его и отменяет все начатые раньше.
+  const refreshAfterLostRace = (onApplied?: (applied: FbsWorkspace) => void) => {
+    void load(true, onApplied)
+  }
+
   const run = async (
     operation: () => Promise<FbsWorkspace>,
-    success: string,
+    // Текст успеха может зависеть от ответа (WMS-477: «подтверждено X из Y»);
+    // функция сохраняется и для «Повторить», чтобы повтор дал то же уведомление.
+    success: string | ((next: FbsWorkspace) => string),
     onError?: (cause: unknown) => void,
   ) => {
+    const write = beginWorkspaceWrite()
     setBusy(true)
     setError(null)
     setNotice(null)
     setRetryAction(null)
     try {
       const next = await operation()
-      setWorkspace(next)
-      setStage((current) => fbsStageAfterWorkspaceRefresh(
-        next.supply.marketplace,
-        current,
-        visualStage(next.stage),
-      ))
-      if (success) setNotice(success)
+      // Пока шёл запрос, могли открыть другую поставку: ни её строки, ни её
+      // уведомление и занятость чужой ответ не подменяет. Ответ, назвавший
+      // не показанную поставку, чужой независимо от номера записи.
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return null
+      // Операция прошла, но её снимок мог устареть, пока шёл запрос: строки
+      // на экране им не откатываем. Вызвавшему ответ возвращаем в любом случае —
+      // ему нужен факт успеха.
+      const applied = write.isLatest()
+      if (applied) {
+        setWorkspace(next)
+        setStage((current) => fbsStageAfterWorkspaceRefresh(
+          next.supply.marketplace,
+          current,
+          visualStage(next.stage),
+        ))
+      } else {
+        // Снимок проиграл гонку, но операция сохранена: строки восстановит новое
+        // чтение. Итог, считаемый по ответу, называем по его снимку и только если
+        // тот лёг на экран этой же поставки: по отброшенному ответу «подтверждено
+        // 1 из 1» спорило бы со строкой «WB не принял ЧЗ» (WMS-477, R2).
+        const retell = typeof success === 'string' ? null : success
+        refreshAfterLostRace((fresh) => {
+          if (retell && write.isCurrent() && write.matchesShownSupply(fresh)) setNotice(retell(fresh))
+        })
+      }
+      // Действие выполнено, поэтому о нём говорим всегда. Текст, посчитанный по
+      // ответу, ждёт восстановительного чтения, если свой снимок отброшен.
+      let message = ''
+      if (typeof success === 'string') message = success
+      else if (applied) message = success(next)
+      if (message) setNotice(message)
       return next
     } catch (cause) {
+      if (!write.isCurrent()) return null
       onError?.(cause)
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
-        setRetryAction(() => () => { void run(operation, success, onError) })
+        // Кнопка живёт в общем Alert окна. Повторяем только пока открыта та же
+        // поставка, в которой ошибка возникла: иначе нажатие отправило бы её
+        // операцию, а ответ лёг бы на состав открытой сейчас поставки.
+        setRetryAction(() => () => { if (write.isCurrent()) void run(operation, success, onError) })
       }
       return null
     } finally {
-      setBusy(false)
+      if (write.isCurrent()) setBusy(false)
     }
   }
 
@@ -637,6 +918,7 @@ export function FfFbsSupplyWorkspace({
 
   const addOrdersToCurrentSupply = async () => {
     if (!workspace || addableSelected.size === 0) return
+    const write = beginWorkspaceWrite()
     setAddOrdersBusy(true)
     setError(null)
     try {
@@ -644,23 +926,30 @@ export function FfFbsSupplyWorkspace({
         order_ids: [...addableSelected],
         idempotency_key: createFbsIdempotencyKey(),
       })
-      setWorkspace(next)
-      // Добавление заказа — обычное обновление, а не повод вернуть оператора
-      // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
-      // setStage перекидывал человека с упаковки или коробов на подбор. Правило
-      // проекта: серверные факты не управляют навигацией в рабочем месте WB.
-      setStage((current) => fbsStageAfterWorkspaceRefresh(
-        next.supply.marketplace,
-        current,
-        visualStage(next.stage),
-      ))
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return
+      // Заказы добавлены в любом случае: закрываем окно и говорим об этом.
+      // Снимок применяем, только если он не старше показанного, иначе читаем
+      // состав заново: старший ответ мог прочитать базу до нашей записи.
+      if (write.isLatest()) {
+        setWorkspace(next)
+        // Добавление заказа — обычное обновление, а не повод вернуть оператора
+        // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
+        // setStage перекидывал человека с упаковки или коробов на подбор. Правило
+        // проекта: серверные факты не управляют навигацией в рабочем месте WB.
+        setStage((current) => fbsStageAfterWorkspaceRefresh(
+          next.supply.marketplace,
+          current,
+          visualStage(next.stage),
+        ))
+      } else refreshAfterLostRace()
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')
     } catch (cause) {
+      if (!write.isCurrent()) return
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось добавить заказы в поставку.')
     } finally {
-      setAddOrdersBusy(false)
+      if (write.isCurrent()) setAddOrdersBusy(false)
     }
   }
 
@@ -675,59 +964,447 @@ export function FfFbsSupplyWorkspace({
   }
 
 
-  // KIZ-01: сканер стреляет в активное поле; пока запрос идёт, поле disabled и фокус
-  // теряется — без возврата фокуса следующий скан уходит в никуда. Тот же приём,
-  // что и в FbsKizScanDialog.tsx (см. его refocus()).
-  const refocusKizInput = useCallback(() => {
-    let attempts = 0
-    const focus = () => {
+  // Return focus only while the scanner still owns it. A delayed print must
+  // never pull the operator out of another control they deliberately chose.
+  const refocusKizInput = useCallback((force = false) => {
+    window.setTimeout(() => {
+      if (!force && !scannerShouldRefocusRef.current) return
       const input = kizScanInputRef.current
-      // Return scanner focus without cancelling the scroll to the scanned row.
-      input?.focus({ preventScroll: true })
-      attempts += 1
-      if (input != null && document.activeElement !== input && attempts < 8) {
-        window.setTimeout(focus, 50)
+      const active = document.activeElement
+      const hiddenPrintFrame = (
+        active instanceof HTMLIFrameElement
+        && active.getAttribute('aria-hidden') === 'true'
+      )
+      if (
+        input
+        && (force || active == null || active === document.body || active === input || hiddenPrintFrame)
+      ) {
+        input.focus({ preventScroll: true })
       }
-    }
-    window.setTimeout(focus, 0)
+      scannerShouldRefocusRef.current = false
+    }, 0)
   }, [])
 
-  const scanKizSticker = useCallback(
-    async (raw: string) => {
+  const scanIdleCode = useCallback(
+    async (raw: string, preferences: FbsScanPrintPreferences) => {
       if (!workspace) return
+      busyHardwareCaptureEnabledRef.current = (
+        !isOzonSupply
+        && (preferences.printQr || preferences.printChz || preferences.reprintChz)
+      )
       setKizScanBusy(true)
       setKizScanError(null)
       setKizScanHints([])
       setKizScanDebugOpen(false)
       setKizScanNotice(null)
       try {
-        const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
-        if (!found.can_bind) {
-          setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ КИЗ внести нельзя'), debug: null })
-          setKizScanValue('')
+        // Classification priority 2: a known order sticker wins before a full
+        // KIZ or product barcode, even when no automatic print mode is active.
+        let stickerNotFound: unknown = null
+        try {
+          const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
+          if (!found.can_bind) {
+            setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ ЧЗ внести нельзя'), debug: null })
+            return
+          }
+          if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
+          kizSelectedStickerRef.current = raw
+          if (found.needs_confirmation) setKizConfirmTarget(found)
+          else setKizScanActive(found)
+          activeProductScanBarcodeRef.current = null
+          return
+        } catch (cause) {
+          if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
+            throw cause
+          }
+          stickerNotFound = cause
+        }
+
+        // Ozon and the all-off state stay on the pre-WMS-514 path. In
+        // particular, no product endpoint, selection, event or hidden attempt
+        // exists when all three checkboxes are off.
+        if (
+          isOzonSupply
+          || (!preferences.printQr && !preferences.printChz && !preferences.reprintChz)
+        ) throw stickerNotFound
+
+        // Classification priority 3: direct exact-KIZ reprint.  A normal
+        // product barcode receives not_a_kiz and continues to priority 4.
+        if (preferences.reprintChz) {
+          const idempotencyKey = pendingDirectReprintKeysRef.current.get(raw)
+            ?? createFbsIdempotencyKey()
+          pendingDirectReprintKeysRef.current.set(raw, idempotencyKey)
+          try {
+            const row = await saveFbsDirectKizReprint(
+              token,
+              authHeaders,
+              workspace.supply.id,
+              raw,
+              idempotencyKey,
+            )
+            let directPrintStarted = false
+            const printAttemptKey = createFbsIdempotencyKey()
+            const queued = await kizAutoPrintQueueRef.current.enqueue(
+              {
+                attemptId: `direct:${row.id}:${printAttemptKey}`,
+                orderId: row.id,
+                kiz: row.kiz,
+                enabled: true,
+              },
+              async () => {
+                const result = await startAutoKizReprintPrint(
+                  row,
+                  printAttemptKey,
+                  (codes) => printMarkingCodeLabels(codes, { duplicateCopies: 1 }),
+                  {
+                    claim: (_saved, attemptKey) => claimFbsDirectKizPrint(
+                      token, authHeaders, workspace.supply.id, row.id, attemptKey,
+                    ),
+                    markStarted: () => markFbsDirectKizPrintStarted(
+                      token, authHeaders, workspace.supply.id, row.id,
+                    ),
+                    releaseClaim: (_saved, attemptKey) => releaseFbsDirectKizPrintClaim(
+                      token, authHeaders, workspace.supply.id, row.id, attemptKey,
+                    ),
+                  },
+                )
+                directPrintStarted = result.printStarted
+              },
+            )
+            pendingDirectReprintKeysRef.current.delete(raw)
+            setKizScanNotice(
+              queued && directPrintStarted
+                ? 'Точная копия ЧЗ отправлена в печать.'
+                : 'Этот скан ЧЗ уже был отправлен в печать; повторная копия не создана.',
+            )
+            return
+          } catch (cause) {
+            if (cause instanceof FbsApiError && cause.code === 'not_a_kiz') {
+              pendingDirectReprintKeysRef.current.delete(raw)
+            } else {
+              throw cause
+            }
+          }
+        }
+
+        // Classification priority 4: deterministic product-unit selection.
+        const attempt = claimFbsPendingProductScan(
+          token,
+          workspace.supply.id,
+          raw,
+          preferences,
+          createFbsIdempotencyKey,
+        )
+        const plan = productScanPrintPlan(attempt.preferences)
+        const result = await scanFbsProductForAutoPrint(
+          token,
+          authHeaders,
+          workspace.supply.id,
+          {
+            barcode: raw,
+            idempotency_key: attempt.idempotencyKey,
+            print_qr: plan.printQr,
+            print_chz: plan.printChz,
+            reprint_chz: plan.reprintChz,
+          },
+        )
+        if (
+          (attempt.scanId && attempt.scanId !== result.scan_id)
+          || (attempt.orderId && attempt.orderId !== result.order_id)
+        ) throw new Error('Сервер вернул другой заказ для незавершённого скана.')
+        attempt.scanId = result.scan_id
+        attempt.orderId = result.order_id
+        updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+
+        const qrStartedBefore = attempt.qrStarted
+        const chzStartedBefore = attempt.chzStarted
+        let reprintAlreadyStarted = false
+        let waitingForReprintKiz = plan.reprintChz && !attempt.chzStarted
+        if (waitingForReprintKiz && result.reprint_recovery?.status === 'started') {
+          attempt.chzStarted = true
+          updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+          reprintAlreadyStarted = true
+          waitingForReprintKiz = false
+        }
+
+        const printErrors: string[] = []
+        if (plan.printQr && !attempt.qrStarted) {
+          if (!result.qr_asset) {
+            printErrors.push('Стикер QR заказа не получен.')
+          } else {
+            try {
+              const printAttemptKey = createFbsIdempotencyKey()
+              await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  attemptId: `${result.scan_id}:qr:${printAttemptKey}`,
+                  orderId: result.order_id,
+                  kiz: result.qr_asset.id,
+                  enabled: true,
+                },
+                async () => {
+                  const printResult = await startClaimedAutomaticPrint(
+                    printAttemptKey,
+                    async () => printFbsOrderQrAsset(token, result.qr_asset!),
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'qr',
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'qr',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'qr',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск печати QR.')
+                  }
+                },
+              )
+              attempt.qrStarted = true
+              updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+            } catch (cause) {
+              printErrors.push(cause instanceof Error ? cause.message : 'Не удалось запустить печать QR.')
+            }
+          }
+        }
+        if (plan.printChz && !result.requires_honest_sign) {
+          attempt.chzStarted = true
+          updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+        } else if (plan.printChz && !attempt.chzStarted) {
+          const printed = result.printed_codes[0]
+          if (!printed) {
+            printErrors.push(
+              result.shortage > 0
+                ? 'Не хватает ЧЗ для выбранной единицы.'
+                : 'ЧЗ выбранной единицы не подготовлен.',
+            )
+          } else {
+            try {
+              const printAttemptKey = createFbsIdempotencyKey()
+              await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  attemptId: `${result.scan_id}:chz:${printAttemptKey}`,
+                  orderId: result.order_id,
+                  kiz: printed.cis_code,
+                  enabled: true,
+                },
+                async (kiz) => {
+                  const printResult = await startClaimedAutomaticPrint(
+                    printAttemptKey,
+                    async () => printMarkingCodeTape(
+                      [{ cis: kiz, codeId: printed.id, hasLabelArtifact: printed.has_label_artifact }],
+                      { units: [{ block: 'cz', copies: 1 }] },
+                      undefined,
+                      { authToken: token },
+                    ),
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск печати ЧЗ.')
+                  }
+                },
+              )
+              attempt.chzStarted = true
+              updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+            } catch (cause) {
+              printErrors.push(cause instanceof Error ? cause.message : 'Не удалось запустить печать ЧЗ.')
+            }
+          }
+        }
+        if (waitingForReprintKiz) {
+          const recovery = result.reprint_recovery
+          if (recovery?.status === 'available') {
+            try {
+              const printAttemptKey = createFbsIdempotencyKey()
+              await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  attemptId: `${result.scan_id}:reprint:${printAttemptKey}`,
+                  orderId: result.order_id,
+                  // Printable bytes are returned only by the atomic claim
+                  // inside this queued job; the product response never carries
+                  // a stale KIZ across the recovery→claim boundary.
+                  kiz: result.scan_id,
+                  enabled: true,
+                },
+                async () => {
+                  const printResult = await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(
+                    printAttemptKey,
+                    async (claim) => {
+                      if (!claim.kiz) {
+                        throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
+                      }
+                      await printMarkingCodeLabels([claim.kiz], { duplicateCopies: 1 })
+                    },
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintReprint(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        result.scan_id,
+                        'chz',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск перепечати ЧЗ.')
+                  }
+                },
+              )
+              attempt.chzStarted = true
+              updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+              waitingForReprintKiz = false
+            } catch (cause) {
+              printErrors.push(cause instanceof Error ? cause.message : 'Не удалось запустить перепечать ЧЗ.')
+            }
+          } else if (recovery?.status === 'outcome_unknown') {
+            printErrors.push('Исход предыдущего запуска перепечати ЧЗ неизвестен; автоматический повтор остановлен.')
+          } else {
+            if (!result.binding_target) {
+              throw new Error('Сервер не вернул выбранный заказ для скана ЧЗ.')
+            }
+            kizSelectedStickerRef.current = ''
+            activeProductScanBarcodeRef.current = raw
+            // Product selection must not bypass the existing replacement
+            // confirmation when this exact order already has a KIZ.
+            if (result.binding_target.needs_confirmation) {
+              setKizConfirmTarget(result.binding_target)
+            } else {
+              setKizScanActive(result.binding_target)
+            }
+          }
+        }
+        printErrors.push(...result.order_errors.map((item) => item.message))
+
+        const attemptComplete = fbsPendingProductScanComplete(attempt)
+        if (attemptComplete) {
+          completeFbsPendingProductScan(token, workspace.supply.id, raw)
+        }
+
+        window.requestAnimationFrame(() => {
+          kizRowRefs.current[result.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        })
+        if (printErrors.length > 0) {
+          setKizScanError({
+            text: `Заказ WB № ${result.wb_order_id} выбран. ${printErrors.join(' ')}`,
+            debug: null,
+          })
           return
         }
-        // Lookup can see an order added after this list was opened.
-        // Render its row before selecting it and scrolling into view.
-        if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
-        kizSelectedStickerRef.current = raw
-        if (found.needs_confirmation) setKizConfirmTarget(found)
-        else setKizScanActive(found)
-        setKizScanValue('')
+        const sent = [
+          plan.printQr && !qrStartedBefore && attempt.qrStarted ? 'QR' : null,
+          (plan.printChz || plan.reprintChz)
+            && !chzStartedBefore
+            && attempt.chzStarted
+            && !reprintAlreadyStarted
+            ? 'ЧЗ'
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' → ')
+        setKizScanNotice(
+          waitingForReprintKiz
+            ? `${sent ? `${sent} заказа WB № ${result.wb_order_id} отправлен в печать. ` : ''}Выбран заказ WB № ${result.wb_order_id}; сканируйте полный ЧЗ.`
+            : sent
+            ? `${sent} заказа WB № ${result.wb_order_id} отправлены в печать.`
+            : reprintAlreadyStarted
+            ? `Перепечать ЧЗ заказа WB № ${result.wb_order_id} уже была запущена; повторная копия не создана.`
+            : `Выбран заказ WB № ${result.wb_order_id}; автоматическая печать выключена.`,
+        )
+        if (plan.printChz) await load(true)
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
-        setKizScanValue('')
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
       }
     },
-    [workspace, token, authHeaders, refocusKizInput, load, providerName],
+    [workspace, token, authHeaders, load, providerName, refocusKizInput, isOzonSupply],
   )
 
   const scanKizCode = useCallback(
-    async (raw: string, confirmed = false) => {
+    async (
+      raw: string,
+      confirmed = false,
+      preferences: FbsScanPrintPreferences = scanPrintPreferences,
+    ) => {
       if (!kizScanActive) return
+      const productBarcode = activeProductScanBarcodeRef.current
+      const pendingProductAttempt = productBarcode && workspace?.supply.id
+        ? peekFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+        : null
+      const effectivePreferences = pendingProductAttempt?.preferences ?? preferences
+      const scan = {
+        attemptId: createFbsIdempotencyKey(),
+        orderId: kizScanActive.order_id,
+        enabled: !isOzonSupply && effectivePreferences.reprintChz,
+        workspaceGeneration: workspaceOpenGeneration.current,
+      }
+      busyHardwareCaptureEnabledRef.current = (
+        !isOzonSupply
+        && (
+          effectivePreferences.printQr
+          || effectivePreferences.printChz
+          || effectivePreferences.reprintChz
+        )
+      )
       setKizScanBusy(true)
       setKizScanError(null)
       setKizScanHints([])
@@ -739,8 +1416,15 @@ export function FfFbsSupplyWorkspace({
         const results = await commitFbsKiz(
           token,
           authHeaders,
-          [{ order_id: kizScanActive.order_id, value: raw, confirmed: confirmed || kizScanActive.needs_confirmation }],
-          createFbsIdempotencyKey(),
+          [{
+            order_id: kizScanActive.order_id,
+            value: raw,
+            confirmed: confirmed || kizScanActive.needs_confirmation,
+            ...(pendingProductAttempt?.scanId
+              ? { scan_auto_print_id: pendingProductAttempt.scanId }
+              : {}),
+          }],
+          scan.attemptId,
         )
         const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
         if (!outcome) throw new Error('Сервер не подтвердил сохранение кода')
@@ -754,18 +1438,101 @@ export function FfFbsSupplyWorkspace({
             text: kizErrorTextByCode(outcome.code ?? '', outcome.message ?? 'Не сохранено', null, providerName),
             debug: null,
           })
-          setKizScanValue('')
           await load(true)
           return
+        }
+        let boundReprintStarted = false
+        if (outcome.newly_bound === true && scan.enabled) {
+          const durableScanId = pendingProductAttempt?.scanId
+          if (!durableScanId && !outcome.bound_kiz) {
+            setKizScanError({
+              text: `ЧЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но перепечатка не запущена: сервер не вернул сохранённый код.`,
+              debug: null,
+            })
+          } else {
+            try {
+              const printAttemptKey = createFbsIdempotencyKey()
+              boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue(
+                {
+                  ...scan,
+                  attemptId: durableScanId
+                    ? `${durableScanId}:reprint:${printAttemptKey}`
+                    : scan.attemptId,
+                  kiz: durableScanId ? durableScanId : outcome.bound_kiz!,
+                },
+                async (kiz) => {
+                  if (!durableScanId || !workspace?.supply.id) {
+                    await printMarkingCodeLabels([kiz], { duplicateCopies: 1 })
+                    return
+                  }
+                  const printResult = await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(
+                    printAttemptKey,
+                    async (claim) => {
+                      if (!claim.kiz) {
+                        throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
+                      }
+                      await printMarkingCodeLabels([claim.kiz], { duplicateCopies: 1 })
+                    },
+                    {
+                      claim: (attemptKey) => claimFbsScanAutoPrintReprint(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        attemptKey,
+                      ),
+                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        'chz',
+                        attemptKey,
+                      ),
+                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
+                        token,
+                        authHeaders,
+                        workspace.supply.id,
+                        durableScanId,
+                        'chz',
+                        attemptKey,
+                      ),
+                    },
+                  )
+                  if (!printResult.started) {
+                    throw new Error('Сервер не подтвердил запуск перепечати ЧЗ.')
+                  }
+                },
+              )
+            } catch (cause) {
+              if (workspaceOpenGeneration.current !== scan.workspaceGeneration) return
+              const reason = cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось запустить печать ЧЗ.'
+              setKizScanError({
+                text: `ЧЗ для заказа ${fbsKizOrderNumber(kizScanActive)} сохранён, но не напечатан: ${reason}`,
+                debug: null,
+              })
+            }
+          }
         }
         setKizScanNotice(isOzonSupply
           ? outcome.meta_status === 'accepted'
             ? `Код принят Ozon · ${fbsKizOrderNumber(kizScanActive)}`
             : `Код сохранён · Ozon проверяет · ${fbsKizOrderNumber(kizScanActive)}`
           : null)
+        if (productBarcode && workspace?.supply.id) {
+          if (pendingProductAttempt) {
+            if (boundReprintStarted) {
+              pendingProductAttempt.chzStarted = true
+              updateFbsPendingProductScan(token, workspace.supply.id, pendingProductAttempt)
+            }
+            if (fbsPendingProductScanComplete(pendingProductAttempt)) {
+              completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+            }
+          }
+          activeProductScanBarcodeRef.current = null
+        }
         setKizScanActive(null)
         kizSelectedStickerRef.current = ''
-        setKizScanValue('')
         const refreshed = await load(true)
         if (!isOzonSupply) {
           const savedOrder = refreshed?.orders.find((order) => order.id === kizScanActive.order_id)
@@ -783,20 +1550,28 @@ export function FfFbsSupplyWorkspace({
         })
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
-        setKizScanValue('')
         await load(true)
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
       }
     },
-    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName],
+    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName, scanPrintPreferences, workspace?.supply.id],
   )
 
-  // WMS-403: restore the original reset from 2ef9c0d3; it only clears scanner UI.
+  // WMS-403: keep the original scanner reset; WMS-514 additionally closes only
+  // its own pending product attempt so a later physical scan is a new action.
   const dropKizScanActive = useCallback(() => {
+    const productBarcode = activeProductScanBarcodeRef.current
+    if (productBarcode && workspace?.supply.id) {
+      // Reset is an explicit cancellation of the selected product unit. A
+      // later physical scan must receive a fresh request id/snapshot instead
+      // of reviving the cancelled attempt forever.
+      completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+    }
     setKizScanActive(null)
     kizSelectedStickerRef.current = ''
+    activeProductScanBarcodeRef.current = null
     setKizScanValue('')
     setKizScanError(null)
     setKizScanHints([])
@@ -804,12 +1579,21 @@ export function FfFbsSupplyWorkspace({
     setKizScanDebugOpen(false)
     setKizConfirmTarget(null)
     setKizConfirmValue(null)
-    refocusKizInput()
-  }, [refocusKizInput])
+    refocusKizInput(true)
+  }, [refocusKizInput, token, workspace?.supply.id])
+
+  const dismissKizConfirmation = useCallback(() => {
+    const productBarcode = activeProductScanBarcodeRef.current
+    if (productBarcode && workspace?.supply.id) {
+      completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+      activeProductScanBarcodeRef.current = null
+    }
+    setKizConfirmTarget(null)
+    refocusKizInput(true)
+  }, [refocusKizInput, token, workspace?.supply.id])
 
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (kizScanBusy) return
       if (event.key === 'Escape' && kizScanActive) {
         event.preventDefault()
         event.stopPropagation()
@@ -820,15 +1604,46 @@ export function FfFbsSupplyWorkspace({
       event.preventDefault()
       const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
       if (!raw) return
+      // Detach the accepted hardware payload synchronously. No async branch is
+      // allowed to clear this state later, otherwise a fast following scan is
+      // concatenated with or erased by the previous request.
+      setKizScanValue('')
+      scannerShouldRefocusRef.current = (
+        document.activeElement == null
+        || document.activeElement === document.body
+        || document.activeElement === kizScanInputRef.current
+      )
+      const scanInput = kizScanInputRef.current
+      if (scanInput && document.activeElement === scanInput) {
+        // Move the hardware target to body before the busy render disables the
+        // original field. The document buffer can then receive every byte of
+        // a scanner burst that starts before the first request completes.
+        scanInput.blur()
+      }
+      const preferences = { ...scanPrintPreferences }
+      if (kizScanBusy) {
+        queuedPackingScansRef.current.push({ raw, preferences })
+        setQueuedPackingScanVersion((current) => current + 1)
+        return
+      }
       if (kizScanActive && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) {
         dropKizScanActive()
         return
       }
-      if (kizScanActive) void scanKizCode(raw)
-      else void scanKizSticker(raw)
+      if (kizScanActive) void scanKizCode(raw, false, preferences)
+      else void scanIdleCode(raw, preferences)
     },
-    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker, dropKizScanActive],
+    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanIdleCode, dropKizScanActive, scanPrintPreferences],
   )
+
+  useEffect(() => {
+    if (kizScanBusy) return
+    const next = queuedPackingScansRef.current.shift()
+    if (!next) return
+    setQueuedPackingScanVersion((current) => current + 1)
+    if (kizScanActive) void scanKizCode(next.raw, false, next.preferences)
+    else void scanIdleCode(next.raw, next.preferences)
+  }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode])
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
@@ -1052,12 +1867,85 @@ export function FfFbsSupplyWorkspace({
     const next = await run(
       () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
       '',
+      // WMS-526 R12: причина отказа сохраняется у заказа на сервере — перечитываем
+      // снимок, чтобы красная строка у коробов заказа появилась сразу.
+      isOzonSupply ? () => refreshAfterLostRace() : undefined,
     )
     if (!next) return
     setStage('boxes')
     const box = next.boxes.find((item) => item.id === boxId)
     if (box?.qr_asset?.status === 'ready' && box.qr_asset.preview_url) openAssetPreview([box.qr_asset])
     else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетка Ozon ещё не готова — повторите получение через минуту.')
+  }
+
+  // WMS-526: одна серверная операция раскладывает каждую неразложенную позицию
+  // Ozon в свой новый короб; затем этикетки запрашиваются тем же запросом, что у
+  // кнопки короба «Собрать и получить этикетку», — по одному на заказ, по очереди.
+  // Сбой заказа не останавливает остальные; окна печати не открываются.
+  const autoCreateOzonBoxes = async () => {
+    if (!workspace || !isOzonSupply || boxEditingDisabled || ozonAutoBoxesRunningRef.current) return
+    ozonAutoBoxesRunningRef.current = true
+    const session = beginWorkspaceWrite()
+    const supplyIdAtStart = workspace.supply.id
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    setRetryAction(null)
+    setOzonAutoBoxesProgress('Раскладка…')
+    // Ответ ложится на экран, только если открыта та же поставка и он последний
+    // из начатых; иначе состав восстановит новое чтение, как в run().
+    const applyResponse = (write: ReturnType<typeof beginWorkspaceWrite>, next: FbsWorkspace) => {
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return false
+      if (write.isLatest()) setWorkspace(next)
+      else refreshAfterLostRace()
+      return true
+    }
+    try {
+      let write = beginWorkspaceWrite()
+      let assigned: FbsWorkspace & { created_boxes: number }
+      try {
+        assigned = await autoAssignFbsOzonBoxes(token, authHeaders, supplyIdAtStart)
+      } catch (cause) {
+        if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Короба не созданы.')
+        return
+      }
+      if (!applyResponse(write, assigned)) return
+      // Число коробов, созданных именно этим вызовом, называет сервер: разница
+      // со своим снимком ошиблась бы, если короба добавил другой оператор.
+      const created = assigned.created_boxes
+      const { labelTargets } = fbsOzonAutoBoxesPlan(assigned.orders, assigned.boxes)
+      let received = 0
+      const failures: Array<{ externalOrderId: string | null; reason: string }> = []
+      for (const [index, target] of labelTargets.entries()) {
+        setOzonAutoBoxesProgress(`Этикетки ${index + 1} из ${labelTargets.length}`)
+        write = beginWorkspaceWrite()
+        try {
+          const next = await retryFbsPackingBoxQr(token, authHeaders, supplyIdAtStart, target.boxId)
+          if (!applyResponse(write, next)) return
+          const ready = next.boxes.some((box) => box.assigned_order_ids.includes(target.orderId) && fbsOzonBoxLabelReady(box))
+          if (ready) received += 1
+          else failures.push({ externalOrderId: target.externalOrderId, reason: 'Этикетка Ozon ещё не готова — повторите получение через минуту.' })
+        } catch (cause) {
+          if (!write.isCurrent()) return
+          failures.push({
+            externalOrderId: target.externalOrderId,
+            reason: cause instanceof Error ? fbsErrorText(cause.message) : 'Этикетка не получена.',
+          })
+        }
+      }
+      setNotice(`Создано коробов: ${created}. Этикетки Ozon получены для заказов: ${received}.`)
+      if (failures.length > 0) {
+        setError(fbsOzonLabelFailuresText(failures))
+        // Неудачный запрос не вернул снимок, а сборка могла успеть изменить заказ.
+        refreshAfterLostRace()
+      }
+    } finally {
+      ozonAutoBoxesRunningRef.current = false
+      if (session.isCurrent()) {
+        setBusy(false)
+        setOzonAutoBoxesProgress(null)
+      }
+    }
   }
 
   const deliver = async () => {
@@ -1248,7 +2136,12 @@ export function FfFbsSupplyWorkspace({
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
-  const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line?: PackagingTaskLine, reprint = false) => {
+  const openOrderMarkingPrint = (
+    order: FbsWorkspace['orders'][number],
+    line?: PackagingTaskLine,
+    reprint = false,
+    reprintMarkingId?: string,
+  ) => {
     const productId = order.product.id
       ?? (workspace?.supply.marketplace === 'ozon'
         ? order.positions.find((position) => position.product_id)?.product_id
@@ -1294,6 +2187,7 @@ export function FfFbsSupplyWorkspace({
               allow_partial: allowPartial,
               include_order_qr: false,
               reprint: printReprint,
+              reprint_marking_ids: reprintMarkingId ? [reprintMarkingId] : undefined,
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
@@ -1343,18 +2237,36 @@ export function FfFbsSupplyWorkspace({
 
   const performSkipHonestSign = async () => {
     if (!workspace) return
+    const write = beginWorkspaceWrite()
     setSkipHonestSignBusy(true)
     setError(null)
     try {
       const next = await skipFbsSupplyHonestSign(token, authHeaders, workspace.supply.id)
-      setWorkspace(next)
+      if (!write.isCurrent() || !write.matchesShownSupply(next)) return
+      // Требование снято на сервере; спорным остаётся только снимок состава.
+      if (write.isLatest()) setWorkspace(next)
+      else refreshAfterLostRace()
       setSkipHonestSignOpen(false)
       setNotice('Требование Честного знака снято со всей поставки.')
     } catch (cause) {
+      if (!write.isCurrent()) return
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять требование Честного знака.')
     } finally {
-      setSkipHonestSignBusy(false)
+      if (write.isCurrent()) setSkipHonestSignBusy(false)
     }
+  }
+
+  // WMS-477: «Проверить в WB» — один запрос по поставке, ответ перерисовывает
+  // строки; ошибка WB уходит в общий красный Alert окна через run().
+  const checkMarkingsInWb = () => {
+    if (!workspace) return
+    void run(
+      () => syncFbsSupplyMarkings(token, authHeaders, workspace.supply.id),
+      (next) => {
+        const { confirmed, withCode } = fbsMarkingVerdictsSummary(next.orders)
+        return `Проверено в WB: подтверждено ${confirmed} из ${withCode}.`
+      },
+    )
   }
 
   const total = workspace?.progress.total ?? 0
@@ -1487,6 +2399,10 @@ export function FfFbsSupplyWorkspace({
     [],
   )
 
+  const packingShowsSize = fbsPackingShowsSize(packingOrders, isOzonSupply)
+  // Слот «Доступно ЧЗ» занимает место во всех строках вкладки, если он нужен хотя бы
+  // одной: иначе строка без ЧЗ раздвигает блок товара и размер со стикером уезжают вправо.
+  const packingShowsMarkingAvailable = packingOrders.some(requiresOrderHonestSign)
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
@@ -1502,6 +2418,8 @@ export function FfFbsSupplyWorkspace({
   const clearableSelectedCount = selectedPackingOrders.filter((order) =>
     order.metadata.states.some((state) => state.kind === 'sgtin' && state.value_tail),
   ).length
+  // WMS-477: пока ни у одного заказа нет кода, спрашивать WB не о чем.
+  const packingOrdersWithCode = fbsMarkingVerdictsSummary(packingOrders).withCode
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
   // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
   // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
@@ -1572,6 +2490,9 @@ export function FfFbsSupplyWorkspace({
   const boxDistributedCount = isOzonSupply ? ozonPositionRows.reduce((sum, row) => sum + (assignedBoxPositionIds.has(row.id) ? row.position.quantity : 0), 0) : assignedBoxOrderIds.size
   const boxTotalCount = isOzonSupply ? (workspace?.orders ?? []).reduce((sum, order) => sum + order.positions.reduce((qty, position) => qty + position.quantity, 0), 0) : workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
+  const ozonAutoBoxesPlan = isOzonSupply && workspace ? fbsOzonAutoBoxesPlan(workspace.orders, workspace.boxes) : null
+  const ozonAutoBoxesNothingToDo = !ozonAutoBoxesPlan
+    || (ozonAutoBoxesPlan.unassignedPositions === 0 && ozonAutoBoxesPlan.labelTargets.length === 0)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = Boolean(workspace?.supply)
   // A cargo-place QR is available per-box whenever WB registered a cargo
@@ -2032,6 +2953,15 @@ export function FfFbsSupplyWorkspace({
                         >
                           {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
                         </Button>
+                        {!isOzonSupply && packagingEditable ? (
+                          <Button
+                            disabled={busy || packingOrdersWithCode === 0}
+                            onClick={checkMarkingsInWb}
+                            data-testid="fbs-packing-check-wb"
+                          >
+                            Проверить в WB
+                          </Button>
+                        ) : null}
                         {!isOzonSupply && selectedPackingOrders.length > 0 ? (
                           <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
                             Очистить ЧЗ
@@ -2095,6 +3025,60 @@ export function FfFbsSupplyWorkspace({
                           }}
                           sx={{ '& input': { fontFamily: 'monospace' } }}
                         />
+                        {!isOzonSupply ? (
+                          <>
+                            <FormControlLabel
+                              data-testid="fbs-scan-print-qr-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.printQr}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, printQr: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Печатать QR"
+                            />
+                            <FormControlLabel
+                              data-testid="fbs-scan-print-chz-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.printChz}
+                                  disabled={scanPrintPreferences.reprintChz}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, printChz: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Печатать ЧЗ"
+                            />
+                            <FormControlLabel
+                              data-testid="fbs-kiz-auto-reprint-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.reprintChz}
+                                  disabled={scanPrintPreferences.printChz}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, reprintChz: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Перепечатывать ЧЗ"
+                            />
+                          </>
+                        ) : null}
                         {kizScanActive ? (
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
                             <ProductPhotoThumb src={kizScanActive.product.image_url} alt={kizScanActive.product.name} size={32} previewSize={220} />
@@ -2199,6 +3183,7 @@ export function FfFbsSupplyWorkspace({
                         : markingView.tone === 'error' ? 'error.main' : 'text.secondary'
                       const tail = markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
+                      const rowSizes = packingShowsSize ? fbsPackingSizes(order, isOzonSupply) : []
                       return (
                         <Stack
                           key={order.id}
@@ -2239,27 +3224,42 @@ export function FfFbsSupplyWorkspace({
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             {isOzonSupply ? (
                               <Stack spacing={0.5}>
-                                {ozonPositions.map((position) => (
-                                  <Box key={position.id ?? position.product_id ?? position.name}>
-                                    <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                                      {position.name}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                      {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
-                                        .filter(Boolean)
-                                        .join(' · ')}
-                                    </Typography>
-                                  </Box>
+                                {ozonPositions.map((position, index) => (
+                                  <Stack
+                                    key={position.id ?? position.product_id ?? position.name}
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{ alignItems: 'flex-start' }}
+                                  >
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                        {position.name}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                        {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
+                                          .filter(Boolean)
+                                          .join(' · ')}
+                                      </Typography>
+                                    </Box>
+                                    {packingShowsSize ? (
+                                      <PackingSizeCell value={rowSizes[index] ?? null} withCaption={index === 0} valueColor={mutedColor} />
+                                    ) : null}
+                                  </Stack>
                                 ))}
                               </Stack>
-                            ) : <>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                                {order.product.name}
-                              </Typography>
-                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                {ids}
-                              </Typography>
-                            </>}
+                            ) : <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                  {order.product.name}
+                                </Typography>
+                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                  {ids}
+                                </Typography>
+                              </Box>
+                              {packingShowsSize ? (
+                                <PackingSizeCell value={rowSizes[0] ?? null} withCaption valueColor={mutedColor} />
+                              ) : null}
+                            </Stack>}
                             {markingShortOrderIds.has(order.id) ? <Typography variant="caption" sx={{ display: 'block', color: 'error.main' }}>ЧЗ не хватило</Typography> : null}
                             {markingView.label ? (
                               <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
@@ -2273,10 +3273,17 @@ export function FfFbsSupplyWorkspace({
                               </Typography>
                             ) : null}
                           </Box>
-                          {needsHonestSign ? (
-                            <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }} data-testid="fbs-packing-marking-available">
-                              <Typography variant="caption" sx={{ display: 'block' }}>Доступно ЧЗ</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: markingShortage ? 700 : 400 }}>{markingAvailable} · нужно {markingNeeded}</Typography>
+                          {packingShowsMarkingAvailable ? (
+                            <Box
+                              sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }}
+                              data-testid={needsHonestSign ? 'fbs-packing-marking-available' : undefined}
+                            >
+                              {needsHonestSign ? (
+                                <>
+                                  <Typography variant="caption" sx={{ display: 'block' }}>Доступно ЧЗ</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: markingShortage ? 700 : 400 }}>{markingAvailable} · нужно {markingNeeded}</Typography>
+                                </>
+                              ) : null}
                             </Box>
                           ) : null}
                           <Box sx={{ width: 150, flexShrink: 0, textAlign: 'right' }}>
@@ -2302,6 +3309,19 @@ export function FfFbsSupplyWorkspace({
                               ЧЗ
                             </Typography>
                             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {hasOperatorKiz(markingState, isOzonSupply ? 'ozon' : 'wb') ? (
+                                <Tooltip title="Перепечатать ЧЗ">
+                                  <IconButton
+                                    size="small"
+                                    disabled={busy || kizScanBusy}
+                                    aria-label="Перепечатать КИЗ"
+                                    onClick={() => openOrderMarkingPrint(order, line, true, markingState?.id ?? undefined)}
+                                    data-testid="fbs-kiz-reprint-inline"
+                                  >
+                                    <ReplayOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : null}
                               {tail ? (
                                 <Typography
                                   sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}
@@ -2333,11 +3353,13 @@ export function FfFbsSupplyWorkspace({
                                   setKizScanNotice(null)
                                 } catch (cause) {
                                   setKizScanError({ text: kizErrorText(cause, providerName), debug: null })
-                                } finally { setKizScanBusy(false); refocusKizInput() }
+                                } finally { setKizScanBusy(false); refocusKizInput(true) }
                               }}>Проверить ЧЗ</Button>
                             </> : null}
                           </Box>
-                          {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
+                          <Typography sx={{ width: 16, flexShrink: 0, textAlign: 'center', color: 'success.main', fontWeight: 700 }}>
+                            {printed ? '✓' : ''}
+                          </Typography>
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
@@ -2396,6 +3418,15 @@ export function FfFbsSupplyWorkspace({
                           ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
                           : `Печать всех QR (${workspace.boxes.length})`}
                       </Button>
+                      {isOzonSupply ? (
+                        <Button
+                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
+                          onClick={() => void autoCreateOzonBoxes()}
+                          data-testid="fbs-boxes-ozon-auto-create"
+                        >
+                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
+                        </Button>
+                      ) : null}
                       {!isOzonSupply ? <FormControlLabel
                         control={(
                           <Checkbox
@@ -2413,7 +3444,7 @@ export function FfFbsSupplyWorkspace({
                         data-task-id="FBS-12"
                       /> : null}
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -2479,6 +3510,11 @@ export function FfFbsSupplyWorkspace({
                               Короб {box.box_number} <Box component="span" sx={{ color: 'text.secondary' }}>· {boxQuantity} шт</Box>
                             </Typography>
                             {isOzonSupply && assigned.length > 0 ? <Typography variant="caption" color="text.secondary">Ozon №{assigned[0].external_order_id}{remainingOrderQuantity > 0 ? ` · осталось разложить ${remainingOrderQuantity} шт` : ''}</Typography> : null}
+                            {isOzonSupply && assigned.length > 0 && box.ozon_label_error ? (
+                              <Typography variant="caption" color="error" sx={{ display: 'block', overflowWrap: 'anywhere' }} data-testid={`fbs-box-ozon-label-error-${box.id}`}>
+                                Ozon не отдал этикетку: {box.ozon_label_error.message || box.ozon_label_error.code}
+                              </Typography>
+                            ) : null}
                           </Box>
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <Button
@@ -2620,20 +3656,20 @@ export function FfFbsSupplyWorkspace({
           ) : null}
         </Box>
       </DialogContent>
-      <FbsPrintPreviewDialog
+      <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
         batch={printBatch}
         open={printPreviewOpen}
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
-      />
-      <FbsSupplyHistoryDialog
+      /></ErrorBoundary>
+      <ErrorBoundary component="FbsSupplyHistoryDialog"><FbsSupplyHistoryDialog
         token={token}
         supplyId={supplyId}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-      />
+      /></ErrorBoundary>
       <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
@@ -2758,7 +3794,7 @@ export function FfFbsSupplyWorkspace({
       {markingPrintDialog}
       {/* KIZ-01: единственный оставшийся модальный шаг скана КИЗ — редкое подтверждение
           замены уже внесённого кода. Основной цикл «стикер → ЧЗ» идёт инлайново на вкладке. */}
-      <Dialog open={Boolean(kizConfirmTarget)} onClose={() => { setKizConfirmTarget(null); refocusKizInput() }} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(kizConfirmTarget)} onClose={dismissKizConfirmation} maxWidth="xs" fullWidth>
         <DialogTitle>Заказ уже с ЧЗ</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
@@ -2768,7 +3804,7 @@ export function FfFbsSupplyWorkspace({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setKizConfirmTarget(null); refocusKizInput() }}>Отмена</Button>
+          <Button onClick={dismissKizConfirmation}>Отмена</Button>
           <Button
             variant="contained"
             data-testid="fbs-kiz-confirm-replace"
@@ -2777,7 +3813,7 @@ export function FfFbsSupplyWorkspace({
               else setKizScanActive(kizConfirmTarget)
               setKizConfirmValue(null)
               setKizConfirmTarget(null)
-              refocusKizInput()
+              refocusKizInput(true)
             }}
           >
             Внести

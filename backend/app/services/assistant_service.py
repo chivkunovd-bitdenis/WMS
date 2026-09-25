@@ -98,6 +98,17 @@ def tenant_assistant_enabled(tenant_slug: str | None) -> bool:
     return tenant_slug.strip().lower() in enabled_slugs
 
 
+def user_assistant_enabled(tenant_slug: str | None, email: str | None) -> bool:
+    """R24: one availability decision for the profile and user message routes."""
+    if not tenant_assistant_enabled(tenant_slug):
+        return False
+    raw = settings.assistant_enabled_user_emails.strip()
+    if not raw:
+        return True
+    enabled_emails = {item.strip().lower() for item in raw.split(",") if item.strip()}
+    return email is not None and email.strip().lower() in enabled_emails
+
+
 class AssistantMessageError(RuntimeError):
     def __init__(self, code: str, *, message: str) -> None:
         super().__init__(message)
@@ -354,7 +365,7 @@ async def build_executor_request(
         message=message,
         tenant_id=message.tenant_id,
         tenant_name=tenant.name if tenant is not None else "",
-        user_email=user.email if user is not None else "",
+        user_email=(user.email or "") if user is not None else "",
         user_role=user.role if user is not None else "",
         history=history,
         code_version=(settings.assistant_deploy_version or "").strip() or None,

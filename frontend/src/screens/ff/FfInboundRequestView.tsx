@@ -1,3 +1,5 @@
+import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
+import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
 import {
@@ -58,6 +60,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
+import { KizReprintDialog } from '../../components/KizReprintDialog'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
@@ -109,7 +112,7 @@ import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
-import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine } from './inboundReceivingRuntime'
+import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -472,7 +475,7 @@ export function FfInboundRequestView({
   const [busy, setBusy] = useState(false)
   const [_sortingToolbarElement, setSortingToolbarElement] = useState<HTMLDivElement | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
+  const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>(() => readIntake(token, requestId).totals ?? {})
   const [actualDraftErrorByLineId, setActualDraftErrorByLineId] = useState<Record<string, string>>({})
   const actualDraftRef = useRef(actualDraftByLineId)
   const actualInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -491,6 +494,7 @@ export function FfInboundRequestView({
   const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
   const [returnAutoPrint, setReturnAutoPrint] = useState(false)
+  const [kizReprintOpen, setKizReprintOpen] = useState(false)
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
@@ -542,6 +546,8 @@ export function FfInboundRequestView({
   const documentDistributionEnabled = false
   const receptionClosed =
     detail != null && (isSortingStatus(detail.status) || isDoneStatus(detail.status))
+  const ffInbound = detail?.operation_type === 'inbound' && detail.created_by_seller_id == null
+  const ffDraft = detail?.status === 'draft' && ffInbound
   const receivingActive = detail != null && isReceivingStatus(detail.status)
   const waitingForFfStart = detail?.status === 'submitted'
   const sellerCreatedDraft = detail?.status === 'draft' && detail.created_by_seller_id != null
@@ -567,8 +573,10 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
-      !distOpen,
+      !distOpen &&
+      !kizReprintOpen,
     onScan: (code) => {
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => scanToReceiving(code))
     },
   })
@@ -581,9 +589,11 @@ export function FfInboundRequestView({
       boxAddDialogBoxId == null &&
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
-      dimensionsLine == null,
+      dimensionsLine == null &&
+      !kizReprintOpen,
     onScan: (code) => {
-      void addLineByBarcode(code)
+      if (!shouldDispatchInboundScan(kizReprintOpen)) return
+      void receivingScanQueue(() => addLineByBarcode(code))
     },
   })
   const defaultPutawayBoxId = useMemo(() => {
@@ -852,6 +862,12 @@ export function FfInboundRequestView({
   }, [detail?.planned_delivery_date])
 
   useEffect(() => {
+    if (ffDraft) {
+      const saved = readIntake(token, requestId).totals ?? {}
+      setActualDraftByLineId(saved)
+      actualDraftRef.current = saved
+      return
+    }
     if (!detail) {
       setActualDraftByLineId({})
       return
@@ -878,7 +894,7 @@ export function FfInboundRequestView({
       }
       return next
     })
-  }, [detail, manualEditLineId])
+  }, [detail, manualEditLineId, ffDraft, token, requestId])
 
   useEffect(() => {
     actualDraftRef.current = actualDraftByLineId
@@ -986,11 +1002,11 @@ export function FfInboundRequestView({
   )
 
   const pickerDisabledProductIds = useMemo(() => {
-    if (detail?.status !== 'draft') {
+    if (detail?.status !== 'draft' || ffDraft) {
       return new Set<string>()
     }
     return lineProductIds
-  }, [detail?.status, lineProductIds])
+  }, [detail?.status, ffDraft, lineProductIds])
 
   const draftLocked = detail != null && detail.status !== 'draft'
 
@@ -1400,6 +1416,7 @@ export function FfInboundRequestView({
       if (catalog == null) {
         await loadCatalog()
       }
+      if (ffDraft) beginIntakePickerAttempt(token, requestId)
       setPickerOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
@@ -1422,6 +1439,11 @@ export function FfInboundRequestView({
       if (!productId) {
         setPickerInitialSearch(code)
         setError('Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.')
+        return
+      }
+      if (ffDraft) {
+        await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/lines`, { product_id: productId, expected_qty: 1, increment: true })])
+        await loadDetail()
         return
       }
       const existing = detail.lines.find((ln) => ln.product_id === productId)
@@ -1464,6 +1486,14 @@ export function FfInboundRequestView({
     setBusy(true)
     setError(null)
     try {
+      if (ffDraft) {
+        const mutations = Object.entries(pickerQtyByProduct).filter(([, qty]) => Number.isInteger(qty) && qty > 0).map(([productId, qty]) => intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/lines`, { product_id: productId, expected_qty: qty, increment: true }))
+        if (mutations.length) await sendIntakeMutations(token, requestId, mutations)
+        else finishIntakePickerAttempt(token, requestId)
+        setPickerOpen(false)
+        await loadDetail()
+        return
+      }
       const lineByProduct = new Map(detail.lines.map((ln) => [ln.product_id, ln]))
       const receivingMode = detail.status !== 'draft' && receivingActive
       for (const [productId, rawQty] of Object.entries(pickerQtyByProduct)) {
@@ -1935,6 +1965,10 @@ export function FfInboundRequestView({
   }
 
   const completeReceiving = async () => {
+    if (ffDraft && Object.entries(actualDraftRef.current).some(([id, raw]) => {
+      const line = detail.lines.find((one) => one.id === id)
+      return line && raw !== String(effectiveActualQty(line, detail.boxes, detail.status))
+    })) { setError('Сохраните введённое количество перед завершением приёмки.'); return }
     setBusy(true)
     setError(null)
     setFinishConfirmOpen(false)
@@ -1942,10 +1976,9 @@ export function FfInboundRequestView({
       await receivingScanQueue(async () => undefined)
       receivingScanReconciler.cancel()
       ++loadDetailSeq.current
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`),
-        { method: 'POST', headers: authHeaders },
-      )
+      const res = ffDraft
+        ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/complete-receiving`, {})])
+        : await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`), { method: 'POST', headers: authHeaders })
       if (!res.ok) {
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
@@ -2037,6 +2070,22 @@ export function FfInboundRequestView({
     if (!line) {
       return
     }
+    if (ffDraft) {
+      setBusy(true)
+      try {
+        await sendIntakeMutations(token, requestId, [intakeMutation('PATCH', `/operations/inbound-intake-requests/${requestId}/lines/${lineId}/expected`, { expected_qty: displayed })])
+        const next = { ...actualDraftRef.current }; delete next[lineId]
+        saveIntakeTotals(token, requestId, next); actualDraftRef.current = next; setActualDraftByLineId(next)
+        setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: '' }))
+        setManualEditLineId(null)
+        await loadDetail()
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Не удалось сохранить количество.'
+        setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: message.includes('actual_below_container_total') ? 'В таре больше товара. Уточните состав тары.' : message }))
+        setManualEditLineId(lineId)
+      } finally { setBusy(false) }
+      return
+    }
     const boxes = detail?.boxes ?? []
     const cargoPlaces = detail?.cargo_places ?? []
     const currentEffective = effectiveActualQty(line, boxes, detail?.status)
@@ -2067,6 +2116,10 @@ export function FfInboundRequestView({
   }
 
   const hasUnsavedActualChange = useMemo(() => {
+    if (ffDraft && detail) return Object.entries(actualDraftByLineId).some(([id, raw]) => {
+      const line = detail.lines.find((one) => one.id === id)
+      return line && raw !== String(effectiveActualQty(line, detail.boxes ?? [], detail.status))
+    })
     if (!manualEditLineId || !detail) return false
     const line = detail.lines.find((ln) => ln.id === manualEditLineId)
     if (!line) return false
@@ -2074,9 +2127,17 @@ export function FfInboundRequestView({
     if (raw == null) return false
     const current = String(effectiveActualQty(line, detail.boxes ?? [], detail.status))
     return raw.trim() !== current
-  }, [actualDraftByLineId, detail, manualEditLineId])
+  }, [actualDraftByLineId, detail, manualEditLineId, ffDraft])
 
   const handleSaveDocument = async () => {
+    if (ffDraft) {
+      for (const [id, raw] of Object.entries(actualDraftRef.current)) {
+        await saveManualLineActual(id, raw)
+        if (readIntake(token, requestId).totals?.[id] != null) return
+      }
+      setSaveSuccessMsg('Документ сохранён.')
+      return
+    }
     if (manualEditLineId) {
       const raw = actualDraftRef.current[manualEditLineId] ?? actualDraftByLineId[manualEditLineId] ?? ''
       const validationError = integerQtyError(raw)
@@ -2151,9 +2212,7 @@ export function FfInboundRequestView({
     [boxAddDialogBoxId, boxes],
   )
 
-  const actualEditable =
-    isFulfillmentAdmin &&
-    receivingActive
+  const actualEditable = isFulfillmentAdmin && (receivingActive || ffDraft)
 
   const hasPostedPartial = useMemo(
     () => (detail?.lines ?? []).some((ln) => (ln.posted_qty ?? 0) > 0),
@@ -2193,6 +2252,12 @@ export function FfInboundRequestView({
       data-testid="ff-inbound-doc-root"
       sx={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
     >
+      {readIntake(token, requestId).pending?.length ? <Alert severity="warning" sx={{ mb: 2 }} action={<Button disabled={busy} onClick={async () => {
+        setBusy(true)
+        try { await sendIntakeMutations(token, requestId); await loadDetail(); setError(null); setPickerOpen(false) }
+        catch (e) { setError(e instanceof Error ? e.message : 'Не удалось проверить запрос.') }
+        finally { setBusy(false) }
+      }}>Проверить результат</Button>}>Предыдущий запрос приёмки требует проверки.</Alert> : null}
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-inbound-doc-error">
           {error}
@@ -2265,7 +2330,7 @@ export function FfInboundRequestView({
                   Селлер: <strong>{detail.seller_name ?? '—'}</strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-received-summary">
-                  Принято: <strong>{receivingTotals.acceptedQty} из {receivingTotals.expectedQty}</strong>
+                  Принято: <strong>{receivingTotals.acceptedQty}{!ffInbound ? ` из ${receivingTotals.expectedQty}` : ''}</strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-boxes-summary">
                   Короба:{' '}
@@ -2360,6 +2425,17 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
+              {isFulfillmentAdmin && workspace !== 'sorting' && isReturnOperation ? (
+                <Button
+                  variant="outlined"
+                  disabled={!detail.seller_id}
+                  onClick={() => setKizReprintOpen(true)}
+                  data-testid="ff-inbound-return-kiz-reprint"
+                >
+                  Перепечатать ЧЗ
+                </Button>
+              ) : null}
+
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -2405,13 +2481,13 @@ export function FfInboundRequestView({
                       disabled={busy || detail.lines.length === 0}
                       onClick={() =>
                         isFulfillmentAdmin
-                          ? void beginReceiving()
+                          ? ffDraft ? void completeReceiving() : void beginReceiving()
                           : void submitToWarehouse()
                       }
                       data-testid="ff-inbound-submit-warehouse"
                     >
                       {isFulfillmentAdmin
-                        ? usesReturnShortcut
+                        ? ffDraft ? 'Завершить приёмку' : usesReturnShortcut
                           ? 'Завершить подбор возврата'
                           : 'Начать приёмку'
                         : 'Передать на склад'}
@@ -2513,6 +2589,7 @@ export function FfInboundRequestView({
                     // Раскладка внутри документа показывает тару и товар ЭТОЙ приёмки,
                     // а не всего склада: без идентификатора она тянула весь склад.
                     inboundRequestId={requestId}
+                    onPlaced={loadDetail}
                   />
                 </Box>
               ) : null}
@@ -2566,10 +2643,8 @@ export function FfInboundRequestView({
                     <TableCell sx={{ width: 188 }}>
                       Габариты
                     </TableCell>
-                    <TableCell align="right" sx={{ width: 112 }}>
-                      План
-                    </TableCell>
-                    <TableCell align="right" sx={{ width: 200 }}>
+                    {!ffInbound ? <TableCell align="right" sx={{ width: 112 }}>План</TableCell> : null}
+                    <TableCell align="right" sx={{ width: ffDraft ? 260 : 200 }}>
                       Принято
                     </TableCell>
                     {isReturnOperation ? <TableCell align="right" sx={{ width: 120 }}>Брак</TableCell> : null}
@@ -2681,7 +2756,7 @@ export function FfInboundRequestView({
                           ) : null}
                         </Stack>
                       </TableCell>
-                      <TableCell align="right" sx={{ width: 112, minWidth: 0 }}>
+                      {!ffInbound ? <TableCell align="right" sx={{ width: 112, minWidth: 0 }}>
                         <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
                           <Typography
                             variant="body2"
@@ -2701,12 +2776,12 @@ export function FfInboundRequestView({
                             </Typography>
                           ) : null}
                         </Stack>
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 200, minWidth: 0 }}>
+                      </TableCell> : null}
+                      <TableCell align="right" sx={{ width: ffDraft ? 260 : 200, minWidth: 0 }}>
                         <Stack
                           direction="row"
                           spacing={0.75}
-                          sx={{ justifyContent: 'flex-end', alignItems: 'center', minWidth: 0 }}
+                          sx={{ justifyContent: 'flex-end', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}
                         >
                           {manualOpen && actualEditable ? (
                             <TextField
@@ -2732,10 +2807,8 @@ export function FfInboundRequestView({
                                   ...prev,
                                   [ln.id]: '',
                                 }))
-                                setActualDraftByLineId((prev) => ({
-                                  ...prev,
-                                  [ln.id]: nextVal,
-                                }))
+                                if (ffDraft) saveIntakeTotals(token, requestId, actualDraftRef.current)
+                                setActualDraftByLineId((prev) => ({ ...prev, [ln.id]: nextVal }))
                               }}
                               slotProps={{
                                 htmlInput: {
@@ -2764,6 +2837,7 @@ export function FfInboundRequestView({
                             />
                           ) : (
                             <Stack spacing={0.1} sx={{ alignItems: 'flex-end', minWidth: 0, flex: '1 1 auto' }}>
+                              {ffDraft && actualDraftByLineId[ln.id] != null ? <Typography variant="caption">Введено: {actualDraftByLineId[ln.id]}</Typography> : null}
                               <Typography
                                 variant="body2"
                                 sx={{ fontWeight: 700, minWidth: 24, textAlign: 'right' }}
@@ -2783,6 +2857,15 @@ export function FfInboundRequestView({
                               ) : null}
                             </Stack>
                           )}
+                          {ffDraft && actualDraftErrorByLineId[ln.id] && (boxes.length > 0 || cargoPlaces.length > 0) ? (
+                            <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => { setManualEditLineId(null); setPackagesExpanded(true); document.querySelector('[data-testid=ff-inbound-packages-accordion]')?.scrollIntoView({ block: 'center' }) }}>Уточнить тару</Button>
+                          ) : null}
+                          {ffDraft ? <IconButton size="small" aria-label="Удалить товар" disabled={busy} onClick={async () => {
+                            setBusy(true)
+                            try { await sendIntakeMutations(token, requestId, [intakeMutation('DELETE', `/operations/inbound-intake-requests/${requestId}/lines/${ln.id}`)]); const next = { ...actualDraftRef.current }; delete next[ln.id]; saveIntakeTotals(token, requestId, next); actualDraftRef.current = next; setActualDraftByLineId(next); await loadDetail() }
+                            catch (e) { setError(e instanceof Error ? e.message : 'Не удалось удалить товар.') }
+                            finally { setBusy(false) }
+                          }}><CloseOutlined fontSize="small" /></IconButton> : null}
                           {actualEditable ? (
                             <IconButton
                               size="small"
@@ -2802,7 +2885,7 @@ export function FfInboundRequestView({
                                 setManualEditLineId(ln.id)
                                 setActualDraftByLineId((prev) => ({
                                   ...prev,
-                                  [ln.id]: String(effectiveActualQty(ln, boxes, detail.status)),
+                                  [ln.id]: prev[ln.id] ?? String(effectiveActualQty(ln, boxes, detail.status)),
                                 }))
                               }}
                               data-testid="ff-inbound-line-manual-edit"
@@ -3008,7 +3091,7 @@ export function FfInboundRequestView({
                   >
                     <Button
                       variant="contained"
-                      disabled={busy || !receivingActive}
+                      disabled={busy || !(receivingActive || ffDraft)}
                       onClick={() => void handleCreateBox()}
                       data-testid="ff-inbound-add-to-box"
                     >
@@ -3016,7 +3099,7 @@ export function FfInboundRequestView({
                     </Button>
                     <Button
                       variant="contained"
-                      disabled={busy || !receivingActive}
+                      disabled={busy || !(receivingActive || ffDraft)}
                       onClick={() => {
                         setCargoError(null)
                         setCargoDialogOpen(true)
@@ -3028,7 +3111,7 @@ export function FfInboundRequestView({
                     {boxImportEnabled ? (
                       <Button
                         variant="outlined"
-                        disabled={busy || !receivingActive}
+                        disabled={busy || !(receivingActive || ffDraft)}
                         onClick={() => setBoxImportOpen(true)}
                         data-testid="ff-inbound-import-boxes"
                       >
@@ -3054,7 +3137,7 @@ export function FfInboundRequestView({
                     {boxes.some((box) => !box.pallet_id) ? (
                       <PrimaryAction
                         disabledReason={
-                          !receivingActive
+                          !(receivingActive || ffDraft)
                             ? 'Приёмка уже завершена'
                             : busy || combinePalletBusy
                             ? 'Дождитесь завершения текущей операции'
@@ -3109,7 +3192,7 @@ export function FfInboundRequestView({
                                     return next
                                   })
                                 }}
-                                disabled={!receivingActive || busy || combinePalletBusy}
+                                disabled={!(receivingActive || ffDraft) || busy || combinePalletBusy}
                                 testId={`ff-inbound-box-select-${box.id}`}
                               />
                             ) : null}
@@ -3138,7 +3221,7 @@ export function FfInboundRequestView({
                               <Button
                                 size="small"
                                 variant="contained"
-                                disabled={busy || !receivingActive}
+                                disabled={busy || !(receivingActive || ffDraft)}
                                 onClick={() => openBoxAddDialog(box.id)}
                                 data-testid={`ff-inbound-box-fill-${box.id}`}
                               >
@@ -3147,7 +3230,7 @@ export function FfInboundRequestView({
                               <Button
                                 size="small"
                                 variant="outlined"
-                                disabled={busy || !receivingActive || visibleLines.length > 0}
+                                disabled={busy || !(receivingActive || ffDraft) || visibleLines.length > 0}
                                 onClick={() => void deleteInboundBox(box.id)}
                                 data-testid={`ff-inbound-box-delete-${box.id}`}
                               >
@@ -3218,7 +3301,7 @@ export function FfInboundRequestView({
                             <Button
                               size="small"
                               variant="contained"
-                              disabled={busy || !receivingActive}
+                              disabled={busy || !(receivingActive || ffDraft)}
                               onClick={() => openCargoAddDialog(place.id)}
                               data-testid={`ff-inbound-cargo-place-fill-${place.id}`}
                             >
@@ -3646,11 +3729,13 @@ export function FfInboundRequestView({
         disabledProductIds={pickerDisabledProductIds}
         testIdPrefix="ff-inbound-picker"
         variant="ff"
-        qtyColumnLabel={detail?.status === 'draft' ? 'Кол-во в заявку' : 'Факт'}
+        renderTrailingHeadCells={ffDraft ? <TableCell sx={{ width: 90 }}>Площадка</TableCell> : undefined}
+        renderTrailingBodyCells={ffDraft ? (row) => <TableCell>{inboundMarketplaceLabel(catalogById.get(row.id))}</TableCell> : undefined}
+        qtyColumnLabel={ffDraft ? 'Принято' : detail?.status === 'draft' ? 'Кол-во в заявку' : 'Факт'}
         initialSearch={pickerInitialSearch}
-        applyLabel={detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
+        applyLabel={ffDraft ? 'Добавить товар' : detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
         emptyMessage="В каталоге селлера нет товаров по этому поиску."
-        onClose={() => setPickerOpen(false)}
+        onClose={() => { if (ffDraft) finishIntakePickerAttempt(token, requestId); setPickerOpen(false) }}
         onApply={applyPicker}
       />
 
@@ -3732,7 +3817,9 @@ export function FfInboundRequestView({
           requestId={requestId}
           boxId={boxAddDialogBoxId}
           boxLabel={`Короб № ${boxAddDialogBox.box_number}`}
-          readOnly={!receivingActive}
+          readOnly={!receivingActive && !ffDraft}
+          ffDraft={ffDraft}
+          ffInbound={ffInbound}
           token={token}
           requestLines={detail?.lines ?? []}
           boxLines={boxAddDialogBox.lines}
@@ -3756,7 +3843,9 @@ export function FfInboundRequestView({
                 boxId={place.id}
                 boxLabel={`Грузоместо № ${place.place_number}`}
                 containerKind="cargo_place"
-                readOnly={!receivingActive}
+                readOnly={!receivingActive && !ffDraft}
+                ffDraft={ffDraft}
+                ffInbound={ffInbound}
                 token={token}
                 requestLines={detail?.lines ?? []}
                 boxLines={place.lines ?? []}
@@ -4050,6 +4139,13 @@ export function FfInboundRequestView({
         onClose={() => setBoxPrintTarget(null)}
         onConfirm={(size) => void confirmInboundBoxPrint(size)}
         testId="ff-inbound-box-print-dialog"
+      />
+      <KizReprintDialog
+        open={kizReprintOpen}
+        token={token}
+        sellerId={detail?.seller_id}
+        onClose={() => setKizReprintOpen(false)}
+        testId="ff-inbound-return-kiz-reprint-dialog"
       />
     </Box>
     </FfProductMarkingPrintProvider>

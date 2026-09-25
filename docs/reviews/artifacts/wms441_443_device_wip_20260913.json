@@ -1,0 +1,53 @@
+{
+  "scope": "isolated local WMS test stand only",
+  "apk": {
+    "package": "ru.wms.tsd",
+    "version_code": 11,
+    "version_name": "0.1.10-mobile-recovery",
+    "device": "emulator-5580"
+  },
+  "wms443_c5": {
+    "status": "device-actions-and-server-reread-complete; web-map does not expose the synthetic warehouse in its current selector",
+    "document_id": "6f04bb1a-57c7-458d-8d38-a1738e6a248a",
+    "display_number": "№000020",
+    "steps": [
+      {
+        "actor": "Anna WMS443 C5 Device",
+        "email": null,
+        "action": "fresh FIO/password login, then placed one loose unit into W441443-A-245a2b04"
+      },
+      {
+        "actor": "Boris WMS443 C5 Device",
+        "email": null,
+        "action": "fresh FIO/password login, then placed the remaining loose unit into W441443-B-245a2b04"
+      }
+    ],
+    "observed_device_result": "The document changed from 2 remaining to 1 after Anna; after Boris it disappeared from the sorting list.",
+    "server_reread": {
+      "status": "done",
+      "actual_qty": 2,
+      "posted_qty": 2,
+      "Anna WMS443 C5 Device": "one transfer-out and one transfer-in for the document's line and cell A",
+      "Boris WMS443 C5 Device": "one transfer-out and one transfer-in for the same document's line and cell B",
+      "billing_after_B": "both synthetic staff accounts have 0 packed units and 0.00 earned; sorting itself did not create a packaging charge"
+    }
+  },
+  "wms441_c9": {
+    "status": "one-unit placement completed and reread; controlled response-loss/GET-503/replay was not observed",
+    "document_id": "5ed15599-6ceb-4931-9218-cb6af937f232",
+    "display_number": "№000022",
+    "sku": "W441C9-SKU-75282a79",
+    "cell_barcode": "LOC-59E3B593114F",
+    "precondition": "sorting, actual 1, posted 0, remaining 1",
+    "server_reread": {
+      "status": "done",
+      "actual_qty": 1,
+      "posted_qty": 1,
+      "placement_movements": 2,
+      "actor": "Boris WMS443 C5 Device",
+      "no_duplicate": "one transfer-out and one transfer-in only"
+    },
+    "acceptance_gap": "The Android client reused its already open connection, so the response-loss proxy did not receive the final POST. The controlled GET 503 and replay were therefore deliberately not claimed."
+  },
+  "cleanup": "The WMS-441 response-loss proxy was stopped, adb reverse was restored to 18082, and the TSD app was force-stopped before this checkpoint."
+}

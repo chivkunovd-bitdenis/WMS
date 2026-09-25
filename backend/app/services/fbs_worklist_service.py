@@ -33,6 +33,7 @@ from app.models.fbs_order import (
     current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_ORDER_STICKER,
     PRINT_ASSET_STATUS_READY,
@@ -87,6 +88,17 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     # раньше сваливались в "done" вместе с реально завершёнными — отвал был не виден.
     # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
     "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
+    # WMS-445: the first TSD screen is a warehouse work queue, rather than a
+    # history view.  It deliberately differs from the web's `new` (which
+    # splits WB by deadline) and `active` (which includes external processing).
+    "tsd_working": frozenset(
+        {
+            FBS_ORDER_STATUS_NEW,
+            FBS_ORDER_STATUS_IN_SUPPLY,
+            FBS_ORDER_STATUS_ASSEMBLING,
+            FBS_ORDER_STATUS_PACKED,
+        }
+    ),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
@@ -112,6 +124,23 @@ def _supplier_new_clause() -> ColumnElement[bool]:
     return or_(
         FbsOrder.supplier_status.is_(None),
         func.lower(FbsOrder.supplier_status) == FBS_ORDER_STATUS_NEW,
+    )
+
+
+def _tsd_working_clause() -> ColumnElement[bool]:
+    """Statuses that remain actionable from the TSD's initial FBS queue."""
+    return or_(
+        and_(
+            FbsOrder.status == FBS_ORDER_STATUS_NEW,
+            _supplier_new_clause(),
+        ),
+        FbsOrder.status.in_(
+            {
+                FBS_ORDER_STATUS_IN_SUPPLY,
+                FBS_ORDER_STATUS_ASSEMBLING,
+                FBS_ORDER_STATUS_PACKED,
+            }
+        ),
     )
 
 
@@ -317,6 +346,8 @@ async def _fetch_orders_page(
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
             stmt = stmt.where(_deadline_expired_clause(server_now))
+        elif status_group == "tsd_working":
+            stmt = stmt.where(_tsd_working_clause())
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
@@ -404,6 +435,8 @@ async def _fetch_warehouse_options(
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
             stmt = stmt.where(_deadline_expired_clause(server_now))
+        elif status_group == "tsd_working":
+            stmt = stmt.where(_tsd_working_clause())
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
@@ -472,6 +505,28 @@ async def _load_worklist_context(
     warehouses = await _load_warehouses(session, tenant_id, warehouse_ids)
     wb_names = await _load_wb_warehouse_names(session, tenant_id, wb_wh_ids)
     positions = await _load_order_positions(session, order_ids)
+    packed_positions: dict[uuid.UUID, int] = {}
+    ozon_order_ids = [order.id for order in orders if order.marketplace == "ozon"]
+    if ozon_order_ids:
+        fulfillments = (await session.scalars(
+            select(FbsPackagingFulfillment).where(
+                FbsPackagingFulfillment.tenant_id == tenant_id,
+                FbsPackagingFulfillment.fbs_order_id.in_(ozon_order_ids),
+                FbsPackagingFulfillment.undone_at.is_(None),
+            )
+        )).all()
+        for fulfillment in fulfillments:
+            remaining: dict[str, int] = {}
+            for unit in fulfillment.ozon_packed_units_json or []:
+                key = unit.get("product_id", "")
+                remaining[key] = remaining.get(key, 0) + 1
+            # Existing packing facts identify the product. Distribute its units
+            # across positions once, without duplicating counts for repeated SKUs.
+            for position in positions.get(fulfillment.fbs_order_id, []):
+                key = str(position.product_id)
+                quantity = min(position.quantity, remaining.get(key, 0))
+                packed_positions[position.id] = quantity
+                remaining[key] = remaining.get(key, 0) - quantity
     # Reuse the positions already fetched for the projection; metadata must not
     # trigger lazy SQL from its synchronous Ozon serializer.
     from sqlalchemy.orm.attributes import set_committed_value
@@ -486,6 +541,11 @@ async def _load_worklist_context(
         if position.product_id is not None
     )
     products = await _load_products(session, tenant_id, product_ids)
+    seller_nm_pairs.update(
+        (product.seller_id, int(product.wb_nm_id))
+        for product in products.values()
+        if product.seller_id is not None and product.wb_nm_id is not None
+    )
     marketplace_bindings = await _load_product_marketplace_bindings(
         session, tenant_id, product_ids
     )
@@ -505,6 +565,7 @@ async def _load_worklist_context(
         "products": products,
         "marketplace_bindings": marketplace_bindings,
         "positions": positions,
+        "packed_positions": packed_positions,
         "cards": cards,
         "ozon_photos": ozon_photos,
         "availability": availability,
@@ -912,6 +973,31 @@ def _position_barcode(
     return product.wb_barcode if product is not None else None
 
 
+def _card_raw_for_product(product: Product | None, ctx: dict[str, Any]) -> dict[str, Any] | None:
+    if product is None or product.seller_id is None or product.wb_nm_id is None:
+        return None
+    card = ctx["cards"].get((product.seller_id, int(product.wb_nm_id)))
+    return card.raw_json if card and isinstance(card.raw_json, dict) else None
+
+
+def _product_label_metadata(product: Product | None, ctx: dict[str, Any]) -> dict[str, str | None]:
+    """Existing catalog characteristics for one exact WMS product."""
+    card_raw = _card_raw_for_product(product, ctx)
+    catalog_barcode = product.wb_barcode if product is not None else None
+    return {
+        "size": (
+            product.wb_size
+            if product is not None and product.wb_size
+            else size_from_card_for_barcode(card_raw, catalog_barcode)
+            if card_raw
+            else None
+        ),
+        "color": color_from_card(card_raw) if card_raw else None,
+        "brand": brand_from_card(card_raw) if card_raw else None,
+        "composition": composition_from_card(card_raw) if card_raw else None,
+    }
+
+
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
     is_ozon = order.marketplace == "ozon"
     positions = ctx["positions"].get(order.id, [])
@@ -981,6 +1067,13 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             product.wb_vendor_code if product and product.wb_vendor_code else order.wb_article
         )
         sku = product.sku_code if product else None
+    # An Ozon posting can have several independently linked WMS products.  Its
+    # compact compatibility product is only the first position, so derive the
+    # product-card details for every position below instead of reusing it.
+    root_label_metadata = _product_label_metadata(
+        ctx["products"].get(first_position.product_id) if is_ozon and first_position else product,
+        ctx,
+    )
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -1019,10 +1112,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 else None
             ),
             "category": category,
-            "color": color,
-            "brand": brand,
-            "composition": composition,
-            "size": size,
+            "color": root_label_metadata["color"] if is_ozon else color,
+            "brand": root_label_metadata["brand"] if is_ozon else brand,
+            "composition": root_label_metadata["composition"] if is_ozon else composition,
+            "size": root_label_metadata["size"] if is_ozon else size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(
                 product
@@ -1061,9 +1154,14 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                     else position.offer_id
                 ),
                 "sku": str(position.ozon_sku) if position.ozon_sku is not None else None,
+                **_product_label_metadata(ctx["products"].get(position.product_id), ctx),
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,
+                # Lightweight callers that only project the worklist do not
+                # load Ozon packing facts.  They still describe an unpacked
+                # position rather than failing the complete response.
+                "packed_quantity": ctx.get("packed_positions", {}).get(position.id, 0),
             }
             for position in positions
         ],
@@ -1169,6 +1267,7 @@ def _build_metadata(
                 ), None)
             states.append(
                 {
+                    "id": str(mark.id),
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,

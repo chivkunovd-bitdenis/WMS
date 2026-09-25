@@ -44,10 +44,22 @@ def _event_out(event: DocumentEvent) -> DocumentEventOut:
     snapshot_name = event.payload_json.get("actor_name_snapshot")
     snapshot_id = event.payload_json.get("actor_user_id_snapshot")
     actor = None
-    if isinstance(snapshot_name, str) and isinstance(snapshot_id, str):
+    if (
+        isinstance(snapshot_name, str) and snapshot_name.strip()
+        and "@" not in snapshot_name
+        and snapshot_name not in ("ФИО не указано", "Сотрудник не указан")
+        and isinstance(snapshot_id, str)
+    ):
         actor = DocumentEventActorOut(id=uuid.UUID(snapshot_id), name=snapshot_name)
     elif event.actor is not None:
-        actor = DocumentEventActorOut(id=event.actor.id, name=event.actor.email)
+        actor = DocumentEventActorOut(id=event.actor.id, name=event.actor.display_name)
+    elif isinstance(snapshot_id, str):
+        actor = DocumentEventActorOut(
+            id=uuid.UUID(snapshot_id), name="Сотрудник не указан",
+        )
+    payload = dict(event.payload_json)
+    if actor is not None and "actor_name_snapshot" in payload:
+        payload["actor_name_snapshot"] = actor.name
     product = (
         DocumentEventProductOut(id=event.product.id, name=event.product.name)
         if event.product is not None
@@ -63,7 +75,7 @@ def _event_out(event: DocumentEvent) -> DocumentEventOut:
         occurred_at=event.occurred_at,
         qty=event.qty,
         product=product,
-        payload=event.payload_json,
+        payload=payload,
     )
 
 

@@ -171,6 +171,9 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'product_not_in_seller_catalog') {
     return 'Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.'
   }
+  if (code === 'barcode_ambiguous') {
+    return 'Один и тот же код у нескольких товаров. Уточните селлера в документе или используйте артикул.'
+  }
   if (code === 'product_seller_mismatch' || code === 'mixed_seller_lines') {
     return 'Товар относится к другому селлеру. В одной приёмке нельзя смешивать селлеров.'
   }
@@ -197,6 +200,10 @@ export function scanErrorMessageRu(code: string): string {
   }
   if (code === 'box_not_empty') {
     return 'Нельзя удалить короб с товарами.'
+  }
+  // readApiErrorMessage уже перевёл известный код — не подменяем понятный текст общим.
+  if (!/^[a-z0-9_]+$/i.test(code)) {
+    return code
   }
   return 'Не удалось выполнить действие. Проверьте заявку и попробуйте ещё раз.'
 }

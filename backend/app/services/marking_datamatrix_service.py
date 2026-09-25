@@ -14,11 +14,14 @@ class DecodedDataMatrix:
 
     value: str
     page_rect: tuple[float, float, float, float]
+    valid: bool = True
 
 
 def decode_datamatrix_codes_on_pdf_page(
     page: object,
     dpi: int = _DEFAULT_DPI,
+    *,
+    include_errors: bool = False,
 ) -> list[DecodedDataMatrix]:
     """Render a PDF page and decode its DataMatrix symbols (from 94c8e674)."""
     try:
@@ -37,18 +40,22 @@ def decode_datamatrix_codes_on_pdf_page(
     samples = pixmap.samples
     view = zxingcpp.ImageView(samples, pixmap.width, pixmap.height, image_format)
     formats = zxingcpp.BarcodeFormats(zxingcpp.DataMatrix)
-    results = zxingcpp.read_barcodes(view, formats=formats)
+    results = zxingcpp.read_barcodes(
+        view,
+        formats=formats,
+        return_errors=include_errors,
+    )
 
     decoded: list[DecodedDataMatrix] = []
     for result in results:
-        if not result.valid:
+        if not result.valid and not include_errors:
             continue
         # The text accessor can render GS as a visible placeholder; use actual bytes.
         try:
             value = result.bytes.decode("utf-8")
         except UnicodeDecodeError:
             value = result.bytes.decode("latin-1")
-        if not value:
+        if not value and result.valid:
             continue
         position = result.position
         xs = (
@@ -69,5 +76,7 @@ def decode_datamatrix_codes_on_pdf_page(
             max(xs) / scale,
             max(ys) / scale,
         )
-        decoded.append(DecodedDataMatrix(value=value, page_rect=page_rect))
+        decoded.append(
+            DecodedDataMatrix(value=value, page_rect=page_rect, valid=bool(result.valid)),
+        )
     return decoded

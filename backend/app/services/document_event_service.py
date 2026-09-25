@@ -301,7 +301,7 @@ async def record_document_mutation(
         async with connection.begin_nested():
             if actor.actor_user_id is not None:
                 name = await connection.scalar(
-                    select(User.email).where(
+                    select(User.display_name).where(
                         User.id == actor.actor_user_id, User.tenant_id == tenant_id
                     )
                 )

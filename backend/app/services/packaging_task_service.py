@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -82,6 +82,7 @@ PackagingTaskError = Literal[
     "undo_not_supported",
     "invalid_status_filter",
     "insufficient_packaging_stock",
+    "idempotency_conflict",
 ]
 
 REVERSIBLE_PACK_EVENTS = (PACKAGING_EVENT_SCAN_PACK, PACKAGING_EVENT_MANUAL_PACK)
@@ -208,6 +209,7 @@ async def _add_task_event(
     line: PackagingTaskLine | None = None,
     acting_user_id: uuid.UUID | None = None,
     note: str | None = None,
+    event_id: uuid.UUID | None = None,
 ) -> PackagingTaskEvent:
     await session.execute(
         select(PackagingTask.id)
@@ -221,6 +223,7 @@ async def _add_task_event(
         )
     )
     event = PackagingTaskEvent(
+        id=event_id or uuid.uuid4(),
         tenant_id=task.tenant_id,
         task_id=task.id,
         event_sequence=int(next_sequence or 1),
@@ -667,6 +670,8 @@ async def sync_mp_task_packed_from_boxes(
         select(
             MarketplaceUnloadBoxLine.product_id,
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_packed), 0),
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_source_known), 0),
         )
         .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
         .join(
@@ -680,34 +685,72 @@ async def sync_mp_task_packed_from_boxes(
         .group_by(MarketplaceUnloadBoxLine.product_id)
     )
     boxed_by_product = {
-        product_id: int(quantity or 0)
-        for product_id, quantity in (await session.execute(stmt)).all()
+        product_id: (
+            int(quantity or 0),
+            int(quantity_packed or 0),
+            int(source_known or 0),
+            int(source_known or 0) < int(quantity or 0),
+        )
+        for product_id, quantity, quantity_packed, source_known in (
+            await session.execute(stmt)
+        ).all()
     }
     if not boxed_by_product:
         return task
-    changes: list[tuple[PackagingTaskLine, int]] = []
+    changes: list[tuple[PackagingTaskLine, int, int]] = []
     status_before = task.status
     changed = False
     for line in task.lines:
         boxed = boxed_by_product.get(line.product_id)
         if boxed is None:
             continue
-        target = min(int(line.qty_total) - int(line.qty_confirmed_packed), boxed)
-        if int(line.qty_packed_in_task) != target:
-            changes.append((line, int(line.qty_packed_in_task)))
-            line.qty_packed_in_task = target
+        boxed_qty, boxed_packed, source_known, source_unknown = boxed
+        if source_unknown:
+            # Rows created before WMS-444 do not carry a source split. Keep
+            # their persisted result rather than inventing new employee work
+            # from a default value or from the current stock remainder.
+            if source_known < 1:
+                continue
+            if line.qty_legacy_confirmed_packed is None:
+                line.qty_legacy_confirmed_packed = int(line.qty_confirmed_packed)
+                line.qty_legacy_packed_in_task = int(line.qty_packed_in_task)
+            legacy_confirmed = int(line.qty_legacy_confirmed_packed)
+            legacy_work = int(line.qty_legacy_packed_in_task or 0)
+            ready_from_source = min(
+                int(line.qty_total), legacy_confirmed + min(source_known, boxed_packed)
+            )
+            worker_packed = min(
+                int(line.qty_total) - ready_from_source,
+                legacy_work + max(0, source_known - boxed_packed),
+            )
+        else:
+            ready_from_source = min(int(line.qty_total), boxed_qty, boxed_packed)
+            worker_packed = min(
+                int(line.qty_total) - ready_from_source,
+                max(0, boxed_qty - ready_from_source),
+            )
+        if (
+            int(line.qty_confirmed_packed) != ready_from_source
+            or int(line.qty_packed_in_task) != worker_packed
+        ):
+            changes.append((line, int(line.qty_confirmed_packed), int(line.qty_packed_in_task)))
+            line.qty_confirmed_packed = ready_from_source
+            line.qty_packed_in_task = worker_packed
             changed = True
     if changed:
         _touch_task(task)
     with system_document_events():
-        for line, qty_before in changes:
+        for line, confirmed_before, packed_before in changes:
             await record_document_mutation(
                 session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_PACKAGING_TASK,
                 document_id=task.id, event_type=EVENT_PACKED_RECALCULATED,
                 product_id=line.product_id,
-                before={"line_id": line.id, "qty_packed_in_task": qty_before,
+                before={"line_id": line.id, "qty_confirmed_packed": confirmed_before,
+                        "qty_packed_in_task": packed_before,
                         "status": status_before},
-                after={"line_id": line.id, "qty_packed_in_task": int(line.qty_packed_in_task),
+                after={"line_id": line.id,
+                       "qty_confirmed_packed": int(line.qty_confirmed_packed),
+                       "qty_packed_in_task": int(line.qty_packed_in_task),
                        "status": task.status, "reason": "mp_boxes_recalculation"},
             )
     return task
@@ -794,6 +837,16 @@ async def confirm_line_packed_from_shelf(
     line = next((ln for ln in task.lines if ln.id == line_id), None)
     if line is None:
         raise PackagingTaskServiceError("line_not_found")
+    if _is_mp_unload_task(task):
+        # Коробочная ФБО уже знает происхождение каждой собранной единицы. Старый
+        # клиент может прислать confirm-packed, но не вправе заменить это знание
+        # текущим готовым остатком в другой ячейке. Самостоятельная упаковка ниже
+        # сохраняет прежнее абсолютное подтверждение.
+        await sync_mp_task_packed_from_boxes(session, tenant_id, task)
+        await session.commit()
+        loaded = await get_task(session, tenant_id, task_id)
+        assert loaded is not None
+        return loaded
     confirmed = int(line.qty_suggested_packed if qty is None else qty)
     if confirmed < 0 or confirmed > line.qty_total:
         raise PackagingTaskServiceError("invalid_qty")
@@ -893,6 +946,73 @@ async def record_pack_progress(
     task = preloaded_task or await get_task(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
+
+    from app.services.fbs_packaging_integration_service import (
+        FbsPackagingIntegrationError,
+        get_supply_for_packaging_task,
+        lock_packaging_rows,
+        record_fbs_pack_progress,
+    )
+
+    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    event_id = None
+    if (idempotency_key is not None and idempotency_key.strip()) or fbs_supply is None:
+        # The existing work event is the durable receipt. Keep the key tenant-wide
+        # so reusing it for another document/line/actor cannot acknowledge new work.
+        # Blank values mean no identity, like the legacy caller without a key.
+        # Nonblank keys remain opaque: never trim their significant whitespace.
+        if idempotency_key is not None and idempotency_key.strip():
+            event_id = uuid.uuid5(tenant_id, f"pack-progress:{idempotency_key}")
+            if session.get_bind().dialect.name == "postgresql":
+                await session.execute(
+                    text("SELECT pg_advisory_xact_lock(:key)"),
+                    {"key": int.from_bytes(event_id.bytes[:8], "big", signed=True)},
+                )
+        # Lock before reloading quantities: a second independent attempt must also
+        # observe the first commit before checking the remaining physical units.
+        if fbs_supply is not None:
+            await lock_packaging_rows(session, tenant_id, supply_id=fbs_supply.id)
+        else:
+            await session.execute(
+                select(PackagingTask.id)
+                .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
+                .with_for_update()
+            )
+        task = await get_task(session, tenant_id, task_id)
+        if task is None:
+            raise PackagingTaskServiceError("not_found")
+        previous = await session.get(PackagingTaskEvent, event_id) if event_id else None
+        if previous is not None:
+            if (
+                previous.tenant_id != tenant_id
+                or previous.task_id != task_id
+                or previous.line_id != line_id
+                or previous.quantity != qty
+                or previous.created_by_user_id != acting_user_id
+                or previous.action != action
+                or (order_id is not None and fbs_supply is None)
+            ):
+                raise PackagingTaskServiceError("idempotency_conflict")
+            # Return current document state, including completion or later undo;
+            # replay never reapplies the historical action.
+            fulfilled_order = None
+            if fbs_supply is not None:
+                replay_line = next((ln for ln in task.lines if ln.id == line_id), None)
+                if replay_line is None:
+                    raise PackagingTaskServiceError("line_not_found")
+                try:
+                    replay = await record_fbs_pack_progress(
+                        session, tenant_id, task, replay_line, qty,
+                        order_id=order_id, acting_user_id=acting_user_id,
+                        idempotency_key=idempotency_key, replay_only=True,
+                    )
+                except FbsPackagingIntegrationError as exc:
+                    raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
+                fulfilled_order = replay.units[-1].order if replay.units else None
+            await session.commit()
+            return PackProgressResult(task=task, fulfilled_order=fulfilled_order)
+        if event_id is not None and order_id is not None and fbs_supply is None:
+            raise PackagingTaskServiceError("order_not_in_supply")
     if task.status == STATUS_DONE:
         raise PackagingTaskServiceError("bad_status")
     line = next((ln for ln in task.lines if ln.id == line_id), None)
@@ -900,14 +1020,6 @@ async def record_pack_progress(
         raise PackagingTaskServiceError("line_not_found")
     need = qty_need_pack(line)
     remaining = need - int(line.qty_packed_in_task)
-
-    from app.services.fbs_packaging_integration_service import (
-        FbsPackagingIntegrationError,
-        get_supply_for_packaging_task,
-        record_fbs_pack_progress,
-    )
-
-    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
     if fbs_supply is not None and order_id is not None:
         from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
         from app.services.fbs_cancelled_after_pack_service import (
@@ -957,6 +1069,7 @@ async def record_pack_progress(
                 quantity=packed_delta,
                 line=line,
                 acting_user_id=acting_user_id,
+                event_id=event_id,
             )
         if acting_user_id is not None:
             await billing_svc.finalize_task_billing(
@@ -982,6 +1095,7 @@ async def record_pack_progress(
         quantity=qty,
         line=line,
         acting_user_id=acting_user_id,
+        event_id=event_id,
     )
     if acting_user_id is not None:
         await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)

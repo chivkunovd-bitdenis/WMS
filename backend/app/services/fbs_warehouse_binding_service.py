@@ -382,6 +382,7 @@ async def _upsert_binding(
     stock_sync_enabled: bool,
     marketplace: str = MARKETPLACE_WB,
     external_warehouse_id: str | None = None,
+    _after_concurrent_insert: bool = False,
 ) -> FbsWarehouseBinding:
     """Сопоставить склад маркетплейса со складом WMS.
 
@@ -477,6 +478,21 @@ async def _upsert_binding(
         # uq_fbs_warehouse_bindings_seller_wb_warehouse, from a concurrent
         # duplicate PUT racing on the same brand-new wb_warehouse_id.
         await session.rollback()
+        if not _after_concurrent_insert:
+            # The winning transaction is visible after the unique violation.
+            # Apply this complete PUT to that same row: a lost response or two
+            # concurrent creators therefore produce one binding, not a 409.
+            return await _upsert_binding(
+                session,
+                tenant_id,
+                seller_id,
+                wb_warehouse_id,
+                wms_warehouse_id=wms_warehouse_id,
+                stock_sync_enabled=stock_sync_enabled,
+                marketplace=marketplace,
+                external_warehouse_id=external_warehouse_id,
+                _after_concurrent_insert=True,
+            )
         raise FbsWarehouseBindingError("wb_warehouse_already_bound") from exc
     await session.refresh(row)
     return row
@@ -532,6 +548,7 @@ async def _configure_seller_warehouse(
     wms_warehouse_id: uuid.UUID | None,
     marketplace: str = MARKETPLACE_WB,
     stock_sync_enabled: bool | None = None,
+    _after_concurrent_insert: bool = False,
 ) -> FbsWarehouseBinding | None:
     """Настроить сопоставление и обслуживание внешнего склада независимо.
 
@@ -637,6 +654,21 @@ async def _configure_seller_warehouse(
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
+        if not _after_concurrent_insert:
+            # A repeated first-save can race on the existing unique external
+            # warehouse key. Re-read the winner and apply this complete request
+            # to it instead of turning a successful first commit into a 409.
+            return await _configure_seller_warehouse(
+                session,
+                tenant_id,
+                seller_id,
+                wb_warehouse_id,
+                served=served,
+                wms_warehouse_id=wms_warehouse_id,
+                marketplace=marketplace,
+                stock_sync_enabled=stock_sync_enabled,
+                _after_concurrent_insert=True,
+            )
         raise FbsWarehouseBindingError("wb_warehouse_already_bound") from exc
     await session.refresh(existing)
     return existing

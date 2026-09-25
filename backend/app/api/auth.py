@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -19,11 +19,13 @@ from app.core.settings import settings
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
-from app.services.assistant_service import tenant_assistant_enabled
+from app.schemas.user_profile import ProfilePatch
+from app.services.assistant_service import user_assistant_enabled
 from app.services.auth_service import (
     AuthError,
     create_seller_user,
     login,
+    login_by_name,
     register_fulfillment,
     request_password_reset,
     send_auth_link,
@@ -36,10 +38,10 @@ from app.services.login_rate_limit import (
 from app.services.seller_shop_service import (
     SellerShopError,
     can_act_as_seller,
+    can_manage_seller_shops,
     list_delegatable_shops,
     list_switchable_shops,
     update_enabled_shops,
-    user_can_manage_seller_shops,
 )
 from app.services.seller_staff_permissions_service import get_seller_permissions
 from app.services.staff_permissions_service import get_staff_permissions
@@ -59,6 +61,13 @@ class RegisterBody(BaseModel):
 class LoginBody(BaseModel):
     email: EmailStr
     password: str = Field(default="", max_length=128)
+    portal: Literal["fulfillment", "seller"] | None = None
+
+
+class NameLoginBody(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    password: str = Field(default="", max_length=128)
+    organization: str | None = Field(default=None, max_length=64)
 
 
 class TokenResponse(BaseModel):
@@ -93,10 +102,14 @@ class SellerShopOut(BaseModel):
 
 class UserMeResponse(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     tenant_id: str
     role: str
     organization_name: str
+    organization_slug: str
     seller_id: str | None = None
     seller_name: str | None = None
     home_seller_id: str | None = None
@@ -153,6 +166,7 @@ class SetPasswordByLinkBody(BaseModel):
 
 class PasswordResetRequestBody(BaseModel):
     email: EmailStr
+    portal: Literal["fulfillment", "seller"] | None = None
 
 
 class ResendInviteBody(BaseModel):
@@ -161,7 +175,10 @@ class ResendInviteBody(BaseModel):
 
 class SellerAccountOut(BaseModel):
     id: str
-    email: str
+    email: str | None
+    full_name: str | None = None
+    job_title: str | None = None
+    display_name: str = "ФИО не указано"
     role: str
     seller_id: str
 
@@ -249,6 +266,9 @@ async def create_seller_account(
     return SellerAccountOut(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         role=user.role,
         seller_id=str(user.seller_id),
     )
@@ -266,7 +286,7 @@ async def login_route(
     check_login_rate_limit(request=request, email=str(body.email))
     try:
         _user, token = await login(
-            session, email=str(body.email), password=body.password
+            session, email=str(body.email), password=body.password, portal=body.portal
         )
     except AuthError:
         # WMS-270. Все причины отказа (нет пользователя, пароль не установлен,
@@ -327,6 +347,7 @@ async def request_password_reset_route(
     await request_password_reset(
         session,
         email=str(body.email),
+        portal=body.portal,
         base_url=public_base_url(request),
         background_tasks=background_tasks,
     )
@@ -383,7 +404,7 @@ async def me(
         active = await session.get(Seller, active_seller_id)
         if active is not None:
             active_seller_name = active.name
-    can_manage = user_can_manage_seller_shops(user)
+    can_manage = await can_manage_seller_shops(session, user)
     switchable = await list_switchable_shops(session, user)
     delegatable = await list_delegatable_shops(session, user)
     switchable_out = [
@@ -431,13 +452,19 @@ async def me(
     # WMS-433/R23: помощник в первом срезе — только портал ФФ (R20), поэтому
     # роль вне FF_PORTAL_ROLES (включая селлера) не проверяется по списку
     # тенантов вовсе и сразу даёт false.
-    assistant_enabled = user.role in FF_PORTAL_ROLES and tenant_assistant_enabled(tenant.slug)
+    assistant_enabled = user.role in FF_PORTAL_ROLES and user_assistant_enabled(
+        tenant.slug, user.email
+    )
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        display_name=user.display_name,
         tenant_id=str(user.tenant_id),
         role=user.role,
         organization_name=tenant.name,
+        organization_slug=tenant.slug,
         seller_id=active_seller_id_str,
         seller_name=active_seller_name,
         home_seller_id=home_seller_id_str,
@@ -466,7 +493,7 @@ async def put_seller_shops(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[SellerShopOut]:
-    if not user_can_manage_seller_shops(user):
+    if not await can_manage_seller_shops(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
         rows = await update_enabled_shops(session, user, body.enabled_seller_ids)
@@ -504,3 +531,35 @@ async def switch_seller(
         seller_id=target,
     )
     return TokenResponse(access_token=token)
+
+
+@router.post("/login-by-name", response_model=TokenResponse)
+async def login_by_name_route(
+    body: NameLoginBody,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> TokenResponse:
+    check_login_rate_limit(request=request, email=body.full_name)
+    try:
+        _user, token = await login_by_name(
+            session, full_name=body.full_name, password=body.password,
+            organization=body.organization,
+        )
+    except AuthError:
+        raise HTTPException(status_code=401, detail="invalid_credentials") from None
+    register_login_success(request=request, email=body.full_name)
+    return TokenResponse(access_token=token)
+
+
+@router.patch("/me", response_model=UserMeResponse)
+async def patch_me(
+    body: ProfilePatch,
+    user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserMeResponse:
+    user.full_name = body.full_name
+    user.job_title = body.job_title
+    await session.commit()
+    await session.refresh(user)
+    return await me(user, credentials, session)

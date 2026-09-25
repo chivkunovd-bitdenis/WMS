@@ -26,6 +26,7 @@ type Props = {
   title?: string
   subtitle?: string
   userLabel?: string
+  userJobTitle?: string | null
   userRoleLabel?: string
   portal: 'seller' | 'ff'
   meRole?: string
@@ -43,6 +44,7 @@ export function AuthedAppLayout({
   children,
   onLogout,
   userLabel,
+  userJobTitle,
   userRoleLabel,
   portal,
   meRole = '',
@@ -78,6 +80,7 @@ export function AuthedAppLayout({
               {userLabel ? (
                 <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
                   <span data-testid="user-email">{userLabel}</span>
+                  {userJobTitle ? <span> · {userJobTitle}</span> : null}
                   {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
                 </Box>
               ) : null}
@@ -177,6 +180,7 @@ export function AuthedAppLayout({
             {userLabel ? (
               <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
                 <span data-testid="user-email">{userLabel}</span>
+                {userJobTitle ? <span> · {userJobTitle}</span> : null}
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}

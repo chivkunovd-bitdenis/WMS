@@ -1,0 +1,17 @@
+{
+  "source_commit": "e85fd924cd737e843fdce9e8f21ff00215406447",
+  "native_windows_or_printer_exercised": false,
+  "smaller_printable_area": {
+    "rejected_before_submit": true,
+    "message": "Печатаемая область выбранной очереди меньше размера этикетки (поля драйвера: 12px, 10px). Настройте драйвер."
+  },
+  "missing_dimensions": {
+    "rejected_before_submit": true,
+    "message": "WMS не передала размер этикетки. Windows не отправит файл без проверяемого формата."
+  },
+  "matching_full_page": "pass",
+  "installer_source_guards": {
+    "explicit_no_connection_branch": true,
+    "uninstall_exit_code_guard": true
+  }
+}

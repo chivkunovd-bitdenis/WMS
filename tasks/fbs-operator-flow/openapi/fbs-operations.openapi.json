@@ -3021,6 +3021,54 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/boxes/auto-assign": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Auto-assign every unboxed Ozon position into a new box each",
+        "operationId": "auto_assign_fbs_packing_boxes_operations_fbs_supplies__supply_id__boxes_auto_assign_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsAutoAssignBoxesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}": {
       "get": {
         "tags": [
@@ -3335,6 +3383,589 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FbsOrderTapePrintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Scan Fbs Supply Product For Auto Print",
+        "description": "Select one WB order for a physical product scan and prepare its labels.\n\nThe durable selection is committed before marketplace/network work.  A\nretry with the same key therefore recovers this order rather than consuming\nits neighbour even when sticker acquisition or KIZ allocation failed.",
+        "operationId": "scan_fbs_supply_product_for_auto_print_operations_fbs_supplies__supply_id__scan_auto_print_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/reprint-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Scan Auto Print Reprint",
+        "operationId": "claim_fbs_scan_auto_print_reprint_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__reprint_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintReprintClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Scan Auto Print Target",
+        "operationId": "claim_fbs_scan_auto_print_target_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-started": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Mark Fbs Scan Auto Print Target Started",
+        "operationId": "mark_fbs_scan_auto_print_target_started_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_started_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/print-failed": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Release Fbs Scan Auto Print Target Claim",
+        "operationId": "release_fbs_scan_auto_print_target_claim_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__print_failed_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanAutoPrintTargetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanAutoPrintTargetClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Save Fbs Supply Direct Kiz Reprint",
+        "operationId": "save_fbs_supply_direct_kiz_reprint_operations_fbs_supplies__supply_id__scan_kiz_reprint_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizReprintBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-claim": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Fbs Supply Direct Kiz Print",
+        "operationId": "claim_fbs_supply_direct_kiz_print_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizPrintClaimOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-started": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Mark Fbs Supply Direct Kiz Print Started",
+        "operationId": "mark_fbs_supply_direct_kiz_print_started_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_started_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint/{reprint_id}/print-failed": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Release Fbs Supply Direct Kiz Print Claim",
+        "operationId": "release_fbs_supply_direct_kiz_print_claim_operations_fbs_supplies__supply_id__scan_kiz_reprint__reprint_id__print_failed_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "reprint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reprint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsDirectKizPrintClaimBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsDirectKizReprintOut"
                 }
               }
             }
@@ -4029,6 +4660,55 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/markings/sync": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Sync Fbs Supply Markings",
+        "description": "WMS-477 R2 — кнопка «Проверить в WB» на вкладке «Упаковка и маркировка».\n\nПересверяет вердикты WB разом по всем закодированным WB-заказам поставки\n(см. `fbs_marking_service.sync_marking_verdicts_for_supply`) и возвращает\nобновлённое рабочее место — тот же контракт, что у `sync-tracking`.",
+        "operationId": "sync_fbs_supply_markings_operations_fbs_supplies__supply_id__markings_sync_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/retry-supply-qr": {
       "post": {
         "tags": [
@@ -4597,6 +5277,179 @@
   },
   "components": {
     "schemas": {
+      "AssignMarkingCodesOut": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "document_number": {
+            "type": "string",
+            "title": "Document Number"
+          },
+          "product": {
+            "$ref": "#/components/schemas/AutoImportProductGroupOut"
+          },
+          "assigned_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "document_number",
+          "product",
+          "assigned_keys"
+        ],
+        "title": "AssignMarkingCodesOut"
+      },
+      "AutoImportProductGroupOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "loaded_count": {
+            "type": "integer",
+            "title": "Loaded Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku",
+          "product_name",
+          "size",
+          "barcode",
+          "loaded_count"
+        ],
+        "title": "AutoImportProductGroupOut"
+      },
+      "AutoImportUnmatchedOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "marking_code": {
+            "type": "string",
+            "title": "Marking Code"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "eligible_for_assignment": {
+            "type": "boolean",
+            "title": "Eligible For Assignment"
+          },
+          "has_label_artifact": {
+            "type": "boolean",
+            "title": "Has Label Artifact"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "marking_code",
+          "article",
+          "size",
+          "reason",
+          "eligible_for_assignment",
+          "has_label_artifact"
+        ],
+        "title": "AutoImportUnmatchedOut"
+      },
+      "AutoMarkingImportOut": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "document_number": {
+            "type": "string",
+            "title": "Document Number"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/AutoImportProductGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "unmatched": {
+            "items": {
+              "$ref": "#/components/schemas/AutoImportUnmatchedOut"
+            },
+            "type": "array",
+            "title": "Unmatched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "document_number",
+          "groups",
+          "unmatched"
+        ],
+        "title": "AutoMarkingImportOut"
+      },
       "BackgroundJobOut": {
         "properties": {
           "id": {
@@ -4774,6 +5627,121 @@
           "file"
         ],
         "title": "Body_apply_marketplace_box_import_route_operations_marketplace_unload_requests__request_id__import_boxes_apply_post"
+      },
+      "Body_assign_marking_codes_to_product_operations_marking_codes_import_assign_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "row_keys_json": {
+            "type": "string",
+            "title": "Row Keys Json"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "request_id",
+          "product_id",
+          "row_keys_json"
+        ],
+        "title": "Body_assign_marking_codes_to_product_operations_marking_codes_import_assign_post"
+      },
+      "Body_auto_import_marking_codes_operations_marking_codes_import_auto_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "request_id"
+        ],
+        "title": "Body_auto_import_marking_codes_operations_marking_codes_import_auto_post"
+      },
+      "Body_download_unmatched_import_pdf_operations_marking_codes_import_unmatched_pdf_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "row_keys_json": {
+            "type": "string",
+            "title": "Row Keys Json"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "row_keys_json"
+        ],
+        "title": "Body_download_unmatched_import_pdf_operations_marking_codes_import_unmatched_pdf_post"
       },
       "Body_import_marking_codes_operations_marking_codes_import_post": {
         "properties": {
@@ -5184,6 +6152,17 @@
               }
             ],
             "title": "Actor Email"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
           },
           "copies": {
             "type": "integer",
@@ -6048,6 +7027,139 @@
         ],
         "title": "FbsAssemblyTimeOut"
       },
+      "FbsAutoAssignBoxesOut": {
+        "properties": {
+          "supply": {
+            "$ref": "#/components/schemas/FbsWorkspaceSupplyOut"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/FbsWorkspaceProgressOut"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorkspaceBlockerOut"
+            },
+            "type": "array",
+            "title": "Blockers"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorkspaceOrderOut"
+            },
+            "type": "array",
+            "title": "Orders"
+          },
+          "cargo_places": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCargoPlaceOut"
+            },
+            "type": "array",
+            "title": "Cargo Places"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPackingBoxOut"
+            },
+            "type": "array",
+            "title": "Boxes"
+          },
+          "marking_pool": {
+            "$ref": "#/components/schemas/FbsWorkspaceMarkingPoolOut"
+          },
+          "delivery_preflight": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Preflight"
+          },
+          "last_wb_sync_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Wb Sync At"
+          },
+          "tracking_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracking Summary"
+          },
+          "partial_rejection": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Rejection"
+          },
+          "picking_auto_passed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picking Auto Passed Reason"
+          },
+          "wb_sync_stale": {
+            "type": "boolean",
+            "title": "Wb Sync Stale",
+            "default": false
+          },
+          "server_now": {
+            "type": "string",
+            "title": "Server Now"
+          },
+          "created_boxes": {
+            "type": "integer",
+            "title": "Created Boxes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply",
+          "stage",
+          "progress",
+          "blockers",
+          "orders",
+          "cargo_places",
+          "boxes",
+          "marking_pool",
+          "delivery_preflight",
+          "last_wb_sync_at",
+          "server_now",
+          "created_boxes"
+        ],
+        "title": "FbsAutoAssignBoxesOut",
+        "description": "WMS-526 F2: same workspace snapshot as every other box operation, plus\nhow many boxes this specific auto-assign call created (not the supply's\ntotal box count, which the base `boxes` field already carries)."
+      },
       "FbsCancelledAfterPackItemOut": {
         "properties": {
           "order_id": {
@@ -6879,6 +7991,105 @@
         ],
         "title": "FbsDeliveryPreflightOut"
       },
+      "FbsDirectKizPrintClaimBody": {
+        "properties": {
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_key"
+        ],
+        "title": "FbsDirectKizPrintClaimBody"
+      },
+      "FbsDirectKizPrintClaimOut": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/FbsDirectKizReprintOut"
+          },
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "claimed"
+        ],
+        "title": "FbsDirectKizPrintClaimOut"
+      },
+      "FbsDirectKizReprintBody": {
+        "properties": {
+          "kiz": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Kiz"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kiz",
+          "idempotency_key"
+        ],
+        "title": "FbsDirectKizReprintBody"
+      },
+      "FbsDirectKizReprintOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "title": "Kiz"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "print_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Print Started At"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "kiz",
+          "created_at",
+          "print_started_at"
+        ],
+        "title": "FbsDirectKizReprintOut"
+      },
       "FbsKizCommitBody": {
         "properties": {
           "pairs": {
@@ -6920,6 +8131,18 @@
             "type": "boolean",
             "title": "Confirmed",
             "default": false
+          },
+          "scan_auto_print_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Auto Print Id"
           }
         },
         "type": "object",
@@ -6957,6 +8180,22 @@
               }
             ],
             "title": "Meta Status"
+          },
+          "newly_bound": {
+            "type": "boolean",
+            "title": "Newly Bound",
+            "default": false
+          },
+          "bound_kiz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bound Kiz"
           }
         },
         "type": "object",
@@ -7753,6 +8992,22 @@
             "type": "boolean",
             "title": "Reprint",
             "default": false
+          },
+          "reprint_marking_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reprint Marking Ids"
           }
         },
         "type": "object",
@@ -7844,6 +9099,24 @@
           "order_product_id"
         ],
         "title": "FbsOrderTapePrintedCodeOut"
+      },
+      "FbsOzonLabelErrorOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "FbsOzonLabelErrorOut"
       },
       "FbsPackingBoxAssignOrdersBody": {
         "properties": {
@@ -7980,6 +9253,16 @@
             "type": "boolean",
             "title": "Without Distribution",
             "default": false
+          },
+          "ozon_label_error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsOzonLabelErrorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -9275,6 +10558,372 @@
           "message"
         ],
         "title": "FbsPrintOrderErrorOut"
+      },
+      "FbsScanAutoPrintBindingTargetOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/FbsScanAutoPrintProductOut"
+          },
+          "current_kiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintCurrentKizOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_confirmation": {
+            "type": "boolean",
+            "title": "Needs Confirmation"
+          },
+          "can_bind": {
+            "type": "boolean",
+            "title": "Can Bind"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          },
+          "marketplace": {
+            "type": "string",
+            "const": "wb",
+            "title": "Marketplace",
+            "default": "wb"
+          },
+          "external_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Order Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "product",
+          "current_kiz",
+          "needs_confirmation",
+          "can_bind",
+          "block_reason"
+        ],
+        "title": "FbsScanAutoPrintBindingTargetOut"
+      },
+      "FbsScanAutoPrintBody": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Barcode"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          },
+          "print_qr": {
+            "type": "boolean",
+            "title": "Print Qr",
+            "default": false
+          },
+          "print_chz": {
+            "type": "boolean",
+            "title": "Print Chz",
+            "default": false
+          },
+          "reprint_chz": {
+            "type": "boolean",
+            "title": "Reprint Chz",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode",
+          "idempotency_key"
+        ],
+        "title": "FbsScanAutoPrintBody"
+      },
+      "FbsScanAutoPrintCurrentKizOut": {
+        "properties": {
+          "masked": {
+            "type": "string",
+            "title": "Masked"
+          },
+          "meta_status": {
+            "type": "string",
+            "title": "Meta Status"
+          },
+          "from_pool": {
+            "type": "boolean",
+            "title": "From Pool"
+          }
+        },
+        "type": "object",
+        "required": [
+          "masked",
+          "meta_status",
+          "from_pool"
+        ],
+        "title": "FbsScanAutoPrintCurrentKizOut"
+      },
+      "FbsScanAutoPrintOut": {
+        "properties": {
+          "scan_id": {
+            "type": "string",
+            "title": "Scan Id"
+          },
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "binding_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintBindingTargetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reprint_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsScanAutoPrintReprintRecoveryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign"
+          },
+          "qr_asset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsPrintAssetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Codes"
+          },
+          "printed_codes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsOrderTapePrintedCodeOut"
+            },
+            "type": "array",
+            "title": "Printed Codes"
+          },
+          "shortage": {
+            "type": "integer",
+            "title": "Shortage"
+          },
+          "order_errors": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPrintOrderErrorOut"
+            },
+            "type": "array",
+            "title": "Order Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scan_id",
+          "order_id",
+          "wb_order_id",
+          "replayed",
+          "binding_target",
+          "reprint_recovery",
+          "requires_honest_sign",
+          "qr_asset",
+          "codes",
+          "printed_codes",
+          "shortage",
+          "order_errors"
+        ],
+        "title": "FbsScanAutoPrintOut"
+      },
+      "FbsScanAutoPrintProductOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "image_url",
+          "barcode",
+          "seller_article"
+        ],
+        "title": "FbsScanAutoPrintProductOut"
+      },
+      "FbsScanAutoPrintReprintClaimOut": {
+        "properties": {
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          },
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          },
+          "kiz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kiz"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claimed",
+          "started"
+        ],
+        "title": "FbsScanAutoPrintReprintClaimOut"
+      },
+      "FbsScanAutoPrintReprintRecoveryOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_attempted",
+              "available",
+              "started",
+              "outcome_unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "FbsScanAutoPrintReprintRecoveryOut"
+      },
+      "FbsScanAutoPrintTargetBody": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "qr",
+              "chz"
+            ],
+            "title": "Target"
+          },
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "attempt_key"
+        ],
+        "title": "FbsScanAutoPrintTargetBody"
+      },
+      "FbsScanAutoPrintTargetClaimOut": {
+        "properties": {
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          },
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claimed",
+          "started"
+        ],
+        "title": "FbsScanAutoPrintTargetClaimOut"
       },
       "FbsSellerOfficeOut": {
         "properties": {
@@ -10594,6 +12243,26 @@
       },
       "FbsSupplyPreflightSummaryOut": {
         "properties": {
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace",
+            "default": "wb"
+          },
+          "delivery_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Route"
+          },
           "seller": {
             "additionalProperties": {
               "type": "string"
@@ -10695,6 +12364,21 @@
       },
       "FbsSupplyWorklistItemOut": {
         "properties": {
+          "delivery_type": {
+            "type": "string",
+            "title": "Delivery Type"
+          },
+          "delivery_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Route"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -10788,6 +12472,7 @@
         },
         "type": "object",
         "required": [
+          "delivery_type",
           "id",
           "wb_supply_id",
           "name",
@@ -11112,6 +12797,17 @@
             "type": "string",
             "title": "Wms Warehouse Id"
           },
+          "wms_warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Warehouse Name"
+          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
@@ -11162,6 +12858,11 @@
             "type": "integer",
             "title": "Allocated Pool Total",
             "default": 0
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable",
+            "default": true
           }
         },
         "type": "object",
@@ -11766,6 +13467,50 @@
             ],
             "title": "Sku"
           },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "composition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition"
+          },
           "quantity": {
             "type": "integer",
             "title": "Quantity"
@@ -11777,6 +13522,11 @@
           "picked_quantity": {
             "type": "integer",
             "title": "Picked Quantity"
+          },
+          "packed_quantity": {
+            "type": "integer",
+            "title": "Packed Quantity",
+            "default": 0
           }
         },
         "type": "object",
@@ -11896,6 +13646,28 @@
               }
             ],
             "title": "Color"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "composition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition"
           },
           "size": {
             "anyOf": [
@@ -12645,6 +14417,28 @@
             ],
             "title": "Color"
           },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "composition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition"
+          },
           "size": {
             "anyOf": [
               {
@@ -12728,6 +14522,17 @@
       },
       "FbsWorkspaceSupplyOut": {
         "properties": {
+          "delivery_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Route"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -13304,6 +15109,18 @@
       },
       "InboundBoxLineQuantityBody": {
         "properties": {
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          },
           "quantity": {
             "type": "integer",
             "maximum": 100000.0,
@@ -13368,6 +15185,18 @@
       },
       "InboundBoxScanBody": {
         "properties": {
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          },
           "barcode": {
             "type": "string",
             "maxLength": 128,
@@ -13808,6 +15637,25 @@
         ],
         "title": "InboundIntakeBoxOut"
       },
+      "InboundIntakeCompleteBody": {
+        "properties": {
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          }
+        },
+        "type": "object",
+        "title": "InboundIntakeCompleteBody",
+        "description": "Optional durable identity for a completion attempt from newer clients."
+      },
       "InboundIntakeLineActualPatch": {
         "properties": {
           "actual_qty": {
@@ -13825,6 +15673,23 @@
       },
       "InboundIntakeLineCreate": {
         "properties": {
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          },
+          "increment": {
+            "type": "boolean",
+            "title": "Increment",
+            "default": false
+          },
           "product_id": {
             "type": "string",
             "format": "uuid",
@@ -13873,6 +15738,18 @@
       },
       "InboundIntakeLineExpectedPatch": {
         "properties": {
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          },
           "expected_qty": {
             "type": "integer",
             "maximum": 1000000000.0,
@@ -14083,6 +15960,18 @@
       },
       "InboundIntakeRequestCreate": {
         "properties": {
+          "client_request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
           "warehouse_id": {
             "type": "string",
             "format": "uuid",
@@ -16414,6 +18303,126 @@
         ],
         "title": "InvoiceV2Out"
       },
+      "KizReprintCreateIn": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Kiz"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "kiz",
+          "idempotency_key"
+        ],
+        "title": "KizReprintCreateIn"
+      },
+      "KizReprintListOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/KizReprintOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "KizReprintListOut"
+      },
+      "KizReprintOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "kiz": {
+            "type": "string",
+            "title": "Kiz"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "print_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Print Started At"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "kiz",
+          "created_at",
+          "print_started_at"
+        ],
+        "title": "KizReprintOut"
+      },
+      "KizReprintPrintClaimIn": {
+        "properties": {
+          "attempt_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Attempt Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_key"
+        ],
+        "title": "KizReprintPrintClaimIn"
+      },
+      "KizReprintPrintClaimOut": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/KizReprintOut"
+          },
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "claimed"
+        ],
+        "title": "KizReprintPrintClaimOut"
+      },
       "LabelArtifactTapeIn": {
         "properties": {
           "code_ids": {
@@ -16571,6 +18580,17 @@
               }
             ],
             "title": "Actor Email"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
           },
           "source_process": {
             "anyOf": [
@@ -16907,6 +18927,21 @@
             "maxLength": 128,
             "title": "Password",
             "default": ""
+          },
+          "portal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fulfillment",
+                  "seller"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portal"
           }
         },
         "type": "object",
@@ -16914,6 +18949,38 @@
           "email"
         ],
         "title": "LoginBody"
+      },
+      "LoosePutawayBody": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Storage Location Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "product_id",
+          "storage_location_id",
+          "quantity"
+        ],
+        "title": "LoosePutawayBody"
       },
       "ManualInvoiceV2DraftIn": {
         "properties": {
@@ -18879,6 +20946,17 @@
             "type": "string",
             "title": "Requested By Email"
           },
+          "requested_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By Name"
+          },
           "product_name": {
             "type": "string",
             "title": "Product Name"
@@ -18975,6 +21053,39 @@
           "out_qty"
         ],
         "title": "MovementGroupOut"
+      },
+      "NameLoginBody": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Password",
+            "default": ""
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "NameLoginBody"
       },
       "NotificationListOut": {
         "properties": {
@@ -20402,6 +22513,17 @@
             ],
             "title": "Created By User Email"
           },
+          "created_by_user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Name"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -20789,6 +22911,60 @@
         ],
         "title": "PackagingTaskOut"
       },
+      "PairBegin": {
+        "properties": {
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Connection Id"
+          },
+          "device_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Device Token"
+          },
+          "queue_name": {
+            "type": "string",
+            "maxLength": 127,
+            "minLength": 1,
+            "title": "Queue Name"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "darwin",
+              "linux",
+              "win32"
+            ],
+            "title": "Platform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connection_id",
+          "device_token",
+          "queue_name",
+          "platform"
+        ],
+        "title": "PairBegin"
+      },
+      "PairConfirm": {
+        "properties": {
+          "pairing_code": {
+            "type": "string",
+            "maxLength": 19,
+            "minLength": 16,
+            "title": "Pairing Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pairing_code"
+        ],
+        "title": "PairConfirm"
+      },
       "PalletCombineIn": {
         "properties": {
           "pallet_id": {
@@ -20894,6 +23070,21 @@
             "type": "string",
             "format": "email",
             "title": "Email"
+          },
+          "portal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fulfillment",
+                  "seller"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portal"
           }
         },
         "type": "object",
@@ -22427,6 +24618,125 @@
         "type": "object",
         "title": "ProductDimensionsPatch"
       },
+      "ProductFbsBindingRuleBody": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "percent",
+              "units"
+            ],
+            "title": "Mode"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Value"
+          },
+          "units_configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "mode",
+          "value"
+        ],
+        "title": "ProductFbsBindingRuleBody"
+      },
+      "ProductFbsBindingRuleOut": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "percent",
+              "units"
+            ],
+            "title": "Mode"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Value"
+          },
+          "units_configured": {
+            "type": "boolean",
+            "title": "Units Configured"
+          },
+          "marketplace": {
+            "type": "string",
+            "title": "Marketplace"
+          },
+          "external_warehouse_id": {
+            "type": "string",
+            "title": "External Warehouse Id"
+          },
+          "wms_warehouse_id": {
+            "type": "string",
+            "title": "Wms Warehouse Id"
+          },
+          "served": {
+            "type": "boolean",
+            "title": "Served"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved"
+          },
+          "free_stock": {
+            "type": "integer",
+            "title": "Free Stock"
+          },
+          "published_now": {
+            "type": "integer",
+            "title": "Published Now"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "mode",
+          "value",
+          "units_configured",
+          "marketplace",
+          "external_warehouse_id",
+          "wms_warehouse_id",
+          "served",
+          "applicable",
+          "on_hand",
+          "reserved",
+          "free_stock",
+          "published_now"
+        ],
+        "title": "ProductFbsBindingRuleOut"
+      },
       "ProductFbsRuleBody": {
         "properties": {
           "publish": {
@@ -22453,13 +24763,15 @@
           },
           "same_everywhere": {
             "type": "boolean",
-            "title": "Same Everywhere"
+            "title": "Same Everywhere",
+            "default": false
           },
           "percent": {
             "type": "integer",
             "maximum": 100.0,
             "minimum": 0.0,
-            "title": "Percent"
+            "title": "Percent",
+            "default": 0
           },
           "by_warehouse": {
             "additionalProperties": {
@@ -22479,14 +24791,20 @@
             },
             "type": "object",
             "title": "Units By Warehouse"
+          },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleBody"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "By Binding"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "same_everywhere",
-          "percent"
-        ],
         "title": "ProductFbsRuleBody",
         "description": "Правило публикации остатка: доля свободного остатка, а не число штук."
       },
@@ -22520,8 +24838,6 @@
           },
           "percent": {
             "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
             "title": "Percent"
           },
           "by_warehouse": {
@@ -22566,12 +24882,18 @@
             "type": "object",
             "title": "Units Remaining By Warehouse"
           },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleOut"
+            },
+            "type": "object",
+            "title": "By Binding"
+          },
           "product_id": {
             "type": "string",
             "title": "Product Id"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "same_everywhere",
@@ -22614,8 +24936,6 @@
           },
           "percent": {
             "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
             "title": "Percent"
           },
           "by_warehouse": {
@@ -22659,9 +24979,15 @@
             },
             "type": "object",
             "title": "Units Remaining By Warehouse"
+          },
+          "by_binding": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductFbsBindingRuleOut"
+            },
+            "type": "object",
+            "title": "By Binding"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "same_everywhere",
@@ -23752,6 +26078,20 @@
           "updated_count": {
             "type": "integer",
             "title": "Updated Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFbsRuleBulkItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "clamps": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductsFbsRuleClampOut"
+            },
+            "type": "object",
+            "title": "Clamps"
           }
         },
         "type": "object",
@@ -23794,6 +26134,34 @@
           "items"
         ],
         "title": "ProductsFbsRuleBulkReadOut"
+      },
+      "ProductsFbsRuleClampOut": {
+        "properties": {
+          "requested_value": {
+            "type": "integer",
+            "title": "Requested Value"
+          },
+          "saved_value": {
+            "type": "integer",
+            "title": "Saved Value"
+          },
+          "limiting_product_id": {
+            "type": "string",
+            "title": "Limiting Product Id"
+          },
+          "limiting_product_name": {
+            "type": "string",
+            "title": "Limiting Product Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requested_value",
+          "saved_value",
+          "limiting_product_id",
+          "limiting_product_name"
+        ],
+        "title": "ProductsFbsRuleClampOut"
       },
       "ProductsLegacyFbsLimitsResetBody": {
         "properties": {
@@ -23996,6 +26364,34 @@
         ],
         "title": "ProfileOut"
       },
+      "ProfilePatch": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "ProfilePatch"
+      },
       "RackOut": {
         "properties": {
           "name": {
@@ -24121,6 +26517,49 @@
           "user_id"
         ],
         "title": "ResendInviteBody"
+      },
+      "ResultBody": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Claim Id"
+          },
+          "queue_receipt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Receipt"
+          },
+          "handed_to_queue": {
+            "type": "boolean",
+            "title": "Handed To Queue"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "handed_to_queue"
+        ],
+        "title": "ResultBody"
       },
       "ScanBody": {
         "properties": {
@@ -24370,8 +26809,42 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": "ФИО не указано"
           },
           "role": {
             "type": "string",
@@ -25924,29 +28397,37 @@
       },
       "SellerStaffAccountCreate": {
         "properties": {
-          "email": {
+          "full_name": {
             "type": "string",
-            "format": "email",
-            "title": "Email"
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
           },
-          "password": {
+          "job_title": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 128
+                "maxLength": 255
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Password"
+            "title": "Job Title"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
           },
           "permissions": {
             "$ref": "#/components/schemas/SellerPermissionsBody"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
+          "full_name",
           "email"
         ],
         "title": "SellerStaffAccountCreate"
@@ -25958,8 +28439,42 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": "ФИО не указано"
           },
           "role": {
             "type": "string",
@@ -25992,6 +28507,46 @@
           "permissions"
         ],
         "title": "SellerStaffAccountOut"
+      },
+      "SellerStaffProfilePatch": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "SellerStaffProfilePatch"
       },
       "SellerWbCatalogAdminOut": {
         "properties": {
@@ -26574,6 +29129,63 @@
         ],
         "title": "SortingGoodsLineOut"
       },
+      "SortingJobBody": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "product",
+              "location"
+            ],
+            "title": "Kind"
+          },
+          "object_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Object Id"
+          },
+          "marketplace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wb",
+                  "ozon"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace"
+          },
+          "copies": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Copies",
+            "default": 1
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Connection Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "kind",
+          "object_id",
+          "connection_id"
+        ],
+        "title": "SortingJobBody"
+      },
       "SortingObjectCreateIn": {
         "properties": {
           "kind": {
@@ -26706,6 +29318,30 @@
             "format": "uuid",
             "title": "Id"
           },
+          "inbound_request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Request Id"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
           "cell_id": {
             "anyOf": [
               {
@@ -26811,9 +29447,34 @@
       "StaffAccountCreate": {
         "properties": {
           "email": {
-            "type": "string",
-            "format": "email",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "full_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
           },
           "password": {
             "anyOf": [
@@ -26830,7 +29491,7 @@
         },
         "type": "object",
         "required": [
-          "email"
+          "full_name"
         ],
         "title": "StaffAccountCreate"
       },
@@ -26841,8 +29502,42 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": "ФИО не указано"
           },
           "role": {
             "type": "string",
@@ -28187,8 +30882,42 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": "ФИО не указано"
           },
           "tenant_id": {
             "type": "string",
@@ -28201,6 +30930,10 @@
           "organization_name": {
             "type": "string",
             "title": "Organization Name"
+          },
+          "organization_slug": {
+            "type": "string",
+            "title": "Organization Slug"
           },
           "seller_id": {
             "anyOf": [
@@ -28335,7 +31068,8 @@
           "email",
           "tenant_id",
           "role",
-          "organization_name"
+          "organization_name",
+          "organization_slug"
         ],
         "title": "UserMeResponse"
       },

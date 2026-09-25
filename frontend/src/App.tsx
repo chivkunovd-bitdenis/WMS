@@ -1,3 +1,5 @@
+import { ErrorBoundary, SectionErrorBoundary } from './components/errors/ErrorBoundary'
+import { readIntake, sendIntakeMutations } from "./screens/ff/inboundDraftPersistence"
 import { confirmDiscardChanges } from './utils/confirmDiscardChanges'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
@@ -276,12 +278,14 @@ export default function App() {
     loading,
     authBusy,
     notice,
+    onRegister,
     onLogin,
     onSetPasswordByLink,
     onRequestPasswordReset,
     clearNotice,
     logout,
     reloadMe,
+    updateProfile,
   } = useAuth('fulfillment')
   const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
@@ -2740,6 +2744,7 @@ export default function App() {
 
   const onCreateFfInboundDraft = useCallback(async (
     operationType: InboundOperationType, sellerId: string, marketplace?: 'wildberries' | 'ozon',
+    clientRequestId?: string,
   ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
@@ -2755,19 +2760,13 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
-      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
-        method: 'POST',
-        headers: {
-          ...authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          warehouse_id: wid,
-          operation_type: operationType,
-          seller_id: sellerId,
+      const res = await sendIntakeMutations(token, 'create', readIntake(token, 'create').pending?.length ? undefined : [{
+        method: 'POST', path: '/operations/inbound-intake-requests', body: {
+          client_request_id: clientRequestId ?? crypto.randomUUID(),
+          warehouse_id: wid, operation_type: operationType, seller_id: sellerId,
           ...(operationType === 'return' && marketplace ? { marketplace } : {}),
-        }),
-      })
+        },
+      }])
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res))
       }
@@ -2883,6 +2882,7 @@ export default function App() {
           error={portalMismatch ?? error}
           notice={notice}
           authBusy={authBusy}
+          onRegister={(e) => void onRegister(e)}
           onLogin={(e) => void onLogin(e)}
           onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
           onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
@@ -2933,7 +2933,8 @@ export default function App() {
       <AuthedAppLayout
         onLogout={onLogout}
         title="Портал ФФ"
-        userLabel={me.email}
+        userLabel={me.display_name}
+        userJobTitle={me.job_title}
         userRoleLabel={ffRoleLabel(me.role)}
         meRole={me.role}
         ffPermissions={ffPermissions}
@@ -2942,16 +2943,16 @@ export default function App() {
       >
         <>
         <Routes>
-          <Route index element={<Navigate to={`${base}/dashboard`} replace />} />
+          <Route index element={<SectionErrorBoundary component="route">{<Navigate to={`${base}/dashboard`} replace />}</SectionErrorBoundary>} />
           <Route
             path="dashboard"
-            element={<Navigate to={`${base}/dashboard`} replace />}
+            element={<SectionErrorBoundary component="route">{<Navigate to={`${base}/dashboard`} replace />}</SectionErrorBoundary>}
           />
 
           <Route
             path="ff/dashboard"
             element={
-              <FfDashboard
+              <SectionErrorBoundary component="route">{<FfDashboard
                 me={me}
                 token={token}
                 authHeaders={authHeaders}
@@ -2986,19 +2987,19 @@ export default function App() {
                 onOpenFbsSupply={(id) => {
                   navigate(`${base}/fbs?supply_id=${id}`)
                 }}
-              />
+              />}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/supplies-shipments"
-            element={<Navigate to={`${base}/reception`} replace />}
+            element={<SectionErrorBoundary component="route">{<Navigate to={`${base}/reception`} replace />}</SectionErrorBoundary>}
           />
 
           <Route
             path="ff/mp-shipments"
             element={
-              token && canMpShipmentOps ? (
+              <SectionErrorBoundary component="route">{token && canMpShipmentOps ? (
                 <FfSuppliesShipmentsPage
                   pageVariant="mp-shipments"
                   busy={opsBusy}
@@ -3037,26 +3038,27 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/unload-pick/:requestId"
             element={
-              token && canMpShipmentOps ? (
+              <SectionErrorBoundary component="route">{token && canMpShipmentOps ? (
                 <FfUnloadPickPage token={token} />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/reception"
             element={
-              token && canReceptionOps ? (
+              <SectionErrorBoundary component="route">{token && canReceptionOps ? (
                 <FfInboundQueuePage
+                  draftToken={token}
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="reception"
                   rows={inboundSummaries}
                   creatingDraft={opsBusy}
@@ -3068,8 +3070,10 @@ export default function App() {
                       await refreshInboundList(token)
                     }
                   }}
-                  onCreateDraft={async (operationType, sellerId, marketplace) => {
-                    const created = await onCreateFfInboundDraft(operationType, sellerId, marketplace)
+                  onCreateDraft={async (operationType, sellerId, marketplace, clientRequestId) => {
+                    const created = await onCreateFfInboundDraft(
+                      operationType, sellerId, marketplace, clientRequestId,
+                    )
                     if (!created?.id) {
                       return null
                     }
@@ -3080,14 +3084,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/sorting"
             element={
-              token && canReceptionOps ? (
+              <SectionErrorBoundary component="route">{token && canReceptionOps ? (
                 <FfInboundQueuePage
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="sorting"
                   rows={inboundSummaries}
@@ -3095,14 +3099,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/products"
             element={
-              token && canCellsOps ? (
+              <SectionErrorBoundary component="route">{token && canCellsOps ? (
                 <FfProductsCatalogScreen
                   token={token}
                   authHeaders={authHeaders}
@@ -3112,14 +3116,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/fbs"
             element={
-              token && canPackagingOps ? (
+              <SectionErrorBoundary component="route">{token && canPackagingOps ? (
                 <FfFbsOrdersScreen
                   token={token}
                   authHeaders={authHeaders}
@@ -3129,103 +3133,103 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/fbs/stock-sync"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <Navigate to="/app/ff/products" replace />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/packaging"
             element={
-              token && canPackagingOps ? (
+              <SectionErrorBoundary component="route">{token && canPackagingOps ? (
                 <FfPackagingPage token={token} addressStorageEnabled={me.address_storage_enabled !== false} />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/packaging/:taskId"
             element={
-              token && canPackagingOps ? (
+              <SectionErrorBoundary component="route">{token && canPackagingOps ? (
                 <FfPackagingPage token={token} addressStorageEnabled={me.address_storage_enabled !== false} />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/packaging/pending-marking"
             element={
-              token && canPackagingOps ? (
+              <SectionErrorBoundary component="route">{token && canPackagingOps ? (
                 <FfPendingMarkingPage token={token} addressStorageEnabled={me.address_storage_enabled !== false} />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/honest-sign"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfHonestSignPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/honest-sign/pool/:poolId"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/honest-sign/product/:productId"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignProductPage token={token} testIdPrefix="ff-honest-sign-product" />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/honest-sign/ledger"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfHonestSignLedgerPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/reports"
             element={
-              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'inventory')) ? (
+              <SectionErrorBoundary component="route">{token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'inventory')) ? (
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
@@ -3234,13 +3238,13 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="seller/reports"
             element={
-              token && me.seller_permissions?.products ? (
+              <SectionErrorBoundary component="route">{token && me.seller_permissions?.products ? (
                 <FfReportsPage
                   token={token}
                   sellers={[]}
@@ -3248,13 +3252,13 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/billing"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfBillingScreen
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
@@ -3262,34 +3266,34 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/honest-sign/reprints"
             element={
-              token && canShiftLeadOps ? (
+              <SectionErrorBoundary component="route">{token && canShiftLeadOps ? (
                 <FfHonestSignReprintsPage token={token} />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
           <Route
             path="ff/honest-sign/import"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignImportPage />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/notifications"
             element={
-              token ? (
+              <SectionErrorBoundary component="route">{token ? (
                 <NotificationsPage token={token} portal="ff" testId="ff-notifications-page" />
               ) : (
                 <FfPlaceholderPage
@@ -3297,7 +3301,7 @@ export default function App() {
                   hint="Нет токена."
                   testId="ff-notifications-placeholder"
                 />
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3307,14 +3311,14 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={
-              token && canInventoryOps ? (
+              <SectionErrorBoundary component="route">{token && canInventoryOps ? (
                 <FfStorageReportPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3323,28 +3327,29 @@ export default function App() {
           <Route
             path="ff/sorting-objects"
             element={
-              token && canCellsOps ? (
+              <SectionErrorBoundary component="route">{token && canCellsOps ? (
                 <FfSortingObjectsPage
                   token={token}
                   warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/warehouse-map"
             element={
-              token && canCellsOps ? (
+              <SectionErrorBoundary component="route">{token && canCellsOps ? (
                 <FfWarehouseMapPage
                   token={token}
                   warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                  isAdmin={isFulfillmentAdmin}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3354,14 +3359,15 @@ export default function App() {
           <Route
             path="ff/fbs-stock"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfProductsFbsPage
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
+                  warehouses={warehouses}
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3370,7 +3376,7 @@ export default function App() {
           <Route
             path="ff/stocktaking"
             element={
-              token && canInventoryOps ? (
+              <SectionErrorBoundary component="route">{token && canInventoryOps ? (
                 <FfInventoryPage
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
@@ -3378,7 +3384,7 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3386,20 +3392,22 @@ export default function App() {
               не закрыта: инструкция «как здесь работать» нужна любому, кто вошёл. */}
           <Route
             path="ff/knowledge"
-            element={token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}</SectionErrorBoundary>}
           />
           <Route
             path="ff/knowledge/:slug"
-            element={token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}</SectionErrorBoundary>}
           />
 
           <Route
             path="ff/settings"
             element={
-              token && canSettingsOps ? (
+              <SectionErrorBoundary component="route">{token && canSettingsOps ? (
                 <FfSettingsScreen
                   token={token}
                   authHeaders={authHeaders}
+                  me={me}
+                  onProfileUpdated={updateProfile}
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   canManageStaff={canSettingsOps}
                   addressStorageEnabled={me.address_storage_enabled !== false}
@@ -3411,31 +3419,31 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/inbound"
-            element={token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}</SectionErrorBoundary>}
           />
           <Route
             path="ff/outbound"
-            element={token && isFulfillmentAdmin ? <Navigate to="/app/ops/outbound" replace /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? <Navigate to="/app/ops/outbound" replace /> : ffAccessDenied}</SectionErrorBoundary>}
           />
           <Route
             path="ff/warehouses"
-            element={token && canCellsOps ? (me.address_storage_enabled !== false ? <Navigate to="/app/catalog" replace /> : <Navigate to={`${base}/products`} replace />) : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token && canCellsOps ? (me.address_storage_enabled !== false ? <Navigate to="/app/catalog" replace /> : <Navigate to={`${base}/products`} replace />) : ffAccessDenied}</SectionErrorBoundary>}
           />
           <Route
             path="ff/integrations/wb"
-            element={token && isFulfillmentAdmin ? <Navigate to="/app/integrations/wb" replace /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? <Navigate to="/app/integrations/wb" replace /> : ffAccessDenied}</SectionErrorBoundary>}
           />
 
           <Route
             path="catalog"
             element={
-              token && canCellsOps && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
+              <SectionErrorBoundary component="route">{token && canCellsOps && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
                 <Screen title="Ячейки" subtitle="Склады и ячейки">
                   <CatalogSection
                     isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
@@ -3481,14 +3489,14 @@ export default function App() {
                 <Navigate to={`${base}/products`} replace />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ff/sellers"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <SellersScreen
                   token={token}
                   authHeaders={authHeaders}
@@ -3498,14 +3506,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="catalog/products"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <ProductsScreen
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   catalogBusy={catalogBusy}
@@ -3516,19 +3524,19 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ops"
-            element={token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}
+            element={<SectionErrorBoundary component="route">{token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}</SectionErrorBoundary>}
           />
 
           <Route
             path="ops/inbound"
             element={
-              token && canReceptionOps ? (
+              <SectionErrorBoundary component="route">{token && canReceptionOps ? (
                 <InboundScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3560,14 +3568,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ops/outbound"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <OutboundScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3593,14 +3601,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="ops/movements"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <MovementsScreen
                   globalMovements={globalMovements}
                   onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
@@ -3612,7 +3620,7 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
@@ -3622,7 +3630,7 @@ export default function App() {
               // Маршрут перемещений открыт только при включённом адресном хранении:
               // без ячеек перемещать нечего между чем. Внутри флаг уже заведомо
               // не false — повторная проверка ничего не решает, и типы это видят.
-              token && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
                 <TransfersScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3633,14 +3641,14 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
           <Route
             path="integrations/wb"
             element={
-              token && isFulfillmentAdmin ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <WildberriesScreen
                   sellers={sellers}
                   products={products}
@@ -3669,11 +3677,11 @@ export default function App() {
                 />
               ) : (
                 ffAccessDenied
-              )
+              )}</SectionErrorBoundary>
             }
           />
 
-          <Route path="*" element={ffAccessDenied} />
+          <Route path="*" element={<SectionErrorBoundary component="route">{ffAccessDenied}</SectionErrorBoundary>} />
         </Routes>
 
         <Dialog
@@ -3703,6 +3711,7 @@ export default function App() {
             </MuiToolbar>
           </MuiAppBar>
           <MuiBox sx={{ p: 2, overflow: 'auto', height: 'calc(100vh - 64px)' }}>
+            <ErrorBoundary component="FfDocument" resetKey={`${ffDocModal}:${selectedInboundId}:${selectedOutboundId}`}>
             {ffDocModal === 'inbound' ? (
               token && selectedInboundId ? (
                 <FfInboundRequestView
@@ -3745,6 +3754,7 @@ export default function App() {
                 onPostOutboundRequest={() => void onPostOutboundRequest()}
               />
             ) : null}
+            </ErrorBoundary>
           </MuiBox>
         </Dialog>
         </>
@@ -3753,18 +3763,18 @@ export default function App() {
 
     return (
       <Routes>
-        <Route path="/" element={<Navigate to={`${base}/dashboard`} replace />} />
-        <Route path="/app/*" element={v2} />
-        <Route path="*" element={v2} />
+        <Route path="/" element={<SectionErrorBoundary component="route">{<Navigate to={`${base}/dashboard`} replace />}</SectionErrorBoundary>} />
+        <Route path="/app/*" element={<SectionErrorBoundary component="route" root>{v2}</SectionErrorBoundary>} />
+        <Route path="*" element={<SectionErrorBoundary component="route" root>{v2}</SectionErrorBoundary>} />
       </Routes>
     )
   })()
 
   return (
     <Routes>
-      <Route path="/seller" element={<SellerPortalDocumentRedirect />} />
-      <Route path="/seller/*" element={<SellerPortalDocumentRedirect />} />
-      <Route path="*" element={rootElement} />
+      <Route path="/seller" element={<SectionErrorBoundary component="route">{<SellerPortalDocumentRedirect />}</SectionErrorBoundary>} />
+      <Route path="/seller/*" element={<SectionErrorBoundary component="route">{<SellerPortalDocumentRedirect />}</SectionErrorBoundary>} />
+      <Route path="*" element={<SectionErrorBoundary component="route" root>{rootElement}</SectionErrorBoundary>} />
     </Routes>
   )
 }

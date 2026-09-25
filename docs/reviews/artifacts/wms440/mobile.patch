@@ -1,0 +1,943 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/Navigation.kt b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+index 006264c..8f565fc 100644
+--- a/android/app/src/main/java/ru/wms/tsd/Navigation.kt
++++ b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+@@ -26,6 +26,7 @@ import ru.wms.tsd.features.fbs.FbsSupplyScreen
+ import ru.wms.tsd.features.fbs.FbsOperationScreen
+ import ru.wms.tsd.features.home.HomeSection
+ import ru.wms.tsd.features.inbound.InboundBoxesScreen
++import ru.wms.tsd.features.inbound.InboundDraftScreen
+ import ru.wms.tsd.features.inbound.InboundListScreen
+ import ru.wms.tsd.features.inbound.InboundReceivingScreen
+ import ru.wms.tsd.features.outbound.OutboundAssemblyScreen
+@@ -79,9 +80,12 @@ fun AppNavHost(
+ 
+         composable("inbound") {
+             InboundListScreen(
++                onCreate = { navController.navigate("inbound/create") },
+                 onBack = { navController.popBackStack() },
+                 onOpenRequest = { id, status ->
+-                    if (status == "submitted") {
++                    if (status == "draft") {
++                        navController.navigate("inbound/$id/draft")
++                    } else if (status == "submitted") {
+                         navController.navigate("inbound/$id/boxes")
+                     } else {
+                         navController.navigate("inbound/$id/receiving")
+@@ -90,6 +94,15 @@ fun AppNavHost(
+             )
+         }
+ 
++        composable("inbound/create") {
++            InboundDraftScreen(null, onBack = { navController.popBackStack() }, onCreated = { id ->
++                navController.navigate("inbound/$id/draft") { popUpTo("inbound/create") { inclusive = true } }
++            })
++        }
++        composable("inbound/{requestId}/draft") { entry ->
++            InboundDraftScreen(entry.arguments?.getString("requestId"), onBack = { navController.popBackStack() })
++        }
++
+         composable("inbound/{requestId}/boxes") { backStackEntry ->
+             val requestId = backStackEntry.arguments?.getString("requestId") ?: return@composable
+             InboundBoxesScreen(
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+index 6599df7..7b50f53 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+@@ -66,6 +66,18 @@ class ApiProvider(
+         authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
+     }
+ 
++    fun inboundDraft(): ru.wms.tsd.core.api.inbound.InboundDraftApi =
++        client().createService(ru.wms.tsd.core.api.inbound.InboundDraftApi::class.java)
++
++    fun inboundScope(): String {
++        val session = checkNotNull(authManager.getCurrentSession())
++        val claims = org.json.JSONObject(String(android.util.Base64.decode(session.token.split('.')[1], android.util.Base64.URL_SAFE)))
++        return "${baseUrl()}:${claims.optString("tenant_id")}:${claims.getString("sub")}"
++    }
++
++    fun pendingInbound(scope: String, document: String): String? = authStore.getInboundDraft(scope, document)
++    fun saveInbound(scope: String, document: String, value: String?) = authStore.saveInboundDraft(scope, document, value)
++
+     fun operations(): OperationsApi {
+         val client = client()
+         return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
+new file mode 100644
+index 0000000..2ec1c2a
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/inbound/InboundDraftApi.kt
+@@ -0,0 +1,79 @@
++package ru.wms.tsd.core.api.inbound
++
++import kotlinx.serialization.SerialName
++import kotlinx.serialization.Serializable
++import kotlinx.serialization.json.JsonElement
++import kotlinx.serialization.json.JsonObject
++import retrofit2.Response
++import retrofit2.http.*
++
++/** Additive intake API: the bundled client predates creator identity and cargo places. */
++interface InboundDraftApi {
++    @GET("operations/inbound-intake-requests") suspend fun list(): Response<List<DraftSummary>>
++    @GET("operations/inbound-intake-requests/{id}") suspend fun get(@Path("id") id: String): Response<DraftRequest>
++    @GET("sellers") suspend fun sellers(): Response<List<DraftChoice>>
++    @GET("warehouses") suspend fun warehouses(): Response<List<DraftChoice>>
++    @GET("products/linked-wb-catalog") suspend fun catalog(@Query("seller_id") sellerId: String?, @Query("search") search: String = ""): Response<List<DraftProduct>>
++    @POST suspend fun post(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @PATCH suspend fun patch(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @PUT suspend fun put(@Url path: String, @Body body: JsonObject): Response<JsonElement>
++    @DELETE suspend fun delete(@Url path: String): Response<JsonElement>
++}
++
++@Serializable data class DraftChoice(val id: String, val name: String = "", @SerialName("company_name") val companyName: String? = null) {
++    val label get() = companyName?.takeIf { it.isNotBlank() } ?: name
++}
++@Serializable data class DraftSummary(
++    val id: String, @SerialName("warehouse_id") val warehouseId: String, val status: String,
++    @SerialName("line_count") val lineCount: Int = 0, @SerialName("created_at") val createdAt: String = "",
++    @SerialName("operation_type") val operationType: String = "",
++    @SerialName("created_by_seller_id") val createdBySellerId: String? = null,
++    @SerialName("display_number") val displayNumber: String? = null,
++    @SerialName("document_number") val documentNumber: String? = null,
++    @SerialName("seller_name") val sellerName: String? = null,
++    @SerialName("planned_delivery_date") val plannedDeliveryDate: String? = null,
++    @SerialName("planned_box_count") val plannedBoxCount: Int? = null,
++    @SerialName("actual_box_count") val actualBoxCount: Int? = null,
++    @SerialName("has_discrepancy") val hasDiscrepancy: Boolean? = null,
++    @SerialName("boxes_discrepancy") val boxesDiscrepancy: Boolean? = null,
++) { val isFfDraft get() = status == "draft" && operationType == "inbound" && createdBySellerId == null }
++@Serializable data class DraftRequest(
++    val id: String, val status: String, @SerialName("seller_id") val sellerId: String?,
++    @SerialName("seller_name") val sellerName: String? = null,
++    @SerialName("display_number") val displayNumber: String? = null,
++    @SerialName("operation_type") val operationType: String,
++    @SerialName("created_by_seller_id") val createdBySellerId: String? = null,
++    val lines: List<DraftLine> = emptyList(), val boxes: List<DraftContainer> = emptyList(),
++    @SerialName("cargo_places") val cargoPlaces: List<DraftContainer> = emptyList(),
++) { val editable get() = status == "draft" && operationType == "inbound" && createdBySellerId == null }
++@Serializable data class DraftLine(
++    val id: String, @SerialName("product_id") val productId: String,
++    @SerialName("sku_code") val skuCode: String, @SerialName("product_name") val productName: String,
++    @SerialName("effective_actual_qty") val effectiveActualQty: Int? = null,
++    @SerialName("actual_qty") val actualQty: Int? = null,
++) {
++    /** After completion the server reports the persisted total as actual_qty. */
++    val acceptedQty get() = effectiveActualQty ?: actualQty ?: 0
++}
++@Serializable data class DraftContainer(
++    val id: String, @SerialName("box_number") val boxNumber: Int? = null,
++    @SerialName("place_number") val placeNumber: Int? = null,
++    @SerialName("internal_barcode") val barcode: String = "", val lines: List<DraftContainerLine> = emptyList(),
++) { val label get() = if (boxNumber != null) "Короб №$boxNumber" else "Грузоместо №$placeNumber" }
++@Serializable data class DraftContainerLine(@SerialName("product_id") val productId: String, val quantity: Int)
++@Serializable data class DraftMarketplaceBinding(
++    val marketplace: String,
++    @SerialName("external_barcodes") val externalBarcodes: List<String> = emptyList(),
++)
++@Serializable data class DraftProduct(
++    val id: String, val name: String, @SerialName("sku_code") val skuCode: String,
++    @SerialName("wb_barcodes") val wbBarcodes: List<String> = emptyList(),
++    @SerialName("wb_primary_barcode") val wbPrimaryBarcode: String? = null,
++    @SerialName("marketplaces") val marketplaces: List<String> = emptyList(),
++    @SerialName("marketplace_bindings") val marketplaceBindings: List<DraftMarketplaceBinding> = emptyList(),
++    @SerialName("ozon_sku") val ozonSku: String? = null,
++    @SerialName("ozon_offer_id") val ozonOfferId: String? = null,
++) {
++    val caption get() = (marketplaces.map { it.uppercase() } + listOfNotNull(ozonOfferId)).joinToString(" · ")
++    val barcodes get() = wbBarcodes + listOfNotNull(wbPrimaryBarcode, skuCode, ozonSku, ozonOfferId) + marketplaceBindings.flatMap { it.externalBarcodes }
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+index 4243fa6..0a4d535 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+@@ -55,6 +55,16 @@ class AuthStore(context: Context) {
+         check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
+     }
+ 
++    fun getInboundDraft(scope: String, document: String): String? =
++        encryptedPrefs.getString("inbound_draft:$scope:$document", null)
++
++    fun saveInboundDraft(scope: String, document: String, value: String?) {
++        val key = "inbound_draft:$scope:$document"
++        val edit = encryptedPrefs.edit()
++        if (value == null) edit.remove(key) else edit.putString(key, value)
++        check(edit.commit()) { "Не удалось сохранить приёмку на устройстве. Повторите попытку." }
++    }
++
+     fun getSavedStaff(): List<SavedStaff> {
+         val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
+         return try {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
+new file mode 100644
+index 0000000..2e6d2df
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftScreen.kt
+@@ -0,0 +1,207 @@
++package ru.wms.tsd.features.inbound
++
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.text.KeyboardOptions
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.filled.DeleteOutline
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.text.input.KeyboardType
++import androidx.compose.ui.text.input.ImeAction
++import androidx.compose.ui.unit.dp
++import androidx.lifecycle.viewmodel.compose.viewModel
++import androidx.lifecycle.compose.LifecycleResumeEffect
++import ru.wms.tsd.AppGraph
++import ru.wms.tsd.core.api.inbound.DraftChoice
++import ru.wms.tsd.ui.patterns.ScanScaffold
++import ru.wms.tsd.ui.theme.WmsColors
++import ru.wms.tsd.ui.theme.WmsDimens
++
++/** FF draft reuses the intake scaffold and the existing bottom-sheet quantity editor. */
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun InboundDraftScreen(requestId: String?, onBack: () -> Unit, onCreated: (String) -> Unit = {}) {
++    val vm: InboundDraftViewModel = viewModel(factory = InboundDraftViewModel.Factory(requestId, AppGraph.apiProvider))
++    val state by vm.state.collectAsState()
++    var catalogOpen by remember { mutableStateOf(false) }
++    var containersOpen by remember { mutableStateOf(false) }
++    var editLine by remember { mutableStateOf<String?>(null) }
++    var containerProduct by remember { mutableStateOf<String?>(null) }
++    var containerQty by remember { mutableStateOf("") }
++    var query by remember { mutableStateOf("") }
++    var selectedProduct by remember { mutableStateOf<String?>(null) }
++    var addQty by remember { mutableStateOf("1") }
++    val request = state.request
++    val activeContainer = (request?.boxes.orEmpty() + request?.cargoPlaces.orEmpty()).firstOrNull { it.id == state.containerId }
++    val editable = request?.editable == true && !state.busy && state.local.pending == null
++    val acceptsScans by rememberUpdatedState(!catalogOpen && !containersOpen && editLine == null && containerProduct == null)
++    LaunchedEffect(Unit) { AppGraph.scannerManager.scans.collect { if (acceptsScans) vm.onScan(it.barcode) } }
++    LaunchedEffect(state.flash) { if (state.flash is ru.wms.tsd.ui.patterns.ScanFlash.Success) catalogOpen = false }
++    LifecycleResumeEffect(requestId) {
++        if (!state.busy) vm.load()
++        onPauseOrDispose { }
++    }
++    LaunchedEffect(state.createdId) { state.createdId?.let { onCreated(it); vm.acknowledgeCreated() } }
++    LaunchedEffect(request?.status) { if (request != null && !request.editable) onBack() }
++
++    ScanScaffold(
++        title = if (requestId == null) "Создать приёмку" else "Приёмка ${request?.displayNumber.orEmpty()}",
++        subtitle = request?.sellerName, flash = state.flash, onExit = onBack,
++        modifier = Modifier.imePadding(), cameraScanner = requestId != null,
++        primaryActionLabel = when { state.loading -> null; requestId == null -> "Создать приёмку"; activeContainer != null -> "К составу приёмки"; else -> "Завершить приёмку" },
++        primaryActionEnabled = !state.busy && state.local.pending == null,
++        onPrimaryAction = { if (requestId == null) vm.create() else if (activeContainer != null) vm.selectContainer(null, null) else vm.complete() },
++    ) {
++        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            if (state.loading || state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
++            state.error?.let { Text(it, color = WmsColors.Error) }
++            if (state.local.pending != null) {
++                Text("Предыдущий запрос требует проверки.")
++                TextButton(onClick = vm::retry, enabled = !state.busy) { Text("Проверить результат") }
++            } else if (state.error != null && request == null && requestId != null) {
++                TextButton(onClick = vm::load) { Text("Повторить загрузку") }
++            }
++            if (requestId == null) {
++                if (!state.loading && state.warehouses.isEmpty()) Text("Нет доступных складов. Обновите список после настройки склада.")
++                if (!state.loading && state.sellers.isEmpty()) Text("Нет доступных селлеров.")
++                if (state.error != null || state.warehouses.isEmpty() || state.sellers.isEmpty()) TextButton(onClick = vm::load, enabled = !state.busy) { Text("Обновить список") }
++                ChoiceField("Склад", state.warehouses, state.local.warehouseId, enabled = !state.busy && state.local.pending == null) { vm.setSelection(warehouse = it) }
++                ChoiceField("Селлер", state.sellers, state.local.sellerId, enabled = !state.busy && state.local.pending == null) { vm.setSelection(seller = it) }
++            } else if (request != null) {
++                if (activeContainer == null) {
++                    Text("Принято: ${request.lines.sumOf { it.acceptedQty }}", style = MaterialTheme.typography.titleMedium)
++                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                        FilledTonalButton(onClick = { catalogOpen = true; vm.searchCatalog("") }, enabled = editable, modifier = Modifier.weight(1f)) { Text("Добавить товар") }
++                        OutlinedButton(onClick = { containersOpen = true }, modifier = Modifier.weight(1f)) { Text("Короба и грузоместа") }
++                    }
++                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
++                        items(request.lines, key = { it.id }) { line ->
++                            Surface(shape = MaterialTheme.shapes.medium, color = WmsColors.Surface, shadowElevation = 1.dp,
++                                modifier = Modifier.fillMaxWidth().clickable(enabled = editable) { editLine = line.id }) {
++                                Row(Modifier.padding(12.dp)) {
++                                    Column(Modifier.weight(1f)) {
++                                        Text(line.skuCode, style = MaterialTheme.typography.titleMedium)
++                                        Text(line.productName)
++                                        Text("Принято: ${line.acceptedQty}", color = WmsColors.Primary)
++                                        state.local.totals[line.id]?.let { Text("Введено: $it", color = WmsColors.Primary) }
++                                    }
++                                    IconButton(onClick = { vm.deleteLine(line.id) }, enabled = editable) { Icon(Icons.Default.DeleteOutline, "Удалить товар ${line.skuCode}") }
++                                }
++                            }
++                        }
++                    }
++                } else {
++                    Text(activeContainer.label, style = MaterialTheme.typography.titleMedium)
++                    Text(activeContainer.barcode, color = WmsColors.TextSecondary)
++                    Text("В таре: ${activeContainer.lines.sumOf { it.quantity }}")
++                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                        items(request.lines, key = { it.id }) { line ->
++                            val qty = activeContainer.lines.firstOrNull { it.productId == line.productId }?.quantity ?: 0
++                            Surface(shape = MaterialTheme.shapes.medium, color = WmsColors.Surface, shadowElevation = 1.dp,
++                                modifier = Modifier.fillMaxWidth().clickable(enabled = editable) { containerProduct = line.productId; containerQty = qty.toString() }) {
++                                Column(Modifier.padding(12.dp)) { Text(line.skuCode, style = MaterialTheme.typography.titleMedium); Text(line.productName); Text("В таре: $qty · Всего принято: ${line.acceptedQty}") }
++                            }
++                        }
++                    }
++                }
++            }
++        }
++    }
++    if (catalogOpen) {
++        ModalBottomSheet(onDismissRequest = { catalogOpen = false }) {
++            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                Text("Добавить товар", style = MaterialTheme.typography.titleLarge)
++                OutlinedTextField(query, { query = it; vm.searchCatalog(it) }, label = { Text("Название, артикул или штрихкод") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
++                LazyColumn(Modifier.heightIn(max = 280.dp)) {
++                    items(state.catalog, key = { it.id }) { product ->
++                        ListItem(headlineContent = { Text(product.skuCode) }, supportingContent = { Text(listOf(product.name, product.caption).filter { it.isNotEmpty() }.joinToString(" · ")) },
++                            leadingContent = { RadioButton(selectedProduct == product.id, onClick = { selectedProduct = product.id }) },
++                            modifier = Modifier.clickable { selectedProduct = product.id })
++                    }
++                }
++                QuantityField(addQty, { addQty = it }, "Количество")
++                state.error?.let { Text(it, color = WmsColors.Error) }
++                Button(onClick = { selectedProduct?.let { vm.addProduct(it, addQty) } }, enabled = editable && selectedProduct != null && (intakeQuantity(addQty) ?: 0) > 0, modifier = Modifier.fillMaxWidth()) { Text("Добавить") }
++                TextButton(onClick = { catalogOpen = false }) { Text("К составу приёмки") }
++            }
++        }
++    }
++    if (containersOpen) {
++        ModalBottomSheet(onDismissRequest = { containersOpen = false }) {
++            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                Text("Короба и грузоместа", style = MaterialTheme.typography.titleLarge)
++                LazyColumn(Modifier.heightIn(max = 360.dp)) {
++                    items(request?.boxes.orEmpty() + request?.cargoPlaces.orEmpty(), key = { it.id }) { container ->
++                        ListItem(headlineContent = { Text(container.label) }, supportingContent = { Text("${container.barcode} · ${container.lines.sumOf { it.quantity }} шт.") },
++                            modifier = Modifier.clickable { vm.selectContainer(if (container.boxNumber != null) "boxes" else "cargo-places", container.id); containersOpen = false })
++                    }
++                }
++                state.error?.let { Text(it, color = WmsColors.Error) }
++                if (state.local.pending != null) TextButton(onClick = vm::retry) { Text("Проверить результат") }
++                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                    FilledTonalButton(onClick = { vm.createContainer("boxes") }, enabled = editable, modifier = Modifier.weight(1f)) { Text("Создать короб") }
++                    FilledTonalButton(onClick = { vm.createContainer("cargo-places") }, enabled = editable, modifier = Modifier.weight(1f)) { Text("Создать грузоместо") }
++                }
++            }
++        }
++    }
++    editLine?.let { lineId ->
++        val line = request?.lines?.firstOrNull { it.id == lineId }
++        if (line != null) ModalBottomSheet(onDismissRequest = { editLine = null }) {
++            Column(Modifier.fillMaxWidth().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                Text(line.skuCode, style = MaterialTheme.typography.titleLarge)
++                Text(line.productName)
++                QuantityField(state.local.totals[lineId] ?: line.acceptedQty.toString(), { vm.editTotal(lineId, it) }, "Всего принято", editable)
++                state.error?.let { Text(it, color = WmsColors.Error) }
++                if (state.local.pending != null) TextButton(onClick = vm::retry, enabled = !state.busy) { Text("Проверить результат") }
++                Button(onClick = { vm.saveTotal(lineId) }, enabled = editable && state.local.totals[lineId] != null, modifier = Modifier.fillMaxWidth().height(WmsDimens.PrimaryButtonHeight)) { Text("Сохранить") }
++                if (request.boxes.isNotEmpty() || request.cargoPlaces.isNotEmpty()) TextButton(onClick = { editLine = null; containersOpen = true }) { Text("Уточнить тару") }
++                TextButton(onClick = { editLine = null }) { Text("К составу приёмки") }
++            }
++        }
++    }
++    containerProduct?.let { productId ->
++        ModalBottomSheet(onDismissRequest = { containerProduct = null }) {
++            Column(Modifier.fillMaxWidth().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                Text(activeContainer?.label.orEmpty(), style = MaterialTheme.typography.titleLarge)
++                Text(request?.lines?.firstOrNull { it.productId == productId }?.productName.orEmpty())
++                QuantityField(containerQty, { containerQty = it }, "В таре", editable)
++                state.error?.let { Text(it, color = WmsColors.Error) }
++                if (state.local.pending != null) TextButton(onClick = vm::retry, enabled = !state.busy) { Text("Проверить результат") }
++                Button(onClick = { vm.saveContainer(productId, containerQty) }, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text("Сохранить") }
++                TextButton(onClick = { containerProduct = null }) { Text("К составу тары") }
++            }
++        }
++    }
++}
++
++@Composable private fun QuantityField(value: String, onChange: (String) -> Unit, label: String, enabled: Boolean = true) {
++    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
++    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
++    OutlinedTextField(value, onChange, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
++        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
++        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus(); keyboard?.hide() }),
++        isError = intakeQuantity(value) == null)
++}
++
++@Composable private fun ChoiceField(label: String, choices: List<DraftChoice>, value: String, enabled: Boolean, onSelect: (String) -> Unit) {
++    var open by remember { mutableStateOf(false) }
++    var query by remember { mutableStateOf("") }
++    Column {
++        OutlinedButton(onClick = { open = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("$label: ${choices.firstOrNull { it.id == value }?.label ?: "Выбрать"}") }
++        if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(label) }, text = {
++            Column {
++                OutlinedTextField(query, { query = it }, label = { Text("Поиск") }, singleLine = true)
++                LazyColumn(Modifier.heightIn(max = 300.dp)) { items(choices.filter { it.label.contains(query, true) }, key = { it.id }) { choice ->
++                    TextButton(onClick = { onSelect(choice.id); open = false }, modifier = Modifier.fillMaxWidth()) { Text(choice.label) }
++                } }
++            }
++        }, confirmButton = { TextButton(onClick = { open = false }) { Text("Закрыть") } })
++    }
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
+new file mode 100644
+index 0000000..7483f1e
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundDraftViewModel.kt
+@@ -0,0 +1,223 @@
++package ru.wms.tsd.features.inbound
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.ViewModelProvider
++import androidx.lifecycle.viewModelScope
++import java.util.UUID
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.channels.Channel
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.launch
++import kotlinx.serialization.Serializable
++import kotlinx.serialization.encodeToString
++import kotlinx.serialization.decodeFromString
++import kotlinx.serialization.json.*
++import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.inbound.*
++import ru.wms.tsd.core.api.networkErrorText
++import ru.wms.tsd.core.api.readableError
++import ru.wms.tsd.ui.patterns.ScanFlash
++
++@Serializable data class IntakeAttempt(val method: String, val path: String, val body: JsonObject, val kind: String = "mutation")
++@Serializable data class IntakeLocal(
++    val warehouseId: String = "", val sellerId: String = "",
++    val totals: Map<String, String> = emptyMap(), val pending: IntakeAttempt? = null, val createdId: String? = null,
++)
++data class InboundDraftState(
++    val loading: Boolean = true, val busy: Boolean = false, val error: String? = null,
++    val request: DraftRequest? = null, val sellers: List<DraftChoice> = emptyList(),
++    val warehouses: List<DraftChoice> = emptyList(), val catalog: List<DraftProduct> = emptyList(),
++    val local: IntakeLocal = IntakeLocal(), val createdId: String? = null,
++    val containerKind: String? = null, val containerId: String? = null,
++    val flash: ScanFlash = ScanFlash.None,
++)
++
++internal fun intakeQuantity(raw: String): Int? =
++    raw.takeIf { it.matches(Regex("[0-9]+")) }?.toIntOrNull()?.takeIf { it in 0..1_000_000_000 }
++
++class InboundDraftViewModel(private val id: String?, private val api: ApiProvider) : ViewModel() {
++    private val json = Json { ignoreUnknownKeys = true }
++    private val scope = api.inboundScope()
++    private val document = id ?: "create"
++    private val base = "operations/inbound-intake-requests"
++    private val _state = MutableStateFlow(InboundDraftState())
++    val state: StateFlow<InboundDraftState> = _state
++    private val scans = Channel<String>(32)
++    private var catalogVersion = 0
++
++    init {
++        try {
++            val local = api.pendingInbound(scope, document)?.let { json.decodeFromString<IntakeLocal>(it) } ?: IntakeLocal()
++            _state.update { it.copy(local = local, createdId = local.createdId) }
++            load()
++        } catch (_: Exception) {
++            _state.update { it.copy(loading = false, error = "Не удалось восстановить сохранённый запрос приёмки.") }
++        }
++        viewModelScope.launch { for (barcode in scans) scan(barcode) }
++    }
++
++    private fun persist(local: IntakeLocal) {
++        check(api.inboundScope() == scope) { "Сотрудник или сервер изменился. Откройте приёмку заново." }
++        api.saveInbound(scope, document, json.encodeToString(local))
++        _state.update { it.copy(local = local) }
++    }
++    private fun fail(message: String) { _state.update { it.copy(error = message, flash = ScanFlash.Error(message, System.nanoTime())) } }
++    fun setSelection(warehouse: String = state.value.local.warehouseId, seller: String = state.value.local.sellerId) {
++        if (state.value.local.pending != null) return
++        runCatching { persist(state.value.local.copy(warehouseId = warehouse, sellerId = seller)) }.onFailure { fail(it.message ?: networkErrorText()) }
++    }
++    fun editTotal(lineId: String, value: String) {
++        val current = state.value.request?.lines?.firstOrNull { it.id == lineId }?.acceptedQty
++        val totals = if (current != null && intakeQuantity(value) == current) {
++            state.value.local.totals - lineId
++        } else {
++            state.value.local.totals + (lineId to value)
++        }
++        runCatching { persist(state.value.local.copy(totals = totals)) }.onFailure { fail(it.message ?: networkErrorText()) }
++    }
++    fun selectContainer(kind: String?, containerId: String?) { _state.update { it.copy(containerKind = kind, containerId = containerId, error = null) } }
++    fun load() {
++        viewModelScope.launch {
++            try {
++                if (id == null) {
++                    val sellers = api.inboundDraft().sellers()
++                    val warehouses = api.inboundDraft().warehouses()
++                    check(sellers.isSuccessful) { sellers.readableError() }
++                    check(warehouses.isSuccessful) { warehouses.readableError() }
++                    _state.update { it.copy(sellers = sellers.body().orEmpty(), warehouses = warehouses.body().orEmpty()) }
++                    if (state.value.local.pending == null) {
++                        setSelection(state.value.local.warehouseId.ifBlank { state.value.warehouses.singleOrNull()?.id.orEmpty() },
++                            state.value.local.sellerId.ifBlank { state.value.sellers.singleOrNull()?.id.orEmpty() })
++                    }
++                } else refresh()
++                _state.update { it.copy(loading = false) }
++            } catch (e: Exception) { if (e is CancellationException) throw e; _state.update { it.copy(loading = false) }; fail(e.message ?: networkErrorText()) }
++        }
++    }
++    private suspend fun refresh() {
++        if (id == null) return
++        val response = api.inboundDraft().get(id)
++        check(response.isSuccessful) { response.readableError() }
++        _state.update { it.copy(request = response.body()) }
++    }
++    fun searchCatalog(search: String) {
++        val version = ++catalogVersion
++        viewModelScope.launch {
++            try {
++                val request = state.value.request ?: return@launch
++                val result = api.inboundDraft().catalog(request.sellerId, search)
++                check(result.isSuccessful) { result.readableError() }
++                if (version == catalogVersion) _state.update { it.copy(catalog = result.body().orEmpty()) }
++            } catch (e: Exception) { if (e is CancellationException) throw e; fail(e.message ?: networkErrorText()) }
++        }
++    }
++    private fun attempt(method: String, path: String, body: JsonObject = buildJsonObject {}, kind: String = "mutation") {
++        if (state.value.busy || state.value.local.pending != null) { fail("Сначала проверьте результат предыдущего запроса."); return }
++        viewModelScope.launch { execute(IntakeAttempt(method, path, body, kind)) }
++    }
++    private suspend fun execute(attempt: IntakeAttempt) {
++        if (state.value.local.pending != null && state.value.local.pending != attempt) { fail("Проверьте предыдущий запрос."); return }
++        try {
++            persist(state.value.local.copy(pending = attempt)) // durable before HTTP
++            _state.update { it.copy(busy = true, error = null) }
++            val service = api.inboundDraft()
++            val response = when (attempt.method) {
++                "PATCH" -> service.patch(attempt.path, attempt.body)
++                "PUT" -> service.put(attempt.path, attempt.body)
++                "DELETE" -> service.delete(attempt.path)
++                else -> service.post(attempt.path, attempt.body)
++            }
++            if (!response.isSuccessful) {
++                val message = response.readableError()
++                // A definite refusal did not apply the operation; the user's total stays in the form.
++                if (response.code() in 400..499 && response.code() !in listOf(408, 429)) persist(state.value.local.copy(pending = null))
++                fail(if (message.contains("actual_below_container_total")) "В таре больше товара. Уточните количество в конкретном коробе или грузоместе, затем сохраните введённое количество." else message)
++                return
++            }
++            val created = if (attempt.kind == "create") response.body()?.jsonObject?.get("id")?.jsonPrimitive?.content else null
++            val lineId = when (attempt.method) {
++                "PATCH" -> attempt.path.substringBeforeLast('/').substringAfterLast('/')
++                "DELETE" -> attempt.path.substringAfterLast('/')
++                else -> null
++            }
++            persist(state.value.local.copy(pending = null, createdId = created ?: state.value.local.createdId, totals = state.value.local.totals - setOfNotNull(lineId)))
++            _state.update { it.copy(createdId = created, flash = ScanFlash.Success(System.nanoTime())) }
++            if (id != null) refresh()
++        } catch (e: Exception) {
++            if (e is CancellationException) throw e
++            fail(if (state.value.local.pending != null) "Ответ не получен. Проверьте результат запроса." else (e.message ?: networkErrorText()))
++        } finally { _state.update { it.copy(busy = false) } }
++    }
++    fun retry() {
++        val pending = state.value.local.pending ?: return load()
++        if (state.value.busy) return
++        viewModelScope.launch {
++            if (pending.kind == "container") {
++                // Legacy container creation has no retry receipt. Inspect its result, never duplicate it blindly.
++                try { refresh(); persist(state.value.local.copy(pending = null)); fail("Список тары обновлён. Проверьте созданные короба и грузоместа.") }
++                catch (e: Exception) { if (e is CancellationException) throw e; fail(networkErrorText()) }
++            } else execute(pending)
++        }
++    }
++    fun acknowledgeCreated() { persist(state.value.local.copy(createdId = null)) }
++    fun create() {
++        val local = state.value.local
++        if (local.warehouseId.isBlank() || local.sellerId.isBlank()) { fail("Выберите склад и селлера."); return }
++        attempt("POST", base, buildJsonObject { put("warehouse_id", local.warehouseId); put("seller_id", local.sellerId); put("client_request_id", UUID.randomUUID().toString()) }, "create")
++    }
++    fun addProduct(productId: String, raw: String) {
++        val quantity = intakeQuantity(raw)?.takeIf { it > 0 } ?: return fail("Введите целое количество больше нуля.")
++        if (state.value.request?.editable != true) return
++        attempt("POST", "$base/$id/lines", buildJsonObject { put("product_id", productId); put("expected_qty", quantity); put("increment", true); put("mutation_id", UUID.randomUUID().toString()) })
++    }
++    fun saveTotal(lineId: String) {
++        val qty = intakeQuantity(state.value.local.totals[lineId].orEmpty()) ?: return fail("Введите целое неотрицательное количество.")
++        attempt("PATCH", "$base/$id/lines/$lineId/expected", buildJsonObject { put("expected_qty", qty); put("mutation_id", UUID.randomUUID().toString()) })
++    }
++    fun deleteLine(lineId: String) { attempt("DELETE", "$base/$id/lines/$lineId") }
++    fun createContainer(kind: String) { attempt("POST", "$base/$id/$kind", buildJsonObject { put("quantity", 1) }, "container") }
++    fun saveContainer(productId: String, raw: String) {
++        val qty = intakeQuantity(raw)?.takeIf { it <= 100_000 } ?: return fail("Введите целое количество от 0 до 100000.")
++        val current = state.value
++        attempt("PUT", "$base/$id/${current.containerKind}/${current.containerId}/lines/$productId", buildJsonObject { put("quantity", qty); put("mutation_id", UUID.randomUUID().toString()) })
++    }
++    fun complete() {
++        if (state.value.local.totals.isNotEmpty()) { fail("Сохраните введённое количество перед завершением приёмки."); return }
++        attempt("POST", "$base/$id/complete-receiving", buildJsonObject { put("mutation_id", UUID.randomUUID().toString()) }, "complete")
++    }
++    fun onScan(barcode: String) { if (!scans.trySend(barcode.trim()).isSuccess) fail("Дождитесь обработки сканов и повторите сканирование.") }
++    private suspend fun scan(barcode: String) {
++        val current = state.value
++        val request = current.request ?: return
++        if (!request.editable || barcode.isEmpty()) return
++        if (current.local.pending != null || current.busy) { fail("Проверьте предыдущий запрос и повторите скан."); return }
++        val container = request.boxes.firstOrNull { it.barcode == barcode } ?: request.cargoPlaces.firstOrNull { it.barcode == barcode }
++        if (container != null) { selectContainer(if (container.boxNumber != null) "boxes" else "cargo-places", container.id); return }
++        if (current.containerId != null) {
++            _state.update { it.copy(busy = true) }
++            try {
++                val response = api.inboundDraft().catalog(request.sellerId, barcode)
++                check(response.isSuccessful) { response.readableError() }
++                val matches = response.body().orEmpty().filter { barcode in it.barcodes }
++                val product = matches.singleOrNull() ?: return fail(if (matches.isEmpty()) "Товар не найден. Выберите товар в каталоге." else "Несколько товаров с этим кодом. Выберите товар в каталоге.")
++                execute(IntakeAttempt("POST", "$base/$id/${current.containerKind}/${current.containerId}/scan", buildJsonObject { put("barcode", barcode); put("product_id", product.id); put("mutation_id", UUID.randomUUID().toString()) }))
++            } catch (e: Exception) { if (e is CancellationException) throw e; fail(e.message ?: networkErrorText()) }
++            finally { _state.update { it.copy(busy = false) } }
++        } else {
++            _state.update { it.copy(busy = true) }
++            try {
++                val response = api.inboundDraft().catalog(request.sellerId, barcode)
++                check(response.isSuccessful) { response.readableError() }
++                val matches = response.body().orEmpty().filter { barcode in it.barcodes }
++                val product = matches.singleOrNull() ?: return fail(if (matches.isEmpty()) "Товар не найден. Выберите товар в каталоге." else "Несколько товаров с этим кодом. Выберите товар в каталоге.")
++                execute(IntakeAttempt("POST", "$base/$id/lines", buildJsonObject { put("product_id", product.id); put("expected_qty", 1); put("increment", true); put("mutation_id", UUID.randomUUID().toString()) }))
++            } catch (e: Exception) { if (e is CancellationException) throw e; fail(e.message ?: networkErrorText()) }
++            finally { _state.update { it.copy(busy = false) } }
++        }
++    }
++    class Factory(private val id: String?, private val api: ApiProvider) : ViewModelProvider.Factory {
++        @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = InboundDraftViewModel(id, api) as T
++    }
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
+index e7a3331..be6dbde 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/inbound/InboundListScreen.kt
+@@ -17,7 +17,7 @@ import ru.wms.tsd.AppGraph
+ import ru.wms.tsd.core.api.ApiProvider
+ import ru.wms.tsd.core.api.networkErrorText
+ import ru.wms.tsd.core.api.readableError
+-import ru.wms.tsd.core.api.generated.models.InboundIntakeRequestSummaryOut
++import ru.wms.tsd.core.api.inbound.DraftSummary
+ import ru.wms.tsd.ui.patterns.FullScreenError
+ import ru.wms.tsd.ui.patterns.ListSkeleton
+ import ru.wms.tsd.ui.patterns.ScanFlash
+@@ -29,7 +29,7 @@ data class InboundListUiState(
+     val loading: Boolean = true,
+     val refreshing: Boolean = false,
+     val error: String? = null,
+-    val requests: List<InboundIntakeRequestSummaryOut> = emptyList(),
++    val requests: List<DraftSummary> = emptyList(),
+ )
+ 
+ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -41,12 +41,12 @@ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+     fun load(initial: Boolean = false) {
+         _state.value = _state.value.copy(loading = initial, refreshing = !initial, error = null)
+         viewModelScope.launch {
+-            runCatching { api.operations().listInboundRequestsOperationsInboundIntakeRequestsGet() }
++            runCatching { api.inboundDraft().list() }
+                 .onSuccess { resp ->
+                     if (resp.isSuccessful) {
+                         // Очередь приёмки: переданные на склад и находящиеся в пересчёте (как в вебе)
+                         val queue = resp.body().orEmpty()
+-                            .filter { it.status == "submitted" || isReceivingStatus(it.status) }
++                            .filter { it.isFfDraft || it.status == "submitted" || isReceivingStatus(it.status) }
+                             .sortedBy { it.plannedDeliveryDate ?: it.createdAt }
+                         _state.value = InboundListUiState(loading = false, requests = queue)
+                     } else {
+@@ -69,6 +69,7 @@ class InboundListViewModel(private val api: ApiProvider) : ViewModel() {
+ @Composable
+ fun InboundListScreen(
+     onBack: () -> Unit,
++    onCreate: () -> Unit,
+     onOpenRequest: (id: String, status: String) -> Unit,
+ ) {
+     val vm: InboundListViewModel = viewModel(factory = InboundListViewModel.Factory(AppGraph.apiProvider))
+@@ -84,6 +85,8 @@ fun InboundListScreen(
+         title = "Приёмка",
+         flash = ScanFlash.None,
+         onExit = onBack,
++        primaryActionLabel = "Создать приёмку",
++        onPrimaryAction = onCreate,
+         cameraScanner = false, // список не принимает сканы
+     ) {
+         when {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
+new file mode 100644
+index 0000000..1dc85f9
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundDraftViewModelTest.kt
+@@ -0,0 +1,194 @@
++package ru.wms.tsd.features.inbound
++
++import io.mockk.*
++import java.io.IOException
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.*
++import kotlinx.serialization.decodeFromString
++import kotlinx.serialization.encodeToString
++import kotlinx.serialization.json.*
++import okhttp3.ResponseBody.Companion.toResponseBody
++import org.junit.*
++import org.junit.Assert.*
++import retrofit2.Response
++import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.inbound.*
++
++@OptIn(ExperimentalCoroutinesApi::class)
++class InboundDraftViewModelTest {
++    private val service = mockk<InboundDraftApi>()
++    private val provider = mockk<ApiProvider>()
++    private val disk = mutableMapOf<String, String?>()
++    private var scope = "http://test:tenant:operator"
++    private val prefix = "operations/inbound-intake-requests/request"
++    private val line = DraftLine("line", "product", "SKU", "Товар", 4)
++    private var request = DraftRequest("request", "draft", "seller", operationType = "inbound", lines = listOf(line))
++    @Before fun setUp() {
++        Dispatchers.setMain(UnconfinedTestDispatcher())
++        every { provider.inboundDraft() } returns service
++        every { provider.inboundScope() } answers { scope }
++        every { provider.pendingInbound(any(), any()) } answers { disk["${firstArg<String>()}:${secondArg<String>()}"] }
++        every { provider.saveInbound(any(), any(), any()) } answers { disk["${firstArg<String>()}:${secondArg<String>()}"] = thirdArg() }
++        coEvery { service.get("request") } answers { Response.success(request) }
++        coEvery { service.sellers() } returns Response.success(listOf(DraftChoice("seller", "Селлер")))
++        coEvery { service.warehouses() } returns Response.success(listOf(DraftChoice("warehouse", "Склад")))
++    }
++    @After fun tearDown() { Dispatchers.resetMain() }
++    @Test fun lostResponseSurvivesRestartAndUsesExactAttempt() = runTest {
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/lines", capture(bodies)) } coAnswers {
++            assertNotNull(disk["$scope:request"])
++            if (bodies.size == 1) throw IOException("lost response")
++            Response.success(buildJsonObject {})
++        }
++        val first = InboundDraftViewModel("request", provider)
++        first.addProduct("product", "3")
++        advanceUntilIdle()
++        assertNotNull(first.state.value.local.pending)
++        val restored = InboundDraftViewModel("request", provider)
++        restored.retry()
++        advanceUntilIdle()
++        assertEquals(2, bodies.size)
++        assertEquals(bodies[0], bodies[1])
++        assertNotNull(bodies[0]["mutation_id"])
++        assertNull(restored.state.value.local.pending)
++    }
++    @Test fun correctionRetainsTwoWhileOperatorEditsChosenTare() = runTest {
++        request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1, lines = listOf(DraftContainerLine("product", 4)))))
++        var corrections = 0
++        coEvery { service.patch("$prefix/lines/line/expected", any()) } answers {
++            corrections++
++            if (corrections == 1) Response.error(409, "{\"detail\":\"actual_below_container_total\"}".toResponseBody())
++            else { request = request.copy(lines = listOf(line.copy(effectiveActualQty = 2))); Response.success(buildJsonObject {}) }
++        }
++        coEvery { service.put("$prefix/boxes/box/lines/product", any()) } answers {
++            request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1, lines = listOf(DraftContainerLine("product", 2)))))
++            Response.success(buildJsonObject {})
++        }
++        val vm = InboundDraftViewModel("request", provider)
++        vm.editTotal("line", "2"); vm.saveTotal("line"); advanceUntilIdle()
++        assertEquals("2", vm.state.value.local.totals["line"])
++        assertNull(vm.state.value.local.pending)
++        val restored = InboundDraftViewModel("request", provider)
++        restored.selectContainer("boxes", "box"); restored.saveContainer("product", "2"); advanceUntilIdle()
++        assertEquals(4, restored.state.value.request!!.lines.single().effectiveActualQty)
++        assertEquals("2", restored.state.value.local.totals["line"])
++        restored.selectContainer(null, null); restored.saveTotal("line"); advanceUntilIdle()
++        assertEquals(2, restored.state.value.request!!.lines.single().effectiveActualQty)
++        assertTrue(restored.state.value.local.totals.isEmpty())
++    }
++    @Test fun independentScansReceiveDifferentMutationIds() = runTest {
++        coEvery { service.catalog("seller", "OZON-SKU") } returns Response.success(listOf(DraftProduct("product", "Ozon товар", "SKU", marketplaces = listOf("ozon"), ozonSku = "OZON-SKU")))
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/lines", capture(bodies)) } returns Response.success(buildJsonObject {})
++        val vm = InboundDraftViewModel("request", provider)
++        vm.onScan("OZON-SKU"); vm.onScan("OZON-SKU"); advanceUntilIdle()
++        assertEquals(2, bodies.size)
++        assertNotEquals(bodies[0]["mutation_id"], bodies[1]["mutation_id"])
++        assertEquals(JsonPrimitive(true), bodies[0]["increment"])
++    }
++    @Test fun ozonExternalBarcodeIsResolvedFromTheDraftCatalog() = runTest {
++        coEvery { service.catalog("seller", "OZN-EXTERNAL") } returns Response.success(listOf(
++            DraftProduct("product", "Ozon товар", "SKU", marketplaces = listOf("ozon"), marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("OZN-EXTERNAL"))))
++        ))
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/lines", capture(bodies)) } returns Response.success(buildJsonObject {})
++        val vm = InboundDraftViewModel("request", provider)
++        vm.onScan("OZN-EXTERNAL"); advanceUntilIdle()
++        assertEquals("product", bodies.single()["product_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun containerScanSendsTheSingleCatalogProductId() = runTest {
++        request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1)))
++        coEvery { service.catalog("seller", "OZN-EXTERNAL") } returns Response.success(listOf(
++            DraftProduct("product", "Ozon товар", "SKU", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("OZN-EXTERNAL"))))
++        ))
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("$prefix/boxes/box/scan", capture(bodies)) } returns Response.success(buildJsonObject {})
++        val vm = InboundDraftViewModel("request", provider)
++        vm.selectContainer("boxes", "box"); vm.onScan("OZN-EXTERNAL"); advanceUntilIdle()
++        assertEquals("product", bodies.single()["product_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun ambiguousContainerScanKeepsTheTareUnchanged() = runTest {
++        request = request.copy(boxes = listOf(DraftContainer("box", boxNumber = 1)))
++        coEvery { service.catalog("seller", "SHARED") } returns Response.success(listOf(
++            DraftProduct("first", "Первый", "SKU-1", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("SHARED")))),
++            DraftProduct("second", "Второй", "SKU-2", marketplaceBindings = listOf(DraftMarketplaceBinding("ozon", listOf("SHARED"))))
++        ))
++        val vm = InboundDraftViewModel("request", provider)
++        vm.selectContainer("boxes", "box"); vm.onScan("SHARED"); advanceUntilIdle()
++        coVerify(exactly = 0) { service.post("$prefix/boxes/box/scan", any()) }
++        assertTrue(vm.state.value.error!!.contains("Несколько товаров"))
++    }
++    @Test fun completionUsesDirectEndpointAndRestoresPendingCompletion() = runTest {
++        coEvery { service.post("$prefix/complete-receiving", any()) } throws IOException("lost")
++        val vm = InboundDraftViewModel("request", provider)
++        vm.complete(); advanceUntilIdle()
++        assertEquals("$prefix/complete-receiving", vm.state.value.local.pending!!.path)
++        assertNotNull(vm.state.value.local.pending!!.body["mutation_id"])
++        coEvery { service.post("$prefix/complete-receiving", any()) } answers { request = request.copy(status = "sorting"); Response.success(buildJsonObject {}) }
++        val restored = InboundDraftViewModel("request", provider)
++        restored.retry(); advanceUntilIdle()
++        assertEquals("sorting", restored.state.value.request!!.status)
++    }
++    @Test fun unchangedTotalDoesNotBlockCompletion() = runTest {
++        coEvery { service.post("$prefix/complete-receiving", any()) } answers {
++            request = request.copy(status = "sorting"); Response.success(buildJsonObject {})
++        }
++        val vm = InboundDraftViewModel("request", provider)
++        vm.editTotal("line", "4")
++        assertTrue(vm.state.value.local.totals.isEmpty())
++        vm.complete(); advanceUntilIdle()
++        coVerify(exactly = 1) { service.post("$prefix/complete-receiving", any()) }
++    }
++    @Test fun createPersistsUuidBeforeRequestAndRecoversDocument() = runTest {
++        val bodies = mutableListOf<JsonObject>()
++        coEvery { service.post("operations/inbound-intake-requests", capture(bodies)) } coAnswers {
++            assertTrue(disk["$scope:create"]!!.contains("client_request_id"))
++            if (bodies.size == 1) throw IOException("lost")
++            Response.success(buildJsonObject { put("id", "created") })
++        }
++        val vm = InboundDraftViewModel(null, provider)
++        vm.create(); advanceUntilIdle()
++        val restored = InboundDraftViewModel(null, provider)
++        restored.retry(); advanceUntilIdle()
++        assertEquals(bodies[0], bodies[1])
++        assertEquals("created", restored.state.value.createdId)
++        assertEquals("created", InboundDraftViewModel(null, provider).state.value.createdId)
++    }
++    @Test fun malformedQuantityAndChangedScopeNeverWrite() = runTest {
++        val vm = InboundDraftViewModel("request", provider)
++        listOf("", "-1", "1.5", "1000000001", "2147483648", "1e2").forEach { vm.addProduct("product", it) }
++        scope = "http://other:tenant:operator"
++        vm.addProduct("product", "2"); advanceUntilIdle()
++        coVerify(exactly = 0) { service.post(any(), any()) }
++        assertTrue(disk.isEmpty())
++    }
++    @Test fun oldOrSellerDraftDoesNotAcceptScans() = runTest {
++        request = request.copy(createdBySellerId = "seller")
++        val vm = InboundDraftViewModel("request", provider)
++        vm.onScan("SKU"); vm.addProduct("product", "1"); advanceUntilIdle()
++        coVerify(exactly = 0) { service.post(any(), any()) }
++    }
++    @Test fun deletingEditedLineClearsOnlyItsPendingTotal() = runTest {
++        coEvery { service.delete("$prefix/lines/line") } answers { request = request.copy(lines = emptyList()); Response.success(buildJsonObject {}) }
++        val vm = InboundDraftViewModel("request", provider)
++        vm.editTotal("line", "2")
++        vm.deleteLine("line"); advanceUntilIdle()
++        assertTrue(vm.state.value.local.totals.isEmpty())
++        assertTrue(vm.state.value.request!!.lines.isEmpty())
++    }
++    @Test fun unresolvedRequestPreventsAnotherMutation() = runTest {
++        disk["$scope:request"] = Json.encodeToString(IntakeLocal(pending = IntakeAttempt("POST", "$prefix/lines", buildJsonObject { put("mutation_id", "pending") })))
++        val vm = InboundDraftViewModel("request", provider)
++        vm.addProduct("product", "1"); advanceUntilIdle()
++        coVerify(exactly = 0) { service.post(any(), any()) }
++        assertEquals("pending", vm.state.value.local.pending!!.body["mutation_id"]!!.jsonPrimitive.content)
++    }
++    @Test fun completedResponseUsesActualQtyWhenEffectiveQtyIsNull() {
++        val response = Json { ignoreUnknownKeys = true }.decodeFromString<DraftRequest>(
++            """{"id":"request","status":"sorting","seller_id":"seller","operation_type":"inbound","lines":[{"id":"line","product_id":"product","sku_code":"SKU","product_name":"Товар","actual_qty":3,"effective_actual_qty":null,"defective_qty":0,"posted_qty":3}]}"""
++        )
++        assertEquals(3, response.lines.single().acceptedQty)
++    }
++}
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
+index 08af41f..fbecbf6 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/inbound/InboundListViewModelTest.kt
+@@ -21,8 +21,8 @@ import org.junit.Before
+ import org.junit.Test
+ import retrofit2.Response
+ import ru.wms.tsd.core.api.ApiProvider
+-import ru.wms.tsd.core.api.generated.apis.OperationsApi
+-import ru.wms.tsd.core.api.generated.models.InboundIntakeRequestSummaryOut
++import ru.wms.tsd.core.api.inbound.InboundDraftApi
++import ru.wms.tsd.core.api.inbound.DraftSummary
+ 
+ /**
+  * Юнит-тесты InboundListViewModel: фильтрация очереди приёмки по submitted и receiving статусам
+@@ -32,7 +32,7 @@ class InboundListViewModelTest {
+ 
+     private val warehouseId = "bbbbbbbb-0000-0000-0000-000000000002"
+ 
+-    private lateinit var ops: OperationsApi
++    private lateinit var ops: InboundDraftApi
+     private lateinit var api: ApiProvider
+ 
+     @Before
+@@ -40,7 +40,7 @@ class InboundListViewModelTest {
+         Dispatchers.setMain(UnconfinedTestDispatcher())
+         ops = mockk()
+         api = mockk {
+-            every { operations() } returns ops
++            every { inboundDraft() } returns ops
+         }
+     }
+ 
+@@ -50,7 +50,7 @@ class InboundListViewModelTest {
+     }
+ 
+     private fun request(status: String, id: String = UUID.randomUUID().toString()) =
+-        InboundIntakeRequestSummaryOut(
++        DraftSummary(
+             id = id,
+             warehouseId = warehouseId,
+             status = status,
+@@ -71,26 +71,28 @@ class InboundListViewModelTest {
+             request("sorting"),             // не должен быть
+             request("verified"),            // не должен быть
+             request("done"),                // не должен быть
+-            request("draft"),               // не должен быть
++            request("draft"),               // неизвестное происхождение не включаем
++            request("draft").copy(operationType = "inbound"),
++            request("draft").copy(operationType = "inbound", createdBySellerId = "seller"),
+         )
+ 
+-        coEvery { ops.listInboundRequestsOperationsInboundIntakeRequestsGet() } returns
++        coEvery { ops.list() } returns
+             Response.success(allRequests)
+ 
+         val vm = InboundListViewModel(api)
+         advanceUntilIdle()
+ 
+         val state = vm.state.value
+-        assertEquals("Фильтр applied, только 4 заявки в очереди", 4, state.requests.size)
++        assertEquals("Фильтр applied, с FF черновиком 5 заявок в очереди", 5, state.requests.size)
+         assertTrue("Первая заявка submitted", state.requests[0].status == "submitted")
+         assertTrue("Все заявки имеют статус submitted или receiving-related",
+-            state.requests.all { it.status == "submitted" || isReceivingStatus(it.status) })
++            state.requests.all { it.isFfDraft || it.status == "submitted" || isReceivingStatus(it.status) })
+         assertNull("Ошибка отсутствует при успешном ответе", state.error)
+     }
+ 
+     @Test
+     fun testNetworkErrorHandling() = runTest {
+-        coEvery { ops.listInboundRequestsOperationsInboundIntakeRequestsGet() } returns
++        coEvery { ops.list() } returns
+             err(500, "Network error")
+ 
+         val vm = InboundListViewModel(api)

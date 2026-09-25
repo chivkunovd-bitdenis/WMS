@@ -456,7 +456,7 @@ async def test_unload_ready_box_writers_audit_once_after_success(
         assert row.actor_user_id is not None and row.source == "user"
         assert row.payload_json["actor_user_id_snapshot"] == str(row.actor_user_id)
         actor = await session.get(User, row.actor_user_id)
-        assert actor is not None and row.payload_json["actor_name_snapshot"] == actor.email
+        assert actor is not None and row.payload_json["actor_name_snapshot"] == actor.display_name
 
 
 async def test_coordinator_zero_box_discrepancy_still_allows_receiving(

@@ -81,7 +81,7 @@ class _PlaywrightLocalOzonTransport:
         return 204
 
 
-async def validate_seller_info(
+async def validate_api_key_roles(
     *,
     transport: OzonTransport,
     client_id: str,
@@ -92,7 +92,7 @@ async def validate_seller_info(
         status_code = await transport.request(
             host=OZON_SELLER_API_HOST,
             method="POST",
-            path="/v1/seller/info",
+            path="/v1/roles",
             headers={
                 "Client-Id": client_id,
                 "Api-Key": api_key,
@@ -122,6 +122,8 @@ async def validate_ozon_credentials(client_id: str, api_key: str) -> OzonValidat
     else:
         transport = _HttpxOzonTransport()
     try:
-        return await validate_seller_info(transport=transport, client_id=client_id, api_key=api_key)
+        return await validate_api_key_roles(
+            transport=transport, client_id=client_id, api_key=api_key
+        )
     except OzonProviderError as exc:
         return OzonValidationResult.http(exc.status_code)

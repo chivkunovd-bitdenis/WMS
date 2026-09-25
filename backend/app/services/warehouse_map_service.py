@@ -761,7 +761,7 @@ async def get_warehouse_map(
         {
             "id": str(event.id),
             "at": event.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-            "actor_name": actor.email if actor is not None else "Система",
+            "actor_name": actor.display_name if actor is not None else "Система",
             "subject": event.subject,
             "qty": event.quantity,
             "from_label": event.from_label,
@@ -979,7 +979,44 @@ async def _transfer_balance(
     destination_container_id: uuid.UUID | None,
     transfer_group_id: uuid.UUID,
     actor_user_id: uuid.UUID,
+    inbound_request_id: uuid.UUID | None = None,
 ) -> None:
+    from app.services.inbound_intake_service import InboundIntakeError
+    from app.services.inbound_sorting_service import apply_received_balance_putaway
+
+    try:
+        if await apply_received_balance_putaway(
+            session, tenant_id=tenant_id, balance_id=balance.id,
+            destination_location_id=destination_location_id,
+            destination_container_kind=destination_container_kind,
+            destination_container_id=destination_container_id, quantity=quantity,
+            performer_id=actor_user_id, request_id=inbound_request_id,
+            transfer_group_id=transfer_group_id,
+        ):
+            return
+    except InboundIntakeError as exc:
+        raise WarehouseMapError(exc.code) from exc
+    inbound_line_id = None
+    if inbound_request_id is not None:
+        from app.models.inventory_movement import InventoryMovement
+
+        line = await session.scalar(select(InboundIntakeLine).where(
+            InboundIntakeLine.request_id == inbound_request_id,
+            InboundIntakeLine.product_id == balance.product_id,
+        ))
+        source = await session.get(StorageLocation, balance.storage_location_id)
+        if source is not None and source.code != SORTING_LOCATION_CODE:
+            proven = 0 if line is None else int(await session.scalar(select(
+                func.coalesce(func.sum(InventoryMovement.quantity_delta), 0)
+            ).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.inbound_intake_line_id == line.id,
+                InventoryMovement.storage_location_id == balance.storage_location_id,
+            )) or 0)
+            if proven < quantity:
+                raise WarehouseMapError("qty_exceeds_accepted")
+            assert line is not None
+            inbound_line_id = line.id
     source_kind = cast(ContainerKind | None, balance.container_kind)
     await inventory_service.record_movement_and_adjust_balance(
         session,
@@ -987,8 +1024,10 @@ async def _transfer_balance(
         product_id=balance.product_id,
         storage_location_id=balance.storage_location_id,
         quantity_delta=-quantity,
+        _exact_source=True,
         movement_type=MOVEMENT_TYPE_WAREHOUSE_MAP,
         transfer_group_id=transfer_group_id,
+        inbound_intake_line_id=inbound_line_id,
         container_kind=source_kind,
         container_id=balance.container_id,
         actor_user_id=actor_user_id,
@@ -1001,6 +1040,7 @@ async def _transfer_balance(
         quantity_delta=quantity,
         movement_type=MOVEMENT_TYPE_WAREHOUSE_MAP,
         transfer_group_id=transfer_group_id,
+        inbound_intake_line_id=inbound_line_id,
         container_kind=destination_container_kind,
         container_id=destination_container_id,
         actor_user_id=actor_user_id,
@@ -1032,6 +1072,11 @@ async def _container_balances(
         (InventoryBalance.container_kind == ref_kind) & (InventoryBalance.container_id == ref_id)
         for ref_kind, ref_id in refs
     ]
+    product_ids = (await session.scalars(select(InventoryBalance.product_id).where(
+        InventoryBalance.tenant_id == tenant_id, or_(*predicates),
+    ).distinct())).all()
+    for product_id in sorted(product_ids, key=str):
+        await inventory_service.lock_stock_product(session, tenant_id, product_id)
     rows = list(
         (
             await session.scalars(
@@ -1126,6 +1171,44 @@ async def _place_container(
     cargo.storage_location_id = destination_location_id
 
 
+async def _lock_object_intakes(
+    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID,
+    kind: ObjectKind, object_id: uuid.UUID, request_id: uuid.UUID | None,
+) -> None:
+    """Take document locks before product/balance locks on every putaway route."""
+    from app.services import inbound_intake_service as intake
+
+    request_ids = {request_id} if request_id is not None else set()
+    source_kind: str | None = kind
+    source_id: uuid.UUID | None = object_id
+    if kind == "product":
+        balance = await session.get(InventoryBalance, object_id)
+        if balance is not None and balance.tenant_id == tenant_id:
+            source_kind, source_id = balance.container_kind, balance.container_id
+    warehouse_boxes, boxes, cargos = await _load_boxes(session, tenant_id, warehouse_id)
+    for box in boxes:
+        if (source_kind == "box" and box.id == source_id) or (
+            source_kind == "pallet" and box.pallet_id == source_id
+        ):
+            request_ids.add(box.request_id)
+    for cargo in cargos:
+        if (source_kind == "cargo_place" and cargo.id == source_id) or (
+            source_kind == "pallet" and cargo.pallet_id == source_id
+        ):
+            request_ids.add(cargo.request_id)
+    for generic in warehouse_boxes:
+        if generic.inbound_request_id is not None and (
+            generic.id == source_id or (source_kind == "pallet" and generic.pallet_id == source_id)
+        ):
+            request_ids.add(generic.inbound_request_id)
+    if source_kind == "pallet" and source_id is not None:
+        pallet = await session.get(Pallet, source_id)
+        if pallet is not None and pallet.tenant_id == tenant_id and pallet.inbound_request_id:
+            request_ids.add(pallet.inbound_request_id)
+    for intake_id in sorted(request_ids, key=str):
+        await intake.get_request(session, tenant_id, intake_id, for_update=True)
+
+
 async def move_object(
     session: AsyncSession,
     *,
@@ -1138,8 +1221,14 @@ async def move_object(
     to_id: uuid.UUID | None,
     quantity: int | None,
     commit: bool = True,
+    inbound_request_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None,
+    event_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
+    await _lock_object_intakes(
+        session, tenant_id, warehouse_id, kind, object_id, inbound_request_id
+    )
     # Количество имеет смысл только для товара: тара всегда переезжает целиком
     # вместе с содержимым (контракт карты склада, раздел 3.1).
     if kind == "product" and (quantity is None or quantity <= 0):
@@ -1149,9 +1238,14 @@ async def move_object(
     destination_location_id, destination_kind, destination_id, to_label = await _destination(
         session, tenant_id, warehouse_id, to_kind, to_id
     )
-    transfer_group_id = uuid.uuid4()
+    transfer_group_id = transfer_group_id or uuid.uuid4()
 
     if kind == "product":
+        initial_balance = await session.get(InventoryBalance, object_id)
+        if initial_balance is not None and initial_balance.tenant_id == tenant_id:
+            await inventory_service.lock_stock_product(
+                session, tenant_id, initial_balance.product_id
+            )
         balance = await session.scalar(
             select(InventoryBalance)
             .join(StorageLocation)
@@ -1190,6 +1284,7 @@ async def move_object(
             destination_container_kind=destination_kind,
             destination_container_id=destination_id,
             transfer_group_id=transfer_group_id,
+            inbound_request_id=inbound_request_id,
             actor_user_id=actor_user_id,
         )
         subject = product.name
@@ -1249,6 +1344,7 @@ async def move_object(
                     destination_container_kind=cast(ContainerKind, balance.container_kind),
                     destination_container_id=balance.container_id,
                     transfer_group_id=transfer_group_id,
+                    inbound_request_id=inbound_request_id,
                     actor_user_id=actor_user_id,
                 )
         await _place_container(
@@ -1266,6 +1362,7 @@ async def move_object(
         moved_quantity = moved_total or None
 
     event = WarehouseMapEvent(
+        id=event_id or uuid.uuid4(),
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         actor_user_id=actor_user_id,
@@ -1449,15 +1546,18 @@ async def _filter_sorting_map_by_inbound_request(
     accepted_rows = list(
         (
             await session.execute(
-                select(InboundIntakeLine.product_id, InboundIntakeLine.actual_qty).where(
+                select(
+                    InboundIntakeLine.product_id, InboundIntakeLine.actual_qty,
+                    InboundIntakeLine.posted_qty,
+                ).where(
                     InboundIntakeLine.request_id == inbound_request_id,
                 )
             )
         ).all()
     )
     remaining_by_product = {
-        str(product_id): max(0, int(actual_qty or 0))
-        for product_id, actual_qty in accepted_rows
+        str(product_id): max(0, int(actual_qty or 0) - int(posted_qty))
+        for product_id, actual_qty, posted_qty in accepted_rows
     }
 
     box_rows = list(
@@ -1526,45 +1626,66 @@ async def _filter_sorting_map_by_inbound_request(
         for container_id, container_kind in generic_box_rows
     )
 
-    def filter_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from app.models.inventory_movement import InventoryMovement
+
+    placed_rows = (await session.execute(select(
+        InventoryMovement.storage_location_id, InventoryMovement.product_id,
+        func.sum(InventoryMovement.quantity_delta),
+    ).join(InboundIntakeLine, InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id)
+        .where(InboundIntakeLine.request_id == inbound_request_id,
+               InventoryMovement.tenant_id == tenant_id)
+        .group_by(InventoryMovement.storage_location_id, InventoryMovement.product_id))).all()
+    placed_by_cell: dict[str, dict[str, int]] = defaultdict(dict)
+    for location_id, product_id, qty in placed_rows:
+        placed_by_cell[str(location_id)][str(product_id)] = max(0, int(qty))
+
+    contained: dict[str, int] = defaultdict(int)
+
+    def count_owned(nodes: list[dict[str, Any]], *, owned: bool = False) -> None:
+        for node in nodes:
+            if node["kind"] == "product":
+                if owned:
+                    contained[node["product_id"]] += int(node["qty"])
+            elif (node["kind"], node["id"]) in allowed_containers:
+                count_owned(node["children"], owned=True)
+
+    count_owned(data["unassigned"])
+    loose_remaining = {
+        product_id: max(0, qty - contained[product_id])
+        for product_id, qty in remaining_by_product.items()
+    }
+
+    def filter_nodes(
+        nodes: list[dict[str, Any]], *, in_container: bool = False, in_sorting: bool = True,
+    ) -> list[dict[str, Any]]:
         filtered: list[dict[str, Any]] = []
         for node in nodes:
             if node["kind"] == "product":
                 product_id = node["product_id"]
                 remaining = remaining_by_product.get(product_id, 0)
+                if in_sorting and not in_container:
+                    remaining = min(remaining, loose_remaining.get(product_id, 0))
                 quantity = min(int(node["qty"]), remaining)
                 if quantity > 0:
                     filtered.append({**node, "qty": quantity})
-                    remaining_by_product[product_id] = remaining - quantity
+                    remaining_by_product[product_id] -= quantity
+                    if in_sorting and not in_container:
+                        loose_remaining[product_id] -= quantity
                 continue
-
-            children = filter_nodes(node["children"])
             if (node["kind"], node["id"]) not in allowed_containers:
-                # Тара другого документа не должна становиться владельцем товара
-                # выбранной приёмки: относящиеся к документу строки поднимаем выше.
-                filtered.extend(children)
                 continue
-            filtered.append(
-                _normalize_container(
-                    {
-                        **node,
-                        "children": children,
-                    }
-                )
-            )
+            children = filter_nodes(node["children"], in_container=True, in_sorting=in_sorting)
+            filtered.append(_normalize_container({**node, "children": children}))
         return filtered
 
-    # Сначала расходуем документное количество в зоне сортировки. Это сохраняет
-    # только что принятую приёмку в «осталось поставить», даже если тот же SKU уже
-    # лежит в ячейках от прежних документов.
     filtered_unassigned = filter_nodes(data["unassigned"])
-    filtered_cells = [
-        {
-            **cell,
-            "children": filter_nodes(cell["children"]),
-        }
-        for cell in data["cells"]
-    ]
+    filtered_cells = []
+    for cell in data["cells"]:
+        remaining_by_product = placed_by_cell.get(cell["id"], {}).copy()
+        filtered_cells.append({
+            **cell, "children": filter_nodes(cell["children"], in_sorting=False),
+        })
+
     return {
         **data,
         "unassigned": filtered_unassigned,
@@ -1716,6 +1837,62 @@ async def _sorting_destination_kind(
     return found[0]
 
 
+async def _replayed_sorting_cargo_putaway(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    cargo_place_id: uuid.UUID,
+    destination_location_id: uuid.UUID,
+    operation_id: uuid.UUID,
+) -> int | None:
+    """Return a prior cargo placement only when this exact sorting intent owns it."""
+    from app.models.inventory_movement import InventoryMovement
+
+    cargo = await session.get(InboundIntakeCargoPlace, cargo_place_id)
+    if cargo is None or cargo.tenant_id != tenant_id or cargo.request_id != inbound_request_id:
+        raise WarehouseMapError("object_not_found")
+    rows = list((await session.scalars(select(InventoryMovement).where(
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.transfer_group_id == operation_id,
+    ))).all())
+    if not rows:
+        return None
+    outgoing = [row for row in rows if row.quantity_delta < 0]
+    if not outgoing or any(
+        row.container_kind != "cargo_place" or row.container_id != cargo_place_id
+        for row in outgoing
+    ):
+        raise WarehouseMapError("operation_conflict")
+    # The existing warehouse-map event is the one-per-container receipt for the
+    # requested cell. Inventory movements can rightly point only to the defect
+    # zone, so they cannot tell a defect-only replay which cell the operator chose.
+    event = await session.get(WarehouseMapEvent, operation_id)
+    expected_label = await _location_label(session, destination_location_id)
+    if event is None or event.to_label != expected_label:
+        raise WarehouseMapError("operation_conflict")
+    return sum(-int(row.quantity_delta) for row in outgoing)
+
+
+async def _pending_sorting_cargo_quantity(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    cargo_place_id: uuid.UUID,
+) -> int:
+    cargo = await session.get(InboundIntakeCargoPlace, cargo_place_id)
+    if cargo is None or cargo.tenant_id != tenant_id or cargo.request_id != inbound_request_id:
+        raise WarehouseMapError("object_not_found")
+    lines = list((await session.scalars(
+        select(InboundIntakeCargoPlaceLine).where(
+            InboundIntakeCargoPlaceLine.cargo_place_id == cargo_place_id,
+            InboundIntakeCargoPlaceLine.tenant_id == tenant_id,
+        ).with_for_update()
+    )).all())
+    return sum(int(line.quantity) - int(line.posted_qty) for line in lines)
+
+
 async def place_sorting_object(
     session: AsyncSession,
     *,
@@ -1727,6 +1904,8 @@ async def place_sorting_object(
     cell_id: uuid.UUID | None,
     to_id: uuid.UUID | None,
     quantity: int | None,
+    inbound_request_id: uuid.UUID | None = None,
+    operation_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     if cell_id is not None and to_id is not None:
         raise WarehouseMapError("destination_conflict")
@@ -1744,6 +1923,75 @@ async def place_sorting_object(
     else:
         destination_kind = "unassigned"
         destination_id = None
+    if inbound_request_id is not None:
+        from app.services import inbound_intake_service as intake
+        from app.services.inbound_sorting_service import apply_loose_putaway
+
+        request = await intake.get_request(
+            session, tenant_id, inbound_request_id, for_update=True
+        )
+        if request is None or request.warehouse_id != warehouse_id:
+            raise WarehouseMapError("inbound_request_not_found")
+        if (
+            kind == "cargo_place"
+            and cell_id is not None
+            and operation_id is not None
+        ):
+            replayed = await _replayed_sorting_cargo_putaway(
+                session,
+                tenant_id=tenant_id,
+                inbound_request_id=inbound_request_id,
+                cargo_place_id=object_id,
+                destination_location_id=cell_id,
+                operation_id=operation_id,
+            )
+            if replayed is not None:
+                return {"id": str(operation_id), "moved_qty": replayed}
+            if await _pending_sorting_cargo_quantity(
+                session,
+                tenant_id=tenant_id,
+                inbound_request_id=inbound_request_id,
+                cargo_place_id=object_id,
+            ) <= 0:
+                # This request still carries sorting context, so it is a stale
+                # placement intent rather than a new general warehouse move.
+                raise WarehouseMapError("nothing_to_move")
+            result = await move_object(
+                session,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                actor_user_id=actor_user_id,
+                kind=kind,
+                object_id=object_id,
+                to_kind=destination_kind,
+                to_id=destination_id,
+                quantity=quantity,
+                inbound_request_id=inbound_request_id,
+                transfer_group_id=operation_id,
+                event_id=operation_id,
+            )
+            return {"id": str(operation_id), "moved_qty": result["moved_qty"]}
+        if kind == "product" and cell_id is not None:
+            balance = await session.get(InventoryBalance, object_id)
+            if balance is None or balance.tenant_id != tenant_id:
+                raise WarehouseMapError("object_not_found")
+            source = await session.get(StorageLocation, balance.storage_location_id)
+            if source is None or source.warehouse_id != warehouse_id:
+                raise WarehouseMapError("object_not_found")
+            if source.code == SORTING_LOCATION_CODE and balance.container_id is None:
+                if quantity is None:
+                    raise WarehouseMapError("quantity_must_be_positive")
+                op_id = operation_id or uuid.uuid4()
+                try:
+                    await apply_loose_putaway(
+                        session, tenant_id, inbound_request_id,
+                        operation_id=op_id, product_id=balance.product_id,
+                        storage_location_id=cell_id, quantity=quantity,
+                        performer_id=actor_user_id,
+                    )
+                except intake.InboundIntakeError as exc:
+                    raise WarehouseMapError(exc.code) from exc
+                return {"id": str(op_id), "moved_qty": quantity}
     return await move_object(
         session,
         tenant_id=tenant_id,
@@ -1754,4 +2002,5 @@ async def place_sorting_object(
         to_kind=destination_kind,
         to_id=destination_id,
         quantity=quantity,
+        inbound_request_id=inbound_request_id,
     )

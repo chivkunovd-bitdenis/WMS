@@ -16,6 +16,7 @@ from app.models.document_event import (
     DOCUMENT_TYPE_INBOUND_INTAKE,
     EVENT_DATA_CHANGED,
     EVENT_DOCUMENT_CREATED,
+    DocumentEvent,
 )
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -27,7 +28,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE
+from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE, InventoryMovement
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
@@ -45,7 +46,11 @@ from app.services.catalog_service import (
     get_warehouse,
 )
 from app.services.defect_warehouse_service import get_or_create_defect_location
-from app.services.document_event_service import record_document_mutation
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event,
+    record_document_mutation,
+)
 from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
     assign_display_number_if_missing,
@@ -118,6 +123,15 @@ async def effective_actual_qty(
         status = res.scalar_one_or_none()
     if status in SORTING_STATUSES | DONE_STATUSES:
         return raw
+    if status == STATUS_DRAFT and line.actual_qty is None:
+        # Compatibility for an untouched FF draft authored before WMS-440.
+        # Never infer actual quantities for submitted/receiving/historical arrivals.
+        source = (await session.execute(
+            select(InboundIntakeRequest.operation_type, InboundIntakeRequest.created_by_seller_id)
+            .where(InboundIntakeRequest.id == request_id)
+        )).one_or_none()
+        if source is not None and source[0] == OPERATION_TYPE_INBOUND and source[1] is None:
+            raw = line.expected_qty
     container_total = await container_total_for_product(session, request_id, line.product_id)
     return raw + container_total
 
@@ -136,13 +150,14 @@ async def _sorting_source_allocations(
     quantity: int,
     preferred_container_kind: ContainerKind | None,
     preferred_container_id: uuid.UUID | None,
+    legacy_non_box_source: bool = False,
 ) -> list[tuple[ContainerKind | None, uuid.UUID | None, int]]:
     """Resolve only this intake line's physical sources, then legacy loose stock."""
     refs: list[tuple[ContainerKind, uuid.UUID]] = []
     if preferred_container_kind is not None and preferred_container_id is not None:
         refs.append((preferred_container_kind, preferred_container_id))
     else:
-        box_ids = list(
+        box_ids = [] if legacy_non_box_source else list(
             (
                 await session.scalars(
                     select(InboundIntakeBox.id)
@@ -199,6 +214,9 @@ async def _sorting_source_allocations(
         if remaining == 0:
             return allocations
 
+    if preferred_container_kind is not None and preferred_container_id is not None:
+        raise ValueError("insufficient stock")
+
     loose_available = int(
         await session.scalar(
             select(sa.func.coalesce(sa.func.sum(InventoryBalance.quantity), 0)).where(
@@ -235,6 +253,9 @@ async def _apply_line_putaway(
     source_container_id: uuid.UUID | None = None,
     destination_container_kind: ContainerKind | None = None,
     destination_container_id: uuid.UUID | None = None,
+    legacy_non_box_source: bool = False,
+    transfer_group_id: uuid.UUID | None = None,
+    update_cargo_posted: bool = False,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -255,6 +276,7 @@ async def _apply_line_putaway(
                 quantity=good_quantity,
                 preferred_container_kind=source_container_kind,
                 preferred_container_id=source_container_id,
+                legacy_non_box_source=legacy_non_box_source,
             )
             for from_kind, from_id, source_quantity in allocations:
                 await inv_svc.apply_putaway_from_sorting(
@@ -268,9 +290,15 @@ async def _apply_line_putaway(
                     actor_user_id=actor_user_id,
                     from_container_kind=from_kind,
                     from_container_id=from_id,
+                    transfer_group_id=transfer_group_id,
                     to_container_kind=destination_container_kind,
                     to_container_id=destination_container_id,
                 )
+                if update_cargo_posted and from_kind == "cargo_place":
+                    await session.execute(sa.update(InboundIntakeCargoPlaceLine).where(
+                        InboundIntakeCargoPlaceLine.cargo_place_id == from_id,
+                        InboundIntakeCargoPlaceLine.product_id == line.product_id,
+                    ).values(posted_qty=InboundIntakeCargoPlaceLine.posted_qty + source_quantity))
     if defective_quantity:
         defect_location = await get_or_create_defect_location(session, tenant_id)
         allocations = await _sorting_source_allocations(
@@ -281,6 +309,7 @@ async def _apply_line_putaway(
             quantity=defective_quantity,
             preferred_container_kind=source_container_kind,
             preferred_container_id=source_container_id,
+            legacy_non_box_source=legacy_non_box_source,
         )
         for from_kind, from_id, source_quantity in allocations:
             await inv_svc.apply_return_defect_putaway(
@@ -294,7 +323,13 @@ async def _apply_line_putaway(
                 actor_user_id=actor_user_id,
                 from_container_kind=from_kind,
                 from_container_id=from_id,
+                transfer_group_id=transfer_group_id,
             )
+            if update_cargo_posted and from_kind == "cargo_place":
+                await session.execute(sa.update(InboundIntakeCargoPlaceLine).where(
+                    InboundIntakeCargoPlaceLine.cargo_place_id == from_id,
+                    InboundIntakeCargoPlaceLine.product_id == line.product_id,
+                ).values(posted_qty=InboundIntakeCargoPlaceLine.posted_qty + source_quantity))
 
 
 async def sync_request_actuals_from_boxes(
@@ -362,6 +397,89 @@ async def record_container_mutation(
     )
 
 
+def is_ff_inbound(req: InboundIntakeRequest) -> bool:
+    return req.operation_type == OPERATION_TYPE_INBOUND and req.created_by_seller_id is None
+
+
+async def redistribute_ff_draft_container(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+    delta: int,
+) -> None:
+    """Move known FF units into/out of tare, accepting genuinely additional units.
+
+    Called before changing tare, under the same request row lock. Only drafts use
+    this interpretation; seller and historical receiving facts stay independent.
+    """
+    # WMS-473: the same one-number rule holds while the FF document is being received
+    # again after «Редактировать»; only sorting/done facts stay frozen.
+    if req.status in SORTING_STATUSES | DONE_STATUSES or not is_ff_inbound(req):
+        return
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is None:
+        raise InboundIntakeError("product_not_on_request")
+    containers_before = await container_total_for_product(session, req.id, product_id)
+    loose = line.actual_qty
+    if loose is None:
+        # An untouched draft authored before WMS-440 shows its entered number; after a
+        # legacy recount (submit/begin-receiving) nothing loose has been counted yet.
+        loose = max(0, line.expected_qty - containers_before) if req.status == STATUS_DRAFT else 0
+    line.actual_qty = max(0, loose - delta)
+    line.expected_qty = line.actual_qty + containers_before + delta
+    if line.expected_qty > 1_000_000_000:
+        raise InboundIntakeError("invalid_qty")
+
+
+async def _claim_intake_mutation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    mutation_id: uuid.UUID | None,
+    action: str,
+    payload: dict[str, object],
+) -> DocumentEvent | None:
+    """Durable retry receipt in the existing audit, atomic with the warehouse write.
+
+    The unique tenant/key index serializes even two simultaneous create attempts.
+    Unlike best-effort audit observers this write must fail with the transaction.
+    """
+    if mutation_id is None:
+        return None
+    # SQLite legacy transaction mode does not BEGIN on SELECT/SAVEPOINT.
+    # Establish the outer write transaction before the audit insert savepoint.
+    if session.bind is not None and session.bind.dialect.name == "sqlite":
+        await session.execute(
+            sa.update(DocumentEvent).where(sa.false()).values(idempotency_key=None)
+        )
+    key = f"inbound:{action}:{mutation_id}"
+    actor = current_document_event_actor()
+    inserted = await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=request_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=actor.source,
+        actor_user_id=actor.actor_user_id,
+        payload_json=payload,
+        idempotency_key=key,
+    )
+    if inserted:
+        return None
+    event = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == key,
+        )
+    )
+    assert event is not None
+    if event.payload_json != payload:
+        raise InboundIntakeError("mutation_payload_mismatch")
+    return event
+
+
 async def create_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -373,6 +491,7 @@ async def create_request(
     waybill_number: str | None = None,
     operation_type: str = OPERATION_TYPE_INBOUND,
     marketplace: str | None = None,
+    client_request_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
@@ -391,7 +510,32 @@ async def create_request(
             raise InboundIntakeError("seller_not_found")
     if created_by_seller_id is not None and created_by_seller_id != seller_id:
         raise InboundIntakeError("seller_not_found")
+    request_id = uuid.uuid4()
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=client_request_id,
+        action="create",
+        payload={
+            "warehouse_id": str(warehouse_id),
+            "seller_id": str(seller_id) if seller_id else None,
+            "created_by_seller_id": str(created_by_seller_id) if created_by_seller_id else None,
+            "planned_delivery_date": (
+                planned_delivery_date.isoformat() if planned_delivery_date else None
+            ),
+            "waybill_number": normalize_waybill_number(waybill_number),
+            "operation_type": normalized_operation_type,
+            "marketplace": normalized_marketplace,
+        },
+    )
+    if replay is not None:
+        existing = await get_request(session, tenant_id, replay.document_id)
+        if existing is None:
+            raise InboundIntakeError("mutation_result_deleted")
+        return existing
     req = InboundIntakeRequest(
+        id=request_id,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         status=STATUS_DRAFT,
@@ -509,6 +653,8 @@ async def get_request_for_receiving_scan(
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest | None:
     """Load only the request state and lines needed by a receiving barcode scan."""
+    # WMS-473: the row lock serializes two simultaneous scans of a product that is not
+    # on the document yet, so the second one sees the line the first one created.
     stmt = (
         select(InboundIntakeRequest)
         .where(
@@ -516,6 +662,8 @@ async def get_request_for_receiving_scan(
             InboundIntakeRequest.tenant_id == tenant_id,
         )
         .options(selectinload(InboundIntakeRequest.lines))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -537,8 +685,10 @@ async def _line_on_request(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     line_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> tuple[InboundIntakeRequest, InboundIntakeLine] | None:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=for_update)
     if req is None:
         return None
     for ln in req.lines:
@@ -573,17 +723,41 @@ async def add_line(
     expected_qty: int,
     storage_location_id: uuid.UUID | None = None,
     seller_product_owner_id: uuid.UUID | None = None,
+    mutation_id: uuid.UUID | None = None,
+    increment: bool = False,
 ) -> InboundIntakeLine:
-    if expected_qty < 1:
+    if expected_qty < 1 or expected_qty > 1_000_000_000:
         raise InboundIntakeError("invalid_qty")
     req = await get_request(
         session,
         tenant_id,
         request_id,
         seller_product_owner_id=seller_product_owner_id,
+        for_update=True,
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
+    if increment and mutation_id is None:
+        raise InboundIntakeError("mutation_id_required")
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="add",
+        payload={
+            "request_id": str(request_id),
+            "product_id": str(product_id),
+            "expected_qty": expected_qty,
+            "increment": increment,
+            "storage_location_id": str(storage_location_id) if storage_location_id else None,
+        },
+    )
+    if replay is not None:
+        existing = next((ln for ln in req.lines if ln.product_id == product_id), None)
+        if existing is None:
+            raise InboundIntakeError("mutation_result_deleted")
+        return existing
     if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     prod_stmt = select(Product).where(
@@ -611,14 +785,33 @@ async def add_line(
         if sorting_loc_svc.is_sorting_location(loc):
             raise InboundIntakeError("sorting_location_reserved")
         loc_id = storage_location_id
+    existing = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if existing is not None:
+        if not increment:
+            raise InboundIntakeError("duplicate_line")
+        total = existing.expected_qty + expected_qty
+        if total > 1_000_000_000:
+            raise InboundIntakeError("invalid_qty")
+        existing.expected_qty = total
+        if is_ff_inbound(req) or (
+            req.operation_type == OPERATION_TYPE_RETURN and req.marketplace in (None, "wildberries")
+        ):
+            containers = await container_total_for_product(session, req.id, product_id)
+            existing.actual_qty = total - containers if is_ff_inbound(req) else total
+        await session.commit()
+        await session.refresh(existing)
+        return existing
     line = InboundIntakeLine(
         request_id=request_id,
         product_id=product_id,
         expected_qty=expected_qty,
         actual_qty=(
             expected_qty
-            if req.operation_type == OPERATION_TYPE_RETURN
-            and req.marketplace in (None, "wildberries")
+            if is_ff_inbound(req)
+            or (
+                req.operation_type == OPERATION_TYPE_RETURN
+                and req.marketplace in (None, "wildberries")
+            )
             else None
         ),
         posted_qty=0,
@@ -642,26 +835,42 @@ async def update_line_expected_qty(
     *,
     expected_qty: int,
     seller_product_owner_id: uuid.UUID | None = None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeLine:
-    if expected_qty < 1:
+    if expected_qty < 1 or expected_qty > 1_000_000_000:
         raise InboundIntakeError("invalid_qty")
-    pair = await _line_on_request(session, tenant_id, request_id, line_id)
+    pair = await _line_on_request(session, tenant_id, request_id, line_id, for_update=True)
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
     if seller_product_owner_id is not None and req.seller_id != seller_product_owner_id:
         raise InboundIntakeError("line_not_found")
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="quantity",
+        payload={
+            "request_id": str(request_id),
+            "line_id": str(line_id),
+            "expected_qty": expected_qty,
+        },
+    )
+    if replay is not None:
+        return line
     if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
+    containers = await container_total_for_product(session, req.id, line.product_id)
+    if is_ff_inbound(req) and expected_qty < containers:
+        raise InboundIntakeError("actual_below_container_total")
     line.expected_qty = expected_qty
-    if (
-        req.operation_type == OPERATION_TYPE_RETURN
-        and req.marketplace in (None, "wildberries")
-        and line.posted_qty == 0
+    if is_ff_inbound(req) or (
+        req.operation_type == OPERATION_TYPE_RETURN and req.marketplace in (None, "wildberries")
     ):
-        line.actual_qty = expected_qty
+        line.actual_qty = expected_qty - containers if is_ff_inbound(req) else expected_qty
     await session.commit()
     await session.refresh(line)
     return line
@@ -675,7 +884,7 @@ async def delete_draft_line(
     *,
     seller_product_owner_id: uuid.UUID | None = None,
 ) -> None:
-    pair = await _line_on_request(session, tenant_id, request_id, line_id)
+    pair = await _line_on_request(session, tenant_id, request_id, line_id, for_update=True)
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
@@ -685,6 +894,16 @@ async def delete_draft_line(
         raise InboundIntakeError("not_draft")
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
+    if is_ff_inbound(req):
+        # Removing the SKU removes its composition too, not the physical packages.
+        for box in req.boxes:
+            for contained in box.lines:
+                if contained.product_id == line.product_id:
+                    await session.delete(contained)
+        for place in req.cargo_places:
+            for cargo_line in place.lines:
+                if cargo_line.product_id == line.product_id:
+                    await session.delete(cargo_line)
     await session.delete(line)
     await session.commit()
 
@@ -859,6 +1078,15 @@ async def set_line_storage_location(
     return line
 
 
+def _start_legacy_ff_recount(req: InboundIntakeRequest) -> None:
+    # Explicit legacy clients still start a fresh recount through submit/begin.
+    # Draft quantities are a total, not extra loose units beside that recount.
+    # Keep tare composition and expected quantities; direct completion bypasses this.
+    if req.status == STATUS_DRAFT and is_ff_inbound(req):
+        for line in req.lines:
+            line.actual_qty = None
+
+
 async def submit_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -871,6 +1099,7 @@ async def submit_request(
         tenant_id,
         request_id,
         seller_product_owner_id=seller_product_owner_id,
+        for_update=True,
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -880,6 +1109,7 @@ async def submit_request(
         raise InboundIntakeError("submit_empty")
     if req.planned_box_count is None or req.planned_box_count < 1:
         raise InboundIntakeError("planned_boxes_missing")
+    _start_legacy_ff_recount(req)
     req.status = STATUS_SUBMITTED
     req.submitted_at = datetime.now(UTC)
     await session.commit()
@@ -976,7 +1206,7 @@ async def begin_receiving(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_DRAFT:
@@ -984,6 +1214,7 @@ async def begin_receiving(
             raise InboundIntakeError("not_submitted")
         if len(req.lines) == 0:
             raise InboundIntakeError("submit_empty")
+        _start_legacy_ff_recount(req)
         req.status = STATUS_RECEIVING
         req.primary_accepted_at = datetime.now(UTC)
         await session.commit()
@@ -1069,11 +1300,22 @@ async def _request_barcode_index(
     req: InboundIntakeRequest,
     *,
     include_seller_catalog: bool = False,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     product_ids = {ln.product_id for ln in req.lines}
     if not product_ids and not include_seller_catalog:
         return {}
-    idx: dict[str, uuid.UUID] = {}
+    idx: dict[str, uuid.UUID | None] = {}
+
+    def add_alias(raw: object, product_id: uuid.UUID) -> None:
+        key = str(raw or "").strip()
+        if not key:
+            return
+        for candidate in {key, key.upper()}:
+            if candidate not in idx:
+                idx[candidate] = product_id
+            elif idx[candidate] != product_id:
+                idx[candidate] = None
+
     if product_ids:
         stmt = select(Product).where(
             Product.tenant_id == tenant_id,
@@ -1082,9 +1324,7 @@ async def _request_barcode_index(
         res = await session.execute(stmt)
         products = list(res.scalars().all())
         for p in products:
-            key = p.sku_code.strip()
-            if key:
-                idx[key] = p.id
+            add_alias(p.sku_code, p.id)
     if req.seller_id is not None:
         rows = await list_seller_wb_catalog_rows(
             session,
@@ -1095,20 +1335,13 @@ async def _request_barcode_index(
         for row in rows:
             if not include_seller_catalog and row.product_id not in product_ids:
                 continue
-            sku_key = row.sku_code.strip()
-            if sku_key:
-                idx[sku_key] = row.product_id
-                idx[sku_key.upper()] = row.product_id
+            add_alias(row.sku_code, row.product_id)
             for b in row.wb_barcodes:
-                key = str(b).strip()
-                if key:
-                    idx[key] = row.product_id
-                    idx[key.upper()] = row.product_id
-            if row.wb_primary_barcode:
-                k = row.wb_primary_barcode.strip()
-                if k:
-                    idx[k] = row.product_id
-                    idx[k.upper()] = row.product_id
+                add_alias(b, row.product_id)
+            add_alias(row.wb_primary_barcode, row.product_id)
+            for binding in row.marketplace_bindings:
+                for raw in binding.get("external_barcodes", []):
+                    add_alias(raw, row.product_id)
     return idx
 
 
@@ -1116,25 +1349,135 @@ async def _seller_catalog_barcode_index(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-) -> dict[str, uuid.UUID]:
+) -> dict[str, uuid.UUID | None]:
     rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
-    idx: dict[str, uuid.UUID] = {}
+    idx: dict[str, uuid.UUID | None] = {}
+
+    def add_alias(raw: object, product_id: uuid.UUID) -> None:
+        key = str(raw or "").strip()
+        if not key:
+            return
+        for candidate in {key, key.upper()}:
+            if candidate not in idx:
+                idx[candidate] = product_id
+            elif idx[candidate] != product_id:
+                idx[candidate] = None
+
     for row in rows:
-        key = row.sku_code.strip()
-        if key:
-            idx[key] = row.product_id
-            idx[key.upper()] = row.product_id
+        add_alias(row.sku_code, row.product_id)
         for b in row.wb_barcodes:
-            k = str(b).strip()
-            if k:
-                idx[k] = row.product_id
-                idx[k.upper()] = row.product_id
-        if row.wb_primary_barcode:
-            k2 = row.wb_primary_barcode.strip()
-            if k2:
-                idx[k2] = row.product_id
-                idx[k2.upper()] = row.product_id
+            add_alias(b, row.product_id)
+        add_alias(row.wb_primary_barcode, row.product_id)
+        for binding in row.marketplace_bindings:
+            for raw in binding.get("external_barcodes", []):
+                add_alias(raw, row.product_id)
     return idx
+
+
+def _index_lookup(
+    idx: dict[str, uuid.UUID | None], raw: str
+) -> tuple[uuid.UUID | None, bool]:
+    """Return (product_id, known): known=True with product_id=None means ambiguous."""
+    if raw in idx:
+        return idx[raw], True
+    upper = raw.upper()
+    if upper in idx:
+        return idx[upper], True
+    return None, False
+
+
+async def resolve_scanned_product_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+    raw: str,
+) -> uuid.UUID | None:
+    """WMS-473: one barcode resolution for loose, box and cargo-place scans.
+
+    Lines of the document first (the catalogue is read only for their products);
+    on a miss an ordinary inbound document falls back to the whole seller catalogue,
+    so a product the seller has but the document does not gets its line created by
+    the caller. Returns None only for a return document, whose historical refusal
+    the caller keeps: returns are not part of this change.
+    """
+    idx = await _request_barcode_index(session, tenant_id, req, include_seller_catalog=False)
+    product_id, known = _index_lookup(idx, raw)
+    if product_id is not None:
+        return product_id
+    if known:
+        raise InboundIntakeError("barcode_ambiguous")
+    if req.operation_type != OPERATION_TYPE_INBOUND:
+        return None
+    if req.seller_id is None:
+        raise InboundIntakeError("product_not_in_seller_catalog")
+    catalog = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
+    product_id, known = _index_lookup(catalog, raw)
+    if product_id is not None:
+        return product_id
+    if known:
+        raise InboundIntakeError("barcode_ambiguous")
+    raise InboundIntakeError("product_not_in_seller_catalog")
+
+
+def scan_creates_lines(req: InboundIntakeRequest) -> bool:
+    """WMS-473 adds document lines from scans of ordinary inbound documents only."""
+    return req.operation_type == OPERATION_TYPE_INBOUND
+
+
+async def ensure_request_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+    *,
+    create_missing: bool = True,
+) -> InboundIntakeLine:
+    """Return the document line of the product, creating it when allowed.
+
+    Creation is what the «Добавить товар» button did: expected 0, nothing accepted
+    yet, marked as added by the fulfilment centre when the seller wrote the plan.
+    Must run under the request row lock so two simultaneous scans share one line.
+    """
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is not None:
+        return line
+    if not create_missing:
+        raise InboundIntakeError("product_not_on_request")
+    product = (
+        await session.execute(
+            select(Product).where(Product.id == product_id, Product.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if product is None:
+        raise InboundIntakeError("product_not_found")
+    if product.seller_id is None:
+        raise InboundIntakeError("product_seller_mismatch")
+    if req.seller_id is None:
+        req.seller_id = product.seller_id
+    elif product.seller_id != req.seller_id:
+        raise InboundIntakeError("product_seller_mismatch")
+    line = InboundIntakeLine(
+        product_id=product_id,
+        expected_qty=0,
+        actual_qty=0,
+        posted_qty=0,
+        added_by_fulfillment=not is_ff_inbound(req),
+    )
+    req.lines.append(line)
+    await session.flush()
+    return line
+
+
+async def sync_ff_line_total(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+    line: InboundIntakeLine,
+) -> None:
+    """FF document keeps one number: expected_qty is the accepted total (loose + tare)."""
+    if not is_ff_inbound(req) or req.status in SORTING_STATUSES | DONE_STATUSES:
+        return
+    containers = await container_total_for_product(session, req.id, line.product_id)
+    line.expected_qty = _loose_qty(line) + containers
 
 
 async def add_or_increment_received_product(
@@ -1157,37 +1500,14 @@ async def add_or_increment_received_product(
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
 
-    prod_stmt = select(Product).where(
-        Product.id == product_id,
-        Product.tenant_id == tenant_id,
-    )
-    prod_res = await session.execute(prod_stmt)
-    product = prod_res.scalar_one_or_none()
-    if product is None:
-        raise InboundIntakeError("product_not_found")
-    if product.seller_id is None:
-        raise InboundIntakeError("product_seller_mismatch")
-    if req.seller_id is None:
-        req.seller_id = product.seller_id
-    elif product.seller_id != req.seller_id:
-        raise InboundIntakeError("product_seller_mismatch")
-    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
-    if line is None:
-        line = InboundIntakeLine(
-            request_id=request_id,
-            product_id=product_id,
-            expected_qty=0,
-            actual_qty=actual_qty,
-            posted_qty=0,
-            added_by_fulfillment=True,
-        )
-        session.add(line)
-    else:
-        new_loose = _loose_qty(line) + actual_qty
-        container_total = await container_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + container_total:
-            raise InboundIntakeError("actual_below_posted")
-        line.actual_qty = new_loose
+    # The manual «Добавить товар» path creates the line for any operation type, as before.
+    line = await ensure_request_line(session, tenant_id, req, product_id)
+    new_loose = _loose_qty(line) + actual_qty
+    container_total = await container_total_for_product(session, request_id, line.product_id)
+    if line.posted_qty > new_loose + container_total:
+        raise InboundIntakeError("actual_below_posted")
+    line.actual_qty = new_loose
+    await sync_ff_line_total(session, req, line)
     await session.commit()
     await session.refresh(line)
     return line
@@ -1205,43 +1525,6 @@ async def scan_barcode_to_loose_intake(
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    if product_id_hint is not None:
-        req_stmt = (
-            select(InboundIntakeRequest)
-            .where(
-                InboundIntakeRequest.id == request_id,
-                InboundIntakeRequest.tenant_id == tenant_id,
-            )
-            .with_for_update()
-        )
-        req = (await session.execute(req_stmt)).scalar_one_or_none()
-        if req is None:
-            raise InboundIntakeError("request_not_found")
-        if req.status == STATUS_SUBMITTED:
-            req.status = STATUS_RECEIVING
-            req.primary_accepted_at = datetime.now(UTC)
-        elif req.status not in RECEIVING_STATUSES:
-            raise InboundIntakeError("not_verifying")
-
-        line_stmt = (
-            select(InboundIntakeLine)
-            .where(
-                InboundIntakeLine.request_id == request_id,
-                InboundIntakeLine.product_id == product_id_hint,
-            )
-            .with_for_update()
-        )
-        line = (await session.execute(line_stmt)).scalar_one_or_none()
-        if line is None:
-            raise InboundIntakeError("product_not_on_request")
-        new_loose = _loose_qty(line) + 1
-        container_total = await container_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + container_total:
-            raise InboundIntakeError("actual_below_posted")
-        line.actual_qty = new_loose
-        await session.commit()
-        await session.refresh(line)
-        return line
     req = await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -1250,20 +1533,19 @@ async def scan_barcode_to_loose_intake(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    idx = await _request_barcode_index(
-        session,
-        tenant_id,
-        req,
-        include_seller_catalog=False,
-    )
-    product_id = idx.get(raw) or idx.get(raw.upper())
+    product_id = product_id_hint
     if product_id is None:
-        raise InboundIntakeError("product_not_on_request")
+        product_id = await resolve_scanned_product_id(session, tenant_id, req, raw)
+        if product_id is None:
+            raise InboundIntakeError("product_not_on_request")
+    line = await ensure_request_line(
+        session, tenant_id, req, product_id, create_missing=scan_creates_lines(req)
+    )
     return await add_or_increment_received_product(
         session,
         tenant_id,
         request_id,
-        product_id=product_id,
+        product_id=line.product_id,
         actual_qty=1,
         request=req,
     )
@@ -1279,7 +1561,7 @@ async def set_line_actual_qty(
 ) -> InboundIntakeLine:
     if actual_qty < 0:
         raise InboundIntakeError("invalid_qty")
-    pair = await _line_on_request(session, tenant_id, request_id, line_id)
+    pair = await _line_on_request(session, tenant_id, request_id, line_id, for_update=True)
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
@@ -1292,6 +1574,7 @@ async def set_line_actual_qty(
     if line.posted_qty > actual_qty + container_total:
         raise InboundIntakeError("actual_below_posted")
     line.actual_qty = actual_qty
+    await sync_ff_line_total(session, req, line)
     await session.commit()
     await session.refresh(line)
     return line
@@ -1335,19 +1618,50 @@ async def complete_receiving(
     request_id: uuid.UUID,
     *,
     actor_user_id: uuid.UUID | None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     # Serialize completion before reading status, including an already-loaded ORM instance.
     req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status not in RECEIVING_STATUSES:
+    # A client that did not receive the response must replay this exact attempt,
+    # not turn it into a new completion after the operator has reopened the document.
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="complete",
+        payload={"request_id": str(request_id)},
+    )
+    if replay is not None:
+        return req
+    if req.status in SORTING_STATUSES | DONE_STATUSES:
+        # This UUID is a successful completion response too. Commit its existing
+        # audit receipt before the optional marking scheduler can roll back.
+        await session.commit()
+        await session.refresh(req)
+        return req
+    if req.status == STATUS_DRAFT and is_ff_inbound(req):
+        if not req.lines:
+            raise InboundIntakeError("submit_empty")
+        # Only an editable FF draft may adopt the quantity entered before this release.
+        for line in req.lines:
+            if line.actual_qty is None:
+                line.actual_qty = line.expected_qty
+        req.primary_accepted_at = datetime.now(UTC)
+    elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
+    ff_document = is_ff_inbound(req)
     for line in req.lines:
         effective = await effective_actual_qty(session, req.id, line, request_status=req.status)
         line.actual_qty = effective
-        if effective != line.expected_qty:
+        if ff_document:
+            # WMS-473: the FF document has no plan to disagree with — one number.
+            line.expected_qty = effective
+        elif effective != line.expected_qty:
             line_discrepancy = True
     live_box_discrepancy = boxes_discrepancy(req.planned_box_count, len(req.boxes))
     req.boxes_discrepancy = live_box_discrepancy
@@ -1445,6 +1759,7 @@ async def receive_line(
     quantity: int,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
+    await get_request(session, tenant_id, request_id, for_update=True)
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
         raise InboundIntakeError("line_not_found")
@@ -1494,7 +1809,7 @@ async def post_all_remaining(
     *,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_DONE:
@@ -1630,7 +1945,7 @@ async def _get_box_for_putaway(
     if locked_request_id is None:
         raise InboundIntakeError("request_not_found")
 
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
@@ -1746,16 +2061,6 @@ async def apply_box_putaway(
             raise InboundIntakeError("product_not_accepted")
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
-
-        await _top_up_sorting_for_putaway(
-            session,
-            tenant_id,
-            sorting_loc.id,
-            line,
-            product_id,
-            qty,
-            actor_user_id=performer_id,
-        )
 
         # FOR UPDATE защищает PostgreSQL. Условные UPDATE ниже дополнительно
         # делают операцию идемпотентной в SQLite-тестах и при повторе запроса:
@@ -1897,6 +2202,75 @@ async def list_distribution_lines(
     return list(res.scalars().all())
 
 
+async def _distribution_posted_quantities(
+    session: AsyncSession, req: InboundIntakeRequest,
+    rows: list[InboundIntakeDistributionLine],
+) -> dict[uuid.UUID, int]:
+    grouped: dict[uuid.UUID | None, int] = {
+        key: int(qty) for key, qty in (await session.execute(select(
+        InventoryMovement.transfer_group_id, -sa.func.sum(InventoryMovement.quantity_delta),
+    ).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+        InventoryMovement.quantity_delta < 0,
+    ).group_by(InventoryMovement.transfer_group_id))).all()}
+    # Recovery rows refer directly to an existing positive movement's ID.
+    for movement_id, qty in (await session.execute(select(
+        InventoryMovement.id, InventoryMovement.quantity_delta,
+    ).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+        InventoryMovement.quantity_delta > 0,
+    ))).all():
+        grouped[movement_id] = int(qty)
+    budgets: dict[tuple[uuid.UUID | None, uuid.UUID], int] = {}
+    for line in req.lines:
+        boxed = sum(row.posted_qty for box in req.boxes for row in box.lines
+                    if row.product_id == line.product_id)
+        budgets[(None, line.product_id)] = max(0, line.posted_qty - boxed)
+    for box in req.boxes:
+        for box_line in box.lines:
+            budgets[(box.id, box_line.product_id)] = box_line.posted_qty
+    posted: dict[uuid.UUID, int] = {}
+    for row in rows:
+        qty = min(row.quantity, int(grouped.get(row.id, 0)))
+        if qty:
+            posted[row.id] = qty
+            key = (row.box_id, row.product_id)
+            budgets[key] = max(0, budgets.get(key, 0) - qty)
+    # Compatibility with the first mobile implementation: receipt and movements
+    # share the database transaction timestamp, but used separate random group IDs.
+    # Preserve that receipt before considering older drafts for the legacy budget.
+    movement_rows = list((await session.scalars(select(InventoryMovement).where(
+        InventoryMovement.inbound_intake_line_id.in_([line.id for line in req.lines]),
+    ))).all())
+    for row in rows:
+        if row.id in posted:
+            continue
+        same_transaction = [movement for movement in movement_rows
+                            if movement.product_id == row.product_id
+                            and movement.created_at == row.created_at]
+        withdrawn = sum(-movement.quantity_delta for movement in same_transaction
+                        if movement.quantity_delta < 0
+                        and movement.movement_type == "stock_transfer_out")
+        matching_target = any(movement.quantity_delta > 0
+                              and movement.storage_location_id == row.storage_location_id
+                              for movement in same_transaction)
+        key = (row.box_id, row.product_id)
+        if matching_target and withdrawn >= row.quantity and budgets.get(key, 0) >= row.quantity:
+            posted[row.id] = row.quantity
+            budgets[key] -= row.quantity
+    # Older legacy drafts had no operation key. Preserve their conducted part
+    # in stable order; newly created receipts are matched exactly above.
+    for row in sorted(rows, key=lambda row: (row.created_at, str(row.id))):
+        if row.id in posted:
+            continue
+        key = (row.box_id, row.product_id)
+        qty = min(row.quantity, budgets.get(key, 0))
+        if qty:
+            posted[row.id] = qty
+            budgets[key] -= qty
+    return posted
+
+
 async def scan_distribution_barcode(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1908,7 +2282,7 @@ async def scan_distribution_barcode(
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
@@ -1944,8 +2318,10 @@ async def scan_distribution_barcode(
         req,
         include_seller_catalog=False,
     )
-    product_id = idx.get(raw) or idx.get(raw.upper())
+    product_id = idx.get(raw) if raw in idx else idx.get(raw.upper())
     if product_id is None:
+        if raw in idx or raw.upper() in idx:
+            raise InboundIntakeError("barcode_ambiguous")
         raise InboundIntakeError("scan_not_found")
     if active_storage_location_id is None:
         raise InboundIntakeError("active_location_required")
@@ -1970,6 +2346,8 @@ async def scan_distribution_barcode(
     )
     res = await session.execute(stmt)
     rows = list(res.scalars().all())
+
+    posted_rows = await _distribution_posted_quantities(session, req, rows)
 
     current_total = sum(int(r.quantity) for r in rows if r.product_id == product_id)
     next_total = max(int(line.posted_qty), current_total) + 1
@@ -2004,6 +2382,7 @@ async def scan_distribution_barcode(
             if r.product_id == product_id
             and r.storage_location_id == active_loc.id
             and r.box_id == source_box_id
+            and r.id not in posted_rows
         ),
         None,
     )
@@ -2041,7 +2420,7 @@ async def replace_distribution_lines(
 
     lines: список (box_id | None, product_id, storage_location_id, quantity).
     """
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
@@ -2050,40 +2429,35 @@ async def replace_distribution_lines(
         raise InboundIntakeError("not_distributable")
 
     box_lines_by_key = _box_lines_by_key(req)
-
-    # Whole-box putaway is already committed when the operator later saves the
-    # loose draft. Keep only the part of existing box rows that is backed by
-    # box_line.posted_qty; discard old, unapplied box drafts from the former UI.
-    existing_stmt = (
-        select(InboundIntakeDistributionLine)
-        .where(InboundIntakeDistributionLine.request_id == request_id)
-        .order_by(
-            InboundIntakeDistributionLine.created_at.desc(),
-            InboundIntakeDistributionLine.id.desc(),
-        )
-    )
-    existing_rows = list((await session.execute(existing_stmt)).scalars().all())
-    preserved_box_rows: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, int]] = []
-    preserved_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
-    for row in existing_rows:
-        if row.box_id is None:
-            continue
-        key = (row.box_id, row.product_id)
-        box_line = box_lines_by_key.get(key)
-        if box_line is None:
-            continue
-        already_preserved = preserved_by_key.get(key, 0)
-        keep_qty = min(int(row.quantity), max(0, int(box_line.posted_qty) - already_preserved))
-        if keep_qty < 1:
-            continue
-        preserved_box_rows.append((row.box_id, row.product_id, row.storage_location_id, keep_qty))
-        preserved_by_key[key] = already_preserved + keep_qty
+    existing_rows = list((await session.scalars(select(InboundIntakeDistributionLine).where(
+        InboundIntakeDistributionLine.request_id == request_id,
+    ))).all())
+    posted = await _distribution_posted_quantities(session, req, existing_rows)
+    preserved = [row for row in existing_rows if posted.get(row.id, 0)]
+    preserved_by_key: dict[tuple[uuid.UUID | None, uuid.UUID, uuid.UUID], int] = {}
+    for row in preserved:
+        key = (row.box_id, row.product_id, row.storage_location_id)
+        preserved_by_key[key] = preserved_by_key.get(key, 0) + posted[row.id]
+    # PUT is a snapshot of assignments. Echoes of conducted rows are subtracted;
+    # omitted conducted rows remain immutable, while the pending draft is replaced.
+    normalized = []
+    for box_id, product_id, storage_location_id, qty in lines:
+        if qty < 1:
+            raise InboundIntakeError("invalid_qty")
+        key = (box_id, product_id, storage_location_id)
+        echoed = min(qty, preserved_by_key.get(key, 0))
+        preserved_by_key[key] = preserved_by_key.get(key, 0) - echoed
+        if qty > echoed:
+            normalized.append((box_id, product_id, storage_location_id, qty - echoed))
+    lines = normalized
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
         accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
 
     sum_by_product: dict[uuid.UUID, int] = {}
+    for row in preserved:
+        sum_by_product[row.product_id] = sum_by_product.get(row.product_id, 0) + posted[row.id]
     sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
     sum_loose_by_product: dict[uuid.UUID, int] = {}
     for box_id, product_id, storage_location_id, qty in lines:
@@ -2119,12 +2493,12 @@ async def replace_distribution_lines(
             raise InboundIntakeError("qty_exceeds_accepted")
         sum_by_product[product_id] = next_sum
 
-    await session.execute(
-        sa.delete(InboundIntakeDistributionLine).where(
-            InboundIntakeDistributionLine.request_id == request_id
-        )
-    )
-    for box_id, product_id, storage_location_id, qty in [*preserved_box_rows, *lines]:
+    for row in existing_rows:
+        if row.id in posted:
+            row.quantity = posted[row.id]
+        else:
+            await session.delete(row)
+    for box_id, product_id, storage_location_id, qty in lines:
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
@@ -2145,7 +2519,7 @@ async def complete_distribution(
     *,
     performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
@@ -2213,42 +2587,10 @@ async def complete_distribution(
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-    initial_box_posted_by_key = {
-        key: int(box_line.posted_qty) for key, box_line in box_lines_by_key.items()
-    }
-    initial_box_posted_by_product: dict[uuid.UUID, int] = {}
-    for (_box_id, product_id), posted_qty in initial_box_posted_by_key.items():
-        initial_box_posted_by_product[product_id] = (
-            initial_box_posted_by_product.get(product_id, 0) + posted_qty
-        )
-    initial_loose_posted_by_product = {
-        product_id: max(
-            0,
-            int(line.posted_qty) - initial_box_posted_by_product.get(product_id, 0),
-        )
-        for product_id, line in lines_by_product.items()
-    }
-    distributed_loose_by_product: dict[uuid.UUID, int] = {}
-    distributed_box_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    posted_rows = await _distribution_posted_quantities(session, req, rows)
     for r in rows:
         line = lines_by_product[r.product_id]
-        if r.box_id is None:
-            distributed_before = distributed_loose_by_product.get(r.product_id, 0)
-            distributed_after = distributed_before + r.quantity
-            distributed_loose_by_product[r.product_id] = distributed_after
-            quantity_to_post = min(
-                r.quantity,
-                max(0, distributed_after - initial_loose_posted_by_product.get(r.product_id, 0)),
-            )
-        else:
-            key = (r.box_id, r.product_id)
-            distributed_before = distributed_box_by_key.get(key, 0)
-            distributed_after = distributed_before + r.quantity
-            distributed_box_by_key[key] = distributed_after
-            quantity_to_post = min(
-                r.quantity,
-                max(0, distributed_after - initial_box_posted_by_key.get(key, 0)),
-            )
+        quantity_to_post = r.quantity - posted_rows.get(r.id, 0)
         if quantity_to_post < 1:
             continue
         if r.box_id is not None:
@@ -2267,6 +2609,9 @@ async def complete_distribution(
                 actor_user_id=performer_id,
                 source_container_kind="box" if r.box_id is not None else None,
                 source_container_id=r.box_id,
+                legacy_non_box_source=r.box_id is None,
+                update_cargo_posted=True,
+                transfer_group_id=r.id,
             )
         except ValueError as exc:
             await session.rollback()
@@ -2294,7 +2639,7 @@ async def reopen_receiving(
     actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     """Return request to receiving; reverse sorting-zone stock and clear distribution."""
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:

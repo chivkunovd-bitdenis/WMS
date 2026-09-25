@@ -29,6 +29,7 @@ from app.services.fbs_stock_rule_service import (
     product_has_rule_predicate,
     publish_amounts_for_binding,
 )
+from app.services.fbs_zero_refresh_service import schedule_binding_zero_refresh
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH = "nothing_to_publish"
 
 SYNC_LEASE_DURATION = timedelta(minutes=5)
+ZERO_REFRESH_INTERVAL = timedelta(minutes=10)
 DEFAULT_RATE_INTERVAL_SECONDS = 0.2
 MAX_429_RETRY_AFTER_SECONDS = 60.0
 
@@ -100,6 +102,8 @@ class FbsStockSyncResult:
     errors: int = 0
     skipped_busy: bool = False
     error_code: str | None = None
+    retryable_errors: int = 0
+    retry_after_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +112,7 @@ class _PublishTarget:
     amount: int
     product_id: uuid.UUID | None
     is_explicit_zero: bool = False
+    refresh_zero: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +214,8 @@ async def _resolve_publish_quantities(
     session: AsyncSession,
     binding: FbsWarehouseBinding,
     products: list[Product],
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Вернуть количества, рассчитанные только по правилу доли свободного остатка.
 
@@ -217,7 +224,9 @@ async def _resolve_publish_quantities(
     числу. Ошибка расчёта также должна подняться в вызывающий код, чтобы привязка
     получила статус ошибки и публикация не состоялась.
     """
-    return await publish_amounts_for_binding(session, binding, products)
+    return await publish_amounts_for_binding(
+        session, binding, products, refresh_zero_product_ids=refresh_zero_product_ids
+    )
 
 
 def _build_publish_plan(
@@ -225,6 +234,8 @@ def _build_publish_plan(
     publish_quantities: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
     product_block_errors: dict[uuid.UUID, str] | None = None,
+    *,
+    refresh_zero_product_ids: set[uuid.UUID] | None = None,
 ) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
     """Return safe publish targets, blocked targets, missing chrt ids, and conflicts.
 
@@ -276,24 +287,35 @@ def _build_publish_plan(
         amount = int(publish_quantities[product.id])
         amount = max(amount, 0)
         if amount == 0:
-            # WMS-376. Ноль отдаём ОДИН РАЗ — на переходе «публиковали ->
-            # перестали», а не каждый цикл по состоянию «выключено». Признак
-            # перехода уже есть и хранить его отдельно не нужно: пока в кабинете
-            # стоит наше положительное число, ноль имеет смысл; как только он
-            # подтверждён, строка перестаёт удовлетворять условию и замолкает
-            # сама. Раньше этой проверки не было, и снятая галка «Передавать
-            # остаток» гнала ноль каждые пять минут бесконечно.
             item = existing_items.get(chrt_id)
-            confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
-            if confirmed <= 0:
-                continue
-        # В результирующий словарь попадают только товары с настроенной долей,
-        # поэтому amount == 0 здесь означает осознанную нулевую долю.
+            if product.id in (refresh_zero_product_ids or set()):
+                # The item timestamp only moves when an actual publication or
+                # error changes its state; intermediate empty passes cannot
+                # postpone the ten-minute refresh. Errors retry next cycle.
+                if (
+                    item is not None
+                    and item.status == STOCK_SYNC_STATUS_CONFIRMED
+                    and item.last_target_amount == 0
+                    and item.last_confirmed_amount == 0
+                    and item.updated_at is not None
+                ):
+                    updated_at = item.updated_at
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=UTC)
+                    if _utcnow() < updated_at + ZERO_REFRESH_INTERVAL:
+                        continue
+            else:
+                # WMS-376: disabled/unmanaged rules keep their one-time
+                # transition zero, without entering the periodic refresh.
+                confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
+                if confirmed <= 0:
+                    continue
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
             product_id=product.id,
             is_explicit_zero=(amount == 0),
+            refresh_zero=amount == 0 and product.id in (refresh_zero_product_ids or set()),
         )
 
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
@@ -469,8 +491,8 @@ async def _put_batch_with_retry(
     batch: list[MarketplaceStockAmount],
     rate_limiter: StockSyncRateLimiter,
     marketplace_api_base: str | None,
-) -> str | None:
-    """PUT one batch; on 429 retry once after rate limiter wait. Returns error code or None."""
+) -> _PutBatchOutcome:
+    """PUT one batch; on 429 retry once after the provider's requested delay."""
     retried_429 = False
     while True:
         outcome = await _put_stocks_batch(
@@ -481,13 +503,22 @@ async def _put_batch_with_retry(
             marketplace_api_base=marketplace_api_base,
         )
         if outcome.error_code is None:
-            return None
+            return outcome
         if outcome.status_code == 429 and not retried_429:
             retried_429 = True
             wait_seconds = outcome.retry_after_seconds or DEFAULT_RATE_INTERVAL_SECONDS
             await rate_limiter.wait(wait_seconds)
             continue
-        return outcome.error_code
+        return outcome
+
+
+def _is_retryable_wb_failure(*, status_code: int | None, error_code: str) -> bool:
+    return (
+        status_code is None
+        or status_code == 429
+        or status_code >= 500
+        or error_code == ERROR_READBACK_MISMATCH
+    )
 
 
 def _compare_readback(
@@ -511,22 +542,24 @@ async def _publish_batches(
     api_token: str,
     rate_limiter: StockSyncRateLimiter,
     marketplace_api_base: str | None,
-) -> tuple[int, int, str | None]:
-    """Returns (confirmed_count, error_count, first_error_code)."""
+) -> tuple[int, int, str | None, int, float]:
+    """Return confirmations, errors, first code and retry metadata."""
     if not targets:
-        return 0, 0, None
+        return 0, 0, None, 0, 0.0
 
     amounts = [MarketplaceStockAmount(chrt_id=t.chrt_id, amount=t.amount) for t in targets]
     batches = split_marketplace_stocks_batches(amounts)
     confirmed = 0
     errors = 0
     first_error_code: str | None = None
+    retryable_errors = 0
+    retry_after_seconds = 0.0
 
     for batch_index, batch in enumerate(batches):
         if batch_index > 0:
             await rate_limiter.wait(DEFAULT_RATE_INTERVAL_SECONDS)
 
-        put_error = await _put_batch_with_retry(
+        outcome = await _put_batch_with_retry(
             http_client,
             api_token=api_token,
             warehouse_id=int(binding.wb_warehouse_id),
@@ -534,14 +567,28 @@ async def _publish_batches(
             rate_limiter=rate_limiter,
             marketplace_api_base=marketplace_api_base,
         )
-        if put_error is not None:
+        # An absolute zero may have reached WB even if its response was lost.
+        # Read it back before another attempt, and only confirm an observed zero.
+        uncertain_zero = outcome.error_code == "wb_transport_error" and any(
+            entry.amount == 0 for entry in batch
+        )
+        if outcome.error_code is not None and not uncertain_zero:
             if first_error_code is None:
-                first_error_code = put_error
+                first_error_code = outcome.error_code
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
-                item.last_error_code = put_error
+                item.last_error_code = outcome.error_code
             errors += len(batch)
+            if _is_retryable_wb_failure(
+                status_code=outcome.status_code,
+                error_code=outcome.error_code,
+            ):
+                retryable_errors += len(batch)
+                retry_after_seconds = max(
+                    retry_after_seconds,
+                    float(outcome.retry_after_seconds or 0.0),
+                )
             await session.commit()
             continue
 
@@ -565,30 +612,48 @@ async def _publish_batches(
                 item.status = STOCK_SYNC_STATUS_ERROR
                 item.last_error_code = err
             errors += len(batch)
+            if _is_retryable_wb_failure(status_code=exc.status_code, error_code=err):
+                retryable_errors += len(batch)
             await session.commit()
             continue
 
         if not _compare_readback(batch, readback):
+            mismatch_code = outcome.error_code or ERROR_READBACK_MISMATCH
             if first_error_code is None:
-                first_error_code = ERROR_READBACK_MISMATCH
+                first_error_code = mismatch_code
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
-                item.last_error_code = ERROR_READBACK_MISMATCH
+                item.last_error_code = mismatch_code
             errors += len(batch)
+            retryable_errors += len(batch)
             await session.commit()
             continue
 
         readback_map = {row.chrt_id: row.amount for row in readback}
+        confirmed_at = _utcnow()
         for entry in batch:
             item = sync_items[entry.chrt_id]
             item.status = STOCK_SYNC_STATUS_CONFIRMED
             item.last_confirmed_amount = readback_map[entry.chrt_id]
+            item.updated_at = confirmed_at
             item.last_error_code = None
             confirmed += 1
         await session.commit()
+        batch_chrts = {entry.chrt_id for entry in batch}
+        if any(target.refresh_zero and target.chrt_id in batch_chrts for target in targets):
+            schedule_binding_zero_refresh(
+                binding.tenant_id, binding.seller_id, binding.id,
+                confirmed_at + ZERO_REFRESH_INTERVAL,
+            )
 
-    return confirmed, errors, first_error_code
+    return (
+        confirmed,
+        errors,
+        first_error_code,
+        retryable_errors,
+        retry_after_seconds,
+    )
 
 
 async def sync_binding_stocks(
@@ -600,6 +665,7 @@ async def sync_binding_stocks(
     *,
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
+    zero_refresh_only: bool = False,
 ) -> FbsStockSyncResult:
     """Publish absolute FBS stock amounts for one seller WB warehouse binding."""
     limiter = rate_limiter or AsyncStockSyncRateLimiter()
@@ -620,26 +686,20 @@ async def sync_binding_stocks(
 
     result = FbsStockSyncResult()
     try:
-        try:
-            api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
-        except FbsStockSyncError as exc:
-            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
-            binding.last_sync_at = _utcnow()
-            binding.last_error_code = exc.code
-            await session.commit()
-            return FbsStockSyncResult(errors=1, error_code=exc.code)
-
         products = await _load_seller_products(session, tenant_id, seller_id)
         try:
+            refresh_zero_product_ids: set[uuid.UUID] = set()
             publish_quantities = await _resolve_publish_quantities(
-                session, binding, products
+                session, binding, products,
+                refresh_zero_product_ids=refresh_zero_product_ids,
             )
         except Exception:
             logger.exception("fbs stock rule calculation failed for binding %s", binding.id)
-            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
-            binding.last_sync_at = _utcnow()
-            binding.last_error_code = ERROR_STOCK_RULE_CALCULATION_FAILED
-            await session.commit()
+            if not zero_refresh_only:
+                binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+                binding.last_sync_at = _utcnow()
+                binding.last_error_code = ERROR_STOCK_RULE_CALCULATION_FAILED
+                await session.commit()
             return FbsStockSyncResult(
                 errors=1,
                 error_code=ERROR_STOCK_RULE_CALCULATION_FAILED,
@@ -648,8 +708,21 @@ async def sync_binding_stocks(
         existing_items = await _load_existing_sync_items(session, binding.id)
 
         targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
-            products, publish_quantities, existing_items, product_block_errors
+            products, publish_quantities, existing_items, product_block_errors,
+            refresh_zero_product_ids=refresh_zero_product_ids,
         )
+
+        if zero_refresh_only:
+            targets = [target for target in targets if target.refresh_zero]
+            eligible_chrts = {
+                int(product.wb_chrt_id) for product in products
+                if product.id in refresh_zero_product_ids and product.wb_chrt_id is not None
+            }
+            conflict_chrts &= eligible_chrts
+            blocked_targets = [
+                target for target in blocked_targets
+                if target.product_id in refresh_zero_product_ids
+            ]
 
         # Zero guard: protect against zero amount without is_explicit_zero flag
         # (should not happen with current code, but defends against future regressions)
@@ -669,6 +742,21 @@ async def sync_binding_stocks(
         targets = safe_targets
         if zero_guard_blocked:
             blocked_targets = blocked_targets + zero_guard_blocked
+
+        # A delayed task can outlive its zero rule (or arrive twice). Such a
+        # no-op must not erase the ordinary publication's status/error/time.
+        if zero_refresh_only and not targets:
+            await session.commit()
+            return result
+
+        try:
+            api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+        except FbsStockSyncError as exc:
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_sync_at = _utcnow()
+            binding.last_error_code = exc.code
+            await session.commit()
+            return FbsStockSyncResult(errors=1, error_code=exc.code)
 
         result.skipped_missing_chrt_id = skipped_missing
 
@@ -696,7 +784,13 @@ async def sync_binding_stocks(
             session, binding.id, publish_targets, existing_items
         )
 
-        confirmed, errors, publish_error_code = await _publish_batches(
+        (
+            confirmed,
+            errors,
+            publish_error_code,
+            retryable_errors,
+            retry_after_seconds,
+        ) = await _publish_batches(
             session,
             binding=binding,
             targets=publish_targets,
@@ -709,7 +803,14 @@ async def sync_binding_stocks(
         result.products_confirmed = confirmed
         blocked_error_count = len(blocked_targets)
         result.errors = errors + result.conflicts + blocked_error_count
+        result.retryable_errors = retryable_errors
+        result.retry_after_seconds = retry_after_seconds
         result.bindings_processed = 1
+
+        # Only the full reconcile can summarize the entire binding. Successful
+        # zero refresh must not conceal another product's outstanding error.
+        if zero_refresh_only and result.errors == 0:
+            return result
 
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
@@ -818,7 +919,13 @@ async def publish_explicit_zero_for_binding(
             item.last_error_code = None
         await session.commit()
 
-        confirmed, errors, publish_error_code = await _publish_batches(
+        (
+            confirmed,
+            errors,
+            publish_error_code,
+            retryable_errors,
+            retry_after_seconds,
+        ) = await _publish_batches(
             session,
             binding=binding,
             targets=targets,
@@ -834,6 +941,8 @@ async def publish_explicit_zero_for_binding(
         result.products_confirmed = confirmed
         result.products_zeroed = confirmed
         result.errors = errors
+        result.retryable_errors = retryable_errors
+        result.retry_after_seconds = retry_after_seconds
 
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR

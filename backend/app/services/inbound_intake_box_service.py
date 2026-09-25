@@ -15,17 +15,14 @@ from app.models.document_event import (
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
-    InboundIntakeLine,
     InboundIntakeRequest,
 )
-from app.models.product import Product
 from app.services import inbound_intake_service as intake_svc
 from app.services.box_barcode_service import generate_box_barcode
 from app.services.document_event_service import (
     current_document_event_actor,
     record_document_event_safely,
 )
-from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 # IN-BE-01 collapsed chain — keep in sync with inbound_intake_service status constants.
 BOX_STATUSES_AFTER_PRIMARY = (
@@ -225,13 +222,33 @@ async def update_box_free_text(
     return await _load_box(session, box_id)
 
 
+def _intake_editable(req: InboundIntakeRequest) -> bool:
+    return req.status in INTAKE_STATUSES or (
+        req.status == intake_svc.STATUS_DRAFT and intake_svc.is_ff_inbound(req)
+    )
+
+
+async def _claim_box_mutation(
+    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID,
+    *, mutation_id: uuid.UUID | None, action: str, payload: dict[str, object],
+) -> bool:
+    try:
+        replay = await intake_svc._claim_intake_mutation(
+            session, tenant_id, request_id, mutation_id=mutation_id,
+            action=action, payload=payload,
+        )
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
+    return replay is not None
+
+
 async def _get_request_for_intake(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> InboundIntakeRequest:
-    req = await intake_svc.get_request(session, tenant_id, request_id)
+    req = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeBoxError("request_not_found")
-    if req.status not in INTAKE_STATUSES:
+    if not _intake_editable(req):
         raise InboundIntakeBoxError("bad_status")
     return req
 
@@ -261,60 +278,6 @@ async def _close_open_boxes(session: AsyncSession, request_id: uuid.UUID) -> Non
         after=intake_svc.container_audit_fields(open_box),
     )
     await session.flush()
-
-
-async def _barcode_index_for_request(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    req: InboundIntakeRequest,
-) -> dict[str, uuid.UUID]:
-    product_ids = {ln.product_id for ln in req.lines}
-    if not product_ids:
-        return {}
-    stmt = select(Product).where(
-        Product.tenant_id == tenant_id,
-        Product.id.in_(product_ids),
-    )
-    res = await session.execute(stmt)
-    products = list(res.scalars().all())
-    idx: dict[str, uuid.UUID] = {}
-    for p in products:
-        key = p.sku_code.strip()
-        if key:
-            idx[key] = p.id
-    if req.seller_id is not None:
-        rows = await list_seller_wb_catalog_rows(
-            session,
-            tenant_id,
-            req.seller_id,
-            product_ids=product_ids,
-        )
-        for r in rows:
-            if r.product_id not in product_ids:
-                continue
-            for b in r.wb_barcodes:
-                key = str(b).strip()
-                if key:
-                    idx[key] = r.product_id
-            if r.wb_primary_barcode:
-                k = r.wb_primary_barcode.strip()
-                if k:
-                    idx[k] = r.product_id
-    return idx
-
-
-async def _expected_qty(
-    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
-) -> int:
-    stmt = select(InboundIntakeLine).where(
-        InboundIntakeLine.request_id == request_id,
-        InboundIntakeLine.product_id == product_id,
-    )
-    res = await session.execute(stmt)
-    ln = res.scalar_one_or_none()
-    if ln is None:
-        return 0
-    return int(ln.expected_qty)
 
 
 async def _total_in_other_boxes(
@@ -441,153 +404,70 @@ async def scan_product_into_box(
     *,
     barcode: str,
     product_id_hint: uuid.UUID | None = None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeBoxLine:
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeBoxError("barcode_empty")
-
-    if product_id_hint is not None:
-        req_stmt = (
-            select(InboundIntakeRequest)
-            .where(
-                InboundIntakeRequest.id == request_id,
-                InboundIntakeRequest.tenant_id == tenant_id,
-            )
-            .with_for_update()
-        )
-        req = (await session.execute(req_stmt)).scalar_one_or_none()
-        if req is None:
-            raise InboundIntakeBoxError("request_not_found")
-        if req.status not in INTAKE_STATUSES:
-            raise InboundIntakeBoxError("bad_status")
-
-        box_stmt = (
-            select(InboundIntakeBox)
-            .where(
-                InboundIntakeBox.id == box_id,
-                InboundIntakeBox.request_id == request_id,
-                InboundIntakeBox.tenant_id == tenant_id,
-            )
-            .with_for_update()
-        )
-        box = (await session.execute(box_stmt)).scalar_one_or_none()
-        if box is None:
-            raise InboundIntakeBoxError("box_not_found")
-        if box.intake_opened_at is None:
-            box.intake_opened_at = datetime.now(UTC)
-
-        request_line_stmt = select(InboundIntakeLine).where(
-            InboundIntakeLine.request_id == request_id,
-            InboundIntakeLine.product_id == product_id_hint,
-        )
-        request_line = (await session.execute(request_line_stmt)).scalar_one_or_none()
-        if request_line is None or int(request_line.expected_qty) <= 0:
-            raise InboundIntakeBoxError("product_not_on_request")
-
-        box_line_stmt = select(InboundIntakeBoxLine).where(
-            InboundIntakeBoxLine.box_id == box_id,
-            InboundIntakeBoxLine.product_id == product_id_hint,
-        )
-        line = (await session.execute(box_line_stmt)).scalar_one_or_none()
-        qty_before_scan = int(line.quantity) if line is not None else 0
-        if line is None:
-            line = InboundIntakeBoxLine(
-                box_id=box_id,
-                product_id=product_id_hint,
-                quantity=1,
-            )
-            session.add(line)
-        else:
-            line.quantity = int(line.quantity) + 1
-        await session.flush()
-
-        box_total = await _total_scanned_for_product(
-            session, request_id, product_id_hint
-        )
-        loose_qty = int(request_line.actual_qty or 0)
-        if request_line.posted_qty > loose_qty + box_total:
-            raise InboundIntakeBoxError("actual_below_posted")
-        if req.status == intake_svc.STATUS_SUBMITTED:
-            req.status = intake_svc.STATUS_RECEIVING
-        # WMS-056: скан +1 в короб — тоже правка состава; чтобы позднее снятие
-        # можно было восстановить, фиксируем изменение количества.
-        await _record_tare_edit(
-            session,
-            tenant_id=tenant_id,
-            request_id=request_id,
-            container_kind="box",
-            container_id=box_id,
-            product_id=product_id_hint,
-            qty_before=qty_before_scan,
-            qty_after=qty_before_scan + 1,
-        )
-        await session.commit()
-
-        result_stmt = (
-            select(InboundIntakeBoxLine)
-            .where(InboundIntakeBoxLine.id == line.id)
-            .options(selectinload(InboundIntakeBoxLine.product))
-        )
-        return (await session.execute(result_stmt)).scalar_one()
-
-    req = await intake_svc.get_request_for_receiving_scan(session, tenant_id, request_id)
+    req = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeBoxError("request_not_found")
-    if req.status not in INTAKE_STATUSES:
-        raise InboundIntakeBoxError("bad_status")
-    box = await session.get(InboundIntakeBox, box_id)
-    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
+    box = next((item for item in req.boxes if item.id == box_id), None)
+    if box is None:
         raise InboundIntakeBoxError("box_not_found")
+    product_id = product_id_hint
+    if product_id is None:
+        try:
+            product_id = await intake_svc.resolve_scanned_product_id(session, tenant_id, req, raw)
+        except intake_svc.InboundIntakeError as exc:
+            raise InboundIntakeBoxError(exc.code) from exc
+        if product_id is None:
+            raise InboundIntakeBoxError("barcode_unknown")
+    replay = await _claim_box_mutation(
+        session, tenant_id, request_id, mutation_id=mutation_id, action="box_scan",
+        payload={"request_id": str(request_id), "box_id": str(box_id),
+                 "product_id": str(product_id), "barcode": raw},
+    )
+    line = next((ln for ln in box.lines if ln.product_id == product_id), None)
+    if replay:
+        if line is None:
+            raise InboundIntakeBoxError("mutation_result_deleted")
+        return line
+    if not _intake_editable(req):
+        raise InboundIntakeBoxError("bad_status")
+    qty_before_scan = int(line.quantity) if line is not None else 0
+    if qty_before_scan >= 1_000_000_000:
+        raise InboundIntakeBoxError("invalid_qty")
+    try:
+        # WMS-473: a seller-catalogue product the document does not list yet gets its
+        # line here, in the same transaction as the unit; no «expected > 0» gate.
+        await intake_svc.ensure_request_line(
+            session, tenant_id, req, product_id,
+            create_missing=intake_svc.scan_creates_lines(req),
+        )
+        await intake_svc.redistribute_ff_draft_container(session, req, product_id, 1)
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
-
-    idx = await _barcode_index_for_request(session, tenant_id, req)
-    product_id = idx.get(raw) or idx.get(raw.upper())
-    if product_id is None:
-        raise InboundIntakeBoxError("barcode_unknown")
-
-    expected = await _expected_qty(session, req.id, product_id)
-    if expected <= 0:
-        raise InboundIntakeBoxError("product_not_on_request")
-
-    stmt = select(InboundIntakeBoxLine).where(
-        InboundIntakeBoxLine.box_id == box_id,
-        InboundIntakeBoxLine.product_id == product_id,
-    )
-    res = await session.execute(stmt)
-    line = res.scalar_one_or_none()
-    qty_before_scan = int(line.quantity) if line is not None else 0
     if line is None:
         line = InboundIntakeBoxLine(box_id=box_id, product_id=product_id, quantity=1)
         session.add(line)
     else:
-        line.quantity = int(line.quantity) + 1
-
+        line.quantity = qty_before_scan + 1
     await session.flush()
-    req_loaded = await intake_svc.get_request_for_receiving_scan(session, tenant_id, request_id)
-    if req_loaded is None:
-        raise InboundIntakeBoxError("request_not_found")
-    await _sync_line_actuals_from_box_totals(session, req_loaded)
-    # WMS-056: авто-скан также правит состав тары — пишем append-only факт.
+    await _sync_line_actuals_from_box_totals(session, req)
     await _record_tare_edit(
-        session,
-        tenant_id=tenant_id,
-        request_id=request_id,
-        container_kind="box",
-        container_id=box_id,
-        product_id=product_id,
-        qty_before=qty_before_scan,
-        qty_after=qty_before_scan + 1,
+        session, tenant_id=tenant_id, request_id=request_id,
+        container_kind="box", container_id=box_id, product_id=product_id,
+        qty_before=qty_before_scan, qty_after=qty_before_scan + 1,
     )
     await session.commit()
-
-    stmt2 = (
-        select(InboundIntakeBoxLine)
-        .where(InboundIntakeBoxLine.id == line.id)
+    result = await session.execute(
+        select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.id == line.id)
         .options(selectinload(InboundIntakeBoxLine.product))
     )
-    res2 = await session.execute(stmt2)
-    return res2.scalar_one()
+    return result.scalar_one()
 
 
 async def set_product_quantity_in_open_box(
@@ -598,11 +478,22 @@ async def set_product_quantity_in_open_box(
     *,
     product_id: uuid.UUID,
     quantity: int,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeBox:
     if quantity < 0:
         raise InboundIntakeBoxError("invalid_qty")
 
-    req = await _get_request_for_intake(session, tenant_id, request_id)
+    req = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
+    if req is None:
+        raise InboundIntakeBoxError("request_not_found")
+    if await _claim_box_mutation(
+        session, tenant_id, request_id, mutation_id=mutation_id, action="box_quantity",
+        payload={"request_id": str(request_id), "box_id": str(box_id),
+                 "product_id": str(product_id), "quantity": quantity},
+    ):
+        return await _load_box(session, box_id)
+    if not _intake_editable(req):
+        raise InboundIntakeBoxError("bad_status")
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
@@ -617,17 +508,25 @@ async def set_product_quantity_in_open_box(
     line = res.scalar_one_or_none()
 
     qty_before = int(line.quantity) if line is not None else 0
+    try:
+        # Manual quantity needs an existing document line; «expected > 0» is no gate.
+        await intake_svc.ensure_request_line(
+            session, tenant_id, req, product_id, create_missing=False
+        )
+        await intake_svc.redistribute_ff_draft_container(
+            session, req, product_id, quantity - qty_before
+        )
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
 
     if quantity == 0:
         if line is None:
+            await session.commit()
             return await _load_box(session, box.id)
         if int(line.posted_qty) > 0:
             raise InboundIntakeBoxError("actual_below_posted")
         await session.delete(line)
     else:
-        expected = await _expected_qty(session, req.id, product_id)
-        if expected <= 0:
-            raise InboundIntakeBoxError("product_not_on_request")
         if line is None:
             session.add(
                 InboundIntakeBoxLine(

@@ -1,0 +1,50 @@
+{
+  "links": [
+    {
+      "text": "Windows x64",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-Setup-Windows-x64.exe",
+      "rel": "noreferrer",
+      "target": "_blank"
+    },
+    {
+      "text": "macOS arm64",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-macOS.zip",
+      "rel": "noreferrer",
+      "target": "_blank"
+    },
+    {
+      "text": "инструкцию",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-Installation.md",
+      "rel": "noreferrer",
+      "target": "_blank"
+    },
+    {
+      "text": "SHA256",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-v2026.09.13.1/WMS-Print-SHA256SUMS.txt",
+      "rel": "noreferrer",
+      "target": "_blank"
+    }
+  ],
+  "downloads": [
+    {
+      "label": "Windows x64",
+      "file": "WMS-Print-Setup-Windows-x64.exe",
+      "failure": null
+    },
+    {
+      "label": "macOS arm64",
+      "file": "WMS-Print-macOS.zip",
+      "failure": null
+    },
+    {
+      "label": "инструкцию",
+      "file": "WMS-Print-Installation.md",
+      "failure": null
+    },
+    {
+      "label": "SHA256",
+      "file": "WMS-Print-SHA256SUMS.txt",
+      "failure": null
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "tenant_id": "769c84ea-649c-4c53-ba1a-8624b3f63d5c",
+  "organization": "final-review-5da311",
+  "user_id": "69e5121b-a555-46c1-8d8c-8e520d6910f8",
+  "full_name": "Final Astra 5da311",
+  "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+  "warehouse_id": "6bfd8c96-3e29-411c-8017-1d5cdf4c95ae",
+  "cell_id": "6837cfdc-c5fe-4b97-84b5-29581222975a",
+  "cell_barcode": "LOC-4CB59ED2D1E6",
+  "product_id": "1a6477c1-db42-4cbd-b69f-be9bd5f180d5",
+  "inbound_id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+  "inbound_number": "ПРИЕМ-26-09-13-1",
+  "expected_units": 3,
+  "expected_amount_kopecks": 3000,
+  "orders": [
+    {
+      "id": "fcbc1815-2410-4a39-8da1-95f1a31a2d5b",
+      "marketplace": "wb",
+      "status": "new",
+      "wb_order_id": 9440000
+    },
+    {
+      "id": "0a8b1dca-9ccf-450c-bc50-e0aa81eaf6b4",
+      "marketplace": "wb",
+      "status": "in_supply",
+      "wb_order_id": 9440001
+    },
+    {
+      "id": "a7623139-a277-4707-9765-4bb15dc7ecc5",
+      "marketplace": "wb",
+      "status": "assembling",
+      "wb_order_id": 9440002
+    },
+    {
+      "id": "a2983230-54ca-4cde-bd01-14c69cb83087",
+      "marketplace": "wb",
+      "status": "packed",
+      "wb_order_id": 9440003
+    },
+    {
+      "id": "89cc73cb-be00-41b3-ab3a-687e6b613d51",
+      "marketplace": "wb",
+      "status": "in_delivery",
+      "wb_order_id": 9440004
+    },
+    {
+      "id": "52294303-83f9-4657-a072-a7ead75e0429",
+      "marketplace": "wb",
+      "status": "sorted",
+      "wb_order_id": 9440005
+    },
+    {
+      "id": "48e2d873-b0bb-480e-a421-de1adef771c5",
+      "marketplace": "wb",
+      "status": "done",
+      "wb_order_id": 9440006
+    },
+    {
+      "id": "36110e44-de99-4285-967f-f75f89875e70",
+      "marketplace": "wb",
+      "status": "cancelled",
+      "wb_order_id": 9440007
+    },
+    {
+      "id": "f04ab00d-05a7-43e5-8ef1-639f507d593f",
+      "marketplace": "wb",
+      "status": "defect",
+      "wb_order_id": 9440008
+    },
+    {
+      "id": "9a6a6902-4134-46f5-9d6b-976027e73c6f",
+      "marketplace": "wb",
+      "status": "external_processing",
+      "wb_order_id": 9440009
+    },
+    {
+      "id": "c3dfb096-af77-4456-b9ac-bf405a6e2e32",
+      "marketplace": "ozon",
+      "status": "new",
+      "wb_order_id": 9440100
+    },
+    {
+      "id": "2b14f367-d357-4b9b-ab7f-8d72facd3000",
+      "marketplace": "ozon",
+      "status": "in_supply",
+      "wb_order_id": 9440101
+    },
+    {
+      "id": "5be6f510-dd5a-4012-a94c-0b9a0de53a57",
+      "marketplace": "ozon",
+      "status": "assembling",
+      "wb_order_id": 9440102
+    },
+    {
+      "id": "ff8d905e-918b-434d-aa89-2508cac8ef9a",
+      "marketplace": "ozon",
+      "status": "packed",
+      "wb_order_id": 9440103
+    },
+    {
+      "id": "fd2f46d3-c9b1-4c4a-a1d3-51b7aa2ab3d3",
+      "marketplace": "ozon",
+      "status": "in_delivery",
+      "wb_order_id": 9440104
+    },
+    {
+      "id": "c2d17923-efaa-4633-b535-8f31e058a631",
+      "marketplace": "ozon",
+      "status": "sorted",
+      "wb_order_id": 9440105
+    },
+    {
+      "id": "ff1dd799-7b9c-4c63-a683-91a3e4622ea1",
+      "marketplace": "ozon",
+      "status": "done",
+      "wb_order_id": 9440106
+    },
+    {
+      "id": "bccaca64-9ea5-4074-9e09-e8cf8ad93b37",
+      "marketplace": "ozon",
+      "status": "cancelled",
+      "wb_order_id": 9440107
+    },
+    {
+      "id": "79f666ed-2857-4e7f-b02b-7afccf5ae15c",
+      "marketplace": "ozon",
+      "status": "defect",
+      "wb_order_id": 9440108
+    },
+    {
+      "id": "453fd4f7-19a9-4325-bbdc-e131cac3361d",
+      "marketplace": "ozon",
+      "status": "external_processing",
+      "wb_order_id": 9440109
+    }
+  ]
+}

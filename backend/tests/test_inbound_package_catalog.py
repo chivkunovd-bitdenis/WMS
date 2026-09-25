@@ -52,7 +52,8 @@ async def _create_staff(
 ) -> dict[str, str]:
     email = f"package-catalog-{label}-{suffix}@example.com"
     created = await async_client.post(
-        "/auth/staff-accounts", headers=admin_headers, json={"email": email}
+        "/auth/staff-accounts", headers=admin_headers,
+        json={"full_name": "Иван Петров", "email": email}
     )
     assert created.status_code == 201, created.text
     updated = await async_client.patch(

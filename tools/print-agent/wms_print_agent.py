@@ -24,6 +24,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -35,7 +36,6 @@ from pathlib import Path
 from typing import Any
 
 MAX_BYTES = 16 * 1024 * 1024
-QUEUE_PATTERN = re.compile(r"[A-Za-z0-9_.-]{1,127}")
 CHECKSUM_PATTERN = re.compile(r"[0-9a-f]{64}")
 RECEIPT_PATTERN = re.compile(r"\brequest id is ([A-Za-z0-9_.-]+)")
 SUPPORTED_CONTENT_TYPES = {"application/pdf", "image/png"}
@@ -69,13 +69,37 @@ def check_base_url(base_url: str) -> str:
 
 
 def check_queue(queue: str) -> str:
-    if queue.startswith("-") or not QUEUE_PATTERN.fullmatch(queue):
+    # Windows exposes the queue's display name, which commonly contains spaces
+    # and Cyrillic characters.  The name is always passed as one subprocess/API
+    # argument, never interpolated into a shell command.  Control characters
+    # are nevertheless forbidden because they do not identify a usable queue.
+    if (
+        not isinstance(queue, str)
+        or not queue
+        or len(queue) > 127
+        or not queue.strip()
+        or queue.startswith("-")
+        or any(ord(character) < 32 or ord(character) == 127 for character in queue)
+    ):
         raise ValueError("Некорректное имя очереди ОС")
     return queue
 
 
 def _open(request: urllib.request.Request) -> tuple[bytes, str]:
-    with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
+    # Frozen packages carry a CA bundle; do not rely on a build-machine OpenSSL path.
+    try:
+        import certifi
+
+        context = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        if getattr(sys, "frozen", False):
+            raise RuntimeError(
+                "В пакете отсутствует хранилище доверенных сертификатов"
+            ) from None
+        context = ssl.create_default_context()
+    with urllib.request.build_opener(
+        NoRedirect, urllib.request.HTTPSHandler(context=context)
+    ).open(request, timeout=30) as response:
         return response.read(MAX_BYTES + 1), response.headers.get_content_type()
 
 
@@ -99,7 +123,7 @@ def _api(
     )
     parsed = json.loads(payload)
     if not isinstance(parsed, dict):
-        raise ValueError("Неожиданный ответ WMS")
+        raise ValueError("Неожиданный ответ WMS")  # noqa: TRY004
     return parsed
 
 
@@ -133,11 +157,21 @@ def validate_job(job: dict[str, Any], warehouse_id: str) -> dict[str, Any]:
 
 
 def fetch_label(
-    base_url: str, token: str, job_id: str, warehouse_id: str, expected: dict[str, Any]
+    base_url: str,
+    token: str,
+    job_id: str,
+    warehouse_id: str,
+    expected: dict[str, Any],
+    *,
+    claim_id: str | None = None,
 ) -> bytes:
     # Путь собираем из проверенного UUID, а не из ссылки внутри задания.
     path = "/operations/fbs-print-jobs/" + str(uuid.UUID(job_id)) + "/content"
-    url = base_url + path + "?" + urllib.parse.urlencode({"warehouse_id": warehouse_id})
+    query = {"warehouse_id": warehouse_id}
+    if claim_id is not None:
+        path = "/operations/print/agent/jobs/" + str(uuid.UUID(job_id)) + "/content"
+        query = {"claim_id": str(uuid.UUID(claim_id))}
+    url = base_url + path + "?" + urllib.parse.urlencode(query)
     data, content_type = _open(
         urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
     )
@@ -151,21 +185,38 @@ def fetch_label(
 
 
 def submit_to_queue(
-    data: bytes, content_type: str, queue: str, run: Any = subprocess.run
+    data: bytes,
+    content_type: str,
+    queue: str,
+    run: Any = subprocess.run,
+    *,
+    copies: int = 1,
+    executable: str | list[str] = "lp",
 ) -> str:
     """Отдать файл в очередь ОС и вернуть её квитанцию.
 
     Без shell, без установки драйверов и без входящего слушателя. Один запуск —
     одна отправка: неизвестный исход наверх уходит как ``UnknownPrintOutcome``.
     """
+    check_queue(queue)
+    if type(copies) is not int or not 1 <= copies <= 999:
+        raise ValueError("Некорректное число копий")
     suffix = ".pdf" if content_type == "application/pdf" else ".png"
     directory = tempfile.mkdtemp(prefix="wms-print-")
     try:
         path = Path(directory) / ("label" + suffix)
         path.write_bytes(data)
         try:
+            command = [executable] if isinstance(executable, str) else executable
             result = run(
-                ["lp", "-d", queue, "--", str(path)],
+                [
+                    *command,
+                    "-d",
+                    queue,
+                    *(["-n", str(copies)] if copies != 1 else []),
+                    "--",
+                    str(path),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=60,

@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './errors/ErrorBoundary'
 import { PrintQuantityField } from './PrintQuantityField'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -40,6 +41,7 @@ import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
+  cancelPendingPrintWindow,
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
   printCzArtifactTape,
@@ -351,7 +353,15 @@ export function resolveProductTapeBarcodeError(
   return null
 }
 
-export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
+export function MarkingPrintDialog(props: Props) {
+  return (
+    <ErrorBoundary component="MarkingPrintDialog" resetKey={String(props.open)}>
+      <MarkingPrintDialogContent {...props} />
+    </ErrorBoundary>
+  )
+}
+
+function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [productBarcodeKey, setProductBarcodeKey] = useState('')
   const barcodeOptions = ctx?.productBarcodeOptions
@@ -1256,6 +1266,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     const forceReprint = opts?.forceReprint ?? false
+    // Confirm while the source tab is still foreground. Opening a popup first
+    // hides the blocking confirmation behind an unpainted blank print tab.
+    if (ctx.fbsTape && fbsTapeSheets > 100 && !window.confirm(
+      `На печать уйдёт ${fbsTapeSheets} листов. Продолжить?`,
+    )) {
+      return
+    }
     if (requiresHonestSign) {
       beginPrintUserGesture()
     }
@@ -1263,14 +1280,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setError(null)
     try {
       if (ctx.fbsTape) {
-        // I4 (20.08.2026): 155 заказов уже уезжали на принтер как 22 тысячи листов.
-        // Пока нет нормального окна подтверждения из ui-kit — спрашиваем прямо здесь,
-        // но только когда лента действительно большая.
-        if (fbsTapeSheets > 100 && !window.confirm(
-          `На печать уйдёт ${fbsTapeSheets} листов. Продолжить?`,
-        )) {
-          return
-        }
         // PRN-05 (18.08.2026): для пачки, где ни одному заказу не нужен Честный знак,
         // размер надо брать тот, который оператор реально видит и меняет в поле
         // «Размер ШК ВБ» (nonCzPrintSize). czTapePrintSize читает другое хранилище,
@@ -1307,6 +1316,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             : 'Не удалось напечатать этикетки.',
       )
     } finally {
+      cancelPendingPrintWindow()
       onBusyChange(false)
     }
   }
@@ -1347,6 +1357,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
     } finally {
+      cancelPendingPrintWindow()
       onBusyChange(false)
     }
   }

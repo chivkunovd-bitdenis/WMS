@@ -12,12 +12,15 @@ from sqlalchemy import event, select
 
 from app.db.session import SessionLocal, engine
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    FBS_ORDER_STATUS_PACKED,
     FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_RESERVED,
@@ -110,9 +113,13 @@ async def _setup_ff_admin_with_stock(
                 title="футболка",
                 raw_json={
                     "nmID": 900_100,
+                    "brand": "FBS Brand",
                     "subjectName": "Бомберы",
                     "photos": [{"big": "https://images.example/wb.jpg"}],
-                    "characteristics": [{"name": "Цвет", "value": "синий"}],
+                    "characteristics": [
+                        {"name": "Цвет", "value": "синий"},
+                        {"name": "Состав", "value": "хлопок"},
+                    ],
                     "sizes": [
                         {
                             "chrtID": 777001,
@@ -210,6 +217,8 @@ async def test_fbs_worklist_happy_path(
     assert item["product"]["chrt_id"] == 777001
     assert item["product"]["category"] == "Бомберы"
     assert item["product"]["color"] == "синий"
+    assert item["product"]["brand"] == "FBS Brand"
+    assert item["product"]["composition"] == "хлопок"
     assert item["product"]["size"] == "L"
     assert item["inventory"]["available_unpacked"] >= 0
     assert len(item["inventory"]["locations"]) == 1
@@ -354,6 +363,175 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
         blocker["code"] == "order_external_processing"
         for blocker in active.json()["items"][0]["selection_blockers"]
     )
+
+
+@pytest.mark.asyncio
+async def test_tsd_working_worklist_includes_only_actionable_statuses_and_paginates(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-445 C16-C19: TSD queue keeps old work, but never mixes in history."""
+    headers, seller_id, warehouse_id, product_id, _location_id, order_ids = (
+        await _setup_ff_admin_with_stock(async_client, order_count=1)
+    )
+    old_new_id = order_ids[0]
+    now = datetime.now(tz=UTC)
+    # New is deliberately overdue: this TSD-only queue must not inherit the
+    # deadline rule of the web's "new" group.
+    rows = [
+        (FBS_ORDER_STATUS_IN_SUPPLY, None, "wb"),
+        (FBS_ORDER_STATUS_ASSEMBLING, None, "wb"),
+        (FBS_ORDER_STATUS_PACKED, None, "wb"),
+        (FBS_ORDER_STATUS_NEW, "new", "ozon"),
+        (FBS_ORDER_STATUS_NEW, "confirm", "wb"),
+        (FBS_ORDER_STATUS_EXTERNAL_PROCESSING, "confirm", "wb"),
+        (FBS_ORDER_STATUS_IN_DELIVERY, None, "wb"),
+        (FBS_ORDER_STATUS_SORTED, None, "wb"),
+        (FBS_ORDER_STATUS_DONE, None, "wb"),
+        (FBS_ORDER_STATUS_CANCELLED, None, "wb"),
+        (FBS_ORDER_STATUS_DEFECT, None, "wb"),
+    ]
+    expected_wb = {str(old_new_id)}
+    expected_wb_in_order = [str(old_new_id)]
+    expected_ozon: set[str] = set()
+    async with SessionLocal() as session:
+        old_new = await session.get(FbsOrder, old_new_id)
+        assert old_new is not None
+        old_new.created_at_wb = now - timedelta(days=30)
+        old_new.deadline_at = now - timedelta(days=1)
+        for index, (status, supplier_status, marketplace) in enumerate(rows, start=1):
+            order = FbsOrder(
+                tenant_id=old_new.tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                marketplace=marketplace,
+                wb_order_id=810_000 + index,
+                external_order_id=f"OZ-{index}" if marketplace == "ozon" else None,
+                wb_nm_id=900_100,
+                wb_chrt_id=777_001,
+                wb_barcode=old_new.wb_barcode,
+                wb_article=old_new.wb_article,
+                cargo_type="mgt",
+                wb_warehouse_id=DEFAULT_WB_WAREHOUSE_ID,
+                can_pvz=True,
+                status=status,
+                supplier_status=supplier_status,
+                wb_status=status,
+                created_at_wb=now - timedelta(days=20 - index),
+                deadline_at=now - timedelta(days=1),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+            )
+            session.add(order)
+            await session.flush()
+            if status in {
+                FBS_ORDER_STATUS_IN_SUPPLY,
+                FBS_ORDER_STATUS_ASSEMBLING,
+                FBS_ORDER_STATUS_PACKED,
+            }:
+                expected_wb.add(str(order.id))
+                expected_wb_in_order.append(str(order.id))
+            elif marketplace == "ozon" and status == FBS_ORDER_STATUS_NEW:
+                expected_ozon.add(str(order.id))
+        await session.commit()
+
+    url = "/operations/fbs-orders/worklist"
+    wb = await async_client.get(
+        url,
+        headers=headers,
+        params={
+            "seller_id": str(seller_id),
+            "marketplace": "wb",
+            "status_group": "tsd_working",
+            "sort": "oldest",
+        },
+    )
+    assert wb.status_code == 200, wb.text
+    assert {item["id"] for item in wb.json()["items"]} == expected_wb
+    assert wb.json()["items"][0]["id"] == str(old_new_id)
+
+    ozon = await async_client.get(
+        url,
+        headers=headers,
+        params={
+            "seller_id": str(seller_id),
+            "marketplace": "ozon",
+            "status_group": "tsd_working",
+            "sort": "oldest",
+        },
+    )
+    assert ozon.status_code == 200, ozon.text
+    assert {item["id"] for item in ozon.json()["items"]} == expected_ozon
+
+    # Non-working history does not consume the cursor: every page contains a
+    # distinct working order, through the actual end of the filtered result.
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        page = await async_client.get(
+            url,
+            headers=headers,
+            params={
+                "seller_id": str(seller_id),
+                "marketplace": "wb",
+                "status_group": "tsd_working",
+                "sort": "oldest",
+                "limit": 1,
+                **({"cursor": cursor} if cursor else {}),
+            },
+        )
+        assert page.status_code == 200, page.text
+        seen.extend(item["id"] for item in page.json()["items"])
+        cursor = page.json()["next_cursor"]
+        if cursor is None:
+            break
+    assert seen == expected_wb_in_order
+    assert len(seen) == len(set(seen))
+
+
+@pytest.mark.asyncio
+async def test_tsd_working_worklist_keeps_tenant_and_served_warehouse_scope(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-445 C20: the new group keeps the existing tenant and served checks."""
+    headers, seller_id, _warehouse_id, _product_id, _location_id, own_ids = (
+        await _setup_ff_admin_with_stock(async_client, order_count=1)
+    )
+    foreign_headers, _foreign_seller_id, *_foreign = await _setup_ff_admin_with_stock(
+        async_client, order_count=1
+    )
+    own = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"marketplace": "wb", "status_group": "tsd_working"},
+    )
+    assert own.status_code == 200, own.text
+    assert {item["id"] for item in own.json()["items"]} == {str(own_ids[0])}
+    foreign = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=foreign_headers,
+        params={"marketplace": "wb", "status_group": "tsd_working"},
+    )
+    assert foreign.status_code == 200, foreign.text
+    assert str(own_ids[0]) not in {item["id"] for item in foreign.json()["items"]}
+
+    async with SessionLocal() as session:
+        binding = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == seller_id,
+                FbsWarehouseBinding.wb_warehouse_id == DEFAULT_WB_WAREHOUSE_ID,
+            )
+        )
+        assert binding is not None
+        binding.served = False
+        await session.commit()
+    hidden = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"marketplace": "wb", "status_group": "tsd_working"},
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert hidden.json()["items"] == []
 
 
 @pytest.mark.asyncio
@@ -570,6 +748,13 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
         res = await session.execute(stmt_orders)
         orders = list(res.scalars().all())
 
+    # Stock fixture writes schedule publication independently of the worklist.
+    # Drain them before the engine-wide listener so it measures only this read.
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+    from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
+
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()
     query_count = 0
 
     def _count_query(

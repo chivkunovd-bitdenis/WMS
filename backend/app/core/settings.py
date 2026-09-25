@@ -38,7 +38,6 @@ class Settings(BaseSettings):
         ),
     )
     jwt_algorithm: str = Field(default="HS256")
-    access_token_expire_minutes: int = Field(default=60 * 24)
     celery_broker_url: str | None = Field(
         default=None,
         description="Redis URL for Celery (e.g. redis://redis:6379/0). "
@@ -137,6 +136,16 @@ class Settings(BaseSettings):
             "или нет."
         ),
     )
+    assistant_enabled_user_emails: str = Field(
+        default="",
+        validation_alias="WMS_ASSISTANT_ENABLED_USER_EMAILS",
+        description=(
+            "WMS-433/R24: optional comma-separated user email allowlist, applied "
+            "in addition to the tenant allowlist. Empty means no user restriction. "
+            "Only authenticated user emails are checked, ignoring case and whitespace. "
+            "Executor processing and stored conversations are unaffected."
+        ),
+    )
     assistant_deploy_version: str | None = Field(
         default=None,
         validation_alias=AliasChoices("WMS_ASSISTANT_DEPLOY_VERSION", "WMS_DEPLOY_VERSION"),
@@ -202,8 +211,9 @@ class Settings(BaseSettings):
             "SHOP_MANAGER_EMAILS",
         ),
         description=(
-            "Comma-separated seller user emails allowed to manage/switch shops "
-            "(in addition to users.can_manage_seller_shops and built-in email markers)."
+            "Legacy allowlist retained for configuration compatibility only. "
+            "WMS-488 migrates existing delegated managers to explicit DB grants; "
+            "this setting no longer grants access at runtime."
         ),
     )
     public_base_url: str = Field(
@@ -306,13 +316,13 @@ class Settings(BaseSettings):
         description="Сумма к оплате за месяц подписки, рублей (WMS-381).",
     )
     allow_public_registration: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices(
             "WMS_ALLOW_PUBLIC_REGISTRATION", "ALLOW_PUBLIC_REGISTRATION"
         ),
         description=(
-            "Регистрация организации со страницы входа. Выключена: до 06.09.2026 любой "
-            "человек из интернета заводил себе тенант в боевой системе."
+            "Публичная регистрация организации и первого администратора со страницы "
+            "входа фулфилмента (WMS-500)."
         ),
     )
     wms_data_dir: str = Field(
@@ -385,6 +395,21 @@ class Settings(BaseSettings):
         description=(
             "Celery Beat interval for the FBS stock safety net: republishes availability "
             "even when no movement event fired (seconds)."
+        ),
+    )
+    fbs_marking_verdicts_sync_interval_sec: int = Field(
+        default=60,
+        ge=60,
+        le=7200,
+        validation_alias=AliasChoices(
+            "CONF_FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+            "FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC",
+        ),
+        description=(
+            "Celery Beat interval for the WB marking-verdicts recheck (WMS-477): only "
+            "codes still pending/sending in assembling/packed WB supplies, in its own "
+            "light cycle — separate from and never a substitute for the full sweep in "
+            "fbs_statuses_sync_interval_sec (seconds)."
         ),
     )
     fbs_universal_test_kiz: str | None = Field(

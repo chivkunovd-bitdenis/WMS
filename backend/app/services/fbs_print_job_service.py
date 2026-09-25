@@ -26,7 +26,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ from app.models.fbs_print_asset import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.models.print_connection import PrintConnection
 from app.models.warehouse import Warehouse
 from app.services.background_job_service import (
     JOB_STATUS_DONE,
@@ -70,8 +71,8 @@ _CLAIM_SCAN_LIMIT = 100
 MAX_PRINT_DOCUMENT_BYTES = 16 * 1024 * 1024
 
 PRINT_JOB_STATUS_TEXT: dict[str, str] = {
-    JOB_STATUS_PENDING: "Ожидает агента печати",
-    JOB_STATUS_RUNNING: "Выдано агенту печати; подтверждение очереди не получено",
+    JOB_STATUS_PENDING: "Ожидает передачи",
+    JOB_STATUS_RUNNING: "Результат печати неизвестен: подтверждение очереди не получено",
     JOB_STATUS_DONE: "Передано в очередь принтера",
     JOB_STATUS_FAILED: "Не передано в очередь принтера",
 }
@@ -79,6 +80,33 @@ PRINT_JOB_STATUS_TEXT: dict[str, str] = {
 
 def print_job_status_text(status: str) -> str:
     return PRINT_JOB_STATUS_TEXT.get(status, status)
+
+
+async def lock_print_intent(session: AsyncSession, job_id: uuid.UUID) -> None:
+    """Serialize UUID creation before reading/generating a file, without a lock table."""
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"), {"key": job_id.int % (2**63 - 1)}
+        )
+
+
+async def assigned_destination(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> dict[str, Any]:
+    connection = await session.scalar(
+        select(PrintConnection).where(
+            PrintConnection.tenant_id == tenant_id,
+            PrintConnection.warehouse_id == warehouse_id,
+            PrintConnection.is_default.is_(True),
+        )
+    )
+    return (
+        {"connection_id": str(connection.id), "queue_name": connection.queue_name}
+        if connection is not None
+        else {}
+    )
 
 
 def _payload_identity(payload: dict[str, Any] | None) -> tuple[str, str, str]:
@@ -187,6 +215,7 @@ async def create_print_job(
     Тот же ``job_id`` с тем же намерением возвращает прежнее задание — второго
     листа не появится. Тот же ``job_id`` с другим намерением отклоняется.
     """
+    await lock_print_intent(session, job_id)
     existing = await session.get(BackgroundJob, job_id)
     if existing is not None:
         return _existing_or_conflict(
@@ -211,7 +240,12 @@ async def create_print_job(
         )
     # Файл читаем целиком уже здесь: контрольная сумма и формат проверяются до
     # того, как задание попадёт в очередь, а не когда агент придёт за файлом.
-    _read_asset_bytes(asset)
+    content, mime = _read_asset_bytes(asset)
+    snapshot = operator_document_relative_path(job_id)
+    if mime != PDF_CONTENT_TYPE:
+        snapshot = snapshot.removesuffix(".pdf") + ".png"
+    snapshot = save_print_file(snapshot, content, content_type=mime)
+    destination = await assigned_destination(session, tenant_id, warehouse_id)
 
     job = BackgroundJob(
         id=job_id,
@@ -219,11 +253,15 @@ async def create_print_job(
         job_type=JOB_TYPE_FBS_LABEL_PRINT,
         status=JOB_STATUS_PENDING,
         payload_json={
+            **destination,
+            "copies": 1,
+            "storage_path": snapshot,
+            "content_bytes": len(content),
             "asset_id": str(asset_id),
             "asset_kind": asset.kind,
             "warehouse_id": str(warehouse_id),
             "content_type": asset.content_type or ORDER_STICKER_CONTENT_TYPE,
-            "checksum": asset.checksum,
+            "checksum": sha256_checksum(content),
             "width_mm": asset.width_mm,
             "height_mm": asset.height_mm,
             "requested_by_user_id": str(user_id),
@@ -320,6 +358,7 @@ async def create_document_print_job(
     задание: одно нажатие оператора — один лист.
     """
     checksum = sha256_checksum(document)
+    await lock_print_intent(session, job_id)
     existing = await session.get(BackgroundJob, job_id)
     if existing is not None:
         return _existing_document_or_conflict(
@@ -369,12 +408,17 @@ async def create_document_print_job(
             fbs_supply_id=supply.id,
         )
     )
+    destination = await assigned_destination(session, tenant_id, supply.warehouse_id)
     job = BackgroundJob(
         id=job_id,
         tenant_id=tenant_id,
         job_type=JOB_TYPE_FBS_LABEL_PRINT,
         status=JOB_STATUS_PENDING,
         payload_json={
+            **destination,
+            "copies": 1,
+            "storage_path": storage_path,
+            "content_bytes": len(document),
             "asset_id": str(asset_id),
             "asset_kind": PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
             "supply_id": str(supply_id),
@@ -409,6 +453,7 @@ async def claim_next_print_job(
     tenant_id: uuid.UUID,
     *,
     warehouse_id: uuid.UUID,
+    connection_id: uuid.UUID | None = None,
 ) -> BackgroundJob | None:
     """Выдать агенту одно ожидающее задание его склада и пометить выданным.
 
@@ -424,6 +469,11 @@ async def claim_next_print_job(
                 BackgroundJob.job_type == JOB_TYPE_FBS_LABEL_PRINT,
                 BackgroundJob.status == JOB_STATUS_PENDING,
                 BackgroundJob.payload_json["warehouse_id"].as_string() == str(warehouse_id),
+                (
+                    BackgroundJob.payload_json["connection_id"].as_string() == str(connection_id)
+                    if connection_id is not None
+                    else BackgroundJob.payload_json["connection_id"].as_string().is_(None)
+                ),
             )
             .order_by(BackgroundJob.created_at)
             .limit(_CLAIM_SCAN_LIMIT)
@@ -436,7 +486,11 @@ async def claim_next_print_job(
                 BackgroundJob.id == candidate.id,
                 BackgroundJob.status == JOB_STATUS_PENDING,
             )
-            .values(status=JOB_STATUS_RUNNING, started_at=datetime.now(tz=UTC))
+            .values(
+                status=JOB_STATUS_RUNNING,
+                started_at=datetime.now(tz=UTC),
+                result_json={"claim_id": str(uuid.uuid4())},
+            )
             .execution_options(synchronize_session=False)
         )
         if getattr(claimed, "rowcount", 0) != 1:
@@ -452,13 +506,23 @@ async def get_agent_print_job(
     job_id: uuid.UUID,
     *,
     warehouse_id: uuid.UUID,
+    connection_id: uuid.UUID | None = None,
+    claim_id: str | None = None,
 ) -> BackgroundJob:
-    job = await session.get(BackgroundJob, job_id)
+    job = await session.scalar(
+        select(BackgroundJob)
+        .where(BackgroundJob.id == job_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if (
         job is None
         or job.tenant_id != tenant_id
         or job.job_type != JOB_TYPE_FBS_LABEL_PRINT
         or (job.payload_json or {}).get("warehouse_id") != str(warehouse_id)
+        or (job.payload_json or {}).get("connection_id")
+        != (str(connection_id) if connection_id else None)
+        or (connection_id is not None and (job.result_json or {}).get("claim_id") != claim_id)
     ):
         raise FbsPrintAssetError(
             "print_job_not_found",
@@ -489,13 +553,22 @@ async def load_print_job_content(
     job_id: uuid.UUID,
     *,
     warehouse_id: uuid.UUID,
+    connection_id: uuid.UUID | None = None,
+    claim_id: str | None = None,
 ) -> tuple[bytes, str]:
     """Отдать агенту файл только его выданного задания.
 
     Печать не «открывалась оператором», поэтому ``print_opened_at`` тут не
     трогаем: это отметка операторского просмотра, а не выдачи агенту.
     """
-    job = await get_agent_print_job(session, tenant_id, job_id, warehouse_id=warehouse_id)
+    job = await get_agent_print_job(
+        session,
+        tenant_id,
+        job_id,
+        warehouse_id=warehouse_id,
+        connection_id=connection_id,
+        claim_id=claim_id,
+    )
     if job.status != JOB_STATUS_RUNNING:
         raise FbsPrintAssetError(
             "print_job_not_running",
@@ -503,6 +576,17 @@ async def load_print_job_content(
             context={"job_id": str(job_id), "status": job.status},
         )
     payload = job.payload_json or {}
+    if payload.get("storage_path"):
+        try:
+            mime = str(payload["content_type"])
+            content = read_print_file(
+                str(payload["storage_path"]), checksum=payload.get("checksum"), content_type=mime
+            )
+        except FbsPrintAssetStorageError as exc:
+            raise FbsPrintAssetError(
+                "print_asset_changed", message="Файл печати повреждён."
+            ) from exc
+        return content, mime
     asset = await _load_ready_asset(session, tenant_id, uuid.UUID(str(payload.get("asset_id"))))
     if asset.checksum != payload.get("checksum"):
         raise FbsPrintAssetError(
@@ -522,6 +606,8 @@ async def finish_print_job(
     queue_receipt: str | None,
     handed_to_queue: bool,
     error_message: str | None,
+    connection_id: uuid.UUID | None = None,
+    claim_id: str | None = None,
 ) -> BackgroundJob:
     """Записать квитанцию очереди ОС.
 
@@ -529,11 +615,22 @@ async def finish_print_job(
     файл в очередь. Обрыв, при котором приём неизвестен, подтверждением не
     является: такое задание остаётся ``running`` без конечной квитанции.
     """
-    job = await get_agent_print_job(session, tenant_id, job_id, warehouse_id=warehouse_id)
+    job = await get_agent_print_job(
+        session,
+        tenant_id,
+        job_id,
+        warehouse_id=warehouse_id,
+        connection_id=connection_id,
+        claim_id=claim_id,
+    )
     target_status = JOB_STATUS_DONE if handed_to_queue else JOB_STATUS_FAILED
     if job.status in {JOB_STATUS_DONE, JOB_STATUS_FAILED}:
         recorded = (job.result_json or {}).get("queue_receipt")
-        if job.status != target_status or recorded != queue_receipt:
+        if (
+            job.status != target_status
+            or recorded != queue_receipt
+            or job.error_message != error_message
+        ):
             raise FbsPrintAssetError(
                 "print_job_result_conflict",
                 message="Задание печати уже завершено с другим результатом.",
@@ -548,6 +645,7 @@ async def finish_print_job(
         )
     job.status = target_status
     job.result_json = {
+        **(job.result_json or {}),
         "queue_receipt": queue_receipt,
         "handed_to_queue_at": datetime.now(tz=UTC).isoformat(),
     }

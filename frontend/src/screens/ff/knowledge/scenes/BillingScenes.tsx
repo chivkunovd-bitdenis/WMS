@@ -64,8 +64,8 @@ function shiftedByDays(days: number): string {
 const FOCUS_SELLER = SELLERS[1]
 
 const EMPLOYEES = [
-  { id: 'u-1', email: 'smirnova@korob-vms.ru', packaging_rate_rub: '12.00' },
-  { id: 'u-2', email: 'kim@korob-vms.ru' },
+  { id: 'u-1', display_name: 'Смирнова Анна', packaging_rate_rub: '12.00' },
+  { id: 'u-2', display_name: 'Ким Алексей' },
 ]
 
 /**

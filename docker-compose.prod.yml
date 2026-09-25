@@ -56,7 +56,7 @@ services:
       WMS_MAIL_FROM: ${WMS_MAIL_FROM:-}
       WMS_MAIL_FROM_NAME: ${WMS_MAIL_FROM_NAME:-Короб ВМС}
       WMS_AUTH_LINK_TTL_HOURS: ${WMS_AUTH_LINK_TTL_HOURS:-72}
-      WMS_ALLOW_PUBLIC_REGISTRATION: ${WMS_ALLOW_PUBLIC_REGISTRATION:-false}
+      WMS_ALLOW_PUBLIC_REGISTRATION: ${WMS_ALLOW_PUBLIC_REGISTRATION:-true}
       WMS_SUBSCRIPTION_PRICE_RUB: ${WMS_SUBSCRIPTION_PRICE_RUB:-10000}
       # WMS-382. Магазин ЮKassa — тот же, что у оцифровки. Вебхук не трогаем:
       # он один на магазин и настроен на соседний продукт, статус платежа
@@ -128,6 +128,10 @@ services:
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
+      # WMS-477 — интервал отдельного цикла сверки вердиктов ЧЗ; расписание
+      # считается в процессе beat из settings, поэтому переменная нужна только
+      # здесь, не в celery_worker и не в api.
+      FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC: ${FBS_MARKING_VERDICTS_SYNC_INTERVAL_SEC:-60}
     depends_on:
       redis:
         condition: service_healthy

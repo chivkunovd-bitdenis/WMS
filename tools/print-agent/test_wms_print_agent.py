@@ -53,7 +53,7 @@ class PrintAgentTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 check_base_url(bad)
         self.assertEqual(check_queue("Warehouse_58"), "Warehouse_58")
-        for bad in ["-d", "queue name", ""]:
+        for bad in ["-d", "queue\nname", ""]:
             with self.assertRaises(ValueError):
                 check_queue(bad)
 

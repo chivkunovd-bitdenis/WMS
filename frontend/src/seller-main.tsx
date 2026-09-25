@@ -1,6 +1,8 @@
+import { ErrorBoundary, RootRouteError } from './components/errors/ErrorBoundary'
+import { installClientErrorHandlers } from './utils/clientErrorReport'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import './index.css'
 import './ui/ui.css'
@@ -11,14 +13,21 @@ import { SellerApp } from './apps/seller/SellerApp'
 const sellerRouterBasename =
   import.meta.env.VITE_SELLER_ROUTER_BASENAME?.trim() || '/seller'
 
+installClientErrorHandlers('seller')
+const router = createBrowserRouter([{
+  path: '*',
+  element: <ErrorBoundary component="SellerApp" root portal="seller"><SellerApp /></ErrorBoundary>,
+  errorElement: <RootRouteError portal="seller" />,
+}], { basename: sellerRouterBasename })
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
-      <WmsDatePickersProvider>
-        <BrowserRouter basename={sellerRouterBasename}>
-          <SellerApp />
-        </BrowserRouter>
-      </WmsDatePickersProvider>
+      <ErrorBoundary component="portal" root portal="seller">
+        <WmsDatePickersProvider>
+          <RouterProvider router={router} />
+        </WmsDatePickersProvider>
+      </ErrorBoundary>
     </ThemeProvider>
   </StrictMode>,
 )

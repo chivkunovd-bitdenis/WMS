@@ -1,0 +1,109 @@
+[
+  {
+    "url": "http://127.0.0.1:5197/api/billing/seller-report/storage-total?date_from=2026-09-13&date_to=2026-09-13",
+    "status": 200,
+    "body": {
+      "liter_days": 0,
+      "amount_kopecks": 0,
+      "complete": true
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5197/api/billing/seller-report/summary?date_from=2026-09-13&date_to=2026-09-13&include_finance=true",
+    "status": 200,
+    "body": {
+      "rows": [
+        {
+          "operation_count": 1,
+          "item_quantity": 3,
+          "not_billable_count": 0,
+          "inbound_items": 3,
+          "packing_items": 0,
+          "outbound_items": 0,
+          "fbs_items": 0,
+          "unpriced_count": 0,
+          "gross_total_kopecks": 3000,
+          "reversal_total_kopecks": 0,
+          "net_total_kopecks": 3000,
+          "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+          "seller_name": "Final seller 5da311",
+          "details_target": "/api/billing/seller-report/sellers/1c4c9d08-2fba-435d-86f6-2c1261230f37/details"
+        }
+      ],
+      "totals": {
+        "operation_count": 1,
+        "item_quantity": 3,
+        "not_billable_count": 0,
+        "inbound_items": 3,
+        "packing_items": 0,
+        "outbound_items": 0,
+        "fbs_items": 0,
+        "unpriced_count": 0,
+        "gross_total_kopecks": 3000,
+        "reversal_total_kopecks": 0,
+        "net_total_kopecks": 3000,
+        "seller_count": 1
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:5197/api/billing/seller-report/sellers/1c4c9d08-2fba-435d-86f6-2c1261230f37/details?date_from=2026-09-13&date_to=2026-09-13&include_finance=true&limit=1000",
+    "status": 200,
+    "body": {
+      "seller_id": "1c4c9d08-2fba-435d-86f6-2c1261230f37",
+      "seller_name": "Final seller 5da311",
+      "entries": [
+        {
+          "id": "operation_fact:02c37809-64f8-4539-af98-b4b6738aa9fa",
+          "kind": "operation_fact",
+          "occurred_at": "2026-09-13T23:24:01.496942+03:00",
+          "service_code": "inbound",
+          "item_quantity": 3,
+          "source_type": "inbound_intake",
+          "source_id": "936cc6a4-60e8-4916-acc3-6356b8a396a1",
+          "source_target": {
+            "kind": "inbound",
+            "source_id": "936cc6a4-60e8-4916-acc3-6356b8a396a1"
+          },
+          "supply": null,
+          "document_number": "ПРИЕМ-26-09-13-1",
+          "product_name": "Final native item 5da311",
+          "sku": "FINAL-SKU-5da311",
+          "fbs_status_label": null,
+          "priced_live": false,
+          "result": "completed",
+          "rate_kopecks": 1000,
+          "amount_kopecks": 3000,
+          "unit": "item",
+          "invoice_history": {
+            "state": "known",
+            "count": 0
+          },
+          "billing_ledger_entry_id": "b8d00fb7-4fff-42c2-8470-8988124a705d"
+        }
+      ],
+      "next_cursor": null,
+      "storage_row": {
+        "kind": "storage",
+        "date_from": "2026-09-13",
+        "date_to": "2026-09-13",
+        "liter_days": 0,
+        "status": "calculated",
+        "amount_kopecks": 0
+      },
+      "totals": {
+        "operation_count": 1,
+        "item_quantity": 3,
+        "not_billable_count": 0,
+        "inbound_items": 3,
+        "packing_items": 0,
+        "outbound_items": 0,
+        "fbs_items": 0,
+        "unpriced_count": 0,
+        "gross_total_kopecks": 3000,
+        "reversal_total_kopecks": 0,
+        "net_total_kopecks": 3000
+      }
+    }
+  }
+]

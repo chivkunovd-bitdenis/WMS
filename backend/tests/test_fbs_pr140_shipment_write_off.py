@@ -556,6 +556,23 @@ async def test_units_shipment_consumes_once_with_or_without_reserve(
     case.order.wb_warehouse_id = 777
     db_session.add(binding)
     await db_session.flush()
+    if marketplace == "ozon":
+        from app.models.product_marketplace_link import ProductMarketplaceLink
+
+        # WMS-456: the effective Ozon flag set below only takes effect with an
+        # active Ozon card — this test is about single-consumption accounting,
+        # not about the card itself, so every product gets an honest one.
+        for product_id in case.product_ids:
+            db_session.add(
+                ProductMarketplaceLink(
+                    tenant_id=case.tenant_id,
+                    seller_id=case.order.seller_id,
+                    product_id=product_id,
+                    marketplace="ozon",
+                    external_offer_id=f"ozon-write-off-{product_id.hex[:10]}",
+                    is_active=True,
+                )
+            )
     pools = []
     for product_id in case.product_ids:
         product = await db_session.get(Product, product_id)

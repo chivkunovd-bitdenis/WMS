@@ -45,9 +45,11 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import fbs_packing_box_service as packing_box_svc
+from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_picking_order_service import picking_list_order_key
+from app.services.fbs_supply_validator_service import order_delivery_route
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
     build_tracking_summary,
@@ -164,6 +166,7 @@ async def get_supply_workspace(
             "name": supply.name,
             "status": supply.status,
             "delivery_type": supply.delivery_type,
+            "delivery_route": order_delivery_route(orders[0]) if orders else None,
             "seller": {
                 "id": str(supply.seller_id),
                 "name": supply.seller.name if supply.seller else "Селлер не найден",
@@ -595,6 +598,15 @@ async def _build_boxes(
             str(order.id): bool((order.meta_details_json or {}).get("ozon_assembly"))
             for order in orders
         }
+        label_errors = {
+            str(order.id): label_error
+            for order in orders
+            if (
+                label_error := (order.meta_details_json or {}).get(
+                    ozon_assembly_svc.LABEL_ERROR_KEY
+                )
+            )
+        }
         ozon_assets = list(
             (
                 await session.scalars(
@@ -615,6 +627,16 @@ async def _build_boxes(
             if assigned:
                 box["ozon_assembled"] = assembled.get(assigned[0], False)
                 box["qr_asset"] = _map_print_asset(assets_by_order.get(assigned[0]))
+                # R12 contract: null once a ready label exists, even if a
+                # stale reason is still sitting in meta_details_json (e.g.
+                # clear_order_label_error hasn't run for this particular
+                # asset yet) — a ready label always wins over a remembered
+                # failure.
+                box["ozon_label_error"] = (
+                    None
+                    if assigned[0] in assets_by_order
+                    else label_errors.get(assigned[0])
+                )
         return boxes
     result = await session.execute(
         select(FbsPrintAsset).where(

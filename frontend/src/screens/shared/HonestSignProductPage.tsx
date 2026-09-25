@@ -71,6 +71,7 @@ type LedgerRow = {
   cis_masked: string | null
   document_number: string | null
   actor_email: string | null
+  actor_name?: string | null
   source_process_label: string | null
   aggregated_count?: number | null
 }
@@ -751,7 +752,7 @@ export function HonestSignProductPage({
                       <TableCell sx={{ wordBreak: 'break-all' }}>
                         {isAggregatedImport ? '—' : row.cis_code ?? row.cis_masked ?? '—'}
                       </TableCell>
-                      <TableCell>{row.actor_email ?? '—'}</TableCell>
+                      <TableCell>{row.actor_name ?? 'Сотрудник не указан'}</TableCell>
                       <TableCell>{row.source_process_label ?? '—'}</TableCell>
                       <TableCell>{row.document_number ?? '—'}</TableCell>
                     </TableRow>

@@ -600,6 +600,7 @@ async def record_fbs_pack_progress(
     order_id: uuid.UUID | None = None,
     acting_user_id: uuid.UUID | None = None,
     idempotency_key: str | None = None,
+    replay_only: bool = False,
 ) -> FbsPackProgressResult:
     """Record one packaging fact per FBS unit without touching warehouse stock."""
     if qty < 1:
@@ -657,8 +658,20 @@ async def record_fbs_pack_progress(
                 None,
             )
         if existing is not None:
+            matched_unit = next((unit for unit in _ozon_packed_units(existing)
+                                 if unit.get("idempotency_key") == unit_key), None)
+            existing_line = (
+                matched_unit.get("packaging_task_line_id") if matched_unit is not None
+                else str(existing.packaging_task_line_id)
+            )
+            if (existing_line != str(line.id)
+                    or (order_id is not None and existing.fbs_order_id != order_id)):
+                raise FbsPackagingIntegrationError("idempotency_conflict")
             units.append(FbsPackUnitResult(existing, existing.order))
             continue
+
+        if replay_only:
+            raise FbsPackagingIntegrationError("idempotency_conflict")
 
         ozon_fulfillment: FbsPackagingFulfillment | None = None
         if supply.marketplace == "ozon":

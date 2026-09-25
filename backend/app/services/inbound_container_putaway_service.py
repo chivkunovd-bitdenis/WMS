@@ -14,6 +14,7 @@ from app.models.inbound_intake import (
     InboundIntakeCargoPlaceLine,
     InboundIntakeRequest,
 )
+from app.models.inventory_balance import InventoryBalance
 from app.services import inbound_intake_service
 from app.services.inbound_intake_service import InboundIntakeError
 from app.services.inventory_container_service import ContainerKind
@@ -101,6 +102,15 @@ async def putaway_pending_container(
     if pending_qty < 1:
         if line_count > 0:
             raise InboundContainerPutawayError("nothing_to_move")
+        return None
+    if kind == "cargo_place" and destination_is_cell:
+        physical_qty = await session.scalar(select(func.sum(InventoryBalance.quantity)).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.container_kind == kind,
+            InventoryBalance.container_id == container_id,
+        ))
+        if not physical_qty:
+            raise InboundContainerPutawayError("container_stock_missing")
         return None
     if kind != "box" or not destination_is_cell:
         raise InboundContainerPutawayError("container_stock_missing")

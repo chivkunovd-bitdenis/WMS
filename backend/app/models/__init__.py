@@ -53,6 +53,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
+from app.models.kiz_reprint import KizReprint
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -77,6 +78,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.ozon_return import InboundOzonReturnGiveout, InboundOzonReturnItem
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.pallet import Pallet
+from app.models.print_connection import PrintConnection
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -157,6 +159,7 @@ __all__ = [
     "InventoryCountLine",
     "InventoryMovement",
     "InventoryReservation",
+    "KizReprint",
     "MarketplaceAccount",
     "MarketplaceUnloadBox",
     "MarketplaceUnloadBoxLine",
@@ -181,6 +184,7 @@ __all__ = [
     "PackagingTaskEvent",
     "PackagingTaskLine",
     "Pallet",
+    "PrintConnection",
     "PrintTemplate",
     "Product",
     "ProductDimensionEvent",

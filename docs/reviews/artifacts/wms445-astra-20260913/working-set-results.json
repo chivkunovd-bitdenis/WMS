@@ -1,0 +1,30 @@
+{
+  "C16_C18_wb": {
+    "working": 5,
+    "pages": 3,
+    "older_history": 105,
+    "repeat_same_ids": true,
+    "foreign_tenant_excluded": true
+  },
+  "C16_C18_ozon": {
+    "working": 5,
+    "pages": 3,
+    "older_history": 105,
+    "repeat_same_ids": true,
+    "foreign_tenant_excluded": true
+  },
+  "C16_reads_preserve_status_and_supply_links": true,
+  "C19_saved_status_refresh": {
+    "terminal_disappeared": true,
+    "own_ozon_stages_kept": true,
+    "active_supply_kept": true,
+    "boundary": "status application routines, no external poll or delivery UI"
+  },
+  "C20_served_and_active": {
+    "served_false_hidden": true,
+    "inactive_hidden": true,
+    "restored_visible": true,
+    "publication_disabled_visible": true,
+    "ozon_unchanged": true
+  }
+}

@@ -209,15 +209,23 @@ export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
   const bwipjs = await import('bwip-js')
   const canvas = document.createElement('canvas')
   // scale 4 — запас разрешения: на крупных этикетках (60×80, 70×120) матрица
-  // растягивается до ~35–45 мм, при scale 2 модули замыливаются.
-  bwipjs.toCanvas(canvas, {
+  // растягивается до ~35–45 мм, при scale 2 модули замыливаются. Отдельный
+  // height здесь недопустим: bwip-js применяет его только по Y и превращает
+  // квадратные модули Data Matrix в прямоугольные. Два модуля белого поля
+  // оставляем внутри PNG, чтобы CSS-вписывание не могло обрезать quiet zone.
+  bwipjs.toCanvas(canvas, buildDataMatrixRenderOptions(cis))
+  return canvas.toDataURL('image/png')
+}
+
+export function buildDataMatrixRenderOptions(cis: string) {
+  return {
     bcid: 'datamatrix',
     text: cis,
     scale: 4,
-    height: 12,
+    padding: 4,
+    backgroundcolor: 'FFFFFF',
     includetext: false,
-  })
-  return canvas.toDataURL('image/png')
+  } as const
 }
 
 export function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
@@ -496,12 +504,19 @@ export function beginPrintUserGesture(): void {
   if (typeof window === 'undefined') {
     return
   }
+  cancelPendingPrintWindow()
   printWindowFromUserGesture = window.open('', '_blank')
   if (printWindowFromUserGesture) {
     printWindowFromUserGesture.document.title = 'Печать'
     printWindowFromUserGesture.document.body.innerHTML =
-      '<p style="font-family:sans-serif;padding:16px">Загрузка PDF…</p>'
+      '<p style="font-family:sans-serif;padding:16px">Подготовка этикеток…</p>'
   }
+}
+
+/** Close only a reserved window that no print renderer has consumed. */
+export function cancelPendingPrintWindow(): void {
+  const pending = takePrintWindowFromUserGesture()
+  if (pending && !pending.closed) pending.close()
 }
 
 function takePrintWindowFromUserGesture(): Window | null {
@@ -716,72 +731,122 @@ declare global {
   }
 }
 
-async function printHtmlInIframe(html: string): Promise<void> {
+export async function printHtmlInIframe(html: string): Promise<void> {
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
     window.__WMS_LAST_PRINT_HTML__ = html
   }
 
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  document.body.appendChild(iframe)
+  const reservedWindow = takePrintWindowFromUserGesture()
+  const popup = reservedWindow && !reservedWindow.closed ? reservedWindow : null
+  return new Promise<void>((resolve, reject) => {
+    const iframe = popup ? null : document.createElement('iframe')
+    if (iframe) {
+      iframe.setAttribute('aria-hidden', 'true')
+      iframe.style.position = 'fixed'
+      iframe.style.left = '-10000px'
+      iframe.style.top = '0'
+      iframe.style.width = '210mm'
+      iframe.style.height = '297mm'
+      iframe.style.border = '0'
+    }
 
-  const cleanup = () => {
-    try {
-      document.body.removeChild(iframe)
-    } catch {
-      // ignore
-    }
-  }
-
-  const printNow = () => {
-    const w = iframe.contentWindow
-    if (!w) {
-      cleanup()
-      return
-    }
-    try {
-      w.focus()
-    } catch {
-      // ignore
-    }
-    setTimeout(() => {
+    let settled = false
+    let printScheduled = false
+    const cleanup = () => {
       try {
-        w.print()
-      } finally {
-        setTimeout(cleanup, 500)
-      }
-    }, 100)
-  }
-
-  iframe.srcdoc = html
-  iframe.onload = () => {
-    const doc = iframe.contentDocument
-    const imgs = doc?.querySelectorAll('img') ?? []
-    if (imgs.length === 0) {
-      printNow()
-      return
-    }
-    let pending = imgs.length
-    const done = () => {
-      pending -= 1
-      if (pending <= 0) {
-        printNow()
+        if (iframe) document.body.removeChild(iframe)
+      } catch {
+        // ignore
       }
     }
-    imgs.forEach((img) => {
-      const el = img as HTMLImageElement
-      if (el.complete) {
-        done()
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeoutId)
+      callback()
+    }
+    const fail = (message: string) => {
+      finish(() => {
+        cleanup()
+        if (popup && !popup.closed) popup.close()
+        reject(new Error(message))
+      })
+    }
+    const timeoutId = window.setTimeout(
+      () => fail('Не удалось открыть форму печати КИЗ (таймаут).'),
+      20_000,
+    )
+    const printNow = () => {
+      if (settled || printScheduled) return
+      printScheduled = true
+      const frameWindow = popup ?? iframe?.contentWindow
+      if (!frameWindow) {
+        fail('Не удалось открыть форму печати КИЗ.')
         return
       }
-      el.addEventListener('load', done, { once: true })
-      el.addEventListener('error', done, { once: true })
-    })
-  }
+      try {
+        frameWindow.focus()
+      } catch {
+        // Browser focus can be denied while the print form itself remains usable.
+      }
+      window.setTimeout(() => {
+        if (settled) return
+        try {
+          frameWindow.print()
+        } catch {
+          fail('Не удалось запустить печать КИЗ.')
+          return
+        }
+        // ``window.print`` has been invoked: the browser has received the print
+        // form.  We cannot truthfully wait for a physical printer afterwards.
+        finish(() => {
+          window.setTimeout(cleanup, 500)
+          resolve()
+        })
+      }, 100)
+    }
+
+    const onLoad = () => {
+      if (settled) return
+      const doc = popup?.document ?? iframe?.contentDocument
+      // An iframe's initial about:blank load is not the label document.
+      if (iframe && doc?.URL === 'about:blank') return
+      const imgs = doc?.querySelectorAll('img') ?? []
+      if (imgs.length === 0) {
+        printNow()
+        return
+      }
+      let pending = imgs.length
+      const done = () => {
+        if (settled) return
+        pending -= 1
+        if (pending <= 0) printNow()
+      }
+      imgs.forEach((img) => {
+        const el = img as HTMLImageElement
+        if (el.complete) {
+          done()
+          return
+        }
+        el.addEventListener('load', done, { once: true })
+        el.addEventListener('error', done, { once: true })
+      })
+    }
+    if (popup) {
+      try {
+        popup.document.open()
+        popup.onload = onLoad
+        popup.document.write(html)
+        popup.document.close()
+      } catch {
+        fail('Не удалось загрузить форму печати КИЗ.')
+      }
+    } else if (iframe) {
+      iframe.onerror = () => fail('Не удалось загрузить форму печати КИЗ.')
+      iframe.onload = onLoad
+      // Set the content before insertion, so we never print an empty document.
+      iframe.srcdoc = html
+      document.body.appendChild(iframe)
+    }
+  })
 }

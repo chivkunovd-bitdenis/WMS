@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FULFILLMENT_SELLER
-from app.core.settings import settings
 from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.user import User
@@ -21,19 +20,10 @@ class SellerShopError(Exception):
 _TEST_EMAIL_SUFFIXES = ("@test.example.com", "@example.com")
 _TEST_EMAIL_PREFIXES = ("e2e-", "iso-", "test-", "cat-")
 
-# Built-in allowlist for shop manager UI (seller portal sidebar).
-# Also: users.can_manage_seller_shops in DB, WMS_SHOP_MANAGER_EMAILS env.
-_SHOP_MANAGER_EMAIL_MARKERS = (
-    "vitalik",
-    "vitaliy",
-    "виталий",
-    "denmark",
-    "denmarks",
-    "денмарк",
-)
 
-
-def is_test_user_email(email: str) -> bool:
+def is_test_user_email(email: str | None) -> bool:
+    if email is None:
+        return False
     normalized = email.strip().lower()
     if any(normalized.endswith(suffix) for suffix in _TEST_EMAIL_SUFFIXES):
         return True
@@ -42,20 +32,14 @@ def is_test_user_email(email: str) -> bool:
 
 
 def user_can_manage_seller_shops(user: User) -> bool:
-    """Shop switcher in seller portal — allowlist only (not all sellers)."""
+    """Shop management requires an explicit grant, independent of email."""
     if user.role != FULFILLMENT_SELLER or user.seller_id is None:
         return False
-    if user.can_manage_seller_shops:
-        return True
-    email = user.email.strip().lower()
-    if any(marker in email for marker in _SHOP_MANAGER_EMAIL_MARKERS):
-        return True
-    configured = settings.shop_manager_emails.strip().lower()
-    if configured:
-        allowed = {e.strip() for e in configured.split(",") if e.strip()}
-        if email in allowed:
-            return True
-    return False
+    return bool(user.can_manage_seller_shops)
+
+
+async def can_manage_seller_shops(session: AsyncSession, user: User) -> bool:
+    return user_can_manage_seller_shops(user)
 
 
 async def is_test_seller(
@@ -83,7 +67,7 @@ async def list_delegatable_shops(
     user: User,
 ) -> list[tuple[Seller, bool]]:
     """Explicitly allowed tenant sellers except own and test; bool = enabled."""
-    if not user_can_manage_seller_shops(user) or user.seller_id is None:
+    if not await can_manage_seller_shops(session, user) or user.seller_id is None:
         return []
     sellers_stmt = (
         select(Seller, SellerShopDelegation.enabled)
@@ -112,7 +96,7 @@ async def update_enabled_shops(
     user: User,
     enabled_seller_ids: list[uuid.UUID],
 ) -> list[tuple[Seller, bool]]:
-    if not user_can_manage_seller_shops(user):
+    if not await can_manage_seller_shops(session, user):
         raise SellerShopError("forbidden")
     allowed = {
         seller.id
@@ -155,7 +139,7 @@ async def can_act_as_seller(
         return False
     if target_seller_id == user.seller_id:
         return True
-    if not user_can_manage_seller_shops(user):
+    if not await can_manage_seller_shops(session, user):
         return False
     stmt = select(SellerShopDelegation).where(
         SellerShopDelegation.user_id == user.id,
@@ -192,7 +176,7 @@ async def list_switchable_shops(
     if home is None:
         return []
     shops = [home]
-    if not user_can_manage_seller_shops(user):
+    if not await can_manage_seller_shops(session, user):
         return shops
     for seller, enabled in await list_delegatable_shops(session, user):
         if enabled:

@@ -43,6 +43,7 @@ export function WarehouseMapToolbar({
   onToggleAll,
   onCreateCell,
   onCreateWarehouse,
+  onPrinter,
   createCellDisabledReason,
   toggleAllDisabledReason,
 }: {
@@ -64,6 +65,7 @@ export function WarehouseMapToolbar({
   onToggleAll: () => void
   onCreateCell: () => void
   onCreateWarehouse: () => void
+  onPrinter: () => void
   createCellDisabledReason?: string
   toggleAllDisabledReason?: string
 }) {
@@ -109,6 +111,9 @@ export function WarehouseMapToolbar({
           >
             Создать ячейку
           </PrimaryAction>
+          <SecondaryAction onClick={onPrinter} data-testid="warehouse-map-printer">
+            Принтер
+          </SecondaryAction>
         </ActionGroup>
       }
     >

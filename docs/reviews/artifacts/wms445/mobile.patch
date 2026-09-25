@@ -1,0 +1,644 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+index 6599df7..2ffddea 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+@@ -6,6 +6,10 @@ import kotlinx.serialization.encodeToString
+ import kotlinx.serialization.decodeFromString
+ import ru.wms.tsd.core.api.fbs.DeliverBody
+ import ru.wms.tsd.core.api.fbs.FbsApi
++import ru.wms.tsd.core.api.fbs.FbsPendingIdentity
++import ru.wms.tsd.core.api.fbs.FbsPendingIdentityApi
++import ru.wms.tsd.core.api.fbs.PendingFbsSupplyAdd
++import ru.wms.tsd.core.api.fbs.SupplyCreateBody
+ import ru.wms.tsd.BuildConfig
+ import ru.wms.tsd.core.api.generated.apis.OperationsApi
+ import ru.wms.tsd.core.api.generated.apis.WarehousesApi
+@@ -28,6 +32,7 @@ class ApiProvider(
+     private var cachedOperations: OperationsApi? = null
+     private var cachedWarehouses: WarehousesApi? = null
+     private var cachedFbs: FbsApi? = null
++    private var cachedFbsPendingIdentity: FbsPendingIdentity? = null
+ 
+     private fun baseUrl(): String {
+         return normalizeBaseUrl(authStore.getBaseUrl() ?: BuildConfig.DEFAULT_API_BASE_URL)
+@@ -56,9 +61,42 @@ class ApiProvider(
+         cachedOperations = null
+         cachedWarehouses = null
+         cachedFbs = null
++        cachedFbsPendingIdentity = null
+         return client
+     }
+ 
++    private suspend fun fbsPendingIdentity(): FbsPendingIdentity {
++        cachedFbsPendingIdentity?.let { return it }
++        val response = client().createService(FbsPendingIdentityApi::class.java).me()
++        val identity = response.body()
++        require(response.isSuccessful && identity != null && identity.id.isNotBlank() && identity.tenantId.isNotBlank()) {
++            "Не удалось определить сотрудника для восстановления FBS. Войдите снова."
++        }
++        return identity.also { cachedFbsPendingIdentity = it }
++    }
++
++    suspend fun pendingFbsSupplyCreate(): SupplyCreateBody? {
++        val identity = fbsPendingIdentity()
++        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create")
++            ?.let { Json.decodeFromString<SupplyCreateBody>(it) }
++    }
++
++    suspend fun saveFbsSupplyCreate(body: SupplyCreateBody?) {
++        val identity = fbsPendingIdentity()
++        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_create", body?.let { Json.encodeToString(it) })
++    }
++
++    suspend fun pendingFbsSupplyAdd(): PendingFbsSupplyAdd? {
++        val identity = fbsPendingIdentity()
++        return authStore.getFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add")
++            ?.let { Json.decodeFromString<PendingFbsSupplyAdd>(it) }
++    }
++
++    suspend fun saveFbsSupplyAdd(body: PendingFbsSupplyAdd?) {
++        val identity = fbsPendingIdentity()
++        authStore.saveFbsPendingMutation(baseUrl(), identity.tenantId, identity.id, "supply_add", body?.let { Json.encodeToString(it) })
++    }
++
+     fun pendingFbsDelivery(supplyId: String): DeliverBody? =
+         authStore.getFbsDelivery(baseUrl(), supplyId)?.let { Json.decodeFromString<DeliverBody>(it) }
+ 
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index 1442fba..a57387e 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -2,6 +2,7 @@ package ru.wms.tsd.core.api.fbs
+ 
+ import kotlinx.serialization.SerialName
+ import kotlinx.serialization.Serializable
++import kotlinx.serialization.json.JsonPrimitive
+ import kotlinx.serialization.json.JsonObject
+ 
+ @Serializable
+@@ -23,10 +24,18 @@ data class FbsSupplySummary(
+     @SerialName("units_count") val unitsCount: Int,
+     @SerialName("boxes_count") val boxesCount: Int,
+     @SerialName("planned_shipment_date") val plannedShipmentDate: String? = null,
++    val marketplace: String = "wb",
++    @SerialName("delivery_type") val deliveryType: String = "warehouse_sc",
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
++    @SerialName("can_add_orders") val canAddOrders: Boolean = true,
+ )
+ 
+ @Serializable
+ data class FbsNamedRef(
++    // WB warehouse identifiers are numbers while WMS and seller identifiers are
++    // UUIDs. JsonPrimitive keeps both exact without turning a number into a
++    // made-up string in the compatibility hint.
++    val id: JsonPrimitive? = null,
+     val name: String? = null,
+ )
+ 
+@@ -57,6 +66,8 @@ data class FbsWorkspaceSupply(
+     @SerialName("nearest_deadline_at") val nearestDeadlineAt: String,
+     @SerialName("packaging_task_id") val packagingTaskId: String? = null,
+     val marketplace: String = "wb",
++    @SerialName("delivery_type") val deliveryType: String = "warehouse_sc",
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
+ )
+ 
+ @Serializable
+@@ -87,6 +98,11 @@ data class FbsOrder(
+     @SerialName("created_at_wb") val createdAt: String = "",
+     @SerialName("supply_id") val supplyId: String? = null,
+     val seller: FbsNamedRef = FbsNamedRef(),
++    @SerialName("wb_warehouse") val wbWarehouse: FbsNamedRef = FbsNamedRef(),
++    @SerialName("wms_warehouse") val wmsWarehouse: FbsNamedRef = FbsNamedRef(),
++    @SerialName("delivery_route") val deliveryRoute: String? = null,
++    @SerialName("can_pvz") val canPvz: Boolean = false,
++    @SerialName("selection_blockers") val selectionBlockers: List<FbsSelectionBlocker> = emptyList(),
+     val product: FbsProduct,
+     val positions: List<FbsPosition> = emptyList(),
+     val sticker: FbsSticker,
+@@ -116,6 +132,13 @@ data class FbsPosition(
+     @SerialName("picked_quantity") val pickedQuantity: Int,
+     val id: String = "",
+     val barcode: String? = null,
++    @SerialName("packed_quantity") val packedQuantity: Int = 0,
++)
++
++@Serializable
++data class FbsSelectionBlocker(
++    val code: String,
++    val message: String,
+ )
+ 
+ @Serializable data class FbsSticker(val code: String? = null, val status: String)
+@@ -352,3 +375,33 @@ data class FbsDeliveryCheck(
+ fun FbsOrder.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: id}" else "WB $wbOrderId"
+ fun KizLookup.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: orderId}" else "WB $wbOrderId"
+ fun FbsWorkspace.marketplaceLabel(): String = if (supply.marketplace == "ozon") "Ozon" else "WB"
++fun FbsOrder.marketplaceLabel(): String = if (marketplace == "ozon") "Ozon" else "WB"
++fun FbsSupplySummary.marketplaceLabel(): String = if (marketplace == "ozon") "Ozon" else "WB"
++fun FbsOrder.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (canPvz) "ПВЗ" else "Склад / СЦ"
++fun FbsSupplySummary.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (deliveryType == "pvz") "ПВЗ" else "Склад / СЦ"
++fun FbsWorkspaceSupply.deliveryRouteLabel(): String = if (marketplace == "ozon") deliveryRoute ?: "Способ доставки не указан" else if (deliveryType == "pvz") "ПВЗ" else "Склад / СЦ"
++
++fun FbsOrder.statusLabel(): String = when (status) {
++    "new" -> "Новый"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакован"
++    "delivered" -> "Передан"
++    "cancelled" -> "Отменён"
++    else -> status
++}
++fun FbsSupplySummary.statusLabel(): String = when (status) {
++    "new" -> "Новая"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакована"
++    "delivered" -> "Передана"
++    "cancelled" -> "Отменена"
++    else -> status
++}
++fun FbsWorkspaceSupply.statusLabel(): String = when (status) {
++    "new" -> "Новая"
++    "assembling" -> "В сборке"
++    "packed" -> "Упакована"
++    "delivered" -> "Передана"
++    "cancelled" -> "Отменена"
++    else -> status
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
+new file mode 100644
+index 0000000..8104300
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsPendingMutation.kt
+@@ -0,0 +1,30 @@
++package ru.wms.tsd.core.api.fbs
++
++import kotlinx.serialization.SerialName
++import kotlinx.serialization.Serializable
++import retrofit2.Response
++import retrofit2.http.GET
++
++/** Identity returned by the existing authenticated `/auth/me` endpoint. */
++@Serializable
++data class FbsPendingIdentity(
++    val id: String,
++    @SerialName("tenant_id") val tenantId: String,
++)
++
++/**
++ * A process-safe copy of the one create/add intent. It is keyed outside this
++ * object by server, tenant and user, and is removed only after the server
++ * confirms the same idempotency body.
++ */
++@Serializable
++data class PendingFbsSupplyAdd(
++    val supplyId: String,
++    val body: SupplyOrdersBody,
++)
++
++/** Hand-written so the generated API jar is not regenerated for one read. */
++interface FbsPendingIdentityApi {
++    @GET("auth/me")
++    suspend fun me(): Response<FbsPendingIdentity>
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+index 4243fa6..25cd72d 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+@@ -55,6 +55,17 @@ class AuthStore(context: Context) {
+         check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
+     }
+ 
++    /** FBS-only operation intent, scoped to the authenticated server tenant and user. */
++    fun getFbsPendingMutation(server: String, tenantId: String, userId: String, kind: String): String? =
++        encryptedPrefs.getString("fbs_pending:$server:$tenantId:$userId:$kind", null)
++
++    fun saveFbsPendingMutation(server: String, tenantId: String, userId: String, kind: String, value: String?) {
++        val key = "fbs_pending:$server:$tenantId:$userId:$kind"
++        val edit = encryptedPrefs.edit()
++        if (value == null) edit.remove(key) else edit.putString(key, value)
++        check(edit.commit()) { "Не удалось сохранить запрос FBS на устройстве. Повторите попытку." }
++    }
++
+     fun getSavedStaff(): List<SavedStaff> {
+         val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
+         return try {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 1476576..dea98e5 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -47,9 +47,25 @@ internal fun displayTime(value: String): String = runCatching {
+     val vm = fbsViewModel(); val state by vm.state.collectAsState()
+     var createDialog by remember { mutableStateOf(false) }
+     var chooseSupply by remember { mutableStateOf(false) }
++    var showingWork by remember { mutableStateOf(false) }
+     var name by remember { mutableStateOf("") }
+     var delivery by remember { mutableStateOf("warehouse_sc") }
++    val selectedOrders = state.selectedOrders()
++    val compatibleSupplies = state.supplies.filter { it.isCompatibleWith(selectedOrders) }
++    val restoredAddSupply = state.restoredSupplyAddId?.let { id -> state.supplies.firstOrNull { it.id == id } }
++    val visibleSupplies = (compatibleSupplies + listOfNotNull(restoredAddSupply)).distinctBy { it.id }
+     LifecycleResumeEffect(Unit) { vm.loadOrders(); onPauseOrDispose {} }
++    LaunchedEffect(state.restoredSupplyCreate?.idempotencyKey, state.restoredSupplyAddId) {
++        state.restoredSupplyCreate?.let { saved ->
++            name = saved.name
++            delivery = saved.deliveryType
++            createDialog = true
++            vm.resumePendingSupplyMutation(onOpen)
++        } ?: state.restoredSupplyAddId?.let {
++            chooseSupply = true
++            vm.resumePendingSupplyMutation(onOpen)
++        }
++    }
+     ScanScaffold(title = "FBS · Заказы", flash = state.flash, onExit = onBack, cameraScanner = false) {
+         Column(Modifier.fillMaxSize()) {
+             ErrorPanel(state, vm)
+@@ -67,37 +83,74 @@ internal fun displayTime(value: String): String = runCatching {
+                     )
+                 }
+             }
+-            if (state.selected.isNotEmpty()) Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
++                TextButton(onClick = { showingWork = !showingWork }, enabled = !state.busy) {
++                    Text(if (showingWork) "К заказам" else "В работе (${state.supplies.size})")
++                }
++            }
++            if (state.selected.isNotEmpty() && !showingWork) Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                 Button(onClick = { createDialog = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("Новая поставка (${state.selected.size})") }
+                 OutlinedButton(onClick = { chooseSupply = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("В поставку") }
+             }
+             LazyColumn(Modifier.weight(1f).padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                item { Text("Все заказы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+-                items(sortedOrders(state.orders), key = { it.id }) { order ->
+-                    OrderCard(order, state.selected.contains(order.id), onClick = {
+-                        if (order.supplyId != null) onOpen(order.supplyId) else vm.toggle(order)
+-                    }, selectable = order.status == "new" && order.supplyId == null)
+-                }
+-                if (state.cursor != null) item { OutlinedButton(onClick = { vm.loadOrders(true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Загрузить ещё") } }
+-                if (state.orders.isEmpty() && !state.busy) item { Text("Заказов пока нет", modifier = Modifier.padding(16.dp)) }
+-                if (state.supplies.isNotEmpty()) item { Text("Поставки в работе", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
+-                items(state.supplies, key = { "supply:${it.id}" }) { supply ->
+-                    OutlinedButton(onClick = { onOpen(supply.id) }, modifier = Modifier.fillMaxWidth()) { Text("${supply.name} · ${supply.ordersCount} заказов") }
++                if (showingWork) {
++                    item { Text("Поставки в работе", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
++                    items(state.supplies, key = { "supply:${it.id}" }) { supply -> SupplyCard(supply) { onOpen(supply.id) } }
++                    if (state.supplies.isEmpty() && !state.busy) item { Text("Поставок в работе пока нет", modifier = Modifier.padding(16.dp)) }
++                } else {
++                    item { Text("Все заказы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
++                    items(sortedOrders(state.orders), key = { it.id }) { order ->
++                        OrderCard(order, state.selected.contains(order.id), onClick = {
++                            if (order.supplyId != null) onOpen(order.supplyId) else vm.toggle(order)
++                        }, selectable = order.status == "new" && order.supplyId == null)
++                    }
++                    if (state.cursor != null) item { OutlinedButton(onClick = { vm.loadOrders(true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Загрузить ещё") } }
++                    if (state.orders.isEmpty() && !state.busy) item { Text("Заказов пока нет", modifier = Modifier.padding(16.dp)) }
+                 }
+             }
+         }
+     }
+     if (createDialog) AlertDialog(onDismissRequest = { createDialog = false }, title = { Text("Создать поставку") }, text = {
+-        Column { OutlinedTextField(name, { name = it }, label = { Text("Название") });
+-            Row { RadioButton(delivery == "warehouse_sc", { delivery = "warehouse_sc" }); Text("Склад / СЦ", modifier = Modifier.padding(top = 12.dp)) }
+-            Row { RadioButton(delivery == "pvz", { delivery = "pvz" }); Text("ПВЗ", modifier = Modifier.padding(top = 12.dp)) }
++        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
++            SelectionSummary(selectedOrders)
++            OutlinedTextField(name, { name = it }, label = { Text("Название") })
++            if (state.marketplace == "wb") {
++                Row { RadioButton(delivery == "warehouse_sc", { delivery = "warehouse_sc" }); Text("Склад / СЦ", modifier = Modifier.padding(top = 12.dp)) }
++                Row { RadioButton(delivery == "pvz", { delivery = "pvz" }); Text("ПВЗ", modifier = Modifier.padding(top = 12.dp)) }
++            } else {
++                Text("Ozon · ${selectedOrders.firstOrNull()?.deliveryRouteLabel() ?: "Способ доставки не указан"}")
++            }
++            state.error?.let {
++                Text(it, color = MaterialTheme.colorScheme.error)
++                TextButton(onClick = vm::retry) { Text("Повторить проверку") }
++            }
+         }
+-    }, confirmButton = { Button(onClick = { createDialog = false; vm.create(name, delivery, onOpen) }, enabled = name.isNotBlank()) { Text("Создать") } }, dismissButton = { TextButton(onClick = { createDialog = false }) { Text("Отмена") } })
++    }, confirmButton = { Button(onClick = { vm.create(name, if (state.marketplace == "ozon") "warehouse_sc" else delivery, onOpen) }, enabled = name.isNotBlank() && !state.busy) { Text("Создать") } }, dismissButton = { TextButton(onClick = { createDialog = false }) { Text("Отмена") } })
+     if (chooseSupply) AlertDialog(onDismissRequest = { chooseSupply = false }, title = { Text("Выберите поставку") }, text = {
+-        LazyColumn { items(state.supplies) { supply -> TextButton(onClick = { chooseSupply = false; vm.addTo(supply.id, onOpen) }) { Text(supply.name) } } }
++        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            SelectionSummary(selectedOrders)
++            if (visibleSupplies.isEmpty()) Text("Совместимых активных поставок пока нет. Создайте новую.")
++            else LazyColumn(Modifier.heightIn(max = 280.dp)) {
++                items(visibleSupplies) { supply ->
++                    TextButton(onClick = { vm.addTo(supply.id, onOpen) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
++                        Column { Text(supply.name, fontWeight = FontWeight.Bold); Text("${supply.marketplaceLabel()} · ${supply.seller.name ?: "Селлер не указан"} · ${supply.deliveryRouteLabel()}") }
++                    }
++                }
++            }
++            selectedOrders.flatMap { it.selectionBlockers }.distinctBy { it.code }.forEach { blocker -> Text(blocker.message, color = MaterialTheme.colorScheme.error) }
++            state.error?.let {
++                Text(it, color = MaterialTheme.colorScheme.error)
++                TextButton(onClick = vm::retry) { Text("Повторить проверку") }
++            }
++        }
+     }, confirmButton = { TextButton(onClick = { chooseSupply = false }) { Text("Закрыть") } })
+ }
+ 
++@Composable private fun SelectionSummary(orders: List<FbsOrder>) {
++    Text("Выбрано: ${orders.size}", fontWeight = FontWeight.Bold)
++    orders.forEach { order -> Text("${order.displayNumber()} · ${order.seller.name ?: "Селлер не указан"} · ${order.deliveryRouteLabel()}") }
++}
++
+ @Composable private fun OrderCard(order: FbsOrder, selected: Boolean = false, onClick: () -> Unit = {}, selectable: Boolean = false, content: @Composable ColumnScope.() -> Unit = {}) {
+     val color = when {
+         order.pick.status == "picked" -> Color(0xffe5f4e9)
+@@ -116,9 +169,11 @@ internal fun displayTime(value: String): String = runCatching {
+                 }
+             }
+             if (order.marketplace == "ozon") for (position in order.positions) {
+-                Text("${position.name} · ${position.quantity} шт · подобрано ${position.pickedQuantity}")
++                Text("${position.name} · ${position.quantity} шт · подобрано ${position.pickedQuantity} · упаковано ${position.packedQuantity}")
+                 Text("ШК: ${position.barcode ?: position.sku ?: "не указан"}")
+             } else Text("ШК: ${order.product.barcode ?: "не указан"}")
++            Text("${order.marketplaceLabel()} · ${order.seller.name ?: "Селлер не указан"}")
++            Text("Маршрут: ${order.deliveryRouteLabel()} · Статус: ${order.statusLabel()}")
+             Text("Поступил: ${displayTime(order.createdAt)}")
+             Text("Отгрузить до: ${displayTime(order.deadlineAt)}", fontWeight = FontWeight.Medium)
+             if (order.pick.status == "picked") Text("Подобран · ${order.pick.locationCode.orEmpty()}", color = Color(0xff176b31))
+@@ -127,6 +182,16 @@ internal fun displayTime(value: String): String = runCatching {
+     }
+ }
+ 
++@Composable private fun SupplyCard(supply: FbsSupplySummary, onClick: () -> Unit) {
++    Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
++        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
++            Text(supply.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
++            Text("${supply.marketplaceLabel()} · ${supply.seller.name ?: "Селлер не указан"}")
++            Text("${supply.deliveryRouteLabel()} · ${supply.statusLabel()} · ${supply.ordersCount} заказов")
++        }
++    }
++}
++
+ @Composable fun FbsSupplyScreen(supplyId: String, onBack: () -> Unit, onStep: (String) -> Unit) {
+     val vm = fbsViewModel(); val state by vm.state.collectAsState()
+     LifecycleResumeEffect(supplyId) { vm.loadSupply(supplyId); onPauseOrDispose {} }
+@@ -135,7 +200,15 @@ internal fun displayTime(value: String): String = runCatching {
+             ErrorPanel(state, vm)
+             state.workspace?.let { ws ->
+                 Text(ws.supply.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
++                Text("${ws.marketplaceLabel()} · ${ws.supply.statusLabel()}")
++                Text("Селлер: ${ws.supply.seller.name ?: "не указан"}")
++                Text("Маршрут: ${ws.supply.deliveryRouteLabel()}")
++                ws.supply.wmsWarehouse.name?.let { Text("Склад: $it") }
+                 Text("${ws.orders.size} заказов · Подобрано ${ws.progress.picked} · Упаковано ${ws.progress.packed}")
++                Text("Состав", fontWeight = FontWeight.Bold)
++                ws.orders.forEach { order ->
++                    Text("${order.displayNumber()} · ${order.product.name}" + if (order.marketplace == "ozon") " · ${order.positions.sumOf { it.quantity }} шт" else "")
++                }
+                 for ((mode, label) in listOf("pick" to "Подбор", "pack" to "Упаковка и этикетки", "boxes" to "Короба")) {
+                     Button(onClick = { onStep(mode) }, modifier = Modifier.fillMaxWidth().height(72.dp)) { Text(label, fontSize = 20.sp) }
+                 }
+@@ -221,7 +294,12 @@ internal fun displayTime(value: String): String = runCatching {
+                             Text((order.externalOrderId ?: order.wbOrderId.toString()).takeLast(4), fontSize = 36.sp, fontWeight = FontWeight.Black)
+                             Button(onClick = { printing = listOf(order.id) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Печатать этикетки", fontSize = 20.sp) }
+                             if (order.marketplace == "ozon" && order.pack.status != "packed") {
+-                                for (position in order.positions) OutlinedButton(onClick = { vm.packOrder(order, position.productId) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Упаковать 1 шт · ${position.name}") }
++                                for (position in order.positions) {
++                                    val remaining = (position.quantity - position.packedQuantity).coerceAtLeast(0)
++                                    OutlinedButton(onClick = { vm.packOrder(order, position.productId) }, enabled = !state.busy && remaining > 0, modifier = Modifier.fillMaxWidth()) {
++                                        Text(if (remaining == 0) "Упаковано ${position.quantity} шт · ${position.name}" else "Упаковать 1 шт · ${position.name} · осталось $remaining")
++                                    }
++                                }
+                             } else OutlinedButton(onClick = { vm.packOrder(order) }, enabled = !state.busy && order.pack.status != "packed", modifier = Modifier.fillMaxWidth()) { Text(if (order.pack.status == "packed") "Упакован" else "Отметить упакованным") }
+                         }
+                     }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index ce11620..ba2d225 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -44,6 +44,23 @@ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
+ fun sortedOperationOrders(orders: List<FbsOrder>): List<FbsOrder> =
+     sortedOrders(orders).sortedBy { it.pick.status == "picked" }
+ 
++private fun sameKnown(left: String?, right: String?): Boolean = left == null || right == null || left == right
++
++/**
++ * The server remains the authority for supply compatibility. This only removes
++ * candidates that contradict values already returned by that server; incomplete
++ * references remain available for the server to decide.
++ */
++fun FbsSupplySummary.isCompatibleWith(orders: List<FbsOrder>): Boolean = canAddOrders && orders.all { order ->
++    marketplace == order.marketplace &&
++        sameKnown(seller.id?.content, order.seller.id?.content) &&
++        sameKnown(wmsWarehouse.id?.content, order.wmsWarehouse.id?.content) &&
++        sameKnown(wbWarehouse.id?.content, order.wbWarehouse.id?.content) &&
++        sameKnown(deliveryRoute, order.deliveryRoute)
++}
++
++fun FbsState.selectedOrders(): List<FbsOrder> = orders.filter { it.id in selected }
++
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+     runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+ 
+@@ -72,6 +89,8 @@ data class FbsState(
+     val cursor: String? = null,
+     val supplies: List<FbsSupplySummary> = emptyList(),
+     val selected: Set<String> = emptySet(),
++    val restoredSupplyCreate: SupplyCreateBody? = null,
++    val restoredSupplyAddId: String? = null,
+     val workspace: FbsWorkspace? = null,
+     val source: FbsScanResult? = null,
+     val pickChoices: List<FbsPickChoice> = emptyList(),
+@@ -105,6 +124,8 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     private var openedSupplyId: String? = null
+     private var retryAction: (suspend () -> Unit)? = null
+     private var pickChoiceReply: CompletableDeferred<FbsScanResult?>? = null
++    private var pendingSupplyCreate: SupplyCreateBody? = null
++    private var pendingSupplyAdd: Pair<String, SupplyOrdersBody>? = null
+     init { viewModelScope.launch { for (scan in scans) {
+         val key = UUID.randomUUID().toString()
+         state.first { !it.busy && it.error == null }
+@@ -153,7 +174,16 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         val marketplace = state.value.marketplace
+         val page = required { api.fbs().orders(marketplace = marketplace, group = null, cursor = if (append) state.value.cursor else null) }
+         val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
+-        mutable.value = state.value.copy(orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id }, cursor = page.nextCursor, supplies = supplies.items)
++        if (pendingSupplyCreate == null) pendingSupplyCreate = runCatching { api.pendingFbsSupplyCreate() }.getOrNull()
++        if (pendingSupplyAdd == null) pendingSupplyAdd = runCatching { api.pendingFbsSupplyAdd() }.getOrNull()?.let { it.supplyId to it.body }
++        mutable.value = state.value.copy(
++            orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id },
++            cursor = page.nextCursor,
++            supplies = supplies.items,
++            selected = pendingSupplyCreate?.orderIds?.toSet() ?: pendingSupplyAdd?.second?.orderIds?.toSet() ?: state.value.selected,
++            restoredSupplyCreate = pendingSupplyCreate,
++            restoredSupplyAddId = pendingSupplyAdd?.first,
++        )
+     }
+ 
+     /**
+@@ -172,12 +202,58 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     }
+     fun create(name: String, delivery: String, onOpen: (String) -> Unit) {
+         val ids = state.value.selected.toList(); if (ids.isEmpty() || name.isBlank()) return
+-        val body = SupplyCreateBody(name.trim(), ids, delivery, UUID.randomUUID().toString())
+-        launch { val workspace = required { api.fbs().createSupply(body) }; mutable.value = state.value.copy(selected = emptySet()); onOpen(workspace.supply.id) }
++        val requested = SupplyCreateBody(name.trim(), ids, delivery, UUID.randomUUID().toString())
++        val body = pendingSupplyCreate?.takeIf {
++            it.name == requested.name && it.orderIds.toSet() == requested.orderIds.toSet() && it.deliveryType == requested.deliveryType
++        } ?: requested.also { pendingSupplyCreate = it }
++        launch {
++            api.saveFbsSupplyCreate(body)
++            val workspace = required { api.fbs().createSupply(body) }
++            api.saveFbsSupplyCreate(null)
++            pendingSupplyCreate = null
++            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyCreate = null)
++            onOpen(workspace.supply.id)
++        }
+     }
+     fun addTo(supplyId: String, onOpen: (String) -> Unit) {
+-        val body = SupplyOrdersBody(state.value.selected.toList(), UUID.randomUUID().toString())
+-        launch { val workspace = required { api.fbs().addOrders(supplyId, body) }; mutable.value = state.value.copy(selected = emptySet()); onOpen(workspace.supply.id) }
++        val requested = SupplyOrdersBody(state.value.selected.toList(), UUID.randomUUID().toString())
++        val pending = pendingSupplyAdd
++        val body = pending?.takeIf { (savedSupply, savedBody) ->
++            savedSupply == supplyId && savedBody.orderIds.toSet() == requested.orderIds.toSet()
++        }?.second ?: requested.also { pendingSupplyAdd = supplyId to it }
++        launch {
++            api.saveFbsSupplyAdd(PendingFbsSupplyAdd(supplyId, body))
++            val workspace = required { api.fbs().addOrders(supplyId, body) }
++            api.saveFbsSupplyAdd(null)
++            pendingSupplyAdd = null
++            mutable.value = state.value.copy(selected = emptySet(), restoredSupplyAddId = null)
++            onOpen(workspace.supply.id)
++        }
++    }
++    fun resumePendingSupplyMutation(onOpen: (String) -> Unit) {
++        val create = pendingSupplyCreate
++        val add = pendingSupplyAdd
++        if (create == null && add == null) return
++        launch {
++            val workspace = if (create != null) {
++                val result = required { api.fbs().createSupply(create) }
++                api.saveFbsSupplyCreate(null)
++                pendingSupplyCreate = null
++                result
++            } else {
++                val (supplyId, body) = requireNotNull(add)
++                val result = required { api.fbs().addOrders(supplyId, body) }
++                api.saveFbsSupplyAdd(null)
++                pendingSupplyAdd = null
++                result
++            }
++            mutable.value = state.value.copy(
++                restoredSupplyCreate = pendingSupplyCreate,
++                restoredSupplyAddId = pendingSupplyAdd?.first,
++                selected = emptySet(),
++            )
++            onOpen(workspace.supply.id)
++        }
+     }
+     fun loadSupply(supplyId: String) {
+         if (openedSupplyId != supplyId) {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index b0f4739..e8ebde8 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.*
++import kotlinx.serialization.json.JsonPrimitive
+ import okhttp3.ResponseBody.Companion.toResponseBody
+ import okhttp3.MediaType.Companion.toMediaType
+ import org.junit.*
+@@ -40,6 +41,10 @@ class FbsViewModelTest {
+             every { pendingFbsDelivery(any()) } returns null
+             every { saveFbsDelivery(any(), any()) } just Runs
+         }
++        coEvery { provider.pendingFbsSupplyCreate() } returns null
++        coEvery { provider.pendingFbsSupplyAdd() } returns null
++        coEvery { provider.saveFbsSupplyCreate(any()) } just Runs
++        coEvery { provider.saveFbsSupplyAdd(any()) } just Runs
+     }
+     @After fun teardown() { Dispatchers.resetMain() }
+ 
+@@ -60,6 +65,87 @@ class FbsViewModelTest {
+         coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
+         coVerify(exactly = 1) { service.worklist(marketplace = "ozon", statusGroup = "active") }
+     }
++
++    @Test fun `supply chooser removes only candidates that contradict selected order context`() {
++        val selected = order("1", "2026-09-08T09:00:00Z").copy(
++            status = "new",
++            marketplace = "ozon",
++            seller = FbsNamedRef(JsonPrimitive("seller-a"), "Селлер А"),
++            wmsWarehouse = FbsNamedRef(JsonPrimitive("warehouse-a"), "Склад А"),
++            deliveryRoute = "Ozon Express",
++        )
++        fun supply(id: String, seller: String?, warehouse: String?, route: String?) = FbsSupplySummary(
++            id = id, name = id, status = "assembling", marketplace = "ozon", seller = FbsNamedRef(seller?.let(::JsonPrimitive)),
++            wbWarehouse = FbsNamedRef(), wmsWarehouse = FbsNamedRef(warehouse?.let(::JsonPrimitive)),
++            ordersCount = 1, unitsCount = 1, boxesCount = 0, deliveryRoute = route,
++        )
++        assertTrue(supply("matching", "seller-a", "warehouse-a", "Ozon Express").isCompatibleWith(listOf(selected)))
++        assertTrue(supply("unknown", null, null, null).isCompatibleWith(listOf(selected)))
++        assertFalse(supply("seller-mismatch", "seller-b", "warehouse-a", "Ozon Express").isCompatibleWith(listOf(selected)))
++        assertFalse(supply("route-mismatch", "seller-a", "warehouse-a", "Other method").isCompatibleWith(listOf(selected)))
++    }
++
++    @Test fun `same create intent keeps its idempotency body after an ambiguous failure`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val bodies = mutableListOf<SupplyCreateBody>()
++        var calls = 0
++        coEvery { service.createSupply(capture(bodies)) } coAnswers {
++            calls += 1
++            if (calls == 1) throw IOException("lost response")
++            Response.success(workspace(listOf(fresh)))
++        }
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        vm.loadOrders(); advanceUntilIdle(); vm.toggle(fresh)
++        vm.create("Поставка 1", "warehouse_sc") { opened += it }; advanceUntilIdle()
++        assertNotNull(vm.state.value.error)
++        vm.dismissError()
++        vm.create("Поставка 1", "warehouse_sc") { opened += it }; advanceUntilIdle()
++        assertEquals(2, bodies.size)
++        assertEquals(bodies[0], bodies[1])
++        assertEquals(listOf("supply"), opened)
++    }
++
++    @Test fun `saved create intent is offered after a process restart and keeps its body`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val saved = SupplyCreateBody("Поставка после перезапуска", listOf("1"), "warehouse_sc", "same-key")
++        coEvery { provider.pendingFbsSupplyCreate() } returns saved
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val sent = mutableListOf<SupplyCreateBody>()
++        coEvery { service.createSupply(capture(sent)) } returns Response.success(workspace(listOf(fresh)))
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        assertEquals(saved, vm.state.value.restoredSupplyCreate)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
++        assertEquals(listOf(saved), sent)
++        assertEquals(listOf("supply"), opened)
++        coVerify { provider.saveFbsSupplyCreate(null) }
++    }
++
++    @Test fun `saved add intent is offered after a process restart and keeps its supply and body`() = runTest {
++        val fresh = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        val saved = PendingFbsSupplyAdd("supply-before-restart", SupplyOrdersBody(listOf("1"), "same-key"))
++        coEvery { provider.pendingFbsSupplyAdd() } returns saved
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(fresh), null, "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val sent = mutableListOf<SupplyOrdersBody>()
++        coEvery { service.addOrders("supply-before-restart", capture(sent)) } returns Response.success(workspace(listOf(fresh)))
++        val opened = mutableListOf<String>()
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle()
++        assertEquals("supply-before-restart", vm.state.value.restoredSupplyAddId)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.resumePendingSupplyMutation { opened += it }; advanceUntilIdle()
++        assertEquals(listOf(saved.body), sent)
++        assertEquals(listOf("supply"), opened)
++        coVerify { provider.saveFbsSupplyAdd(null) }
++    }
++
+     @Test fun `Ozon secondary position scan sends its product and oldest posting`() = runTest {
+         val position = FbsPosition(productId = "second-product", name = "Second", sku = "222", quantity = 3, pickedQuantity = 1, id = "position", barcode = "222-bar")
+         val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "123-456-1", positions = listOf(position))

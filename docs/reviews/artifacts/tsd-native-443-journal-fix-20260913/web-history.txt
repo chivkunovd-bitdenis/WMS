@@ -1,0 +1,215 @@
+Короб ВМС
+Final Boris Split 5da311 · Split operator B · администратор
+4
+Выйти
+Приёмка на FF
+Сортировка
+FBS
+Отгрузки
+Ячейки
+Отчёты
+Хранение
+Инвентаризация
+Селлеры
+Каталог
+Расчёты
+Честный знак
+Календарь отгрузок
+Настройки
+Упаковка
+База знаний
+Карта склада
+
+Что физически лежит на каждой ячейке. Строку можно перетащить на другую ячейку.
+
+Сканер активен — ШК короба, палеты, грузоместа или ячейки
+
+​
+
+​
+
+Можно вставить сразу список: штрихкоды или названия через пробел или столбцом
+
+Селлер
+Все селлеры
+Final seller 5da311
+Селлер
+Категория
+Все категории
+Категория
+Final warehouse 5da311
+Свернуть всё
+Создать ячейку
+Принтер
+Содержимое	Селлер	Артикул продавца	ШК тары	ШК товара	Штук
+
+Без ячеек
+Пусто
+					0
+
+
+FINAL-CELL-5da311
+
+
+LOC-4CB59ED2D1E6
+
+		3
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				3
+
+
+FINAL-JOURNAL-A-5da311
+
+
+LOC-9EECC2708C1D
+
+		1
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				1
+
+
+FINAL-JOURNAL-B-5da311
+
+
+LOC-7DBA1E839CA6
+
+		2
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				2
+
+
+FINAL-JOURNAL2-A-5da311
+
+
+LOC-DAFCB148E94D
+
+		1
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				1
+
+
+FINAL-JOURNAL2-B-5da311
+
+
+LOC-CB158065B8FA
+
+		2
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				2
+
+
+FINAL-SPLIT-A-5da311
+
+
+LOC-2A1650A5869E
+
+		1
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				1
+
+
+FINAL-SPLIT-B-5da311
+
+
+LOC-A4B1954C0199
+
+		2
+
+
+
+Final native item 5da311
+
+
+Final seller 5da311
+				2
+Журнал перемещений
+
+записей: 4
+
+Что переместили	Штук	Откуда	Куда	Сотрудник	Когда
+
+Final native item 5da311
+	2
+Сортировка
+
+FINAL-JOURNAL2-B-5da311
+
+Final Boris Split 5da311
+
+
+14.09 00:01
+
+
+
+Final native item 5da311
+	1
+Сортировка
+
+FINAL-JOURNAL2-A-5da311
+
+Final Astra 5da311
+
+
+13.09 23:59
+
+
+
+Final native item 5da311
+	2
+Сортировка
+
+FINAL-JOURNAL-B-5da311
+
+Final Astra 5da311
+
+
+13.09 23:56
+
+
+
+Final native item 5da311
+	1
+Сортировка
+
+FINAL-JOURNAL-A-5da311
+
+Final Astra 5da311
+
+
+13.09 23:55

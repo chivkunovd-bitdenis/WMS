@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -34,6 +34,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import { MarketplaceChip } from '../../ui-kit'
+import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 
 type WbCatalogRow = {
   id: string
@@ -104,16 +105,61 @@ function matchesCatalogSearch(
   return haystack.includes(needle)
 }
 
+export type SellerCatalogLoad =
+  | { outcome: 'stale' }
+  | { outcome: 'loaded'; rows: WbCatalogRow[] }
+  | { outcome: 'failed'; message: string }
+
+/**
+ * Каталог применяется, только если к моменту ответа вкладка осталась в той же
+ * сессии.
+ *
+ * WMS-488: пока список грузился, сессию могли сменить (другой селлер в соседней
+ * вкладке, переключение магазина). Запоздалый ответ — это товары прежнего
+ * селлера, и на экране им места нет.
+ */
+export async function loadSellerCatalog(
+  headers: Record<string, string>,
+  isCurrentSession: () => boolean,
+): Promise<SellerCatalogLoad> {
+  try {
+    const res = await fetch(apiUrl('/products/wb-catalog'), { headers })
+    if (!isCurrentSession()) {
+      return { outcome: 'stale' }
+    }
+    if (!res.ok) {
+      const message = await readApiErrorMessage(res)
+      return isCurrentSession() ? { outcome: 'failed', message } : { outcome: 'stale' }
+    }
+    const rows = (await res.json()) as WbCatalogRow[]
+    return isCurrentSession() ? { outcome: 'loaded', rows } : { outcome: 'stale' }
+  } catch (e) {
+    if (!isCurrentSession()) {
+      return { outcome: 'stale' }
+    }
+    return {
+      outcome: 'failed',
+      message: e instanceof Error ? e.message : 'Не удалось загрузить товары.',
+    }
+  }
+}
+
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   addressStorageEnabled?: boolean
+  sellerId: string
+  sellerName: string
+  warehouses: Array<{ id: string; name: string; code?: string; is_operational?: boolean }>
 }
 
 export function SellerProductsStockScreen({
   token,
   authHeaders,
   addressStorageEnabled = true,
+  sellerId,
+  sellerName,
+  warehouses,
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -128,6 +174,7 @@ export function SellerProductsStockScreen({
   const [editBusy, setEditBusy] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
+  const [stockDialogRows, setStockDialogRows] = useState<WbCatalogRow[] | null>(null)
 
   // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
   const [filterSearch, setFilterSearch] = useState('')
@@ -138,23 +185,33 @@ export function SellerProductsStockScreen({
   const [reserveDirections, setReserveDirections] = useState<Record<string, StockDirectionRow[]>>({})
   const [reserveBusy, setReserveBusy] = useState<Set<string>>(new Set())
 
+  // Токен сессии, к которой относятся показанные строки. Держим в ref, чтобы
+  // ответ, пришедший после смены сессии, было с чем сравнить (WMS-488).
+  const sessionTokenRef = useRef(token)
+  useEffect(() => {
+    sessionTokenRef.current = token
+    // Показанное принадлежит прежнему токену: до ответа по новому на экране
+    // не должно остаться ни строки прежнего селлера.
+    setCatalog([])
+    setStock([])
+    setReserveDirections({})
+  }, [token])
+
   const refreshAll = useCallback(async () => {
+    const requestToken = token
+    const isCurrentSession = () => sessionTokenRef.current === requestToken
     setError(null)
     setBusy(true)
-    try {
-      const catalogRes = await fetch(apiUrl('/products/wb-catalog'), {
-        headers: { ...authHeaders(token) },
-      })
-      if (!catalogRes.ok) {
-        setError(await readApiErrorMessage(catalogRes))
-        return
-      }
-      setCatalog((await catalogRes.json()) as WbCatalogRow[])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
-    } finally {
-      setBusy(false)
+    const result = await loadSellerCatalog({ ...authHeaders(requestToken) }, isCurrentSession)
+    if (result.outcome === 'stale') {
+      return
     }
+    setBusy(false)
+    if (result.outcome === 'failed') {
+      setError(result.message)
+      return
+    }
+    setCatalog(result.rows)
   }, [authHeaders, token])
 
   useEffect(() => {
@@ -162,16 +219,27 @@ export function SellerProductsStockScreen({
   }, [refreshAll])
 
   const loadStock = useCallback(async () => {
+    const requestToken = token
     try {
       const res = await fetch(apiUrl('/operations/inventory-balances/summary'), {
-        headers: { ...authHeaders(token) },
+        headers: { ...authHeaders(requestToken) },
       })
+      if (sessionTokenRef.current !== requestToken) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
-      setStock((await res.json()) as StockSummaryRow[])
+      const body = (await res.json()) as StockSummaryRow[]
+      if (sessionTokenRef.current !== requestToken) {
+        return
+      }
+      setStock(body)
     } catch (e) {
+      if (sessionTokenRef.current !== requestToken) {
+        return
+      }
       setError(e instanceof Error ? e.message : 'Не удалось загрузить остатки.')
     }
   }, [authHeaders, token])
@@ -382,17 +450,24 @@ export function SellerProductsStockScreen({
 
   const loadReserveDirections = useCallback(
     async (productId: string) => {
+      const requestToken = token
       markReserveBusy(productId, true)
       setError(null)
       try {
         const res = await fetch(apiUrl(`/products/${productId}/stock-directions`), {
-          headers: { ...authHeaders(token) },
+          headers: { ...authHeaders(requestToken) },
         })
+        if (sessionTokenRef.current !== requestToken) {
+          return
+        }
         if (!res.ok) {
           setError(await readApiErrorMessage(res))
           return
         }
         const body = (await res.json()) as StockDirectionRow[]
+        if (sessionTokenRef.current !== requestToken) {
+          return
+        }
         setReserveDirections((current) => ({ ...current, [productId]: body }))
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить резервы.')
@@ -436,8 +511,7 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог товаров, синхронизированных из маркетплейсов. Остаток и резервы здесь только для
-        просмотра — их настраивает фулфилмент на своём экране каталога.
+        Каталог товаров, синхронизированных из маркетплейсов.
       </Typography>
 
       {error ? (
@@ -479,6 +553,31 @@ export function SellerProductsStockScreen({
           {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}
         </Stack>
       </Paper>
+
+      {selectedCount > 0 ? (
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, mb: 2, borderColor: 'primary.main' }}
+          data-testid="seller-catalog-selection-bar"
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle2" data-testid="seller-catalog-selection-count">
+              Выбрано {selectedCount}
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={() => setStockDialogRows(selectedRows)}
+              data-testid="seller-catalog-fbs-set-stock"
+            >
+              Задать остаток · {selectedCount}
+            </Button>
+          </Stack>
+        </Paper>
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-catalog-filters">
         <Stack
@@ -941,6 +1040,20 @@ export function SellerProductsStockScreen({
           </Box>
         ) : null}
       </Drawer>
+
+      {stockDialogRows ? (
+        <FbsStockDialogContainer
+          token={token}
+          sellerId={sellerId}
+          sellerName={sellerName}
+          chosen={stockDialogRows}
+          warehouses={warehouses}
+          canEditBindings={false}
+          onClose={() => setStockDialogRows(null)}
+          onChanged={() => void loadStock()}
+          onLoadError={setError}
+        />
+      ) : null}
     </Box>
   )
 }

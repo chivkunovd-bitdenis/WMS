@@ -2101,7 +2101,7 @@ async def test_marketplace_unload_pick_allocations_admin_only(
     created = await async_client.post(
         "/auth/staff-accounts",
         headers=ah,
-        json={"email": staff_email},
+        json={"full_name": "Иван Петров", "email": staff_email},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]

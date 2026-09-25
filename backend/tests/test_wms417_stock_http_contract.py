@@ -1,4 +1,4 @@
-"""Execute WMS-060's actual saveRule payload builder, then send it to the real ASGI API."""
+"""Execute the current stock dialog saveRule, then send its payload to the real ASGI API."""
 
 from __future__ import annotations
 
@@ -32,43 +32,49 @@ EXTRACT_SAVE = r"""
 const fs = require('node:fs');
 const ts = require('typescript');
 const data = JSON.parse(fs.readFileSync(0, 'utf8'));
-const path = 'src/screens/ff/products-fbs/FfProductsFbsPage.tsx';
-const file = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true,
-                                 ts.ScriptKind.TSX);
-let declaration, ruleDeclaration;
-function visit(node) {
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'saveRule') declaration = node;
-  if (ts.isFunctionDeclaration(node) && node.name?.text === 'toRule') ruleDeclaration = node;
-  ts.forEachChild(node, visit);
+function declaration(path, name) {
+  const file = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'),
+                                  ts.ScriptTarget.Latest, true);
+  let found;
+  function visit(node) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) found = node;
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  if (!found) throw new Error(name + ' not found');
+  return ts.transpileModule(found.getText(file).replace(/^export /, ''), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 }
+  }).outputText;
 }
-visit(file);
-if (!declaration) throw new Error('saveRule not found');
-const code = ts.transpileModule(declaration.getText(file), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022 }
-}).outputText;
+const base = 'src/screens/ff/products-fbs/';
 const calls = [];
-const save = new Function('fetch','apiUrl','headers','token','setError','load',
-                         'readApiErrorMessage',
-                         code + ';return saveRule;')(
-  async (url, options) => { calls.push({url, body: JSON.parse(options.body)}); return {ok:true}; },
-  p => p, () => ({}), '', () => {}, async () => {}, async () => 'error');
+const createSession = new Function('apiUrl', 'readApiErrorMessage', 'loadFbsStockDialog',
+  declaration(base + 'fbsStockDialogSession.ts', 'createStockDialogSession') +
+  ';return createStockDialogSession;')(p => p, async () => 'error',
+    async () => { throw new Error('unexpected reread'); });
+const session = createSession({
+  sellerId: data.sellerId, headers: {},
+  fetchImpl: async (url, options) => {
+    calls.push({url, body: JSON.parse(options.body)});
+    return {ok: true, json: async () => ({items: [], clamps: {}})};
+  },
+});
+let byBinding = data.byBinding;
 if (data.apiRule) {
-  const keyExports = {};
-  const keyCode = ts.transpileModule(fs.readFileSync(
-    'src/screens/ff/products-fbs/fbsWarehouseRuleKeys.ts', 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS }
-    }).outputText;
-  new Function('exports', keyCode)(keyExports);
-  const mapper = new Function('qualifyWarehouseRuleValues', ts.transpileModule(
-    ruleDeclaration.getText(file).replace(/^export /, ''), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022 }
-    }).outputText + ';return toRule;')(keyExports.qualifyWarehouseRuleValues);
-  data.rule = mapper(data.ids[0], data.apiRule, data.bindings);
-  const key = keyExports.warehouseRuleKey(data.bindings[0]);
-  if (data.rule.unitsByWarehouse[key] !== 5) throw new Error('WB cap not loaded as 5');
-  data.rule.unitsByWarehouse[key] = 4;
+  const mapper = new Function(
+    declaration(base + 'fbsStockBlocks.ts', 'toProductBindingState') +
+    ';return toProductBindingState;')();
+  const state = mapper(data.apiRule.by_binding[data.wbBindingId]);
+  if (state.value !== 5 || state.mode !== 'units') throw new Error('WB cap not loaded as 5');
+  byBinding = {[data.wbBindingId]: {
+    publish: state.publish, mode: state.mode, value: 4,
+    units_configured: state.unitsConfigured,
+  }};
 }
-save(data.ids, data.rule).then(() => process.stdout.write(JSON.stringify(calls)));
+session.saveRule(data.ids, byBinding).then(outcome => {
+  if (outcome.kind !== 'saved') throw new Error('save failed: ' + outcome.kind);
+  process.stdout.write(JSON.stringify(calls));
+});
 """
 
 
@@ -127,6 +133,12 @@ async def test_actual_frontend_save_preserves_units_through_http(
     ]
     async with SessionLocal() as session:
         await _stock(session, ids, seller_id)
+        binding_id = await session.scalar(
+            select(FbsWarehouseBinding.id).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id)
+            )
+        )
+        assert binding_id is not None
     capture = subprocess.run(
         ["node", "-e", EXTRACT_SAVE],
         cwd=FRONTEND,
@@ -136,14 +148,14 @@ async def test_actual_frontend_save_preserves_units_through_http(
         input=json.dumps(
             {
                 "ids": ids,
-                "rule": {
-                    "publish": True,
-                    "publishOzon": False,
-                    "sameEverywhere": False,
-                    "percent": 0,
-                    "byWarehouse": {},
-                    "unitsMode": True,
-                    "unitsByWarehouse": {"501001": 5},
+                "sellerId": seller_id,
+                "byBinding": {
+                    str(binding_id): {
+                        "publish": True,
+                        "mode": "units",
+                        "value": 5,
+                        "units_configured": True,
+                    },
                 },
             }
         ),
@@ -184,7 +196,8 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
         "available": 5,
     }
     too_much = await async_client.put(url, headers=headers, json={"quantity": 6})
-    assert too_much.status_code == 409, too_much.text
+    assert too_much.status_code == 200, too_much.text
+    assert too_much.json()["quantity"] == 5
     percent = await async_client.put(
         f"/products/{pid}/fbs-rule",
         headers=headers,
@@ -235,7 +248,8 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
             )
         )
         await session.commit()
-    # Caps 5+3 survive depletion; real free is 2 minus an ordinary reserve of 1.
+    # Existing caps survive depletion until the operator edits them. A fresh
+    # manual edit is clamped to the current free stock (WMS-469 R12).
     listed = await async_client.get(url.rsplit("/", 1)[0], headers=headers)
     assert listed.status_code == 200, listed.text
     row = next(row for row in listed.json() if row["product_id"] == pid)
@@ -245,11 +259,12 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
     restored = await async_client.put(url, headers=headers, json={"quantity": 5})
     assert restored.status_code == 200, restored.text
     assert restored.json()["pool_limit"] == restored.json()["available"] == 1
-    assert restored.json()["allocated_total"] == 8
+    assert restored.json()["quantity"] == 1
+    assert restored.json()["allocated_total"] == 4
     rule = await async_client.get(f"/products/{pid}/fbs-rule", headers=headers)
     assert rule.status_code == 200, rule.text
     assert rule.json()["units_mode"] is True
-    assert rule.json()["units_by_warehouse"] == {"501001": 5, "501002": 3}
+    assert rule.json()["units_by_warehouse"] == {"501001": 1, "501002": 3}
     assert rule.json()["free_stock"] == 1
 
 
@@ -287,11 +302,25 @@ async def test_colliding_wb_ozon_ids_survive_actual_frontend_http_edit(
         )
         session.add(ozon)
         await session.flush()
+        from app.models.product_marketplace_link import ProductMarketplaceLink
+
         for pid in ids:
             product = await session.get(Product, uuid.UUID(pid))
             assert product is not None
             product.fbs_units_mode = True
             product.fbs_stock_sync_enabled = product.fbs_ozon_stock_sync_enabled = True
+            # WMS-456: an honest two-marketplace product needs an active Ozon
+            # card, or the effective publish_ozon above stays false regardless.
+            session.add(
+                ProductMarketplaceLink(
+                    tenant_id=wb.tenant_id,
+                    seller_id=wb.seller_id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_offer_id=f"ozon-collision-{pid}",
+                    is_active=True,
+                )
+            )
             balance = await session.scalar(
                 select(InventoryBalance).where(InventoryBalance.product_id == product.id)
             )
@@ -319,10 +348,8 @@ async def test_colliding_wb_ozon_ids_survive_actual_frontend_http_edit(
             {
                 "ids": ids,
                 "apiRule": rule.json(),
-                "bindings": [
-                    {"wb_warehouse_id": 123, "marketplace": "wb"},
-                    {"wb_warehouse_id": 123, "marketplace": "ozon"},
-                ],
+                "sellerId": seller_id,
+                "wbBindingId": str(wb.id),
             }
         ),
     )

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   AppBar,
@@ -6,12 +6,16 @@ import {
   Button as MuiButton,
   CssBaseline,
   Drawer,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
   Toolbar,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
+import MenuIcon from '@mui/icons-material/Menu'
 
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
@@ -23,6 +27,7 @@ type Props = {
   onLogout: () => void
   title?: string
   userLabel?: string
+  userJobTitle?: string | null
   userRoleLabel?: string
   canManageSellerShops?: boolean
   homeSellerId?: string | null
@@ -41,6 +46,7 @@ export function SellerLayout({
   onLogout,
   title = 'Портал селлера',
   userLabel,
+  userJobTitle,
   userRoleLabel,
   canManageSellerShops = false,
   homeSellerId = null,
@@ -54,6 +60,9 @@ export function SellerLayout({
   onSwitchShop,
 }: Props) {
   const drawerWidth = 240
+  const theme = useTheme()
+  const desktop = useMediaQuery(theme.breakpoints.up('md'))
+  const [menuOpen, setMenuOpen] = useState(false)
   const base = navigationBasePath
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
@@ -69,25 +78,27 @@ export function SellerLayout({
         }}
         data-testid="app-topbar"
       >
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-            <WmsBrandMark size={44} portal="seller" />
-            <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: { xs: 0.5, md: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1.5 }, minWidth: 0 }}>
+            {!desktop ? <IconButton aria-label="Открыть меню" onClick={() => setMenuOpen(true)} edge="start"><MenuIcon /></IconButton> : null}
+            <WmsBrandMark size={desktop ? 44 : 32} portal="seller" />
+            <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0, fontSize: { xs: 18, md: 28 } }}>
               Короб ВМС
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               noWrap
-              sx={{ fontWeight: 700 }}
+              sx={{ fontWeight: 700, display: { xs: 'none', md: 'block' } }}
             >
               {title}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 2 }, flexShrink: 0 }}>
             {userLabel ? (
-              <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
+              <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14, display: { xs: 'none', md: 'block' } }}>
                 <span>{userLabel}</span>
+                {userJobTitle ? <span> · {userJobTitle}</span> : null}
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
@@ -106,9 +117,11 @@ export function SellerLayout({
       </AppBar>
 
       <Drawer
-        variant="permanent"
+        variant={desktop ? 'permanent' : 'temporary'}
+        open={desktop || menuOpen}
+        onClose={() => setMenuOpen(false)}
         sx={{
-          width: drawerWidth,
+          width: desktop ? drawerWidth : 0,
           flexShrink: 0,
           [`& .MuiDrawer-paper`]: {
             width: drawerWidth,
@@ -122,7 +135,7 @@ export function SellerLayout({
       >
         <Toolbar />
         <Box sx={{ p: 1 }}>
-          <List dense aria-label="Разделы">
+          <List dense aria-label="Разделы" onClick={() => setMenuOpen(false)}>
             {permissions.documents ? (
               <ListItemButton component={NavLink} to={`${base}/documents`} data-testid="nav-seller-documents">
                 <ListItemText primary="Документы" />
@@ -164,7 +177,7 @@ export function SellerLayout({
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }} data-testid="app-content">
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 3 } }} data-testid="app-content">
         <Toolbar />
         {children}
       </Box>

@@ -153,6 +153,7 @@ export type FbsOrderMetadata = {
   required: string[]
   optional: string[]
   states: Array<{
+    id?: string | null
     kind: string
     status:
       | 'missing'
@@ -222,6 +223,8 @@ export type FbsWorklistOrder = {
     chrt_id: number | null
     category: string | null
     color: string | null
+    brand?: string | null
+    composition?: string | null
     size: string | null
     marketplace_bindings?: Array<{
       marketplace: 'wb' | 'ozon'
@@ -242,6 +245,10 @@ export type FbsWorklistOrder = {
     name: string
     seller_article: string | null
     sku: string | null
+    size?: string | null
+    color?: string | null
+    brand?: string | null
+    composition?: string | null
     quantity: number
     reserved_quantity: number
     picked_quantity: number
@@ -392,6 +399,7 @@ export type FbsOrderPrintTapeRequest = {
   allow_partial: boolean
   include_order_qr: boolean
   reprint: boolean
+  reprint_marking_ids?: string[]
 }
 
 export type FbsOrderPrintTapeOrder = {
@@ -419,6 +427,56 @@ export type FbsOrderPrintTape = {
   shortage: number
 }
 
+export type FbsScanAutoPrintRequest = {
+  barcode: string
+  idempotency_key: string
+  print_qr: boolean
+  print_chz: boolean
+  reprint_chz: boolean
+}
+
+export type FbsScanAutoPrintResult = {
+  scan_id: string
+  order_id: string
+  wb_order_id: number
+  replayed: boolean
+  binding_target: FbsKizLookup | null
+  reprint_recovery: {
+    status: 'not_attempted' | 'available' | 'started' | 'outcome_unknown'
+  } | null
+  requires_honest_sign: boolean
+  qr_asset: FbsPrintAsset | null
+  codes: string[]
+  printed_codes: FbsOrderPrintTapeOrder['printed_codes']
+  shortage: number
+  order_errors: FbsPrintBatch['order_errors']
+}
+
+export type FbsScanAutoPrintTarget = 'qr' | 'chz'
+
+export type FbsScanAutoPrintTargetClaim = {
+  claimed: boolean
+  started: boolean
+}
+
+export type FbsScanAutoPrintReprintClaim = FbsScanAutoPrintTargetClaim & {
+  kiz: string | null
+}
+
+export type FbsDirectKizReprint = {
+  id: string
+  seller_id: string
+  kiz: string
+  created_at: string
+  print_started_at: string | null
+  replayed?: boolean
+}
+
+export type FbsDirectKizPrintClaim = {
+  row: FbsDirectKizReprint
+  claimed: boolean
+}
+
 export type FbsCargoPlace = {
   id: string
   wb_trbx_id: string
@@ -437,6 +495,8 @@ export type FbsPackingBox = {
   assigned_order_ids: string[]
   assigned_order_product_ids?: string[]
   ozon_assembled?: boolean
+  /** WMS-526 R12: последняя неудачная попытка получить этикетку заказа Ozon этого короба; null — не было или успех. */
+  ozon_label_error?: { code: string; message: string } | null
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
@@ -909,6 +969,20 @@ export async function retryFbsPackingBoxQr(
   )
 }
 
+// WMS-526: каждая неразложенная позиция неотменённого заказа Ozon — в свой
+// новый короб, одной операцией. К Ozon сервер здесь не обращается.
+export async function autoAssignFbsOzonBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+): Promise<FbsWorkspace & { created_boxes: number }> {
+  return jsonOrThrow<FbsWorkspace & { created_boxes: number }>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/auto-assign`), {
+      method: 'POST', headers: { ...ah(token) },
+    }),
+  )
+}
+
 export async function fetchFbsOrderMetadata(
   token: string,
   ah: AuthHeaders,
@@ -947,6 +1021,156 @@ export async function printFbsOrderTape(
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function scanFbsProductForAutoPrint(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: FbsScanAutoPrintRequest,
+): Promise<FbsScanAutoPrintResult> {
+  return jsonOrThrow<FbsScanAutoPrintResult>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+async function updateFbsScanAutoPrintTarget(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  action: 'print-claim' | 'print-started' | 'print-failed',
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return jsonOrThrow<FbsScanAutoPrintTargetClaim>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/${action}`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ target, attempt_key: attemptKey }),
+    }),
+  )
+}
+
+export function claimFbsScanAutoPrintTarget(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-claim', target, attemptKey,
+  )
+}
+
+export async function claimFbsScanAutoPrintReprint(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintReprintClaim> {
+  return jsonOrThrow<FbsScanAutoPrintReprintClaim>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/reprint-claim`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ attempt_key: attemptKey }),
+    }),
+  )
+}
+
+export function markFbsScanAutoPrintTargetStarted(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-started', target, attemptKey,
+  )
+}
+
+export function releaseFbsScanAutoPrintTargetClaim(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+  target: FbsScanAutoPrintTarget,
+  attemptKey: string,
+): Promise<FbsScanAutoPrintTargetClaim> {
+  return updateFbsScanAutoPrintTarget(
+    token, ah, supplyId, scanId, 'print-failed', target, attemptKey,
+  )
+}
+
+export async function saveFbsDirectKizReprint(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  kiz: string,
+  idempotencyKey: string,
+): Promise<FbsDirectKizReprint> {
+  return jsonOrThrow<FbsDirectKizReprint>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-kiz-reprint`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ kiz, idempotency_key: idempotencyKey }),
+    }),
+  )
+}
+
+export async function claimFbsDirectKizPrint(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  reprintId: string,
+  attemptKey: string,
+): Promise<FbsDirectKizPrintClaim> {
+  return jsonOrThrow<FbsDirectKizPrintClaim>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-kiz-reprint/${reprintId}/print-claim`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ attempt_key: attemptKey }),
+    }),
+  )
+}
+
+export async function markFbsDirectKizPrintStarted(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  reprintId: string,
+): Promise<FbsDirectKizReprint> {
+  return jsonOrThrow<FbsDirectKizReprint>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-kiz-reprint/${reprintId}/print-started`), {
+      method: 'POST',
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function releaseFbsDirectKizPrintClaim(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  reprintId: string,
+  attemptKey: string,
+): Promise<FbsDirectKizReprint> {
+  return jsonOrThrow<FbsDirectKizReprint>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-kiz-reprint/${reprintId}/print-failed`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ attempt_key: attemptKey }),
     }),
   )
 }
@@ -1209,7 +1433,12 @@ export type FbsKizLookup = {
   block_reason: string | null
 }
 
-export type FbsKizPair = { order_id: string; value: string; confirmed: boolean }
+export type FbsKizPair = {
+  order_id: string
+  value: string
+  confirmed: boolean
+  scan_auto_print_id?: string
+}
 
 export type FbsKizValidateResult = {
   ok: boolean
@@ -1222,6 +1451,10 @@ export type FbsKizCommitResult = {
   status: 'ok' | 'error'
   code: string | null
   message: string | null
+  /** True only when this commit created or replaced the order's KIZ. */
+  newly_bound?: boolean
+  /** Exact server-normalized KIZ saved for this order, including GS separators. */
+  bound_kiz?: string | null
 }
 
 export async function lookupFbsOrderBySticker(
@@ -1681,6 +1914,14 @@ export function fbsKizOrderNumber(order: FbsKizLookup): string {
 
 export async function syncFbsOrderMarkings(token: string, ah: AuthHeaders, orderId: string): Promise<void> {
   await jsonOrThrow<unknown>(await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/sync`), {
+    method: 'POST', headers: ah(token),
+  }))
+}
+
+// WMS-477: «Проверить в WB» — сервер пересверяет вердикты WB по всем заказам
+// поставки с кодом одним пакетом и отдаёт обновлённое рабочее место, как sync-tracking.
+export async function syncFbsSupplyMarkings(token: string, ah: AuthHeaders, supplyId: string): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/markings/sync`), {
     method: 'POST', headers: ah(token),
   }))
 }

@@ -1,0 +1,25 @@
+{
+  "FbsViewModelTest": {
+    "tests": 54,
+    "failures": 0,
+    "errors": 0,
+    "timestamp": "2026-09-13T19:05:59",
+    "failed_cases": []
+  },
+  "FbsScopeReviewTest": {
+    "tests": 2,
+    "failures": 2,
+    "errors": 0,
+    "timestamp": "2026-09-13T19:05:56",
+    "failed_cases": [
+      {
+        "name": "scope switch clears old selected order IDs",
+        "failure": "java.lang.AssertionError: Selected A IDs remain in B scope: [1]"
+      },
+      {
+        "name": "failed reload in new scope cannot display old tenant orders",
+        "failure": "java.lang.AssertionError: Old tenant order IDs remain: [1]"
+      }
+    ]
+  }
+}

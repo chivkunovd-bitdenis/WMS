@@ -56,7 +56,7 @@ async def _setup_request(
         request_id = req.id
         product_id = prod.id
     async with SessionLocal() as session:
-        await svc.add_line(
+        line = await svc.add_line(
             session,
             tenant_id,
             request_id,
@@ -71,6 +71,11 @@ async def _setup_request(
             planned_box_count_set=True,
         )
         await svc.submit_request(session, tenant_id, request_id)
+        # Historical receiving fixture: its plan has not yet been counted.
+        # WMS-440 newly authored FF drafts already carry fact; these tests exercise
+        # the preserved independent loose + tare contract of existing documents.
+        line.actual_qty = None
+        await session.commit()
     return request_id, product_id
 
 
@@ -244,7 +249,7 @@ async def test_status_transitions_collapsed_chain(async_client: AsyncClient) -> 
 
 @pytest.mark.asyncio
 async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient) -> None:
-    """REV-IN-BE-01: box=6, loose=0, planned=10 → total=6, discrepancy=true."""
+    """REV-IN-BE-01 / WMS-473: box=6, loose=0, planned=10 → total=6; FF plan follows fact."""
     tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
@@ -264,7 +269,9 @@ async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient
             session, tenant_id, request_id, actor_user_id=actor_user_id
         )
         assert done.lines[0].actual_qty == 6
-        assert done.has_discrepancy is True
+        # WMS-473 R7: an FF-authored document has one number — no line discrepancy.
+        assert done.lines[0].expected_qty == 6
+        assert done.has_discrepancy is False
 
 
 @pytest.mark.asyncio

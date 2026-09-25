@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,6 +10,8 @@ from time import monotonic
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 _LOCK_NAMESPACE = b"wms:fbs:marketplace:seller:"
 
@@ -89,16 +92,74 @@ async def marketplace_seller_lock(
     release_connection_while_waiting: bool = False,
     transaction_scoped: bool = False,
 ) -> AsyncIterator[bool]:
-    lock_key = await acquire_marketplace_seller_lock(
-        session,
-        seller_id,
-        marketplace,
-        wait_timeout_sec=wait_timeout_sec,
-        release_connection_while_waiting=release_connection_while_waiting,
-        transaction_scoped=transaction_scoped,
-    )
-    try:
+    """Serialize per-seller marketplace work with a PostgreSQL advisory lock.
+
+    A transaction-scoped claim stays on the caller's own session by design:
+    its unlock is the commit/rollback of the local operation it guards (see
+    create_supply_from_orders), so it must live and die with that
+    transaction.
+
+    A session-scoped claim is held on a private connection instead (WMS-435).
+    The caller's session is used only to find its engine (`session.bind`) and
+    is never read from or written to here, so whatever the caller does with
+    it inside the block — commit, rollback, flush, raise — cannot strand the
+    lock on a connection that then goes back into the pool still holding it.
+    The lock is always released on the very connection that took it, right
+    before that connection is closed, regardless of how the block exits.
+    """
+    if transaction_scoped:
+        lock_key = await acquire_marketplace_seller_lock(
+            session,
+            seller_id,
+            marketplace,
+            wait_timeout_sec=wait_timeout_sec,
+            release_connection_while_waiting=release_connection_while_waiting,
+            transaction_scoped=True,
+        )
         yield lock_key is not None
-    finally:
-        if lock_key is not None and not transaction_scoped:
-            await release_marketplace_seller_lock(session, lock_key)
+        return
+
+    bind = session.bind
+    if bind is None or bind.dialect.name != "postgresql":
+        # Not on PostgreSQL (SQLite in tests): unchanged behaviour, the lock
+        # is always considered taken. No private connection is needed, and
+        # checking dialect this way never checks out the caller's session.
+        yield True
+        return
+
+    async with AsyncSession(bind=bind) as lock_session:
+        lock_key = await acquire_marketplace_seller_lock(
+            lock_session,
+            seller_id,
+            marketplace,
+            wait_timeout_sec=wait_timeout_sec,
+            # Between failed poll attempts the lock's own connection is
+            # always handed back to the pool: it does nothing else while
+            # sleeping, so there is never a reason to keep it checked out
+            # (WMS-435, R4г) — independent of what the caller asked for.
+            release_connection_while_waiting=True,
+            transaction_scoped=False,
+        )
+        try:
+            yield lock_key is not None
+        finally:
+            if lock_key is not None:
+                try:
+                    await release_marketplace_seller_lock(lock_session, lock_key)
+                except Exception:
+                    # The block's own exception (if any) must reach the
+                    # caller unchanged (R2) — never replace or hide it with
+                    # an unlock failure. A connection that failed to unlock
+                    # must not go back to the pool alive.
+                    logger.exception(
+                        "marketplace seller lock unlock failed; invalidating "
+                        "the lock connection instead of returning it to the pool",
+                        extra={"seller_id": str(seller_id), "marketplace": marketplace},
+                    )
+                    try:
+                        await lock_session.invalidate()
+                    except Exception:
+                        logger.exception(
+                            "marketplace seller lock connection invalidation failed",
+                            extra={"seller_id": str(seller_id), "marketplace": marketplace},
+                        )

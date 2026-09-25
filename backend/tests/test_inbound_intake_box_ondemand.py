@@ -10,7 +10,9 @@ from httpx import AsyncClient
 from inbound_box_intake_helpers import set_planned_boxes
 
 from app.db.session import SessionLocal
-from app.models.inbound_intake import InboundIntakeBoxLine
+from app.models.inbound_intake import InboundIntakeBoxLine, InboundIntakeLine
+from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.services import inbound_cargo_place_service as cargo_svc
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as intake_svc
 from app.services.tokens import decode_access_token
@@ -155,6 +157,114 @@ async def test_box_two_scans_only_box_two(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_box_scan_resolves_ozon_external_barcode(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000) + 14)
+    _headers, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, _sku = await _submitted_request(async_client, _headers, suffix, expected_qty=2)
+    barcode = f"OZN-BOX-{suffix}"
+    async with SessionLocal() as session:
+        request = await intake_svc.get_request(session, tenant_id, rid)
+        assert request is not None and request.seller_id is not None
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=tenant_id,
+                seller_id=request.seller_id,
+                product_id=pid,
+                marketplace="ozon",
+                external_barcodes=[barcode],
+            )
+        )
+        await session.commit()
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        scanned = await box_svc.scan_product_into_box(
+            session, tenant_id, rid, box.id, barcode=barcode
+        )
+    assert scanned.product_id == pid
+    assert scanned.quantity == 1
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_external_barcode_does_not_change_box_or_cargo_place(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 15)
+    headers, tenant_id = await _register_admin(async_client, suffix)
+    rid, first_product_id, _sku = await _submitted_request(
+        async_client, headers, suffix, expected_qty=2
+    )
+    async with SessionLocal() as session:
+        request = await intake_svc.get_request(session, tenant_id, rid)
+        assert request is not None and request.seller_id is not None
+        seller_id = request.seller_id
+    second_product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Second shared barcode product",
+            "sku_code": f"second-{suffix}",
+            "seller_id": str(seller_id),
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert second_product.status_code == 200, second_product.text
+    second_product_id = uuid.UUID(second_product.json()["id"])
+    barcode = f"OZN-SHARED-{suffix}"
+    async with SessionLocal() as session:
+        request = await intake_svc.get_request(session, tenant_id, rid, for_update=True)
+        assert request is not None
+        request.status = intake_svc.STATUS_RECEIVING
+        session.add(
+            InboundIntakeLine(
+                request_id=rid,
+                product_id=second_product_id,
+                expected_qty=2,
+                actual_qty=0,
+            )
+        )
+        for product_id in (first_product_id, second_product_id):
+            session.add(
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    marketplace="ozon",
+                    external_barcodes=[barcode],
+                )
+            )
+        await session.commit()
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        places = await intake_svc.create_cargo_places(session, tenant_id, rid, quantity=1)
+        with pytest.raises(box_svc.InboundIntakeBoxError, match="barcode_ambiguous"):
+            await box_svc.scan_product_into_box(session, tenant_id, rid, box.id, barcode=barcode)
+        with pytest.raises(intake_svc.InboundIntakeError, match="barcode_ambiguous"):
+            await cargo_svc.scan_product(session, tenant_id, rid, places[0].id, barcode=barcode)
+        boxes = await box_svc.list_boxes_with_lines(session, tenant_id, rid)
+        assert boxes[0].lines == []
+        cargo_before = await cargo_svc._load_cargo_place(session, tenant_id, rid, places[0].id)
+        assert cargo_before.lines == []
+        box_line = await box_svc.scan_product_into_box(
+            session,
+            tenant_id,
+            rid,
+            box.id,
+            barcode=barcode,
+            product_id_hint=first_product_id,
+        )
+        cargo = await cargo_svc.scan_product(
+            session,
+            tenant_id,
+            rid,
+            places[0].id,
+            barcode=barcode,
+            product_id_hint=second_product_id,
+        )
+        assert box_line.product_id == first_product_id
+        assert cargo.lines[0].product_id == second_product_id
+
+
+@pytest.mark.asyncio
 async def test_receiving_scans_limit_catalog_lookup_to_request_products(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -169,12 +279,9 @@ async def test_receiving_scans_limit_catalog_lookup_to_request_products(
         looked_up_product_ids.append(product_ids if isinstance(product_ids, set) else None)
         return []
 
+    # WMS-473: box and cargo-place scans resolve barcodes through the intake service.
     monkeypatch.setattr(
         "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
-        capture_catalog_lookup,
-    )
-    monkeypatch.setattr(
-        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
         capture_catalog_lookup,
     )
 
@@ -211,10 +318,6 @@ async def test_product_hint_skips_catalog_and_updates_only_requested_line(
         "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
         catalog_must_not_be_loaded,
     )
-    monkeypatch.setattr(
-        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
-        catalog_must_not_be_loaded,
-    )
 
     loose = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/receiving/scan",
@@ -236,13 +339,15 @@ async def test_product_hint_skips_catalog_and_updates_only_requested_line(
     assert boxed.status_code == 200, boxed.text
     assert boxed.json()["quantity"] == 1
 
+    # WMS-473: a hint that is not a product of this organisation is refused without the
+    # catalogue; nothing is added to the document.
     wrong_hint = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/boxes/{box_id}/scan",
         headers=ah,
         json={"barcode": sku, "product_id": str(uuid.uuid4())},
     )
-    assert wrong_hint.status_code == 422, wrong_hint.text
-    assert wrong_hint.json()["detail"] == "product_not_on_request"
+    assert wrong_hint.status_code == 404, wrong_hint.text
+    assert wrong_hint.json()["detail"] == "product_not_found"
 
 
 @pytest.mark.asyncio

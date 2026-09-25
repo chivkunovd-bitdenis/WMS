@@ -1,0 +1,581 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
+index 708a941..624bba4 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt
+@@ -23,8 +23,10 @@ import kotlinx.coroutines.withContext
+  * Модель текущей сессии.
+  */
+ data class AuthSession(
+-    val email: String,
++    val userId: String,
++    val organizationSlug: String,
+     val displayName: String,
++    val jobTitle: String?,
+     val token: String,
+ )
+
+@@ -38,6 +40,7 @@ class AuthManager(
+     private val connectivityHint: ConnectivityHint,
+     private val serverHealthCheck: ServerHealthCheck = ServerHealthCheck(),
+     private val apiClientFactory: (String) -> ApiClient = ::loginApiClient,
++    private val identityApiFactory: (ApiClient) -> IdentityAuthApi = { it.createService(IdentityAuthApi::class.java) },
+ ) {
+     private var currentSession: AuthSession? = null
+
+@@ -58,21 +61,24 @@ class AuthManager(
+      */
+     fun notifySessionExpired() {
+         val session = currentSession ?: return
+-        authStore.invalidateToken(session.email)
++        authStore.invalidateToken(session.userId, session.organizationSlug, getWorkingBaseUrl())
+         currentSession = null
+         _sessionExpired.tryEmit(Unit)
+     }
+
+     /**
+-     * Вход по email+пароль через API.
++     * Основной вход по ФИО+пароль; прежний протокол остаётся переходным.
+      * При успехе сохраняет в currentSession и только тогда — base URL.
+      */
+     suspend fun loginWithPassword(
+         baseUrl: String,
+         email: String,
+         password: String,
++        legacyLogin: Boolean = true,
+     ): Result<AuthSession> = withContext(Dispatchers.IO) {
+-        val trimmedEmail = email.trim()
++        // The public parameter name is retained for APK-11 caller source compatibility.
++        // New callers pass a full name here; legacy callers pass their old login.
++        val trimmedName = email.trim()
+         val normalizedUrl = validateAndNormalizeBaseUrl(baseUrl, allowCleartext = BuildConfig.DEBUG)
+             .getOrElse { throwable ->
+                 val failure = (throwable as? ru.wms.tsd.core.api.BaseUrlValidationException)
+@@ -83,24 +89,34 @@ class AuthManager(
+
+         try {
+             val apiClient = apiClientFactory(normalizedUrl)
+-            val authApi = apiClient.createService(AuthApi::class.java)
+-
+-            val response = authApi.loginRouteAuthLoginPost(LoginBody(trimmedEmail, password))
+-            if (!response.isSuccessful) {
+-                return@withContext Result.failure(classifyHttpStatus(response.code(), forLogin = true))
++            val token = if (legacyLogin) {
++                val response = apiClient.createService(AuthApi::class.java).loginRouteAuthLoginPost(LoginBody(trimmedName, password))
++                if (!response.isSuccessful) return@withContext Result.failure(classifyHttpStatus(response.code(), forLogin = true))
++                response.body()?.accessToken
++            } else {
++                val response = identityApiFactory(apiClient).loginByName(NameLoginBody(trimmedName, password))
++                if (!response.isSuccessful) return@withContext Result.failure(classifyHttpStatus(response.code(), forLogin = true))
++                response.body()?.access_token
++            }
++            if (token.isNullOrBlank()) {
++                return@withContext Result.failure(NetworkFailure.InvalidResponse)
++            }
++            val identityResponse = identityApiFactory(apiClient).me("Bearer $token")
++            val identity = identityResponse.body()
++            if (!identityResponse.isSuccessful || identity == null || identity.id.isBlank() || identity.display_name.isBlank() || identity.organization_slug.isBlank()) {
++                return@withContext Result.failure(NetworkFailure.InvalidResponse)
+             }
+-
+-            val token = response.body()?.accessToken
+-                ?: return@withContext Result.failure(NetworkFailure.InvalidResponse)
+
+             val session = AuthSession(
+-                email = trimmedEmail,
+-                displayName = trimmedEmail,
++                userId = identity.id,
++                organizationSlug = identity.organization_slug,
++                displayName = identity.display_name,
++                jobTitle = identity.job_title,
+                 token = token,
+             )
+             try {
+                 authStore.setBaseUrl(normalizedUrl)
+-                authStore.getSavedStaff().find { it.email == trimmedEmail }?.let {
++                authStore.getSavedStaff().find { it.userId == session.userId && it.organizationSlug == session.organizationSlug && it.baseUrl == normalizedUrl }?.let {
+                     authStore.saveStaff(it.copy(token = token))
+                 }
+             } catch (_: Exception) {
+@@ -138,28 +154,58 @@ class AuthManager(
+     }
+
+     /**
+-     * Вход по PIN (4 цифры) из сохранённых сотрудников.
+-     * Проверка локальная.
++     * Вход по PIN (4 цифры) из сохранённых сотрудников. Локальный PIN
++     * открывает только сохранённую тройку server/tenant/user ID, а профиль
++     * повторно читается до создания сессии: переименованного или удалённого
++     * сотрудника не показываем по устаревшим данным устройства.
+      */
+-    fun loginWithPin(email: String, pin: String): Result<AuthSession> {
+-        val staff = authStore.getSavedStaff().find { it.email == email }
+-            ?: return Result.failure(AuthException.StaffNotFound())
++    suspend fun loginWithPin(userId: String, organizationSlug: String, baseUrl: String, pin: String): Result<AuthSession> = withContext(Dispatchers.IO) {
++        val staff = authStore.getSavedStaff().find { it.userId == userId && it.organizationSlug == organizationSlug && it.baseUrl == baseUrl }
++            ?: return@withContext Result.failure(AuthException.StaffNotFound())
+
+         if (staff.pin != pin) {
+-            return Result.failure(AuthException.InvalidPin())
++            return@withContext Result.failure(AuthException.InvalidPin())
+         }
+
+         if (staff.token.isEmpty()) {
+-            return Result.failure(AuthException.TokenExpired())
++            return@withContext Result.failure(AuthException.TokenExpired())
+         }
+
+-        val session = AuthSession(
+-            email = staff.email,
+-            displayName = staff.displayName,
+-            token = staff.token,
+-        )
+-        currentSession = session
+-        return Result.success(session)
++        try {
++            val response = identityApiFactory(apiClientFactory(baseUrl)).me("Bearer ${staff.token}")
++            if (response.code() == 401) {
++                authStore.invalidateToken(staff.userId, staff.organizationSlug, staff.baseUrl)
++                return@withContext Result.failure(AuthException.TokenExpired())
++            }
++            val identity = response.body()
++            if (!response.isSuccessful || identity == null || identity.id != staff.userId ||
++                identity.organization_slug != staff.organizationSlug || identity.display_name.isBlank()
++            ) {
++                return@withContext Result.failure(NetworkFailure.InvalidResponse)
++            }
++            val session = AuthSession(
++                userId = identity.id,
++                organizationSlug = identity.organization_slug,
++                displayName = identity.display_name,
++                jobTitle = identity.job_title,
++                token = staff.token,
++            )
++            authStore.saveStaff(staff.copy(displayName = session.displayName, jobTitle = session.jobTitle))
++            currentSession = session
++            Result.success(session)
++        } catch (error: CancellationException) {
++            throw error
++        } catch (error: Exception) {
++            val failure = classifyThrowable(error)
++            Result.failure(refineWithConnectivityHint(failure, connectivityHint.hasActiveNetwork()))
++        }
++    }
++
++    @Deprecated("Use the server, organization and user ID PIN key")
++    suspend fun loginWithPin(email: String, pin: String): Result<AuthSession> {
++        val staff = authStore.getSavedStaff().find { it.userId == email }
++            ?: return Result.failure(AuthException.StaffNotFound())
++        return loginWithPin(staff.userId, staff.organizationSlug, staff.baseUrl, pin)
+     }
+
+     fun logout() {
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+index 4243fa6..d704ea1 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+@@ -13,11 +13,27 @@ import kotlinx.serialization.decodeFromString
+  */
+ @Serializable
+ data class SavedStaff(
+-    val email: String,
++    val userId: String = "",
++    val organizationSlug: String = "",
++    val baseUrl: String = "",
+     val displayName: String,
++    val jobTitle: String? = null,
+     val token: String,
+     val pin: String, // 4 цифры
+-)
++) {
++    @Deprecated("Identity is stored as server, organization and user ID")
++    val email: String get() = userId
++
++    @Deprecated("Use the named fields")
++    constructor(email: String, displayName: String, token: String, pin: String) : this(
++        userId = email,
++        organizationSlug = "legacy",
++        baseUrl = "",
++        displayName = displayName,
++        token = token,
++        pin = pin,
++    )
++}
+
+ /**
+  * Хранилище авторизации на устройстве через EncryptedSharedPreferences.
+@@ -55,7 +71,7 @@ class AuthStore(context: Context) {
+         check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
+     }
+
+-    fun getSavedStaff(): List<SavedStaff> {
++    private fun readSavedStaff(): List<SavedStaff> {
+         val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
+         return try {
+             json.decodeFromString(jsonStr)
+@@ -64,23 +80,33 @@ class AuthStore(context: Context) {
+         }
+     }
+
++    /**
++     * PIN можно предложить только после входа, который уже подтвердил три
++     * части идентичности через /auth/me. Старые записи остаются на устройстве
++     * до переходного входа, но не показывают email, local-part или догадку
++     * вместо ФИО.
++     */
++    fun getSavedStaff(): List<SavedStaff> = readSavedStaff().filter {
++        it.userId.isNotBlank() && it.organizationSlug.isNotBlank() && it.baseUrl.isNotBlank()
++    }
++
+     fun saveStaff(staff: SavedStaff) {
+-        val current = getSavedStaff().toMutableList()
+-        current.removeAll { it.email == staff.email }
++        val current = readSavedStaff().toMutableList()
++        current.removeAll { it.userId == staff.userId && it.organizationSlug == staff.organizationSlug && it.baseUrl == staff.baseUrl }
+         current.add(staff)
+         val jsonStr = json.encodeToString(current)
+         encryptedPrefs.edit().putString(KEY_SAVED_STAFF, jsonStr).apply()
+     }
+
+     /** Токен умер (401): PIN-плитка остаётся, но вход по ней потребует пароль. */
+-    fun invalidateToken(email: String) {
+-        val staff = getSavedStaff().find { it.email == email } ?: return
++    fun invalidateToken(userId: String, organizationSlug: String, baseUrl: String) {
++        val staff = readSavedStaff().find { it.userId == userId && it.organizationSlug == organizationSlug && it.baseUrl == baseUrl } ?: return
+         saveStaff(staff.copy(token = ""))
+     }
+
+-    fun removeStaff(email: String) {
+-        val current = getSavedStaff().toMutableList()
+-        current.removeAll { it.email == email }
++    fun removeStaff(userId: String, organizationSlug: String, baseUrl: String) {
++        val current = readSavedStaff().toMutableList()
++        current.removeAll { it.userId == userId && it.organizationSlug == organizationSlug && it.baseUrl == baseUrl }
+         val jsonStr = json.encodeToString(current)
+         encryptedPrefs.edit().putString(KEY_SAVED_STAFF, jsonStr).apply()
+     }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt
+new file mode 100644
+index 0000000..a13f99d
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/IdentityAuthApi.kt
+@@ -0,0 +1,31 @@
++package ru.wms.tsd.core.auth
++
++import kotlinx.serialization.Serializable
++import retrofit2.Response
++import retrofit2.http.Body
++import retrofit2.http.GET
++import retrofit2.http.Header
++import retrofit2.http.POST
++
++@Serializable
++data class NameLoginBody(val full_name: String, val password: String)
++
++@Serializable
++data class NameLoginResponse(val access_token: String)
++
++@Serializable
++data class IdentityMeResponse(
++    val id: String,
++    val display_name: String,
++    val job_title: String? = null,
++    val organization_slug: String,
++)
++
++/** Small hand-written extension until the generated API jar is renewed. */
++interface IdentityAuthApi {
++    @POST("auth/login-by-name")
++    suspend fun loginByName(@Body body: NameLoginBody): Response<NameLoginResponse>
++
++    @GET("auth/me")
++    suspend fun me(@Header("Authorization") authorization: String): Response<IdentityMeResponse>
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
+index ed1b90a..6841537 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
+@@ -88,7 +88,9 @@ fun LoginScreen(
+     val savedStaff = remember { authStore.getSavedStaff() }
+     var showPinDialog by remember { mutableStateOf(false) }
+     var showPasswordLogin by remember { mutableStateOf(false) }
+-    var selectedEmail by remember { mutableStateOf("") }
++    var selectedUserId by remember { mutableStateOf("") }
++    var selectedOrganizationSlug by remember { mutableStateOf("") }
++    var selectedBaseUrl by remember { mutableStateOf("") }
+
+     BackHandler(enabled = showPinDialog) { showPinDialog = false }
+
+@@ -99,8 +101,10 @@ fun LoginScreen(
+         if (savedStaff.isNotEmpty() && !showPinDialog && !showPasswordLogin) {
+             StaffSelectionScreen(
+                 staff = savedStaff,
+-                onStaffSelected = { email ->
+-                    selectedEmail = email
++                onStaffSelected = { staff ->
++                    selectedUserId = staff.userId
++                    selectedOrganizationSlug = staff.organizationSlug
++                    selectedBaseUrl = staff.baseUrl
+                     showPinDialog = true
+                 },
+                 onLoginWithPassword = {
+@@ -112,7 +116,9 @@ fun LoginScreen(
+             )
+         } else if (showPinDialog) {
+             PinLoginDialog(
+-                email = selectedEmail,
++                userId = selectedUserId,
++                organizationSlug = selectedOrganizationSlug,
++                baseUrl = selectedBaseUrl,
+                 authManager = authManager,
+                 onSuccess = onLoginSuccess,
+                 onBack = { showPinDialog = false },
+@@ -134,7 +140,7 @@ fun LoginScreen(
+ @Composable
+ private fun StaffSelectionScreen(
+     staff: List<ru.wms.tsd.core.auth.SavedStaff>,
+-    onStaffSelected: (String) -> Unit,
++    onStaffSelected: (ru.wms.tsd.core.auth.SavedStaff) -> Unit,
+     onLoginWithPassword: () -> Unit,
+     authStore: AuthStore,
+     authManager: AuthManager,
+@@ -165,13 +171,16 @@ private fun StaffSelectionScreen(
+             items(staff.size) { index ->
+                 val s = staff[index]
+                 Button(
+-                    onClick = { onStaffSelected(s.email) },
++                    onClick = { onStaffSelected(s) },
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .height(WmsDimens.TouchTargetMin),
+                     colors = ButtonDefaults.buttonColors(containerColor = WmsColors.Primary),
+                 ) {
+-                    Text(s.displayName, fontSize = 20.sp)
++                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
++                        Text(s.displayName, fontSize = 20.sp)
++                        s.jobTitle?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 14.sp) }
++                    }
+                 }
+             }
+         }
+@@ -192,7 +201,9 @@ private fun StaffSelectionScreen(
+  */
+ @Composable
+ private fun PinLoginDialog(
+-    email: String,
++    userId: String,
++    organizationSlug: String,
++    baseUrl: String,
+     authManager: AuthManager,
+     onSuccess: () -> Unit,
+     onBack: () -> Unit,
+@@ -206,12 +217,14 @@ private fun PinLoginDialog(
+             errorMessage = "Введите 4 цифры"
+             return
+         }
+-        val result = authManager.loginWithPin(email, pinInput)
+-        if (result.isSuccess) {
+-            onSuccess()
+-        } else {
+-            errorMessage = "Неверный PIN"
+-            pinInput = ""
++        coroutineScope.launch {
++            val result = authManager.loginWithPin(userId, organizationSlug, baseUrl, pinInput)
++            if (result.isSuccess) {
++                onSuccess()
++            } else {
++                errorMessage = result.exceptionOrNull()?.toLoginErrorMessage() ?: "Не удалось войти"
++                pinInput = ""
++            }
+         }
+     }
+
+@@ -305,7 +318,8 @@ private fun EmailPasswordLoginScreen(
+     onBackToStaff: (() -> Unit)?,
+ ) {
+     val coroutineScope = rememberCoroutineScope()
+-    var email by remember { mutableStateOf("") }
++    var fullName by remember { mutableStateOf("") }
++    var legacyLogin by remember { mutableStateOf(false) }
+     var password by remember { mutableStateOf("") }
+     var baseUrl by remember { mutableStateOf(authManager.getWorkingBaseUrl()) }
+     var showServerSettings by remember { mutableStateOf(false) }
+@@ -324,14 +338,14 @@ private fun EmailPasswordLoginScreen(
+     }
+
+     fun submitLogin() {
+-        if (email.isBlank() || password.isBlank()) {
++        if (fullName.isBlank() || password.isBlank()) {
+             errorMessage = "Заполните все поля"
+             return
+         }
+         isLoading = true
+         errorMessage = ""
+         coroutineScope.launch {
+-            val result = authManager.loginWithPassword(baseUrl, email, password)
++            val result = authManager.loginWithPassword(baseUrl, fullName, password, legacyLogin)
+             isLoading = false
+             if (result.isSuccess) {
+                 showPinSetup = true
+@@ -380,8 +394,11 @@ private fun EmailPasswordLoginScreen(
+         if (session != null) {
+             authStore.saveStaff(
+                 ru.wms.tsd.core.auth.SavedStaff(
+-                    email = session.email,
++                    userId = session.userId,
++                    organizationSlug = session.organizationSlug,
++                    baseUrl = authManager.getWorkingBaseUrl(),
+                     displayName = session.displayName,
++                    jobTitle = session.jobTitle,
+                     token = session.token,
+                     pin = pin1,
+                 )
+@@ -402,18 +419,22 @@ private fun EmailPasswordLoginScreen(
+                 Text("Вход", fontSize = 24.sp, modifier = Modifier.padding(top = 16.dp))
+
+                 OutlinedTextField(
+-                    value = email,
+-                    onValueChange = { email = it },
+-                    label = { Text("Email") },
++                    value = fullName,
++                    onValueChange = { fullName = it },
++                    label = { Text(if (legacyLogin) "Прежний логин" else "ФИО") },
+                     modifier = Modifier.fillMaxWidth(),
+                     singleLine = true,
+                     enabled = !isLoading,
+                     keyboardOptions = KeyboardOptions(
+-                        keyboardType = KeyboardType.Email,
++                        keyboardType = KeyboardType.Text,
+                         imeAction = ImeAction.Next,
+                     ),
+                 )
+
++                TextButton(onClick = { legacyLogin = !legacyLogin }, enabled = !isLoading) {
++                    Text(if (legacyLogin) "Вход по ФИО" else "Вход по прежнему логину", fontSize = 14.sp, color = WmsColors.Primary)
++                }
++
+                 OutlinedTextField(
+                     value = password,
+                     onValueChange = { password = it },
+@@ -512,7 +533,7 @@ private fun EmailPasswordLoginScreen(
+
+                 Button(
+                     onClick = { submitLogin() },
+-                    enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
++                    enabled = !isLoading && fullName.isNotBlank() && password.isNotBlank(),
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .height(WmsDimens.PrimaryButtonHeight),
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
+index cd65432..2110b7e 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
+@@ -149,11 +149,16 @@ fun HomeScreen(
+             horizontalArrangement = Arrangement.SpaceBetween,
+             verticalAlignment = Alignment.CenterVertically,
+         ) {
+-            Text(
+-                text = session.displayName,
+-                fontSize = 16.sp,
+-                color = WmsColors.TextPrimary,
+-            )
++            Column {
++                Text(
++                    text = session.displayName,
++                    fontSize = 16.sp,
++                    color = WmsColors.TextPrimary,
++                )
++                session.jobTitle?.takeIf { it.isNotBlank() }?.let {
++                    Text(text = it, fontSize = 13.sp, color = WmsColors.TextSecondary)
++                }
++            }
+             TextButton(onClick = onLogout) {
+                 Text(
+                     text = "Сменить",
+diff --git a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
+index a1d4fb7..96d8afd 100644
+--- a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
+@@ -36,6 +36,7 @@ class AuthManagerUrlPersistenceTest {
+     private lateinit var authStore: AuthStore
+     private lateinit var connectivityHint: ConnectivityHint
+     private lateinit var authApi: AuthApi
++    private lateinit var identityApi: IdentityAuthApi
+     private lateinit var authManager: AuthManager
+
+     @Before
+@@ -43,6 +44,10 @@ class AuthManagerUrlPersistenceTest {
+         authStore = mockk(relaxed = true)
+         connectivityHint = mockk()
+         authApi = mockk()
++        identityApi = mockk()
++        coEvery { identityApi.me(any()) } returns Response.success(
++            IdentityMeResponse("test-user", "Тестовый сотрудник", "Кладовщик", "test-org"),
++        )
+         every { connectivityHint.hasActiveNetwork() } returns true
+         authManager = AuthManager(
+             authStore = authStore,
+@@ -53,6 +58,7 @@ class AuthManagerUrlPersistenceTest {
+                     every { createService(AuthApi::class.java) } returns authApi
+                 }
+             },
++            identityApiFactory = { identityApi },
+         )
+     }
+
+@@ -113,7 +119,15 @@ class AuthManagerUrlPersistenceTest {
+
+     @Test
+     fun `explicit https login replaces old server while preserving staff pin`() = runTest {
+-        val oldStaff = SavedStaff("fixture@example.test", "Fixture", "old-test-token", "2468")
++        val oldStaff = SavedStaff(
++            userId = "test-user",
++            organizationSlug = "test-org",
++            baseUrl = "https://fixture.example.test/api/",
++            displayName = "Тестовый сотрудник",
++            jobTitle = "Кладовщик",
++            token = "old-test-token",
++            pin = "2468",
++        )
+         var workingUrl = "http://fixture.example.test:8088/"
+         var saved = oldStaff
+         every { authStore.getBaseUrl() } answers { workingUrl }
+@@ -124,14 +138,37 @@ class AuthManagerUrlPersistenceTest {
+             TokenResponse(accessToken = "new-test-token", tokenType = "bearer"),
+         )
+         assertEquals("http://fixture.example.test:8088/", authManager.getWorkingBaseUrl())
+-        assertTrue(authManager.loginWithPassword("https://fixture.example.test/api", oldStaff.email, "test-password").isSuccess)
++        assertTrue(authManager.loginWithPassword("https://fixture.example.test/api", "fixture@example.test", "test-password").isSuccess)
+         assertEquals("https://fixture.example.test/api/", authManager.getWorkingBaseUrl())
+         assertEquals(oldStaff.copy(token = "new-test-token"), saved)
+         authManager.logout()
+-        assertTrue(authManager.loginWithPin(oldStaff.email, oldStaff.pin).isSuccess)
++        assertTrue(authManager.loginWithPin(oldStaff.userId, oldStaff.organizationSlug, oldStaff.baseUrl, oldStaff.pin).isSuccess)
+         verify(exactly = 1) { authStore.setBaseUrl(any()) }
+     }
+
++    @Test
++    fun `PIN does not create a session when the current profile cannot be read`() = runTest {
++        val staff = SavedStaff(
++            userId = "test-user",
++            organizationSlug = "test-org",
++            baseUrl = "https://fixture.example.test/api/",
++            displayName = "Тестовый сотрудник",
++            jobTitle = "Кладовщик",
++            token = "test-token",
++            pin = "2468",
++        )
++        every { authStore.getSavedStaff() } returns listOf(staff)
++        coEvery { identityApi.me(any()) } returns Response.error(
++            503,
++            "".toResponseBody("application/json".toMediaType()),
++        )
++
++        val result = authManager.loginWithPin(staff.userId, staff.organizationSlug, staff.baseUrl, staff.pin)
++
++        assertTrue(result.isFailure)
++        assertNull(authManager.getCurrentSession())
++    }
++
+     @Test
+     fun `storage failure leaves session null and returns safe typed failure`() = runTest {
+         coEvery { authApi.loginRouteAuthLoginPost(any()) } returns Response.success(

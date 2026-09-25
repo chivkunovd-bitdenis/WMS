@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
 
 class FbsBindingStockPool(Base):
-    """Доля FBS по складу WB и наследуемое абсолютное количество."""
+    """Правило товара для одной привязки внешнего склада к складу ФФ."""
 
     __tablename__ = "fbs_binding_stock_pools"
     __table_args__ = (
@@ -62,11 +63,18 @@ class FbsBindingStockPool(Base):
     quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    # quantity — доступные новым заказам штуки, без действующих резервов.
-    # Доля свободного остатка для этого склада WB, когда у товара доли разные.
-    # NULL — «отдельная доля не задана», и это не то же самое, что ноль: ноль
-    # означает осознанное «на этот склад не публикуем».
+    # Only an explicit key in an operator-saved units rule proves zero intent.
+    units_configured: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # WMS-469: одно сохранённое значение на пару товар x привязка. Если percent
+    # задан, действует процентный режим; если NULL — ручной потолок quantity.
+    # Рассчитанное к публикации число нигде рядом не сохраняется.
     percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # NULL означает старую строку до WMS-469: для неё выключатель и режим ещё
+    # читаются из legacy-полей Product. После первого сохранения блока значение
+    # становится явным и независимо от других привязок этого товара.
+    publish_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

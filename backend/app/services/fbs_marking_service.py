@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +36,7 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
@@ -78,7 +81,10 @@ from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
     MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
+    split_marketplace_order_id_batches,
 )
+
+logger = logging.getLogger(__name__)
 
 OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
 
@@ -471,6 +477,7 @@ def build_order_metadata(
         for mark in current:
             states.append(
                 {
+                    "id": str(mark.id),
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
@@ -711,6 +718,7 @@ async def record_pending_kiz_operation(
     error_code: str,
     actor_user_id: uuid.UUID | None,
     idempotency_key: str,
+    scan_auto_print_id: uuid.UUID | None = None,
 ) -> None:
     marking.meta_status = META_STATUS_UNKNOWN
     marking.check_status = CHECK_STATUS_ERROR
@@ -733,6 +741,11 @@ async def record_pending_kiz_operation(
             local_entity_type="fbs_order_marking", local_entity_id=marking.id,
             wb_object_kind="order", wb_object_id=str(order.wb_order_id),
             created_by_user_id=actor_user_id,
+            request_summary_json=(
+                {"scan_auto_print_id": str(scan_auto_print_id)}
+                if scan_auto_print_id is not None
+                else None
+            ),
         )
         session.add(operation)
     # A later uncertain retry for the same binding reuses its existing key.
@@ -741,6 +754,41 @@ async def record_pending_kiz_operation(
     operation.error_context_json = None
     operation.confirmed_at = None
     operation.failed_at = None
+
+
+async def confirmed_kiz_operation_for_scan_auto_print(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    scan_auto_print_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> FbsWbOperation | None:
+    """Find the confirmed uncertain write owned by this exact product scan."""
+    result = await session.execute(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == order.tenant_id,
+            FbsWbOperation.seller_id == order.seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.wb_object_kind == "order",
+            FbsWbOperation.wb_object_id == str(order.wb_order_id),
+            FbsWbOperation.created_by_user_id == actor_user_id,
+            FbsWbOperation.request_hash
+            == hashlib.sha256(marking.value.encode()).hexdigest(),
+            FbsWbOperation.state == WB_OPERATION_STATE_CONFIRMED,
+            FbsWbOperation.confirmed_at.is_not(None),
+        )
+        .with_for_update()
+    )
+    matching = [
+        operation
+        for operation in result.scalars().all()
+        if (operation.request_summary_json or {}).get("scan_auto_print_id")
+        == str(scan_auto_print_id)
+    ]
+    return matching[0] if len(matching) == 1 else None
 
 
 async def pending_kiz_operation(
@@ -761,6 +809,35 @@ async def pending_kiz_operation(
     return result.scalar_one_or_none()
 
 
+class SyncedMarkings(list[FbsOrderMarking]):
+    """`_sync_order_meta_from_wb`'s markings, plus whether the WB answer was
+    actually applied or skipped because it was stale (WMS-477 review finding 4).
+
+    Every existing caller only ever indexed or iterated the plain list this
+    function used to return, so this stays a drop-in `list[FbsOrderMarking]`;
+    `.applied` is a purely additive signal for callers that must not count a
+    skipped, stale answer as a real update.
+    """
+
+    def __init__(self, markings: list[FbsOrderMarking], *, applied: bool) -> None:
+        super().__init__(markings)
+        self.applied = applied
+
+
+def _marking_verdict_fingerprint(
+    meta_status: str,
+    check_status: str,
+    reason: str | None,
+    meta_details_json: dict[str, Any] | None,
+) -> tuple[str, str, str | None, dict[str, Any] | None]:
+    """Point-in-time shape of a marking's WB verdict, for staleness checks.
+
+    Dict equality is structural (order-independent), so this needs no
+    serialization — just the field values a fresher writer would change.
+    """
+    return (meta_status, check_status, reason, meta_details_json)
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -769,15 +846,75 @@ async def _sync_order_meta_from_wb(
     *,
     meta_batch: list[MarketplaceOrderMetaRow] | None = None,
     expected_marking_ids: set[uuid.UUID] | None = None,
-) -> list[FbsOrderMarking]:
+    expected_marking_verdicts: dict[uuid.UUID, tuple[str, str, str | None, dict[str, Any] | None]]
+    | None = None,
+    expected_order_last_checked_at: datetime | None = None,
+) -> SyncedMarkings:
+    """Apply one order's WB metadata answer under a row lock.
+
+    `expected_marking_ids` alone (the pre-existing protection) only catches a
+    code that was removed or replaced while this order's WB answer was in
+    flight — it says nothing about a *different* writer refreshing the very
+    same code to a newer verdict in the meantime (WMS-477 review finding 1: a
+    slow `pending` from one writer can otherwise land after a fast `accepted`
+    from another and silently revert it, or a slow `accepted` land after a
+    fresher `rejected`). A caller that pre-fetches markings and a WB batch of
+    its own before calling this (the button/minute-cycle batch path) should
+    pass `expected_marking_verdicts` (a fingerprint of each marking's verdict
+    fields at that same pre-fetch) and `expected_order_last_checked_at` (the
+    order's own snapshot); when supplied, a fresher write by anyone else
+    between that snapshot and this lock makes this call a no-op, exactly like
+    an ID mismatch does.
+
+    A caller that passes neither `expected_marking_ids` nor
+    `expected_marking_verdicts` (`get_order_metadata`, `sync_order_marking_statuses`
+    — the single-order path behind the "Проверить ЧЗ" button, the WB metadata
+    card and the pre-handover sync) gets the same protection for free: this
+    function takes that same snapshot itself, right before it does its own
+    single-order WB fetch below (WMS-477 review round 2, finding Н1 — this
+    call's own single HTTP round trip is exactly the same race, just with a
+    shorter window). Only a caller that supplies an already-fetched
+    `meta_batch` *without* `expected_marking_verdicts` gets no freshness check
+    beyond the ID one, because by then this function has no "before its HTTP"
+    moment left to snapshot — no real caller does this today.
+    """
     order_id = order.id
     tenant_id = order.tenant_id
     wb_order_id = int(order.wb_order_id)
     before_ids = expected_marking_ids
+    verdict_snapshot = expected_marking_verdicts
+    checked_at_snapshot = expected_order_last_checked_at
     if before_ids is None:
-        before_ids = set((await session.scalars(select(FbsOrderMarking.id).where(
-            FbsOrderMarking.order_id == order_id, FbsOrderMarking.tenant_id == tenant_id,
-        ))).all())
+        # No caller-supplied snapshot: this call is about to read WB itself
+        # below (or was handed an already-fetched `meta_batch` without one —
+        # same handling either way). Snapshot the verdict fields here, before
+        # that happens, so the freshness check after the lock can catch the
+        # same race the batch callers already guard against (WMS-477 review
+        # finding Н1): a fresher write by anyone else landing in between.
+        pre_fetch_markings = list(
+            (
+                await session.scalars(
+                    select(FbsOrderMarking).where(
+                        FbsOrderMarking.order_id == order_id,
+                        FbsOrderMarking.tenant_id == tenant_id,
+                    )
+                )
+            ).all()
+        )
+        before_ids = {marking.id for marking in pre_fetch_markings}
+        if verdict_snapshot is None:
+            verdict_snapshot = {
+                marking.id: _marking_verdict_fingerprint(
+                    marking.meta_status,
+                    marking.check_status,
+                    marking.reason,
+                    marking.meta_details_json,
+                )
+                for marking in pre_fetch_markings
+            }
+            checked_at_snapshot = await session.scalar(
+                select(FbsOrder.metadata_last_checked_at).where(FbsOrder.id == order_id)
+            )
     batch = meta_batch
     if batch is None:
         batch = await fetch_marketplace_orders_meta_batch(
@@ -814,7 +951,25 @@ async def _sync_order_meta_from_wb(
     )
     if {marking.id for marking in markings} != before_ids:
         # The GET describes the previous binding; a completed scan/unbind wins.
-        return markings
+        return SyncedMarkings(markings, applied=False)
+    if verdict_snapshot is not None and (
+        order.metadata_last_checked_at != checked_at_snapshot
+        or any(
+            _marking_verdict_fingerprint(
+                marking.meta_status,
+                marking.check_status,
+                marking.reason,
+                marking.meta_details_json,
+            )
+            != verdict_snapshot.get(marking.id)
+            for marking in markings
+        )
+    ):
+        # Same codes, but someone else already wrote a fresher (or equally
+        # fresh) verdict for at least one of them while this HTTP call was in
+        # flight — WMS-477 review finding 1. The ID check above only catches a
+        # removed/replaced code; this catches the same code changing value.
+        return SyncedMarkings(markings, applied=False)
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_details: tuple[MarketplaceMetaDetail, ...] = ()
@@ -830,6 +985,11 @@ async def _sync_order_meta_from_wb(
                 returned_kinds.add(kind)
                 details_by_kind[kind] = detail
 
+    if not returned_row:
+        # An omitted order supplies no new verdict. Preserve the saved state so
+        # pending/sending codes remain eligible for the next minute cycle.
+        return SyncedMarkings(markings, applied=False)
+
     for marking in markings:
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
@@ -837,7 +997,7 @@ async def _sync_order_meta_from_wb(
         # A status entry for a value is not enough: treating it as fresh metadata
         # would mask a partial response and could incorrectly advance the local
         # lifecycle state.
-        if not returned_row or marking.kind not in returned_kinds:
+        if marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
             continue
@@ -882,7 +1042,7 @@ async def _sync_order_meta_from_wb(
     if returned_row and all(marking.kind in returned_kinds for marking in markings):
         order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
-    return markings
+    return SyncedMarkings(markings, applied=True)
 
 
 def _meta_validation_reasons(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
@@ -1132,3 +1292,196 @@ async def _notify_supply_marking_update(
         order_id,
         actor_user_id=actor_user_id,
     )
+
+
+@dataclass(frozen=True)
+class MarkingVerdictsSyncResult:
+    """How many orders a batch verdict sync looked at and actually refreshed (WMS-477)."""
+
+    orders_checked: int
+    orders_updated: int
+
+
+async def sync_marking_verdicts_batch(
+    session: AsyncSession,
+    orders: list[FbsOrder],
+    http_client: httpx.AsyncClient,
+    token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> MarkingVerdictsSyncResult:
+    """Refresh WB verdicts for many orders' marking codes in ≤100-order batches.
+
+    Shared by the per-supply "Проверить в WB" endpoint (WMS-477 R2,
+    `sync_marking_verdicts_for_supply` below) and the background verdicts-recheck
+    cycle (WMS-477 R5, `fbs_autopoll_service.sync_marking_verdicts_for_seller`) —
+    the two callers that need WB's answer for *many* orders' codes at once,
+    unlike the existing one-order-at-a-time `sync_order_marking_statuses`.
+
+    Every batch is read from WB before anything is applied to the database: if
+    any batch fails, no marking in `orders` is touched at all (R2/R3 — a failed
+    check must never look like a partial success), and the original
+    `WildberriesClientError` propagates so the caller decides how to isolate the
+    failure (R6 — one seller's WB error must not touch another seller's codes
+    or stop the rest of the cycle).
+    """
+    wb_order_ids = list(dict.fromkeys(int(order.wb_order_id) for order in orders))
+    if not wb_order_ids:
+        return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
+
+    order_ids = [order.id for order in orders]
+    expected_marking_ids: dict[uuid.UUID, set[uuid.UUID]] = {}
+    marking_fingerprints: dict[
+        uuid.UUID, tuple[str, str, str | None, dict[str, Any] | None]
+    ] = {}
+    marking_rows = (
+        await session.execute(
+            select(
+                FbsOrderMarking.order_id,
+                FbsOrderMarking.id,
+                FbsOrderMarking.meta_status,
+                FbsOrderMarking.check_status,
+                FbsOrderMarking.reason,
+                FbsOrderMarking.meta_details_json,
+            ).where(FbsOrderMarking.order_id.in_(order_ids))
+        )
+    ).all()
+    for row_order_id, marking_id, meta_status, check_status, reason, meta_details_json in (
+        marking_rows
+    ):
+        expected_marking_ids.setdefault(row_order_id, set()).add(marking_id)
+        marking_fingerprints[marking_id] = _marking_verdict_fingerprint(
+            meta_status, check_status, reason, meta_details_json
+        )
+    # Snapshotting the order's own "last checked" timestamp alongside the
+    # marking fields (WMS-477 review finding 1) closes a gap the ID-only
+    # check leaves open: a concurrent writer (the button, the minute cycle
+    # itself on another order batch, or the general sweep) can refresh the
+    # very same code to a newer verdict without ever changing its ID.
+    order_checked_at_snapshot: dict[uuid.UUID, datetime | None] = {
+        row_id: checked_at
+        for row_id, checked_at in (
+            await session.execute(
+                select(FbsOrder.id, FbsOrder.metadata_last_checked_at).where(
+                    FbsOrder.id.in_(order_ids)
+                )
+            )
+        ).all()
+    }
+
+    # Read every batch first: a failure here must leave every marking as it was.
+    batches: list[tuple[set[int], list[MarketplaceOrderMetaRow]]] = []
+    for chunk in split_marketplace_order_id_batches(wb_order_ids):
+        meta_batch = await fetch_marketplace_orders_meta_batch(
+            http_client, api_token=token, order_ids=chunk
+        )
+        batches.append((set(chunk), meta_batch))
+
+    checked = 0
+    updated = 0
+    for wb_ids_in_batch, meta_batch in batches:
+        rows_by_wb_order_id: dict[int, list[MarketplaceOrderMetaRow]] = {}
+        for row in meta_batch:
+            rows_by_wb_order_id.setdefault(row.order_id, []).append(row)
+        for order in orders:
+            wb_id = int(order.wb_order_id)
+            if wb_id not in wb_ids_in_batch:
+                continue
+            expected = expected_marking_ids.get(order.id)
+            if not expected:
+                # The code disappeared between selection and the WB answer —
+                # nothing to apply; the next recheck will pick up whatever
+                # the operator left behind.
+                continue
+            checked += 1
+            returned_rows = rows_by_wb_order_id.get(wb_id, [])
+            if not returned_rows:
+                logger.warning(
+                    "fbs marking verdicts sync: WB batch response missed order %s",
+                    order.id,
+                )
+                continue
+            result = await _sync_order_meta_from_wb(
+                session,
+                order,
+                http_client,
+                token,
+                meta_batch=returned_rows,
+                expected_marking_ids=expected,
+                expected_marking_verdicts={mid: marking_fingerprints[mid] for mid in expected},
+                expected_order_last_checked_at=order_checked_at_snapshot.get(order.id),
+            )
+            if not result.applied:
+                # A fresher (or equally fresh) verdict already won for this
+                # order's code while this batch's HTTP call was in flight —
+                # not a real update, and _notify_supply_marking_update below
+                # would have nothing new to recompute from (WMS-477 review
+                # finding 4: this used to be counted as updated regardless).
+                logger.info(
+                    "fbs marking verdicts sync: stale WB answer skipped for order %s",
+                    order.id,
+                )
+                continue
+            await _notify_supply_marking_update(
+                session,
+                order.tenant_id,
+                order.id,
+                actor_user_id=actor_user_id,
+            )
+            updated += 1
+    return MarkingVerdictsSyncResult(orders_checked=checked, orders_updated=updated)
+
+
+async def sync_marking_verdicts_for_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> MarkingVerdictsSyncResult:
+    """WMS-477 R2 — «Проверить в WB»: пересверить все закодированные WB-заказы поставки.
+
+    Заказ участвует, если у него есть хотя бы один код маркировки любого
+    статуса (в том числе `unknown` и `rejected` — решение D1 в требованиях):
+    пакет WB стоит одинаково независимо от статуса, а заодно подтверждаются
+    коды, потерявшие ответ, и обновляются отказы. Заказы без кода и заказы
+    других маркетплейсов в выборку не попадают — пустая выборка не делает ни
+    одного вызова WB.
+    """
+    supply = await session.scalar(
+        select(FbsSupply).where(
+            FbsSupply.id == supply_id,
+            FbsSupply.tenant_id == tenant_id,
+        )
+    )
+    if supply is None:
+        raise FbsMarkingError("supply_not_found")
+
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+            FbsOrder.marketplace == "wb",
+            exists(
+                select(FbsOrderMarking.id).where(FbsOrderMarking.order_id == FbsOrder.id)
+            ),
+        )
+        .order_by(FbsOrder.id.asc())
+    )
+    orders = list((await session.execute(stmt)).scalars().all())
+    if not orders:
+        return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
+
+    token = await require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        return await sync_marking_verdicts_batch(
+            session,
+            orders,
+            http_client,
+            token,
+            actor_user_id=actor_user_id,
+        )
+    except WildberriesClientError as exc:
+        raise FbsMarkingError(_wb_error_code(exc)) from exc

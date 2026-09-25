@@ -8,11 +8,15 @@ from httpx import AsyncClient
 
 from app.db.session import SessionLocal
 from app.models.seller_shop_delegation import SellerShopDelegation
+from app.models.user import User
 from app.services.tokens import create_access_token, decode_access_token
 
 
 async def _allow_seller_shop(user_id: str, seller_id: str, *, enabled: bool = False) -> None:
     async with SessionLocal() as session:
+        user = await session.get(User, uuid.UUID(user_id))
+        assert user is not None
+        user.can_manage_seller_shops = True
         session.add(
             SellerShopDelegation(
                 user_id=uuid.UUID(user_id),

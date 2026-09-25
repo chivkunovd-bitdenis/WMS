@@ -1,0 +1,16 @@
+{
+  "seller_id": "35526a1f-7a32-4542-a7ea-7b980b8a7eb1",
+  "warehouse_id": "1178e3ba-a154-4ac4-8827-888634eb9e79",
+  "products": [
+    {
+      "id": "c16deead-98e6-4941-8652-df95ab5b7c79",
+      "sku": "440UI-WB",
+      "barcode": "2000000440401"
+    },
+    {
+      "id": "e2aa2565-14a2-4bb5-839b-01e5271ac8e7",
+      "sku": "440UI-OZON",
+      "barcode": "2000000440402"
+    }
+  ]
+}

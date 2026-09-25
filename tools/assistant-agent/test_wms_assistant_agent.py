@@ -727,6 +727,21 @@ class CallModelTest(unittest.TestCase):
         self.assertNotIn("ANTHROPIC_API_KEY", passed_env)
         self.assertNotIn("ANTHROPIC_AUTH_TOKEN", passed_env)
 
+    def test_model_receives_only_cli_environment_not_runner_secrets(self):
+        cli_payload = self._cli_payload({"mode": "how_to", "answer_text": "ok"})
+        run = mock.Mock(return_value=_run(0, json.dumps(cli_payload)))
+        safe = {"HOME": "/test/user", "PATH": "/test/bin", "LANG": "en_US.UTF-8"}
+        sensitive = {
+            "WMS_ASSISTANT_EXECUTOR_SECRET": "test-runner-secret",
+            "DATABASE_URL": "test-database", "RAILWAY_TOKEN": "test-railway",
+            "GITHUB_TOKEN": "test-github", "ANTHROPIC_API_KEY": "test-api",
+            "ANTHROPIC_AUTH_TOKEN": "test-auth", "UNEXPECTED_SECRET": "test-unknown",
+            "NODE_OPTIONS": "--require=/test/injected.js",
+        }
+        with mock.patch.dict("os.environ", {**safe, **sensitive}, clear=True):
+            call_model("prompt", cwd=Path("."), schema_text="{}", model="sonnet", run=run)
+        self.assertEqual(run.call_args.kwargs["env"], safe)
+
     def test_is_error_raises(self):
         run = mock.Mock(return_value=_run(0, json.dumps({"is_error": True, "subtype": "error_max_turns"})))
         with self.assertRaises(AssistantAgentError):

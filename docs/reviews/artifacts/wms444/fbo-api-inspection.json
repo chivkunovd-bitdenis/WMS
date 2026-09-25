@@ -1,0 +1,157 @@
+{
+  "request_id": "2f34e653-a99c-4e18-828b-9adb905d61df",
+  "task_id": "52a59f50-d2e4-4805-b0f8-5b6d351352e6",
+  "line_id": "192357af-38b0-4433-a885-aa3e5165d3be",
+  "fixture": "synthetic FBO, plan3/closed box3, initial task packed0, no pack requests",
+  "document": {
+    "id": "2f34e653-a99c-4e18-828b-9adb905d61df",
+    "document_number": "WMS444-INSPECT",
+    "display_number": "444001",
+    "warehouse_id": "9341abbc-1a26-414b-8cc1-1750955bbf48",
+    "warehouse_name": "WMS444 осмотр ФБО",
+    "status": "collecting",
+    "seller_id": "2169236e-bc45-4585-af17-b26b5a5784ba",
+    "seller_name": "WMS444 осмотр упаковки",
+    "marketplace": "wb",
+    "wb_mp_warehouse_id": null,
+    "planned_shipment_date": null,
+    "ff_modified": false,
+    "created_at": "2026-09-13T11:51:25.355115+03:00",
+    "lines": [
+      {
+        "id": "9832a760-8401-49cb-9c99-f162c043fa85",
+        "product_id": "6a5e3444-4a4f-4ae7-ac22-3f9d31ed7dc5",
+        "sku_code": "WMS444-FBO-UI",
+        "product_name": "WMS444 три штуки для проверки процесса",
+        "quantity": 3,
+        "picked_qty": 3,
+        "has_discrepancy": false
+      }
+    ],
+    "boxes": [
+      {
+        "id": "36ec19da-e77f-4a4c-8e59-371c926c36bc",
+        "box_preset": "60_40_40",
+        "internal_barcode": null,
+        "closed_at": "2026-09-13T11:51:25.366576+03:00",
+        "lines": [
+          {
+            "id": "772020be-183a-4ff7-a5e0-23c804575bdf",
+            "product_id": "6a5e3444-4a4f-4ae7-ac22-3f9d31ed7dc5",
+            "sku_code": "WMS444-FBO-UI",
+            "product_name": "WMS444 три штуки для проверки процесса",
+            "quantity": 3
+          }
+        ]
+      }
+    ],
+    "pick_allocations": [
+      {
+        "id": "ab6b28b4-e086-402b-a73f-5ecb644d0252",
+        "product_id": "6a5e3444-4a4f-4ae7-ac22-3f9d31ed7dc5",
+        "sku_code": "WMS444-FBO-UI",
+        "product_name": "WMS444 три штуки для проверки процесса",
+        "storage_location_id": "33a9b4b9-7cc7-4f72-bcd0-0d40ab6d6972",
+        "location_code": "WMS444-A",
+        "quantity": 3
+      }
+    ],
+    "linked_packaging_task": {
+      "task_id": "52a59f50-d2e4-4805-b0f8-5b6d351352e6",
+      "status": "in_progress",
+      "qty_done": 3,
+      "qty_total": 3,
+      "is_complete": true
+    }
+  },
+  "by_unload": {
+    "id": "52a59f50-d2e4-4805-b0f8-5b6d351352e6",
+    "document_number": null,
+    "display_number": null,
+    "warehouse_id": "9341abbc-1a26-414b-8cc1-1750955bbf48",
+    "warehouse_name": "WMS444 осмотр ФБО",
+    "warehouse_code": "wms444-fbo",
+    "seller_id": "2169236e-bc45-4585-af17-b26b5a5784ba",
+    "seller_name": "WMS444 осмотр упаковки",
+    "status": "in_progress",
+    "marketplace_unload_request_id": "2f34e653-a99c-4e18-828b-9adb905d61df",
+    "inbound_intake_request_id": null,
+    "is_complete": true,
+    "pick_resync_warning": false,
+    "created_at": "2026-09-13T11:51:25.355115+03:00",
+    "updated_at": "2026-09-13T11:51:56.134182+03:00",
+    "completed_at": null,
+    "completed_by_user_id": null,
+    "lines": [
+      {
+        "id": "192357af-38b0-4433-a885-aa3e5165d3be",
+        "product_id": "6a5e3444-4a4f-4ae7-ac22-3f9d31ed7dc5",
+        "seller_id": "2169236e-bc45-4585-af17-b26b5a5784ba",
+        "seller_name": "WMS444 осмотр упаковки",
+        "sku_code": "WMS444-FBO-UI",
+        "product_name": "WMS444 три штуки для проверки процесса",
+        "storage_location_id": "06428682-ae09-453d-86a5-36bf0e8f6569",
+        "storage_location_code": "__SORTING__",
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "qty_total": 3,
+        "qty_suggested_packed": 0,
+        "qty_confirmed_packed": 0,
+        "qty_need_pack": 3,
+        "qty_packed_in_task": 3,
+        "qty_done": 3,
+        "qty_marking_printed": 0,
+        "qty_marking_external": 0,
+        "qty_product_label_printed": 0,
+        "marking_available_count": 0,
+        "is_complete": true
+      }
+    ],
+    "events": []
+  },
+  "task": {
+    "id": "52a59f50-d2e4-4805-b0f8-5b6d351352e6",
+    "document_number": null,
+    "display_number": null,
+    "warehouse_id": "9341abbc-1a26-414b-8cc1-1750955bbf48",
+    "warehouse_name": "WMS444 осмотр ФБО",
+    "warehouse_code": "wms444-fbo",
+    "seller_id": "2169236e-bc45-4585-af17-b26b5a5784ba",
+    "seller_name": "WMS444 осмотр упаковки",
+    "status": "in_progress",
+    "marketplace_unload_request_id": "2f34e653-a99c-4e18-828b-9adb905d61df",
+    "inbound_intake_request_id": null,
+    "is_complete": true,
+    "pick_resync_warning": false,
+    "created_at": "2026-09-13T11:51:25.355115+03:00",
+    "updated_at": "2026-09-13T11:51:56.243393+03:00",
+    "completed_at": null,
+    "completed_by_user_id": null,
+    "lines": [
+      {
+        "id": "192357af-38b0-4433-a885-aa3e5165d3be",
+        "product_id": "6a5e3444-4a4f-4ae7-ac22-3f9d31ed7dc5",
+        "seller_id": "2169236e-bc45-4585-af17-b26b5a5784ba",
+        "seller_name": "WMS444 осмотр упаковки",
+        "sku_code": "WMS444-FBO-UI",
+        "product_name": "WMS444 три штуки для проверки процесса",
+        "storage_location_id": "06428682-ae09-453d-86a5-36bf0e8f6569",
+        "storage_location_code": "__SORTING__",
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "qty_total": 3,
+        "qty_suggested_packed": 0,
+        "qty_confirmed_packed": 0,
+        "qty_need_pack": 3,
+        "qty_packed_in_task": 3,
+        "qty_done": 3,
+        "qty_marking_printed": 0,
+        "qty_marking_external": 0,
+        "qty_product_label_printed": 0,
+        "marking_available_count": 0,
+        "is_complete": true
+      }
+    ],
+    "events": []
+  }
+}
