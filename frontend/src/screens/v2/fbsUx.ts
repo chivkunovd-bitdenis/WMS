@@ -1,4 +1,4 @@
-import type { FbsOrderMetadata } from './fbsApi'
+import type { FbsOrderMetadata, FbsPickOptionLocation } from './fbsApi'
 
 export type FbsMarketplace = 'wb' | 'ozon'
 
@@ -289,8 +289,45 @@ export type FbsPickingListPrintInput = {
   routeLabel: string
   deadlineLabel: string
   printedAtLabel: string
-  addressStorageEnabled?: boolean
   rows: FbsPickingListPrintRow[]
+}
+
+// Так сервер подписывает служебную зону сортировки (UNASSIGNED_LABEL).
+const SORTING_LOCATION_LABEL = 'Без ячеек'
+
+/**
+ * WMS-528: откуда брать товар по листу подбора. В сортировке называется только
+ * тара, в настоящей ячейке — ячейка и тара на ней. Источники идут по убыванию
+ * свободного количества и берутся, пока не покроют оставшееся к подбору.
+ */
+export function fbsPickSourceLabels(locations: FbsPickOptionLocation[], need: number): string[] {
+  if (need <= 0) return []
+  const candidates: Array<{ label: string; available: number }> = []
+  for (const location of locations) {
+    const isSorting = location.location_code === SORTING_LOCATION_LABEL
+    const sources = location.sources.length
+      ? location.sources
+      : [{ available: location.available, is_loose: true, source_label: '', container_path: [] }]
+    for (const source of sources) {
+      if (source.available <= 0) continue
+      const container = source.is_loose || !source.container_path.length
+        ? null
+        : source.container_path.map((item) => item.label).join(' › ')
+      const label = isSorting
+        ? container ?? 'Россыпью'
+        : container ? `${location.location_code} · ${container}` : location.location_code
+      candidates.push({ label, available: source.available })
+    }
+  }
+  candidates.sort((a, b) => b.available - a.available)
+  const picked: string[] = []
+  let covered = 0
+  for (const candidate of candidates) {
+    if (covered >= need) break
+    picked.push(`${candidate.label}: ${candidate.available}`)
+    covered += candidate.available
+  }
+  return picked
 }
 
 function escapePrintHtml(value: string | number) {
@@ -337,7 +374,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
         <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
-        ${input.addressStorageEnabled === false ? '' : `<td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>`}
+        <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
         <td class="quantity">${escapePrintHtml(row.required)}</td>
@@ -386,8 +423,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th>${input.addressStorageEnabled === false ? '' : '<th>Ячейка</th>'}<th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="${input.addressStorageEnabled === false ? 9 : 10}">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>

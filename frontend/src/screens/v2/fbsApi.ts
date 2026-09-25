@@ -1362,6 +1362,40 @@ export async function getFbsPickingList(
   return data.items
 }
 
+// Физические источники подбора: ячейки и тара на них со свободным количеством.
+// GET /operations/fbs-supplies/{id}/pick-options — тот же расчёт, что у выбора источника.
+export type FbsPickOptionSource = {
+  available: number
+  is_loose: boolean
+  source_label: string
+  container_path: Array<{ kind: string; id: string; code: string; label: string }>
+}
+
+export type FbsPickOptionLocation = {
+  storage_location_id: string
+  location_code: string
+  available: number
+  sources: FbsPickOptionSource[]
+}
+
+export type FbsPickOptionProduct = {
+  product_id: string
+  planned_qty: number
+  picked_qty: number
+  locations: FbsPickOptionLocation[]
+}
+
+export async function getFbsPickOptions(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  id: string,
+): Promise<FbsPickOptionProduct[]> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick-options`), {
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<FbsPickOptionProduct[]>(res)
+}
+
 // ── Legacy trbx compatibility (deprecated) ───────────────────────────────────
 // Канонический контракт ПВЗ — count-only cargo-places выше (preflightFbsCargoPlaces,
 // createFbsCargoPlaces, fetchFbsCargoPlaces). Без order→trbx allocation.
