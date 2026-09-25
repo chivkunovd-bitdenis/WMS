@@ -58,6 +58,7 @@ from app.services.product_code_resolver_service import (
     ProductCodeAmbiguous,
     ProductCodeFound,
     ProductCodeScope,
+    normalize_product_code,
     resolve_product_code,
 )
 
@@ -1120,7 +1121,7 @@ async def record_pack_scan(
     *,
     acting_user_id: uuid.UUID | None = None,
 ) -> PackProgressResult:
-    cleaned = barcode.strip()
+    cleaned = normalize_product_code(barcode)
     if not cleaned:
         raise PackagingTaskServiceError("invalid_qty")
     task = await get_task_for_scan(session, tenant_id, task_id)
@@ -1130,7 +1131,7 @@ async def record_pack_scan(
         raise PackagingTaskServiceError("bad_status")
     resolution = await resolve_product_code(
         session,
-        barcode,
+        cleaned,
         scope=ProductCodeScope(
             tenant_id=tenant_id,
             product_ids=frozenset(line.product_id for line in task.lines),

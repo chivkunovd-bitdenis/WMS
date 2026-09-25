@@ -20,19 +20,13 @@ from app.models.inbound_intake import (
 )
 from app.models.pallet import Pallet
 from app.models.product import Product
-from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services.product_code_resolver_service import (
     ProductCodeAliasPolicy,
-    ProductCodeMatch,
-    ProductCodeResolution,
     ProductCodeScope,
-    ProductCodeSource,
-    build_product_code_index,
-    normalize_product_code,
-    resolve_product_code_from_index,
+    resolve_product_code,
 )
 
 ScanObjectType = Literal[
@@ -44,15 +38,6 @@ ScanObjectType = Literal[
     "fbs_order",
     "warehouse",
 ]
-
-_DIRECT_PRODUCT_CODE_SOURCES = frozenset(
-    {
-        ProductCodeSource.WB_PRIMARY,
-        ProductCodeSource.WB_ADDITIONAL,
-        ProductCodeSource.SKU,
-    }
-)
-
 
 @dataclass(frozen=True)
 class ScanMatch:
@@ -74,109 +59,6 @@ class ScanResolverError(Exception):
         self.message = message
         self.matches = matches
         super().__init__(code)
-
-
-async def validated_product_ids_from_resolution(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    resolution: ProductCodeResolution,
-    *,
-    seller_id: uuid.UUID | None,
-) -> tuple[uuid.UUID, ...]:
-    """Reject marketplace aliases whose legacy link has the wrong owner.
-
-    ProductCodeScope filters products before ambiguity, but the core index currently
-    accepts an active marketplace link by product_id alone. Old inconsistent rows may
-    therefore point at an in-scope product while belonging to another seller. Keep the
-    core untouched and enforce the existing WMS-488 owner boundary at the consumer.
-    """
-    if resolution.status == "not_found":
-        return ()
-    matches = (
-        resolution.matches
-        if resolution.status == "ambiguous"
-        else (
-            ProductCodeMatch(
-                product_id=resolution.product_id,
-                matched_sources=resolution.matched_sources,
-            ),
-        )
-    )
-    direct_ids = {
-        match.product_id
-        for match in matches
-        if _DIRECT_PRODUCT_CODE_SOURCES.intersection(match.matched_sources)
-    }
-    external_matches = [match for match in matches if match.product_id not in direct_ids]
-    if not external_matches:
-        return tuple(match.product_id for match in matches)
-
-    external_ids = {match.product_id for match in external_matches}
-    stmt = (
-        select(
-            ProductMarketplaceLink.product_id,
-            ProductMarketplaceLink.external_barcodes,
-            ProductMarketplaceLink.external_sku,
-            ProductMarketplaceLink.external_offer_id,
-        )
-        .join(Product, Product.id == ProductMarketplaceLink.product_id)
-        .where(
-            ProductMarketplaceLink.tenant_id == tenant_id,
-            ProductMarketplaceLink.product_id.in_(external_ids),
-            ProductMarketplaceLink.marketplace == "ozon",
-            ProductMarketplaceLink.is_active.is_(True),
-            Product.tenant_id == tenant_id,
-            Product.seller_id == ProductMarketplaceLink.seller_id,
-        )
-    )
-    if seller_id is not None:
-        stmt = stmt.where(Product.seller_id == seller_id)
-    links_by_product: dict[uuid.UUID, list[tuple[object, object, object]]] = {}
-    for row in (await session.execute(stmt)).all():
-        links_by_product.setdefault(row.product_id, []).append(
-            (row.external_barcodes, row.external_sku, row.external_offer_id)
-        )
-
-    matched_code = normalize_product_code(resolution.matched_code).casefold()
-
-    def valid_external_match(match: ProductCodeMatch) -> bool:
-        product_id = match.product_id
-        sources = set(match.matched_sources)
-        for external_barcodes, external_sku, external_offer_id in links_by_product.get(
-            product_id, []
-        ):
-            if (
-                ProductCodeSource.OZON_EXTERNAL_BARCODE in sources
-                and isinstance(external_barcodes, (list, tuple))
-                and any(
-                    isinstance(value, str)
-                    and normalize_product_code(value).casefold() == matched_code
-                    for value in external_barcodes
-                )
-            ):
-                return True
-            if (
-                ProductCodeSource.OZON_EXTERNAL_SKU in sources
-                and isinstance(external_sku, str)
-                and normalize_product_code(external_sku).casefold() == matched_code
-            ):
-                return True
-            if (
-                ProductCodeSource.OZON_EXTERNAL_OFFER_ID in sources
-                and isinstance(external_offer_id, str)
-                and normalize_product_code(external_offer_id).casefold() == matched_code
-            ):
-                return True
-        return False
-
-    valid_external_ids = {
-        match.product_id for match in external_matches if valid_external_match(match)
-    }
-    return tuple(
-        match.product_id
-        for match in matches
-        if match.product_id in direct_ids or match.product_id in valid_external_ids
-    )
 
 
 def normalize_scan_code(code: str) -> str:
@@ -365,25 +247,22 @@ async def _find_products(
     code: str,
     seller_id: uuid.UUID | None = None,
 ) -> list[ScanMatch]:
-    index = await build_product_code_index(
+    resolution = await resolve_product_code(
         session,
+        code,
         scope=ProductCodeScope(
             tenant_id=tenant_id,
             seller_ids=frozenset({seller_id}) if seller_id is not None else None,
         ),
         policy=ProductCodeAliasPolicy(include_marketplace_identity=True),
     )
-    resolution = resolve_product_code_from_index(index, code)
     if resolution.status == "not_found":
         return []
-    product_ids = await validated_product_ids_from_resolution(
-        session,
-        tenant_id,
-        resolution,
-        seller_id=seller_id,
+    product_ids = (
+        resolution.product_ids
+        if resolution.status == "ambiguous"
+        else (resolution.product_id,)
     )
-    if not product_ids:
-        return []
     stmt = select(Product.id, Product.name).where(
         Product.tenant_id == tenant_id,
         Product.id.in_(product_ids),
@@ -539,5 +418,4 @@ __all__ = [
     "ScanResolverError",
     "normalize_scan_code",
     "resolve_any_scan",
-    "validated_product_ids_from_resolution",
 ]

@@ -22,6 +22,8 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.pallet import Pallet
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
@@ -142,6 +144,28 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
     product_id = await _create_product(
         async_client, headers, seller_id, sku=sku, barcode=barcode
     )
+    additional_barcode = f"BAR-ADDITIONAL-{suffix[-8:]}"
+    external_barcode = f"OZN-OPTIONS-{suffix[-8:]}"
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    barcode=additional_barcode,
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    marketplace="ozon",
+                    external_barcodes=[external_barcode],
+                ),
+            ]
+        )
+        await session.commit()
     supply_id, _order_ids, _location_code = await _seed_pick_supply(
         async_client,
         headers,
@@ -214,10 +238,17 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "locations",
         "barcode",
         "seller_article",
+        "scan_codes",
     }
     assert product["product_id"] == str(product_id)
     assert product["sku_code"] == sku
     assert product["product_name"] == "Pick product"
+    assert set(product["scan_codes"]) == {
+        sku,
+        barcode,
+        additional_barcode,
+        external_barcode,
+    }
     assert product["planned_qty"] == 3
     assert product["picked_qty"] == 0
     locations = {

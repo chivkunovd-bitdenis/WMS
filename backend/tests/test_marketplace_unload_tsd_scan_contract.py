@@ -20,6 +20,7 @@ from test_marketplace_unload_and_discrepancy_acts import (  # type: ignore[impor
 
 from app.services import marketplace_unload_box_service as box_svc
 from app.services import marketplace_unload_pick_service as pick_svc
+from app.services import product_code_resolver_service as product_code_resolver_svc
 
 BASE = "/operations/marketplace-unload-requests"
 
@@ -124,8 +125,8 @@ async def test_tsd_box_scan_location_then_product_sequence(
         async_client, h, monkeypatch, address_storage_enabled=True
     )
 
-    index_spy = AsyncMock(wraps=box_svc._barcode_index_for_seller)
-    monkeypatch.setattr(box_svc, "_barcode_index_for_seller", index_spy)
+    resolver_spy = AsyncMock(wraps=product_code_resolver_svc.resolve_product_code)
+    monkeypatch.setattr(box_svc, "resolve_product_code", resolver_spy)
 
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
@@ -154,7 +155,7 @@ async def test_tsd_box_scan_location_then_product_sequence(
     assert prod_body["kind"] == "product"
     assert prod_body["quantity"] == 1
     assert prod_body["picked_qty"] == 1
-    assert index_spy.await_count == 1
+    assert resolver_spy.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -272,8 +273,8 @@ async def test_pick_scan_deprecated_still_works(
     assert legacy.status_code == 200, legacy.text
     assert legacy.json()["kind"] == "location"
 
-    index_spy = AsyncMock(wraps=pick_svc._barcode_index_for_seller)
-    monkeypatch.setattr(pick_svc, "_barcode_index_for_seller", index_spy)
+    resolver_spy = AsyncMock(wraps=product_code_resolver_svc.resolve_product_code)
+    monkeypatch.setattr(pick_svc, "resolve_product_code", resolver_spy)
     product = await async_client.post(
         f"{BASE}/{mid}/pick/scan",
         headers=h,
@@ -286,7 +287,7 @@ async def test_pick_scan_deprecated_still_works(
     assert product.status_code == 200, product.text
     assert product.json()["kind"] == "product"
     assert product.json()["picked_qty"] == 1
-    assert index_spy.await_count == 1
+    assert resolver_spy.await_count == 1
 
 
 @pytest.mark.asyncio

@@ -66,9 +66,9 @@ from app.services.product_code_resolver_service import (
     ProductCodeScope,
     build_product_code_index,
     normalize_product_code,
+    resolve_product_code,
     resolve_product_code_from_index,
 )
-from app.services.scan_resolver_service import validated_product_ids_from_resolution
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -1322,40 +1322,16 @@ async def _request_barcode_index(
     )
 
 
-async def _seller_catalog_barcode_index(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-) -> ProductCodeIndex:
-    return await build_product_code_index(
-        session,
-        scope=ProductCodeScope(
-            tenant_id=tenant_id,
-            seller_ids=frozenset({seller_id}),
-        ),
-        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
-    )
-
-
-async def _resolved_product_id(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
+def _resolved_product_id(
     resolution: ProductCodeResolution,
     *,
-    seller_id: uuid.UUID | None,
     product_id_hint: uuid.UUID | None,
 ) -> uuid.UUID | None:
-    product_ids = await validated_product_ids_from_resolution(
-        session,
-        tenant_id,
-        resolution,
-        seller_id=seller_id,
-    )
-    if len(product_ids) > 1:
+    if resolution.status == "ambiguous":
         raise InboundIntakeError("barcode_ambiguous")
-    if not product_ids:
+    if resolution.status == "not_found":
         return None
-    product_id = product_ids[0]
+    product_id = resolution.product_id
     if product_id_hint is not None and product_id_hint != product_id:
         raise InboundIntakeError("product_not_found")
     return product_id
@@ -1371,20 +1347,14 @@ async def resolve_scanned_product_id(
 ) -> uuid.UUID | None:
     """WMS-473: one barcode resolution for loose, box and cargo-place scans.
 
-    An ordinary inbound request builds one index for the whole seller catalogue, so
-    a product absent from the plan can still create its historical zero-plan line.
-    Return documents build one document-only index and keep their refusal to accept
-    products outside the request.
+    The document is resolved first. An ordinary inbound request falls back to a
+    point lookup in its seller catalogue only after a document miss, so a product
+    absent from the plan can still create its historical zero-plan line. Returns
+    remain document-only.
     """
-    if req.operation_type == OPERATION_TYPE_INBOUND and req.seller_id is not None:
-        index = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
-    else:
-        index = await _request_barcode_index(session, tenant_id, req)
-    product_id = await _resolved_product_id(
-        session,
-        tenant_id,
+    index = await _request_barcode_index(session, tenant_id, req)
+    product_id = _resolved_product_id(
         resolve_product_code_from_index(index, raw),
-        seller_id=req.seller_id,
         product_id_hint=product_id_hint,
     )
     if product_id is not None:
@@ -1395,6 +1365,20 @@ async def resolve_scanned_product_id(
         return None
     if req.seller_id is None:
         raise InboundIntakeError("product_not_in_seller_catalog")
+    product_id = _resolved_product_id(
+        await resolve_product_code(
+            session,
+            raw,
+            scope=ProductCodeScope(
+                tenant_id=tenant_id,
+                seller_ids=frozenset({req.seller_id}),
+            ),
+            policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+        ),
+        product_id_hint=product_id_hint,
+    )
+    if product_id is not None:
+        return product_id
     if product_id_hint is not None:
         raise InboundIntakeError("product_not_found")
     raise InboundIntakeError("product_not_in_seller_catalog")
@@ -2298,17 +2282,12 @@ async def scan_distribution_barcode(
         )
 
     index = await _request_barcode_index(session, tenant_id, req)
-    product_ids = await validated_product_ids_from_resolution(
-        session,
-        tenant_id,
-        resolve_product_code_from_index(index, raw),
-        seller_id=req.seller_id,
-    )
-    if len(product_ids) > 1:
+    resolution = resolve_product_code_from_index(index, raw)
+    if resolution.status == "ambiguous":
         raise InboundIntakeError("barcode_ambiguous")
-    if not product_ids:
+    if resolution.status == "not_found":
         raise InboundIntakeError("scan_not_found")
-    product_id = product_ids[0]
+    product_id = resolution.product_id
     if active_storage_location_id is None:
         raise InboundIntakeError("active_location_required")
 

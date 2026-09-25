@@ -4,8 +4,10 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import engine
 from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -493,3 +495,44 @@ async def test_built_index_supports_many_lookups_without_a_session_or_rebuild(
         assert _found(resolve_product_code_from_index(index, WB_ADDITIONAL)).product_id == (
             seed.product_id
         )
+
+
+@pytest.mark.asyncio
+async def test_seller_point_lookup_does_not_expand_catalog_product_ids_into_in_clause(
+    db_session: AsyncSession,
+) -> None:
+    """A seller with more than 65,535 products has the same fixed query shape."""
+    seed = await _seed(db_session)
+    statements: list[tuple[str, object]] = []
+
+    def capture_sql(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if any(
+            table in statement
+            for table in ("products", "product_barcodes", "product_marketplace_links")
+        ):
+            statements.append((statement, parameters))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture_sql)
+    try:
+        result = await resolve_product_code(
+            db_session,
+            WB_ADDITIONAL,
+            scope=_seller_scope(seed),
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture_sql)
+
+    assert _found(result).product_id == seed.product_id
+    assert len(statements) == 3
+    assert all("products.id IN" not in statement for statement, _ in statements)
+    assert all(
+        not isinstance(parameters, tuple) or len(parameters) < 20
+        for _, parameters in statements
+    )

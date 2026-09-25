@@ -93,6 +93,7 @@ class PickOptionProduct:
     product_name: str
     seller_article: str | None
     barcode: str | None
+    scan_codes: list[str]
     planned_qty: int
     picked_qty: int
     locations: list[PickOptionLocation]
@@ -291,6 +292,11 @@ async def get_pick_options(
 
     product_ids = list(planned)
     products = await _load_products(session, tenant_id, product_ids)
+    scan_codes_by_product = await warehouse_map_service.load_product_scan_codes(
+        session,
+        tenant_id,
+        set(product_ids),
+    )
     ozon_bindings: dict[uuid.UUID, ProductMarketplaceLink] = {}
     ozon_names: dict[uuid.UUID, str] = {}
     if supply.marketplace == "ozon":
@@ -384,6 +390,25 @@ async def get_pick_options(
                 )
                 if supply.marketplace == "ozon" and product_id in ozon_bindings
                 else None
+            ),
+            scan_codes=list(
+                dict.fromkeys(
+                    code
+                    for code in (
+                        product.sku_code,
+                        *scan_codes_by_product.get(product_id, []),
+                        *(
+                            (
+                                ozon_bindings[product_id].external_sku,
+                                ozon_bindings[product_id].external_offer_id,
+                            )
+                            if supply.marketplace == "ozon"
+                            and product_id in ozon_bindings
+                            else ()
+                        ),
+                    )
+                    if isinstance(code, str) and code.strip(" \t\r\n")
+                )
             ),
             planned_qty=planned[product_id],
             picked_qty=picked_by_product.get(product_id, 0),
@@ -843,6 +868,7 @@ async def pick_scan(
         location_id=location.id,
         product_barcode=raw,
         product_id=product.id,
+        resolved_product=product,
         idempotency_key=idempotency_key,
         actor=actor,
         order_id=order_id,
@@ -994,6 +1020,7 @@ async def scan_pick_product(
     actor: User,
     order_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
+    resolved_product: Product | None = None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
@@ -1039,14 +1066,15 @@ async def scan_pick_product(
             "wrong_location",
             "Ячейка не принадлежит складу поставки.",
         )
-    if product_barcode:
+    product: Product | None = resolved_product
+    if product is None and product_barcode:
         product = await _resolve_product_for_supply(
             session,
             tenant_id,
             supply,
             product_barcode=product_barcode,
         )
-    else:
+    elif product is None:
         # Manual picking deliberately reuses this operation without a scan.
         product = await session.get(Product, product_id) if product_id is not None else None
     if product is None or product.tenant_id != tenant_id:

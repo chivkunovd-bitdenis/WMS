@@ -41,11 +41,9 @@ from app.services.inventory_container_service import ContainerKind
 from app.services.product_code_resolver_service import (
     ProductCodeAliasPolicy,
     ProductCodeScope,
-    build_product_code_index,
     normalize_product_code,
-    resolve_product_code_from_index,
+    resolve_product_code,
 )
-from app.services.scan_resolver_service import validated_product_ids_from_resolution
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -1177,8 +1175,9 @@ async def record_found(
                 loaded, seen.expected_quantity, _found_notice(seen.expected_quantity)
             )
 
-    index = await build_product_code_index(
+    resolution = await resolve_product_code(
         session,
+        codes[0],
         scope=ProductCodeScope(
             tenant_id=tenant_id,
             seller_ids=(
@@ -1186,23 +1185,13 @@ async def record_found(
             ),
         ),
         policy=ProductCodeAliasPolicy(include_marketplace_identity=True),
-    )
-    resolution = resolve_product_code_from_index(
-        index,
-        codes[0],
         layout_candidate=codes[1] if len(codes) > 1 else None,
     )
-    product_ids = await validated_product_ids_from_resolution(
-        session,
-        tenant_id,
-        resolution,
-        seller_id=count.seller_id,
-    )
-    if not product_ids:
+    if resolution.status == "not_found":
         raise InventoryCountError("product_not_found")
-    if len(product_ids) > 1:
+    if resolution.status == "ambiguous":
         raise InventoryCountError("barcode_is_ambiguous")
-    product = await session.get(Product, product_ids[0])
+    product = await session.get(Product, resolution.product_id)
     if product is None or product.tenant_id != tenant_id:
         raise InventoryCountError("product_not_found")
 

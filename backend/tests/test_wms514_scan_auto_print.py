@@ -445,6 +445,70 @@ async def test_wms536_scan_auto_print_rejects_cross_source_product_collision(
         assert await session.scalar(select(func.count()).select_from(DocumentEvent)) == 0
 
 
+async def test_wms536_scan_auto_print_ignores_cancelled_order_product_collision(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        first_order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.supply_id == supply_id)
+        )
+        assert supply is not None and first_order is not None
+        first_product = await session.get(Product, first_order.product_id)
+        assert first_product is not None
+        first_product.sku_code = "ELIGIBLE-536"
+        cancelled_product = Product(
+            tenant_id=supply.tenant_id,
+            seller_id=supply.seller_id,
+            name="Cancelled collision product",
+            sku_code="CANCELLED-536",
+            wb_barcode="ELIGIBLE-536",
+        )
+        session.add(cancelled_product)
+        await session.flush()
+        session.add(
+            FbsOrder(
+                tenant_id=supply.tenant_id,
+                seller_id=supply.seller_id,
+                warehouse_id=supply.warehouse_id,
+                product_id=cancelled_product.id,
+                marketplace="wb",
+                wb_order_id=536_003,
+                wb_rid=f"wms536-cancelled-{uuid.uuid4().hex}",
+                wb_article=cancelled_product.sku_code,
+                wb_barcode=cancelled_product.wb_barcode,
+                price=100,
+                is_legal=False,
+                cargo_type="mgt",
+                wb_office_id=1,
+                wb_warehouse_id=1,
+                can_pvz=False,
+                supply_id=supply.id,
+                sticker_code="536 0003",
+                sticker_barcode="*WMS536CANCELLED",
+                status=FBS_ORDER_STATUS_CANCELLED,
+                created_at_wb=datetime.now(UTC),
+                deadline_at=datetime.now(UTC) + timedelta(hours=1),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+            )
+        )
+        await session.commit()
+
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/scan-auto-print",
+        headers=headers,
+        json={
+            "barcode": "ELIGIBLE-536",
+            "idempotency_key": "wms536-ignore-cancelled-collision",
+            "print_qr": False,
+            "print_chz": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
 async def test_reprint_product_scan_selects_exact_order_without_allocating_code(
     async_client: AsyncClient,
 ) -> None:
