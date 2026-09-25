@@ -213,22 +213,25 @@ function freeAt(product: StockDialogProduct, bindingId: string): number {
   return product.byBinding[bindingId]?.freeStock ?? 0
 }
 
-/** Суммы блока по выбранным товарам на связанном складе ФФ. */
+/**
+ * Строка чисел блока — Остаток, Резерв и Доступно организации суммой по
+ * выбранным товарам (WMS-530 R6). Доступно показывается как есть, в том числе
+ * меньше нуля, как в каталоге (R3, D3): это разность остатка и резерва, а не
+ * `free_stock`, который сервер для расчётов обрезает нулём.
+ */
 export function blockTotals(
   binding: StockBinding,
   products: StockDialogProduct[],
-): { onHand: number; reserved: number; free: number } {
+): { onHand: number; reserved: number; available: number } {
   let onHand = 0
   let reserved = 0
-  let free = 0
   for (const product of products) {
     const state = product.byBinding[binding.id]
     if (!state) continue
     onHand += state.onHand
     reserved += state.reserved
-    free += state.freeStock
   }
-  return { onHand, reserved, free }
+  return { onHand, reserved, available: onHand - reserved }
 }
 
 /**

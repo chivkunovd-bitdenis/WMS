@@ -485,7 +485,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  addressStorageEnabled={me.address_storage_enabled !== false}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
                   sellerName={me.active_seller_name ?? me.seller_name ?? '—'}
                   warehouses={warehouses}

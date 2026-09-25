@@ -3169,7 +3169,7 @@ export function FfSuppliesShipmentsPage({
                   {docProductPicklist.map((p) => (
                     <MenuItem key={p.id} value={p.id}>
                       {p.sku_code} — {p.name}
-                      {'available' in p ? ` · доступно для FBO ${p.available}` : ''}
+                      {'available' in p ? ` · доступно ${p.available}` : ''}
                     </MenuItem>
                   ))}
                 </Select>
@@ -3355,17 +3355,11 @@ export function FfSuppliesShipmentsPage({
         applyLabel="Добавить в отгрузку"
         inDraftMessage="Товар уже добавлен в отгрузку"
         showAvailableColumn
-        availableColumnLabel="Доступно FBO"
         getAvailable={mpPickerGetAvailable}
         filterRow={mpPickerFilterRow}
-        // Остаток ищется строго по складу документа: JOIN StorageLocation по warehouse_id.
-        // Пустой список чаще всего значит «отгрузка создана не на том складе», поэтому
-        // склад назван прямо в сообщении — иначе оператор упирается в тупик без подсказки.
-        emptyMessage={
-          unloadDetail?.warehouse_name
-            ? `На складе «${unloadDetail.warehouse_name}» нет свободного остатка по этому селлеру. Проверьте, тот ли склад указан в отгрузке.`
-            : 'Нет свободного остатка по этому селлеру на складе отгрузки.'
-        }
+        // Доступно считается по всей организации, склад документа на число не
+        // влияет (WMS-530 R8), поэтому пустой список склад не называет (R12).
+        emptyMessage="Нет доступного остатка по этому селлеру"
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />

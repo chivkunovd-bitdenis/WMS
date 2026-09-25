@@ -1,4 +1,5 @@
 import { ErrorBoundary } from '../../../components/errors/ErrorBoundary'
+import { formatStockQty } from '../../../utils/formatStockQty'
 import {
   Box,
   FormControlLabel,
@@ -40,7 +41,6 @@ import {
   capNoteText,
   clampUnits,
   draftFromState,
-  NUMBER_FORMAT,
   PERCENT_STEP,
   pluralRu,
   rowCalc,
@@ -473,8 +473,8 @@ function BindingBlock({
           sx={{ ml: 'auto', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
           data-testid={`fbs-stock-totals-${binding.id}`}
         >
-          на складе {NUMBER_FORMAT(totals.onHand)} шт, занято {NUMBER_FORMAT(totals.reserved)} — свободно{' '}
-          <Box component="b" sx={{ color: 'text.primary' }}>{NUMBER_FORMAT(totals.free)}</Box>
+          остаток {formatStockQty(totals.onHand)} шт, резерв {formatStockQty(totals.reserved)} — доступно{' '}
+          <Box component="b" sx={{ color: 'text.primary' }}>{formatStockQty(totals.available)}</Box>
         </Typography>
       </Stack>
 
@@ -550,7 +550,7 @@ function BindingBlock({
                 if (!draft.byPercent) return
                 onDraft({ ...draft, percent: snapPercent(Array.isArray(next) ? next[0]! : next) })
               }}
-              aria-label={`Доля свободного остатка на ${label}`}
+              aria-label={`Доля доступного остатка на ${label}`}
               aria-readonly={!draft.byPercent}
               tabIndex={draft.byPercent ? 0 : -1}
               data-testid={`fbs-stock-percent-${binding.id}`}

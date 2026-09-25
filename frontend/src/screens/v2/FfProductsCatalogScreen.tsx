@@ -43,6 +43,8 @@ import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContai
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { ProductStockLines } from '../../components/ProductStockLines'
+import { formatStockQty } from '../../utils/formatStockQty'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
@@ -103,19 +105,16 @@ type FfCatalogPage = {
 }
 
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
-// запрос, которым раньше пользовался селлерский экран (см. CAT-11/CAT-12).
+// запрос, что у селлерского экрана (см. CAT-11/CAT-12). Показываются только
+// Остаток / Резерв / Доступно организации (WMS-530 R1–R3, WMS-532); прежние
+// поля ответа (в ячейках, свободный FBO) экран больше не читает.
 type StockSummaryRow = {
   product_id: string
   sku_code: string
   product_name: string
   quantity: number
-  quantity_in_sorting: number
-  quantity_in_storage: number
   reserved: number
   available: number
-  quantity_fbs: number
-  quantity_reserved_directions: number
-  quantity_free_fbo: number
 }
 
 type StockDirectionRow = {
@@ -160,7 +159,7 @@ type Props = {
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
   warehouses: WarehouseRow[]
-  canManageCatalog?: boolean; addressStorageEnabled?: boolean
+  canManageCatalog?: boolean
 }
 
 function humanFfCatalogError(message: string): string {
@@ -212,7 +211,7 @@ export function FfProductsCatalogScreen({
   authHeaders,
   sellers,
   warehouses,
-  canManageCatalog = false, addressStorageEnabled = true,
+  canManageCatalog = false,
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -221,7 +220,7 @@ export function FfProductsCatalogScreen({
   // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
   // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
   // действий липкая справа и из виду не уходит.
-  const tableMinWidth = 1488
+  const tableMinWidth = 1518
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -518,10 +517,8 @@ export function FfProductsCatalogScreen({
       return {
         ...p,
         stock_on_hand: bal?.quantity ?? 0,
-        stock_in_storage: bal?.quantity_in_storage ?? 0,
-        stock_fbs: bal?.quantity_fbs ?? 0,
-        stock_reserved_directions: bal?.quantity_reserved_directions ?? 0,
-        stock_free_fbo: bal?.quantity_free_fbo ?? bal?.quantity ?? 0,
+        stock_reserved: bal?.reserved ?? 0,
+        stock_available: bal?.available ?? 0,
       }
     })
   }, [catalog, stock])
@@ -1091,7 +1088,7 @@ export function FfProductsCatalogScreen({
               <col style={{ width: 130 }} />
               <col style={{ width: 64 }} />
               <col style={{ width: 110 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 160 }} />{/* «Остаток»: «Доступно −1 234 567» целиком в одну строку (WMS-532 R3); длиннее — число переносится под подпись */}
               <col style={{ width: 124 }} />{/* «В Wildberries»: на 70px заголовок резало до «В Wildberr», а значение до «не перед» */}
               <col style={{ width: 70 }} />
               <col style={{ width: 110 }} />
@@ -1221,34 +1218,15 @@ export function FfProductsCatalogScreen({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                        {addressStorageEnabled ? <Typography
-                          variant="caption"
-                          data-testid={`ff-catalog-stock-in-storage-${p.id}`}
-                          title={`В ячейках ${p.stock_in_storage}`}
-                          noWrap
-                        >
-                          В ячейках {p.stock_in_storage}
-                        </Typography> : null}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          data-testid={`ff-catalog-stock-on-hand-${p.id}`}
-                          title={`На ФФ ${p.stock_on_hand}`}
-                          noWrap
-                        >
-                          На ФФ {p.stock_on_hand}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          data-testid={`ff-catalog-stock-free-fbo-${p.id}`}
-                          title={`Свободный FBO ${p.stock_free_fbo}`}
-                          noWrap
-                        >
-                          Свободный FBO {p.stock_free_fbo}
-                        </Typography>
-                      </Stack>
+                      <ProductStockLines
+                        totals={{
+                          onHand: p.stock_on_hand,
+                          reserved: p.stock_reserved,
+                          available: p.stock_available,
+                        }}
+                        productId={p.id}
+                        testIdPrefix="ff-catalog-stock"
+                      />
                     </TableCell>
                     {/* Сколько из свободного остатка уходит в Wildberries.
                         Владелец просил видеть это прямо в каталоге, рядом с
@@ -1597,21 +1575,23 @@ export function FfProductsCatalogScreen({
                     {directionProduct.sku_code} · {directionProduct.name}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={2}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Резервы
-                    </Typography>
-                    <Typography variant="h6">
-                      {directionProduct.stock_reserved_directions} шт
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Свободный FBO
-                    </Typography>
-                    <Typography variant="h6">{directionProduct.stock_free_fbo} шт</Typography>
-                  </Box>
+                {/* Те же три числа, что в ячейке «Остаток» этой строки (WMS-532 R5):
+                    направления ниже — лишь часть резерва. */}
+                <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2, rowGap: 1 }}>
+                  {[
+                    { key: 'on-hand', label: 'Остаток', value: directionProduct.stock_on_hand },
+                    { key: 'reserved', label: 'Резерв', value: directionProduct.stock_reserved },
+                    { key: 'available', label: 'Доступно', value: directionProduct.stock_available },
+                  ].map((item) => (
+                    <Box key={item.key} data-testid={`ff-stock-directions-${item.key}`}>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.label}
+                      </Typography>
+                      <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+                        {formatStockQty(item.value)} шт
+                      </Typography>
+                    </Box>
+                  ))}
                 </Stack>
                 <Divider />
                 <Stack spacing={1}>
@@ -1767,9 +1747,7 @@ export function FfProductsCatalogScreen({
           <DialogContent>
             {deleteTarget ? (
               <Typography variant="body2" color="text.secondary">
-                {deleteTarget.direction.is_fbs
-                  ? `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено из FBS-пула.`
-                  : `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут свободным FBO-остатком, если не заняты другими операциями.`}
+                {`Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут доступными, если не заняты другими операциями.`}
               </Typography>
             ) : null}
           </DialogContent>

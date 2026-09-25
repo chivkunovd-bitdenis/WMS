@@ -163,9 +163,16 @@ describe('WMS-469 черновики и суммы блока', () => {
   })
 
   it('суммы блока складываются только по выбранным товарам на этом складе ФФ', () => {
-    expect(blockTotals(wb, [fifty, thirty])).toEqual({ onHand: 84, reserved: 4, free: 80 })
+    expect(blockTotals(wb, [fifty, thirty])).toEqual({ onHand: 84, reserved: 4, available: 80 })
     // Про эту привязку у товара записи нет — в суммы он не входит.
-    expect(blockTotals(ozon, [fifty])).toEqual({ onHand: 0, reserved: 0, free: 0 })
+    expect(blockTotals(ozon, [fifty])).toEqual({ onHand: 0, reserved: 0, available: 0 })
+  })
+
+  it('WMS-530 R6: доступно в строке блока — остаток минус резерв, в том числе меньше нуля', () => {
+    // Резерв больше остатка: сервер отдаёт free_stock 0 для расчётов, а строка
+    // показывает ту же разность, что каталог (R3, D3).
+    const over = product('over', 'Перебор', { 'b-wb': 0 }, { on_hand: 5, reserved: 7, free_stock: 0 })
+    expect(blockTotals(wb, [over])).toEqual({ onHand: 5, reserved: 7, available: -2 })
   })
 })
 
