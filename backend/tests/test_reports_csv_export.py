@@ -155,58 +155,10 @@ async def test_inventory_csv_matches_table_grouping_and_requested_order(
     assert [row[0] for row in csv_rows[1:]] == ["Приёмка", "Отгрузка"]
 
 
-# S-33-TC-013: an incomplete transfer must not look like a valid zero in CSV.
+# WMS-530: перенос меняет расположение, а не остаток — ни в таблице, ни в CSV его нет,
+# даже когда отчёт сужен до одного склада.
 @pytest.mark.asyncio
-async def test_inventory_csv_marks_incomplete_transfer_like_visible_table(
-    async_client: AsyncClient,
-) -> None:
-    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
-    await _seed_movement(
-        tenant_id=tenant_id,
-        seller_id=seller_id,
-        warehouse_id=warehouse_id,
-        location_id=location_id,
-        sku="SKU-INCOMPLETE-TRANSFER",
-        name="Incomplete transfer",
-        quantity_delta=-3,
-        movement_type="stock_transfer_out",
-        transfer_group_id=uuid.uuid4(),
-    )
-    params = {
-        "date_from": "2026-08-01T00:00:00Z",
-        "date_to": "2026-08-02T00:00:00Z",
-        "group_by": "operation",
-        "warehouse_id": warehouse_id,
-    }
-
-    table = await async_client.get("/reports/inventory", headers=headers, params=params)
-    export = await async_client.get("/reports/inventory/export.csv", headers=headers, params=params)
-
-    assert table.status_code == 200
-    assert export.status_code == 200
-    table_row = table.json()["rows"][0]
-    assert table_row == {
-        "operation": "Перемещение: ушло",
-        "in_qty": 0,
-        "out_qty": 3,
-        "net": -3,
-        "integrity_error": True,
-    }
-    csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
-    assert csv_rows == [
-        ["Операция", "Приход", "Расход"],
-        [
-            f"{table_row['operation']} (Ошибка)",
-            "—",
-            str(table_row["out_qty"]),
-        ],
-    ]
-    assert ["Перемещение: ушло", "0", "3", "-3"] not in csv_rows
-
-
-# S-33-TC-004: a complete pair keeps the ordinary table-shaped CSV values.
-@pytest.mark.asyncio
-async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
+async def test_inventory_csv_excludes_transfers_like_visible_table(
     async_client: AsyncClient,
 ) -> None:
     headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
@@ -227,8 +179,8 @@ async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
         seller_id=seller_id,
         warehouse_id=warehouse_id,
         location_id=location_id,
-        sku="SKU-COMPLETE-TRANSFER",
-        name="Complete transfer",
+        sku="SKU-TRANSFER",
+        name="Transfer",
         quantity_delta=-4,
         movement_type="stock_transfer_out",
         transfer_group_id=transfer_group_id,
@@ -238,12 +190,21 @@ async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
         seller_id=seller_id,
         warehouse_id=second_warehouse.json()["id"],
         location_id=second_location.json()["id"],
-        sku="SKU-COMPLETE-TRANSFER",
-        name="Complete transfer",
+        sku="SKU-TRANSFER",
+        name="Transfer",
         quantity_delta=4,
         movement_type="stock_transfer_in",
         transfer_group_id=transfer_group_id,
         product_id=product_id,
+    )
+    await _seed_movement(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        sku="SKU-INTAKE",
+        name="Intake",
+        quantity_delta=2,
     )
     params = {
         "date_from": "2026-08-01T00:00:00Z",
@@ -257,14 +218,9 @@ async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
 
     assert table.status_code == 200
     assert export.status_code == 200
-    table_row = table.json()["rows"][0]
-    assert table_row["integrity_error"] is False
+    assert [row["operation"] for row in table.json()["rows"]] == ["Приёмка"]
     csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
-    assert csv_rows[1] == [
-        table_row["operation"],
-        str(table_row["in_qty"]),
-        str(table_row["out_qty"]),
-    ]
+    assert csv_rows == [["Операция", "Приход", "Расход"], ["Приёмка", "2", "0"]]
 
 
 @pytest.mark.asyncio
