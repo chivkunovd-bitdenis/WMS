@@ -28,8 +28,23 @@ async def test_link_product_to_wb_card(
                 {
                     "nmID": 555001,
                     "vendorCode": "VC-LINK",
-                    "sizes": [{"skus": ["4600111222333"]}],
-                }
+                    "sizes": [
+                        {
+                            "chrtID": 55500101,
+                            "skus": ["4600111222333", "4600111222334"],
+                        }
+                    ],
+                },
+                {
+                    "nmID": 555002,
+                    "vendorCode": "VC-RELINK",
+                    "sizes": [
+                        {
+                            "chrtID": 55500201,
+                            "skus": ["4600111222444", "4600111222445"],
+                        }
+                    ],
+                },
             ],
             "cursor": {},
         }
@@ -92,9 +107,22 @@ async def test_link_product_to_wb_card(
     assert link.status_code == 200
     assert link.json()["wb_nm_id"] == 555001
     assert link.json()["wb_vendor_code"] == "VC-LINK"
+    assert link.json()["removed_wb_barcodes"] == []
+    relink = await async_client.post(
+        f"/integrations/wildberries/sellers/{sid}/link-product",
+        headers=h,
+        json={"product_id": pid, "nm_id": 555002},
+    )
+    assert relink.status_code == 200
+    assert relink.json()["wb_nm_id"] == 555002
+    assert relink.json()["wb_vendor_code"] == "VC-RELINK"
+    assert relink.json()["removed_wb_barcodes"] == [
+        "4600111222333",
+        "4600111222334",
+    ]
     plist = await async_client.get("/products", headers=h)
     row = next(x for x in plist.json() if x["id"] == pid)
-    assert row["wb_nm_id"] == 555001
+    assert row["wb_nm_id"] == 555002
 
 
 @pytest.mark.asyncio

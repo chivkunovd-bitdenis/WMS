@@ -104,6 +104,7 @@ class LinkProductWbOut(BaseModel):
     wb_vendor_code: str | None
     wb_barcode: str | None = None
     wb_size: str | None = None
+    removed_wb_barcodes: list[str] | None = None
 
 
 class WildberriesSelfTokenSaveBody(BaseModel):
@@ -299,7 +300,7 @@ async def link_product_to_wildberries(
 ) -> LinkProductWbOut:
     """Привязать SKU к импортированной карточке WB (nm_id) для селлера."""
     try:
-        p = await link_product_to_wb_card(
+        p, removed_barcodes = await link_product_to_wb_card(
             session,
             user.tenant_id,
             seller_id,
@@ -322,6 +323,7 @@ async def link_product_to_wildberries(
         if exc.code in (
             "wb_nm_already_linked",
             "wb_barcode_already_linked",
+            "wb_chrt_already_linked",
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -333,6 +335,7 @@ async def link_product_to_wildberries(
             "wb_size_required",
             "wb_barcode_not_found",
             "wb_chrt_not_found",
+            "wb_chrt_missing",
             "wb_card_no_sizes",
         ):
             raise HTTPException(
@@ -348,6 +351,7 @@ async def link_product_to_wildberries(
         wb_vendor_code=p.wb_vendor_code,
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
+        removed_wb_barcodes=removed_barcodes,
     )
 
 

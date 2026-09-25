@@ -300,7 +300,7 @@ def _resolve_barcode(*, barcode_raw: str | None, label_raw: str | None) -> str |
 
 
 def _sku_for_row(*, vendor: str, size: str | None, barcode: str) -> str:
-    variant = WbSizeVariant(chrt_id=None, size_label=size, barcode=barcode)
+    variant = WbSizeVariant(chrt_id=None, size_label=size, barcodes=(barcode,))
     return sku_code_for_wb_variant(vendor, None, variant, multi_variant=True)
 
 

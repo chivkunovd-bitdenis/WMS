@@ -1,8 +1,9 @@
 """Merge duplicate WB products for one tenant and seller after safety checks.
 
 Dry-run is the default. ``--apply`` requires ``--expected-pairs`` and processes
-each duplicate chrtID atomically. Product references are discovered from live
-database foreign-key metadata, not maintained as a partial hard-coded list.
+each duplicate chrtID through the standard WMS-349 product merge. Product
+references are discovered from live database foreign-key metadata, not
+maintained as a partial hard-coded list.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any, cast
+from typing import cast
 
 from sqlalchemy import Uuid, bindparam, inspect, or_, select, text
 from sqlalchemy.engine.reflection import Inspector
@@ -26,12 +27,30 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
 from app.models.product import Product
 from app.models.seller import Seller
+from app.services.product_merge_service import ProductMergeError, merge_products
 
 
 @dataclass(frozen=True)
 class ProductReference:
     table: str
     column: str
+
+
+@dataclass(frozen=True)
+class ProductReferenceUniqueRule:
+    table: str
+    column: str
+    constraint: str
+    columns: tuple[str, ...]
+    policy: str
+
+
+@dataclass(frozen=True)
+class ReferenceConflict:
+    table: str
+    column: str
+    constraint: str
+    policy: str
 
 
 @dataclass
@@ -43,6 +62,7 @@ class PairReport:
     reason: str | None = None
     references_before: dict[str, int] = field(default_factory=dict)
     references_moved: dict[str, int] = field(default_factory=dict)
+    unique_conflicts: list[dict[str, str]] = field(default_factory=list)
 
 
 def _discover_product_references(sync_connection: object) -> list[ProductReference]:
@@ -63,9 +83,57 @@ def _discover_product_references(sync_connection: object) -> list[ProductReferen
     ]
 
 
+def _discover_product_reference_unique_rules(
+    sync_connection: object,
+) -> list[ProductReferenceUniqueRule]:
+    inspector = cast(Inspector, inspect(sync_connection))
+    references = _discover_product_references(sync_connection)
+    rules: set[tuple[str, str, str, tuple[str, ...], str]] = set()
+    for reference in references:
+        candidates = [
+            *inspector.get_unique_constraints(reference.table),
+            *(
+                index
+                for index in inspector.get_indexes(reference.table)
+                if index.get("unique")
+            ),
+        ]
+        for candidate in candidates:
+            raw_columns = cast(list[object], candidate.get("column_names") or [])
+            columns = tuple(str(value) for value in raw_columns if value is not None)
+            if reference.column not in columns:
+                continue
+            constraint = str(candidate.get("name") or "unnamed_unique_constraint")
+            policy = (
+                "merge_dimension_history"
+                if reference.table == "product_dimension_events"
+                else "skip_pair"
+            )
+            rules.add(
+                (
+                    reference.table,
+                    reference.column,
+                    constraint,
+                    columns,
+                    policy,
+                )
+            )
+    return [
+        ProductReferenceUniqueRule(*values)
+        for values in sorted(rules)
+    ]
+
+
 async def discover_product_references(session: AsyncSession) -> list[ProductReference]:
     connection = await session.connection()
     return await connection.run_sync(_discover_product_references)
+
+
+async def discover_product_reference_unique_rules(
+    session: AsyncSession,
+) -> list[ProductReferenceUniqueRule]:
+    connection = await session.connection()
+    return await connection.run_sync(_discover_product_reference_unique_rules)
 
 
 def _quoted(session: AsyncSession, identifier: str) -> str:
@@ -159,6 +227,87 @@ async def _safety_reason(
     return None
 
 
+def _constraint_name_from_integrity_error(
+    exc: IntegrityError,
+    *,
+    reference: ProductReference,
+    unique_rules: list[ProductReferenceUniqueRule],
+) -> str:
+    original = getattr(exc, "orig", None)
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name:
+        return str(constraint_name)
+
+    message = str(original or exc)
+    marker = "UNIQUE constraint failed:"
+    failed_columns: set[str] = set()
+    if marker in message:
+        failed_columns = {
+            part.strip().split(".")[-1]
+            for part in message.split(marker, 1)[1].split(",")
+            if part.strip()
+        }
+    candidates = [
+        rule
+        for rule in unique_rules
+        if rule.table == reference.table and rule.column == reference.column
+    ]
+    if failed_columns:
+        exact = [rule for rule in candidates if set(rule.columns) == failed_columns]
+        if len(exact) == 1:
+            return exact[0].constraint
+    if len(candidates) == 1:
+        return candidates[0].constraint
+    return "database_unique_constraint"
+
+
+async def _probe_reference_conflicts(
+    session: AsyncSession,
+    *,
+    references: list[ProductReference],
+    unique_rules: list[ProductReferenceUniqueRule],
+    keeper_id: uuid.UUID,
+    duplicate_id: uuid.UUID,
+) -> list[ReferenceConflict]:
+    """Try the real reference UPDATE per table, rolling every probe back."""
+    conflicts: list[ReferenceConflict] = []
+    for reference in references:
+        if reference.table == "product_dimension_events":
+            continue
+        table = _quoted(session, reference.table)
+        column = _quoted(session, reference.column)
+        savepoint = await session.begin_nested()
+        try:
+            await session.execute(
+                text(
+                    f"UPDATE {table} SET {column} = :keeper_id "
+                    f"WHERE {column} = :duplicate_id"
+                ).bindparams(
+                    bindparam("keeper_id", type_=Uuid(as_uuid=True)),
+                    bindparam("duplicate_id", type_=Uuid(as_uuid=True)),
+                ),
+                {"keeper_id": keeper_id, "duplicate_id": duplicate_id},
+            )
+        except IntegrityError as exc:
+            await savepoint.rollback()
+            conflicts.append(
+                ReferenceConflict(
+                    table=reference.table,
+                    column=reference.column,
+                    constraint=_constraint_name_from_integrity_error(
+                        exc,
+                        reference=reference,
+                        unique_rules=unique_rules,
+                    ),
+                    policy="skip_pair",
+                )
+            )
+        else:
+            await savepoint.rollback()
+    return conflicts
+
+
 async def _merge_pair(
     session: AsyncSession,
     *,
@@ -166,6 +315,7 @@ async def _merge_pair(
     seller_id: uuid.UUID,
     chrt_id: int,
     references: list[ProductReference],
+    unique_rules: list[ProductReferenceUniqueRule],
     apply: bool,
 ) -> PairReport:
     products = list(
@@ -208,38 +358,38 @@ async def _merge_pair(
         report.status = "skipped"
         report.reason = reason
         return report
+    conflicts = await _probe_reference_conflicts(
+        session,
+        references=references,
+        unique_rules=unique_rules,
+        keeper_id=keeper.id,
+        duplicate_id=duplicate.id,
+    )
+    if conflicts:
+        report.status = "skipped"
+        report.unique_conflicts = [asdict(conflict) for conflict in conflicts]
+        first = conflicts[0]
+        report.reason = f"unique_conflict:{first.table}:{first.constraint}"
+        return report
     if not apply:
         return report
 
     try:
-        for reference in references:
-            table = _quoted(session, reference.table)
-            column = _quoted(session, reference.column)
-            result = await session.execute(
-                text(
-                    f"UPDATE {table} SET {column} = :keeper_id "
-                    f"WHERE {column} = :duplicate_id"
-                ).bindparams(
-                    bindparam("keeper_id", type_=Uuid(as_uuid=True)),
-                    bindparam("duplicate_id", type_=Uuid(as_uuid=True)),
-                ),
-                {"keeper_id": keeper.id, "duplicate_id": duplicate.id},
-            )
-            moved = int(cast(Any, result).rowcount or 0)
-            if moved:
-                report.references_moved[
-                    f"{reference.table}.{reference.column}"
-                ] = moved
-        remaining = await _reference_counts(session, references, duplicate.id)
-        if remaining:
-            raise ValueError("references_remain_after_update")
-        await session.delete(duplicate)
-        await session.flush()
-        await session.commit()
-    except (IntegrityError, ValueError) as exc:
-        await session.rollback()
+        merged = await merge_products(
+            session,
+            tenant_id,
+            [keeper.id, duplicate.id],
+        )
+        if merged.id != keeper.id:
+            raise ValueError("standard_merge_kept_unexpected_product")
+        report.references_moved = {
+            key: count
+            for key, count in report.references_before.items()
+            if not key.startswith("product_dimension_events.")
+        }
+    except ProductMergeError as exc:
         report.status = "skipped"
-        report.reason = type(exc).__name__
+        report.reason = f"standard_merge:{exc.code}"
         report.references_moved = {}
         return report
     report.status = "merged"
@@ -274,6 +424,7 @@ async def run_merge(
         ).scalars()
         chrt_ids = [int(value) for value in duplicate_rows if value is not None]
         references = await discover_product_references(session)
+        unique_rules = await discover_product_reference_unique_rules(session)
         await session.rollback()
 
     if apply and len(chrt_ids) != expected_pairs:
@@ -291,6 +442,7 @@ async def run_merge(
                     seller_id=seller_id,
                     chrt_id=chrt_id,
                     references=references,
+                    unique_rules=unique_rules,
                     apply=apply,
                 )
             )
@@ -339,6 +491,7 @@ async def run_merge(
         "seller_id": str(seller_id),
         "duplicate_chrt_ids_found": len(chrt_ids),
         "foreign_key_references_discovered": [asdict(item) for item in references],
+        "unique_reference_rules": [asdict(item) for item in unique_rules],
         "pairs": [asdict(item) for item in pair_reports],
         "verification": verification,
         "merged": sum(item.status == "merged" for item in pair_reports),

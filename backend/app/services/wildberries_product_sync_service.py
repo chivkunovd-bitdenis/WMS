@@ -176,12 +176,16 @@ async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
                 ok.append(result)
                 logger.info(
                     "wb products sync ok seller=%s cards=%s created=%s "
-                    "updated=%s legacy_old=%s",
+                    "updated=%s legacy_old=%s barcode_conflicts=%s "
+                    "duplicate_chrt_id=%s missing_chrt_id=%s",
                     seller_id,
                     result.get("cards_received"),
                     result.get("products_created"),
                     result.get("products_updated"),
                     result.get("legacy_marked_old"),
+                    result.get("barcode_conflicts"),
+                    result.get("duplicate_chrt_id"),
+                    result.get("sizes_missing_chrt_id"),
                 )
 
     summary = {
