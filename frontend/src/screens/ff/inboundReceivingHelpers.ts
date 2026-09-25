@@ -171,9 +171,6 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'product_not_in_seller_catalog') {
     return 'Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.'
   }
-  if (code === 'barcode_ambiguous') {
-    return 'Один и тот же код у нескольких товаров. Уточните селлера в документе или используйте артикул.'
-  }
   if (code === 'product_seller_mismatch' || code === 'mixed_seller_lines') {
     return 'Товар относится к другому селлеру. В одной приёмке нельзя смешивать селлеров.'
   }

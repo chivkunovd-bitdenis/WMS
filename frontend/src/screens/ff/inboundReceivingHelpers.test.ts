@@ -5,6 +5,8 @@ import {
   looseQtyFromDisplayedTotal,
   scanErrorMessageRu,
 } from './inboundReceivingHelpers'
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from '../../utils/productScanResolver'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 describe('scanErrorMessageRu', () => {
   it('maps inbound receiving service codes to human messages', () => {
@@ -19,6 +21,12 @@ describe('scanErrorMessageRu', () => {
     expect(scanErrorMessageRu('unexpected_backend_code')).toBe(
       'Не удалось выполнить действие. Проверьте заявку и попробуйте ещё раз.',
     )
+  })
+
+  it('shows the common WMS-536 text for an ambiguous product code', async () => {
+    // Экраны приёмки, короба и грузоместа сначала читают ответ общим readApiErrorMessage.
+    const res = new Response(JSON.stringify({ detail: 'barcode_ambiguous' }), { status: 409 })
+    expect(scanErrorMessageRu(await readApiErrorMessage(res))).toBe(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
   })
 })
 

@@ -1,6 +1,9 @@
 import { apiUrl } from '../../api'
 import { fbsErrorText } from './fbsUx'
-import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  productScanAmbiguousApiMessage,
+  readApiErrorMessage,
+} from '../../utils/readApiErrorMessage'
 
 // Реальный backend-контракт (HANDOFF Composer):
 //   GET /operations/fbs-orders?seller_id=&limit=&offset=  → list[FbsOrderOut]
@@ -140,7 +143,8 @@ export class FbsApiError extends Error {
   readonly status: number
 
   constructor(code: string, message: string, context: unknown, retryable: boolean, status: number) {
-    super(fbsErrorText(message))
+    // Товарная неоднозначность — общий текст WMS-536 вместо текста сервера.
+    super(productScanAmbiguousApiMessage(code) ?? fbsErrorText(message))
     this.name = 'FbsApiError'
     this.code = code
     this.context = context

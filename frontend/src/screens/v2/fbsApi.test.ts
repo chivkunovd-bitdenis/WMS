@@ -13,6 +13,7 @@ import {
   validateFbsKiz,
 } from './fbsApi'
 import { fbsErrorText, fbsOrdersSyncErrorMessage, orderStatusForChip } from './fbsUx'
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from '../../utils/productScanResolver'
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` })
 
@@ -120,6 +121,27 @@ describe('FBS API client', () => {
     expect(fbsOrdersSyncErrorMessage({ code: 'wb_error', message })).toBe(message)
     expect(fbsErrorText('sgtinNoGS')).toContain('отсканируйте Честный знак заново целиком')
     expect(fbsErrorText('fbs_shipment_source_missing')).toContain('Проверьте источник товара в подборе')
+  })
+
+  it('shows the common product ambiguity text and keeps the structured code (WMS-536)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: {
+        code: 'scan_product_ambiguous',
+        message: 'Штрихкод соответствует разным товарам или размерам. Печать не запущена.',
+        context: {},
+        retryable: false,
+      },
+    }), { status: 409 })))
+    await expect(fetchFbsWorklist('token', authHeaders)).rejects.toMatchObject({
+      name: 'FbsApiError',
+      code: 'scan_product_ambiguous',
+      status: 409,
+      message: PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+    })
+    expect(new FbsApiError('barcode_ambiguous', 'текст сервера', null, false, 409).message)
+      .toBe(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+    expect(new FbsApiError('scan_ambiguous', 'Код совпал с товаром и ячейкой.', null, false, 409).message)
+      .toBe('Код совпал с товаром и ячейкой.')
   })
 
   it('shows a translated failed background job without retrying the operation', async () => {
