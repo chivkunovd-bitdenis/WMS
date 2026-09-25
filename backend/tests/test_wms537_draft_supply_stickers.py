@@ -798,13 +798,14 @@ async def test_cancelled_order_already_in_draft_is_not_requested_when_adding_ano
         async_client, headers, suffix
     )
     product = await _create_product(async_client, headers, seller_id, sku=f"c9b-{suffix[-6:]}")
+    order_a_wb_id = 537801
     order_a = await _create_ready_order(
         tenant_id,
         uuid.UUID(seller_id),
         uuid.UUID(warehouse_id),
         uuid.UUID(location_id),
         product,
-        order_id=537801,
+        order_id=order_a_wb_id,
     )
     order_e = await _create_ready_order(
         tenant_id,
@@ -858,15 +859,43 @@ async def test_cancelled_order_already_in_draft_is_not_requested_when_adding_ano
     )
     assert resp.status_code == 200, resp.text
     assert batch_order_ids == [[order_e]]
-    assert all(537701 not in chunk for chunk in wb_fetch_calls)
+    # The cancelled A must never be handed to WB — neither its local order id
+    # in the batch call nor its WB order id in the actual fetch.
+    assert all(order_a not in chunk for chunk in batch_order_ids)
+    assert all(order_a_wb_id not in chunk for chunk in wb_fetch_calls)
 
-    # A subsequent "start work" answers the cancelled order with the existing
-    # `order_cancelled` error, without ever asking WB for it.
+    # A subsequent "start work" requests the still-missing sticker of A (the
+    # only order without a code), but must not contact WB for it — the
+    # existing cancelled-order filter in request_supply_print_batch answers
+    # it locally with `order_cancelled` instead.
     started = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/start-work", headers=headers
     )
     assert started.status_code == 200, started.text
-    assert all(537701 not in chunk for chunk in wb_fetch_calls)
+    assert all(order_a_wb_id not in chunk for chunk in wb_fetch_calls)
+
+    # Prove the `order_cancelled` result itself through the existing print
+    # API, instead of only inferring it from "WB was never called": ask for
+    # A's sticker directly and check the reported error.
+    print_resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/print-assets",
+        headers=headers,
+        json={
+            "kind": "order_sticker",
+            "order_ids": [str(order_a)],
+            "retry_missing": True,
+        },
+    )
+    assert print_resp.status_code == 200, print_resp.text
+    print_body = print_resp.json()
+    assert print_body["ready"] == 0
+    assert print_body["failed"] == 1
+    order_errors = print_body["order_errors"]
+    assert len(order_errors) == 1
+    assert order_errors[0]["order_id"] == str(order_a)
+    assert order_errors[0]["wb_order_id"] == order_a_wb_id
+    assert order_errors[0]["code"] == "order_cancelled"
+    assert all(order_a_wb_id not in chunk for chunk in wb_fetch_calls)
 
 
 # ---------------------------------------------------------------------------
