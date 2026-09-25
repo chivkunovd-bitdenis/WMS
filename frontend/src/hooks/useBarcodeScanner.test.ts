@@ -442,3 +442,91 @@ it('removes focused input KIZ text while preserving GS in dispatched code', () =
   expect(onScan).toHaveBeenCalledExactlyOnceWith(prefix + '\x1d' + suffix)
   expect(el.value).toBe('7')
 })
+
+// WMS-536 R7: поиску товара нужна исходная строка до перевода раскладки.
+describe('createScannerListener — исходные символы для поиска товара', () => {
+  function makeRawListener(onScanWithRaw: (code: string, scan: { raw: string; layout: string }) => void) {
+    let now = 0
+    const onScan = vi.fn()
+    const listener = createScannerListener({
+      onScan,
+      onScanWithRaw,
+      minLength: 5,
+      maxIntervalMs: 50,
+      getNow: () => now,
+      getActiveElement: () => null,
+    })
+    return { listener, onScan, tick: (ms: number) => { now += ms } }
+  }
+
+  it('русская раскладка: onScanWithRaw получает и латиницу, и исходную кириллицу', () => {
+    const onScanWithRaw = vi.fn()
+    const { listener, onScan, tick } = makeRawListener(onScanWithRaw)
+    sendChars(listener, [
+      { key: 'С', code: 'KeyC', shift: true },
+      { key: 'р', code: 'KeyH' },
+      { key: 'ш', code: 'KeyI' },
+      { key: 'т', code: 'KeyN' },
+      { key: '-', code: 'Minus' },
+      ...asChars('56005'),
+    ], tick, 10)
+    sendEnter(listener)
+
+    expect(onScanWithRaw).toHaveBeenCalledExactlyOnceWith('Chin-56005', {
+      raw: 'Сршт-56005',
+      layout: 'Chin-56005',
+    })
+    expect(onScan).not.toHaveBeenCalled()
+  })
+
+  it('настоящий кириллический артикул сохраняется в raw без изменений', () => {
+    const onScanWithRaw = vi.fn()
+    const { listener, tick } = makeRawListener(onScanWithRaw)
+    sendChars(listener, [
+      { key: 'Ф', code: 'KeyA', shift: true },
+      { key: 'А', code: 'KeyF', shift: true },
+      { key: '_', code: 'Minus', shift: true },
+      { key: 'М', code: 'KeyV', shift: true },
+      { key: 'О', code: 'KeyJ', shift: true },
+      { key: 'Д', code: 'KeyL', shift: true },
+      { key: '8', code: 'Digit8' },
+      { key: '-', code: 'Minus' },
+      { key: '4', code: 'Digit4' },
+      { key: 'а', code: 'KeyF' },
+      { key: '/', code: 'Slash' },
+      ...asChars('083'),
+      { key: '/', code: 'Slash' },
+      ...asChars('42'),
+    ], tick, 10)
+    sendEnter(listener)
+
+    expect(onScanWithRaw).toHaveBeenCalledExactlyOnceWith('AF_VJL8-4f/083/42', {
+      raw: 'ФА_МОД8-4а/083/42',
+      layout: 'AF_VJL8-4f/083/42',
+    })
+  })
+
+  it('GS из Ctrl+] остаётся и в raw, и в layout', () => {
+    const onScanWithRaw = vi.fn()
+    const { listener, tick } = makeRawListener(onScanWithRaw)
+    sendChars(listener, asChars('0104'), tick, 10)
+    listener(makeEvent(']', { code: 'BracketRight', ctrlKey: true }))
+    tick(10)
+    sendChars(listener, asChars('9112'), tick, 10)
+    sendEnter(listener)
+
+    expect(onScanWithRaw).toHaveBeenCalledExactlyOnceWith('0104\x1d9112', {
+      raw: '0104\x1d9112',
+      layout: '0104\x1d9112',
+    })
+  })
+
+  it('латинский код: raw и layout совпадают', () => {
+    const onScanWithRaw = vi.fn()
+    const { listener, tick } = makeRawListener(onScanWithRaw)
+    sendChars(listener, asChars(EAN), tick, 10)
+    sendEnter(listener)
+
+    expect(onScanWithRaw).toHaveBeenCalledExactlyOnceWith(EAN, { raw: EAN, layout: EAN })
+  })
+})
