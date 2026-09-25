@@ -337,7 +337,7 @@ async def test_ambiguous_external_barcode_does_not_change_box_or_cargo_place(
 
 
 @pytest.mark.asyncio
-async def test_receiving_scans_build_one_seller_catalog_index_per_scan(
+async def test_receiving_scans_build_only_document_index_when_code_is_in_request(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -371,7 +371,56 @@ async def test_receiving_scans_build_one_seller_catalog_index_per_scan(
             )
         assert box_line.quantity == 2
 
-    assert looked_up_product_ids == [None] * 4
+    assert looked_up_product_ids == [frozenset({_pid})] * 4
+
+
+@pytest.mark.asyncio
+async def test_receiving_document_match_wins_before_seller_catalog_collision(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 11)
+    headers, tenant_id = await _register_admin(async_client, suffix)
+    request_id, product_id, sku = await _submitted_request(
+        async_client, headers, suffix, expected_qty=1
+    )
+    async with SessionLocal() as session:
+        request = await intake_svc.get_request(session, tenant_id, request_id)
+        assert request is not None and request.seller_id is not None
+        seller_id = request.seller_id
+
+    collision = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Catalog-only collision",
+            "sku_code": f"catalog-only-{suffix}",
+            "wb_barcode": sku,
+            "seller_id": str(seller_id),
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert collision.status_code == 200, collision.text
+
+    async def seller_lookup_must_not_run(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("document match must not search the seller catalogue")
+
+    monkeypatch.setattr(
+        "app.services.inbound_intake_service.resolve_product_code",
+        seller_lookup_must_not_run,
+    )
+    async with SessionLocal() as session:
+        line = await intake_svc.scan_barcode_to_loose_intake(
+            session,
+            tenant_id,
+            request_id,
+            barcode=sku,
+            product_id_hint=product_id,
+        )
+    assert line.product_id == product_id
+    assert line.actual_qty == 1
 
 
 @pytest.mark.asyncio

@@ -216,7 +216,7 @@ async def select_order_for_product_scan(
         )
     ]
     supply_product_ids = frozenset(
-        order.product_id for order in orders if order.product_id is not None
+        order.product_id for order in eligible_orders if order.product_id is not None
     )
     resolution = await resolve_product_code(
         session,

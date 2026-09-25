@@ -40,10 +40,8 @@ from app.services.product_code_resolver_service import (
     DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
     ProductCodeAmbiguous,
     ProductCodeFound,
-    ProductCodeIndex,
     ProductCodeScope,
-    build_product_code_index,
-    resolve_product_code_from_index,
+    resolve_product_code,
 )
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
@@ -74,21 +72,6 @@ class BoxScanResult:
 
 def _map_collect_err(exc: MarketplaceUnloadPickError) -> MarketplaceUnloadBoxError:
     return MarketplaceUnloadBoxError(exc.code)
-
-
-async def _barcode_index_for_seller(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-) -> ProductCodeIndex:
-    return await build_product_code_index(
-        session,
-        scope=ProductCodeScope(
-            tenant_id=tenant_id,
-            seller_ids=frozenset({seller_id}),
-        ),
-        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
-    )
 
 
 async def _request_for_picking(
@@ -413,8 +396,15 @@ async def scan_barcode_into_box(
             container_code=container.code,
         )
 
-    index = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
-    resolution = resolve_product_code_from_index(index, raw)
+    resolution = await resolve_product_code(
+        session,
+        raw,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=frozenset({req.seller_id}),
+        ),
+        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    )
     if isinstance(resolution, ProductCodeAmbiguous):
         raise MarketplaceUnloadBoxError("barcode_ambiguous")
     if not isinstance(resolution, ProductCodeFound):

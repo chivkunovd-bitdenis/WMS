@@ -343,6 +343,29 @@ async def test_cargo_place_rejects_product_not_on_request(
         headers=headers,
         json={"barcode": sku_code, "product_id": foreign_product_id},
     )
+    assert scan.status_code == 404, scan.text
+    assert scan.json()["detail"] == "product_not_found"
+    async with SessionLocal() as session:
+        cargo_quantity = await session.scalar(
+            select(InboundIntakeCargoPlaceLine.quantity).where(
+                InboundIntakeCargoPlaceLine.cargo_place_id == uuid.UUID(place_id),
+                InboundIntakeCargoPlaceLine.product_id == uuid.UUID(foreign_product_id),
+            )
+        )
+        document_line = await session.scalar(
+            select(InboundIntakeLine).where(
+                InboundIntakeLine.request_id == uuid.UUID(request_id),
+                InboundIntakeLine.product_id == uuid.UUID(foreign_product_id),
+            )
+        )
+    assert cargo_quantity is None
+    assert document_line is None
+
+    scan = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": foreign_sku, "product_id": foreign_product_id},
+    )
     assert scan.status_code == 200, scan.text
     added = next(row for row in scan.json()["lines"] if row["product_id"] == foreign_product_id)
     assert added["quantity"] == 1
