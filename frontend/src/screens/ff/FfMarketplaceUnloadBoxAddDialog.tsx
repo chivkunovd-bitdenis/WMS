@@ -30,7 +30,13 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { storageLocationLabel } from '../../utils/inboundQueues'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import {
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  buildProductScanIndex,
+  productScanSourceFromCatalogRow,
+  resolveProductScan,
+  type ProductScanSource,
+} from '../../utils/productScanResolver'
 import {
   boxFillDialogContentSx,
   boxFillDialogPaperSx,
@@ -65,6 +71,15 @@ type PickOptionProduct = {
   boxed_qty?: number
   locations: PickOptionLocation[]
 }
+
+/**
+ * Один скан в очереди окна.
+ *
+ * `code` — то, что уходило на сервер и раньше: у клавиатурного сканера уже в
+ * латинской раскладке, у ручного ввода — как набрано. `wedgeRaw` есть только у
+ * клавиатурного сканера: те же символы до перевода раскладки (WMS-536 R7).
+ */
+type QueuedScan = { code: string; wedgeRaw: string | null }
 
 type Props = {
   open: boolean
@@ -240,13 +255,18 @@ function FfMarketplaceUnloadBoxAddDialogContent({
     }
   }, [open, requestId, boxId, readOnly, token])
 
-  const catalogRows = useMemo(
-    () =>
-      pickOptions
-        .map((row) => catalogById.get(row.product_id))
-        .filter((row): row is WbProductPickerCatalogRow => row != null),
-    [catalogById, pickOptions],
-  )
+  // WMS-536: единый поиск товара по кодам товаров плана этой отгрузки (R5):
+  // SKU, основной и все WB-ШК, Ozon external_barcodes. Индекс строится один раз
+  // на загруженный набор, скан — поиск в нём.
+  const productScanIndex = useMemo(() => {
+    const sources: ProductScanSource[] = []
+    for (const row of pickOptions) {
+      sources.push({ productId: row.product_id, skuCode: row.sku_code })
+      const catalog: WbProductPickerCatalogRow | undefined = catalogById.get(row.product_id)
+      if (catalog) sources.push(productScanSourceFromCatalogRow(catalog))
+    }
+    return buildProductScanIndex(sources)
+  }, [catalogById, pickOptions])
 
   const locationOptions = useMemo(() => {
     const byId = new Map<string, LocationOption>()
@@ -422,10 +442,25 @@ function FfMarketplaceUnloadBoxAddDialogContent({
     }
   }
 
-  const runScan = async (barcode: string, session: number) => {
+  const runScan = async (scan: QueuedScan, session: number) => {
     const isCurrent = () => scanOpenRef.current && scanSessionRef.current === session
     if (!isCurrent()) return
     setError(null)
+    // WMS-536: товар ищется единым поиском только как подсказка — ячейку, тару
+    // и сам товар сервер распознаёт по коду в прежнем порядке. Клавиатурный
+    // сканер сначала ищет исходные символы, и только если их нет — латиницу по
+    // клавишам (R7); ручной ввод раскладку не исправляет.
+    const productLookup = scan.wedgeRaw !== null
+      ? resolveProductScan(productScanIndex, scan.wedgeRaw, { layoutCandidate: scan.code })
+      : resolveProductScan(productScanIndex, scan.code)
+    if (productLookup.status === 'ambiguous') {
+      // Код у двух товаров плана: ничего не шлём, источник и короб не меняются (R2).
+      setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+      return
+    }
+    // Найденный товар уходит тем кодом, по которому он нашёлся: кириллический
+    // артикул — как есть, а не латиницей. Остальное — как и раньше.
+    const barcode = productLookup.status === 'found' ? productLookup.matchedCode : scan.code
     try {
       const scanBody: {
         barcode: string
@@ -440,9 +475,8 @@ function FfMarketplaceUnloadBoxAddDialogContent({
         quantity: 1,
         allow_over_plan: false,
       }
-      const productId = resolveProductIdByBarcode(catalogRows, barcode)
-      if (productId) {
-        scanBody.product_id = productId
+      if (productLookup.status === 'found') {
+        scanBody.product_id = productLookup.productId
       }
       const selected = sourceRef.current
       if (addressStorageEnabled && selected.locationId) {
@@ -584,6 +618,11 @@ function FfMarketplaceUnloadBoxAddDialogContent({
         )
         return
       }
+      if (errDetail === 'barcode_ambiguous') {
+        // Сервер нашёл тот же код у нескольких товаров селлера (WMS-536 R2).
+        setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+        return
+      }
       setError(errDetail === 'invalid_container_reference'
         ? 'Тара недоступна или находится в другой ячейке. Отсканируйте источник заново.'
         : errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
@@ -592,28 +631,29 @@ function FfMarketplaceUnloadBoxAddDialogContent({
     }
   }
 
-  const enqueueScan = (barcode: string) => {
+  const enqueueScan = (scan: QueuedScan) => {
     const session = scanSessionRef.current
-    const job = scanQueueRef.current.then(() => runScan(barcode, session))
+    const job = scanQueueRef.current.then(() => runScan(scan, session))
     scanQueueRef.current = job.catch(() => undefined)
     return job
   }
 
-  const doScan = (rawInput?: string) => {
+  /** Без аргумента — ручной ввод из поля; с аргументом — клавиатурный сканер. */
+  const doScan = (wedge?: { code: string; raw: string }) => {
     if (readOnly) {
       return
     }
-    const raw = (rawInput ?? scanBarcode).trim()
-    if (!raw) {
+    const code = (wedge?.code ?? scanBarcode).trim()
+    if (!code) {
       setError('Введите штрихкод.')
       return
     }
-    void enqueueScan(raw)
+    void enqueueScan({ code, wedgeRaw: wedge ? wedge.raw : null })
   }
 
   useBarcodeScanner({
     enabled: open && !readOnly && !readyBoxOverPlanOpen,
-    onScan: doScan,
+    onScan: (code, scan) => doScan({ code, raw: scan.raw }),
   })
 
   const confirmReadyBoxOverPlan = () => {

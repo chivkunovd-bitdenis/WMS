@@ -47,7 +47,11 @@ import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
 import { MarketplaceChip } from '../../ui-kit'
 
-import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import {
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  catalogProductScanIndex,
+  resolveProductScan,
+} from '../../utils/productScanResolver'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
@@ -1986,7 +1990,15 @@ export function FfSuppliesShipmentsPage({
     return true
   }
 
-  const addMpLineByBarcode = async (rawInput?: string) => {
+  /**
+   * Добавить в план товар по коду.
+   *
+   * `wedgeRaw` передаёт только клавиатурный сканер: те же символы до перевода
+   * раскладки. Тогда сначала ищется исходная строка (кириллический артикул), и
+   * только если её нет — латиница по клавишам (WMS-536 R7). Ручной ввод в поле
+   * раскладку не исправляет.
+   */
+  const addMpLineByBarcode = async (rawInput?: string, wedgeRaw?: string) => {
     if (!unloadDetail || !docModalId || docModal !== 'marketplace_unload' || !mpDraft) return
     const code = (rawInput ?? mpLineBarcodeScan).trim()
     if (!code) return
@@ -1997,11 +2009,22 @@ export function FfSuppliesShipmentsPage({
       if (rows.length === 0) {
         rows = await reloadWbCatalog()
       }
-      const productId = resolveProductIdByBarcode(rows, code)
-      if (!productId) {
+      // WMS-536: единый поиск по каталогу селлера — SKU, основной и все WB-ШК,
+      // Ozon external_barcodes; индекс строится один раз на загруженный каталог.
+      const index = catalogProductScanIndex(rows)
+      const productLookup = wedgeRaw !== undefined
+        ? resolveProductScan(index, wedgeRaw, { layoutCandidate: code })
+        : resolveProductScan(index, code)
+      if (productLookup.status === 'ambiguous') {
+        // Код у нескольких товаров: не выбираем ни один, план не меняется (R2).
+        setModalError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+        return
+      }
+      if (productLookup.status !== 'found') {
         setModalError('Товар не найден по штрихкоду или артикулу.')
         return
       }
+      const productId = productLookup.productId
       const existing = unloadDetail.lines.find((ln) => ln.product_id === productId)
       if (existing) {
         const delRes = await fetch(
@@ -2041,9 +2064,9 @@ export function FfSuppliesShipmentsPage({
       boxAddDialogBoxId == null &&
       !mpPickerOpen &&
       !modalBusy,
-    onScan: (code) => {
+    onScan: (code, scan) => {
       setMpLineBarcodeScan(code)
-      void addMpLineByBarcode(code)
+      void addMpLineByBarcode(code, scan.raw)
     },
   })
 

@@ -4,8 +4,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import {
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  resolveProductScan,
+  type ProductScanCatalogRow,
+} from '../../../utils/productScanResolver'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
-import { resolveProductScanSource, scanSourceKey } from './pickScanSource'
+import { pickProductScanIndex, resolveProductScanSource, scanSourceKey } from './pickScanSource'
 import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
 import {
   cellRef,
@@ -95,6 +100,8 @@ type ApiPickProduct = {
   product_name: string
   seller_article: string | null
   barcode: string | null
+  /** Все коды товара (WMS-536), если сервер их отдаёт; старый ответ без поля. */
+  scan_codes?: string[] | null
   planned_qty: number
   picked_qty: number
   locations: ApiPickLocation[]
@@ -124,6 +131,20 @@ function formatDate(value: string | null): string | null {
 
 function sourceLocationId(sourceKey: string | null): string | null {
   return sourceKey?.startsWith('cell:') ? sourceKey.slice(5) : null
+}
+
+/** У Ozon-поставки ФБС экран каталог не грузит — и коды из него не берёт. */
+const NO_CATALOG: ReadonlyMap<string, ProductScanCatalogRow> = new Map()
+
+/**
+ * Отказ скана подбора для оператора.
+ *
+ * Отгрузка отдаёт неоднозначный код голым машинным кодом — показываем смысл
+ * (WMS-536 R2). Остальное — как и раньше, через общий разбор ошибки.
+ */
+async function readPickScanErrorMessage(res: Response): Promise<string> {
+  const message = await readApiErrorMessage(res)
+  return message === 'barcode_ambiguous' ? PRODUCT_SCAN_AMBIGUOUS_MESSAGE : message
 }
 
 type Props = {
@@ -360,6 +381,18 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     }
   }, [catalogById, detail, isOzonFbs, pickOptions, source])
 
+  // WMS-536: индекс «код → товар плана» строится один раз на загруженный
+  // набор, а скан — это поиск в нём, а не обход строк.
+  const productScanIndex = useMemo(
+    () =>
+      pickProductScanIndex(
+        screenData?.products ?? [],
+        isOzonFbs ? NO_CATALOG : catalogById,
+        pickOptions,
+      ),
+    [catalogById, isOzonFbs, pickOptions, screenData?.products],
+  )
+
   const updateOption = useCallback(async () => {
     if (!requestId) return
     try {
@@ -417,15 +450,19 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     async ({ barcode, sourceKey }: { barcode: string; sourceKey: string | null }) => {
       if (!requestId) throw new Error('Не указан номер отгрузки')
 
-      const normalized = barcode.trim().toLowerCase()
-      const matchedProduct = screenData?.products.find((product) => {
-        const catalog = catalogById.get(product.id)
-        return (
-          product.sku.toLowerCase() === normalized ||
-          product.barcode === barcode ||
-          catalog?.wb_barcodes.some((one) => one === barcode)
-        )
-      })
+      // Товар ищется единым поиском (WMS-536) — только как подсказка и для
+      // выбора физического источника: ячейку, тару и сам товар сервер всё
+      // равно распознаёт по коду. Поле подбора — обычное поле ввода, раскладку
+      // оно не исправляло и не исправляет (R7).
+      const productLookup = resolveProductScan(productScanIndex, barcode)
+      if (productLookup.status === 'ambiguous') {
+        // Код у двух товаров плана — не выбираем ни один и ничего не шлём (R2).
+        throw new Error(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+      }
+      const matchedProduct =
+        productLookup.status === 'found'
+          ? screenData?.products.find((product) => product.id === productLookup.productId)
+          : undefined
       // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
       // среди уже известных pick-options источников, затем среди того, что
       // оператор только что отсканировал сам (см. scannedContainers выше).
@@ -460,7 +497,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             container_id: containerSource?.containerId ?? null,
           }),
         })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        if (!res.ok) throw new Error(await readPickScanErrorMessage(res))
         const result = (await res.json()) as ApiScanResult
         if (result.kind === 'location') {
           if (!result.storage_location_id || !result.location_code) {
@@ -520,8 +557,8 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       }
     },
     [
-      catalogById,
       pickOptions,
+      productScanIndex,
       requestId,
       screenData?.placeSource,
       screenData?.products,
