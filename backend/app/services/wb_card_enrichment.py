@@ -50,7 +50,12 @@ def subject_name_from_card(card: dict[str, Any]) -> str | None:
 class WbSizeVariant:
     chrt_id: int | None
     size_label: str | None
-    barcode: str
+    barcodes: tuple[str, ...]
+
+    @property
+    def barcode(self) -> str:
+        """Stable primary candidate for a newly created Product."""
+        return self.barcodes[0]
 
 
 def _parse_chrt_id(entry: dict[str, Any]) -> int | None:
@@ -67,7 +72,7 @@ def _parse_chrt_id(entry: dict[str, Any]) -> int | None:
 
 
 def iter_size_variants_from_card(card: dict[str, Any]) -> list[WbSizeVariant]:
-    """One WMS product row per barcode in ``sizes[].skus``."""
+    """One WMS product row per ``sizes[]`` element, carrying all of its SKUs."""
     out: list[WbSizeVariant] = []
     sizes = card.get("sizes")
     if isinstance(sizes, list) and sizes:
@@ -79,13 +84,51 @@ def iter_size_variants_from_card(card: dict[str, Any]) -> list[WbSizeVariant]:
             skus = sz.get("skus")
             if not isinstance(skus, list):
                 continue
-            for s in skus:
-                if isinstance(s, str) and (t := s.strip()):
-                    out.append(WbSizeVariant(chrt_id=chrt, size_label=label, barcode=t))
+            barcodes = tuple(
+                dict.fromkeys(
+                    t
+                    for s in skus
+                    if isinstance(s, str)
+                    and (t := s.strip())
+                    and len(t) <= 64
+                )
+            )
+            if barcodes:
+                out.append(
+                    WbSizeVariant(
+                        chrt_id=chrt,
+                        size_label=label,
+                        barcodes=barcodes,
+                    )
+                )
     if out:
-        return out
-    for barcode in collect_skus_from_card(card):
-        out.append(WbSizeVariant(chrt_id=None, size_label=None, barcode=barcode))
+        grouped: dict[int, WbSizeVariant] = {}
+        missing_identity: list[WbSizeVariant] = []
+        for variant in out:
+            if variant.chrt_id is None:
+                missing_identity.append(variant)
+                continue
+            current = grouped.get(variant.chrt_id)
+            if current is None:
+                grouped[variant.chrt_id] = variant
+                continue
+            grouped[variant.chrt_id] = WbSizeVariant(
+                chrt_id=variant.chrt_id,
+                size_label=current.size_label or variant.size_label,
+                barcodes=tuple(dict.fromkeys((*current.barcodes, *variant.barcodes))),
+            )
+        return [*grouped.values(), *missing_identity]
+    fallback_barcodes = tuple(
+        dict.fromkeys(code for code in collect_skus_from_card(card) if len(code) <= 64)
+    )
+    if fallback_barcodes:
+        out.append(
+            WbSizeVariant(
+                chrt_id=None,
+                size_label=None,
+                barcodes=fallback_barcodes,
+            )
+        )
     return out
 
 

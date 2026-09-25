@@ -59,7 +59,11 @@ async def test_self_sync_creates_product_per_size(
         "title": "Лосины",
         "sizes": [
             {"chrtID": 1, "techSize": "S", "skus": ["1110000000001"]},
-            {"chrtID": 2, "techSize": "M", "skus": ["1110000000002"]},
+            {
+                "chrtID": 2,
+                "techSize": "M",
+                "skus": ["1110000000002", "1110000000202", "1110000000203"],
+            },
             {"chrtID": 3, "techSize": "L", "skus": ["1110000000003"]},
         ],
     }
@@ -99,7 +103,11 @@ async def test_self_sync_creates_product_per_size(
     by_size = {r["wb_size"]: r for r in rows}
     assert set(by_size) == {"S", "M", "L"}
     assert by_size["S"]["wb_primary_barcode"] == "1110000000001"
-    assert by_size["M"]["wb_barcodes"] == ["1110000000002"]
+    assert by_size["M"]["wb_barcodes"] == [
+        "1110000000002",
+        "1110000000202",
+        "1110000000203",
+    ]
     assert by_size["L"]["sku_code"] == "LEG-STRIP/L"
     assert {r["name"] for r in rows} == {"Лосины"}
 
@@ -272,8 +280,12 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         "cards_received": 1,
         "cards_saved": 1,
         "products_created": 0,
-        "products_updated": 0 if swap_sizes else 1,
-        "products_skipped": 2 if swap_sizes else 1,
+        "products_updated": 0,
+        "products_skipped": 1,
+        "sizes_missing_chrt_id": 0,
+        "duplicate_chrt_id": 1,
+        "barcode_conflicts": 0,
+        "barcode_conflict_details": [],
     }
     assert first.json() == expected
     assert second.json() == expected
@@ -292,7 +304,10 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         )) is None
         updated_product = next(p for p in products if p.wb_barcode == barcode_second)
         assert (updated_product.length_mm, updated_product.width_mm,
-                updated_product.height_mm) == ((10, 10, 10) if swap_sizes else (310, 230, 70))
+                updated_product.height_mm) == (10, 10, 10)
+        assert await session.scalar(select(ProductDimensionEvent.id).where(
+            ProductDimensionEvent.product_id == updated_product.id,
+        )) is None
 
     imported = await async_client.get(
         f"/integrations/wildberries/sellers/{seller_id}/imported-cards",

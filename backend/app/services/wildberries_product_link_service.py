@@ -5,10 +5,12 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
+from app.services.product_barcode_service import add_barcodes_to_product
 from app.services.wb_card_enrichment import WbSizeVariant, iter_size_variants_from_card
 
 
@@ -27,7 +29,7 @@ def _match_variant(
     if wb_barcode and wb_barcode.strip():
         target = wb_barcode.strip()
         for v in variants:
-            if v.barcode == target:
+            if target in v.barcodes:
                 return v
         raise WildberriesLinkError("wb_barcode_not_found")
     if wb_chrt_id is not None:
@@ -76,6 +78,7 @@ async def link_product_to_wb_card(
     taken = await session.execute(
         select(Product.id).where(
             Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
             Product.wb_barcode == variant.barcode,
             Product.id != product_id,
         )
@@ -86,8 +89,22 @@ async def link_product_to_wb_card(
     p.wb_nm_id = nm_id
     p.wb_vendor_code = card.vendor_code
     p.wb_chrt_id = variant.chrt_id
-    p.wb_barcode = variant.barcode
+    if not p.wb_barcode or not p.wb_barcode.strip():
+        p.wb_barcode = variant.barcode
     p.wb_size = variant.size_label
-    await session.commit()
+    retained_barcodes = variant.barcodes
+    if p.wb_barcode and p.wb_barcode.strip():
+        retained_barcodes = tuple(
+            dict.fromkeys((p.wb_barcode.strip(), *retained_barcodes))
+        )
+    barcode_result = await add_barcodes_to_product(session, p, retained_barcodes)
+    if barcode_result.conflicts:
+        await session.rollback()
+        raise WildberriesLinkError("wb_barcode_already_linked")
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise WildberriesLinkError("wb_barcode_already_linked") from exc
     await session.refresh(p, attribute_names=["seller"])
     return p

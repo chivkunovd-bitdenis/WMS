@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -119,6 +119,10 @@ class WildberriesSelfTokenSaveOut(BaseModel):
     products_created: int = 0
     products_updated: int = 0
     products_skipped: int = 0
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 class WildberriesSelfTokenSaveErrorOut(BaseModel):
@@ -134,6 +138,10 @@ class WildberriesSelfSyncOut(BaseModel):
     products_created: int
     products_updated: int
     products_skipped: int
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 def _self_token_save_error_response(
@@ -503,10 +511,14 @@ async def save_and_validate_self_content_token(
 
     n = len(total_cards)
     saved = 0
-    prod_stats = {
+    prod_stats: dict[str, Any] = {
         "products_created": 0,
         "products_updated": 0,
         "products_skipped": 0,
+        "sizes_missing_chrt_id": 0,
+        "duplicate_chrt_id": 0,
+        "barcode_conflicts": 0,
+        "barcode_conflict_details": [],
     }
 
     try:
@@ -572,6 +584,10 @@ async def save_and_validate_self_content_token(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )
 
 
@@ -620,4 +636,8 @@ async def sync_products_now(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )
