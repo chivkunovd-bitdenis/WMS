@@ -576,7 +576,10 @@ async def _send_or_reconcile_printed_marking(
     try:
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
-            await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
+            await marking_svc.reconcile_pending_kiz_operation(
+                session, order, marking, operation, http_client, token,
+                actor_user_id=actor_user_id,
+            )
             if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
                 raise marking_svc.FbsMarkingError("wb_pending_confirmation")
             if operation.state == WB_OPERATION_STATE_FAILED:
@@ -596,6 +599,7 @@ async def _send_or_reconcile_printed_marking(
         raise marking_svc.FbsMarkingError("wb_pending_confirmation") from error
     ambiguous = (
         error.code == "wb_transport_error" or error.code == "wb_upstream_error_408"
+        or error.code == "wb_pending_confirmation"
         or error.code.startswith("wb_upstream_error_5")
         or marking.meta_status == META_STATUS_SENDING
     )

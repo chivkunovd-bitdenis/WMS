@@ -405,6 +405,9 @@ def compute_delivery_allowed(
         if isinstance(reason, str) and reason.strip():
             return False
         remote_value = details.get("value")
+        if (kind == MARKING_KIND_SGTIN
+                and mark.meta_status == META_STATUS_UNKNOWN and not remote_value):
+            return False
         if isinstance(remote_value, str) and not _same_marking_value(mark.value, remote_value):
             return False
         decision = details.get("decision")
@@ -1009,6 +1012,9 @@ async def _sync_order_meta_from_wb(
             decision = meta_detail.decision.strip().lower()
             if decision == "required" and not meta_detail.value:
                 marking.meta_status = META_STATUS_MISSING
+            elif marking.kind == MARKING_KIND_SGTIN and not meta_detail.value:
+                # Optional metadata does not confirm the KIZ already bound locally.
+                marking.meta_status = META_STATUS_UNKNOWN
             elif meta_detail.value and not _same_marking_value(marking.value, meta_detail.value):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
@@ -1143,11 +1149,55 @@ async def attach_order_meta_to_wb_and_sync(
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
     markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    remote_detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN) or {}
+    if marking.kind == MARKING_KIND_SGTIN and (
+        not markings.applied
+        or not remote_detail.get("value")
+    ):
+        raise FbsMarkingError("wb_pending_confirmation")
     if notify_supply:
         await _notify_supply_marking_update(
             session, tenant_id, order.id, actor_user_id=actor_user_id,
         )
     return markings
+
+
+async def reconcile_pending_kiz_operation(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    operation: FbsWbOperation,
+    http_client: httpx.AsyncClient,
+    token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Retry only after a fresh WB row establishes that its KIZ is empty.
+
+    Callers hold the order/packaging locks for this binding. Missing orders,
+    stale answers and a different remote KIZ cannot authorize an overwrite.
+    An exact value, even with a pending verdict, needs no second PUT.
+    """
+    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    if not markings.applied:
+        raise FbsMarkingError("wb_pending_confirmation")
+    detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN)
+    if detail is None or (isinstance(detail, dict) and not detail.get("value")):
+        try:
+            await attach_order_meta_to_wb_and_sync(
+                session, order.tenant_id, order, marking, http_client,
+                actor_user_id=actor_user_id, api_token=token, notify_supply=False,
+            )
+        except (WildberriesClientError, FbsMarkingError) as exc:
+            if isinstance(exc, FbsMarkingError) and exc.code == "meta_validation_fail":
+                operation.state = WB_OPERATION_STATE_FAILED
+                operation.failed_at = datetime.now(tz=UTC)
+                operation.error_code = exc.code
+            else:
+                marking.meta_status = META_STATUS_UNKNOWN
+                marking.check_status = CHECK_STATUS_ERROR
+                marking.reason = "Wildberries не подтвердил результат; нужна сверка."
+            raise
 
 
 async def list_order_markings(

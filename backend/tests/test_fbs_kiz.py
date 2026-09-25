@@ -3990,7 +3990,9 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
             "started": False,
             "kiz": value,
         }
-    assert calls.count("put") == 1
+    # The fresh required/empty row authorizes one retry of the same KIZ.
+    # Wrong-order, different-value and exact-pending rows remain GET-only.
+    assert calls.count("put") == 2
     assert len(commit_keys) == len(set(commit_keys))
     async with SessionLocal() as session:
         operation = await session.get(FbsWbOperation, operation_id)
