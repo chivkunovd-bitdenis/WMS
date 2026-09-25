@@ -47,7 +47,8 @@ import {
   boxFillTableScrollSx,
 } from './boxFillDialogLayout'
 import { scanErrorMessageRu } from './inboundReceivingHelpers'
-import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
+import { buildInboundDocumentScanIndex, inboundCatalogScanIndex, resolveInboundProductScan } from './inboundScanLookup'
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from '../../utils/productScanResolver'
 
 type InboundBoxLine = {
   id: string
@@ -234,10 +235,11 @@ function FfInboundBoxAddDialogContent({
     return m
   }, [localBoxLines])
 
-  const scanProductByBarcode = useMemo(
-    () => buildInboundScanProductMap(requestLines, catalogById),
+  const scanProductIndex = useMemo(
+    () => buildInboundDocumentScanIndex(requestLines, catalogById),
     [catalogById, requestLines],
   )
+  const catalogScanIndex = useMemo(() => inboundCatalogScanIndex(catalogById), [catalogById])
 
   // Считаем витрину строки один раз на состав заявки, а не на каждый рендер:
   // иначе memo у строки бесполезен — meta каждый раз новый объект.
@@ -353,7 +355,7 @@ function FfInboundBoxAddDialogContent({
     onClose()
   }
 
-  const scanIntoBox = async (rawInput?: string) => {
+  const scanIntoBox = async (rawInput?: string, wedgeRaw?: string) => {
     if (readOnly) {
       return
     }
@@ -371,8 +373,14 @@ function FfInboundBoxAddDialogContent({
         return
       }
       lastProductLineId.current = null
-      const productId = findInboundScanProductId(raw, scanProductByBarcode)
-      const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/scan`, { barcode: raw, product_id: productId })]) : await fetch(
+      // Ручной Enter — без исправления раскладки; у скана со сканера исходные символы идут первыми (R7).
+      const product = resolveInboundProductScan(scanProductIndex, catalogScanIndex, { code: raw, wedgeRaw })
+      if (product.status === 'ambiguous') {
+        setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+        return
+      }
+      const productId = product.productId
+      const res = ffDraft ? await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/${containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'}/${boxId}/scan`, { barcode: product.barcode, product_id: productId })]) : await fetch(
         apiUrl(
           `/operations/inbound-intake-requests/${requestId}/${
             containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
@@ -381,7 +389,7 @@ function FfInboundBoxAddDialogContent({
         {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify({ barcode: raw, product_id: productId }),
+          body: JSON.stringify({ barcode: product.barcode, product_id: productId }),
         },
       )
       if (!res.ok) {
@@ -438,10 +446,10 @@ function FfInboundBoxAddDialogContent({
     }
   }
 
-  const enqueueScanIntoBox = (rawInput?: string): Promise<void> => {
+  const enqueueScanIntoBox = (rawInput?: string, wedgeRaw?: string): Promise<void> => {
     const next = scanQueueRef.current.then(
-      () => scanIntoBox(rawInput),
-      () => scanIntoBox(rawInput),
+      () => scanIntoBox(rawInput, wedgeRaw),
+      () => scanIntoBox(rawInput, wedgeRaw),
     )
     scanQueueRef.current = next.catch(() => undefined)
     return next
@@ -453,9 +461,9 @@ function FfInboundBoxAddDialogContent({
   // в итоге на складе скан перестал давать какой-либо видимый отклик.
   useBarcodeScanner({
     enabled: open && !readOnly,
-    onScan: (code) => {
+    onScan: (code, scan) => {
       setScanBarcode(code)
-      void enqueueScanIntoBox(code)
+      void enqueueScanIntoBox(code, scan.raw)
     },
   })
 

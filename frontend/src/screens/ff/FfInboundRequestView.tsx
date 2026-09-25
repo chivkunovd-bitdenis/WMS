@@ -90,7 +90,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
-import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
+import { buildInboundDocumentScanIndex, inboundCatalogScanIndex, resolveInboundProductScan } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
   buildInboundDiscrepancyLines,
@@ -109,7 +109,7 @@ import {
 } from './inboundReceivingHelpers'
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
-import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import { catalogProductScanIndex, PRODUCT_SCAN_AMBIGUOUS_MESSAGE, resolveProductScan } from '../../utils/productScanResolver'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
 import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
@@ -575,9 +575,9 @@ export function FfInboundRequestView({
       !finishConfirmOpen &&
       !distOpen &&
       !kizReprintOpen,
-    onScan: (code) => {
+    onScan: (code, scan) => {
       if (!shouldDispatchInboundScan(kizReprintOpen)) return
-      void receivingScanQueue(() => scanToReceiving(code))
+      void receivingScanQueue(() => scanToReceiving(code, scan.raw))
     },
   })
 
@@ -591,9 +591,9 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !kizReprintOpen,
-    onScan: (code) => {
+    onScan: (code, scan) => {
       if (!shouldDispatchInboundScan(kizReprintOpen)) return
-      void receivingScanQueue(() => addLineByBarcode(code))
+      void receivingScanQueue(() => addLineByBarcode(code, scan.raw))
     },
   })
   const defaultPutawayBoxId = useMemo(() => {
@@ -974,8 +974,8 @@ export function FfInboundRequestView({
     documentNumber: displayDocumentNumber, sellerName: detail?.seller_name ?? null, loadDetail,
     setBusy, setError, setSuccessMessage: setImportSuccessMsg })
 
-  const scanProductByBarcode = useMemo(
-    () => buildInboundScanProductMap(detail?.lines ?? [], catalogById),
+  const scanProductIndex = useMemo(
+    () => buildInboundDocumentScanIndex(detail?.lines ?? [], catalogById),
     [catalogById, detail?.lines],
   )
 
@@ -1423,7 +1423,7 @@ export function FfInboundRequestView({
     }
   }
 
-  const addLineByBarcode = async (rawInput?: string) => {
+  const addLineByBarcode = async (rawInput?: string, wedgeRaw?: string) => {
     if (!detail) return
     const code = (rawInput ?? '').trim()
     if (!code) return
@@ -1435,12 +1435,22 @@ export function FfInboundRequestView({
         cat = await fetchCatalogRows()
         setCatalog(cat)
       }
-      const productId = resolveProductIdByBarcode(cat, code)
-      if (!productId) {
+      // Исходные символы сканера — первыми, исправленная раскладка — только после промаха (R7).
+      const match = resolveProductScan(
+        catalogProductScanIndex(cat),
+        wedgeRaw ?? code,
+        wedgeRaw !== undefined ? { layoutCandidate: code } : {},
+      )
+      if (match.status === 'ambiguous') {
+        setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+        return
+      }
+      if (match.status === 'not_found') {
         setPickerInitialSearch(code)
         setError('Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.')
         return
       }
+      const productId = match.productId
       if (ffDraft) {
         await sendIntakeMutations(token, requestId, [intakeMutation('POST', `/operations/inbound-intake-requests/${requestId}/lines`, { product_id: productId, expected_qty: 1, increment: true })])
         await loadDetail()
@@ -1716,7 +1726,7 @@ export function FfInboundRequestView({
     }
   }
 
-  const scanToReceiving = async (raw?: string) => {
+  const scanToReceiving = async (raw?: string, wedgeRaw?: string) => {
     const code = (raw ?? '').trim()
     if (!code || scanDocument.current !== requestId) return
     setError(null)
@@ -1727,15 +1737,22 @@ export function FfInboundRequestView({
         return
       }
       lastProductScan.current = null
+      const product = resolveInboundProductScan(scanProductIndex, inboundCatalogScanIndex(catalogById), {
+        code,
+        wedgeRaw,
+      })
+      if (product.status === 'ambiguous') {
+        setScanToastError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+        return
+      }
       receivingScanReconciler.cancel()
       ++loadDetailSeq.current
-      const productId = findInboundScanProductId(code, scanProductByBarcode)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/scan`),
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode: code, product_id: productId }),
+          body: JSON.stringify({ barcode: product.barcode, product_id: product.productId }),
         },
       )
       if (!res.ok) {

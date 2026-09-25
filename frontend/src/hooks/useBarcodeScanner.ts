@@ -2,9 +2,30 @@ import { useEffect, useRef } from 'react'
 
 // ─── Типы ────────────────────────────────────────────────────────────────────
 
+/**
+ * Оба чтения одного скана (WMS-536 R7).
+ *
+ * Кириллица переводится в латиницу по физическим клавишам — так сканер,
+ * работающий при русской раскладке, отдаёт `Chin-56005`, а не `Сршт-56005`.
+ * Но у владельца есть и настоящие кириллические артикулы
+ * (`ФА_МОД8-4а/083/42`): после такого перевода их уже не найти. Поэтому поиск
+ * товара получает исходные символы отдельно и сам решает, что проверять первым.
+ */
+export type WedgeScan = {
+  /** Символы ровно как пришли с клавиатуры: кириллица не переведена, GS из Ctrl+] на месте. */
+  raw: string
+  /** Те же символы в латинской раскладке по физическим клавишам. Это же значение — первый аргумент onScan. */
+  layout: string
+}
+
 export type BarcodeScannerOptions = {
-  /** Обработчик распознанного скана. */
-  onScan: (code: string) => void
+  /**
+   * Обработчик распознанного скана.
+   *
+   * `code` — как и раньше, в латинской раскладке. `scan` нужен только поиску
+   * товара (WMS-536 R7); остальным обработчикам достаточно `code`.
+   */
+  onScan: (code: string, scan: WedgeScan) => void
   /** Слушать ли сейчас (например, открыта ли панель). Дефолт true. */
   enabled?: boolean
   /** Минимальная длина кода, чтобы считать burst сканом. Дефолт 5. */
@@ -115,7 +136,10 @@ function isTextEntry(el: ActiveElementLike): boolean {
 }
 
 type ScannerListenerOptions = {
-  onScan: (code: string) => void
+  /** Получает код в латинской раскладке. */
+  onScan?: (code: string) => void
+  /** Если задан, вызывается вместо onScan и получает ещё и исходные символы. */
+  onScanWithRaw?: (code: string, scan: WedgeScan) => void
   minLength: number
   maxIntervalMs: number
   /** Инъекция времени — в реальном коде performance.now(), в тестах — mock. */
@@ -237,7 +261,12 @@ export function createScannerListener(opts: ScannerListenerOptions) {
           }
         }
 
-        opts.onScan(normalized)
+        if (opts.onScanWithRaw) {
+          const raw = buffer.map((c) => c.raw).join('')
+          opts.onScanWithRaw(normalized, { raw, layout: normalized })
+        } else {
+          opts.onScan?.(normalized)
+        }
         resetBurst()
         lastTime = -Infinity
         return
@@ -290,7 +319,7 @@ export function useBarcodeScanner({
     if (!enabled) return
 
     const handler = createScannerListener({
-      onScan: (code) => onScanRef.current(code),
+      onScanWithRaw: (code, scan) => onScanRef.current(code, scan),
       minLength,
       maxIntervalMs,
       getNow: () => performance.now(),
