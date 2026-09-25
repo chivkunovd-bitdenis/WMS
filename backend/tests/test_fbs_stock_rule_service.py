@@ -678,8 +678,16 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     # количество товара в складе (marketplace_unload видит его как занятое), а
     # переустановка потолка через _allocate — единственное, что его меняет.
     from app.models.fbs_order import FbsOrder
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
     from app.services.inventory_service import update_fbs_order_reservation
-    from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
+
+    async def _available(product_id: uuid.UUID) -> int:
+        totals = await organization_stock_totals_by_product(
+            db_session, seed.tenant.id, [product_id]
+        )
+        return totals[product_id].available_for_checks
 
     seed = await _units_seed(db_session, on_hand=400)
     await _allocate(db_session, seed, {501001: 100, 501002: 200})
@@ -689,13 +697,9 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     # Потолок оператора остался прежним, резерв заказа его не расходует.
     assert view.units_remaining_by_warehouse == {501001: 100, 501002: 200}
-    # Only the real order reservation holds one physical unit.
-    assert (
-        await _available_product_qty_in_warehouse(
-            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
-        )
-        == 399
-    )
+    # Only the real order reservation holds one physical unit (WMS-530: Доступно
+    # теперь организации, но в этом тесте склад всего один — число то же).
+    assert await _available(seed.product.id) == 399
     await _allocate(db_session, seed, {501001: 100, 501002: 0})
     await update_fbs_order_reservation(db_session, order, reserve=False)
     await update_fbs_order_reservation(db_session, order, reserve=False)
@@ -715,8 +719,16 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
     # потом уже занимаемая ФБС-часть — но само число оператора остаётся тем,
     # что он задал.
     from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
     from app.services.inventory_service import record_movement_and_adjust_balance
-    from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
+
+    async def _available(product_id: uuid.UUID) -> int:
+        totals = await organization_stock_totals_by_product(
+            db_session, seed.tenant.id, [product_id]
+        )
+        return totals[product_id].available_for_checks
 
     seed = await _units_seed(db_session, on_hand=400)
     await _allocate(db_session, seed, {501001: 100, 501002: 200})
@@ -745,12 +757,7 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
         assert view.published_now == available
         assert view.reserved == 1
     # A cap above stock is not a shortage: 250 physical - 1 order reserve.
-    assert (
-        await _available_product_qty_in_warehouse(
-            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
-        )
-        == 249
-    )
+    assert await _available(seed.product.id) == 249
 
 
 @pytest.mark.asyncio
@@ -1249,10 +1256,12 @@ def test_units_publication_caps_each_marketplace_after_outbound(free, expected) 
 async def test_named_direction_never_exposes_existing_fbs_reservations_to_fbo(
     db_session: AsyncSession, percent: int,
 ) -> None:
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
     from app.services.marketplace_unload_service import (
         MarketplaceUnloadError,
         _assert_available_for_unload_quantity,
-        _available_product_availability_in_warehouse,
     )
 
     seed = await _seed(db_session, on_hand=10)
@@ -1266,15 +1275,18 @@ async def test_named_direction_never_exposes_existing_fbs_reservations_to_fbo(
     for _ in range(2):
         await _place_order(db_session, seed, seed.bindings[0].wb_warehouse_id)
     await db_session.commit()
-    availability = await _available_product_availability_in_warehouse(
-        db_session, seed.tenant.id, seed.warehouse.id, seed.product.id,
+    # WMS-530 R1-R3: одно Доступно организации, склад в расчёт не входит.
+    totals = await organization_stock_totals_by_product(
+        db_session, seed.tenant.id, [seed.product.id],
     )
-    assert availability.available == 7
+    assert totals[seed.product.id].available == 7
     with pytest.raises(MarketplaceUnloadError) as error:
         await _assert_available_for_unload_quantity(
-            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 8,
+            db_session, seed.tenant.id, seed.product.id, 8,
         )
-    assert error.value.code == "insufficient_free_fbo"
+    # Единая проверка Доступно организации — больше нет отдельного кода
+    # "insufficient_free_fbo" (R2/R3/R8 объединили два пула в один).
+    assert error.value.code == "insufficient_available"
 
 
 @pytest.mark.parametrize("units_mode", [False, True])
@@ -1442,11 +1454,11 @@ async def test_cap_is_not_fbo_reservation_but_order_is(db_session: AsyncSession)
     await _allocate(db_session, seed, {501001: 5, 501002: 0})
     await _place_order(db_session, seed, 501001)
     await _assert_available_for_unload_quantity(
-        db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 4,
+        db_session, seed.tenant.id, seed.product.id, 4,
     )
     with pytest.raises(MarketplaceUnloadError) as exc:
         await _assert_available_for_unload_quantity(
-            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 5,
+            db_session, seed.tenant.id, seed.product.id, 5,
         )
     assert exc.value.code == "insufficient_available"
     rows = await list_available_products(db_session, seed.tenant.id,

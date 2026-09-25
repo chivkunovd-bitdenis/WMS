@@ -19,6 +19,7 @@ from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services import (
+    fbs_stock_availability_service,
     inventory_service,
     stock_direction_service,
     tenant_settings_service,
@@ -137,9 +138,16 @@ async def get_inventory_balances_summary(
     address_enabled = await tenant_settings_service.is_address_storage_enabled(
         session, user.tenant_id
     )
+    # WMS-530 R1-R4: quantity/reserved/available — Остаток/Резерв/Доступно
+    # организации по товару, один расчёт на всех, независимо от warehouse_id
+    # (тот продолжает сужать только то, какие строки вообще показаны, ради
+    # старых полей ниже). Available показывается как есть, может быть < 0 (R3).
+    totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
+        session, user.tenant_id, product_ids
+    )
     return [
         (
-            lambda fbo_reserved, dist: InventoryBalanceRowOut(
+            lambda fbo_reserved, dist, total: InventoryBalanceRowOut(
                 product_id=str(pid),
                 sku_code=sku_code,
                 product_name=product_name,
@@ -147,19 +155,15 @@ async def get_inventory_balances_summary(
                 seller_name=None,
                 packaging_instructions=None,
                 requires_honest_sign=False,
-                quantity=qty,
+                quantity=total.on_hand if total is not None else 0,
                 quantity_unpacked=unp,
                 quantity_packed=pck,
                 quantity_in_sorting=sort_qty if address_enabled else 0,
                 quantity_in_storage=(
                     max(0, qty - sort_qty) if address_enabled else qty
                 ),
-                reserved=rsv,
-                available=(
-                    max(0, dist.quantity_free_fbo - fbo_reserved)
-                    if dist.quantity_fbs > 0 or dist.quantity_reserved > 0
-                    else max(0, qty - rsv)
-                ),
+                reserved=total.reserved if total is not None else 0,
+                available=total.available if total is not None else 0,
                 quantity_fbs=dist.quantity_fbs,
                 quantity_reserved_directions=dist.quantity_reserved,
                 quantity_free_fbo=dist.quantity_free_fbo,
@@ -176,6 +180,7 @@ async def get_inventory_balances_summary(
                     quantity_free_fbo=qty,
                 ),
             ),
+            totals.get(pid),
         )
         for pid, sku_code, product_name, qty, sort_qty, unp, pck, rsv in rows
     ]

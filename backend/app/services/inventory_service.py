@@ -106,8 +106,14 @@ async def update_fbs_order_reservation(
 
     Физическое списание остаётся в record_movement_and_adjust_balance. После
     проведённого списания снятие резерва не возвращает доступность.
+
+    WMS-530 R7: доступность проверяется по Доступно организации (без брони
+    самого заказа), а не по складу заказа — склад остаётся только местом
+    обработки (поставка, лист подбора, D5).
     """
-    from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
 
     positions = list(
         (
@@ -215,13 +221,14 @@ async def update_fbs_order_reservation(
                 ):
                     order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
-            available = await fbs_available_qty_for_product(
+            totals = await organization_stock_totals_by_product(
                 session,
                 order.tenant_id,
-                order.warehouse_id,
-                pid,
-                exclude_fbs_order_id=order.id,
+                [pid],
+                exclude_fbs_order_ids=frozenset({order.id}),
             )
+            total = totals.get(pid)
+            available = total.available_for_checks if total is not None else 0
             if available < quantity:
                 order.reserve_status = RESERVE_STATUS_NO_STOCK
                 return
@@ -520,35 +527,6 @@ async def list_balances_total(
     ]
 
 
-async def reserved_qty_excluding_line(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    storage_location_id: uuid.UUID,
-    exclude_line_id: uuid.UUID,
-) -> int:
-    stmt = (
-        select(func.coalesce(func.sum(InventoryReservation.quantity), 0))
-        .join(
-            OutboundShipmentLine,
-            OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
-        )
-        .join(
-            OutboundShipmentRequest,
-            OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
-        )
-        .where(
-            InventoryReservation.tenant_id == tenant_id,
-            InventoryReservation.product_id == product_id,
-            InventoryReservation.storage_location_id == storage_location_id,
-            OutboundShipmentRequest.status.in_(OUTBOUND_RESERVE_STATUSES),
-            OutboundShipmentLine.id != exclude_line_id,
-        )
-    )
-    res = await session.scalar(stmt)
-    return int(res or 0)
-
-
 async def available_quantity_at_location(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -579,48 +557,6 @@ async def _physical_on_hand_in_warehouse(
     return int(await session.scalar(stmt) or 0)
 
 
-async def storage_on_hand_in_warehouse(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> int:
-    """Остаток в ячейках хранения (без зоны «Сортировка»)."""
-    stmt = (
-        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
-        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
-            StorageLocation.code != SORTING_LOCATION_CODE,
-        )
-    )
-    return int(await session.scalar(stmt) or 0)
-
-
-async def sorting_on_hand_in_warehouse(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> int:
-    """Остаток в зоне «Сортировка» (буфер до раскладки)."""
-    stmt = (
-        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
-        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
-            StorageLocation.code == SORTING_LOCATION_CODE,
-        )
-    )
-    return int(await session.scalar(stmt) or 0)
-
-
 async def _schedule_fbs_publish_for_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -638,6 +574,12 @@ async def sync_outbound_line_reservation(
     request: OutboundShipmentRequest,
     line: OutboundShipmentLine,
 ) -> None:
+    """WMS-530 R8/R11: бронь строки проверяется по Доступно организации.
+
+    Расположение (ячейка или склад заявки) остаётся только записью о том, где
+    физически лежит товар под эту бронь (используют другие экраны и подбор);
+    оно больше не решает, можно ли вообще забронировать столько (D5).
+    """
     await session.execute(
         delete(InventoryReservation).where(
             InventoryReservation.outbound_shipment_line_id == line.id,
@@ -658,45 +600,30 @@ async def sync_outbound_line_reservation(
     if desired < 1:
         return
 
-    sid = line.storage_location_id
-    if sid is not None:
-        on_hand = await _physical_on_hand(session, tenant_id, line.product_id, sid)
-        others = await reserved_qty_excluding_line(
-            session, tenant_id, line.product_id, sid, line.id
-        )
-        if on_hand < others + desired:
-            raise ValueError(RESERVATION_ERROR)
-        session.add(
-            InventoryReservation(
-                tenant_id=tenant_id,
-                outbound_shipment_line_id=line.id,
-                product_id=line.product_id,
-                storage_location_id=sid,
-                warehouse_id=None,
-                quantity=desired,
-            )
-        )
-        return
+    await lock_stock_product(session, tenant_id, line.product_id)
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
 
-    wh_id = request.warehouse_id
-    on_hand_wh = await storage_on_hand_in_warehouse(session, tenant_id, wh_id, line.product_id)
-    rsv_map = await reserved_totals_by_product(
+    totals = await organization_stock_totals_by_product(
         session,
         tenant_id,
         [line.product_id],
-        warehouse_id=wh_id,
+        exclude_outbound_request_id=request.id,
     )
-    already = int(rsv_map.get(line.product_id, 0))
-    if on_hand_wh < already + desired:
+    total = totals.get(line.product_id)
+    available = total.available_for_checks if total is not None else 0
+    if available < desired:
         raise ValueError(RESERVATION_ERROR)
 
+    sid = line.storage_location_id
     session.add(
         InventoryReservation(
             tenant_id=tenant_id,
             outbound_shipment_line_id=line.id,
             product_id=line.product_id,
-            storage_location_id=None,
-            warehouse_id=wh_id,
+            storage_location_id=sid,
+            warehouse_id=None if sid is not None else request.warehouse_id,
             quantity=desired,
         )
     )

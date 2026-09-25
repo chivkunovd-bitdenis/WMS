@@ -327,13 +327,15 @@ async def test_directions_reserve_from_stock_and_mp_free_fbo(
         # The picker must match the existing write boundary: 10 - 6 - 1 = 3.
         assert available[0].available == 3
         await _assert_available_for_unload_quantity(
-            session, tenant_id, warehouse_id, product_id, 3,
+            session, tenant_id, product_id, 3,
         )
         with pytest.raises(MarketplaceUnloadError) as rejected:
             await _assert_available_for_unload_quantity(
-                session, tenant_id, warehouse_id, product_id, 4,
+                session, tenant_id, product_id, 4,
             )
-        assert rejected.value.code == "insufficient_free_fbo"
+        # WMS-530: единое Доступно организации — больше нет отдельного кода
+        # "insufficient_free_fbo" для случая с направлениями/бронями (R2/R3/R8).
+        assert rejected.value.code == "insufficient_available"
         assert rejected.value.detail["available"] == 3
 
     admin_available = await async_client.get(

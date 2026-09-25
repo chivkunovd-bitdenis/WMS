@@ -176,17 +176,20 @@ async def available_pick_source_quantity(
     )
     ceiling = None
     if marketplace_unload_request_id is not None:
-        from app.services import marketplace_unload_service as unload
+        # WMS-530 R8: потолок подбора — Доступно организации, а не остаток
+        # склада ячейки; расположение (R11) само по себе его не ограничивает.
+        from app.services.fbs_stock_availability_service import (
+            organization_stock_totals_by_product,
+        )
 
-        location = await session.get(StorageLocation, location_id)
-        assert location is not None
-        ceiling = await unload._available_product_qty_in_warehouse(
+        totals = await organization_stock_totals_by_product(
             session,
             tenant_id,
-            location.warehouse_id,
-            product_id,
-            exclude_request_id=marketplace_unload_request_id,
+            [product_id],
+            exclude_mp_unload_request_id=marketplace_unload_request_id,
         )
+        total = totals.get(product_id)
+        ceiling = total.available_for_checks if total is not None else 0
     return source_available(on_hand, source_assigned, place_free, place_assigned + unknown, ceiling)
 
 
@@ -249,21 +252,24 @@ async def list_pick_option_locations(
     place_free = {
         (pid, loc): on_hand - reserved for pid, loc, _code, on_hand, reserved in legacy_rows
     }
+    # WMS-530 R8/R11: потолок подбора — Доступно организации по товару, одно
+    # число на всех складах, а не остаток склада документа (имя переменной
+    # сохранено ради мест использования ниже).
     warehouse_ceilings: dict[uuid.UUID, int] = {}
     if marketplace_unload_request_id is not None:
-        from app.services import marketplace_unload_service as unload
+        from app.services.fbs_stock_availability_service import (
+            organization_stock_totals_by_product,
+        )
 
+        totals = await organization_stock_totals_by_product(
+            session,
+            tenant_id,
+            product_ids,
+            exclude_mp_unload_request_id=marketplace_unload_request_id,
+        )
         for pid in product_ids:
-            warehouse_ceilings[pid] = max(
-                0,
-                await unload._available_product_qty_in_warehouse(
-                    session,
-                    tenant_id,
-                    warehouse_id,
-                    pid,
-                    exclude_request_id=marketplace_unload_request_id,
-                ),
-            )
+            total = totals.get(pid)
+            warehouse_ceilings[pid] = total.available_for_checks if total is not None else 0
     container_refs: set[tuple[ContainerKind, uuid.UUID]] = set()
     for _product_id, _location_id, _quantity, raw_kind, container_id in source_rows:
         if raw_kind is None and container_id is None:

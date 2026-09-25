@@ -53,7 +53,7 @@ from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
-from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
+from app.services.fbs_stock_availability_service import organization_stock_totals_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
     brand_from_card,
@@ -720,24 +720,35 @@ async def _load_availability_by_warehouse_product(
     tenant_id: uuid.UUID,
     orders: list[FbsOrder],
 ) -> dict[tuple[uuid.UUID, uuid.UUID], int]:
-    by_wh: dict[uuid.UUID, set[uuid.UUID]] = {}
-    exclude_by_wh: dict[uuid.UUID, set[uuid.UUID]] = {}
+    """WMS-530 R10: доступное — Доступно организации, без брони этих же заказов.
+
+    Ключ результата остаётся (склад заказа, товар) ради вызывающего кода, но
+    значение больше не зависит от склада: один и тот же товар на разных
+    складах заказов показывает одно и то же число (R4).
+    """
+    by_product: dict[uuid.UUID, set[uuid.UUID]] = {}
+    warehouses_by_product: dict[uuid.UUID, set[uuid.UUID]] = {}
     for o in orders:
         if o.warehouse_id is None or o.product_id is None:
             continue
-        by_wh.setdefault(o.warehouse_id, set()).add(o.product_id)
-        exclude_by_wh.setdefault(o.warehouse_id, set()).add(o.id)
+        by_product.setdefault(o.product_id, set()).add(o.id)
+        warehouses_by_product.setdefault(o.product_id, set()).add(o.warehouse_id)
+    if not by_product:
+        return {}
+    product_ids = list(by_product)
+    exclude_order_ids = frozenset(oid for ids in by_product.values() for oid in ids)
+    totals = await organization_stock_totals_by_product(
+        session,
+        tenant_id,
+        product_ids,
+        exclude_fbs_order_ids=exclude_order_ids,
+    )
     result: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
-    for wh_id, pids in by_wh.items():
-        qty_map = await fbs_available_qty_by_product(
-            session,
-            tenant_id,
-            wh_id,
-            list(pids),
-            exclude_fbs_order_ids=frozenset(exclude_by_wh.get(wh_id, set())),
-        )
-        for pid, qty in qty_map.items():
-            result[(wh_id, pid)] = int(qty)
+    for pid, warehouse_ids in warehouses_by_product.items():
+        total = totals.get(pid)
+        available = total.available_for_checks if total is not None else 0
+        for wh_id in warehouse_ids:
+            result[(wh_id, pid)] = available
     return result
 
 

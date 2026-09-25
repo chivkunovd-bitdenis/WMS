@@ -5,9 +5,37 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import Connection, inspect, text
+from sqlalchemy import Connection, Engine, event, inspect, text
 
 GUARD_ERROR = "physical_warehouse_required"
+
+
+def register_sqlite_defect_function(engine: Engine) -> None:
+    """Bind ``wms_defect_allowed`` to every DBAPI connection this engine opens.
+
+    SQLite user-defined functions live on the raw connection object, not in
+    the database file. ``install_guards`` registers the function on whatever
+    connection is active at the moment it runs, which is enough for a single
+    migration or an isolated test, but a shared engine's pool can and does
+    hand out a *different* physical connection later -- normal once a
+    handful of sessions or a background task interleave, and it does not
+    depend on ``pytest -n``. That other connection never saw
+    ``create_function`` and the guard trigger then fails with
+    ``no such function: wms_defect_allowed`` even though the trigger DDL
+    itself is stored in the database file and still fires correctly.
+    Hooking the pool's ``connect`` event covers every connection the engine
+    ever opens, in any order, regardless of test order or worker count.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(engine, "connect")
+    def _register_wms_defect_allowed(dbapi_connection: Any, connection_record: Any) -> None:
+        info = connection_record.info
+        dbapi_connection.create_function(
+            "wms_defect_allowed", 1,
+            lambda tenant: info.get("wms_defect_tenant") == str(tenant),
+        )
 
 
 def physical_graph(connection: Connection) -> dict[str, list[tuple[str, str]]]:

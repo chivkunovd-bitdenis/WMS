@@ -1499,16 +1499,16 @@ async def apply_products_fbs_stock_limit_from_balance(
             updated=updated, skipped=skipped, reset_products_count=0
         )
 
-    warehouses_stmt = select(Warehouse.id).where(Warehouse.tenant_id == tenant_id)
-    warehouse_ids = [wid for (wid,) in (await session.execute(warehouses_stmt)).all()]
-
-    available_by_product: dict[uuid.UUID, int] = dict.fromkeys(found_ids, 0)
-    for warehouse_id in warehouse_ids:
-        per_warehouse = await fbs_stock_availability_service.fbs_available_qty_by_product(
-            session, tenant_id, warehouse_id, found_ids
-        )
-        for pid, qty in per_warehouse.items():
-            available_by_product[pid] = available_by_product.get(pid, 0) + qty
+    # WMS-530: Доступно организации — один расчёт (R1-R3). Раньше здесь суммировался
+    # «свободный» каждого склада по отдельности, и общее ручное направление
+    # (не привязанное к складу) вычиталось из каждого слагаемого повторно —
+    # тем больше складов, тем сильнее заниженный итог.
+    totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
+        session, tenant_id, found_ids
+    )
+    available_by_product: dict[uuid.UUID, int] = {
+        pid: totals[pid].available_for_checks if pid in totals else 0 for pid in found_ids
+    }
 
     async with _legacy_wb_publication_update(
         session, [products_by_id[pid] for pid in found_ids], enabled=True,

@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrderProductReservation, FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
+from app.models.warehouse import Warehouse
 from app.services import stock_direction_service
+from app.services.defect_warehouse_service import DEFECT_WAREHOUSE_CODE
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 
@@ -278,3 +280,158 @@ async def fbs_available_qty_for_product(
         exclude_fbs_order_ids=exclude_ids,
     )
     return int(result.get(product_id, 0))
+
+
+# --- WMS-530: один расчёт «Остаток / Резерв / Доступно» на организацию -----
+#
+# Всё выше в этом файле считает по ОДНОМУ складу ФФ (нужно только для
+# ремонта псевдоскладов WMS-516, см. physical_warehouse_repair_service).
+# Каталог, панели распределения, окно «Остаток для FBS», публикация WB/Ozon,
+# бронь заказов FBS, отгрузка на МП и старая «Отгрузка», инвентаризация и
+# рабочий список FBS берут числа только отсюда (R1-R4): склад, зона, тара и
+# признак рабочего склада на три числа не влияют.
+
+
+@dataclass(frozen=True)
+class OrganizationStockTotals:
+    """Остаток, Резерв и Доступно одного товара для всей организации.
+
+    on_hand (Остаток, R1) — сумма всех строк остатка товара у арендатора, на
+    любых складах, зонах и таре, включая склад брака и старые псевдосклады
+    «FBS WB …» (пока их не перенёс ремонт WMS-516). reserved (Резерв, R2) —
+    все брони (отгрузки на МП, старая «Отгрузка», заказы FBS WB и Ozon),
+    ручные направления и количество на складе брака (D2: брак физически лежит
+    у ФФ и входит в Остаток, но не продаётся, поэтому входит и в Резерв).
+    available (Доступно, R3) = on_hand - reserved и может быть отрицательным:
+    экран показывает число как есть, а проверки и публикация берут
+    ``available_for_checks`` (max(0, available), D3).
+    """
+
+    on_hand: int
+    reserved: int
+    available: int
+
+    @property
+    def available_for_checks(self) -> int:
+        return max(0, self.available)
+
+
+async def _organization_on_hand_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """R1: сумма всех строк остатка товара, без единого фильтра по месту."""
+    if not product_ids:
+        return {}
+    stmt = (
+        select(
+            InventoryBalance.product_id,
+            func.coalesce(func.sum(InventoryBalance.quantity), 0),
+        )
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id.in_(product_ids),
+        )
+        .group_by(InventoryBalance.product_id)
+    )
+    res = await session.execute(stmt)
+    return {pid: int(qty or 0) for pid, qty in res.all()}
+
+
+async def _defect_on_hand_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """D2: брак уже в Остатке (склад брака физический), кладём его и в Резерв."""
+    if not product_ids:
+        return {}
+    stmt = (
+        select(
+            InventoryBalance.product_id,
+            func.coalesce(func.sum(InventoryBalance.quantity), 0),
+        )
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id.in_(product_ids),
+            StorageLocation.tenant_id == tenant_id,
+            Warehouse.tenant_id == tenant_id,
+            func.lower(Warehouse.code) == DEFECT_WAREHOUSE_CODE.lower(),
+        )
+        .group_by(InventoryBalance.product_id)
+    )
+    res = await session.execute(stmt)
+    return {pid: int(qty or 0) for pid, qty in res.all()}
+
+
+async def organization_stock_totals_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+    *,
+    exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
+    exclude_mp_unload_request_id: uuid.UUID | None = None,
+    exclude_outbound_request_id: uuid.UUID | None = None,
+) -> dict[uuid.UUID, OrganizationStockTotals]:
+    """Единственный расчёт Остатка/Резерва/Доступно организации (WMS-530 R1-R3).
+
+    Документ или заказ, который сам держит бронь, не должен вычитать её из
+    своего же доступного (R4) — для этого передайте его в соответствующий
+    ``exclude_*``: FBS-бронь этого заказа, бронь этой же заявки на отгрузку на
+    МП или этой же строки старой «Отгрузки» (вся заявка сразу, чтобы другая её
+    строка того же товара тоже не считалась чужой бронью).
+    """
+    if not product_ids:
+        return {}
+    from app.services.marketplace_unload_service import (
+        _mp_reserved_by_product,
+        _outbound_reserved_by_product,
+    )
+
+    on_hand_map = await _organization_on_hand_by_product(session, tenant_id, product_ids)
+    outbound_map = await _outbound_reserved_by_product(
+        session,
+        tenant_id,
+        None,
+        product_ids,
+        exclude_request_id=exclude_outbound_request_id,
+    )
+    mp_map = await _mp_reserved_by_product(
+        session,
+        tenant_id,
+        None,
+        product_ids,
+        exclude_request_id=exclude_mp_unload_request_id,
+    )
+    fbs_map = await fbs_reserved_by_product(
+        session,
+        tenant_id,
+        None,
+        product_ids,
+        exclude_fbs_order_ids=exclude_fbs_order_ids,
+    )
+    direction_map = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, product_ids
+    )
+    defect_map = await _defect_on_hand_by_product(session, tenant_id, product_ids)
+
+    result: dict[uuid.UUID, OrganizationStockTotals] = {}
+    for pid in product_ids:
+        on_hand = int(on_hand_map.get(pid, 0))
+        directions = direction_map.get(pid)
+        reserved = (
+            int(outbound_map.get(pid, 0))
+            + int(mp_map.get(pid, 0))
+            + int(fbs_map.get(pid, 0))
+            + (int(directions.total) if directions is not None else 0)
+            + int(defect_map.get(pid, 0))
+        )
+        result[pid] = OrganizationStockTotals(
+            on_hand=on_hand,
+            reserved=reserved,
+            available=on_hand - reserved,
+        )
+    return result

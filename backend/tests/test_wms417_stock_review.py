@@ -74,10 +74,19 @@ async def test_percent_switch_and_legacy_reset_keep_wb_ozon_caps(db_session: Asy
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("units_mode", [False, True])
-async def test_rule_views_match_actual_publication_per_physical_warehouse(
+async def test_rule_views_match_actual_publication_across_organization(
     db_session: AsyncSession,
     units_mode: bool,
 ) -> None:
+    """WMS-530 R5/R6: сток второго физического склада — тот же общий пул.
+
+    Раньше склад привязки изолировал свой пул: WB-привязка (склад «first»)
+    и Ozon-привязка (склад «second») делили свободный остаток каждая только
+    внутри своего склада. Теперь Доступно организации общее (6 - 1 = 5), и
+    обе привязки независимо берут из него свою долю (WMS-455/469: 100% + 100%
+    разрешено, см. AGENTS.md) — поэтому сумма публикаций двух привязок больше,
+    чем сам остаток, и это ожидаемо, а не двойная продажа физического товара.
+    """
     seed = await _seed(db_session, on_hand=3)
     second = Warehouse(tenant_id=seed.tenant.id, code="second", name="Second")
     db_session.add(second)
@@ -130,7 +139,10 @@ async def test_rule_views_match_actual_publication_per_physical_warehouse(
     ]
     assert single == bulk
     assert (single.on_hand, single.reserved, single.free_stock) == (6, 1, 5)
-    assert actual == (4 if units_mode else 2)
+    # Each binding independently gets min(its own share, 5) from the same
+    # organization-wide free stock: percent 50% of 5 = 2 per binding (4 total);
+    # the units-mode cap of 5 per binding is clamped to 5 each (10 total).
+    assert actual == (10 if units_mode else 4)
     assert single.published_now == actual
 
 

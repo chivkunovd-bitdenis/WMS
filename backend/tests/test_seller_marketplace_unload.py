@@ -91,7 +91,9 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     )
     assert stock.status_code == 200
     row = next(x for x in stock.json() if x["product_id"] == pid)
-    assert row["available"] == 10
+    # WMS-530 R1/R11: 10 в ячейке + 10 в сортировке — расположение не исключает
+    # строку из Остатка, поэтому Доступно организации теперь 20, а не 10.
+    assert row["available"] == 20
 
     create = await async_client.post(
         "/operations/marketplace-unload-requests/seller",
@@ -161,7 +163,8 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
         params={"warehouse_id": wid},
     )
     row2 = next(x for x in stock2.json() if x["product_id"] == pid)
-    assert row2["available"] == 6
+    # Остаток 20 - резерв 4 (собственная бронь этой заявки на МП) = 16.
+    assert row2["available"] == 16
 
     edit_blocked = await async_client.put(
         f"/operations/marketplace-unload-requests/{mid}/lines",
