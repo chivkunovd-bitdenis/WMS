@@ -321,9 +321,8 @@ async def _resolve_wms_warehouse_from_binding(
             warehouse = await session.get(Warehouse, binding.wms_warehouse_id)
             if warehouse is None:
                 return None
-    if is_auto_fbs_wms_warehouse(warehouse):
-        binding.stock_sync_enabled = False
-        await session.flush()
+    if (not warehouse.is_operational or is_auto_fbs_wms_warehouse(warehouse)
+            or warehouse.code.lower() == "__defect__"):
         return None
     return cast(uuid.UUID, binding.wms_warehouse_id)
 

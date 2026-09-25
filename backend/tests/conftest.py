@@ -41,6 +41,10 @@ async def _rebuild_schema() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        if os.environ.get("WMS_TEST_PHYSICAL_GUARDS") == "1":
+            from app.db.physical_warehouse_guard import install_guards
+
+            await conn.run_sync(install_guards)
 
 
 async def _reset_database() -> None:
