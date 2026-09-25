@@ -213,22 +213,28 @@ describe('WMS-536 · S-OUT-02 наполнение короба: единый п
     expect(scanCalls()[1].body).toEqual({ barcode: 'Сршт-56005', quantity: 1, allow_over_plan: false })
   })
 
-  it('код у двух товаров плана: понятная ошибка, на сервер ничего не уходит, следующий скан работает (R2)', async () => {
+  it('код у двух товаров плана уходит без подсказки; отказ сервера — понятный текст, следующий скан работает (R2)', async () => {
     await mount([
       catalogRow('P', { sku_code: 'DUP-536', wb_barcodes: [WB_A] }),
       catalogRow('Q', { marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['DUP-536'] }] }),
     ])
+    scanReply = (body) =>
+      body.barcode === WB_A
+        ? { status: 200, body: productReply('P') }
+        : { status: 409, body: { detail: 'barcode_ambiguous' } }
     await wedgeScan('DUP-536')
     expect(errorText()).toBe(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
-    expect(scanCalls()).toHaveLength(0)
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: 'DUP-536', quantity: 1, allow_over_plan: false },
+    ])
 
     await manualScan('dup-536')
     expect(errorText()).toBe(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
-    expect(scanCalls()).toHaveLength(0)
+    expect(scanCalls()[1].body).toEqual({ barcode: 'dup-536', quantity: 1, allow_over_plan: false })
 
     await wedgeScan(WB_A)
-    expect(scanCalls()).toHaveLength(1)
-    expect(scanCalls()[0].body).toMatchObject({ barcode: WB_A, product_id: 'P' })
+    expect(scanCalls()).toHaveLength(3)
+    expect(scanCalls()[2].body).toMatchObject({ barcode: WB_A, product_id: 'P' })
     expect(errorText()).toBeNull()
   })
 
@@ -254,6 +260,100 @@ describe('WMS-536 · S-OUT-02 наполнение короба: единый п
     scanReply = () => ({ status: 200, body: productReply('P') })
     await wedgeScan('cell-prod-536')
     expect(scanCalls()[1].body).toMatchObject({ product_id: 'P', storage_location_id: 'CELL-1' })
+  })
+
+  describe('код ячейки или тары совпал с двумя товарами плана (R8, ревью F2)', () => {
+    // CELL-DUP и BOX-DUP — одновременно WB-ШК товара P и Ozon-ШК товара Q.
+    const catalog = () => [
+      catalogRow('P', { sku_code: 'AbC-42', wb_barcodes: [WB_A, 'CELL-DUP', 'BOX-DUP', 'BOX-DUP-2'] }),
+      catalogRow('Q', { marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['CELL-DUP', 'BOX-DUP', 'BOX-DUP-2'] }] }),
+    ]
+    beforeEach(() => {
+      const cell = { storage_location_id: 'CELL-1', location_code: 'A-01', quantity: 3, reserved: 0, available: 3 }
+      pickOptions = [{ ...planRow('P', 'AbC-42'), locations: [cell] }, { ...planRow('Q', 'SKU-Q'), locations: [cell] }]
+    })
+    const containerReply = (id: string, code: string) => ({
+      status: 200,
+      body: { kind: 'container', storage_location_id: 'CELL-1', location_code: 'A-01', container_kind: 'box', container_id: id, container_code: code },
+    })
+
+    it('ячейка: запрос уходит без подсказки, ячейка выбирается, следующий товар идёт с ней', async () => {
+      await mount(catalog())
+      scanReply = (body) =>
+        body.barcode === 'CELL-DUP'
+          ? { status: 200, body: { kind: 'location', storage_location_id: 'CELL-1', location_code: 'A-01' } }
+          : { status: 200, body: productReply('P') }
+      await wedgeScan('CELL-DUP')
+      expect(scanCalls().map((call) => call.body)).toEqual([
+        { barcode: 'CELL-DUP', quantity: 1, allow_over_plan: false },
+      ])
+      expect(errorText()).toBeNull()
+      expect(document.querySelector('[data-testid="ff-mp-box-add-active-location"]')?.textContent).toContain('A-01')
+
+      await wedgeScan(WB_A)
+      expect(scanCalls()[1].body).toEqual({
+        barcode: WB_A,
+        product_id: 'P',
+        quantity: 1,
+        allow_over_plan: false,
+        storage_location_id: 'CELL-1',
+      })
+    })
+
+    it('тара A → тара B таким же кодом: выбранная тара уходит как есть, сервер меняет её, товар идёт из B', async () => {
+      await mount(catalog())
+      scanReply = (body) => {
+        if (body.barcode === 'BOX-DUP') return containerReply('BOX-A', 'WHB-A')
+        if (body.barcode === 'BOX-DUP-2') return containerReply('BOX-B', 'WHB-B')
+        return { status: 200, body: productReply('P') }
+      }
+      await wedgeScan('BOX-DUP')
+      expect(scanCalls()[0].body).toEqual({ barcode: 'BOX-DUP', quantity: 1, allow_over_plan: false })
+      expect(document.querySelector('[data-testid="ff-mp-box-add-active-location"]')?.textContent).toContain('WHB-A')
+
+      await wedgeScan('BOX-DUP-2')
+      expect(scanCalls()[1].body).toEqual({
+        barcode: 'BOX-DUP-2',
+        quantity: 1,
+        allow_over_plan: false,
+        storage_location_id: 'CELL-1',
+        container_kind: 'box',
+        container_id: 'BOX-A',
+      })
+      expect(document.querySelector('[data-testid="ff-mp-box-add-active-location"]')?.textContent).toContain('WHB-B')
+
+      await wedgeScan(WB_A)
+      expect(scanCalls()[2].body).toEqual({
+        barcode: WB_A,
+        product_id: 'P',
+        quantity: 1,
+        allow_over_plan: false,
+        storage_location_id: 'CELL-1',
+        container_kind: 'box',
+        container_id: 'BOX-B',
+      })
+      expect(errorText()).toBeNull()
+    })
+
+    it('неоднозначность товара от сервера не меняет выбранную тару', async () => {
+      await mount(catalog())
+      scanReply = (body) =>
+        body.barcode === 'BOX-DUP'
+          ? containerReply('BOX-A', 'WHB-A')
+          : { status: 409, body: { detail: 'barcode_ambiguous' } }
+      await wedgeScan('BOX-DUP')
+      await wedgeScan('CELL-DUP')
+      expect(errorText()).toBe(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+      expect(scanCalls()[1].body).toEqual({
+        barcode: 'CELL-DUP',
+        quantity: 1,
+        allow_over_plan: false,
+        storage_location_id: 'CELL-1',
+        container_kind: 'box',
+        container_id: 'BOX-A',
+      })
+      expect(document.querySelector('[data-testid="ff-mp-box-add-active-location"]')?.textContent).toContain('WHB-A')
+    })
   })
 
   it('КИЗ с GS не ищется как товар и уходит на сервер с разделителями (R9)', async () => {

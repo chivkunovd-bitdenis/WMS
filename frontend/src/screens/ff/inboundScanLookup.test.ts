@@ -149,6 +149,67 @@ describe('раскладка и кириллица в скане приёмки 
   })
 })
 
+describe('исходная строка во всей области раньше раскладки (R5, R7)', () => {
+  // Воспроизведение из ревью: настоящий кириллический артикул P есть только в
+  // каталоге селлера, а латинский артикул Q, совпадающий с его раскладкой, — в документе.
+  const REAL = row('REAL', { sku_code: CYR })
+  const LAYOUT = row('LAYOUT', { sku_code: CYR_LAYOUT })
+  const scan = { code: CYR_LAYOUT, wedgeRaw: CYR }
+
+  it('кириллический товар каталога вне документа не проигрывает латинскому товару документа', () => {
+    const byId = catalog(REAL, LAYOUT)
+    const documentIndex = buildInboundDocumentScanIndex([line(LAYOUT)], byId)
+    expect(resolveInboundProductScan(documentIndex, inboundCatalogScanIndex(byId), scan)).toEqual({
+      status: 'send',
+      barcode: CYR,
+    })
+  })
+
+  it('исходная строка неоднозначна в каталоге — раскладка не проверяется, серверу уходит исходная', () => {
+    const TWIN = row('TWIN', { wb_barcodes: [CYR] })
+    const byId = catalog(REAL, TWIN, LAYOUT)
+    const documentIndex = buildInboundDocumentScanIndex([line(LAYOUT)], byId)
+    expect(resolveInboundProductScan(documentIndex, inboundCatalogScanIndex(byId), scan)).toEqual({
+      status: 'send',
+      barcode: CYR,
+    })
+  })
+
+  it('исходная строка не нашлась нигде — раскладка находит товар документа с подсказкой', () => {
+    const byId = catalog(LAYOUT)
+    const documentIndex = buildInboundDocumentScanIndex([line(LAYOUT)], byId)
+    expect(resolveInboundProductScan(documentIndex, inboundCatalogScanIndex(byId), scan)).toEqual({
+      status: 'send',
+      barcode: CYR_LAYOUT,
+      productId: 'LAYOUT',
+    })
+  })
+
+  it('возвратная приёмка ищет только в документе: каталог селлера не участвует', () => {
+    const byId = catalog(REAL, LAYOUT)
+    const documentIndex = buildInboundDocumentScanIndex([line(LAYOUT)], byId)
+    expect(resolveInboundProductScan(documentIndex, null, scan)).toEqual({
+      status: 'send',
+      barcode: CYR_LAYOUT,
+      productId: 'LAYOUT',
+    })
+    expect(resolveInboundProductScan(buildInboundDocumentScanIndex([line(REAL)], byId), null, scan)).toEqual({
+      status: 'send',
+      barcode: CYR,
+      productId: 'REAL',
+    })
+  })
+
+  it('исходная строка неоднозначна в документе — раскладка не спасает, ничего не отправляется', () => {
+    const TWIN = row('TWIN', { wb_barcodes: [CYR] })
+    const byId = catalog(REAL, TWIN, LAYOUT)
+    const documentIndex = buildInboundDocumentScanIndex([line(REAL), line(TWIN), line(LAYOUT)], byId)
+    expect(resolveInboundProductScan(documentIndex, inboundCatalogScanIndex(byId), scan)).toEqual({
+      status: 'ambiguous',
+    })
+  })
+})
+
 describe('КИЗ в приёмке не доходит до товарного поиска (R8, R9)', () => {
   it('классификатор ЧЗ забирает КИЗ с GS и без GS раньше товара', () => {
     expect(isInboundMarkingScan(KIZ_GS)).toBe(true)

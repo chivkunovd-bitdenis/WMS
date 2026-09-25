@@ -182,6 +182,11 @@ type Props = {
   requestLines: RequestLine[]
   boxLines: InboundBoxLine[]
   catalogById: Map<string, WbProductCatalogRow>
+  /**
+   * Ищет ли скан товар ещё и в каталоге селлера, если в документе его нет (R5).
+   * Обычная приёмка — да, возвратная — нет: она ограничена товарами документа.
+   */
+  catalogScanFallback: boolean
   onUpdated: () => Promise<void>
   onMarkingScan?: (code: string, lineId: string | null) => Promise<void>
 }
@@ -208,6 +213,7 @@ function FfInboundBoxAddDialogContent({
   requestLines,
   boxLines,
   catalogById,
+  catalogScanFallback,
   onUpdated,
   onMarkingScan,
 }: Props) {
@@ -239,7 +245,10 @@ function FfInboundBoxAddDialogContent({
     () => buildInboundDocumentScanIndex(requestLines, catalogById),
     [catalogById, requestLines],
   )
-  const catalogScanIndex = useMemo(() => inboundCatalogScanIndex(catalogById), [catalogById])
+  const catalogScanIndex = useMemo(
+    () => (catalogScanFallback ? inboundCatalogScanIndex(catalogById) : null),
+    [catalogById, catalogScanFallback],
+  )
 
   // Считаем витрину строки один раз на состав заявки, а не на каждый рендер:
   // иначе memo у строки бесполезен — meta каждый раз новый объект.
@@ -373,7 +382,8 @@ function FfInboundBoxAddDialogContent({
         return
       }
       lastProductLineId.current = null
-      // Ручной Enter — без исправления раскладки; у скана со сканера исходные символы идут первыми (R7).
+      // Ручной Enter — без исправления раскладки; у скана со сканера исходная строка
+      // проверяется во всей области раньше раскладки (R7).
       const product = resolveInboundProductScan(scanProductIndex, catalogScanIndex, { code: raw, wedgeRaw })
       if (product.status === 'ambiguous') {
         setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)

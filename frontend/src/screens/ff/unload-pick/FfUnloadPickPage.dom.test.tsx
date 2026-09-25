@@ -199,7 +199,7 @@ describe('WMS-536 · S-OUT-01 подбор отгрузки: единый пои
     })
   })
 
-  it('код у двух товаров плана: понятная ошибка, на сервер ничего не уходит (R2)', async () => {
+  it('код у двух товаров плана уходит без подсказки и без выбора источника; отказ сервера — понятный текст (R2)', async () => {
     routes = mpRoutes(
       [pickOption('P', 'AbC-42', [looseLocation('CELL-1', 'A-01', 5)]), pickOption('Q', 'SKU-Q', [])],
       [
@@ -207,9 +207,31 @@ describe('WMS-536 · S-OUT-01 подбор отгрузки: единый пои
         catalogRow('Q', { marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['DUP-536'] }] }),
       ],
     )
+    routes['POST /api/operations/marketplace-unload-requests/REQ/pick/scan'] = () => ({
+      status: 409,
+      body: { detail: 'barcode_ambiguous' },
+    })
     await mount()
     await scan('DUP-536')
-    expect(scanCalls()).toHaveLength(0)
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: 'DUP-536', storage_location_id: null, container_kind: null, container_id: null },
+    ])
+    expect(pageText()).toContain(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+    expect(document.querySelector('[data-testid="pick-source"]')).toBeNull()
+  })
+
+  it('при адресном хранении сервер просит ячейку раньше товара — оператор видит настоящую причину (R2)', async () => {
+    routes = mpRoutes(
+      [pickOption('P', 'AbC-42', [looseLocation('CELL-1', 'A-01', 5)]), pickOption('Q', 'SKU-Q', [])],
+      [catalogRow('P', { sku_code: 'DUP-536' }), catalogRow('Q', { wb_barcodes: ['DUP-536'] })],
+    )
+    routes['POST /api/operations/marketplace-unload-requests/REQ/pick/scan'] = () => ({
+      status: 422,
+      body: { detail: 'location_required' },
+    })
+    await mount()
+    await scan('DUP-536')
+    expect(scanCalls()).toHaveLength(1)
     expect(pageText()).toContain(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
   })
 
@@ -261,6 +283,127 @@ describe('WMS-536 · S-OUT-01 подбор отгрузки: единый пои
   })
 })
 
+describe('WMS-536 · S-OUT-01 код ячейки или тары совпал с двумя товарами плана (R8, ревью F2)', () => {
+  const plan = () => [
+    pickOption('P', 'AbC-42', [looseLocation('CELL-1', 'A-01', 5), looseLocation('CELL-2', 'A-02', 5)]),
+    pickOption('Q', 'SKU-Q', [looseLocation('CELL-1', 'A-01', 5)]),
+  ]
+  // CELL-DUP и BOX-DUP — одновременно SKU товара P и Ozon-ШК товара Q.
+  const catalog = () => [
+    catalogRow('P', { sku_code: 'AbC-42', wb_barcodes: [WB_A], marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['BOX-DUP'] }] }),
+    catalogRow('Q', { sku_code: 'CELL-DUP', marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['BOX-DUP'] }] }),
+  ]
+  const catalogWithCellDup = () => [
+    catalogRow('P', { sku_code: 'AbC-42', wb_barcodes: [WB_A, 'CELL-DUP', 'CELL-DUP-2'] }),
+    catalogRow('Q', { marketplace_bindings: [{ marketplace: 'ozon', external_barcodes: ['CELL-DUP', 'CELL-DUP-2'] }] }),
+  ]
+
+  function replyBy(byBarcode: Record<string, unknown>) {
+    return () => {
+      const body = scanCalls().at(-1)?.body
+      return { status: 200, body: byBarcode[String(body?.barcode)] ?? productReply('P') }
+    }
+  }
+
+  it('ячейка: запрос уходит без подсказки, ячейка выбирается, следующий товар снимается с неё', async () => {
+    routes = mpRoutes(plan(), catalogWithCellDup())
+    routes['POST /api/operations/marketplace-unload-requests/REQ/pick/scan'] = replyBy({
+      'CELL-DUP': { kind: 'location', storage_location_id: 'CELL-2', location_code: 'A-02' },
+    })
+    await mount()
+    await scan('CELL-DUP')
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: 'CELL-DUP', storage_location_id: null, container_kind: null, container_id: null },
+    ])
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('A-02')
+    expect(pageText()).not.toContain(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+
+    await scan(WB_A)
+    expect(scanCalls()[1].body).toEqual({
+      barcode: WB_A,
+      product_id: 'P',
+      storage_location_id: 'CELL-2',
+      container_kind: null,
+      container_id: null,
+    })
+  })
+
+  it('переключение ячейки A → B таким же кодом: выбранное место уходит как есть, сервер меняет его на новое', async () => {
+    routes = mpRoutes(plan(), catalogWithCellDup())
+    routes['POST /api/operations/marketplace-unload-requests/REQ/pick/scan'] = replyBy({
+      'CELL-DUP': { kind: 'location', storage_location_id: 'CELL-1', location_code: 'A-01' },
+      'CELL-DUP-2': { kind: 'location', storage_location_id: 'CELL-2', location_code: 'A-02' },
+    })
+    await mount()
+    await scan('CELL-DUP')
+    await scan('CELL-DUP-2')
+    expect(scanCalls()[1].body).toEqual({
+      barcode: 'CELL-DUP-2',
+      storage_location_id: 'CELL-1',
+      container_kind: null,
+      container_id: null,
+    })
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('A-02')
+    await scan(WB_A)
+    expect(scanCalls()[2].body).toMatchObject({ product_id: 'P', storage_location_id: 'CELL-2' })
+  })
+
+  it('тара: запрос уходит без подсказки, тара выбирается, следующий товар снимается из неё', async () => {
+    routes = mpRoutes(plan(), catalog())
+    routes['POST /api/operations/marketplace-unload-requests/REQ/pick/scan'] = replyBy({
+      'BOX-DUP': {
+        kind: 'container',
+        storage_location_id: 'CELL-1',
+        location_code: 'A-01',
+        product_id: null,
+        sku_code: null,
+        product_name: null,
+        picked_qty: null,
+        allocation_quantity: null,
+        container_kind: 'box',
+        container_id: 'BOX-7',
+        container_code: 'WHB-7',
+      },
+    })
+    await mount()
+    await scan('BOX-DUP')
+    expect(scanCalls()[0].body).toEqual({
+      barcode: 'BOX-DUP',
+      storage_location_id: null,
+      container_kind: null,
+      container_id: null,
+    })
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('WHB-7')
+
+    await scan(WB_A)
+    expect(scanCalls()[1].body).toEqual({
+      barcode: WB_A,
+      product_id: 'P',
+      storage_location_id: 'CELL-1',
+      container_kind: 'box',
+      container_id: 'BOX-7',
+    })
+  })
+
+  it('поставка ФБС: код ячейки у двух товаров поставки уходит на сервер, ячейка выбирается', async () => {
+    const fbsDetail = { ...MP_DETAIL, marketplace: 'wb', lines: undefined, name: 'WB-1' }
+    routes = {
+      'GET /api/operations/fbs-supplies/REQ': () => ({ status: 200, body: fbsDetail }),
+      'GET /api/operations/fbs-supplies/REQ/pick-options': () => ({ status: 200, body: plan() }),
+      'GET /api/products/linked-wb-catalog?seller_id=S': () => ({ status: 200, body: catalogWithCellDup() }),
+      'POST /api/operations/fbs-supplies/REQ/pick/scan': replyBy({
+        'CELL-DUP': { kind: 'location', storage_location_id: 'CELL-2', location_code: 'A-02' },
+      }),
+    }
+    await mount('fbs')
+    await scan('CELL-DUP')
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: 'CELL-DUP', storage_location_id: null, container_kind: null, container_id: null },
+    ])
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('A-02')
+  })
+})
+
 describe('WMS-536 · S-OUT-01 подбор Ozon-поставки ФБС', () => {
   const OZON_DETAIL = {
     id: 'REQ',
@@ -294,15 +437,116 @@ describe('WMS-536 · S-OUT-01 подбор Ozon-поставки ФБС', () => 
     expect(calls.some((call) => call.url.includes('linked-wb-catalog'))).toBe(false)
   })
 
-  it('scan_codes из pick-options, если сервер их отдал, тоже находят товар', async () => {
-    routes = ozonRoutes([
-      pickOption('P', '987654', [looseLocation('CELL-1', 'A-01', 5)], {
-        barcode: OZN,
-        scan_codes: [OZN, 'OZN-SECOND'],
-      }),
-    ])
+  // Строка GET /operations/fbs-supplies/{id}/pick-options ровно в форме серверной
+  // модели FbsPickOptionProductOut (backend/app/api/fbs_supplies.py): те же поля,
+  // вложенные места и источники, плюс scan_codes — все коды карточки списком строк.
+  // Для Ozon-поставки сервер кладёт в sku_code Ozon SKU, а в barcode — первый Ozon-ШК.
+  type FbsPickOptionSourceOut = {
+    quantity: number
+    available: number
+    picked: number
+    is_loose: boolean
+    source_label: string
+    container_path: { kind: string; id: string; code: string; label: string }[]
+  }
+  type FbsPickOptionLocationOut = {
+    storage_location_id: string
+    location_code: string
+    quantity: number
+    reserved: number
+    available: number
+    picked: number
+    sources: FbsPickOptionSourceOut[]
+  }
+  type FbsPickOptionProductOut = {
+    product_id: string
+    sku_code: string | null
+    product_name: string
+    seller_article: string | null
+    barcode: string | null
+    planned_qty: number
+    picked_qty: number
+    locations: FbsPickOptionLocationOut[]
+    scan_codes: string[]
+  }
+
+  function ozonLocation(cellId: string, code: string): FbsPickOptionLocationOut {
+    return {
+      storage_location_id: cellId,
+      location_code: code,
+      quantity: 4,
+      reserved: 0,
+      available: 4,
+      picked: 0,
+      sources: [{ quantity: 4, available: 4, picked: 0, is_loose: true, source_label: 'Россыпью', container_path: [] }],
+    }
+  }
+
+  function ozonOption(
+    productId: string,
+    ozonSku: string,
+    scanCodes: string[],
+    locations: FbsPickOptionLocationOut[],
+  ): FbsPickOptionProductOut {
+    return {
+      product_id: productId,
+      sku_code: ozonSku,
+      product_name: `Товар ${productId}`,
+      seller_article: `offer-${productId}`,
+      barcode: scanCodes.find((code) => code.startsWith('OZN-')) ?? null,
+      planned_qty: 2,
+      picked_qty: 0,
+      locations,
+      scan_codes: scanCodes,
+    }
+  }
+
+  // Внутренний артикул, WB-коды и все Ozon-ШК карточки P.
+  const P_CODES = ['AbC-42', WB_P, WB_A, 'OZN-FIRST', 'OZN-SECOND']
+
+  it.each([
+    ['первый Ozon-ШК', 'OZN-FIRST'],
+    ['второй Ozon-ШК', 'OZN-SECOND'],
+    ['внутренний артикул в другом регистре', 'abc-42'],
+    ['дополнительный WB-ШК', WB_A],
+  ])('scan_codes: %s находит товар и его единственный источник, ничего не выбирая заранее', async (_name, code) => {
+    routes = ozonRoutes([ozonOption('P', '987654', P_CODES, [ozonLocation('CELL-1', 'A-01')])])
     await mount('fbs')
-    await scan('ozn-second')
-    expect(scanCalls()[0].body).toMatchObject({ barcode: 'ozn-second', product_id: 'P', storage_location_id: 'CELL-1' })
+    await scan(code)
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: code, product_id: 'P', storage_location_id: 'CELL-1', container_kind: null, container_id: null },
+    ])
+  })
+
+  it('scan_codes: товар в двух местах без выбранного места — прежняя просьба уточнить место', async () => {
+    routes = ozonRoutes([ozonOption('P', '987654', P_CODES, [ozonLocation('CELL-1', 'A-01'), ozonLocation('CELL-2', 'A-02')])])
+    await mount('fbs')
+    await scan('OZN-SECOND')
+    expect(scanCalls()).toHaveLength(0)
+    expect(pageText()).toContain('лежит в 2 местах')
+  })
+
+  it('scan_codes: код двух товаров поставки уходит без подсказки; отказ сервера — понятный текст', async () => {
+    routes = ozonRoutes([
+      ozonOption('P', '987654', [...P_CODES, 'OZN-SHARED'], [ozonLocation('CELL-1', 'A-01')]),
+      ozonOption('QQ', '555001', ['OZN-Q', 'OZN-SHARED'], [ozonLocation('CELL-1', 'A-01')]),
+    ])
+    routes['POST /api/operations/fbs-supplies/REQ/pick/scan'] = () => ({
+      status: 409,
+      body: {
+        detail: {
+          code: 'barcode_ambiguous',
+          message: 'Код относится к нескольким товарам. Проверьте штрихкоды карточек.',
+          context: {},
+          retryable: false,
+        },
+      },
+    })
+    await mount('fbs')
+    await scan('OZN-SHARED')
+    expect(scanCalls().map((call) => call.body)).toEqual([
+      { barcode: 'OZN-SHARED', storage_location_id: null, container_kind: null, container_id: null },
+    ])
+    expect(pageText()).toContain(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
   })
 })

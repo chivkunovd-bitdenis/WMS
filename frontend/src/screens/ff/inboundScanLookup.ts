@@ -65,33 +65,52 @@ export type InboundProductScanRequest =
 /**
  * Что товарная ветка приёмки отправляет серверу.
  *
+ * Область поиска задаёт документ (R5): обычная приёмка — товары документа,
+ * затем каталог её селлера; возвратная — только товары документа, для неё
+ * вызывающий передаёт `catalogIndex = null`.
+ *
+ * Порядок кандидатов (R7): сначала исходная строка во всей области — документ,
+ * затем каталог. Только если исходная строка не нашлась нигде, проверяется
+ * вариант раскладки (у скана со сканера) — тоже документ, затем каталог.
+ * Иначе латинский код товара документа перебивал бы настоящий кириллический
+ * артикул другой карточки каталога, и сервер засчитывал бы не тот товар.
+ *
  * - Товар документа найден — его код и `product_id` как подсказка; сервер
  *   всё равно разрешает код сам и сверяет подсказку (R10).
  * - Код в документе ведёт к нескольким карточкам — не отправляется ничего (R2).
- * - В документе нет — сервер ищет в каталоге селлера (WMS-473) по одной строке
- *   и раскладку не исправляет. Поэтому для скана со сканера загруженный каталог
- *   подсказывает, какую строку отдать: исходную (настоящий кириллический
- *   артикул) или исправленную. Если каталог не узнал ни одну — уходит код, как
- *   и раньше. Найден ли товар и однозначен ли он, решает сервер.
+ * - Код узнал только каталог — уходит тот кандидат, по которому он нашёлся,
+ *   без подсказки: найден ли товар и однозначен ли он, решает сервер (WMS-473).
+ * - Не узнал никто — уходит код, как и раньше.
  */
 export function resolveInboundProductScan(
   documentIndex: ProductScanIndex,
   catalogIndex: ProductScanIndex | null,
   input: InboundProductScanInput,
 ): InboundProductScanRequest {
-  const wedge = input.wedgeRaw !== undefined
   const raw = input.wedgeRaw ?? input.code
-  const options = wedge ? { layoutCandidate: input.code } : {}
+  const byRaw = resolveInScope(documentIndex, catalogIndex, raw)
+  if (byRaw) return byRaw
 
-  const inDocument = resolveProductScan(documentIndex, raw, options)
+  // Ручной ввод раскладку не исправляет: второго кандидата у него нет.
+  if (input.wedgeRaw !== undefined && input.code !== raw) {
+    const byLayout = resolveInScope(documentIndex, catalogIndex, input.code)
+    if (byLayout) return byLayout
+  }
+  return { status: 'send', barcode: input.code }
+}
+
+/** Один кандидат во всей области приёмки: документ, затем каталог; null — не нашёлся нигде. */
+function resolveInScope(
+  documentIndex: ProductScanIndex,
+  catalogIndex: ProductScanIndex | null,
+  candidate: string,
+): InboundProductScanRequest | null {
+  const inDocument = resolveProductScan(documentIndex, candidate)
   if (inDocument.status === 'ambiguous') return { status: 'ambiguous' }
   if (inDocument.status === 'found') {
     return { status: 'send', barcode: inDocument.matchedCode, productId: inDocument.productId }
   }
-
-  if (wedge && catalogIndex) {
-    const inCatalog = resolveProductScan(catalogIndex, raw, options)
-    if (inCatalog.status !== 'not_found') return { status: 'send', barcode: inCatalog.matchedCode }
-  }
-  return { status: 'send', barcode: input.code }
+  if (!catalogIndex) return null
+  const inCatalog = resolveProductScan(catalogIndex, candidate)
+  return inCatalog.status === 'not_found' ? null : { status: 'send', barcode: inCatalog.matchedCode }
 }

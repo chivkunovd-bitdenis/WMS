@@ -100,7 +100,12 @@ type ApiPickProduct = {
   product_name: string
   seller_article: string | null
   barcode: string | null
-  /** Все коды товара (WMS-536), если сервер их отдаёт; старый ответ без поля. */
+  /**
+   * Все коды карточки списком строк — поле `scan_codes` модели ответа
+   * pick-options (FbsPickOptionProductOut, WMS-536). В Ozon-поставке каталог
+   * не грузится, и других кодов, кроме SKU и первого ШК строки, у экрана нет.
+   * Ответ без поля (отгрузка на маркетплейс, старый сервер) читается как раньше.
+   */
   scan_codes?: string[] | null
   planned_qty: number
   picked_qty: number
@@ -127,6 +132,21 @@ function formatDate(value: string | null): string | null {
   const [year, month, day] = value.split('-').map(Number)
   if (!year || !month || !day) return value
   return new Intl.DateTimeFormat('ru-RU').format(new Date(year, month - 1, day))
+}
+
+/** Машинный код отказа сервера: строкой (`detail`) или в конверте (`detail.code`). */
+async function apiErrorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { detail?: unknown }
+    const detail = body.detail
+    if (typeof detail === 'string') return detail
+    if (detail && typeof detail === 'object' && typeof (detail as { code?: unknown }).code === 'string') {
+      return (detail as { code: string }).code
+    }
+  } catch {
+    // Тело не JSON — кода нет.
+  }
+  return null
 }
 
 function sourceLocationId(sourceKey: string | null): string | null {
@@ -443,11 +463,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       // выбора физического источника: ячейку, тару и сам товар сервер всё
       // равно распознаёт по коду. Поле подбора — обычное поле ввода, раскладку
       // оно не исправляло и не исправляет (R7).
+      //
+      // Код у двух товаров плана здесь не останавливает скан: тем же кодом
+      // может оказаться ячейка, тара или палета, а их сервер узнаёт раньше
+      // товара (R8). Поэтому такой код уходит без подсказки и без выбора
+      // источника по товару; товар сервер не выберет — ответит неоднозначностью (R2).
       const productLookup = resolveProductScan(productScanIndex, barcode)
-      if (productLookup.status === 'ambiguous') {
-        // Код у двух товаров плана — не выбираем ни один и ничего не шлём (R2).
-        throw new Error(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
-      }
       const matchedProduct =
         productLookup.status === 'found'
           ? screenData?.products.find((product) => product.id === productLookup.productId)
@@ -486,7 +507,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             container_id: containerSource?.containerId ?? null,
           }),
         })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        if (!res.ok) {
+          // Отгрузка при адресном хранении просит ячейку раньше, чем ищет товар.
+          // Если ни ячейкой, ни тарой код не оказался, а товаров у него два,
+          // настоящая причина — неоднозначный код, а не выбор места.
+          if (productLookup.status === 'ambiguous' && (await apiErrorCode(res.clone())) === 'location_required') {
+            throw new Error(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+          }
+          throw new Error(await readApiErrorMessage(res))
+        }
         const result = (await res.json()) as ApiScanResult
         if (result.kind === 'location') {
           if (!result.storage_location_id || !result.location_code) {

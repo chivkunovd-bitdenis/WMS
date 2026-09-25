@@ -20,6 +20,8 @@ const WB_P = '4601234567893'
 const WB_A = '4601234567886'
 const OZN = 'OZN-987654'
 const CYR = 'ФА_МОД8-4а/083/42'
+/** Тот же набор клавиш, что у CYR, в латинской раскладке. */
+const CYR_LAYOUT = 'AF_VJL8-4f/083/42'
 const DUP = 'DUP-536'
 const GS = '\x1d'
 const KIZ_GS = `010460123456789321SERIAL536${GS}91ABCD${GS}92SIGNATURE536`
@@ -55,7 +57,9 @@ const D = row('D', { sku_code: DUP })
 const LAT = row('LAT', { sku_code: 'Chin-56005' })
 /** Есть в каталоге селлера, но не в документе. */
 const CYRP = row('CYRP', { sku_code: CYR })
-const CATALOG = [P, Q, D, LAT, CYRP]
+/** Товар документа, чей латинский артикул совпадает с раскладкой CYR (ревью F1). */
+const LAYOUT = row('LAYOUT', { sku_code: CYR_LAYOUT })
+const CATALOG = [P, Q, D, LAT, CYRP, LAYOUT]
 
 function line(product: WbProductCatalogRow) {
   return {
@@ -85,7 +89,7 @@ function detail(status: string) {
     document_number: 'IN-1',
     warehouse_id: 'w1',
     status,
-    operation_type: 'inbound',
+    operation_type: operationType,
     marketplace: null,
     planned_delivery_date: null,
     planned_box_count: null,
@@ -98,7 +102,7 @@ function detail(status: string) {
     distribution_completed_at: null,
     boxes: [],
     cargo_places: [],
-    lines: status === 'draft' ? [] : [line(P), line(Q), line(D), line(LAT)],
+    lines: status === 'draft' ? [] : [line(P), line(Q), line(D), line(LAT), line(LAYOUT)],
   }
 }
 
@@ -108,6 +112,7 @@ const TOKEN = `h.${btoa(JSON.stringify({ sub: 'u1', tenant_id: 't1' }))}.s`
 type Call = { method: string; path: string; body: Record<string, unknown> | null }
 let calls: Call[] = []
 let status = 'receiving'
+let operationType: 'inbound' | 'return' = 'inbound'
 let root: Root | null = null
 let host: HTMLDivElement | null = null
 
@@ -117,6 +122,7 @@ function json(value: unknown, code = 200): Response {
 
 beforeEach(() => {
   calls = []
+  operationType = 'inbound'
   localStorage.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     const path = url.replace(/^\/api/, '')
@@ -226,9 +232,18 @@ describe('F/S-INB-05: непосредственная приёмка', () => {
   })
 
   it('кириллический артикул из каталога вне документа уходит исходными символами, без подсказки', async () => {
+    // В документе есть товар с латинским артикулом, равным раскладке CYR: исходная
+    // строка ищется во всём каталоге раньше, чем раскладка в документе (R7).
     await mount('receiving')
     await wedge(CYR)
     expect(scanCalls()).toEqual([{ barcode: CYR }])
+  })
+
+  it('возвратная приёмка ищет только в документе: каталог селлера исходную строку не перехватывает', async () => {
+    operationType = 'return'
+    await mount('receiving')
+    await wedge(CYR)
+    expect(scanCalls()).toEqual([{ barcode: CYR_LAYOUT, product_id: 'LAYOUT' }])
   })
 
   it('код двух карточек документа: запроса нет, оператор видит понятную ошибку', async () => {
