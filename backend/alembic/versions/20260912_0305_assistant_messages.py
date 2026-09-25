@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260912_0305"
 down_revision: str | Sequence[str] | None = "20260911_0304"
@@ -28,7 +28,86 @@ depends_on: str | Sequence[str] | None = None
 TABLE = "assistant_messages"
 
 
+def _validate_existing_table(inspector: sa.Inspector) -> None:
+    """Adopt a previously deployed table only after checking its contract."""
+    expected = {
+        "id": (sa.Uuid, None, False),
+        "tenant_id": (sa.Uuid, None, False),
+        "user_id": (sa.Uuid, None, False),
+        "client_message_id": (sa.String, 128, False),
+        "message_text": (sa.Text, None, False),
+        "screen_path": (sa.String, 512, False),
+        "screen_title": (sa.String, 256, False),
+        "screen_text": (sa.Text, None, False),
+        "created_at": (sa.DateTime, None, False),
+        "claimed_at": (sa.DateTime, None, True),
+        "answer_text": (sa.Text, None, True),
+        "answered_at": (sa.DateTime, None, True),
+        "backlog_number": (sa.String, 16, True),
+    }
+    columns = {column["name"]: column for column in inspector.get_columns(TABLE)}
+    if set(columns) - set(expected) - {"executor_attempts"}:
+        raise RuntimeError("WMS-433: incompatible assistant_messages extra columns")
+    for name, (kind, length, nullable) in expected.items():
+        column = columns.get(name)
+        if column is None:
+            raise RuntimeError(f"WMS-433: assistant_messages missing column {name}")
+        actual = column["type"]
+        # SQLite reflects UUID storage as CHAR(32); PostgreSQL reflects UUID.
+        uuid_storage = kind is sa.Uuid and inspector.bind.dialect.name == "sqlite"
+        type_matches = (
+            isinstance(actual, sa.CHAR) and actual.length == 32
+            if uuid_storage
+            else isinstance(actual, kind)
+        )
+        if (
+            not type_matches
+            or column["nullable"] != nullable
+            or (length is not None and getattr(actual, "length", None) != length)
+        ):
+            raise RuntimeError(f"WMS-433: incompatible assistant_messages column {name}")
+        if (
+            kind is sa.DateTime
+            and inspector.bind.dialect.name == "postgresql"
+            and not getattr(actual, "timezone", False)
+        ):
+            raise RuntimeError(f"WMS-433: assistant_messages column {name} needs timezone")
+    if inspector.get_pk_constraint(TABLE)["constrained_columns"] != ["id"]:
+        raise RuntimeError("WMS-433: incompatible assistant_messages primary key")
+    unique_columns = {
+        tuple(item["column_names"]) for item in inspector.get_unique_constraints(TABLE)
+    }
+    indexes = inspector.get_indexes(TABLE)
+    if ("user_id", "client_message_id") not in unique_columns:
+        raise RuntimeError("WMS-433: assistant_messages missing message uniqueness")
+    indexed_columns = {
+        tuple(item["column_names"])
+        for item in indexes
+        if not any(key.endswith("_where") for key in item.get("dialect_options", {}))
+    }
+    if not {(name,) for name in ("tenant_id", "user_id", "created_at")} <= indexed_columns:
+        raise RuntimeError("WMS-433: assistant_messages missing required indexes")
+    foreign_keys = inspector.get_foreign_keys(TABLE)
+    for column_name, target in (("tenant_id", "tenants"), ("user_id", "users")):
+        if not any(
+            fk["constrained_columns"] == [column_name]
+            and fk["referred_table"] == target
+            and fk.get("referred_schema") in (None, inspector.default_schema_name)
+            and fk["referred_columns"] == ["id"]
+            and (fk.get("options", {}).get("ondelete") or "").upper() == "CASCADE"
+            for fk in foreign_keys
+        ):
+            raise RuntimeError(
+                f"WMS-433: incompatible assistant_messages foreign key {column_name}"
+            )
+
+
 def upgrade() -> None:
+    if not context.is_offline_mode():
+        inspector = sa.inspect(op.get_bind())
+        if inspector.has_table(TABLE):
+            _validate_existing_table(inspector)
+            return
     op.create_table(
         TABLE,
         sa.Column("id", sa.Uuid(), nullable=False),

@@ -21,7 +21,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260913_2200"
 down_revision: str | Sequence[str] | None = "20260912_0305"
@@ -33,6 +33,13 @@ COLUMN = "executor_attempts"
 
 
 def upgrade() -> None:
+    if not context.is_offline_mode():
+        columns = sa.inspect(op.get_bind()).get_columns(TABLE)
+        existing = next((column for column in columns if column["name"] == COLUMN), None)
+        if existing is not None:
+            if not isinstance(existing["type"], sa.Integer) or existing["nullable"]:
+                raise RuntimeError("WMS-433: incompatible assistant_messages executor_attempts")
+            return
     op.add_column(
         TABLE,
         sa.Column(COLUMN, sa.Integer(), nullable=False, server_default="0"),
@@ -40,7 +47,8 @@ def upgrade() -> None:
     # Серверный default нужен только существующим строкам при миграции; ORM
     # пишет явный 0 при вставке новой строки — держим схему честной о том,
     # кто на самом деле задаёт значение (тот же приём, что и в 20260910_0100).
-    op.alter_column(TABLE, COLUMN, server_default=None)
+    with op.batch_alter_table(TABLE) as batch_op:
+        batch_op.alter_column(COLUMN, existing_type=sa.Integer(), server_default=None)
 
 
 def downgrade() -> None:
