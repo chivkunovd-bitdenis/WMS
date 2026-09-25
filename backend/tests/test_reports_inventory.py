@@ -9,8 +9,10 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services.tokens import decode_access_token
 from tests.auth_helpers import set_password_via_link
@@ -250,7 +252,7 @@ async def test_reports_inventory_interprets_offsetless_boundaries_as_moscow_time
 
 
 @pytest.mark.asyncio
-async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_incomplete_pair(
+async def test_reports_inventory_never_counts_transfers_even_for_selected_warehouse(
     async_client: AsyncClient,
 ) -> None:
     headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
@@ -321,12 +323,71 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
     selected_warehouse = await async_client.get(
         "/reports/inventory", headers=headers, params={**params, "warehouse_id": warehouse_id}
     )
-    rows = {row["operation"]: row for row in selected_warehouse.json()["rows"]}
-    assert rows["Перемещение: ушло"] == {
-        "operation": "Перемещение: ушло", "in_qty": 0, "out_qty": 11,
-        "net": -11, "integrity_error": True,
-    }
-    assert rows["Приёмка"]["integrity_error"] is False
+    # WMS-529: перенос — расположение, а не остаток; склад в фильтре этого не меняет.
+    assert selected_warehouse.status_code == 200
+    assert [row["operation"] for row in selected_warehouse.json()["rows"]] == ["Приёмка"]
+    assert selected_warehouse.json()["rows"][0]["in_qty"] == 3
+
+
+# WMS-529: остаток — сколько товара, а не где он лежит. Приёмка на складе, помеченном
+# нерабочим, — настоящий приход; отгрузка FBS с номером группы — настоящий расход;
+# перенос по карте и перевешивание тары меняют только расположение.
+@pytest.mark.asyncio
+async def test_reports_inventory_counts_stock_documents_not_location_moves(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    suffix = str(time.time_ns())
+    async with SessionLocal() as session:
+        service = Warehouse(
+            tenant_id=tenant_id, name="FBS WB 1887957", code=f"fbs-wb-{suffix}",
+            barcode=f"WH-FBS-{suffix}", is_operational=False,
+        )
+        session.add(service)
+        await session.flush()
+        service_location = StorageLocation(
+            tenant_id=tenant_id, warehouse_id=service.id, code="S-01", barcode=f"S-{suffix}",
+        )
+        session.add(service_location)
+        await session.commit()
+        service_id, service_location_id = str(service.id), str(service_location.id)
+
+    product_id = uuid.UUID(await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=service_id,
+        location_id=service_location_id, number=1, quantity_delta=30,
+    ))
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=1, quantity_delta=-3,
+        movement_type="fbs_shipment", transfer_group_id=uuid.uuid4(), product_id=product_id,
+    )
+    for movement_type in ("warehouse_map_move", "container_reattach", "transfer"):
+        group = uuid.uuid4()
+        for delta in (-5, 5):
+            await _seed_product_movement(
+                tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+                location_id=location_id, number=1, quantity_delta=delta,
+                movement_type=movement_type, transfer_group_id=group, product_id=product_id,
+            )
+    async with SessionLocal() as session:
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=product_id,
+            storage_location_id=uuid.UUID(service_location_id), quantity=27,
+        ))
+        await session.commit()
+
+    params = {"date_from": "2026-08-01T00:00:00Z", "date_to": "2026-08-02T00:00:00Z"}
+    response = await async_client.get(
+        "/reports/inventory", headers=headers, params={**params, "group_by": "product"}
+    )
+    assert response.status_code == 200
+    row = response.json()["rows"][0]
+    assert (row["total_in"], row["total_out"], row["current_balance"]) == (30, 3, 27)
+
+    overview = await async_client.get("/reports/overview", headers=headers, params=params)
+    assert overview.status_code == 200
+    assert (overview.json()["in_qty"], overview.json()["out_qty"]) == (30, 3)
+    assert overview.json()["current_balance"] == 27
 
 
 @pytest.mark.asyncio

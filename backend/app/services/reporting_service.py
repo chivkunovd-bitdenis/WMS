@@ -32,6 +32,23 @@ from app.services.inventory_movement_report_service import (
 )
 
 TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
+# WMS-529. Остаток и расположение — разные понятия (AGENTS.md, §3). Эти движения
+# только перекладывают товар между складами, ячейками и тарой: остаток они не
+# меняют и приходом или расходом в отчёте не считаются ни при каком фильтре.
+# Отделяем их по виду, а не по transfer_group_id: группой помечены и настоящие
+# отгрузки FBS, и передачи товара между селлерами.
+LOCATION_ONLY_MOVEMENT_TYPES = (
+    "stock_transfer_in",
+    "stock_transfer_out",
+    "warehouse_map_move",
+    "container_reattach",
+    "transfer",
+)
+
+
+def stock_movement_filter() -> ColumnElement[bool]:
+    """Только движения, которые меняют остаток, а не расположение."""
+    return InventoryMovement.movement_type.not_in(LOCATION_ONLY_MOVEMENT_TYPES)
 PAGE_SIZE = 50
 GROUP_BY_VALUES = {"product", "operation", "seller"}
 PRODUCT_SORTS = {"name", "sku", "in_qty", "out_qty", "net"}
@@ -209,11 +226,7 @@ async def build_inventory_report(
     date_from, date_to = normalize_period(date_from, date_to)
     sort_by, sort_order = validated_sort(group_by, sort_by, sort_order)
     filters = [InventoryMovement.tenant_id == tenant_id, InventoryMovement.created_at >= date_from,
-        InventoryMovement.created_at < date_to, Warehouse.is_operational.is_(True)]
-    # Transfers are an internal flow.  They are useful only when an operator
-    # narrows the report to one warehouse, where each side is meaningful.
-    if warehouse_id is None:
-        filters.append(InventoryMovement.transfer_group_id.is_(None))
+        InventoryMovement.created_at < date_to, stock_movement_filter()]
     if seller_id is not None:
         # The movement owns the seller at event time.  Filtering through the
         # mutable product relation would move historical rows when a product
@@ -310,7 +323,6 @@ async def build_inventory_report(
             .where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id.in_(product_ids),
-                Warehouse.is_operational.is_(True),
             )
             .group_by(InventoryBalance.product_id)
         )
@@ -334,7 +346,6 @@ async def build_inventory_report(
             .join(Product, Product.id == InventoryBalance.product_id)
             .where(
                 InventoryBalance.tenant_id == tenant_id,
-                Warehouse.is_operational.is_(True),
                 Product.seller_id.in_([row[0] for row in rows]),
             )
             .group_by(Product.seller_id)
@@ -422,10 +433,8 @@ async def build_inventory_csv(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
-        Warehouse.is_operational.is_(True),
+        stock_movement_filter(),
     ]
-    if warehouse_id is None:
-        filters.append(InventoryMovement.transfer_group_id.is_(None))
     if seller_id is not None:
         filters.append(InventoryMovement.seller_id == seller_id)
     if warehouse_id is not None:
@@ -445,7 +454,6 @@ async def build_inventory_csv(
         balance_filters = [
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id == Product.id,
-            balance_warehouse.is_operational.is_(True),
         ]
         if warehouse_id is not None:
             balance_filters.append(balance_warehouse.id == warehouse_id)
@@ -577,10 +585,8 @@ async def build_overview(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
-        Warehouse.is_operational.is_(True),
+        stock_movement_filter(),
     ]
-    if warehouse_id is None:
-        movement_filter.append(InventoryMovement.transfer_group_id.is_(None))
     if warehouse_id is not None:
         movement_filter.append(InventoryMovement.warehouse_id == warehouse_id)
     if seller_id is not None:
@@ -627,10 +633,8 @@ async def build_overview(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= previous_from,
         InventoryMovement.created_at < previous_to,
-        Warehouse.is_operational.is_(True),
+        stock_movement_filter(),
     ]
-    if warehouse_id is None:
-        previous_filter.append(InventoryMovement.transfer_group_id.is_(None))
     if seller_id is not None:
         previous_filter.append(InventoryMovement.seller_id == seller_id)
     if warehouse_id is not None:
@@ -661,7 +665,7 @@ async def build_overview(
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
         .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
         .join(Product, Product.id == InventoryBalance.product_id)
-        .where(InventoryBalance.tenant_id == tenant_id, Warehouse.is_operational.is_(True))
+        .where(InventoryBalance.tenant_id == tenant_id)
     )
     if seller_id is not None:
         balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
@@ -681,11 +685,11 @@ async def build_overview(
     since_start_filter = [
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
-        Warehouse.is_operational.is_(True),
     ]
-    if warehouse_id is None:
-        since_start_filter.append(InventoryMovement.transfer_group_id.is_(None))
-    else:
+    # Откат остатка — расчёт остатка, а не прихода/расхода: здесь нужны все
+    # движения, иначе при фильтре по складу начальный остаток разойдётся на
+    # переносы. По всем складам сразу переносы в сумме дают ноль.
+    if warehouse_id is not None:
         since_start_filter.append(InventoryMovement.warehouse_id == warehouse_id)
     if seller_id is not None:
         since_start_filter.append(InventoryMovement.seller_id == seller_id)
@@ -890,13 +894,11 @@ async def list_product_movements(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
-        Warehouse.is_operational.is_(True),
+        stock_movement_filter(),
     ]
     if product_id is not None:
         filters.append(InventoryMovement.product_id == product_id)
-    if warehouse_id is None:
-        filters.append(InventoryMovement.transfer_group_id.is_(None))
-    else:
+    if warehouse_id is not None:
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if seller_id is not None:
         filters.append(InventoryMovement.seller_id == seller_id)
