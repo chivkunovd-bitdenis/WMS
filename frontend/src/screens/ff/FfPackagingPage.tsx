@@ -57,6 +57,7 @@ import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendin
 import { PageHeader } from '../../ui/PageHeader'
 import { resolveProductBarcodeOptions, resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from '../../utils/productScanResolver'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
@@ -272,6 +273,8 @@ const MARKING_NOT_DONE_MESSAGE =
 
 const PACKAGING_API_MESSAGES_RU: Record<string, string> = {
   unknown_barcode: 'ШК не найден в этом задании. Проверьте товар и выбранное задание.',
+  // WMS-536 R2: код у нескольких товаров задания — сервер не выбирает ни один.
+  barcode_ambiguous: PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
   line_already_packed: 'По этому товару всё уже упаковано.',
   undo_not_available: 'Нет действия, которое можно отменить.',
   undo_not_supported: 'Это действие нельзя отменить.',

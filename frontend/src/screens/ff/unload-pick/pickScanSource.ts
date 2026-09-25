@@ -1,4 +1,60 @@
+import {
+  buildProductScanIndex,
+  productScanSourceFromCatalogRow,
+  type ProductScanCatalogRow,
+  type ProductScanIndex,
+  type ProductScanSource,
+} from '../../../utils/productScanResolver'
 import { cellRef, objRef, type ObjKind } from './pickStub'
+
+/** Товар плана подбора так, как его уже показывают колонки «SKU» и «ШК». */
+type PickPlanProductCodes = { id: string; sku: string; barcode: string }
+
+/** Строка pick-options: сервер может отдать все коды товара списком `scan_codes`. */
+type PickOptionCodes = {
+  product_id: string
+  scan_codes?: readonly (string | null | undefined)[] | null
+}
+
+/**
+ * WMS-536 · Индекс «код → товар» подбора (S-OUT-01).
+ *
+ * Область — только товары плана этого документа (R5): товар, которого нет в
+ * плане, по скану не находится, даже если он есть в каталоге селлера.
+ *
+ * Коды каждого товара берутся одновременно (R3): SKU и ШК строки плана, все
+ * коды карточки каталога селлера (sku_code, основной и все WB-ШК, Ozon
+ * external_barcodes) и `scan_codes` из pick-options, если сервер их отдаёт.
+ *
+ * В Ozon-поставке ФБС каталога у экрана нет, а в поле SKU строки плана сервер
+ * кладёт Ozon SKU товара. Он находился по скану здесь и до WMS-536, и сервер в
+ * этом подборе его тоже принимает (R4) — поэтому остаётся подсказкой, как был.
+ * В других экранах Ozon SKU и offer_id товаром не становятся.
+ */
+export function pickProductScanIndex(
+  products: readonly PickPlanProductCodes[],
+  catalogById: ReadonlyMap<string, ProductScanCatalogRow>,
+  pickOptions: readonly PickOptionCodes[],
+): ProductScanIndex {
+  const scanCodesByProductId = new Map<string, PickOptionCodes['scan_codes']>()
+  for (const option of pickOptions) {
+    if (option.scan_codes?.length) scanCodesByProductId.set(option.product_id, option.scan_codes)
+  }
+  const sources: ProductScanSource[] = []
+  for (const product of products) {
+    sources.push({
+      productId: product.id,
+      skuCode: product.sku,
+      wbPrimaryBarcode: product.barcode,
+      // scan_codes — все коды карточки одним списком. Поле источника в индексе
+      // приоритета не задаёт: коды одной карточки просто сливаются.
+      wbBarcodes: scanCodesByProductId.get(product.id),
+    })
+    const catalog = catalogById.get(product.id)
+    if (catalog) sources.push(productScanSourceFromCatalogRow(catalog))
+  }
+  return buildProductScanIndex(sources)
+}
 
 /** The server already subtracts assignments/reservations in source.available. */
 type ScanLocation = {
