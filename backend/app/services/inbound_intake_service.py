@@ -407,10 +407,19 @@ async def redistribute_ff_draft_container(
     product_id: uuid.UUID,
     delta: int,
 ) -> None:
-    """Move known FF units into/out of tare, accepting genuinely additional units.
+    """Keep the FF document's loose/total bookkeeping in step with one tare change.
 
     Called before changing tare, under the same request row lock. Only drafts use
     this interpretation; seller and historical receiving facts stay independent.
+
+    Adding to a box or cargo place (delta > 0) still draws from loose stock first
+    (WMS-440 R2): the accepted total only grows once loose is exhausted, so a scan
+    never double-counts a unit that was already counted loose.
+
+    WMS-534 R1: removing from a box or cargo place (delta < 0) no longer turns the
+    removed units into loose stock (that was WMS-440 D5, now reverted for this
+    direction only). Loose stays untouched and the accepted total simply drops by
+    the same amount — the units leave the document instead of reappearing unboxed.
     """
     # WMS-473: the same one-number rule holds while the FF document is being received
     # again after «Редактировать»; only sorting/done facts stay frozen.
@@ -425,7 +434,7 @@ async def redistribute_ff_draft_container(
         # An untouched draft authored before WMS-440 shows its entered number; after a
         # legacy recount (submit/begin-receiving) nothing loose has been counted yet.
         loose = max(0, line.expected_qty - containers_before) if req.status == STATUS_DRAFT else 0
-    line.actual_qty = max(0, loose - delta)
+    line.actual_qty = loose if delta < 0 else max(0, loose - delta)
     line.expected_qty = line.actual_qty + containers_before + delta
     if line.expected_qty > 1_000_000_000:
         raise InboundIntakeError("invalid_qty")
