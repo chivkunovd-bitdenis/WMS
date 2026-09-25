@@ -32,7 +32,11 @@ import {
   productDisplayMetaFromCatalog,
   type MarketplaceProductCatalogRow,
 } from '../types/wbProductCatalog'
-import { resolveProductIdByBarcode } from '../utils/resolveProductByBarcode'
+import {
+  catalogProductScanIndex,
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  resolveProductScan,
+} from '../utils/productScanResolver'
 
 export type MarketplaceProductPickerCatalogRow = {
   id: string
@@ -205,6 +209,8 @@ function MarketplaceProductPickerDialogContent({
   }, [catalog])
 
   const categories = useMemo(() => wbCategories(catalog), [catalog])
+  // Индекс кодов строится один раз на загруженный каталог, а не на каждый Enter (R13).
+  const scanIndex = useMemo(() => (catalog ? catalogProductScanIndex(catalog) : null), [catalog])
   /**
    * Потолок отрисовки. 21.08.2026: у продавца с 9266 товарами окно выбора рисовало
    * все строки разом — с фотографией, галкой и полем ввода в каждой. Вкладка
@@ -407,19 +413,24 @@ function MarketplaceProductPickerDialogContent({
               onSearchChange?.(e.target.value)
             }}
             onKeyDown={(e) => {
-              if (e.key !== 'Enter' || !catalog) {
+              if (e.key !== 'Enter' || !scanIndex) {
                 return
               }
               e.preventDefault()
               const input = e.currentTarget.querySelector('input')
               const rawSearch = input?.value || (e.target as HTMLInputElement).value || pickerSearch
-              const productId = resolveProductIdByBarcode(catalog, rawSearch)
-              const targetId =
-                productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
-              if (!targetId) {
+              // Enter — это скан: принимается только точный код карточки. Единственная
+              // строка частичного фильтра товаром скана не считается (WMS-536, D6).
+              const match = resolveProductScan(scanIndex, rawSearch)
+              if (match.status === 'ambiguous') {
+                setPickerError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+                return
+              }
+              if (match.status === 'not_found') {
                 setPickerError(notFoundMessage)
                 return
               }
+              const targetId = match.productId
               if (disabledProductIds.has(targetId)) {
                 setPickerError(inDraftMessage)
                 return

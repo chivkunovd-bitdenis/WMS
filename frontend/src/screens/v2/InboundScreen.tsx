@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import type { FormEventHandler } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -7,6 +6,11 @@ import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import {
+  catalogProductScanIndex,
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  resolveProductScan,
+} from '../../utils/productScanResolver'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -18,6 +22,8 @@ type ProductRow = {
   wb_primary_barcode?: string | null
   wb_vendor_code?: string | null
   wb_nm_id?: number | null
+  /** Ozon external_barcodes участвуют в поиске товара по коду, если строка их несёт (WMS-536). */
+  marketplace_bindings?: { marketplace?: string | null; external_barcodes?: string[] | null }[]
 }
 
 type InboundSummaryRow = {
@@ -154,25 +160,44 @@ export function InboundScreen(props: Props) {
   const boxIntakeMode = (inboundDetail?.boxes?.length ?? 0) > 0
   const activeIntakeBox = inboundDetail?.boxes?.find((b) => b.is_open) ?? null
 
+  // Точный код карточки — единый поиск товара (WMS-536); текстовый фильтр ниже остаётся ручным поиском.
+  const productScanIndex = useMemo(() => catalogProductScanIndex(products), [products])
+  const productQueryMatch = useMemo(
+    () => resolveProductScan(productScanIndex, productQuery),
+    [productQuery, productScanIndex],
+  )
+  const exactProductId = productQueryMatch.status === 'found' ? productQueryMatch.productId : null
+
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim().toLowerCase()
     if (!q) {
       return products
     }
     return products.filter((p) => {
+      // Товар, найденный по точному коду, остаётся в списке, даже если этого кода
+      // (например, Ozon-штрихкода) нет среди полей текстового фильтра.
+      if (p.id === exactProductId) {
+        return true
+      }
       const barcodes = (p.wb_barcodes ?? []).join(' ')
       const hay =
         `${p.sku_code} ${p.name} ${p.wb_vendor_code ?? ''} ${p.wb_nm_id ?? ''} ${p.wb_primary_barcode ?? ''} ${barcodes}`.toLowerCase()
       return hay.includes(q)
     })
-  }, [productQuery, products])
+  }, [exactProductId, productQuery, products])
 
   useEffect(() => {
-    const id = resolveProductIdByBarcode(products, productQuery)
-    if (id && productSelectRef.current) {
-      productSelectRef.current.value = id
+    const select = productSelectRef.current
+    if (!select) {
+      return
     }
-  }, [productQuery, products])
+    if (productQueryMatch.status === 'found') {
+      select.value = productQueryMatch.productId
+    } else if (productQueryMatch.status === 'ambiguous') {
+      // Код двух карточек не выбирает ни одну: товар выбирают вручную из списка.
+      select.value = ''
+    }
+  }, [productQueryMatch])
 
   return (
     <Screen title="Приёмка" subtitle="Список заявок → детали → приём по строкам">
@@ -333,6 +358,11 @@ export function InboundScreen(props: Props) {
                         data-testid="inbound-line-product-search"
                       />
                     </label>
+                    {productQueryMatch.status === 'ambiguous' ? (
+                      <p className="error" data-testid="inbound-line-product-search-error">
+                        {PRODUCT_SCAN_AMBIGUOUS_MESSAGE}
+                      </p>
+                    ) : null}
                     <label>
                       Товар
                       <Select
