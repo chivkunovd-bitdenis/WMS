@@ -211,11 +211,15 @@ async def build_product_code_index(
                     ProductMarketplaceLink.external_barcodes,
                     ProductMarketplaceLink.external_sku,
                     ProductMarketplaceLink.external_offer_id,
-                ).where(
+                )
+                .join(Product, Product.id == ProductMarketplaceLink.product_id)
+                .where(
                     ProductMarketplaceLink.tenant_id == scope.tenant_id,
                     ProductMarketplaceLink.product_id.in_(scoped_product_ids),
                     ProductMarketplaceLink.marketplace == "ozon",
                     ProductMarketplaceLink.is_active.is_(True),
+                    Product.tenant_id == ProductMarketplaceLink.tenant_id,
+                    Product.seller_id == ProductMarketplaceLink.seller_id,
                 )
             )
         ).all()

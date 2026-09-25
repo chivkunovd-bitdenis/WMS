@@ -238,9 +238,11 @@ async def test_map_totals_moves_sorting_disband_and_tenant_scope(
     )
     assert pallet_node["qty"] == 7
     assert pallet_node["children"][0]["kind"] == "box"
+    assert pallet_node["children"][0]["children"][0]["sku_code"] == product.sku_code
     loose_product = next(
         node for node in data["cells"][0]["children"] if node["kind"] == "product"
     )
+    assert loose_product["sku_code"] == product.sku_code
     assert loose_product["scan_codes"] == [
         product.wb_barcode,
         f"WB-ALT-{product.sku_code.removeprefix('TS-')}",
