@@ -254,8 +254,8 @@ export function FfInventoryCountScreen({
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
-  function handleScan(code: string) {
-    const result = applyScan(count, code, openPlace)
+  function handleScan(code: string, layoutCandidate?: string) {
+    const result = applyScan(count, code, openPlace, true, layoutCandidate)
     setOpenPlace(result.open)
     setScanNote({ text: result.message, tone: result.tone })
     if (result.focusRowKey) {

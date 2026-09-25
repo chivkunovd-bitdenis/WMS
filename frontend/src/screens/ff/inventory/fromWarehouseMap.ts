@@ -17,6 +17,9 @@ function toInventoryNode(node: MapNode): InventoryNode {
     return {
       kind: 'product',
       id: node.id,
+      // Строка карты — это остаток «товар на месте»; сканер ищет карточку.
+      productId: node.product_id,
+      ...(node.scan_codes ? { scanCodes: node.scan_codes } : {}),
       name: node.name,
       sku: node.product_id,
       seller: node.seller_name ?? '—',

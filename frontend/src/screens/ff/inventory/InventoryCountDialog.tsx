@@ -122,12 +122,12 @@ function InventoryCountDialogState({
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
-  function handleScan(code: string) {
+  function handleScan(code: string, layoutCandidate?: string) {
     if (busy) return
     setCount((current) => {
       if (!current) return current
       // Диалог с карты склада не ходит на сервер, значит и находку не запишет.
-      const result = applyScan(current, code, openPlace, false)
+      const result = applyScan(current, code, openPlace, false, layoutCandidate)
       setOpenPlace(result.open)
       setScanNote({ text: result.message, tone: result.tone })
       if (result.focusRowKey) {

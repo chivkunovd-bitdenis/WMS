@@ -1,6 +1,13 @@
 import type { ContainerKind, InventoryCount, InventoryNode, ProductNode } from './InventoryTypes'
 import { KIND_TITLE } from './InventoryTypes'
-import { expectedNow, setActual } from './InventoryRows'
+import { allProducts, expectedNow, setActual } from './InventoryRows'
+import {
+  buildProductScanIndex,
+  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
+  resolveProductScan,
+  type ProductScanIndex,
+  type ProductScanSource,
+} from '../../../utils/productScanResolver'
 
 // Сканер на пересчёте.
 //
@@ -61,7 +68,11 @@ export type ScanResult = {
    * перезагружает документ.
    */
   found?: {
-    /** Все прочтения кода: как пришло со сканера и как в латинской раскладке. */
+    /**
+     * Прочтения кода для сервера. Товар экрану не знаком — оба: как пришло со
+     * сканера и как в латинской раскладке, сервер проверит их по порядку.
+     * Товар знаком — ровно то прочтение, по которому экран его узнал.
+     */
     barcodes: string[]
     /** Ячейка, если она открыта. null — россыпь без ячейки или адрес берётся у тары. */
     cellId: string | null
@@ -112,6 +123,55 @@ export function scanCandidates(rawCode: string): string[] {
   return converted && converted !== code ? [code, converted] : [code]
 }
 
+/**
+ * Прочтения одного скана: как пришло и как было бы в латинской раскладке.
+ *
+ * Клавиатурный сканер переводит раскладку сам — по физическим клавишам, с
+ * Shift и знаками препинания, — и отдаёт исходные символы отдельно. Его
+ * перевод точнее нашего, поэтому берём его. Ручной ввод приходит одной
+ * строкой, и латинский вариант строит scanCandidates, как и раньше.
+ */
+function scanReadings(rawCode: string, layoutCandidate?: string | null): string[] {
+  const own = scanCandidates(rawCode)
+  const layout = layoutCandidate ? normalize(layoutCandidate) : ''
+  if (own.length === 0 || !layout || layout === own[0]) return own
+  return [own[0], layout]
+}
+
+/**
+ * Карточка строки. Строк у одной карточки может быть несколько, и общий код
+ * у них — не неоднозначность. Без поля (заглушки) карточкой считается строка.
+ */
+function productIdOf(product: ProductNode): string {
+  return product.productId ?? product.id
+}
+
+function productScanSource(product: ProductNode): ProductScanSource {
+  return {
+    productId: productIdOf(product),
+    skuCode: product.sku,
+    wbPrimaryBarcode: product.barcode,
+    // wbBarcode — то же поле карточки, что barcode; scanCodes — все коды
+    // карточки от сервера одним списком (WB и Ozon). Индексу источник кода
+    // безразличен: совпадение с двумя карточками — неоднозначность (R2, R3).
+    wbBarcodes: [product.wbBarcode, ...(product.scanCodes ?? [])],
+  }
+}
+
+// Индекс «код → карточки» по снимку документа. Строится один раз на снимок, а
+// пик переносит его на следующий снимок (см. bump): факт строки на коды не
+// влияет, и тысяча строк не обходится заново на каждый скан (R13, R-34).
+const productIndexByCount = new WeakMap<InventoryCount, ProductScanIndex>()
+
+/** Индекс товаров документа для единого поиска товара по коду (WMS-536). */
+export function inventoryProductScanIndex(count: InventoryCount): ProductScanIndex {
+  const cached = productIndexByCount.get(count)
+  if (cached) return cached
+  const index = buildProductScanIndex(allProducts(count).map(productScanSource))
+  productIndexByCount.set(count, index)
+  return index
+}
+
 type Located = { product: ProductNode; containerId: string | null; pathKeys: string[] }
 
 /**
@@ -154,28 +214,24 @@ type FoundContainer = {
 /** Найденная ячейка: её тоже можно открыть сканом, как и тару. */
 type FoundCell = { id: string; label: string; pathKeys: string[] }
 
-/** Тара, ячейка и товары ищутся одним обходом; на 1000 строках второго прохода нет. */
-function findScanTargets(
+/**
+ * Тара и ячейка, которые узнаются по коду. Товар здесь не ищется: он идёт
+ * после них (тара → ячейка → товар) и ищется единым поиском по карточкам.
+ */
+function findPlaceTargets(
   count: InventoryCount,
   normalizedCodes: Set<string>,
-): { container: FoundContainer | null; cell: FoundCell | null; products: Located[] } {
+): { container: FoundContainer | null; cell: FoundCell | null } {
   let container: FoundContainer | null = null
   let cell: FoundCell | null = null
-  const products: Located[] = []
-  function walk(nodes: InventoryNode[], cellId: string, containerId: string | null, pathKeys: string[]) {
+  function walk(nodes: InventoryNode[], cellId: string, pathKeys: string[]) {
     for (const node of nodes) {
-      const key = `${node.kind}:${node.id}`
-      const nextPath = [...pathKeys, key]
-      if (node.kind === 'product') {
-        if (productMatches(node, normalizedCodes)) {
-          products.push({ product: node, containerId, pathKeys: nextPath })
-        }
-        continue
-      }
+      if (node.kind === 'product') continue
+      const nextPath = [...pathKeys, `${node.kind}:${node.id}`]
       if (!container && matchesPlace(normalizedCodes, node.barcode, node.code)) {
         container = { id: node.id, kind: node.kind, code: node.code, cellId, pathKeys: nextPath }
       }
-      walk(node.children, cellId, node.id, nextPath)
+      walk(node.children, cellId, nextPath)
     }
   }
   for (const item of count.cells) {
@@ -183,7 +239,7 @@ function findScanTargets(
     if (!cell && matchesPlace(normalizedCodes, item.barcode, item.label)) {
       cell = { id: item.id, label: item.label, pathKeys: [cellKey] }
     }
-    walk(item.children, item.id, null, [cellKey])
+    walk(item.children, item.id, [cellKey])
   }
   if (!container) {
     // Тара, пустая по документу, в дерево не попадает — иначе пересчёт по
@@ -212,7 +268,33 @@ function findScanTargets(
     )
     if (empty) cell = { id: empty.id, label: empty.label, pathKeys: [`cell:${empty.id}`] }
   }
-  return { container, cell, products }
+  return { container, cell }
+}
+
+/** Все строки одной карточки с их путями в дереве — в порядке документа. */
+function locateProduct(count: InventoryCount, productId: string): Located[] {
+  const located: Located[] = []
+  const path: string[] = []
+  function walk(nodes: InventoryNode[], containerId: string | null) {
+    for (const node of nodes) {
+      const key = `${node.kind}:${node.id}`
+      if (node.kind === 'product') {
+        if (productIdOf(node) === productId) {
+          located.push({ product: node, containerId, pathKeys: [...path, key] })
+        }
+        continue
+      }
+      path.push(key)
+      walk(node.children, node.id)
+      path.pop()
+    }
+  }
+  for (const cell of count.cells) {
+    path.push(`cell:${cell.id}`)
+    walk(cell.children, null)
+    path.pop()
+  }
+  return located
 }
 
 /**
@@ -235,16 +317,11 @@ function matchesPlace(
 }
 
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
-function bump(count: InventoryCount, product: ProductNode): InventoryCount {
-  return setActual(count, product.id, (product.actual ?? 0) + 1)
-}
-
-/** ШК WB — основной код, SKU — код на внутренней этикетке при отсутствии ШК WB. */
-function productMatches(product: ProductNode, normalizedCodes: Set<string>): boolean {
-  return [product.barcode, product.wbBarcode, product.sku].some((identifier) => {
-    const normalized = identifier?.trim().toLowerCase()
-    return Boolean(normalized && normalizedCodes.has(normalized))
-  })
+function bump(count: InventoryCount, product: ProductNode, index: ProductScanIndex): InventoryCount {
+  const next = setActual(count, product.id, (product.actual ?? 0) + 1)
+  // Пик меняет только факт строки: карточки и их коды прежние, индекс годится.
+  if (next !== count) productIndexByCount.set(next, index)
+  return next
 }
 
 /**
@@ -306,15 +383,23 @@ export function applyScan(
    * находку вносят в полном документе.
    */
   allowFound = true,
+  /**
+   * Тот же скан в латинской раскладке, как его перевёл клавиатурный сканер.
+   *
+   * `rawCode` тогда — исходные символы. Товар ищется сначала по ним и только
+   * потом по переводу: кириллический артикул после перевода уже не найти
+   * (WMS-536 R7). Без параметра перевод строится из `rawCode`, как и раньше.
+   */
+  layoutCandidate?: string | null,
 ): ScanResult {
-  const codes = scanCandidates(rawCode)
+  const codes = scanReadings(rawCode, layoutCandidate)
   const code = codes[0] ?? ''
   if (!code) {
     return { count, open, message: '', tone: 'ok' }
   }
 
   const normalizedCodes = new Set(codes.map((candidate) => candidate.toLowerCase()))
-  const targets = findScanTargets(count, normalizedCodes)
+  const targets = findPlaceTargets(count, normalizedCodes)
 
   const container = targets.container
   if (container) {
@@ -360,8 +445,22 @@ export function applyScan(
     }
   }
 
-  const byBarcode = targets.products
+  // Не тара и не ячейка — значит товар. Ищем его единым поиском по карточкам
+  // документа: основной и все WB-коды, артикул, коды Ozon — одновременно.
+  const index = inventoryProductScanIndex(count)
+  const product = resolveProductScan(index, code, { layoutCandidate: codes[1] })
+  if (product.status === 'ambiguous') {
+    // Код ведёт к двум карточкам документа. Выбрать одну из них — значит
+    // записать факт, а потом и остаток, на карточку наугад. Ничего не меняем,
+    // и находку на сервер тоже не отправляем (R2).
+    return { count, open, message: PRODUCT_SCAN_AMBIGUOUS_MESSAGE, tone: 'error' }
+  }
+  const byBarcode = product.status === 'found' ? locateProduct(count, product.productId) : []
   const place = allowFound ? foundPlace(count, open) : null
+  // Знакомый товар сервер ищет ровно по тому прочтению, по которому его узнал
+  // экран. Иначе, найдя товар по латинице, сервер мог бы сначала проверить
+  // кириллицу и записать находку на другую карточку каталога.
+  const foundBarcodes = product.status === 'found' ? [product.matchedCode] : codes
 
   if (byBarcode.length === 0) {
     if (!place) {
@@ -377,7 +476,7 @@ export function applyScan(
       open,
       message: `Код ${code} — записываем находку сюда.`,
       tone: 'ok',
-      found: { barcodes: codes, ...place },
+      found: { barcodes: foundBarcodes, ...place },
     }
   }
 
@@ -385,7 +484,7 @@ export function applyScan(
     const inside = byBarcode.find((item) => item.containerId === open.containerId)
     if (inside) {
       return {
-        count: bump(count, inside.product),
+        count: bump(count, inside.product, index),
         open,
         focusRowKey: `product:${inside.product.id}`,
         focusPathKeys: inside.pathKeys,
@@ -407,7 +506,7 @@ export function applyScan(
       open,
       message: `${byBarcode[0].product.name} — записываем находку в ${openName}.`,
       tone: 'ok',
-      found: { barcodes: codes, ...place },
+      found: { barcodes: foundBarcodes, ...place },
     }
   }
 
@@ -421,7 +520,7 @@ export function applyScan(
   )
   if (loose) {
     return {
-      count: bump(count, loose.product),
+      count: bump(count, loose.product, index),
       open,
       focusRowKey: `product:${loose.product.id}`,
       focusPathKeys: loose.pathKeys,
@@ -448,7 +547,7 @@ export function applyScan(
       `${byBarcode[0].product.name} числится в другом месте — записываем находку сюда. `
       + 'Если он лежит в таре, отсканируйте её и посчитайте там.',
     tone: 'warn',
-    found: { barcodes: codes, ...place },
+    found: { barcodes: foundBarcodes, ...place },
   }
 }
 
