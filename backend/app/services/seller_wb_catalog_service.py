@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, exists, false, func, or_, select, tuple_
+from sqlalchemy import String, and_, cast, exists, false, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -599,8 +599,10 @@ async def list_linked_wb_catalog_page_rows(
             or_(
                 Product.name.ilike(pattern),
                 Product.sku_code.ilike(pattern),
+                cast(Product.wb_nm_id, String).ilike(pattern),
                 Product.wb_vendor_code.ilike(pattern),
                 Product.wb_barcode.ilike(pattern),
+                Product.wb_size.ilike(pattern),
                 SellerWildberriesImportedCard.title.ilike(pattern),
                 SellerWildberriesImportedCard.vendor_code.ilike(pattern),
                 SellerWildberriesImportedCard.raw_json["subjectName"]

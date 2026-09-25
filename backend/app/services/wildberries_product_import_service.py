@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.catalog_service import (
     DEFAULT_PRODUCT_DIM_MM,
@@ -200,16 +201,93 @@ def _apply_variant_fields(
 ) -> None:
     if p.seller_id is None:
         p.seller_id = seller_id
-    p.sku_code = sku
-    p.name = title
-    if nm is not None:
+    if not p.sku_code.strip():
+        p.sku_code = sku
+    if not p.name.strip():
+        p.name = title
+    if p.wb_nm_id is None and nm is not None:
         p.wb_nm_id = nm
-    if vendor is not None:
+    if not p.wb_vendor_code and vendor is not None:
         p.wb_vendor_code = vendor
-    p.wb_chrt_id = variant.chrt_id
-    p.wb_size = variant.size_label
-    if category is not None:
+    if p.wb_chrt_id is None:
+        p.wb_chrt_id = variant.chrt_id
+    if not p.wb_barcode or not p.wb_barcode.strip():
+        p.wb_barcode = variant.barcode
+    if not p.wb_size and variant.size_label is not None:
+        p.wb_size = variant.size_label
+    if not p.category and category is not None:
         p.category = category
+
+
+async def _barcode_conflicts_for_variant(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    barcodes: tuple[str, ...],
+    incoming_product_id: uuid.UUID | None,
+) -> list[tuple[str, Product]]:
+    """Return every conflicting owner, including legacy primary-only barcodes."""
+    if not barcodes:
+        return []
+    owners_by_key: dict[tuple[str, uuid.UUID], Product] = {}
+    alias_rows = (
+        await session.execute(
+            select(ProductBarcode.barcode, Product)
+            .join(Product, Product.id == ProductBarcode.product_id)
+            .where(
+                ProductBarcode.tenant_id == tenant_id,
+                ProductBarcode.seller_id == seller_id,
+                ProductBarcode.barcode.in_(barcodes),
+            )
+        )
+    ).all()
+    for barcode, owner in alias_rows:
+        if owner.id != incoming_product_id:
+            owners_by_key[(barcode, owner.id)] = owner
+    primary_rows = list(
+        (
+            await session.execute(
+                select(Product).where(
+                    Product.tenant_id == tenant_id,
+                    Product.seller_id == seller_id,
+                    Product.wb_barcode.in_(barcodes),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for owner in primary_rows:
+        if owner.id != incoming_product_id and owner.wb_barcode is not None:
+            owners_by_key[(owner.wb_barcode, owner.id)] = owner
+    return [
+        (barcode, owner)
+        for (barcode, _owner_id), owner in sorted(
+            owners_by_key.items(), key=lambda item: (item[0][0], str(item[0][1]))
+        )
+    ]
+
+
+def _append_barcode_conflicts(
+    details: list[dict[str, object]],
+    *,
+    variant: WbSizeVariant,
+    incoming_product_id: uuid.UUID | None,
+    conflicts: list[tuple[str, Product]],
+) -> None:
+    details.extend(
+        {
+            "barcode": barcode,
+            "incoming_chrt_id": variant.chrt_id,
+            "incoming_product_id": (
+                str(incoming_product_id) if incoming_product_id is not None else None
+            ),
+            "existing_chrt_id": owner.wb_chrt_id,
+            "existing_product_id": str(owner.id),
+        }
+        for barcode, owner in conflicts
+    )
 
 
 async def upsert_products_from_wb_cards(
@@ -225,6 +303,7 @@ async def upsert_products_from_wb_cards(
     legacy_marked_old = 0
     missing_chrt_id = 0
     duplicate_chrt_id = 0
+    missing_chrt_id_details: list[dict[str, object]] = []
     barcode_conflicts = 0
     barcode_conflict_details: list[dict[str, object]] = []
     barcodes_added = 0
@@ -244,19 +323,23 @@ async def upsert_products_from_wb_cards(
         if not variants:
             skipped += 1
             continue
-        multi = len(variants) > 1
-        legacy_marked_old += await _mark_legacy_products_for_card(
-            session,
-            tenant_id,
-            seller_id,
-            nm,
-            multi_variant=multi,
-        )
+        # Before WMS-535 there was one variant per barcode. Preserve that exact
+        # SKU formatting rule for newly created products even though all barcodes
+        # of a size now live on one Product.
+        multi = sum(len(variant.barcodes) for variant in variants) > 1
 
         for variant in variants:
             if variant.chrt_id is None:
                 skipped += 1
                 missing_chrt_id += 1
+                missing_chrt_id_details.append(
+                    {
+                        "nm_id": nm,
+                        "vendor_code": vendor,
+                        "size": variant.size_label,
+                        "barcodes": list(variant.barcodes),
+                    }
+                )
                 continue
             sku = sku_code_for_wb_variant(vendor, nm, variant, multi_variant=multi)
             title = product_display_name(base_title, variant, multi_variant=multi)
@@ -270,6 +353,28 @@ async def upsert_products_from_wb_cards(
                     duplicate_chrt_id += 1
                     break
                 is_new = p is None
+                retained_codes = variant.barcodes
+                if p is not None and p.wb_barcode and p.wb_barcode.strip():
+                    retained_codes = tuple(
+                        dict.fromkeys((p.wb_barcode.strip(), *retained_codes))
+                    )
+                conflicts = await _barcode_conflicts_for_variant(
+                    session,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    barcodes=retained_codes,
+                    incoming_product_id=p.id if p is not None else None,
+                )
+                if conflicts:
+                    _append_barcode_conflicts(
+                        barcode_conflict_details,
+                        variant=variant,
+                        incoming_product_id=p.id if p is not None else None,
+                        conflicts=conflicts,
+                    )
+                    skipped += 1
+                    barcode_conflicts += len(conflicts)
+                    break
                 if p is None:
                     p = Product(
                         tenant_id=tenant_id,
@@ -302,11 +407,6 @@ async def upsert_products_from_wb_cards(
                     )
                 try:
                     await session.flush()
-                    retained_codes = variant.barcodes
-                    if p.wb_barcode and p.wb_barcode.strip():
-                        retained_codes = tuple(
-                            dict.fromkeys((p.wb_barcode.strip(), *retained_codes))
-                        )
                     barcode_result = await add_barcodes_to_product(
                         session, p, retained_codes
                     )
@@ -415,6 +515,21 @@ async def upsert_products_from_wb_cards(
                 except IntegrityError:
                     await session.rollback()
                     if attempt == 1:
+                        concurrent_conflicts = await _barcode_conflicts_for_variant(
+                            session,
+                            tenant_id=tenant_id,
+                            seller_id=seller_id,
+                            barcodes=variant.barcodes,
+                            incoming_product_id=None,
+                        )
+                        if concurrent_conflicts:
+                            _append_barcode_conflicts(
+                                barcode_conflict_details,
+                                variant=variant,
+                                incoming_product_id=None,
+                                conflicts=concurrent_conflicts,
+                            )
+                            barcode_conflicts += len(concurrent_conflicts)
                         skipped += 1
                     continue
                 barcodes_added += barcode_result.added
@@ -434,6 +549,7 @@ async def upsert_products_from_wb_cards(
         "products_skipped": skipped,
         "legacy_marked_old": legacy_marked_old,
         "sizes_missing_chrt_id": missing_chrt_id,
+        "missing_chrt_id_details": missing_chrt_id_details,
         "duplicate_chrt_id": duplicate_chrt_id,
         "barcode_conflicts": barcode_conflicts,
         "barcode_conflict_details": barcode_conflict_details,

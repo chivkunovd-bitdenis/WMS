@@ -42,7 +42,7 @@ async def _link_product_wb_barcode(
                 {
                     "nmID": 555001,
                     "vendorCode": "VC-MU",
-                    "sizes": [{"skus": [barcode]}],
+                    "sizes": [{"chrtID": 55500101, "skus": [barcode]}],
                 }
             ],
             "cursor": {},

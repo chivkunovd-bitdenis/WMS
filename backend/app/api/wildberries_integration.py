@@ -322,6 +322,7 @@ async def link_product_to_wildberries(
         if exc.code in (
             "wb_nm_already_linked",
             "wb_barcode_already_linked",
+            "wb_chrt_already_linked",
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -333,6 +334,7 @@ async def link_product_to_wildberries(
             "wb_size_required",
             "wb_barcode_not_found",
             "wb_chrt_not_found",
+            "wb_chrt_missing",
             "wb_card_no_sizes",
         ):
             raise HTTPException(

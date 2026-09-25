@@ -170,8 +170,15 @@ def _next_cursor(data: dict[str, Any], cards_count: int) -> tuple[str, int] | No
 
 
 async def run_backfill(
-    *, tenant_id: uuid.UUID, seller_id: uuid.UUID, apply: bool
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    apply: bool,
+    cursor_updated_at: str | None = None,
+    cursor_nm_id: int | None = None,
 ) -> BackfillReport:
+    if (cursor_updated_at is None) != (cursor_nm_id is None):
+        raise ValueError("initial_cursor_requires_updated_at_and_nm_id")
     report = BackfillReport(
         mode="apply" if apply else "dry-run",
         tenant_id=str(tenant_id),
@@ -186,8 +193,6 @@ async def run_backfill(
             raise ValueError("seller_content_token_missing")
         content_token = tokens[0]
 
-    cursor_updated_at: str | None = None
-    cursor_nm_id: int | None = None
     seen_cursors: set[tuple[str, int]] = set()
     async with httpx.AsyncClient() as client:
         while True:
@@ -212,7 +217,7 @@ async def run_backfill(
                     )
                 report.wb_cards_read += len(cards)
                 next_cursor = _next_cursor(data, len(cards))
-            except (IntegrityError, ValueError, WildberriesClientError) as exc:
+            except Exception as exc:
                 status = getattr(exc, "status_code", None)
                 code = getattr(exc, "code", type(exc).__name__)
                 report.errors.append(f"{code}:{status}" if status else str(code))
@@ -239,16 +244,23 @@ async def run_backfill(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Do not start at minute :17: the hourly WB import uses the same API limit.",
+    )
     parser.add_argument("--tenant-id", type=uuid.UUID, required=True)
     parser.add_argument("--seller-id", type=uuid.UUID, required=True)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--cursor-updated-at")
+    parser.add_argument("--cursor-nm-id", type=int)
     args = parser.parse_args()
     report = asyncio.run(
         run_backfill(
             tenant_id=args.tenant_id,
             seller_id=args.seller_id,
             apply=args.apply,
+            cursor_updated_at=args.cursor_updated_at,
+            cursor_nm_id=args.cursor_nm_id,
         )
     )
     print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
