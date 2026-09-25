@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
-from test_marketplace_unload_and_discrepancy_acts import (
+from test_marketplace_unload_and_discrepancy_acts import (  # type: ignore[import-not-found]
     E2E_BARCODE,
     _finish_unload_packaging,
     _inventory_in_sorting_zone,
@@ -16,6 +17,9 @@ from test_marketplace_unload_and_discrepancy_acts import (
     _post_inventory,
     _seller_wb_mp_warehouse,
 )
+
+from app.services import marketplace_unload_box_service as box_svc
+from app.services import marketplace_unload_pick_service as pick_svc
 
 BASE = "/operations/marketplace-unload-requests"
 
@@ -120,13 +124,8 @@ async def test_tsd_box_scan_location_then_product_sequence(
         async_client, h, monkeypatch, address_storage_enabled=True
     )
 
-    async def catalog_must_not_be_loaded(*args: object, **kwargs: object) -> dict[str, object]:
-        raise AssertionError("product_id fast path must not rebuild the seller catalog")
-
-    monkeypatch.setattr(
-        "app.services.marketplace_unload_box_service._barcode_index_for_seller",
-        catalog_must_not_be_loaded,
-    )
+    index_spy = AsyncMock(wraps=box_svc._barcode_index_for_seller)
+    monkeypatch.setattr(box_svc, "_barcode_index_for_seller", index_spy)
 
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
@@ -155,6 +154,7 @@ async def test_tsd_box_scan_location_then_product_sequence(
     assert prod_body["kind"] == "product"
     assert prod_body["quantity"] == 1
     assert prod_body["picked_qty"] == 1
+    assert index_spy.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -272,13 +272,8 @@ async def test_pick_scan_deprecated_still_works(
     assert legacy.status_code == 200, legacy.text
     assert legacy.json()["kind"] == "location"
 
-    async def catalog_must_not_be_loaded(*args: object, **kwargs: object) -> dict[str, object]:
-        raise AssertionError("product_id fast path must not rebuild the seller catalog")
-
-    monkeypatch.setattr(
-        "app.services.marketplace_unload_pick_service._barcode_index_for_seller",
-        catalog_must_not_be_loaded,
-    )
+    index_spy = AsyncMock(wraps=pick_svc._barcode_index_for_seller)
+    monkeypatch.setattr(pick_svc, "_barcode_index_for_seller", index_spy)
     product = await async_client.post(
         f"{BASE}/{mid}/pick/scan",
         headers=h,
@@ -291,6 +286,7 @@ async def test_pick_scan_deprecated_still_works(
     assert product.status_code == 200, product.text
     assert product.json()["kind"] == "product"
     assert product.json()["picked_qty"] == 1
+    assert index_spy.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -330,7 +326,7 @@ async def test_box_scan_ready_box_into_open_box_mp018(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """WMS-058: INB source scan and explicit attach use current container, never loose."""
-    from inbound_box_intake_helpers import (
+    from inbound_box_intake_helpers import (  # type: ignore[import-not-found]
         fulfill_inbound_via_box_scans,
         post_primary_accept,
     )
@@ -400,7 +396,9 @@ async def test_box_scan_ready_box_into_open_box_mp018(
         json={"storage_location_id": loc_id},
     )
     assert putaway.status_code == 200, putaway.text
-    from test_marketplace_unload_pick_from_container import _balances_by_container
+    from test_marketplace_unload_pick_from_container import (  # type: ignore[import-not-found]
+        _balances_by_container,
+    )
     before = await _balances_by_container(loc_id, pid)
     assert before[None] == 20
     assert before[inb_id] == 4

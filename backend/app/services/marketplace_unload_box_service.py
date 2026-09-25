@@ -36,7 +36,15 @@ from app.services.marketplace_unload_pick_service import (
     find_location_by_barcode,
 )
 from app.services.marketplace_unload_status import DELETE_EDITABLE_STATUSES
-from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
+from app.services.product_code_resolver_service import (
+    DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    ProductCodeAmbiguous,
+    ProductCodeFound,
+    ProductCodeIndex,
+    ProductCodeScope,
+    build_product_code_index,
+    resolve_product_code_from_index,
+)
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
 MAX_BATCH_BOX_COUNT = 50
@@ -72,19 +80,15 @@ async def _barcode_index_for_seller(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-) -> dict[str, uuid.UUID]:
-    rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
-    idx: dict[str, uuid.UUID] = {}
-    for r in rows:
-        for b in r.wb_barcodes:
-            key = str(b).strip()
-            if key:
-                idx[key] = r.product_id
-        if r.wb_primary_barcode:
-            k = r.wb_primary_barcode.strip()
-            if k:
-                idx[k] = r.product_id
-    return idx
+) -> ProductCodeIndex:
+    return await build_product_code_index(
+        session,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=frozenset({seller_id}),
+        ),
+        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    )
 
 
 async def _request_for_picking(
@@ -409,13 +413,15 @@ async def scan_barcode_into_box(
             container_code=container.code,
         )
 
-    if product_id_hint is None:
-        idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
-        product_id = idx.get(raw)
-        if product_id is None:
-            raise MarketplaceUnloadBoxError("barcode_unknown")
-    else:
-        product_id = product_id_hint
+    index = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
+    resolution = resolve_product_code_from_index(index, raw)
+    if isinstance(resolution, ProductCodeAmbiguous):
+        raise MarketplaceUnloadBoxError("barcode_ambiguous")
+    if not isinstance(resolution, ProductCodeFound):
+        raise MarketplaceUnloadBoxError("barcode_unknown")
+    product_id = resolution.product_id
+    if product_id_hint is not None and product_id_hint != product_id:
+        raise MarketplaceUnloadBoxError("barcode_unknown")
 
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
