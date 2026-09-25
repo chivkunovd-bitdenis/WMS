@@ -10,7 +10,7 @@ import { cellRef, objRef, type ObjKind } from './pickStub'
 /** Товар плана подбора так, как его уже показывают колонки «SKU» и «ШК». */
 type PickPlanProductCodes = { id: string; sku: string; barcode: string }
 
-/** Строка pick-options: сервер может отдать все коды товара списком `scan_codes`. */
+/** Строка pick-options: `scan_codes` — все коды карточки списком строк (FbsPickOptionProductOut). */
 type PickOptionCodes = {
   product_id: string
   scan_codes?: readonly (string | null | undefined)[] | null

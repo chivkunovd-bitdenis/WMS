@@ -34,7 +34,6 @@ import {
   readApiErrorMessage,
 } from '../../utils/readApiErrorMessage'
 import {
-  PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
   buildProductScanIndex,
   productScanSourceFromCatalogRow,
   resolveProductScan,
@@ -456,14 +455,14 @@ function FfMarketplaceUnloadBoxAddDialogContent({
     const productLookup = scan.wedgeRaw !== null
       ? resolveProductScan(productScanIndex, scan.wedgeRaw, { layoutCandidate: scan.code })
       : resolveProductScan(productScanIndex, scan.code)
-    if (productLookup.status === 'ambiguous') {
-      // Код у двух товаров плана: ничего не шлём, источник и короб не меняются (R2).
-      setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
-      return
-    }
-    // Найденный товар уходит тем кодом, по которому он нашёлся: кириллический
-    // артикул — как есть, а не латиницей. Остальное — как и раньше.
-    const barcode = productLookup.status === 'found' ? productLookup.matchedCode : scan.code
+    // Код у двух товаров плана скан не останавливает: тем же кодом может быть
+    // ячейка, тара или палета, а их сервер узнаёт раньше товара (R8). Такой код
+    // уходит без подсказки товара с тем источником, который уже выбран; товар
+    // сервер не выберет — ответит неоднозначностью, и источник не изменится (R2).
+    //
+    // Код уходит тем кандидатом, по которому он совпал: кириллический артикул —
+    // как есть, а не латиницей. Не совпал ни с чем — как и раньше.
+    const barcode = productLookup.status === 'not_found' ? scan.code : productLookup.matchedCode
     try {
       const scanBody: {
         barcode: string

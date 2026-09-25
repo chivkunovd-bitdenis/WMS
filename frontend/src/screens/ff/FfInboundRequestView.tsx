@@ -1737,10 +1737,9 @@ export function FfInboundRequestView({
         return
       }
       lastProductScan.current = null
-      const product = resolveInboundProductScan(scanProductIndex, inboundCatalogScanIndex(catalogById), {
-        code,
-        wedgeRaw,
-      })
+      // Возвратная приёмка ищет только в документе, обычная — ещё и в каталоге селлера (R5).
+      const catalogScope = isReturnOperation ? null : inboundCatalogScanIndex(catalogById)
+      const product = resolveInboundProductScan(scanProductIndex, catalogScope, { code, wedgeRaw })
       if (product.status === 'ambiguous') {
         setScanToastError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
         return
@@ -3841,6 +3840,7 @@ export function FfInboundRequestView({
           requestLines={detail?.lines ?? []}
           boxLines={boxAddDialogBox.lines}
           catalogById={catalogById}
+          catalogScanFallback={!isReturnOperation}
           onMarkingScan={marking.attach}
           onUpdated={async () => {
             await loadDetail()
@@ -3867,6 +3867,7 @@ export function FfInboundRequestView({
                 requestLines={detail?.lines ?? []}
                 boxLines={place.lines ?? []}
                 catalogById={catalogById}
+                catalogScanFallback={!isReturnOperation}
                 onMarkingScan={marking.attach}
                 onUpdated={async () => {
                   await loadDetail()

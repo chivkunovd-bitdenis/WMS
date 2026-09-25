@@ -20,6 +20,8 @@ const WB_P = '4601234567893'
 const WB_A = '4601234567886'
 const OZN = 'OZN-987654'
 const CYR = 'ФА_МОД8-4а/083/42'
+/** Тот же набор клавиш, что у CYR, в латинской раскладке. */
+const CYR_LAYOUT = 'AF_VJL8-4f/083/42'
 const DUP = 'DUP-536'
 const BOX_PROD = 'BOX-PROD-536'
 const GS = '\x1d'
@@ -75,19 +77,22 @@ type ScanBody = { barcode: string; product_id?: string }
 let root: Root | null = null
 let host: HTMLDivElement | null = null
 let requests: ScanBody[] = []
+let requestUrls: string[] = []
 type MarkingScan = (code: string, lineId: string | null) => Promise<void>
 let onMarkingScan = vi.fn<MarkingScan>(async () => undefined)
 let onUpdated = vi.fn(async () => undefined)
 
 beforeEach(() => {
   requests = []
+  requestUrls = []
   onMarkingScan = vi.fn<MarkingScan>(async () => undefined)
   onUpdated = vi.fn(async () => undefined)
   // Сервер отвечает строкой короба того товара, который пришёл подсказкой, а без
   // подсказки — товаром каталога, как это делает серверная ветка (WMS-473).
-  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as ScanBody
     requests.push(body)
+    requestUrls.push(url)
     const productId = body.product_id ?? 'OUT'
     return new Response(
       JSON.stringify({ id: `box-line-${productId}`, product_id: productId, sku_code: productId, product_name: productId, quantity: 1 }),
@@ -105,7 +110,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount() {
+type MountOptions = {
+  containerKind?: 'box' | 'cargo_place'
+  lines?: typeof LINES
+  catalog?: Map<string, WbProductCatalogRow>
+  /** false — возвратная приёмка: только товары документа. */
+  catalogScanFallback?: boolean
+}
+
+function mount(options: MountOptions = {}) {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -117,11 +130,13 @@ function mount() {
         requestId="r1"
         boxId="box-1"
         boxLabel="Короб № 1"
+        containerKind={options.containerKind}
         readOnly={false}
         token="t"
-        requestLines={LINES}
+        requestLines={options.lines ?? LINES}
         boxLines={[]}
-        catalogById={CATALOG}
+        catalogById={options.catalog ?? CATALOG}
+        catalogScanFallback={options.catalogScanFallback ?? true}
         onUpdated={onUpdated}
         onMarkingScan={onMarkingScan}
       />,
@@ -250,6 +265,44 @@ describe('F/S-INB-06: товар в короб через единый поис�
     mount()
     await wedge(code)
     expect(requests).toEqual([{ barcode: code }])
+  })
+})
+
+describe('F/S-INB-06: исходная строка во всей области раньше раскладки (R5, R7, ревью F1)', () => {
+  /** Товар документа, чей латинский артикул совпадает с раскладкой CYR. */
+  const LAYOUT = row('LAYOUT', { sku_code: CYR_LAYOUT })
+  /** Настоящий кириллический артикул — только в каталоге селлера. */
+  const REAL = row('REAL', { sku_code: CYR })
+  const catalog = new Map([P, LAYOUT, REAL].map((r) => [r.id, r]))
+  const lines = [P, LAYOUT].map((r) => ({
+    id: `line-${r.id}`,
+    product_id: r.id,
+    sku_code: r.sku_code,
+    product_name: r.name,
+    expected_qty: 5,
+  }))
+
+  it.each([
+    ['короб', 'box', '/boxes/box-1/scan'],
+    ['грузоместо', 'cargo_place', '/cargo-places/box-1/scan'],
+  ] as const)('%s: кириллический товар каталога не проигрывает латинскому товару документа', async (_label, kind, path) => {
+    mount({ containerKind: kind, lines, catalog })
+    await wedge(CYR)
+    expect(requests).toEqual([{ barcode: CYR }])
+    expect(requestUrls).toHaveLength(1)
+    expect(requestUrls[0]).toContain(path)
+  })
+
+  it('исходная строка не нашлась нигде — раскладка находит товар документа, как раньше', async () => {
+    mount({ lines, catalog: new Map([P, LAYOUT].map((r) => [r.id, r])) })
+    await wedge(CYR)
+    expect(requests).toEqual([{ barcode: CYR_LAYOUT, product_id: 'LAYOUT' }])
+  })
+
+  it('возвратная приёмка: каталог селлера не участвует, область — только документ', async () => {
+    mount({ lines, catalog, catalogScanFallback: false })
+    await wedge(CYR)
+    expect(requests).toEqual([{ barcode: CYR_LAYOUT, product_id: 'LAYOUT' }])
   })
 })
 
