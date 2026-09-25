@@ -896,7 +896,7 @@ async def _ensure_kiz_not_occupied_in_pool(
                 FbsOrderMarking.meta_status != META_STATUS_REJECTED,
             )
         )
-        # UI validation must let an uncertain own binding reach GET-only reconciliation.
+        # UI validation must let an uncertain own binding reach WB reconciliation.
         if marking is not None and (
             code.status in {STATUS_RESERVED, STATUS_PRINTED}
             or await marking_svc.pending_kiz_operation(session, marking)
@@ -1361,9 +1361,14 @@ async def _commit_one_kiz_pair(
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
-                await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
-            except WildberriesClientError as exc:
-                raise FbsKizError("wb_pending_confirmation") from exc
+                await marking_svc.reconcile_pending_kiz_operation(
+                    session, order, current, operation, http_client, token,
+                    actor_user_id=actor_user_id,
+                )
+            except (WildberriesClientError, marking_svc.FbsMarkingError) as exc:
+                if operation.state == WB_OPERATION_STATE_FAILED:
+                    raise FbsKizError("meta_validation_fail", persist_failure_state=True) from exc
+                raise FbsKizError("wb_pending_confirmation", persist_failure_state=True) from exc
             if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
                 raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
             if operation.state == WB_OPERATION_STATE_FAILED:
@@ -1463,6 +1468,7 @@ async def _commit_one_kiz_pair(
         # A lost PUT response or a failed read after PUT cannot undo the WB write.
         ambiguous = (
             new_error.code == "wb_transport_error"
+            or new_error.code == "wb_pending_confirmation"
             or new_error.code == "wb_upstream_error_408"
             or new_error.code.startswith("wb_upstream_error_5")
             or marking.meta_status == META_STATUS_SENDING
