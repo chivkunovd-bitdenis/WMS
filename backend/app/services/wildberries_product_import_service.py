@@ -195,27 +195,24 @@ def _apply_variant_fields(
     nm: int | None,
     vendor: str | None,
     title: str,
-    sku: str,
     variant: WbSizeVariant,
     category: str | None,
 ) -> None:
     if p.seller_id is None:
         p.seller_id = seller_id
-    if not p.sku_code.strip():
-        p.sku_code = sku
-    if not p.name.strip():
-        p.name = title
-    if p.wb_nm_id is None and nm is not None:
+    # Existing Product.sku_code is an operator-visible identity. In particular,
+    # do not rewrite legacy values such as ``V1/0`` to the current ``V1`` format.
+    # Every other imported WB field keeps the pre-WMS-535 refresh semantics.
+    p.name = title
+    if nm is not None:
         p.wb_nm_id = nm
-    if not p.wb_vendor_code and vendor is not None:
+    if vendor is not None:
         p.wb_vendor_code = vendor
-    if p.wb_chrt_id is None:
-        p.wb_chrt_id = variant.chrt_id
+    p.wb_chrt_id = variant.chrt_id
     if not p.wb_barcode or not p.wb_barcode.strip():
         p.wb_barcode = variant.barcode
-    if not p.wb_size and variant.size_label is not None:
-        p.wb_size = variant.size_label
-    if not p.category and category is not None:
+    p.wb_size = variant.size_label
+    if category is not None:
         p.category = category
 
 
@@ -327,6 +324,13 @@ async def upsert_products_from_wb_cards(
         # SKU formatting rule for newly created products even though all barcodes
         # of a size now live on one Product.
         multi = sum(len(variant.barcodes) for variant in variants) > 1
+        legacy_marked_old += await _mark_legacy_products_for_card(
+            session,
+            tenant_id,
+            seller_id,
+            nm,
+            multi_variant=multi,
+        )
 
         for variant in variants:
             if variant.chrt_id is None:
@@ -401,7 +405,6 @@ async def upsert_products_from_wb_cards(
                         nm=nm,
                         vendor=vendor,
                         title=title,
-                        sku=sku,
                         variant=variant,
                         category=category,
                     )

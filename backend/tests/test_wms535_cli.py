@@ -76,7 +76,9 @@ async def test_backfill_retries_429_and_temporary_5xx(
 @pytest.mark.asyncio
 async def test_backfill_resumes_from_explicit_cursor_and_reports_unexpected_error(
     monkeypatch: pytest.MonkeyPatch,
+    db_session: object,
 ) -> None:
+    del db_session
     tenant_id, seller_id = await _seed_scope()
     requested_cursors: list[tuple[str | None, int | None]] = []
 
@@ -336,12 +338,9 @@ async def test_duplicate_merge_discovers_and_moves_product_foreign_keys(
             .scalars()
             .all()
         )
-        assert len(dimension_events) == 2
-        assert sum(event.applied for event in dimension_events) == 1
-        assert {event.source for event in dimension_events} == {
-            "wb",
-            "wb_merged_history",
-        }
+        assert len(dimension_events) == 1
+        assert dimension_events[0].applied is True
+        assert dimension_events[0].source == "wb"
 
 
 @pytest.mark.asyncio

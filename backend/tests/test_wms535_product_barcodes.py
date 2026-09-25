@@ -100,7 +100,7 @@ async def test_import_keeps_all_barcodes_on_one_chrt_product(
         assert len(products) == 1
         product = products[0]
         assert product.wb_barcode == "2000000000001"
-        assert product.name == "Initial title"
+        assert product.name == "Renamed title"
         assert product.sku_code == "WMS535-A/M"
         aliases = set(
             (
@@ -254,7 +254,7 @@ async def test_import_preserves_existing_identity_and_fills_empty_primary_barcod
                         {
                             "chrtID": 901,
                             "techSize": "0",
-                            "skus": ["901-CODE-1", "901-CODE-2"],
+                            "skus": ["901-CODE-1"],
                         }
                     ],
                 }
@@ -265,7 +265,9 @@ async def test_import_preserves_existing_identity_and_fills_empty_primary_barcod
         stored = await session.get(Product, product_id)
         assert stored is not None
         assert stored.sku_code == "V1/0"
-        assert stored.name == "Existing name"
+        assert stored.name == "Changed by WB"
+        assert stored.wb_vendor_code == "V1"
+        assert stored.wb_size == "0"
         assert stored.wb_barcode == "901-CODE-1"
 
 
@@ -353,12 +355,22 @@ async def test_manual_relink_replaces_primary_and_releases_wrong_card_barcodes(
         await session.commit()
         product_id = product.id
 
-        await link_product_to_wb_card(
+        _linked, first_removed = await link_product_to_wb_card(
             session, tenant_id, seller_id, product_id, 9101, wb_barcode="A-2"
         )
-        await link_product_to_wb_card(
+        assert first_removed == []
+        _linked, same_size_removed = await link_product_to_wb_card(
+            session, tenant_id, seller_id, product_id, 9101
+        )
+        assert same_size_removed == []
+        stored = await session.get(Product, product_id)
+        assert stored is not None
+        assert stored.wb_barcode == "A-2"
+
+        _linked, second_removed = await link_product_to_wb_card(
             session, tenant_id, seller_id, product_id, 9102, wb_barcode="B-2"
         )
+        assert second_removed == ["A-1", "A-2"]
 
         stored = await session.get(Product, product_id)
         assert stored is not None

@@ -78,7 +78,7 @@ async def _allow_seller_shop(user_id: str, seller_id: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_wb_subject_category_is_trimmed_and_nonempty_value_is_preserved(
+async def test_wb_subject_category_is_trimmed_for_every_variant_and_blank_resync_preserves_it(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -114,19 +114,19 @@ async def test_wb_subject_category_is_trimmed_and_nonempty_value_is_preserved(
 
         card["subjectName"] = "Брюки"
         await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
-        assert {row.category for row in rows} == {"Футболки"}
+        assert {row.category for row in rows} == {"Брюки"}
 
         card["subjectName"] = "   "
         await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
-        assert {row.category for row in rows} == {"Футболки"}
+        assert {row.category for row in rows} == {"Брюки"}
 
         card["subjectName"] = ["не строка"]
         await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
-        assert {row.category for row in rows} == {"Футболки"}
+        assert {row.category for row in rows} == {"Брюки"}
 
         del card["subjectName"]
         await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
-        assert {row.category for row in rows} == {"Футболки"}
+        assert {row.category for row in rows} == {"Брюки"}
 
         empty_subject_card = {
             "nmID": 1002,
@@ -145,7 +145,7 @@ async def test_wb_subject_category_is_trimmed_and_nonempty_value_is_preserved(
     products = await async_client.get("/products", headers=admin_headers)
     assert products.status_code == 200, products.text
     imported = [row for row in products.json() if row["seller_id"] == str(seller_id)]
-    assert {row["category"] for row in imported} == {"Футболки", None}
+    assert {row["category"] for row in imported} == {"Брюки", None}
 
 
 @pytest.mark.asyncio

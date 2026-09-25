@@ -52,7 +52,7 @@ async def link_product_to_wb_card(
     *,
     wb_barcode: str | None = None,
     wb_chrt_id: int | None = None,
-) -> Product:
+) -> tuple[Product, list[str]]:
     p = await session.get(Product, product_id)
     if p is None or p.tenant_id != tenant_id:
         raise WildberriesLinkError("product_not_found")
@@ -112,8 +112,38 @@ async def link_product_to_wb_card(
 
     identity_changed = p.wb_nm_id != nm_id or p.wb_chrt_id != variant.chrt_id
     previous_primary = p.wb_barcode.strip() if p.wb_barcode and p.wb_barcode.strip() else None
-    selected_primary = wb_barcode.strip() if wb_barcode and wb_barcode.strip() else variant.barcode
+    explicit_primary = wb_barcode.strip() if wb_barcode and wb_barcode.strip() else None
+    selected_primary = explicit_primary or variant.barcode
+    if (
+        explicit_primary is None
+        and not identity_changed
+        and previous_primary is not None
+        and previous_primary in variant.barcodes
+    ):
+        selected_primary = previous_primary
+    removed_barcodes: list[str] = []
     if identity_changed:
+        removed_barcodes = list(
+            dict.fromkeys(
+                (
+                    await session.execute(
+                        select(ProductBarcode.barcode)
+                        .where(
+                            ProductBarcode.tenant_id == tenant_id,
+                            ProductBarcode.seller_id == seller_id,
+                            ProductBarcode.product_id == product_id,
+                            ProductBarcode.source == "wb",
+                            ProductBarcode.barcode.not_in(variant.barcodes),
+                        )
+                        .order_by(ProductBarcode.barcode)
+                    )
+                ).scalars()
+            )
+        )
+        if previous_primary and previous_primary not in variant.barcodes:
+            removed_barcodes = list(
+                dict.fromkeys((*removed_barcodes, previous_primary))
+            )
         await session.execute(
             delete(ProductBarcode).where(
                 ProductBarcode.tenant_id == tenant_id,
@@ -143,4 +173,4 @@ async def link_product_to_wb_card(
         await session.rollback()
         raise WildberriesLinkError("wb_barcode_already_linked") from exc
     await session.refresh(p, attribute_names=["seller"])
-    return p
+    return p, removed_barcodes

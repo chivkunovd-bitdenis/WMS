@@ -1,8 +1,9 @@
 """Merge duplicate WB products for one tenant and seller after safety checks.
 
 Dry-run is the default. ``--apply`` requires ``--expected-pairs`` and processes
-each duplicate chrtID atomically. Product references are discovered from live
-database foreign-key metadata, not maintained as a partial hard-coded list.
+each duplicate chrtID through the standard WMS-349 product merge. Product
+references are discovered from live database foreign-key metadata, not
+maintained as a partial hard-coded list.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any, cast
+from typing import cast
 
 from sqlalchemy import Uuid, bindparam, inspect, or_, select, text
 from sqlalchemy.engine.reflection import Inspector
@@ -25,8 +26,8 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
 from app.models.product import Product
-from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
+from app.services.product_merge_service import ProductMergeError, merge_products
 
 
 @dataclass(frozen=True)
@@ -307,55 +308,6 @@ async def _probe_reference_conflicts(
     return conflicts
 
 
-async def _merge_dimension_events(
-    session: AsyncSession,
-    *,
-    keeper_id: uuid.UUID,
-    duplicate_id: uuid.UUID,
-) -> int:
-    """Preserve every event while keeping dimension uniqueness valid."""
-    keeper_events = list(
-        (
-            await session.execute(
-                select(ProductDimensionEvent).where(
-                    ProductDimensionEvent.product_id == keeper_id
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    duplicate_events = list(
-        (
-            await session.execute(
-                select(ProductDimensionEvent)
-                .where(ProductDimensionEvent.product_id == duplicate_id)
-                .order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    keeper_has_applied = any(event.applied for event in keeper_events)
-    keeper_wb_fingerprints = {
-        event.fingerprint for event in keeper_events if event.source == "wb"
-    }
-    for event in duplicate_events:
-        if event.applied:
-            if keeper_has_applied:
-                event.applied = False
-            else:
-                keeper_has_applied = True
-        if event.source == "wb":
-            if event.fingerprint in keeper_wb_fingerprints:
-                event.source = "wb_merged_history"
-            else:
-                keeper_wb_fingerprints.add(event.fingerprint)
-        event.product_id = keeper_id
-    await session.flush()
-    return len(duplicate_events)
-
-
 async def _merge_pair(
     session: AsyncSession,
     *,
@@ -423,48 +375,21 @@ async def _merge_pair(
         return report
 
     try:
-        moved_dimensions = await _merge_dimension_events(
+        merged = await merge_products(
             session,
-            keeper_id=keeper.id,
-            duplicate_id=duplicate.id,
+            tenant_id,
+            [keeper.id, duplicate.id],
         )
-        if moved_dimensions:
-            report.references_moved[
-                "product_dimension_events.product_id"
-            ] = moved_dimensions
-        for reference in references:
-            if reference.table == "product_dimension_events":
-                continue
-            table = _quoted(session, reference.table)
-            column = _quoted(session, reference.column)
-            result = await session.execute(
-                text(
-                    f"UPDATE {table} SET {column} = :keeper_id "
-                    f"WHERE {column} = :duplicate_id"
-                ).bindparams(
-                    bindparam("keeper_id", type_=Uuid(as_uuid=True)),
-                    bindparam("duplicate_id", type_=Uuid(as_uuid=True)),
-                ),
-                {"keeper_id": keeper.id, "duplicate_id": duplicate.id},
-            )
-            moved = int(cast(Any, result).rowcount or 0)
-            if moved:
-                report.references_moved[
-                    f"{reference.table}.{reference.column}"
-                ] = moved
-        remaining = await _reference_counts(session, references, duplicate.id)
-        if remaining:
-            raise ValueError("references_remain_after_update")
-        await session.delete(duplicate)
-        await session.flush()
-        await session.commit()
-    except (IntegrityError, ValueError) as exc:
-        await session.rollback()
+        if merged.id != keeper.id:
+            raise ValueError("standard_merge_kept_unexpected_product")
+        report.references_moved = {
+            key: count
+            for key, count in report.references_before.items()
+            if not key.startswith("product_dimension_events.")
+        }
+    except ProductMergeError as exc:
         report.status = "skipped"
-        if isinstance(exc, IntegrityError):
-            report.reason = "unexpected_integrity_error_after_preflight"
-        else:
-            report.reason = str(exc)
+        report.reason = f"standard_merge:{exc.code}"
         report.references_moved = {}
         return report
     report.status = "merged"

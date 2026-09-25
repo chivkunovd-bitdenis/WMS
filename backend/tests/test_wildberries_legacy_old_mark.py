@@ -1,4 +1,4 @@
-"""Keep existing product identity while importing WB sizes."""
+"""Mark pre-split WB products as OLD/ when importing multi-size cards."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.services.wildberries_product_import_service import upsert_products_from
 
 
 @pytest.mark.asyncio
-async def test_multi_size_sync_does_not_rewrite_existing_product(async_client: AsyncClient) -> None:
+async def test_multi_size_sync_marks_legacy_product_old(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -67,12 +67,12 @@ async def test_multi_size_sync_does_not_rewrite_existing_product(async_client: A
         await session.commit()
 
         stats = await upsert_products_from_wb_cards(session, tenant_id, seller_uuid, [card])
-        assert stats["legacy_marked_old"] == 0
+        assert stats["legacy_marked_old"] == 1
         assert stats["products_created"] == 2
 
         await session.refresh(p)
-        assert p.sku_code == f"LEG-MERGE-{suffix}"
-        assert p.name == "Лосины merged"
+        assert p.sku_code.startswith("OLD/")
+        assert p.name.startswith("[OLD] ")
 
     plist = await async_client.get("/products", headers=ah)
     rows = [r for r in plist.json() if r.get("seller_id") == sid]
