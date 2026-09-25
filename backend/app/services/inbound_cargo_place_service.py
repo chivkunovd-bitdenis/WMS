@@ -23,6 +23,7 @@ from app.services.document_event_service import (
     record_document_event_safely,
 )
 from app.services.inbound_intake_service import InboundIntakeError
+from app.services.product_code_resolver_service import normalize_product_code
 
 
 async def _load_cargo_place(
@@ -140,20 +141,22 @@ async def scan_product(
     mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeCargoPlace:
     """Resolve a product scan and add one unit to an inbound cargo place."""
-    raw = barcode.strip()
+    raw = normalize_product_code(barcode)
     if not raw:
         raise InboundIntakeError("barcode_empty")
     request = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
     if request is None:
         raise InboundIntakeError("request_not_found")
     place = await _load_cargo_place(session, tenant_id, request_id, place_id)
-    product_id = product_id_hint
+    product_id = await intake_svc.resolve_scanned_product_id(
+        session,
+        tenant_id,
+        request,
+        raw,
+        product_id_hint=product_id_hint,
+    )
     if product_id is None:
-        product_id = await intake_svc.resolve_scanned_product_id(
-            session, tenant_id, request, raw
-        )
-        if product_id is None:
-            raise InboundIntakeError("barcode_unknown")
+        raise InboundIntakeError("barcode_unknown")
     replay = await intake_svc._claim_intake_mutation(
         session, tenant_id, request_id, mutation_id=mutation_id, action="cargo_scan",
         payload={"request_id": str(request_id), "place_id": str(place_id),

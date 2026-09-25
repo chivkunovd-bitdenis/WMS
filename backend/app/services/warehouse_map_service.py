@@ -20,6 +20,8 @@ from app.models.inbound_intake import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.pallet import Pallet
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
@@ -166,6 +168,80 @@ def _card_data(card: SellerWildberriesImportedCard | None) -> tuple[str | None, 
     if not isinstance(raw, dict):
         return None, None
     return subject_name_from_card(raw), first_photo_url_from_card(raw)
+
+
+async def load_product_scan_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, list[str]]:
+    """Load every printable product barcode in a fixed number of batch queries."""
+    if not product_ids:
+        return {}
+    codes_by_product: dict[uuid.UUID, list[str]] = {
+        product_id: [] for product_id in product_ids
+    }
+    seen_by_product: dict[uuid.UUID, set[str]] = {
+        product_id: set() for product_id in product_ids
+    }
+
+    def add(product_id: uuid.UUID, value: object) -> None:
+        if product_id not in codes_by_product or not isinstance(value, str):
+            return
+        code = value.strip(" \t\r\n")
+        if not code or code in seen_by_product[product_id]:
+            return
+        seen_by_product[product_id].add(code)
+        codes_by_product[product_id].append(code)
+
+    product_rows = (
+        await session.execute(
+            select(Product.id, Product.wb_barcode).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(product_ids),
+            )
+        )
+    ).all()
+    for product_id, barcode in product_rows:
+        add(product_id, barcode)
+
+    wb_rows = (
+        await session.execute(
+            select(ProductBarcode.product_id, ProductBarcode.barcode)
+            .where(
+                ProductBarcode.tenant_id == tenant_id,
+                ProductBarcode.product_id.in_(product_ids),
+                ProductBarcode.source == "wb",
+            )
+            .order_by(ProductBarcode.product_id, ProductBarcode.created_at, ProductBarcode.id)
+        )
+    ).all()
+    for product_id, barcode in wb_rows:
+        add(product_id, barcode)
+
+    ozon_rows = (
+        await session.execute(
+            select(
+                ProductMarketplaceLink.product_id,
+                ProductMarketplaceLink.external_barcodes,
+            )
+            .join(Product, Product.id == ProductMarketplaceLink.product_id)
+            .where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.product_id.in_(product_ids),
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.is_active.is_(True),
+                Product.tenant_id == tenant_id,
+                Product.seller_id == ProductMarketplaceLink.seller_id,
+            )
+            .order_by(ProductMarketplaceLink.product_id, ProductMarketplaceLink.id)
+        )
+    ).all()
+    for product_id, external_barcodes in ozon_rows:
+        if isinstance(external_barcodes, (list, tuple)):
+            for barcode in external_barcodes:
+                add(product_id, barcode)
+    return codes_by_product
 
 
 async def _assert_warehouse(
@@ -519,6 +595,10 @@ async def get_warehouse_map(
         {product.id for _balance, _location, product, _seller in rows}
         | {row.product.id for row in pending_contents},
     )
+    map_product_ids = {
+        product.id for _balance, _location, product, _seller in rows
+    } | {row.product.id for row in pending_contents}
+    scan_codes = await load_product_scan_codes(session, tenant_id, map_product_ids)
 
     location_by_id = {location.id: location for location in locations}
     balance_location: dict[tuple[str, uuid.UUID], uuid.UUID] = {}
@@ -625,6 +705,7 @@ async def get_warehouse_map(
             "seller_name": seller_name,
             "category": category,
             "barcode": product.wb_barcode,
+            "scan_codes": scan_codes.get(product.id, []),
             "seller_article": product.wb_vendor_code,
             "photo_url": photo_url,
             "qty": int(balance.quantity),
@@ -678,6 +759,7 @@ async def get_warehouse_map(
                 "seller_name": seller_name,
                 "category": category,
                 "barcode": product.wb_barcode,
+                "scan_codes": scan_codes.get(product.id, []),
                 "seller_article": product.wb_vendor_code,
                 "photo_url": photo_url,
                 "qty": pending_quantity,

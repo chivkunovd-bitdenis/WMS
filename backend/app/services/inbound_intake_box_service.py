@@ -23,6 +23,7 @@ from app.services.document_event_service import (
     current_document_event_actor,
     record_document_event_safely,
 )
+from app.services.product_code_resolver_service import normalize_product_code
 
 # IN-BE-01 collapsed chain — keep in sync with inbound_intake_service status constants.
 BOX_STATUSES_AFTER_PRIMARY = (
@@ -406,7 +407,7 @@ async def scan_product_into_box(
     product_id_hint: uuid.UUID | None = None,
     mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeBoxLine:
-    raw = barcode.strip()
+    raw = normalize_product_code(barcode)
     if not raw:
         raise InboundIntakeBoxError("barcode_empty")
     req = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
@@ -415,14 +416,18 @@ async def scan_product_into_box(
     box = next((item for item in req.boxes if item.id == box_id), None)
     if box is None:
         raise InboundIntakeBoxError("box_not_found")
-    product_id = product_id_hint
+    try:
+        product_id = await intake_svc.resolve_scanned_product_id(
+            session,
+            tenant_id,
+            req,
+            raw,
+            product_id_hint=product_id_hint,
+        )
+    except intake_svc.InboundIntakeError as exc:
+        raise InboundIntakeBoxError(exc.code) from exc
     if product_id is None:
-        try:
-            product_id = await intake_svc.resolve_scanned_product_id(session, tenant_id, req, raw)
-        except intake_svc.InboundIntakeError as exc:
-            raise InboundIntakeBoxError(exc.code) from exc
-        if product_id is None:
-            raise InboundIntakeBoxError("barcode_unknown")
+        raise InboundIntakeBoxError("barcode_unknown")
     replay = await _claim_box_mutation(
         session, tenant_id, request_id, mutation_id=mutation_id, action="box_scan",
         payload={"request_id": str(request_id), "box_id": str(box_id),

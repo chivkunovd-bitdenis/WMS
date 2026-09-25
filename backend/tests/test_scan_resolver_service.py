@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
@@ -26,6 +27,8 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
@@ -256,6 +259,60 @@ async def test_ambiguous_code_returns_all_matches_instead_of_first(
             await resolve_any_scan(session, tenant_id, "COLLISION-CODE")
     assert caught.value.code == "scan_ambiguous"
     assert [match.type for match in caught.value.matches] == ["cell", "product"]
+
+
+@pytest.mark.asyncio
+async def test_product_branch_uses_all_aliases_and_reports_cross_source_ambiguity(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id = await _register_tenant(async_client, "product-aliases")
+    seeded = await _seed_objects(tenant_id)
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, seeded["product"])
+        assert product is not None and product.seller_id is not None
+        collision_product = await session.scalar(
+            select(Product).where(
+                Product.tenant_id == tenant_id,
+                Product.sku_code == "COLLISION-SKU",
+            )
+        )
+        assert collision_product is not None
+        collision_product.sku_code = "DUP-536"
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=tenant_id,
+                    seller_id=product.seller_id,
+                    product_id=product.id,
+                    barcode="4601234567886",
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=product.seller_id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_barcodes=["DUP-536"],
+                ),
+            ]
+        )
+        await session.commit()
+
+        additional = await resolve_any_scan(session, tenant_id, "4601234567886")
+        assert additional.type == "product"
+        assert additional.id == product.id
+
+        casefolded_sku = await resolve_any_scan(session, tenant_id, "product-sku")
+        assert casefolded_sku.id == product.id
+
+        with pytest.raises(ScanResolverError) as ambiguous:
+            await resolve_any_scan(session, tenant_id, "DUP-536")
+        assert ambiguous.value.code == "scan_ambiguous"
+        assert {(match.type, match.id) for match in ambiguous.value.matches} == {
+            ("product", product.id),
+            ("product", collision_product.id),
+        }
 
 
 @pytest.mark.asyncio

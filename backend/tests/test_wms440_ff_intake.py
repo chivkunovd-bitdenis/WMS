@@ -32,6 +32,7 @@ async def _setup(client: AsyncClient) -> tuple[dict[str, str], str, str, str]:
         json={
             "name": "WMS440 product",
             "sku_code": f"WMS440-{suffix}",
+            "wb_barcode": "synthetic-scan",
             "seller_id": seller.json()["id"],
             "length_mm": 1,
             "width_mm": 1,
