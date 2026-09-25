@@ -77,6 +77,7 @@ async def get_product_movements(
     operation: Annotated[str | None, Query()] = None,
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> dict[str, object]:
     """Движения за период: когда приехало, когда уехало и по какому документу.
@@ -84,6 +85,7 @@ async def get_product_movements(
     Раскрыть можно товар (`product_id`) или вид движения (`operation`) — второй
     случай нужен группировке «по видам», где третьего уровня раньше не было.
     `page` — постраничная догрузка (WMS-531 R11, порция — `MOVEMENT_PAGE_LIMIT`).
+    `search` — тот же фильтр товара, что и в сводке (WMS-531 ревью Astra, F4).
     """
     await assert_inventory_read_access(session, user)
     try:
@@ -96,6 +98,7 @@ async def get_product_movements(
             date_to=date_to,
             seller_id=seller_scope if seller_scope is not None else seller_id,
             warehouse_id=warehouse_id,
+            search=search,
             page=page,
         )
     except ValueError as exc:

@@ -11,6 +11,7 @@ from openpyxl import Workbook  # type: ignore[import-untyped]
 from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.background_job import BackgroundJob
@@ -390,6 +391,26 @@ async def incomplete_transfer_product_ids(
         )
         if not is_complete:
             incomplete.update(m[0] for m in members)
+
+    # WMS-531 ревью Astra, F6: движение расположения совсем без номера группы
+    # никогда не может оказаться полной парой — раньше такие строки не
+    # попадали даже в кандидаты (`transfer_group_id IS NOT NULL` их
+    # отбрасывал), и товар с потерянной второй стороной оставался без
+    # предупреждения, хотя откат «было»/«стало» её всё равно учитывает.
+    ungrouped_rows = await session.execute(
+        select(InventoryMovement.product_id)
+        .join(Product, Product.id == InventoryMovement.product_id)
+        .where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.created_at >= date_from,
+            InventoryMovement.created_at < date_to,
+            InventoryMovement.movement_type.in_(LOCATION_ONLY_MOVEMENT_TYPES),
+            InventoryMovement.transfer_group_id.is_(None),
+            *_product_scope_filters(tenant_id, seller_id, search),
+        )
+        .distinct()
+    )
+    incomplete.update(product_id for (product_id,) in ungrouped_rows)
     return incomplete
 
 
@@ -662,21 +683,22 @@ async def build_overview(
         seller_id=seller_id, search=search,
     )
 
+    # WMS-531 ревью Astra, F5: селлер здесь и ниже — ТЕКУЩИЙ владелец товара
+    # (Product.seller_id), а не снимок на момент движения
+    # (InventoryMovement.seller_id). Иначе кабинет селлера мог показать
+    # количества по чужому текущему владельцу товара или потерять свои —
+    # ровно то расхождение, которое R10 запрещает.
     movement_filter = [
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
         stock_movement_filter(),
+        Product.id == InventoryMovement.product_id,
     ]
     if seller_id is not None:
-        movement_filter.append(InventoryMovement.seller_id == seller_id)
+        movement_filter.append(Product.seller_id == seller_id)
     if search:
-        movement_filter.extend(
-            [
-                Product.id == InventoryMovement.product_id,
-                product_search_filter(tenant_id, search),
-            ]
-        )
+        movement_filter.append(product_search_filter(tenant_id, search))
 
     length = date_to - date_from
     previous_from, previous_to = date_from - length, date_from
@@ -685,16 +707,12 @@ async def build_overview(
         InventoryMovement.created_at >= previous_from,
         InventoryMovement.created_at < previous_to,
         stock_movement_filter(),
+        Product.id == InventoryMovement.product_id,
     ]
     if seller_id is not None:
-        previous_filter.append(InventoryMovement.seller_id == seller_id)
+        previous_filter.append(Product.seller_id == seller_id)
     if search:
-        previous_filter.extend(
-            [
-                Product.id == InventoryMovement.product_id,
-                product_search_filter(tenant_id, search),
-            ]
-        )
+        previous_filter.append(product_search_filter(tenant_id, search))
     out_expr = func.coalesce(
         func.sum(
             case(
@@ -869,11 +887,26 @@ async def build_overview(
 
 
 def row_operation_label(
-    movement_type: str, *, intake_operation_type: str | None, quantity_delta: int,
+    movement_type: str,
+    *,
+    intake_operation_type: str | None,
+    quantity_delta: int,
+    has_resolved_document: bool = False,
 ) -> str:
     """WMS-531 R2. Подпись «Движение» одной строки — не всегда совпадает с её
     группой в «По операциям» (см. Корректировка/Передача между селлерами:
-    группа общая, подписи разные)."""
+    группа общая, подписи разные).
+
+    WMS-531 ревью Astra, F8: «FBS, сторно» — это про ПОДТВЕРЖДЁННОЕ историческое
+    сторно (R2: «сторно до 05.09.2026», связанное `reversal_movement_id`), а не
+    про любую положительную строку по знаку. Известные сентябрьские правки —
+    разовые правки данных без автора, не сторно заказа (факт ведущего, прод,
+    только чтение) — подписывать их «сторно» без подтверждённой связи с
+    заказом означало бы приписать документу непроверенный смысл. Пока
+    требования не определяют отдельную подпись для положительной строки без
+    связи, используем нейтральную «FBS» — она и так верна (это FBS-движение),
+    просто не утверждает, что это возврат.
+    """
     if movement_type == MOVEMENT_TYPE_INBOUND_INTAKE:
         return "Возврат" if intake_operation_type == "return" else "Приёмка"
     if movement_type == MOVEMENT_TYPE_DISCREPANCY_ACT:
@@ -881,7 +914,7 @@ def row_operation_label(
     if movement_type == MOVEMENT_TYPE_OWNERSHIP_RECEIPT:
         return "Приёмка при передаче между селлерами"
     if movement_type == MOVEMENT_TYPE_FBS_SHIPMENT:
-        return "FBS, сторно" if quantity_delta > 0 else "FBS"
+        return "FBS, сторно" if quantity_delta > 0 and has_resolved_document else "FBS"
     if movement_type not in REPORT_MOVEMENT_TYPE_GROUPS:
         # WMS-531 R2, последняя строка таблицы: неизвестный вид всё равно
         # обязан быть виден и опознаваем, а не молча слит с прочими «Прочее».
@@ -994,19 +1027,53 @@ async def _resolve_fbs_documents(
     Списание FBS связано с заказом через журнал `FbsShipmentReversalLedger`:
     прямой id (исходное списание или его историческое сторно
     `reversal_movement_id`) либо позиция Ozon-заказа с несколькими товарами
-    (`ozon_positions_json`, где у каждой позиции свой movement_id). Список
-    позиций читаем только в границах текущего периода (по `created_at`
-    журнала — пишется в той же операции, что и списание): раньше запрос
-    читал вообще все строки с `ozon_positions_json` по арендатору, что на
-    годовом объёме означало загрузку всего исторического журнала FBS в
-    память (WMS-531 R15). Старое `fbs_order_pick`/его отмена документа в
-    журнале не имеют — ищем через запись подбора (см. ниже).
+    (`ozon_positions_json`, где у каждой позиции свой movement_id). Старое
+    `fbs_order_pick`/его отмена документа в журнале не имеют — ищем через
+    запись подбора (см. ниже).
+
+    WMS-531 ревью Astra, F2: список позиций Ozon ограничен по времени НЕ
+    `created_at` самого журнала (он пишется заранее, при подготовке к
+    передаче — `fbs_ozon_packaging_service.prepare_shipment_sources`, часто
+    задолго до фактического списания), а по `created_at` движения-якоря
+    (`shipment_movement_id`): все позиции одного списания создаются в одном
+    вызове `write_off_order` практически одномоментно, поэтому якорь — верная
+    граница периода, а дата журнала — нет. Старое ограничение по дате
+    журнала теряло вторую и следующие позиции, если журнал готовили раньше.
     """
     fbs_movement_ids = {
         row.id for row in rows if row.movement_type in {"fbs_shipment", "fbs_order_pick"}
     }
     pick_undo_ids = {row.id for row in rows if row.movement_type == "fbs_order_pick_undo"}
     result: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
+
+    # WMS-531 ревью Astra, F3: разделённое списание (в т.ч. вторая и следующие
+    # позиции Ozon, расколотые по местам/таре) может быть найдено не по своему
+    # id, а по id ЛЮБОГО соседа с тем же transfer_group_id — включая соседа,
+    # найденного только через ozon_positions_json, а не через
+    # shipment_movement_id напрямую. Поэтому расширяем набор кандидатов ДО
+    # прямых поисков всеми участниками группы, а не подбираем документ по
+    # группе отдельным финальным шагом, ограниченным только shipment_movement_id.
+    group_by_movement: dict[uuid.UUID, uuid.UUID] = {
+        row.id: row.transfer_group_id
+        for row in rows
+        if row.movement_type == "fbs_shipment" and row.transfer_group_id is not None
+    }
+    members_by_group: dict[uuid.UUID, set[uuid.UUID]] = {}
+    if group_by_movement:
+        group_ids = set(group_by_movement.values())
+        sibling_rows = await session.execute(
+            select(InventoryMovement.id, InventoryMovement.transfer_group_id).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.transfer_group_id.in_(group_ids),
+                InventoryMovement.movement_type == "fbs_shipment",
+            )
+        )
+        for member_id, group_id in sibling_rows:
+            members_by_group.setdefault(group_id, set()).add(member_id)
+
+    expanded_fbs_ids = set(fbs_movement_ids)
+    for members in members_by_group.values():
+        expanded_fbs_ids |= members
 
     async def _apply_ledger_rows(
         # Каждый элемент — Row из session.execute с колонками (movement_id,
@@ -1031,7 +1098,7 @@ async def _resolve_fbs_documents(
                 number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
                 result[linked_id] = (number, supply_id)
 
-    if fbs_movement_ids:
+    if expanded_fbs_ids:
         by_shipment_id = await session.execute(
             select(
                 FbsShipmentReversalLedger.shipment_movement_id,
@@ -1043,15 +1110,15 @@ async def _resolve_fbs_documents(
             .where(
                 FbsShipmentReversalLedger.tenant_id == tenant_id,
                 FbsOrder.tenant_id == tenant_id,
-                FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids),
+                FbsShipmentReversalLedger.shipment_movement_id.in_(expanded_fbs_ids),
             )
         )
-        await _apply_ledger_rows(by_shipment_id, fbs_movement_ids)
+        await _apply_ledger_rows(by_shipment_id, expanded_fbs_ids)
 
     # Историческое сторно FBS (до 05.09.2026, movement_type всё ещё
     # "fbs_shipment", но со знаком «+») связано через reversal_movement_id,
     # а не shipment_movement_id.
-    reversal_candidates = fbs_movement_ids - set(result)
+    reversal_candidates = expanded_fbs_ids - set(result)
     if reversal_candidates:
         by_reversal_id = await session.execute(
             select(
@@ -1069,8 +1136,9 @@ async def _resolve_fbs_documents(
         )
         await _apply_ledger_rows(by_reversal_id, reversal_candidates)
 
-    ozon_position_candidates = fbs_movement_ids - set(result)
+    ozon_position_candidates = expanded_fbs_ids - set(result)
     if ozon_position_candidates:
+        anchor_movement = aliased(InventoryMovement)
         by_position = await session.execute(
             select(
                 FbsShipmentReversalLedger.shipment_movement_id,
@@ -1079,55 +1147,29 @@ async def _resolve_fbs_documents(
                 FbsOrder.supply_id,
             )
             .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+            .join(
+                anchor_movement,
+                anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
+            )
             .where(
                 FbsShipmentReversalLedger.tenant_id == tenant_id,
                 FbsOrder.tenant_id == tenant_id,
                 FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
-                FbsShipmentReversalLedger.created_at >= date_from,
-                FbsShipmentReversalLedger.created_at < date_to,
+                anchor_movement.created_at >= date_from,
+                anchor_movement.created_at < date_to,
             )
         )
         await _apply_ledger_rows(by_position, ozon_position_candidates)
 
-    # Разделённое списание FBS (несколько мест/тары на одно и то же
-    # количество): журнал хранит id только первой строки, остальные делят
-    # тот же transfer_group_id (WMS-531 R3). Достаём номер заказа с уже
-    # связанной строки той же группы.
-    unresolved_with_group = {
-        row.id for row in rows
-        if row.movement_type == "fbs_shipment"
-        and row.id not in result
-        and row.transfer_group_id is not None
-    }
-    if unresolved_with_group:
-        group_by_id = {
-            row.id: row.transfer_group_id for row in rows if row.id in unresolved_with_group
-        }
-        group_ids = set(group_by_id.values())
-        sibling_rows = await session.execute(
-            select(
-                InventoryMovement.transfer_group_id,
-                FbsOrder.marketplace, FbsOrder.wb_order_id, FbsOrder.external_order_id,
-                FbsOrder.supply_id,
-            )
-            .join(
-                FbsShipmentReversalLedger,
-                FbsShipmentReversalLedger.shipment_movement_id == InventoryMovement.id,
-            )
-            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
-            .where(
-                InventoryMovement.tenant_id == tenant_id,
-                InventoryMovement.transfer_group_id.in_(group_ids),
-            )
-        )
-        by_group: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
-        for group_id, marketplace, wb_order_id, external_order_id, supply_id in sibling_rows:
-            number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
-            by_group[group_id] = (number, supply_id)
-        for movement_id in unresolved_with_group:
-            group_id = group_by_id[movement_id]
-            if group_id in by_group:
-                result[movement_id] = by_group[group_id]
+    # Распространяем найденный документ на всех участников группы: если хоть
+    # один сосед разрешился (любым из способов выше), остальные наследуют тот
+    # же заказ, не будучи связаны напрямую (R3).
+    for members in members_by_group.values():
+        found = next((result[member_id] for member_id in members if member_id in result), None)
+        if found is None:
+            continue
+        for member_id in members:
+            result.setdefault(member_id, found)
 
     # Старое fbs_order_pick / его отмена: документ в журнале сторно
     # отсутствует. Ищем заказ через запись подбора — сначала по её событию
@@ -1316,6 +1358,7 @@ async def _enrich_movement_rows(
                 row.movement_type,
                 intake_operation_type=intake_operation_type,
                 quantity_delta=int(row.quantity_delta),
+                has_resolved_document=document is not None,
             )
 
         name, sku = product_names.get(row.product_id, (None, None))
@@ -1338,6 +1381,7 @@ async def list_product_movements(
     date_to: datetime,
     seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
+    search: str | None = None,
     page: int = 1,
     limit: int = MOVEMENT_PAGE_LIMIT,
 ) -> tuple[list[dict[str, object]], bool, int]:
@@ -1346,6 +1390,10 @@ async def list_product_movements(
     `warehouse_id` принимается и игнорируется (WMS-531 R5). Возвращает
     `(rows, truncated, total)`: `truncated` — есть ли ещё строки после этой
     страницы, `total` — сколько их всего (для «Загрузить ещё», R11).
+
+    WMS-531 ревью Astra, F4: `search` раньше не принимался вовсе — сводка по
+    виду операции учитывала поиск, а раскрытие того же вида его теряло, и
+    сумма раскрытых движений расходилась со строкой (R11, R13).
     """
     del warehouse_id
     if product_id is None and operation is None:
@@ -1359,11 +1407,14 @@ async def list_product_movements(
     ]
     if product_id is not None:
         filters.append(InventoryMovement.product_id == product_id)
-    if seller_id is not None:
-        seller_product_ids = select(Product.id).where(
-            Product.tenant_id == tenant_id, Product.seller_id == seller_id
-        )
-        filters.append(InventoryMovement.product_id.in_(seller_product_ids))
+    if seller_id is not None or search:
+        product_scope_filters = [Product.tenant_id == tenant_id]
+        if seller_id is not None:
+            product_scope_filters.append(Product.seller_id == seller_id)
+        if search:
+            product_scope_filters.append(product_search_filter(tenant_id, search))
+        scoped_product_ids = select(Product.id).where(*product_scope_filters)
+        filters.append(InventoryMovement.product_id.in_(scoped_product_ids))
 
     query = select(InventoryMovement)
     if operation is not None:
@@ -1443,7 +1494,13 @@ async def build_inventory_workbook(
 ) -> bytes:
     """Полная выгрузка: та же группировка, что на экране, без ограничений
     50/200 (R12.8). Использует ровно те же агрегаты и ту же сборку строк
-    движения, что и JSON-эндпоинты — числа гарантированно совпадают (R13)."""
+    движения, что и JSON-эндпоинты — числа гарантированно совпадают (R13).
+
+    WMS-531 ревью Astra, F1: журнал движений периода читается и обогащается
+    ПОРЦИЯМИ — по одному селлеру за раз, а не всем тенантом разом, — чтобы
+    пиковая память ограничивалась объёмом одного селлера, а не годовым
+    журналом самого крупного арендатора целиком (R15).
+    """
     del warehouse_id
     date_from, date_to = normalize_period(date_from, date_to)
     sort_by, sort_order = validated_sort(group_by, sort_by, sort_order)
@@ -1456,33 +1513,6 @@ async def build_inventory_workbook(
         raise ValueError("nothing to export for the selected period")
     infos = await _load_product_infos(session, tenant_id, list(figures.keys()))
 
-    all_product_ids = list(figures.keys())
-    movement_filters = [
-        InventoryMovement.tenant_id == tenant_id,
-        InventoryMovement.created_at >= date_from,
-        InventoryMovement.created_at < date_to,
-        stock_movement_filter(),
-        InventoryMovement.product_id.in_(all_product_ids),
-    ]
-    movement_rows = list(
-        (
-            await session.execute(
-                select(InventoryMovement)
-                .where(*movement_filters)
-                .order_by(InventoryMovement.created_at.asc(), InventoryMovement.id)
-            )
-        ).scalars().all()
-    )
-    enriched = await _enrich_movement_rows(
-        session, tenant_id, movement_rows, date_from=date_from, date_to=date_to,
-    )
-    movements_by_product: dict[str, list[dict[str, object]]] = {}
-    for row in enriched:
-        pid = row["product_id"]
-        if pid is None:
-            continue
-        movements_by_product.setdefault(str(pid), []).append(row)
-
     sellers: dict[str, dict[str, object]] = {}
     for pid, fig in figures.items():
         info = infos.get(pid)
@@ -1493,6 +1523,10 @@ async def build_inventory_workbook(
             key, {"seller_name": info.seller_name or "Без селлера", "products": []}
         )
         bucket["products"].append((pid, info, fig))  # type: ignore[attr-defined]
+    # Освобождаем словари, которые уже разложены по селлерам, — дальше журнал
+    # движений тоже читается порциями, и не нужно держать все товары/фигуры
+    # тенанта плоским списком одновременно с ними.
+    del figures, infos
 
     workbook = Workbook()
     sheet = workbook.active
@@ -1519,17 +1553,71 @@ async def build_inventory_workbook(
     col_in = headers.index("Приход")
     col_out = headers.index("Расход")
     col_closing = headers.index("Остаток на конец")
+    numeric_columns = frozenset({col_opening, col_in, col_out, col_closing})
+
+    # WMS-531 ревью Astra, F1 (P1): `sheet.max_row` в установленной версии
+    # openpyxl — это `max(self._cells)`, то есть обход всех уже накопленных
+    # ячеек. Вызов после каждой строки давал квадратичный рост (замер ревью:
+    # 1.381 с / 4.003 с / 20.225 с на 1000/2000/4000 строк). Собственный
+    # счётчик и точечная запись через `sheet.cell(row=, column=)` вместо
+    # `sheet.append(list) + sheet.max_row` держат каждую операцию O(1):
+    # тот же объём — 4000 строк — укладывается в доли секунды (проверено
+    # отдельным локальным замером при написании этого исправления).
+    next_row = 1  # заголовок уже в строке 1
 
     def _append(values: list[object], *, outline_level: int) -> None:
-        sheet.append(values)
-        row_index = sheet.max_row
+        nonlocal next_row
+        next_row += 1
+        for column_index, value in enumerate(values):
+            if value is None:
+                continue
+            cell = sheet.cell(row=next_row, column=column_index + 1, value=value)
+            if isinstance(value, str):
+                # WMS-531 ревью Astra, F10: openpyxl трактует строку,
+                # начинающуюся с «=», как формулу — название товара вида
+                # «=1+1» не должно поменять смысл при открытии в Excel.
+                # Числа и даты явный тип не получают — им ниже нужен
+                # number_format числовой/датной ячейки, а не текстовой.
+                cell.data_type = "s"
+            elif column_index in numeric_columns:
+                cell.number_format = "0"
+            elif column_index == col_date:
+                cell.number_format = _XLSX_DATE_FORMAT
         if outline_level > 0:
-            sheet.row_dimensions[row_index].outlineLevel = outline_level
-            sheet.row_dimensions[row_index].hidden = True
+            sheet.row_dimensions[next_row].outlineLevel = outline_level
+            sheet.row_dimensions[next_row].hidden = True
 
     total_opening = total_in = total_out = total_closing = 0
     for _seller_key, bucket in sorted(sellers.items(), key=lambda kv: str(kv[1]["seller_name"])):
         products: list[tuple[uuid.UUID, _ProductInfo, ProductPeriodFigures]] = bucket["products"]  # type: ignore[assignment]
+        seller_product_ids = [pid for pid, _info, _fig in products]
+        movement_rows = list(
+            (
+                await session.execute(
+                    select(InventoryMovement)
+                    .where(
+                        InventoryMovement.tenant_id == tenant_id,
+                        InventoryMovement.created_at >= date_from,
+                        InventoryMovement.created_at < date_to,
+                        stock_movement_filter(),
+                        InventoryMovement.product_id.in_(seller_product_ids),
+                    )
+                    .order_by(InventoryMovement.created_at.asc(), InventoryMovement.id)
+                )
+            ).scalars().all()
+        )
+        enriched = await _enrich_movement_rows(
+            session, tenant_id, movement_rows, date_from=date_from, date_to=date_to,
+        )
+        del movement_rows
+        movements_by_product: dict[str, list[dict[str, object]]] = {}
+        for row in enriched:
+            row_product_id = row["product_id"]
+            if row_product_id is None:
+                continue
+            movements_by_product.setdefault(str(row_product_id), []).append(row)
+        del enriched
+
         seller_opening = sum(fig.opening_balance for _p, _i, fig in products)
         seller_in = sum(fig.in_qty for _p, _i, fig in products)
         seller_out = sum(fig.out_qty for _p, _i, fig in products)
@@ -1539,14 +1627,21 @@ async def build_inventory_workbook(
         total_out += seller_out
         total_closing += seller_closing
 
-        seller_row: list[object] = [None] * len(headers)
+        # WMS-531 ревью Astra, F7: в кабинете селлера уровня «Селлер» нет
+        # вовсе (R12.9) — не только колонки и названия, но и самой строки:
+        # верхним уровнем становятся товары/виды, а не безымянный дубль
+        # итогов над ними. `top_level`/`leaf_level` сдвигают вложенность на
+        # один уровень вверх, когда селлерского уровня нет.
+        top_level = 1 if include_seller else 0
+        leaf_level = 2 if include_seller else 1
         if include_seller:
+            seller_row: list[object] = [None] * len(headers)
             seller_row[0] = bucket["seller_name"]
-        seller_row[col_opening] = seller_opening
-        seller_row[col_in] = seller_in
-        seller_row[col_out] = seller_out
-        seller_row[col_closing] = seller_closing
-        _append(seller_row, outline_level=0)
+            seller_row[col_opening] = seller_opening
+            seller_row[col_in] = seller_in
+            seller_row[col_out] = seller_out
+            seller_row[col_closing] = seller_closing
+            _append(seller_row, outline_level=0)
 
         if group_by == "product":
             for pid, info, fig in sorted(products, key=_product_row_sort_key):
@@ -1560,7 +1655,7 @@ async def build_inventory_workbook(
                 product_row[col_in] = fig.in_qty
                 product_row[col_out] = fig.out_qty
                 product_row[col_closing] = fig.closing_balance
-                _append(product_row, outline_level=1)
+                _append(product_row, outline_level=top_level)
                 for movement in movements_by_product.get(str(pid), []):
                     movement_row: list[object] = [None] * len(headers)
                     if include_seller:
@@ -1568,17 +1663,18 @@ async def build_inventory_workbook(
                     movement_row[col_date] = _moscow_naive(
                         datetime.fromisoformat(str(movement["at"]))
                     )
-                    movement_row[col_operation] = movement["operation"]
+                    row_operation = str(movement["operation"])
+                    movement_row[col_operation] = row_operation
                     document = movement["document"]
-                    movement_row[col_document] = (
-                        document["number"] if document else "без документа"  # type: ignore[index]
+                    movement_row[col_document] = _excel_document_text(
+                        row_operation, document  # type: ignore[arg-type]
                     )
                     quantity = _movement_quantity(movement)
                     if quantity > 0:
                         movement_row[col_in] = quantity
                     else:
                         movement_row[col_out] = -quantity
-                    _append(movement_row, outline_level=2)
+                    _append(movement_row, outline_level=leaf_level)
         else:  # group_by == "operation"
             by_group: dict[str, list[tuple[_ProductInfo, dict[str, object]]]] = {}
             for pid, info, _fig in products:
@@ -1595,7 +1691,7 @@ async def build_inventory_workbook(
                 group_row[col_operation] = group_label
                 group_row[col_in] = group_in
                 group_row[col_out] = group_out
-                _append(group_row, outline_level=1)
+                _append(group_row, outline_level=top_level)
                 for info, movement in members:
                     movement_row = [None] * len(headers)
                     if include_seller:
@@ -1604,17 +1700,18 @@ async def build_inventory_workbook(
                     movement_row[col_date] = _moscow_naive(
                         datetime.fromisoformat(str(movement["at"]))
                     )
-                    movement_row[col_operation] = movement["operation"]
+                    row_operation = str(movement["operation"])
+                    movement_row[col_operation] = row_operation
                     document = movement["document"]
-                    movement_row[col_document] = (
-                        document["number"] if document else "без документа"  # type: ignore[index]
+                    movement_row[col_document] = _excel_document_text(
+                        row_operation, document  # type: ignore[arg-type]
                     )
                     quantity = _movement_quantity(movement)
                     if quantity > 0:
                         movement_row[col_in] = quantity
                     else:
                         movement_row[col_out] = -quantity
-                    _append(movement_row, outline_level=2)
+                    _append(movement_row, outline_level=leaf_level)
 
     total_row: list[object] = [None] * len(headers)
     total_row[0] = "Итого"
@@ -1622,17 +1719,7 @@ async def build_inventory_workbook(
     total_row[col_in] = total_in
     total_row[col_out] = total_out
     total_row[col_closing] = total_closing
-    sheet.append(total_row)
-
-    numeric_columns = (col_opening, col_in, col_out, col_closing)
-    for row_cells in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
-        for column_index in numeric_columns:
-            cell = row_cells[column_index]
-            if cell.value is not None:
-                cell.number_format = "0"
-        date_cell = row_cells[col_date]
-        if date_cell.value is not None:
-            date_cell.number_format = _XLSX_DATE_FORMAT
+    _append(total_row, outline_level=0)
 
     widths = [22, 16, 16, 20, 26, 26, 14, 10, 10, 14]
     if include_seller:
@@ -1651,6 +1738,35 @@ def _product_row_sort_key(
     item: tuple[uuid.UUID, _ProductInfo, ProductPeriodFigures]
 ) -> tuple[str, str]:
     return (item[1].name, item[1].sku_code)
+
+
+_EXCEL_DOCUMENT_PREFIX_BY_OPERATION: dict[str, str] = {
+    # WMS-531 ревью Astra, F9: JSON отдаёт структурированные kind/id/number —
+    # фронт волен оформить их как ссылку сам. В Excel это уже конечный,
+    # плоский текст (R12), и он обязан нести те же слова, что задаёт таблица
+    # R2: «Приёмка №…», «Возврат №…», «Отгрузка №…» и т. д., а не голый номер.
+    "Приёмка": "Приёмка {number}",
+    "Возврат": "Возврат {number}",
+    # Акт расхождений ссылается на строку той же приёмки (R2, R3).
+    "Корректировка по акту расхождений": "Приёмка {number}",
+    "Отгрузка на МП": "Отгрузка {number}",
+    "Отгрузка": "Отгрузка {number}",
+    "Приёмка при передаче между селлерами": "Служебная приёмка {number}",
+}
+
+
+def _excel_document_text(operation: str, document: dict[str, object] | None) -> str:
+    """Полный текст документа для ячейки Excel — с подписью вида, а не только
+    номером. FBS («Заказ WB №…»/«Заказ Ozon №…») и обе стороны передачи между
+    селлерами уже несут полный текст в `operation`/`number`; «ИНВ-…» уже
+    самодостаточна — их не дублируем префиксом."""
+    if document is None:
+        return "без документа"
+    number = str(document["number"])
+    template = _EXCEL_DOCUMENT_PREFIX_BY_OPERATION.get(operation)
+    if template is None:
+        return number
+    return template.format(number=number)
 
 
 def _excel_operation_group(row_label: str) -> str:

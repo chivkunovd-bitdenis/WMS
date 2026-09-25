@@ -1090,7 +1090,9 @@ async def test_excel_export_by_product_matches_screen_with_outline_and_totals(
         assert sheet.row_dimensions[movement_row[4].row].outlineLevel == 2
         assert isinstance(movement_row[8].value, int) or isinstance(movement_row[9].value, int)
     documents = {cell.value for row in movement_rows for cell in [row[6]]}
-    assert "№000042" in documents
+    # WMS-531 ревью Astra, F9: ячейка «Документ» несёт подпись вида, а не
+    # голый номер — «Приёмка №000042», а не «№000042».
+    assert "Приёмка №000042" in documents
     assert "без документа" in documents
 
     total_row = [cell.value for cell in sheet[sheet.max_row]]
