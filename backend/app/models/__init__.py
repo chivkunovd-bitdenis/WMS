@@ -80,6 +80,7 @@ from app.models.pallet import Pallet
 from app.models.print_connection import PrintConnection
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.product_tz_import import ProductTzImport
@@ -185,6 +186,7 @@ __all__ = [
     "PrintConnection",
     "PrintTemplate",
     "Product",
+    "ProductBarcode",
     "ProductDimensionEvent",
     "ProductMarketplaceLink",
     "ProductTzImport",
