@@ -147,7 +147,12 @@ async def test_reports_overview_uses_moscow_half_open_dates_and_fills_daily_gaps
     })
     assert response.status_code == 200
     body = response.json()
-    assert body["current_balance"] == 23
+    # WMS-531 R6: последнее число — факт на конец периода (2026-08-05 МСК =
+    # 2026-08-04T21:00 UTC), а не сырой остаток «прямо сейчас». Ровно на этой
+    # границе стоит движение -40 (>= date_to), поэтому его откатывают назад:
+    # 23 (сейчас) минус (-40) = 63 — остаток каким он был до этого движения.
+    assert body["current_balance"] == 63
+    assert body["closing_balance"] == 63
     assert body["in_qty"] == 7
     assert body["out_qty"] == 4
     assert body["comparison"] == {"previous_out_qty": 0, "change_percent": None, "change": 4}
@@ -329,7 +334,12 @@ async def test_overview_opening_balance_is_the_stock_at_period_start(
     })
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["current_balance"] == 3
+    # WMS-531 R6: то же правило симметрично работает и для конца периода.
+    # 10.08 остаток был 15 (после +5), а к сегодняшнему дню его же откатило
+    # списание -12 от 20.08 — «сейчас» это 3, а «на 10.08» — факт 15.
+    assert payload["current_balance"] == 15
+    assert payload["closing_balance"] == 15
+    assert payload["closing_balance_is_current"] is False
     assert payload["in_qty"] == 5 and payload["out_qty"] == 0
     # На начало августа лежало десять штук, а не 3 - 5 + 0 = -2.
     assert payload["opening_balance"] == 10

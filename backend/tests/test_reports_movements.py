@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import time
 import uuid
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from openpyxl import load_workbook
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
@@ -176,7 +178,7 @@ async def test_movements_say_when_the_list_is_cut(async_client: AsyncClient) -> 
             location_id=location_id, product_id=product_id, quantity_delta=1,
         )
     async with SessionLocal() as session:
-        rows, truncated = await list_product_movements(
+        rows, truncated, total = await list_product_movements(
             session, tenant_id, product_id=product_id,
             date_from=datetime(2026, 8, 1, tzinfo=UTC),
             date_to=datetime(2026, 8, 2, tzinfo=UTC),
@@ -184,6 +186,7 @@ async def test_movements_say_when_the_list_is_cut(async_client: AsyncClient) -> 
         )
     assert len(rows) == 2
     assert truncated is True
+    assert total == 3
 
 
 @pytest.mark.asyncio
@@ -250,7 +253,8 @@ async def test_ozon_report_links_exact_recipe_movement_ids_only(
     documents = {row["id"]: row["document"] for row in response.json()["rows"]}
     expected = movement_ids[:3] if has_recipe_ids else movement_ids[:1]
     for movement_id in expected:
-        assert documents[str(movement_id)]["number"] == "Заказ ORDER-OZON-RECIPE"
+        # WMS-531 R4: площадка обязана быть видна в подписи заказа.
+        assert documents[str(movement_id)]["number"] == "Заказ Ozon №ORDER-OZON-RECIPE"
     for movement_id in set(movement_ids) - set(expected):
         assert documents[str(movement_id)] is None
 
@@ -315,8 +319,14 @@ async def test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv(
             assert [row["product_id"] for row in response.json()["rows"]] == [str(product_id)]
         if grouping == "seller":
             assert response.json()["rows"][0]["current_balance"] == 15
-    csv = await async_client.get(
-        "/reports/inventory/export.csv", headers=headers, params={**query, "group_by": "product"},
+    # WMS-531: CSV убран из бэка (D6, R12.1) — выгрузка теперь только Excel;
+    # тот же критерий поиска обязан дать те же товары и в файле.
+    workbook_response = await async_client.get(
+        "/reports/inventory/export.xlsx", headers=headers, params={**query, "group_by": "product"},
     )
-    assert csv.status_code == 200, csv.text
-    assert "Moved product" in csv.text
+    assert workbook_response.status_code == 200, workbook_response.text
+    workbook = load_workbook(io.BytesIO(workbook_response.content))
+    sheet = workbook.active
+    assert sheet is not None
+    sheet_values = [cell.value for row in sheet.iter_rows() for cell in row]
+    assert "Moved product" in sheet_values
