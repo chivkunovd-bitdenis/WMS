@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FbsOrderMetadata } from './fbsApi'
-import { fbsOzonAutoBoxesPlan, fbsOzonLabelFailuresText, fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
+import type { FbsOrderMetadata, FbsPickOptionLocation } from './fbsApi'
+import { fbsPickSourceLabels, fbsOzonAutoBoxesPlan, fbsOzonLabelFailuresText, fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -161,5 +161,53 @@ describe('WMS-394 repeated active sticker', () => {
     expect(fbsSameStickerScan('010460000000001821ABC', '*DU7aq2hE')).toBe(false)
     expect(fbsSameStickerScan('  ', '')).toBe(false)
     expect(fbsSameStickerScan('ABC/123', 'ABC?123')).toBe(false)
+  })
+})
+
+describe('fbsPickSourceLabels (WMS-528)', () => {
+  const box = (code: string, available: number) => ({
+    available,
+    is_loose: false,
+    source_label: `Короб ${code}`,
+    container_path: [{ kind: 'box', id: code, code, label: `Короб ${code}` }],
+  })
+  const loose = (available: number) => ({ available, is_loose: true, source_label: 'Россыпью', container_path: [] })
+  const place = (code: string, sources: FbsPickOptionLocation['sources']): FbsPickOptionLocation => ({
+    storage_location_id: code,
+    location_code: code,
+    available: sources.reduce((sum, source) => sum + source.available, 0),
+    sources,
+  })
+
+  it('shows only containers when stock is in sorting', () => {
+    const locations = [place('Без ячеек', [box('B-1', 2), box('B-2', 7), loose(1)])]
+    expect(fbsPickSourceLabels(locations, 3)).toEqual(['Короб B-2: 7'])
+    expect(fbsPickSourceLabels(locations, 10)).toEqual(['Короб B-2: 7', 'Короб B-1: 2', 'Россыпью: 1'])
+  })
+
+  it('shows the cell with its container, largest first, only enough to cover the pick', () => {
+    const locations = [
+      place('A-01', [box('B-1', 3), loose(2)]),
+      place('A-02', [box('B-9', 10)]),
+      place('A-03', [box('B-4', 5)]),
+    ]
+    expect(fbsPickSourceLabels(locations, 12)).toEqual(['A-02 · Короб B-9: 10', 'A-03 · Короб B-4: 5'])
+    expect(fbsPickSourceLabels(locations, 2)).toEqual(['A-02 · Короб B-9: 10'])
+    expect(fbsPickSourceLabels([place('A-01', [loose(4)])], 1)).toEqual(['A-01: 4'])
+  })
+
+  it('shows the full container path, skips empty sources and nothing when the pick is done', () => {
+    const nested = {
+      available: 4,
+      is_loose: false,
+      source_label: 'Короб B-1',
+      container_path: [
+        { kind: 'pallet', id: 'P', code: 'P-1', label: 'Палета P-1' },
+        { kind: 'box', id: 'B', code: 'B-1', label: 'Короб B-1' },
+      ],
+    }
+    expect(fbsPickSourceLabels([place('A-01', [nested, box('B-2', 0)])], 1))
+      .toEqual(['A-01 · Палета P-1 › Короб B-1: 4'])
+    expect(fbsPickSourceLabels([place('A-01', [box('B-2', 5)])], 0)).toEqual([])
   })
 })

@@ -59,6 +59,7 @@ import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import {
   buildFbsPickingListPrintHtml,
+  fbsPickSourceLabels,
   fbsAccessibleStageIndex,
   fbsErrorText,
   fbsSameStickerScan,
@@ -101,6 +102,7 @@ import {
   fetchFbsPrintBatch,
   fetchFbsWorklist,
   fetchFbsWorkspace,
+  getFbsPickOptions,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
   markFbsScanAutoPrintTargetStarted,
@@ -2355,7 +2357,7 @@ export function FfFbsSupplyWorkspace({
     }
     return [...grouped.values()]
   }, [fullTapeOrders, workspace])
-  const printPickingList = () => {
+  const printPickingList = async () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
@@ -2363,6 +2365,26 @@ export function FfFbsSupplyWorkspace({
       return
     }
     printWindow.opener = null
+    setError(null)
+    printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
+    // WMS-528: где брать — ячейки и тара по убыванию остатка, ровно на покрытие подбора.
+    // Без ответа сервера лист печатается с прежними ячейками, печать не блокируется.
+    let rows: typeof pickingRows = pickingRows
+    try {
+      // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
+      const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
+        .map((option) => [option.product_id, option]))
+      rows = pickingRows.map((row) => {
+        const option = options.get(row.key)
+        if (!option) return row
+        const picked = Math.min(option.picked_qty, row.required)
+        return { ...row, picked, locations: fbsPickSourceLabels(option.locations, row.required - picked) }
+      })
+    } catch {
+      rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
+      setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    if (printWindow.closed) return
     printWindow.document.open()
     printWindow.document.write(buildFbsPickingListPrintHtml({
       supplyName: workspace.supply.name,
@@ -2371,8 +2393,8 @@ export function FfFbsSupplyWorkspace({
       wmsWarehouseName: workspace.supply.wms_warehouse.name,
       routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
       deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
-      printedAtLabel: new Date().toLocaleString('ru-RU'), addressStorageEnabled,
-      rows: pickingRows,
+      printedAtLabel: new Date().toLocaleString('ru-RU'),
+      rows,
     }))
     printWindow.document.close()
   }
@@ -2844,7 +2866,7 @@ export function FfFbsSupplyWorkspace({
                     >
                       Добавить заказы
                     </Button>
-                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
                       Печать листа подбора
                     </Button>
                   </Stack>
@@ -2887,7 +2909,7 @@ export function FfFbsSupplyWorkspace({
               {!stageIsCurrent ? <Alert severity="success">Подбор завершён. Этот этап доступен только для просмотра.</Alert> : null}
               {allPicked && stageIsCurrent ? <Alert severity="success">Все товары подобраны. Перейдите к упаковке.</Alert> : null}
               <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
                   Печать листа подбора
                 </Button>
               </Stack>
