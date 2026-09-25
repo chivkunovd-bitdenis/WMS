@@ -1,3 +1,27 @@
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from './productScanResolver'
+
+/**
+ * Серверные коды товарной неоднозначности (WMS-536 R2): код ведёт к нескольким
+ * товарам. У процессов код свой — приёмка, короб и грузоместо, подбор отгрузки
+ * и FBS, упаковка, инвентаризация, автопечать WMS-514, — а смысл один, поэтому
+ * оператор везде видит один текст, даже если сервер прислал свой.
+ *
+ * Межтиповой `scan_ambiguous` общего поиска (код и товара, и ячейки/короба)
+ * сюда намеренно не входит: это другой смысл.
+ */
+const PRODUCT_SCAN_AMBIGUOUS_CODES: ReadonlySet<string> = new Set([
+  'barcode_ambiguous',
+  'barcode_is_ambiguous',
+  'scan_product_ambiguous',
+])
+
+/** Текст товарной неоднозначности для кода ошибки сервера; null — код другой. */
+export function productScanAmbiguousApiMessage(code: unknown): string | null {
+  return typeof code === 'string' && PRODUCT_SCAN_AMBIGUOUS_CODES.has(code)
+    ? PRODUCT_SCAN_AMBIGUOUS_MESSAGE
+    : null
+}
+
 const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   // Инвентаризация: находки и пересчёт.
   count_not_found: 'Документ пересчёта не найден.',
@@ -5,8 +29,6 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   storage_location_not_found: 'Ячейка не найдена на складе.',
   container_not_found: 'Тара не найдена на складе документа.',
   container_reference_invalid: 'Тара указана неполностью — нужны и вид, и номер.',
-  barcode_is_ambiguous:
-    'Один и тот же код у нескольких товаров. Уточните селлера в документе или используйте артикул.',
   barcode_required: 'Не передан код для поиска товара.',
 
   lines_missing_storage:
@@ -110,7 +132,7 @@ export async function readApiErrorMessage(res: Response): Promise<string> {
     const data = JSON.parse(text) as { detail?: unknown }
     const d = data.detail
     if (typeof d === 'string') {
-      return API_DETAIL_MESSAGES_RU[d] ?? d
+      return productScanAmbiguousApiMessage(d) ?? API_DETAIL_MESSAGES_RU[d] ?? d
     }
     if (Array.isArray(d)) {
       const parts = d
@@ -131,6 +153,10 @@ export async function readApiErrorMessage(res: Response): Promise<string> {
     }
     if (d && typeof d === 'object') {
       const structured = d as { message?: unknown; code?: unknown }
+      const ambiguous = productScanAmbiguousApiMessage(structured.code)
+      if (ambiguous) {
+        return ambiguous
+      }
       if (typeof structured.message === 'string' && structured.message.trim()) {
         return structured.message
       }

@@ -90,6 +90,8 @@ type ProductRow = {
   ozon_offer_id?: string | null
   wb_barcodes?: string[]
   wb_primary_barcode?: string | null
+  /** Ozon external_barcodes из каталога — для единого поиска товара по коду (WMS-536). */
+  marketplace_bindings?: { marketplace?: string | null; external_barcodes?: string[] | null }[]
 }
 
 type SellerRow = { id: string; name: string; ozon_connected?: boolean | null }
@@ -531,9 +533,17 @@ export default function App() {
         id: string
         wb_barcodes?: string[]
         wb_primary_barcode?: string | null
+        marketplace_bindings?: ProductRow['marketplace_bindings']
       }[]
       const barcodesById = new Map(
-        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
+        catalog.map((r) => [
+          r.id,
+          {
+            wb_barcodes: r.wb_barcodes ?? [],
+            wb_primary_barcode: r.wb_primary_barcode,
+            marketplace_bindings: r.marketplace_bindings ?? [],
+          },
+        ]),
       )
       setProducts(
         base.map((p) => {

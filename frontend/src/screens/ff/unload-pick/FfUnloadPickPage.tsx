@@ -136,17 +136,6 @@ function sourceLocationId(sourceKey: string | null): string | null {
 /** У Ozon-поставки ФБС экран каталог не грузит — и коды из него не берёт. */
 const NO_CATALOG: ReadonlyMap<string, ProductScanCatalogRow> = new Map()
 
-/**
- * Отказ скана подбора для оператора.
- *
- * Отгрузка отдаёт неоднозначный код голым машинным кодом — показываем смысл
- * (WMS-536 R2). Остальное — как и раньше, через общий разбор ошибки.
- */
-async function readPickScanErrorMessage(res: Response): Promise<string> {
-  const message = await readApiErrorMessage(res)
-  return message === 'barcode_ambiguous' ? PRODUCT_SCAN_AMBIGUOUS_MESSAGE : message
-}
-
 type Props = {
   token: string
   /**
@@ -497,7 +486,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             container_id: containerSource?.containerId ?? null,
           }),
         })
-        if (!res.ok) throw new Error(await readPickScanErrorMessage(res))
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
         const result = (await res.json()) as ApiScanResult
         if (result.kind === 'location') {
           if (!result.storage_location_id || !result.location_code) {

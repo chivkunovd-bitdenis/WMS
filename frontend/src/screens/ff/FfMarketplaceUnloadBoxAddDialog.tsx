@@ -29,7 +29,10 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { storageLocationLabel } from '../../utils/inboundQueues'
-import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  productScanAmbiguousApiMessage,
+  readApiErrorMessage,
+} from '../../utils/readApiErrorMessage'
 import {
   PRODUCT_SCAN_AMBIGUOUS_MESSAGE,
   buildProductScanIndex,
@@ -618,9 +621,10 @@ function FfMarketplaceUnloadBoxAddDialogContent({
         )
         return
       }
-      if (errDetail === 'barcode_ambiguous') {
-        // Сервер нашёл тот же код у нескольких товаров селлера (WMS-536 R2).
-        setError(PRODUCT_SCAN_AMBIGUOUS_MESSAGE)
+      // Сервер нашёл тот же код у нескольких товаров селлера (WMS-536 R2).
+      const ambiguous = productScanAmbiguousApiMessage(errDetail)
+      if (ambiguous) {
+        setError(ambiguous)
         return
       }
       setError(errDetail === 'invalid_container_reference'
