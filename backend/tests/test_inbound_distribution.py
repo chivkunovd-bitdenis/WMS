@@ -642,11 +642,11 @@ async def test_distribution_scan_cell_then_product_and_complete(
     assert scan_loc.json()["active_storage_location_id"] == lid
     assert scan_loc.json()["active_storage_location_code"] == "A-01"
 
-    for expected_qty in (1, 2):
+    for expected_qty, scanned_code in ((1, sku.swapcase()), (2, sku)):
         scan_product = await async_client.post(
             f"{base}/{rid}/distribution-scan",
             headers=ah,
-            json={"barcode": sku, "active_storage_location_id": lid},
+            json={"barcode": scanned_code, "active_storage_location_id": lid},
         )
         assert scan_product.status_code == 200, scan_product.text
         body = scan_product.json()

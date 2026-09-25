@@ -112,6 +112,7 @@ class CountProductNodeOut(BaseModel):
     seller_id: str | None = None
     category: str | None = None
     barcode: str | None = None
+    scan_codes: list[str]
     wb_vendor_code: str | None = None
     wb_barcode: str | None = None
     wb_size: str | None = None
@@ -167,6 +168,7 @@ class InventoryCountLineOut(BaseModel):
     seller_name: str | None
     category: str | None
     barcode: str | None
+    scan_codes: list[str]
     wb_vendor_code: str | None
     wb_barcode: str | None
     wb_size: str | None
@@ -338,6 +340,7 @@ def _product_node(
     category: str | None,
     photo_url: str | None,
     current_quantity: int,
+    scan_codes: list[str],
 ) -> CountProductNodeOut:
     product = line.product
     expected_now = current_quantity if current_quantity != line.expected_quantity else None
@@ -350,6 +353,7 @@ def _product_node(
         seller_id=str(product.seller_id) if product.seller_id is not None else None,
         category=category,
         barcode=product.wb_barcode,
+        scan_codes=scan_codes,
         wb_vendor_code=product.wb_vendor_code,
         wb_barcode=product.wb_barcode,
         wb_size=product.wb_size,
@@ -436,6 +440,11 @@ async def _detail_out(
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
     photos = await _photos(session, count)
+    scan_codes = await warehouse_map_service.load_product_scan_codes(
+        session,
+        count.tenant_id,
+        {line.product_id for line in count.lines},
+    )
     line_rows: list[InventoryCountLineOut] = []
     # Пустой список — нормальное значение: без адресного хранения ячеек нет.
     scannable_cells: list[CountScannableCellOut] = []
@@ -489,6 +498,7 @@ async def _detail_out(
             category=category,
             photo_url=photos.get(product.id),
             current_quantity=current[line.id],
+            scan_codes=scan_codes.get(product.id, []),
         )
         container = (
             containers.get((line.container_kind, str(line.container_id)))
@@ -534,6 +544,7 @@ async def _detail_out(
                 seller_name=product.seller.name if product.seller is not None else None,
                 category=category,
                 barcode=product.wb_barcode,
+                scan_codes=scan_codes.get(product.id, []),
                 wb_vendor_code=product.wb_vendor_code,
                 wb_barcode=product.wb_barcode,
                 wb_size=product.wb_size,

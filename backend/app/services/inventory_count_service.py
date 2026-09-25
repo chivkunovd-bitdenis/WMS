@@ -38,6 +38,14 @@ from app.services import (
 )
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind
+from app.services.product_code_resolver_service import (
+    ProductCodeAliasPolicy,
+    ProductCodeScope,
+    build_product_code_index,
+    normalize_product_code,
+    resolve_product_code_from_index,
+)
+from app.services.scan_resolver_service import validated_product_ids_from_resolution
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -1143,7 +1151,11 @@ async def record_found(
     if count.status != STATUS_DRAFT:
         raise InventoryCountError("count_not_editable")
 
-    codes = [candidate.strip() for candidate in barcodes if candidate.strip()]
+    codes = [
+        normalized
+        for candidate in barcodes
+        if (normalized := normalize_product_code(candidate))
+    ]
     if not codes:
         raise InventoryCountError("barcode_required")
 
@@ -1165,50 +1177,34 @@ async def record_found(
                 loaded, seen.expected_quantity, _found_notice(seen.expected_quantity)
             )
 
-    # Сканер — обычная клавиатура, и в русской раскладке он отдаёт кириллицу.
-    # Экран умеет переводить раскладку и присылает оба варианта, поэтому ищем по
-    # всем кандидатам и без учёта регистра: точное сравнение отвергало товар,
-    # который экран только что нашёл, и оператор видел два взаимоисключающих
-    # сообщения сразу.
-    lowered = [candidate.lower() for candidate in codes]
-    product_stmt = select(Product).where(
-        Product.tenant_id == tenant_id,
-        or_(
-            func.lower(Product.wb_barcode).in_(lowered),
-            func.lower(Product.sku_code).in_(lowered),
+    index = await build_product_code_index(
+        session,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=(
+                frozenset({count.seller_id}) if count.seller_id is not None else None
+            ),
         ),
+        policy=ProductCodeAliasPolicy(include_marketplace_identity=True),
     )
-    # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
-    # пересчёт одного селлера начнёт править остатки другого.
-    if count.seller_id is not None:
-        product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
-    products = list((await session.execute(product_stmt)).scalars().all())
-    if not products:
-        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon свой код
-        # вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
-        from app.services.ozon_product_import_service import (
-            find_product_ids_by_marketplace_barcode,
-        )
-
-        product_ids = await find_product_ids_by_marketplace_barcode(
-            session,
-            tenant_id,
-            list(codes),
-            seller_id=count.seller_id,
-        )
-        if product_ids:
-            fallback_stmt = select(Product).where(
-                Product.tenant_id == tenant_id,
-                Product.id.in_(product_ids),
-            )
-            if count.seller_id is not None:
-                fallback_stmt = fallback_stmt.where(Product.seller_id == count.seller_id)
-            products = list((await session.execute(fallback_stmt)).scalars().all())
-    if not products:
+    resolution = resolve_product_code_from_index(
+        index,
+        codes[0],
+        layout_candidate=codes[1] if len(codes) > 1 else None,
+    )
+    product_ids = await validated_product_ids_from_resolution(
+        session,
+        tenant_id,
+        resolution,
+        seller_id=count.seller_id,
+    )
+    if not product_ids:
         raise InventoryCountError("product_not_found")
-    if len(products) > 1:
+    if len(product_ids) > 1:
         raise InventoryCountError("barcode_is_ambiguous")
-    product = products[0]
+    product = await session.get(Product, product_ids[0])
+    if product is None or product.tenant_id != tenant_id:
+        raise InventoryCountError("product_not_found")
 
     await _clear_empty_confirmation(
         session, count, {(container_kind, str(container_id))}, {storage_location_id},

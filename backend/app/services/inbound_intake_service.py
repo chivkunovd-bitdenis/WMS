@@ -59,7 +59,16 @@ from app.services.document_number_service import (
 from app.services.inbound_intake_quantity_service import container_total_for_product
 from app.services.inventory_container_service import ContainerKind
 from app.services.operation_fact_service import record_inbound_completion
-from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
+from app.services.product_code_resolver_service import (
+    DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    ProductCodeIndex,
+    ProductCodeResolution,
+    ProductCodeScope,
+    build_product_code_index,
+    normalize_product_code,
+    resolve_product_code_from_index,
+)
+from app.services.scan_resolver_service import validated_product_ids_from_resolution
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -1298,92 +1307,58 @@ async def _request_barcode_index(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     req: InboundIntakeRequest,
-    *,
-    include_seller_catalog: bool = False,
-) -> dict[str, uuid.UUID | None]:
-    product_ids = {ln.product_id for ln in req.lines}
-    if not product_ids and not include_seller_catalog:
-        return {}
-    idx: dict[str, uuid.UUID | None] = {}
-
-    def add_alias(raw: object, product_id: uuid.UUID) -> None:
-        key = str(raw or "").strip()
-        if not key:
-            return
-        for candidate in {key, key.upper()}:
-            if candidate not in idx:
-                idx[candidate] = product_id
-            elif idx[candidate] != product_id:
-                idx[candidate] = None
-
-    if product_ids:
-        stmt = select(Product).where(
-            Product.tenant_id == tenant_id,
-            Product.id.in_(product_ids),
-        )
-        res = await session.execute(stmt)
-        products = list(res.scalars().all())
-        for p in products:
-            add_alias(p.sku_code, p.id)
-    if req.seller_id is not None:
-        rows = await list_seller_wb_catalog_rows(
-            session,
-            tenant_id,
-            req.seller_id,
+) -> ProductCodeIndex:
+    product_ids = frozenset(line.product_id for line in req.lines)
+    return await build_product_code_index(
+        session,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=(
+                frozenset({req.seller_id}) if req.seller_id is not None else None
+            ),
             product_ids=product_ids,
-        )
-        for row in rows:
-            if not include_seller_catalog and row.product_id not in product_ids:
-                continue
-            add_alias(row.sku_code, row.product_id)
-            for b in row.wb_barcodes:
-                add_alias(b, row.product_id)
-            add_alias(row.wb_primary_barcode, row.product_id)
-            for binding in row.marketplace_bindings:
-                for raw in binding.get("external_barcodes", []):
-                    add_alias(raw, row.product_id)
-    return idx
+        ),
+        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    )
 
 
 async def _seller_catalog_barcode_index(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-) -> dict[str, uuid.UUID | None]:
-    rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
-    idx: dict[str, uuid.UUID | None] = {}
-
-    def add_alias(raw: object, product_id: uuid.UUID) -> None:
-        key = str(raw or "").strip()
-        if not key:
-            return
-        for candidate in {key, key.upper()}:
-            if candidate not in idx:
-                idx[candidate] = product_id
-            elif idx[candidate] != product_id:
-                idx[candidate] = None
-
-    for row in rows:
-        add_alias(row.sku_code, row.product_id)
-        for b in row.wb_barcodes:
-            add_alias(b, row.product_id)
-        add_alias(row.wb_primary_barcode, row.product_id)
-        for binding in row.marketplace_bindings:
-            for raw in binding.get("external_barcodes", []):
-                add_alias(raw, row.product_id)
-    return idx
+) -> ProductCodeIndex:
+    return await build_product_code_index(
+        session,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=frozenset({seller_id}),
+        ),
+        policy=DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    )
 
 
-def _index_lookup(
-    idx: dict[str, uuid.UUID | None], raw: str
-) -> tuple[uuid.UUID | None, bool]:
-    """Return (product_id, known): known=True with product_id=None means ambiguous."""
-    if raw in idx:
-        return idx[raw], True
-    upper = raw.upper()
-    if upper in idx:
-        return idx[upper], True
-    return None, False
+async def _resolved_product_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    resolution: ProductCodeResolution,
+    *,
+    seller_id: uuid.UUID | None,
+    product_id_hint: uuid.UUID | None,
+) -> uuid.UUID | None:
+    product_ids = await validated_product_ids_from_resolution(
+        session,
+        tenant_id,
+        resolution,
+        seller_id=seller_id,
+    )
+    if len(product_ids) > 1:
+        raise InboundIntakeError("barcode_ambiguous")
+    if not product_ids:
+        return None
+    product_id = product_ids[0]
+    if product_id_hint is not None and product_id_hint != product_id:
+        raise InboundIntakeError("product_not_found")
+    return product_id
 
 
 async def resolve_scanned_product_id(
@@ -1391,31 +1366,37 @@ async def resolve_scanned_product_id(
     tenant_id: uuid.UUID,
     req: InboundIntakeRequest,
     raw: str,
+    *,
+    product_id_hint: uuid.UUID | None = None,
 ) -> uuid.UUID | None:
     """WMS-473: one barcode resolution for loose, box and cargo-place scans.
 
-    Lines of the document first (the catalogue is read only for their products);
-    on a miss an ordinary inbound document falls back to the whole seller catalogue,
-    so a product the seller has but the document does not gets its line created by
-    the caller. Returns None only for a return document, whose historical refusal
-    the caller keeps: returns are not part of this change.
+    An ordinary inbound request builds one index for the whole seller catalogue, so
+    a product absent from the plan can still create its historical zero-plan line.
+    Return documents build one document-only index and keep their refusal to accept
+    products outside the request.
     """
-    idx = await _request_barcode_index(session, tenant_id, req, include_seller_catalog=False)
-    product_id, known = _index_lookup(idx, raw)
+    if req.operation_type == OPERATION_TYPE_INBOUND and req.seller_id is not None:
+        index = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
+    else:
+        index = await _request_barcode_index(session, tenant_id, req)
+    product_id = await _resolved_product_id(
+        session,
+        tenant_id,
+        resolve_product_code_from_index(index, raw),
+        seller_id=req.seller_id,
+        product_id_hint=product_id_hint,
+    )
     if product_id is not None:
         return product_id
-    if known:
-        raise InboundIntakeError("barcode_ambiguous")
     if req.operation_type != OPERATION_TYPE_INBOUND:
+        if product_id_hint is not None:
+            raise InboundIntakeError("product_not_found")
         return None
     if req.seller_id is None:
         raise InboundIntakeError("product_not_in_seller_catalog")
-    catalog = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
-    product_id, known = _index_lookup(catalog, raw)
-    if product_id is not None:
-        return product_id
-    if known:
-        raise InboundIntakeError("barcode_ambiguous")
+    if product_id_hint is not None:
+        raise InboundIntakeError("product_not_found")
     raise InboundIntakeError("product_not_in_seller_catalog")
 
 
@@ -1522,7 +1503,7 @@ async def scan_barcode_to_loose_intake(
     product_id_hint: uuid.UUID | None = None,
 ) -> InboundIntakeLine:
     """Scan product barcode into general (non-box) intake: +1 to loose actual_qty."""
-    raw = barcode.strip()
+    raw = normalize_product_code(barcode)
     if not raw:
         raise InboundIntakeError("barcode_empty")
     req = await get_request_for_receiving_scan(session, tenant_id, request_id)
@@ -1533,11 +1514,15 @@ async def scan_barcode_to_loose_intake(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    product_id = product_id_hint
+    product_id = await resolve_scanned_product_id(
+        session,
+        tenant_id,
+        req,
+        raw,
+        product_id_hint=product_id_hint,
+    )
     if product_id is None:
-        product_id = await resolve_scanned_product_id(session, tenant_id, req, raw)
-        if product_id is None:
-            raise InboundIntakeError("product_not_on_request")
+        raise InboundIntakeError("product_not_on_request")
     line = await ensure_request_line(
         session, tenant_id, req, product_id, create_missing=scan_creates_lines(req)
     )
@@ -2312,17 +2297,18 @@ async def scan_distribution_barcode(
             rows=await list_distribution_lines(session, tenant_id, request_id),
         )
 
-    idx = await _request_barcode_index(
+    index = await _request_barcode_index(session, tenant_id, req)
+    product_ids = await validated_product_ids_from_resolution(
         session,
         tenant_id,
-        req,
-        include_seller_catalog=False,
+        resolve_product_code_from_index(index, raw),
+        seller_id=req.seller_id,
     )
-    product_id = idx.get(raw) if raw in idx else idx.get(raw.upper())
-    if product_id is None:
-        if raw in idx or raw.upper() in idx:
-            raise InboundIntakeError("barcode_ambiguous")
+    if len(product_ids) > 1:
+        raise InboundIntakeError("barcode_ambiguous")
+    if not product_ids:
         raise InboundIntakeError("scan_not_found")
+    product_id = product_ids[0]
     if active_storage_location_id is None:
         raise InboundIntakeError("active_location_required")
 

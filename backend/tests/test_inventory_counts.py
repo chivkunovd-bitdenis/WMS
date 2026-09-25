@@ -17,6 +17,8 @@ from app.models.inventory_count import InventoryCountCreatedContainer, Inventory
 from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
@@ -811,6 +813,71 @@ async def test_inventory_count_includes_negative_balance_and_skips_zero(
 
 
 @pytest.mark.asyncio
+async def test_inventory_snapshot_returns_all_scan_codes_without_marketplace_identity(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "InventoryScanCodes")
+    seller_id = await _seller(async_client, setup, "Scan codes seller")
+    product_id = await _product(
+        async_client, setup, name="Товар со всеми кодами", seller_id=seller_id
+    )
+    primary = "4601234567893"
+    additional = "4601234567886"
+    external = "OZN-987654"
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.wb_barcode = primary
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    barcode=additional,
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    marketplace="ozon",
+                    external_sku="987654",
+                    external_offer_id="offer-536",
+                    external_barcodes=[external],
+                ),
+            ]
+        )
+        await session.commit()
+    await _balance(setup, product_id, 2)
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {
+                "seller_id": str(seller_id),
+                "warehouse_id": str(setup.warehouse_id),
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
+    detail = response.json()
+    line = next(row for row in detail["lines"] if row["product_id"] == str(product_id))
+    node = next(
+        node
+        for cell in detail["cells"]
+        for node in cell["children"]
+        if node["kind"] == "product" and node["product_id"] == str(product_id)
+    )
+    assert line["scan_codes"] == [primary, additional, external]
+    assert node["scan_codes"] == [primary, additional, external]
+    assert "987654" not in node["scan_codes"]
+    assert "offer-536" not in node["scan_codes"]
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_found_creates_line_and_second_scan_increments(
     async_client: AsyncClient,
 ) -> None:
@@ -905,6 +972,142 @@ async def test_inventory_count_found_survives_scanner_layout_and_case(
         line for line in response.json()["count"]["lines"] if line["product_id"] == str(surprise)
     )
     assert line["actual_quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_prefers_raw_cyrillic_before_layout_candidate(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "RawFirstCount")
+    seller_id = await _seller(async_client, setup, "Raw first seller")
+    raw_product_id = await _product(
+        async_client, setup, name="Кириллический товар", seller_id=seller_id
+    )
+    layout_product_id = await _product(
+        async_client, setup, name="Layout товар", seller_id=seller_id
+    )
+    anchor_id = await _product(
+        async_client, setup, name="Якорь", seller_id=seller_id
+    )
+    raw_code = "ФА_МОД8-4а/083/42"
+    layout_code = "LATIN-LAYOUT-536"
+    async with SessionLocal() as session:
+        raw_product = await session.get(Product, raw_product_id)
+        layout_product = await session.get(Product, layout_product_id)
+        assert raw_product is not None and layout_product is not None
+        raw_product.sku_code = raw_code
+        layout_product.sku_code = layout_code
+        await session.commit()
+    await _balance(setup, anchor_id, 1)
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {
+                "seller_id": str(seller_id),
+                "warehouse_id": str(setup.warehouse_id),
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{created.json()['id']}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [raw_code, layout_code],
+            "cell_id": str(setup.location_id),
+        },
+    )
+    assert response.status_code == 200, response.text
+    found_ids = {
+        line["product_id"]
+        for line in response.json()["count"]["lines"]
+        if line["actual_quantity"] is not None
+    }
+    assert str(raw_product_id) in found_ids
+    assert str(layout_product_id) not in found_ids
+
+
+@pytest.mark.asyncio
+async def test_inventory_found_keeps_external_identity_and_rejects_cross_source_duplicate(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "InventoryIdentity")
+    seller_id = await _seller(async_client, setup, "Identity seller")
+    external_product_id = await _product(
+        async_client, setup, name="Ozon identity product", seller_id=seller_id
+    )
+    duplicate_product_id = await _product(
+        async_client, setup, name="Duplicate SKU product", seller_id=seller_id
+    )
+    anchor_id = await _product(async_client, setup, name="Anchor", seller_id=seller_id)
+    duplicate_code = "DUP-536"
+    async with SessionLocal() as session:
+        duplicate_product = await session.get(Product, duplicate_product_id)
+        assert duplicate_product is not None
+        duplicate_product.sku_code = duplicate_code
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=setup.tenant_id,
+                seller_id=seller_id,
+                product_id=external_product_id,
+                marketplace="ozon",
+                external_sku="987654",
+                external_offer_id="offer-536",
+                external_barcodes=["OZN-987654", duplicate_code],
+            )
+        )
+        await session.commit()
+    await _balance(setup, anchor_id, 1)
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {
+                "seller_id": str(seller_id),
+                "warehouse_id": str(setup.warehouse_id),
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+
+    found = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={"barcodes": ["987654"], "cell_id": str(setup.location_id)},
+    )
+    assert found.status_code == 200, found.text
+    external_line = next(
+        line
+        for line in found.json()["count"]["lines"]
+        if line["product_id"] == str(external_product_id)
+    )
+    assert external_line["actual_quantity"] == 1
+
+    ambiguous = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={"barcodes": [duplicate_code], "cell_id": str(setup.location_id)},
+    )
+    assert ambiguous.status_code == 409, ambiguous.text
+    assert ambiguous.json()["detail"] == "barcode_is_ambiguous"
+    reread = await async_client.get(
+        f"/operations/inventory-counts/{count_id}", headers=setup.headers
+    )
+    assert reread.status_code == 200, reread.text
+    assert next(
+        line
+        for line in reread.json()["lines"]
+        if line["product_id"] == str(external_product_id)
+    )["actual_quantity"] == 1
+    assert all(
+        line["product_id"] != str(duplicate_product_id)
+        for line in reread.json()["lines"]
+    )
 
 
 @pytest.mark.asyncio

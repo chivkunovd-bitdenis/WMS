@@ -18,6 +18,8 @@ from app.models.inbound_intake import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.pallet import Pallet
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
@@ -105,6 +107,25 @@ async def _seed_map(
         )
         session.add_all([product, sorting_product])
         await session.flush()
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=tenant_id,
+                    seller_id=seller.id,
+                    product_id=product.id,
+                    barcode=f"WB-ALT-{suffix}",
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=seller.id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_sku=f"OZ-SKU-{suffix}",
+                    external_barcodes=[f"OZN-{suffix}"],
+                ),
+            ]
+        )
         request = InboundIntakeRequest(
             tenant_id=tenant_id,
             warehouse_id=warehouse.id,
@@ -198,7 +219,7 @@ async def test_map_totals_moves_sorting_disband_and_tenant_scope(
         warehouse,
         cell,
         sorting,
-        _product,
+        product,
         _sorting_product,
         loose,
         pallet,
@@ -217,6 +238,15 @@ async def test_map_totals_moves_sorting_disband_and_tenant_scope(
     )
     assert pallet_node["qty"] == 7
     assert pallet_node["children"][0]["kind"] == "box"
+    loose_product = next(
+        node for node in data["cells"][0]["children"] if node["kind"] == "product"
+    )
+    assert loose_product["scan_codes"] == [
+        product.wb_barcode,
+        f"WB-ALT-{product.sku_code.removeprefix('TS-')}",
+        f"OZN-{product.sku_code.removeprefix('TS-')}",
+    ]
+    assert all("OZ-SKU" not in code for code in loose_product["scan_codes"])
     assert sum(node["qty"] for node in data["unassigned"]) == 3
     async with SessionLocal() as session:
         db_total = int(
