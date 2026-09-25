@@ -23,8 +23,6 @@ from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
-from app.services import marketplace_unload_box_service as box_svc
-from app.services import marketplace_unload_pick_service as pick_svc
 
 WB_ADDITIONAL = "4601234567886"
 OZON_BARCODE = "OZN-987654"
@@ -188,11 +186,13 @@ async def test_marketplace_unload_uses_default_product_aliases_without_tsd_hint(
 
 
 @pytest.mark.asyncio
-async def test_marketplace_unload_ambiguity_stops_both_services_before_mutation(
+@pytest.mark.parametrize("endpoint", ["pick", "box"])
+async def test_marketplace_unload_api_returns_409_for_product_code_ambiguity(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
 ) -> None:
-    headers = await _register_headers(async_client, "wms536-ambiguous")
+    headers = await _register_headers(async_client, f"wms536-ambiguous-{endpoint}")
     request_id, box_id, product_id, location_id, _ = (
         await _confirmed_unload_with_open_box(
             async_client,
@@ -228,28 +228,18 @@ async def test_marketplace_unload_ambiguity_stops_both_services_before_mutation(
         await session.commit()
 
     before = await _mutation_counts(request_id, box_id)
-    async with SessionLocal() as session:
-        with pytest.raises(pick_svc.MarketplaceUnloadPickError, match="barcode_ambiguous"):
-            await pick_svc.pick_scan(
-                session,
-                tenant_id,
-                uuid.UUID(request_id),
-                barcode=DUPLICATE_CODE,
-                product_id_hint=uuid.UUID(product_id),
-                storage_location_id=uuid.UUID(location_id),
-                actor_user_id=None,
-            )
-        with pytest.raises(box_svc.MarketplaceUnloadBoxError, match="barcode_ambiguous"):
-            await box_svc.scan_barcode_into_box(
-                session,
-                tenant_id,
-                uuid.UUID(box_id),
-                barcode=DUPLICATE_CODE,
-                request_id=uuid.UUID(request_id),
-                product_id_hint=uuid.UUID(product_id),
-                storage_location_id=uuid.UUID(location_id),
-                actor_user_id=None,
-            )
+    response = await _post_product_scan(
+        async_client,
+        headers,
+        endpoint=endpoint,
+        request_id=request_id,
+        box_id=box_id,
+        location_id=location_id,
+        barcode=DUPLICATE_CODE,
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "barcode_ambiguous"
     assert await _mutation_counts(request_id, box_id) == before
 
 

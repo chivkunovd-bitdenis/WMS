@@ -329,6 +329,31 @@ async def test_scope_is_applied_before_ambiguity_for_seller_tenant_and_product_i
 
 
 @pytest.mark.asyncio
+async def test_ozon_alias_requires_link_and_product_to_have_the_same_owner(
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed(db_session)
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=seed.tenant_id,
+            seller_id=seed.other_seller_id,
+            product_id=seed.product_id,
+            marketplace="ozon",
+            external_barcodes=["FOREIGN-OWNER-536"],
+        )
+    )
+    await db_session.commit()
+
+    result = await resolve_product_code(
+        db_session,
+        "FOREIGN-OWNER-536",
+        scope=_seller_scope(seed),
+    )
+
+    assert isinstance(result, ProductCodeNotFound)
+
+
+@pytest.mark.asyncio
 async def test_13_and_14_digit_codes_with_leading_zero_are_distinct(
     db_session: AsyncSession,
 ) -> None:

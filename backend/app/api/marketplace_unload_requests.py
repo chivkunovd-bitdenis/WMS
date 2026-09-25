@@ -691,6 +691,7 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "bad_status",
         "open_box_exists",
         "invalid_container_reference",
+        "barcode_ambiguous",
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
@@ -735,6 +736,7 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
         "box_already_attached",
         "warehouse_mismatch",
         "box_not_empty",
+        "barcode_ambiguous",
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
