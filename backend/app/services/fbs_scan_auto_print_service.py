@@ -35,6 +35,14 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import FbsSupply
 from app.services.document_event_service import record_document_event
 from app.services.fbs_picking_order_service import picking_list_order_key
+from app.services.product_code_resolver_service import (
+    WB_ONLY_PRODUCT_CODE_ALIAS_POLICY,
+    ProductCodeAmbiguous,
+    ProductCodeFound,
+    ProductCodeScope,
+    normalize_product_code,
+    resolve_product_code,
+)
 
 _EVENT_KIND = "wms514_scan_auto_print"
 _TARGET_EVENT_KIND = "wms514_scan_auto_print_target"
@@ -195,7 +203,7 @@ async def select_order_for_product_scan(
             )
         ).all()
     )
-    matching = [
+    eligible_orders = [
         order
         for order in orders
         if order.status != FBS_ORDER_STATUS_CANCELLED
@@ -206,21 +214,47 @@ async def select_order_for_product_scan(
                 and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
             )
         )
-        and raw_barcode
-        in {
-            value
-            for value in (
-                order.wb_barcode,
-                order.product.wb_barcode if order.product is not None else None,
-            )
-            if value
-        }
     ]
+    supply_product_ids = frozenset(
+        order.product_id for order in orders if order.product_id is not None
+    )
+    resolution = await resolve_product_code(
+        session,
+        raw_barcode,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=frozenset({supply.seller_id}),
+            product_ids=supply_product_ids,
+        ),
+        policy=WB_ONLY_PRODUCT_CODE_ALIAS_POLICY,
+    )
+    if isinstance(resolution, ProductCodeAmbiguous):
+        raise FbsScanAutoPrintError("scan_product_ambiguous")
+
+    matched_product_ids: set[uuid.UUID] = set()
+    if isinstance(resolution, ProductCodeFound):
+        matched_product_ids.add(resolution.product_id)
+    snapshot_key = normalize_product_code(raw_barcode).casefold()
+    snapshot_orders = [
+        order
+        for order in eligible_orders
+        if isinstance(order.wb_barcode, str)
+        and normalize_product_code(order.wb_barcode).casefold() == snapshot_key
+    ]
+    if any(order.product_id is None for order in snapshot_orders):
+        raise FbsScanAutoPrintError("scan_product_ambiguous")
+    matched_product_ids.update(
+        order.product_id for order in snapshot_orders if order.product_id is not None
+    )
+    if len(matched_product_ids) > 1:
+        raise FbsScanAutoPrintError("scan_product_ambiguous")
+    if not matched_product_ids:
+        raise FbsScanAutoPrintError("scan_product_not_found")
+
+    product_id = next(iter(matched_product_ids))
+    matching = [order for order in eligible_orders if order.product_id == product_id]
     if not matching:
         raise FbsScanAutoPrintError("scan_product_not_found")
-    product_ids = {order.product_id for order in matching if order.product_id is not None}
-    if len(product_ids) != 1 or any(order.product_id is None for order in matching):
-        raise FbsScanAutoPrintError("scan_product_ambiguous")
 
     while True:
         scan_events = list(

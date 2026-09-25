@@ -29,7 +29,10 @@ from app.models.fbs_supply import (
 )
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
+from app.services import fbs_picking_service as picking_svc
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
@@ -937,6 +940,224 @@ async def test_fbs_pick_idempotency_no_double_pick(async_client: AsyncClient) ->
             ).scalars()
         )
         assert len(picks) == 1
+
+
+@pytest.mark.asyncio
+async def test_wms536_fbs_product_resolution_scope_aliases_and_hint(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    other_seller_id, _, _ = await _create_seller_and_warehouse(
+        async_client, headers, f"{suffix}-other", seller_name="Other seller"
+    )
+    primary = "4601234567893"
+    additional = "4601234567886"
+    external = "OZN-987654"
+    product_id = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku="AbC-42",
+        barcode=primary,
+    )
+    foreign_product_id = await _create_product(
+        async_client,
+        headers,
+        other_seller_id,
+        sku=external,
+        barcode=f"FOREIGN-{suffix}",
+    )
+    cyrillic_product_id = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku="ФА_МОД8-4а/083/42",
+        barcode=f"CYR-{suffix}",
+        name="Cyrillic product",
+    )
+    supply_id, _order_ids, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=primary,
+    )
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    barcode=additional,
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    marketplace="ozon",
+                    external_sku="987654",
+                    external_offer_id="offer-536",
+                    external_barcodes=[external],
+                ),
+                FbsOrder(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    warehouse_id=warehouse_id,
+                    product_id=cyrillic_product_id,
+                    supply_id=supply_id,
+                    marketplace="wb",
+                    wb_order_id=736_002,
+                    wb_barcode=f"CYR-{suffix}",
+                    created_at_wb=datetime.now(UTC),
+                    deadline_at=datetime.now(UTC) + timedelta(hours=48),
+                    mapping_status=MAPPING_STATUS_MAPPED,
+                    reserve_status=RESERVE_STATUS_RESERVED,
+                    status=FBS_ORDER_STATUS_IN_SUPPLY,
+                ),
+            ]
+        )
+        await session.commit()
+
+        loaded = await picking_svc._load_supply(session, tenant_id, supply_id)
+        for code in (primary, additional, external, "aBc-42"):
+            resolved = await picking_svc._resolve_product_for_supply(
+                session,
+                tenant_id,
+                loaded,
+                product_barcode=code,
+            )
+            assert resolved is not None and resolved.id == product_id
+        resolved_cyrillic = await picking_svc._resolve_product_for_supply(
+            session,
+            tenant_id,
+            loaded,
+            product_barcode="ФА_МОД8-4а/083/42",
+        )
+        assert resolved_cyrillic is not None
+        assert resolved_cyrillic.id == cyrillic_product_id
+        assert (
+            await picking_svc._resolve_product_for_supply(
+                session,
+                tenant_id,
+                loaded,
+                product_barcode="987654",
+            )
+            is None
+        )
+        assert (
+            await picking_svc._resolve_product_for_supply(
+                session,
+                tenant_id,
+                loaded,
+                product_barcode=(
+                    "010460123456789321SERIAL536\x1d91ABCD\x1d92SIGNATURE536"
+                ),
+            )
+            is None
+        )
+
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.wb_barcode = f"NEW-{primary}"
+        await session.commit()
+        snapshot_supply = await picking_svc._load_supply(session, tenant_id, supply_id)
+        snapshot_resolved = await picking_svc._resolve_product_for_supply(
+            session,
+            tenant_id,
+            snapshot_supply,
+            product_barcode=primary,
+        )
+        assert snapshot_resolved is not None and snapshot_resolved.id == product_id
+
+    mismatch = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/pick/scan",
+        headers={**headers, "Idempotency-Key": "wms536-wrong-hint"},
+        json={
+            "barcode": primary,
+            "product_id": str(cyrillic_product_id),
+            "storage_location_id": str(location_id),
+        },
+    )
+    assert mismatch.status_code == 409, mismatch.text
+    assert mismatch.json()["detail"]["code"] == "wrong_product"
+
+    async with SessionLocal() as session:
+        assert not (
+            await session.scalars(
+                select(FbsOrderPick).where(FbsOrderPick.fbs_supply_id == supply_id)
+            )
+        ).all()
+        foreign = await session.get(Product, foreign_product_id)
+        assert foreign is not None
+        collision_product = await session.get(Product, product_id)
+        assert collision_product is not None
+        collision_product.sku_code = "DUP-536"
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=cyrillic_product_id,
+                marketplace="ozon",
+                external_sku="cyr-536",
+                external_offer_id="cyr-offer-536",
+                external_barcodes=["DUP-536"],
+            )
+        )
+        await session.commit()
+
+    ambiguous = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/pick/scan",
+        headers={**headers, "Idempotency-Key": "wms536-ambiguous"},
+        json={
+            "barcode": "DUP-536",
+            "product_id": str(product_id),
+            "storage_location_id": str(location_id),
+        },
+    )
+    assert ambiguous.status_code == 409, ambiguous.text
+    assert ambiguous.json()["detail"]["code"] == "barcode_ambiguous"
+    async with SessionLocal() as session:
+        assert not (
+            await session.scalars(
+                select(FbsOrderPick).where(FbsOrderPick.fbs_supply_id == supply_id)
+            )
+        ).all()
+
+    ozon_supply_id, _, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=0,
+        order_specs=[(3, timedelta(hours=24))],
+        barcode=primary,
+        marketplace="ozon",
+    )
+    async with SessionLocal() as session:
+        ozon_supply = await picking_svc._load_supply(session, tenant_id, ozon_supply_id)
+        for identity in ("987654", "offer-536"):
+            resolved = await picking_svc._resolve_product_for_supply(
+                session,
+                tenant_id,
+                ozon_supply,
+                product_barcode=identity,
+            )
+            assert resolved is not None and resolved.id == product_id
 
 
 @pytest.mark.asyncio

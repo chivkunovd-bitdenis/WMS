@@ -335,6 +335,7 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
         "no_eligible_order",
         "fbs_acknowledge_not_allowed",
         "mixed_seller",
+        "barcode_ambiguous",
         "unknown_barcode",
         "line_already_packed",
         "undo_not_available",

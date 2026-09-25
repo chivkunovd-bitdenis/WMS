@@ -54,6 +54,12 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.operation_fact_service import record_packaging_event
+from app.services.product_code_resolver_service import (
+    ProductCodeAmbiguous,
+    ProductCodeFound,
+    ProductCodeScope,
+    resolve_product_code,
+)
 
 PackagingTaskError = Literal[
     "not_found",
@@ -76,6 +82,7 @@ PackagingTaskError = Literal[
     "supply_not_found",
     "fbs_acknowledge_not_allowed",
     "mixed_seller",
+    "barcode_ambiguous",
     "unknown_barcode",
     "line_already_packed",
     "undo_not_available",
@@ -1105,11 +1112,6 @@ async def record_pack_progress(
     return PackProgressResult(task=loaded)
 
 
-def _line_matches_barcode(line: PackagingTaskLine, barcode: str) -> bool:
-    product = line.product
-    return barcode in {product.sku_code, product.wb_barcode}
-
-
 async def record_pack_scan(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1126,9 +1128,22 @@ async def record_pack_scan(
         raise PackagingTaskServiceError("not_found")
     if task.status in (STATUS_DONE, STATUS_CANCELLED):
         raise PackagingTaskServiceError("bad_status")
-    matching = [line for line in task.lines if _line_matches_barcode(line, cleaned)]
-    if not matching:
+    resolution = await resolve_product_code(
+        session,
+        barcode,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            product_ids=frozenset(line.product_id for line in task.lines),
+        ),
+    )
+    if isinstance(resolution, ProductCodeAmbiguous):
+        raise PackagingTaskServiceError(
+            "barcode_ambiguous",
+            "Код относится к нескольким товарам. Проверьте штрихкоды карточек.",
+        )
+    if not isinstance(resolution, ProductCodeFound):
         raise PackagingTaskServiceError("unknown_barcode")
+    matching = [line for line in task.lines if line.product_id == resolution.product_id]
     open_line = next(
         (line for line in matching if qty_need_pack(line) - int(line.qty_packed_in_task) > 0),
         None,
