@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.cell import WriteOnlyCell  # type: ignore[import-untyped]
 from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
@@ -376,21 +377,33 @@ async def incomplete_transfer_product_ids(
 
     incomplete: set[uuid.UUID] = set()
     for members in groups.values():
-        types = {m[2] for m in members}
-        pair_ok = types == _STOCK_TRANSFER_PAIR_TYPES or (
-            len(types) == 1 and next(iter(types)) in _SAME_TYPE_PAIR_TYPES
-        )
-        is_complete = (
-            len(members) == 2
-            and members[0][0] == members[1][0]
-            and pair_ok
-            and members[0][1] != 0
-            and members[1][1] != 0
-            and members[0][1] * members[1][1] < 0
-            and abs(members[0][1]) == abs(members[1][1])
-        )
-        if not is_complete:
-            incomplete.update(m[0] for m in members)
+        # WMS-531 ревью Astra, раунд 2, F11: одна группа переноса может
+        # нести несколько независимых товарных пар сразу — перенос короба с
+        # несколькими позициями содержимого пишет их все ОДНИМ
+        # transfer_group_id (warehouse_map_service.py: перенос остатка
+        # каждой позиции короба). Полнота проверяется ПО КАЖДОМУ ТОВАРУ
+        # внутри группы отдельно: недостача одного товара не может
+        # компенсироваться избытком другого, а группа из четырёх строк по
+        # двум товарам (по 2 строки на каждый) — это две полные пары, а не
+        # одна «не пара из двух строк».
+        by_product: dict[uuid.UUID, list[tuple[int, str]]] = {}
+        for product_id, quantity, movement_type in members:
+            by_product.setdefault(product_id, []).append((quantity, movement_type))
+        for product_id, product_members in by_product.items():
+            types = {m[1] for m in product_members}
+            pair_ok = types == _STOCK_TRANSFER_PAIR_TYPES or (
+                len(types) == 1 and next(iter(types)) in _SAME_TYPE_PAIR_TYPES
+            )
+            is_complete = (
+                len(product_members) == 2
+                and pair_ok
+                and product_members[0][0] != 0
+                and product_members[1][0] != 0
+                and product_members[0][0] * product_members[1][0] < 0
+                and abs(product_members[0][0]) == abs(product_members[1][0])
+            )
+            if not is_complete:
+                incomplete.add(product_id)
 
     # WMS-531 ревью Astra, F6: движение расположения совсем без номера группы
     # никогда не может оказаться полной парой — раньше такие строки не
@@ -891,21 +904,25 @@ def row_operation_label(
     *,
     intake_operation_type: str | None,
     quantity_delta: int,
-    has_resolved_document: bool = False,
+    is_confirmed_fbs_reversal: bool = False,
 ) -> str:
     """WMS-531 R2. Подпись «Движение» одной строки — не всегда совпадает с её
     группой в «По операциям» (см. Корректировка/Передача между селлерами:
     группа общая, подписи разные).
 
     WMS-531 ревью Astra, F8: «FBS, сторно» — это про ПОДТВЕРЖДЁННОЕ историческое
-    сторно (R2: «сторно до 05.09.2026», связанное `reversal_movement_id`), а не
-    про любую положительную строку по знаку. Известные сентябрьские правки —
-    разовые правки данных без автора, не сторно заказа (факт ведущего, прод,
-    только чтение) — подписывать их «сторно» без подтверждённой связи с
-    заказом означало бы приписать документу непроверенный смысл. Пока
-    требования не определяют отдельную подпись для положительной строки без
-    связи, используем нейтральную «FBS» — она и так верна (это FBS-движение),
-    просто не утверждает, что это возврат.
+    сторно (R2: «сторно до 05.09.2026», связанное именно `reversal_movement_id`),
+    а не про любую положительную строку с НАЙДЕННЫМ документом. Раунд 2 нашёл,
+    что `is_confirmed_fbs_reversal` раньше означало «есть какой-то документ» —
+    например, положительная строка, случайно связанная через
+    inbound_intake_line_id с чужой приёмкой, тоже получала «сторно». Теперь
+    флаг ставится в `_resolve_fbs_documents` только когда связь найдена именно
+    через `reversal_movement_id`; в остальных случаях (нет связи вовсе, связь
+    через shipment_movement_id/ozon_positions_json/группу без сторно) —
+    нейтральная «FBS»: она верна (это FBS-движение), но не утверждает, что это
+    возврат. Известные сентябрьские правки — разовые правки данных без автора,
+    не сторно заказа (факт ведущего, прод, только чтение); отдельная подпись
+    для них требованиями пока не определена — вопрос аналитику.
     """
     if movement_type == MOVEMENT_TYPE_INBOUND_INTAKE:
         return "Возврат" if intake_operation_type == "return" else "Приёмка"
@@ -914,7 +931,7 @@ def row_operation_label(
     if movement_type == MOVEMENT_TYPE_OWNERSHIP_RECEIPT:
         return "Приёмка при передаче между селлерами"
     if movement_type == MOVEMENT_TYPE_FBS_SHIPMENT:
-        return "FBS, сторно" if quantity_delta > 0 and has_resolved_document else "FBS"
+        return "FBS, сторно" if quantity_delta > 0 and is_confirmed_fbs_reversal else "FBS"
     if movement_type not in REPORT_MOVEMENT_TYPE_GROUPS:
         # WMS-531 R2, последняя строка таблицы: неизвестный вид всё равно
         # обязан быть виден и опознаваем, а не молча слит с прочими «Прочее».
@@ -1021,15 +1038,19 @@ async def _resolve_fbs_documents(
     *,
     date_from: datetime,
     date_to: datetime,
-) -> dict[uuid.UUID, tuple[str, uuid.UUID | None]]:
-    """movement_id -> (подпись заказа с площадкой, supply_id).
+    ozon_position_index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] | None = None,
+) -> dict[uuid.UUID, tuple[str, uuid.UUID | None, bool]]:
+    """movement_id -> (подпись заказа с площадкой, supply_id, подтверждённое сторно).
 
     Списание FBS связано с заказом через журнал `FbsShipmentReversalLedger`:
     прямой id (исходное списание или его историческое сторно
     `reversal_movement_id`) либо позиция Ozon-заказа с несколькими товарами
     (`ozon_positions_json`, где у каждой позиции свой movement_id). Старое
     `fbs_order_pick`/его отмена документа в журнале не имеют — ищем через
-    запись подбора (см. ниже).
+    запись подбора (см. ниже). Третий элемент кортежа — «сторно подтверждено
+    именно `reversal_movement_id`» (WMS-531 ревью Astra, F8): используется
+    только `row_operation_label`, для остальных видов документа значения не
+    имеет.
 
     WMS-531 ревью Astra, F2: список позиций Ozon ограничен по времени НЕ
     `created_at` самого журнала (он пишется заранее, при подготовке к
@@ -1039,12 +1060,21 @@ async def _resolve_fbs_documents(
     вызове `write_off_order` практически одномоментно, поэтому якорь — верная
     граница периода, а дата журнала — нет. Старое ограничение по дате
     журнала теряло вторую и следующие позиции, если журнал готовили раньше.
+
+    WMS-531 ревью Astra, раунд 2, F1: этот же запрос по `ozon_positions_json`,
+    если выполнять его отдельно на каждую порцию (каждого селлера), повторяет
+    идентичное чтение всего подходящего по датам журнала арендатора столько
+    раз, сколько в отчёте селлеров. `build_inventory_workbook` считает его
+    ОДИН раз на весь запрос через `_load_ozon_position_index` и передаёт сюда
+    готовым словарём `ozon_position_index`; `list_product_movements` (один
+    вызов на запрос) им не пользуется и оставляет прежний путь — свой запрос,
+    ограниченный ровно тем же условием даты.
     """
     fbs_movement_ids = {
         row.id for row in rows if row.movement_type in {"fbs_shipment", "fbs_order_pick"}
     }
     pick_undo_ids = {row.id for row in rows if row.movement_type == "fbs_order_pick_undo"}
-    result: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
+    result: dict[uuid.UUID, tuple[str, uuid.UUID | None, bool]] = {}
 
     # WMS-531 ревью Astra, F3: разделённое списание (в т.ч. вторая и следующие
     # позиции Ozon, расколотые по местам/таре) может быть найдено не по своему
@@ -1082,6 +1112,8 @@ async def _resolve_fbs_documents(
         # SQLAlchemy подтипом tuple, а распаковка в цикле ниже работает и так.
         ledger_rows: Iterable[Any],
         candidate_ids: set[uuid.UUID],
+        *,
+        is_confirmed_reversal: bool,
     ) -> None:
         for movement_id, positions, marketplace, wb_order_id, external_order_id, supply_id in (
             ledger_rows
@@ -1096,7 +1128,7 @@ async def _resolve_fbs_documents(
                 if linked_id in result:
                     continue
                 number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
-                result[linked_id] = (number, supply_id)
+                result[linked_id] = (number, supply_id, is_confirmed_reversal)
 
     if expanded_fbs_ids:
         by_shipment_id = await session.execute(
@@ -1113,11 +1145,15 @@ async def _resolve_fbs_documents(
                 FbsShipmentReversalLedger.shipment_movement_id.in_(expanded_fbs_ids),
             )
         )
-        await _apply_ledger_rows(by_shipment_id, expanded_fbs_ids)
+        # Прямая связь shipment_movement_id — это исходное списание, а не
+        # сторно (F8): без знака «+» здесь взяться неоткуда, но флаг ставим
+        # явно, а не по умолчанию, чтобы не полагаться на совпадение.
+        await _apply_ledger_rows(by_shipment_id, expanded_fbs_ids, is_confirmed_reversal=False)
 
     # Историческое сторно FBS (до 05.09.2026, movement_type всё ещё
     # "fbs_shipment", но со знаком «+») связано через reversal_movement_id,
-    # а не shipment_movement_id.
+    # а не shipment_movement_id. Это ЕДИНСТВЕННАЯ связь, которая доказывает
+    # именно отмену списания (F8) — остальные способы ниже её не подтверждают.
     reversal_candidates = expanded_fbs_ids - set(result)
     if reversal_candidates:
         by_reversal_id = await session.execute(
@@ -1134,36 +1170,45 @@ async def _resolve_fbs_documents(
                 FbsShipmentReversalLedger.reversal_movement_id.in_(reversal_candidates),
             )
         )
-        await _apply_ledger_rows(by_reversal_id, reversal_candidates)
+        await _apply_ledger_rows(by_reversal_id, reversal_candidates, is_confirmed_reversal=True)
 
     ozon_position_candidates = expanded_fbs_ids - set(result)
     if ozon_position_candidates:
-        anchor_movement = aliased(InventoryMovement)
-        by_position = await session.execute(
-            select(
-                FbsShipmentReversalLedger.shipment_movement_id,
-                FbsShipmentReversalLedger.ozon_positions_json,
-                FbsOrder.marketplace, FbsOrder.wb_order_id, FbsOrder.external_order_id,
-                FbsOrder.supply_id,
+        if ozon_position_index is not None:
+            for movement_id in ozon_position_candidates:
+                indexed = ozon_position_index.get(movement_id)
+                if indexed is not None:
+                    number, supply_id = indexed
+                    result[movement_id] = (number, supply_id, False)
+        else:
+            anchor_movement = aliased(InventoryMovement)
+            by_position = await session.execute(
+                select(
+                    FbsShipmentReversalLedger.shipment_movement_id,
+                    FbsShipmentReversalLedger.ozon_positions_json,
+                    FbsOrder.marketplace, FbsOrder.wb_order_id, FbsOrder.external_order_id,
+                    FbsOrder.supply_id,
+                )
+                .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+                .join(
+                    anchor_movement,
+                    anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
+                )
+                .where(
+                    FbsShipmentReversalLedger.tenant_id == tenant_id,
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
+                    anchor_movement.created_at >= date_from,
+                    anchor_movement.created_at < date_to,
+                )
             )
-            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
-            .join(
-                anchor_movement,
-                anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
+            await _apply_ledger_rows(
+                by_position, ozon_position_candidates, is_confirmed_reversal=False
             )
-            .where(
-                FbsShipmentReversalLedger.tenant_id == tenant_id,
-                FbsOrder.tenant_id == tenant_id,
-                FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
-                anchor_movement.created_at >= date_from,
-                anchor_movement.created_at < date_to,
-            )
-        )
-        await _apply_ledger_rows(by_position, ozon_position_candidates)
 
     # Распространяем найденный документ на всех участников группы: если хоть
     # один сосед разрешился (любым из способов выше), остальные наследуют тот
-    # же заказ, не будучи связаны напрямую (R3).
+    # же заказ и тот же признак сторно, не будучи связаны напрямую (R3).
     for members in members_by_group.values():
         found = next((result[member_id] for member_id in members if member_id in result), None)
         if found is None:
@@ -1208,7 +1253,8 @@ async def _resolve_fbs_documents(
         )
         for movement_id, order_id in event_rows:
             if movement_id is not None and order_id in order_by_id:
-                result[movement_id] = order_by_id[order_id]
+                number, supply_id = order_by_id[order_id]
+                result[movement_id] = (number, supply_id, False)
 
         remaining = pick_candidates - set(result)
         if remaining:
@@ -1225,9 +1271,61 @@ async def _resolve_fbs_documents(
             )
             for movement_id, order_id in direct_rows:
                 if movement_id is not None and order_id in direct_order_by_id:
-                    result[movement_id] = direct_order_by_id[order_id]
+                    number, supply_id = direct_order_by_id[order_id]
+                    result[movement_id] = (number, supply_id, False)
 
     return result
+
+
+async def _load_ozon_position_index(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    date_from: datetime,
+    date_to: datetime,
+) -> dict[uuid.UUID, tuple[str, uuid.UUID | None]]:
+    """movement_id -> (подпись заказа с площадкой, supply_id) для ЛЮБОЙ позиции
+    Ozon-заказа, чей якорь (`shipment_movement_id`) создан в границах периода.
+
+    WMS-531 ревью Astra, раунд 2, F1: тот же запрос, что в `_resolve_fbs_documents`
+    делает для одной порции движений — но если вызывать его на КАЖДУЮ порцию
+    (каждого селлера в Excel), он повторяет идентичное чтение всего подходящего
+    по датам журнала арендатора столько раз, сколько в отчёте селлеров. Здесь
+    считается ОДИН раз на весь запрос экспорта; `build_inventory_workbook`
+    передаёт готовый результат в каждый вызов `_enrich_movement_rows`. Запрос
+    по-прежнему ограничен периодом (не всей историей арендатора) — граница та
+    же, что и раньше (F2): якорь, а не дата самого журнала.
+    """
+    anchor_movement = aliased(InventoryMovement)
+    rows = await session.execute(
+        select(
+            FbsShipmentReversalLedger.ozon_positions_json,
+            FbsOrder.marketplace, FbsOrder.wb_order_id, FbsOrder.external_order_id,
+            FbsOrder.supply_id,
+        )
+        .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+        .join(
+            anchor_movement,
+            anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
+        )
+        .where(
+            FbsShipmentReversalLedger.tenant_id == tenant_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
+            anchor_movement.created_at >= date_from,
+            anchor_movement.created_at < date_to,
+        )
+    )
+    index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
+    for positions, marketplace, wb_order_id, external_order_id, supply_id in rows:
+        number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
+        for position in positions or []:
+            try:
+                movement_id = uuid.UUID(str(position.get("movement_id")))
+            except (ValueError, AttributeError, TypeError):
+                continue
+            index.setdefault(movement_id, (number, supply_id))
+    return index
 
 
 async def _resolve_ownership_transfer_partners(
@@ -1286,12 +1384,18 @@ async def _enrich_movement_rows(
     *,
     date_from: datetime,
     date_to: datetime,
+    ozon_position_index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] | None = None,
 ) -> list[dict[str, object]]:
     """Общая сборка обогащённых строк движения — использует и постраничный
     экранный эндпоинт, и Excel (WMS-531 R13: одна функция гарантирует, что
     файл и экран не разойдутся). Имя и артикул товара заполняются всегда:
     в раскрытии по виду движения без них не понять, что именно уехало —
-    там в одной пачке лежат разные товары."""
+    там в одной пачке лежат разные товары.
+
+    `ozon_position_index` — см. `_resolve_fbs_documents`/`_load_ozon_position_index`
+    (WMS-531 ревью Astra, раунд 2, F1): готовый словарь, который Excel считает
+    один раз на весь запрос вместо повторного чтения журнала на каждую порцию.
+    """
     intake_line_ids = {row.inbound_intake_line_id for row in rows if row.inbound_intake_line_id}
     unload_ids = {
         row.marketplace_unload_request_id for row in rows if row.marketplace_unload_request_id
@@ -1306,7 +1410,8 @@ async def _enrich_movement_rows(
     outbound_requests = await _resolve_outbound_documents(session, outbound_line_ids)
     count_documents = await _resolve_inventory_count_documents(session, count_line_ids)
     fbs_documents = await _resolve_fbs_documents(
-        session, tenant_id, rows, date_from=date_from, date_to=date_to
+        session, tenant_id, rows, date_from=date_from, date_to=date_to,
+        ozon_position_index=ozon_position_index,
     )
     ownership_labels = await _resolve_ownership_transfer_partners(session, tenant_id, rows)
 
@@ -1324,12 +1429,13 @@ async def _enrich_movement_rows(
     for row in rows:
         document: dict[str, object] | None = None
         intake_operation_type: str | None = None
+        is_confirmed_fbs_reversal = False
         if row.inbound_intake_line_id and row.inbound_intake_line_id in intake_by_line:
             request_id, number, operation_type = intake_by_line[row.inbound_intake_line_id]
             intake_operation_type = operation_type
             document = {"kind": "inbound", "id": str(request_id), "number": number or "без номера"}
         elif row.id in fbs_documents:
-            number, supply_id = fbs_documents[row.id]
+            number, supply_id, is_confirmed_fbs_reversal = fbs_documents[row.id]
             document = {
                 "kind": "fbs_supply" if supply_id else "fbs_order",
                 "id": str(supply_id) if supply_id else str(row.id),
@@ -1358,7 +1464,7 @@ async def _enrich_movement_rows(
                 row.movement_type,
                 intake_operation_type=intake_operation_type,
                 quantity_delta=int(row.quantity_delta),
-                has_resolved_document=document is not None,
+                is_confirmed_fbs_reversal=is_confirmed_fbs_reversal,
             )
 
         name, sku = product_names.get(row.product_id, (None, None))
@@ -1496,10 +1602,26 @@ async def build_inventory_workbook(
     50/200 (R12.8). Использует ровно те же агрегаты и ту же сборку строк
     движения, что и JSON-эндпоинты — числа гарантированно совпадают (R13).
 
-    WMS-531 ревью Astra, F1: журнал движений периода читается и обогащается
-    ПОРЦИЯМИ — по одному селлеру за раз, а не всем тенантом разом, — чтобы
-    пиковая память ограничивалась объёмом одного селлера, а не годовым
-    журналом самого крупного арендатора целиком (R15).
+    WMS-531 ревью Astra, раунд 2, F1 — три отдельных источника накопления
+    памяти и повтора запроса устранены здесь одновременно:
+    1. Книга — `Workbook(write_only=True)`: строки уходят в поток сразу при
+       `sheet.append`, а не копятся в `_cells` до `save()`. Уровни группировки
+       (`row_dimensions[...].outlineLevel/hidden`) и `freeze_panes` в этом
+       режиме сохраняются, только если выставлены ДО соответствующего
+       `append` — иначе строка уже отправлена в поток и недоступна для
+       правки; `_append` поэтому сначала пишет измерения строки, потом сами
+       ячейки. Числовой/датный/принудительно текстовый тип и формат
+       (F10) задаются через `WriteOnlyCell`, а не постфактум через
+       `sheet.cell(...)`, которая в write-only книге недоступна.
+    2. Журнал движений одного селлера тоже читается порциями (курсор по
+       `(created_at, id)`, не `OFFSET` — сложность страницы не растёт от её
+       номера), а не одним `.all()`: размер порции чтения/обогащения
+       ограничен константой `_MOVEMENT_FETCH_CHUNK_SIZE` независимо от того,
+       сколько всего движений у этого селлера за период.
+    3. Поиск позиций Ozon в `ozon_positions_json` считается ОДИН раз на весь
+       запрос через `_load_ozon_position_index`, а не в каждой порции —
+       иначе идентичный запрос ко всему подходящему по датам журналу
+       арендатора повторялся бы по разу на каждого селлера/порцию.
     """
     del warehouse_id
     date_from, date_to = normalize_period(date_from, date_to)
@@ -1528,16 +1650,26 @@ async def build_inventory_workbook(
     # тенанта плоским списком одновременно с ними.
     del figures, infos
 
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Остатки и движения"
+    ozon_position_index = await _load_ozon_position_index(
+        session, tenant_id, date_from=date_from, date_to=date_to,
+    )
+
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet("Остатки и движения")
     headers = ["Товар", "Артикул продавца", "ШК", "Дата", "Движение", "Документ",
         "Было на начало", "Приход", "Расход", "Остаток на конец"]
     if include_seller:
         headers.insert(0, "Селлер")
-    sheet.append(headers)
+    # write-only: свойства листа обязаны быть выставлены ДО первого append —
+    # см. докстринг выше.
     sheet.freeze_panes = "A2"
     sheet.sheet_properties.outlinePr.summaryBelow = False
+    widths = [22, 16, 16, 20, 26, 26, 14, 10, 10, 14]
+    if include_seller:
+        widths = [22, *widths]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    sheet.append(headers)
 
     # Индексы колонок считаются один раз по итоговому списку headers (уже с
     # учётом вставленной «Селлер», если она есть) — не подбираются вручную на
@@ -1555,23 +1687,23 @@ async def build_inventory_workbook(
     col_closing = headers.index("Остаток на конец")
     numeric_columns = frozenset({col_opening, col_in, col_out, col_closing})
 
-    # WMS-531 ревью Astra, F1 (P1): `sheet.max_row` в установленной версии
-    # openpyxl — это `max(self._cells)`, то есть обход всех уже накопленных
-    # ячеек. Вызов после каждой строки давал квадратичный рост (замер ревью:
-    # 1.381 с / 4.003 с / 20.225 с на 1000/2000/4000 строк). Собственный
-    # счётчик и точечная запись через `sheet.cell(row=, column=)` вместо
-    # `sheet.append(list) + sheet.max_row` держат каждую операцию O(1):
-    # тот же объём — 4000 строк — укладывается в доли секунды (проверено
-    # отдельным локальным замером при написании этого исправления).
     next_row = 1  # заголовок уже в строке 1
 
     def _append(values: list[object], *, outline_level: int) -> None:
         nonlocal next_row
         next_row += 1
+        # Измерения строки — ДО append: в write-only книге строка уходит в
+        # поток немедленно, и `row_dimensions`, выставленные после, на неё уже
+        # не действуют (см. докстринг выше).
+        if outline_level > 0:
+            sheet.row_dimensions[next_row].outlineLevel = outline_level
+            sheet.row_dimensions[next_row].hidden = True
+        cells: list[object] = []
         for column_index, value in enumerate(values):
             if value is None:
+                cells.append(None)
                 continue
-            cell = sheet.cell(row=next_row, column=column_index + 1, value=value)
+            cell = WriteOnlyCell(sheet, value=value)
             if isinstance(value, str):
                 # WMS-531 ревью Astra, F10: openpyxl трактует строку,
                 # начинающуюся с «=», как формулу — название товара вида
@@ -1583,40 +1715,65 @@ async def build_inventory_workbook(
                 cell.number_format = "0"
             elif column_index == col_date:
                 cell.number_format = _XLSX_DATE_FORMAT
-        if outline_level > 0:
-            sheet.row_dimensions[next_row].outlineLevel = outline_level
-            sheet.row_dimensions[next_row].hidden = True
+            cells.append(cell)
+        sheet.append(cells)
+
+    _MOVEMENT_FETCH_CHUNK_SIZE = 1000
+
+    async def _iter_seller_movements_enriched(
+        seller_product_ids: list[uuid.UUID],
+    ) -> AsyncIterator[dict[str, object]]:
+        """Курсорная постраничная выборка движений одного селлера: сложность
+        страницы не растёт от глубины (в отличие от `OFFSET`), и в моменте
+        держится не больше `_MOVEMENT_FETCH_CHUNK_SIZE` сырых ORM-объектов —
+        независимо от того, сколько всего движений у этого селлера за
+        период (WMS-531 ревью Astra, раунд 2, F1)."""
+        cursor: tuple[datetime, uuid.UUID] | None = None
+        while True:
+            filters = [
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.created_at >= date_from,
+                InventoryMovement.created_at < date_to,
+                stock_movement_filter(),
+                InventoryMovement.product_id.in_(seller_product_ids),
+            ]
+            if cursor is not None:
+                filters.append(
+                    tuple_(InventoryMovement.created_at, InventoryMovement.id) > cursor
+                )
+            page = list(
+                (
+                    await session.execute(
+                        select(InventoryMovement)
+                        .where(*filters)
+                        .order_by(InventoryMovement.created_at.asc(), InventoryMovement.id.asc())
+                        .limit(_MOVEMENT_FETCH_CHUNK_SIZE)
+                    )
+                ).scalars().all()
+            )
+            if not page:
+                return
+            enriched_chunk = await _enrich_movement_rows(
+                session, tenant_id, page, date_from=date_from, date_to=date_to,
+                ozon_position_index=ozon_position_index,
+            )
+            for row in enriched_chunk:
+                yield row
+            if len(page) < _MOVEMENT_FETCH_CHUNK_SIZE:
+                return
+            last = page[-1]
+            cursor = (last.created_at, last.id)
 
     total_opening = total_in = total_out = total_closing = 0
     for _seller_key, bucket in sorted(sellers.items(), key=lambda kv: str(kv[1]["seller_name"])):
         products: list[tuple[uuid.UUID, _ProductInfo, ProductPeriodFigures]] = bucket["products"]  # type: ignore[assignment]
         seller_product_ids = [pid for pid, _info, _fig in products]
-        movement_rows = list(
-            (
-                await session.execute(
-                    select(InventoryMovement)
-                    .where(
-                        InventoryMovement.tenant_id == tenant_id,
-                        InventoryMovement.created_at >= date_from,
-                        InventoryMovement.created_at < date_to,
-                        stock_movement_filter(),
-                        InventoryMovement.product_id.in_(seller_product_ids),
-                    )
-                    .order_by(InventoryMovement.created_at.asc(), InventoryMovement.id)
-                )
-            ).scalars().all()
-        )
-        enriched = await _enrich_movement_rows(
-            session, tenant_id, movement_rows, date_from=date_from, date_to=date_to,
-        )
-        del movement_rows
         movements_by_product: dict[str, list[dict[str, object]]] = {}
-        for row in enriched:
+        async for row in _iter_seller_movements_enriched(seller_product_ids):
             row_product_id = row["product_id"]
             if row_product_id is None:
                 continue
             movements_by_product.setdefault(str(row_product_id), []).append(row)
-        del enriched
 
         seller_opening = sum(fig.opening_balance for _p, _i, fig in products)
         seller_in = sum(fig.in_qty for _p, _i, fig in products)
@@ -1720,12 +1877,6 @@ async def build_inventory_workbook(
     total_row[col_out] = total_out
     total_row[col_closing] = total_closing
     _append(total_row, outline_level=0)
-
-    widths = [22, 16, 16, 20, 26, 26, 14, 10, 10, 14]
-    if include_seller:
-        widths = [22, *widths]
-    for index, width in enumerate(widths, start=1):
-        sheet.column_dimensions[get_column_letter(index)].width = width
 
     import io
 

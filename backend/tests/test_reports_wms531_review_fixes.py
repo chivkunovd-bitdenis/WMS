@@ -1,10 +1,12 @@
-"""WMS-531 · регресс на находки перекрёстного ревью Astra (раунд 1).
+"""WMS-531 · регресс на находки перекрёстного ревью Astra (раунды 1 и 2).
 
 Каждый тест воспроизводит ровно тот сценарий, что описан в
-`docs/reviews/artifacts/wms-531/review-astra-1.md`, под соответствующим F-id.
-F8 — продуктовая развилка, отдельного regression-теста не требует (описана
-в требованиях лишь частично); её код зафиксирован тестом на C1 в
-`test_reports_wms531.py` (историческое сторно с подтверждённой связью).
+`docs/reviews/artifacts/wms-531/review-astra-1.md` или `-2.md`, под
+соответствующим F-id. Раунд 2 (`test_f1_round2_*`, `test_f8_round2_*`,
+`test_f11_*`) закрывает: остаток F1 (журнал Ozon-позиций считался заново на
+каждую порцию), техническую подмену «подтверждённое сторно» → «есть любой
+документ» в F8, и новую находку F11 (штатный перенос короба с несколькими
+товарами ошибочно помечался неполным перемещением).
 """
 
 from __future__ import annotations
@@ -17,10 +19,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from openpyxl import load_workbook
+from sqlalchemy import select
 
+import app.services.reporting_service as reporting_service
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from tests.test_reports_wms531 import (
     MSK_NOON,
@@ -31,6 +36,7 @@ from tests.test_reports_wms531 import (
     _seller,
     _warehouse_location,
 )
+from tests.test_warehouse_map_api import _register, _seed_map
 
 
 @pytest.mark.asyncio
@@ -484,3 +490,301 @@ async def test_f10_text_fields_are_not_written_as_excel_formulas(
     assert product_name_cells, "product name cell not found by literal value"
     for cell in product_name_cells:
         assert cell.data_type == "s", f"cell {cell.coordinate} became a formula, not text"
+
+
+# ---------------------------------------------------------------------------
+# Раунд 2
+# ---------------------------------------------------------------------------
+
+
+async def _seed_ozon_split_scenario(
+    async_client: AsyncClient, headers: dict[str, str], *, tenant_id: uuid.UUID, tag: str,
+) -> uuid.UUID:
+    """Один селлер с товаром P1 (найден напрямую) и P2 (найден только через
+    ozon_positions_json) — минимальный набор, чтобы упражнять и обычное
+    разрешение документа, и общий на весь запрос индекс позиций Ozon."""
+    seller_id = await _seller(async_client, headers, f"{tag} seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name=f"{tag}wh")
+    async with SessionLocal() as session:
+        p1 = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name=f"{tag} P1", sku=f"{tag}-P1"
+        )
+        p2 = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name=f"{tag} P2", sku=f"{tag}-P2"
+        )
+        order = FbsOrder(
+            tenant_id=tenant_id, seller_id=seller_id, marketplace="ozon", wb_order_id=-1,
+            external_order_id=f"{tag}-PROBE", product_id=p1, warehouse_id=warehouse_id,
+            created_at_wb=datetime(2026, 9, 1, tzinfo=UTC),
+            deadline_at=datetime(2026, 9, 2, tzinfo=UTC),
+            mapping_status="mapped", reserve_status="no_stock",
+        )
+        session.add(order)
+        await session.flush()
+        m1 = _movement(
+            tenant_id=tenant_id, product_id=p1, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=-1,
+            movement_type="fbs_shipment",
+        )
+        m2 = _movement(
+            tenant_id=tenant_id, product_id=p2, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=-1,
+            movement_type="fbs_shipment",
+        )
+        session.add_all([m1, m2])
+        await session.flush()
+        session.add(FbsShipmentReversalLedger(
+            tenant_id=tenant_id, fbs_order_id=order.id, product_id=p1,
+            storage_location_id=location_id, quantity=2, shipment_movement_id=m1.id,
+            ozon_positions_json=[
+                {"product_id": str(p1), "movement_id": str(m1.id)},
+                {"product_id": str(p2), "movement_id": str(m2.id)},
+            ],
+        ))
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=p1, storage_location_id=location_id, quantity=-1,
+        ))
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=p2, storage_location_id=location_id, quantity=-1,
+        ))
+        await session.commit()
+    return seller_id
+
+
+@pytest.mark.asyncio
+async def test_f1_round2_ozon_position_index_computed_once_per_export(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F1 (раунд 2): раньше поиск по ozon_positions_json выполнялся заново на
+    каждую порцию (каждого селлера) — идентичный запрос ко всему подходящему
+    журналу арендатора повторялся N раз. Теперь `_load_ozon_position_index`
+    считается один раз на весь экспорт, независимо от числа селлеров."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f1r2")
+    for tag in ("s1", "s2", "s3"):
+        await _seed_ozon_split_scenario(async_client, headers, tenant_id=tenant_id, tag=tag)
+
+    call_count = 0
+    original = reporting_service._load_ozon_position_index
+
+    async def _counting_wrapper(*args: object, **kwargs: object) -> dict[object, object]:
+        nonlocal call_count
+        call_count += 1
+        return await original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(reporting_service, "_load_ozon_position_index", _counting_wrapper)
+
+    response = await async_client.get(
+        "/reports/inventory/export.xlsx", headers=headers,
+        params={**PERIOD, "group_by": "product"},
+    )
+    assert response.status_code == 200, response.text
+    assert call_count == 1, f"ozon position index computed {call_count} times, expected 1"
+
+    workbook = load_workbook(io.BytesIO(response.content))
+    sheet = workbook.active
+    assert sheet is not None
+    documents = {
+        cell.value for row in sheet.iter_rows(min_row=2) for cell in [row[6]]
+        if cell.value is not None
+    }
+    # Все три селлера должны получить документ своей второй позиции (P2),
+    # найденной только через общий индекс, а не отдельным запросом на порцию.
+    for tag in ("s1", "s2", "s3"):
+        assert f"Заказ Ozon №{tag}-PROBE" in documents
+
+
+@pytest.mark.asyncio
+async def test_f8_round2_reversal_label_requires_confirmed_link(
+    async_client: AsyncClient,
+) -> None:
+    """F8 (раунд 2): признак «сторно» раньше означал буквально
+    `document is not None` — положительная строка, случайно связанная через
+    inbound_intake_line_id с чужой приёмкой, или найденная через
+    shipment_movement_id (то есть через исходное списание, а не отмену),
+    тоже получала «FBS, сторно». Теперь флаг ставится только когда связь
+    найдена именно через `reversal_movement_id`."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f8r2")
+    seller_id = await _seller(async_client, headers, "F8r2 seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="f8r2wh")
+    async with SessionLocal() as session:
+        from app.models.inbound_intake import InboundIntakeLine
+
+        # Строка 1: положительная, вообще без связей.
+        p_none = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name="None", sku="F8R2-NONE"
+        )
+        session.add(_movement(
+            tenant_id=tenant_id, product_id=p_none, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=1,
+            movement_type="fbs_shipment",
+        ))
+
+        # Строка 2: положительная, случайно связана со строкой ЧУЖОЙ приёмки
+        # (inbound_intake_line_id) — документ есть, сторно нет.
+        p_intake = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name="Intake", sku="F8R2-INTAKE"
+        )
+        intake = InboundIntakeRequest(
+            tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+            status="done", operation_type="inbound", display_number="№100",
+        )
+        session.add(intake)
+        await session.flush()
+        line = InboundIntakeLine(request_id=intake.id, product_id=p_intake, expected_qty=1)
+        session.add(line)
+        await session.flush()
+        session.add(_movement(
+            tenant_id=tenant_id, product_id=p_intake, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=1,
+            movement_type="fbs_shipment", inbound_intake_line_id=line.id,
+        ))
+
+        # Строка 3: положительная, связана через shipment_movement_id (то
+        # есть это исходное списание в журнале, а не его отмена) — документ
+        # заказа есть, но это НЕ сторно.
+        p_shipment = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id,
+            name="Shipment", sku="F8R2-SHIPMENT",
+        )
+        order = FbsOrder(
+            tenant_id=tenant_id, seller_id=seller_id, marketplace="wb", wb_order_id=123,
+            product_id=p_shipment, warehouse_id=warehouse_id,
+            created_at_wb=datetime(2026, 9, 1, tzinfo=UTC),
+            deadline_at=datetime(2026, 9, 2, tzinfo=UTC),
+            mapping_status="mapped", reserve_status="no_stock",
+        )
+        session.add(order)
+        await session.flush()
+        m_shipment = _movement(
+            tenant_id=tenant_id, product_id=p_shipment, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=1,
+            movement_type="fbs_shipment",
+        )
+        session.add(m_shipment)
+        await session.flush()
+        session.add(FbsShipmentReversalLedger(
+            tenant_id=tenant_id, fbs_order_id=order.id, product_id=p_shipment,
+            storage_location_id=location_id, quantity=1,
+            shipment_movement_id=m_shipment.id, reversal_movement_id=None,
+        ))
+        await session.commit()
+
+    resp = await async_client.get(
+        "/reports/inventory/movements", headers=headers,
+        params={**PERIOD, "operation": "FBS"},
+    )
+    assert resp.status_code == 200, resp.text
+    by_product = {row["product_name"]: row for row in resp.json()["rows"]}
+    assert by_product["None"]["operation"] == "FBS"
+    assert by_product["None"]["document"] is None
+    assert by_product["Intake"]["operation"] == "FBS"
+    assert by_product["Intake"]["document"] is not None
+    assert by_product["Shipment"]["operation"] == "FBS"
+    assert by_product["Shipment"]["document"] is not None
+
+
+@pytest.mark.asyncio
+async def test_f8_round2_confirmed_reversal_still_gets_the_label(
+    async_client: AsyncClient,
+) -> None:
+    """Контроль к предыдущему тесту: настоящая связь через
+    reversal_movement_id обязана по-прежнему давать «FBS, сторно»."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f8r2ok")
+    seller_id = await _seller(async_client, headers, "F8r2ok seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="f8r2okwh")
+    async with SessionLocal() as session:
+        product_id = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name="Reversed", sku="F8R2OK-1"
+        )
+        order = FbsOrder(
+            tenant_id=tenant_id, seller_id=seller_id, marketplace="wb", wb_order_id=999,
+            product_id=product_id, warehouse_id=warehouse_id,
+            created_at_wb=datetime(2026, 8, 20, tzinfo=UTC),
+            deadline_at=datetime(2026, 8, 25, tzinfo=UTC),
+            mapping_status="mapped", reserve_status="no_stock",
+        )
+        session.add(order)
+        await session.flush()
+        original_shipment = _movement(
+            tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=-1,
+            movement_type="fbs_shipment", created_at=datetime(2026, 8, 20, MSK_NOON, tzinfo=UTC),
+        )
+        reversal_movement = _movement(
+            tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=1,
+            movement_type="fbs_shipment",
+        )
+        session.add_all([original_shipment, reversal_movement])
+        await session.flush()
+        session.add(FbsShipmentReversalLedger(
+            tenant_id=tenant_id, fbs_order_id=order.id, product_id=product_id,
+            storage_location_id=location_id, quantity=1,
+            shipment_movement_id=original_shipment.id, reversal_movement_id=reversal_movement.id,
+        ))
+        await session.commit()
+
+    resp = await async_client.get(
+        "/reports/inventory/movements", headers=headers,
+        params={**PERIOD, "operation": "FBS"},
+    )
+    assert resp.status_code == 200, resp.text
+    rows = {row["quantity"]: row for row in resp.json()["rows"]}
+    assert rows[1]["operation"] == "FBS, сторно"
+    assert rows[1]["document"]["number"] == "Заказ WB №999"
+
+
+@pytest.mark.asyncio
+async def test_f11_multi_product_box_move_does_not_flag_incomplete_transfer(
+    async_client: AsyncClient,
+) -> None:
+    """F11: перенос короба с ДВУМЯ товарами пишет четыре `warehouse_map_move`
+    одним transfer_group_id (по паре на товар) — это два независимых полных
+    переноса, а не «не пара из двух строк» на всю группу."""
+    headers, _user, tenant = await _register(async_client, "f11")
+    (
+        warehouse, cell, _sorting, product, _sorting_product, _loose, _pallet, box,
+    ) = await _seed_map(tenant.id)
+
+    async with SessionLocal() as session:
+        request = await session.scalar(
+            select(InboundIntakeRequest).where(InboundIntakeRequest.warehouse_id == warehouse.id)
+        )
+        assert request is not None
+        request.status = "done"
+        second_product = await _product(
+            session, tenant_id=tenant.id, seller_id=product.seller_id,
+            name="Second product", sku="F11-SECOND",
+        )
+        session.add(InventoryBalance(
+            tenant_id=tenant.id, storage_location_id=cell.id, product_id=second_product,
+            container_kind="box", container_id=box.id, quantity=3,
+            quantity_unpacked=3, quantity_packed=0,
+        ))
+        await session.commit()
+
+    move = await async_client.post(
+        f"/warehouses/{warehouse.id}/map/move", headers=headers,
+        json={"kind": "box", "id": str(box.id), "to_kind": "sorting", "to_id": None},
+    )
+    assert move.status_code == 200, move.text
+    assert move.json()["moved_qty"] == 10  # 7 (product) + 3 (second_product)
+
+    # Движение произошло «сейчас» (создано штатным сервисом, не тестом) —
+    # период должен захватывать текущий момент независимо от дня месяца,
+    # без риска исключить конец месяца жёстко зашитым «28».
+    now = datetime.now(UTC)
+    date_from = now - timedelta(days=1)
+    date_to = now + timedelta(days=1)
+    period = {"date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
+    report = await async_client.get(
+        "/reports/inventory", headers=headers, params={**period, "group_by": "product"}
+    )
+    assert report.status_code == 200, report.text
+    rows = {row["sku_code"]: row for row in report.json()["rows"]}
+    assert rows[product.sku_code]["integrity_error"] is False
+    assert rows["F11-SECOND"]["integrity_error"] is False
+
+    overview = await async_client.get("/reports/overview", headers=headers, params=period)
+    assert overview.status_code == 200, overview.text
+    assert overview.json()["has_incomplete_transfer"] is False
