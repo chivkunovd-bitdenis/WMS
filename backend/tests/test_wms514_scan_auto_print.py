@@ -26,6 +26,8 @@ from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
 from app.models.kiz_reprint import KizReprint
 from app.models.marking_code import MarkingCode
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.user import User
 from app.services import fbs_kiz_service as kiz_svc
@@ -307,6 +309,140 @@ async def test_product_scan_is_wb_only(async_client: AsyncClient) -> None:
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "scan_auto_print_wb_only"
+
+
+async def test_wms536_scan_auto_print_uses_wb_only_product_aliases(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, primary_barcode = await _seed_wb_supply(
+        async_client,
+        order_count=3,
+    )
+    async with SessionLocal() as session:
+        order = await session.scalar(select(FbsOrder).where(FbsOrder.supply_id == supply_id))
+        assert order is not None and order.product_id is not None
+        product = await session.get(Product, order.product_id)
+        assert product is not None
+        additional_barcode = f"460-WMS536-A-{uuid.uuid4().hex[:8]}"
+        external_barcode = f"OZN-WMS536-{uuid.uuid4().hex[:8]}"
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=product.tenant_id,
+                    seller_id=product.seller_id,
+                    product_id=product.id,
+                    barcode=additional_barcode,
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=product.tenant_id,
+                    seller_id=product.seller_id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_sku="wms536-external-sku",
+                    external_offer_id="wms536-offer",
+                    external_barcodes=[external_barcode],
+                ),
+            ]
+        )
+        sku_case = product.sku_code.swapcase()
+        await session.commit()
+
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    base = {"print_qr": False, "print_chz": True}
+    ozon = await async_client.post(
+        url,
+        headers=headers,
+        json={
+            **base,
+            "barcode": external_barcode,
+            "idempotency_key": "wms536-ozon-must-not-print",
+        },
+    )
+    assert ozon.status_code == 404, ozon.text
+    assert ozon.json()["detail"]["code"] == "scan_product_not_found"
+
+    for index, code in enumerate((sku_case, additional_barcode, primary_barcode), start=1):
+        selected = await async_client.post(
+            url,
+            headers=headers,
+            json={
+                **base,
+                "barcode": code,
+                "idempotency_key": f"wms536-wb-alias-{index}",
+            },
+        )
+        assert selected.status_code == 200, selected.text
+
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(DocumentEvent)) == 3
+
+
+async def test_wms536_scan_auto_print_rejects_cross_source_product_collision(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        first_order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.supply_id == supply_id)
+        )
+        assert supply is not None and first_order is not None
+        first_product = await session.get(Product, first_order.product_id)
+        assert first_product is not None
+        first_product.sku_code = "DUP-536"
+        second_product = Product(
+            tenant_id=supply.tenant_id,
+            seller_id=supply.seller_id,
+            name="WMS-536 collision product",
+            sku_code="WMS536-Q",
+            wb_barcode="DUP-536",
+        )
+        session.add(second_product)
+        await session.flush()
+        session.add(
+            FbsOrder(
+                tenant_id=supply.tenant_id,
+                seller_id=supply.seller_id,
+                warehouse_id=supply.warehouse_id,
+                product_id=second_product.id,
+                marketplace="wb",
+                wb_order_id=536_002,
+                wb_rid=f"wms536-rid-{uuid.uuid4().hex}",
+                wb_article=second_product.sku_code,
+                wb_barcode=second_product.wb_barcode,
+                price=100,
+                is_legal=False,
+                cargo_type="mgt",
+                wb_office_id=1,
+                wb_warehouse_id=1,
+                can_pvz=False,
+                supply_id=supply.id,
+                sticker_code="536 0002",
+                sticker_barcode="*WMS536Q",
+                status=FBS_ORDER_STATUS_PACKED,
+                created_at_wb=datetime.now(UTC),
+                deadline_at=datetime.now(UTC) + timedelta(hours=1),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+            )
+        )
+        await session.commit()
+
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/scan-auto-print",
+        headers=headers,
+        json={
+            "barcode": "DUP-536",
+            "idempotency_key": "wms536-ambiguous",
+            "print_qr": False,
+            "print_chz": True,
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "scan_product_ambiguous"
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(DocumentEvent)) == 0
 
 
 async def test_reprint_product_scan_selects_exact_order_without_allocating_code(

@@ -23,6 +23,8 @@ from app.models.packaging_task import (
     PackagingTaskLine,
 )
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
@@ -44,6 +46,146 @@ async def _register_admin(async_client: AsyncClient) -> dict[str, str]:
     assert reg.status_code in (200, 201), reg.text
     token = reg.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+async def test_wms536_packaging_scan_uses_scoped_product_resolver(db_session) -> None:
+    tenant = Tenant(name="WMS-536 packaging", slug=f"wms536-pkg-{uuid.uuid4().hex}")
+    seller = Seller(tenant=tenant, name="Seller A")
+    other_seller = Seller(tenant=tenant, name="Seller B")
+    warehouse = Warehouse(tenant=tenant, name="Warehouse", code=f"W-{uuid.uuid4().hex[:8]}")
+    db_session.add_all([tenant, seller, other_seller, warehouse])
+    await db_session.flush()
+    location = StorageLocation(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        code="CELL-PROD-536",
+        barcode="CELL-PROD-536",
+    )
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product P",
+        sku_code="AbC-42",
+        wb_barcode="4601234567893",
+    )
+    cyrillic_product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product CYR",
+        sku_code="ФА_МОД8-4а/083/42",
+    )
+    duplicate_product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product Q",
+        sku_code="DUP-536",
+    )
+    foreign_product = Product(
+        tenant=tenant,
+        seller=other_seller,
+        name="Foreign seller product",
+        sku_code="4601234567893",
+    )
+    db_session.add_all(
+        [location, product, cyrillic_product, duplicate_product, foreign_product]
+    )
+    await db_session.flush()
+    db_session.add_all(
+        [
+            ProductBarcode(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                product_id=product.id,
+                barcode="4601234567886",
+                source="wb",
+            ),
+            ProductBarcode(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                product_id=product.id,
+                barcode="CELL-PROD-536",
+                source="wb",
+            ),
+            ProductMarketplaceLink(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                product_id=product.id,
+                marketplace="ozon",
+                external_sku="987654",
+                external_offer_id="offer-536",
+                external_barcodes=["OZN-987654", "DUP-536"],
+            ),
+        ]
+    )
+    task = PackagingTask(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        status="draft",
+    )
+    db_session.add(task)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            PackagingTaskLine(
+                task_id=task.id,
+                product_id=product.id,
+                storage_location_id=location.id,
+                qty_total=5,
+                qty_suggested_packed=0,
+            ),
+            PackagingTaskLine(
+                task_id=task.id,
+                product_id=cyrillic_product.id,
+                storage_location_id=location.id,
+                qty_total=1,
+                qty_suggested_packed=0,
+            ),
+            PackagingTaskLine(
+                task_id=task.id,
+                product_id=duplicate_product.id,
+                storage_location_id=location.id,
+                qty_total=1,
+                qty_suggested_packed=0,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    for code in (
+        "4601234567893",
+        "4601234567886",
+        "OZN-987654",
+        "aBc-42",
+        "CELL-PROD-536",
+        "ФА_МОД8-4а/083/42",
+    ):
+        await pkg_svc.record_pack_scan(db_session, tenant.id, task.id, code)
+
+    loaded = await pkg_svc.get_task(db_session, tenant.id, task.id)
+    assert loaded is not None
+    packed_by_product = {
+        line.product_id: line.qty_packed_in_task for line in loaded.lines
+    }
+    assert packed_by_product[product.id] == 5
+    assert packed_by_product[cyrillic_product.id] == 1
+    assert packed_by_product[duplicate_product.id] == 0
+
+    with pytest.raises(pkg_svc.PackagingTaskServiceError, match="barcode_ambiguous"):
+        await pkg_svc.record_pack_scan(db_session, tenant.id, task.id, "DUP-536")
+    with pytest.raises(pkg_svc.PackagingTaskServiceError, match="unknown_barcode"):
+        await pkg_svc.record_pack_scan(
+            db_session,
+            tenant.id,
+            task.id,
+            "010460123456789321SERIAL536\x1d91ABCD\x1d92SIGNATURE536",
+        )
+
+    unchanged = await pkg_svc.get_task(db_session, tenant.id, task.id)
+    assert unchanged is not None
+    assert {
+        line.product_id: line.qty_packed_in_task for line in unchanged.lines
+    } == packed_by_product
 
 
 async def _inventory_at_location(

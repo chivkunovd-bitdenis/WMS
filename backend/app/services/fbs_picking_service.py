@@ -60,6 +60,15 @@ from app.services.inventory_container_service import (
 from app.services.operation_fact_service import record_fbs_pick
 from app.services.ozon_fbs_process_service import OzonHandoffProgress
 from app.services.pick_option_location_service import PickOptionLocation
+from app.services.product_code_resolver_service import (
+    DEFAULT_PRODUCT_CODE_ALIAS_POLICY,
+    ProductCodeAliasPolicy,
+    ProductCodeAmbiguous,
+    ProductCodeFound,
+    ProductCodeScope,
+    normalize_product_code,
+    resolve_product_code,
+)
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
 )
@@ -766,20 +775,21 @@ async def pick_scan(
             )
         storage_location_id = container_location_id
 
-    product = (
-        await session.get(Product, product_id_hint)
-        if product_id_hint is not None
-        else await _resolve_product_for_supply(
-            session,
-            tenant_id,
-            supply,
-            product_barcode=raw,
-        )
+    product = await _resolve_product_for_supply(
+        session,
+        tenant_id,
+        supply,
+        product_barcode=raw,
     )
     if product is None or product.tenant_id != tenant_id:
         raise FbsPickingError(
             "wrong_product",
             "Товар не найден по штрихкоду в этой поставке.",
+        )
+    if product_id_hint is not None and product.id != product_id_hint:
+        raise FbsPickingError(
+            "wrong_product",
+            "Переданный product_id не соответствует отсканированному коду.",
         )
 
     if storage_location_id is not None:
@@ -1029,20 +1039,25 @@ async def scan_pick_product(
             "wrong_location",
             "Ячейка не принадлежит складу поставки.",
         )
-    product = (
-        await session.get(Product, product_id)
-        if product_id is not None
-        else await _resolve_product_for_supply(
+    if product_barcode:
+        product = await _resolve_product_for_supply(
             session,
             tenant_id,
             supply,
             product_barcode=product_barcode,
         )
-    )
+    else:
+        # Manual picking deliberately reuses this operation without a scan.
+        product = await session.get(Product, product_id) if product_id is not None else None
     if product is None or product.tenant_id != tenant_id:
         raise FbsPickingError(
             "wrong_product",
             "Товар не найден по штрихкоду в этой поставке.",
+        )
+    if product_barcode and product_id is not None and product.id != product_id:
+        raise FbsPickingError(
+            "wrong_product",
+            "Переданный product_id не соответствует отсканированному коду.",
         )
     if product.seller_id != supply.seller_id:
         raise FbsPickingError(
@@ -1708,46 +1723,53 @@ async def _resolve_product_for_supply(
         for order in supply.orders
         for position in order.product_positions
         if position.product_id is not None
-    } or {o.product_id for o in supply.orders if o.product_id is not None}
+    }
+    supply_product_ids.update(
+        order.product_id for order in supply.orders if order.product_id is not None
+    )
     if not supply_product_ids:
         return None
 
-    stmt = select(Product).where(
-        Product.tenant_id == tenant_id,
-        Product.id.in_(supply_product_ids),
-        or_(
-            Product.wb_barcode == product_barcode,
-            Product.sku_code == product_barcode,
+    policy = (
+        ProductCodeAliasPolicy(include_marketplace_identity=True)
+        if supply.marketplace == "ozon"
+        else DEFAULT_PRODUCT_CODE_ALIAS_POLICY
+    )
+    resolution = await resolve_product_code(
+        session,
+        product_barcode,
+        scope=ProductCodeScope(
+            tenant_id=tenant_id,
+            seller_ids=frozenset({supply.seller_id}),
+            product_ids=frozenset(supply_product_ids),
         ),
+        policy=policy,
     )
-    product = (await session.execute(stmt)).scalar_one_or_none()
-    if product is not None:
-        return product
 
-    if supply.marketplace != "wb":
-        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon собственный
-        # код вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
-        # Вайлдберрисовскую поставку эта ветка не задевает вовсе.
-        from app.services.ozon_product_import_service import (
-            find_product_ids_by_marketplace_barcode,
+    if isinstance(resolution, ProductCodeFound):
+        return await session.get(Product, resolution.product_id)
+    if isinstance(resolution, ProductCodeAmbiguous):
+        raise FbsPickingError(
+            "barcode_ambiguous",
+            "Код относится к нескольким товарам. Проверьте штрихкоды карточек.",
         )
 
-        linked_ids = await find_product_ids_by_marketplace_barcode(
-            session,
-            tenant_id,
-            [product_barcode],
+    snapshot_key = normalize_product_code(product_barcode).casefold()
+    matched_product_ids = {
+        order.product_id
+        for order in supply.orders
+        if order.product_id is not None
+        and isinstance(order.wb_barcode, str)
+        and normalize_product_code(order.wb_barcode).casefold() == snapshot_key
+    }
+    if len(matched_product_ids) > 1:
+        raise FbsPickingError(
+            "barcode_ambiguous",
+            "Код относится к нескольким товарам. Проверьте штрихкоды карточек.",
         )
-        matched = supply_product_ids.intersection(linked_ids)
-        if len(matched) == 1:
-            return await session.get(Product, next(iter(matched)))
-
-    order_match = next(
-        (o for o in supply.orders if o.wb_barcode == product_barcode and o.product_id is not None),
-        None,
-    )
-    if order_match is None:
+    if not matched_product_ids:
         return None
-    return await session.get(Product, order_match.product_id)
+    return await session.get(Product, next(iter(matched_product_ids)))
 
 
 def _eligible_orders_for_product(
