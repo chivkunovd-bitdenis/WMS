@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, exists, false, func, or_, select, tuple_
+from sqlalchemy import String, and_, cast, exists, false, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import (
@@ -22,6 +23,7 @@ from app.services.catalog_service import (
     marketplace_scope_condition,
     ozon_link_primary_image_url,
 )
+from app.services.product_barcode_service import load_barcodes_by_product
 from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
@@ -105,14 +107,11 @@ def _ozon_barcode_binding(link: ProductMarketplaceLink | None) -> tuple[dict[str
 
 def _barcodes_for_product(
     p: Product,
-    card_raw: dict[str, Any] | None,
+    stored_barcodes: tuple[str, ...],
 ) -> tuple[str | None, tuple[str, ...]]:
-    if p.wb_barcode and p.wb_barcode.strip():
-        code = p.wb_barcode.strip()
-        return code, (code,)
-    subj, img, barcodes = _enrich_from_raw(card_raw)
-    del subj, img
-    primary = primary_sku_display(list(barcodes))
+    primary = p.wb_barcode.strip() if p.wb_barcode and p.wb_barcode.strip() else None
+    ordered = ((primary,) if primary else ()) + stored_barcodes
+    barcodes = tuple(dict.fromkeys(ordered))
     return primary, barcodes
 
 
@@ -261,6 +260,9 @@ async def list_seller_wb_catalog_rows(
         products,
         seller_id=seller_id,
     )
+    barcodes_by_product = await load_barcodes_by_product(
+        session, tenant_id, {product.id for product in products}
+    )
     # Берём карточки только по товарам этой выдачи. Раньше грузились все карточки
     # селлера целиком — у крупного это полторы тысячи записей с тяжёлым raw_json,
     # и запрос занимал секунды даже когда на экран уходила одна строка.
@@ -286,7 +288,9 @@ async def list_seller_wb_catalog_rows(
         if nm is not None:
             card_raw = by_nm.get(nm)
         subj, img, _legacy_barcodes = _enrich_from_raw(card_raw)
-        primary, barcodes = _barcodes_for_product(p, card_raw)
+        primary, barcodes = _barcodes_for_product(
+            p, barcodes_by_product.get(p.id, ())
+        )
         if primary is None:
             primary = primary_sku_display(list(barcodes))
         wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
@@ -436,6 +440,9 @@ async def _enrich_linked_products(
         scoped_products,
         seller_id=seller_id,
     )
+    barcodes_by_product = await load_barcodes_by_product(
+        session, tenant_id, {product.id for product in scoped_products}
+    )
 
     card_keys = {
         (p.seller_id, int(p.wb_nm_id))
@@ -465,7 +472,9 @@ async def _enrich_linked_products(
         if nm is not None and p.seller_id is not None:
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, _legacy_barcodes = _enrich_from_raw(card_raw)
-        primary, barcodes = _barcodes_for_product(p, card_raw)
+        primary, barcodes = _barcodes_for_product(
+            p, barcodes_by_product.get(p.id, ())
+        )
         if primary is None:
             primary = primary_sku_display(list(barcodes))
         wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
@@ -579,15 +588,28 @@ async def list_linked_wb_catalog_page_rows(
                 ),
             )
         )
+        wb_barcode_matches = exists(
+            select(ProductBarcode.id).where(
+                ProductBarcode.tenant_id == tenant_id,
+                ProductBarcode.product_id == Product.id,
+                ProductBarcode.barcode.ilike(pattern),
+            )
+        )
         filters.append(
             or_(
                 Product.name.ilike(pattern),
                 Product.sku_code.ilike(pattern),
+                cast(Product.wb_nm_id, String).ilike(pattern),
                 Product.wb_vendor_code.ilike(pattern),
                 Product.wb_barcode.ilike(pattern),
+                Product.wb_size.ilike(pattern),
                 SellerWildberriesImportedCard.title.ilike(pattern),
                 SellerWildberriesImportedCard.vendor_code.ilike(pattern),
-                cast(SellerWildberriesImportedCard.raw_json, Text).ilike(pattern),
+                SellerWildberriesImportedCard.raw_json["subjectName"]
+                .as_string()
+                .ilike(pattern),
+                SellerWildberriesImportedCard.raw_json["brand"].as_string().ilike(pattern),
+                wb_barcode_matches,
                 ozon_link_matches,
             )
         )

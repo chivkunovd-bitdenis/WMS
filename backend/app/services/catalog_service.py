@@ -22,6 +22,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.outbound_shipment import OutboundShipmentRequest
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
@@ -612,6 +613,13 @@ async def list_products(
                 Product.wb_barcode.ilike(like),
                 Product.wb_vendor_code.ilike(like),
                 cast(Product.wb_nm_id, String).ilike(like),
+                exists(
+                    select(ProductBarcode.id).where(
+                        ProductBarcode.tenant_id == tenant_id,
+                        ProductBarcode.product_id == Product.id,
+                        ProductBarcode.barcode.ilike(like),
+                    )
+                ),
                 exists(
                     select(ProductMarketplaceLink.id).where(
                         ProductMarketplaceLink.tenant_id == tenant_id,

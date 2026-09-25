@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -104,6 +104,7 @@ class LinkProductWbOut(BaseModel):
     wb_vendor_code: str | None
     wb_barcode: str | None = None
     wb_size: str | None = None
+    removed_wb_barcodes: list[str] | None = None
 
 
 class WildberriesSelfTokenSaveBody(BaseModel):
@@ -119,6 +120,10 @@ class WildberriesSelfTokenSaveOut(BaseModel):
     products_created: int = 0
     products_updated: int = 0
     products_skipped: int = 0
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 class WildberriesSelfTokenSaveErrorOut(BaseModel):
@@ -134,6 +139,10 @@ class WildberriesSelfSyncOut(BaseModel):
     products_created: int
     products_updated: int
     products_skipped: int
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 def _self_token_save_error_response(
@@ -291,7 +300,7 @@ async def link_product_to_wildberries(
 ) -> LinkProductWbOut:
     """Привязать SKU к импортированной карточке WB (nm_id) для селлера."""
     try:
-        p = await link_product_to_wb_card(
+        p, removed_barcodes = await link_product_to_wb_card(
             session,
             user.tenant_id,
             seller_id,
@@ -314,6 +323,7 @@ async def link_product_to_wildberries(
         if exc.code in (
             "wb_nm_already_linked",
             "wb_barcode_already_linked",
+            "wb_chrt_already_linked",
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -325,6 +335,7 @@ async def link_product_to_wildberries(
             "wb_size_required",
             "wb_barcode_not_found",
             "wb_chrt_not_found",
+            "wb_chrt_missing",
             "wb_card_no_sizes",
         ):
             raise HTTPException(
@@ -340,6 +351,7 @@ async def link_product_to_wildberries(
         wb_vendor_code=p.wb_vendor_code,
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
+        removed_wb_barcodes=removed_barcodes,
     )
 
 
@@ -503,10 +515,14 @@ async def save_and_validate_self_content_token(
 
     n = len(total_cards)
     saved = 0
-    prod_stats = {
+    prod_stats: dict[str, Any] = {
         "products_created": 0,
         "products_updated": 0,
         "products_skipped": 0,
+        "sizes_missing_chrt_id": 0,
+        "duplicate_chrt_id": 0,
+        "barcode_conflicts": 0,
+        "barcode_conflict_details": [],
     }
 
     try:
@@ -572,6 +588,10 @@ async def save_and_validate_self_content_token(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )
 
 
@@ -620,4 +640,8 @@ async def sync_products_now(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )

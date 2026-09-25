@@ -31,7 +31,13 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
                     "vendorCode": "VC-ENRICH",
                     "brand": "TestBrand",
                     "subjectName": "Футболки",
-                    "sizes": [{"techSize": "M", "skus": ["2000000111223"]}],
+                    "sizes": [
+                        {
+                            "chrtID": 77788801,
+                            "techSize": "M",
+                            "skus": ["2000000111223"],
+                        }
+                    ],
                     "photos": [{"big": "https://img.example/wb1.jpg"}],
                     "characteristics": [
                         {"name": "Цвет", "value": ["синий"]},
@@ -163,7 +169,9 @@ async def test_ff_catalog_lists_all_tenant_products(
                     "nmID": 919191,
                     "vendorCode": "ADM-WB-VC",
                     "subjectName": "Брюки",
-                    "sizes": [{"skus": ["4600000000011"]}],
+                    "sizes": [
+                        {"chrtID": 91919101, "skus": ["4600000000011"]}
+                    ],
                     "photos": [{"big": "https://img.example/admin-wb.jpg"}],
                 }
             ],
@@ -394,7 +402,9 @@ async def test_linked_wb_catalog_before_stock_movement(
                 {
                     "nmID": 777001,
                     "vendorCode": "wb38qjqidg",
-                    "sizes": [{"skus": ["2041647591153"]}],
+                    "sizes": [
+                        {"chrtID": 77700101, "skus": ["2041647591153"]}
+                    ],
                 }
             ],
             "cursor": {},

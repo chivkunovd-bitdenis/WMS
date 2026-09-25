@@ -4,11 +4,12 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.catalog_service import (
     DEFAULT_PRODUCT_DIM_MM,
@@ -16,6 +17,7 @@ from app.services.catalog_service import (
     _record_dimension_event,
     volume_liters_from_mm,
 )
+from app.services.product_barcode_service import add_barcodes_to_product
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
     country_of_origin_from_card,
@@ -154,25 +156,36 @@ async def _find_product_for_variant(
     seller_id: uuid.UUID,
     sku: str,
     variant: WbSizeVariant,
-) -> Product | None:
-    by_barcode = await session.execute(
+) -> tuple[Product | None, bool]:
+    if variant.chrt_id is None:
+        return None, False
+    by_chrt = await session.execute(
         select(Product).where(
             Product.tenant_id == tenant_id,
             Product.seller_id == seller_id,
-            Product.wb_barcode == variant.barcode,
+            Product.wb_chrt_id == variant.chrt_id,
         )
+        .order_by(Product.created_at, Product.id)
     )
-    p = by_barcode.scalar_one_or_none()
-    if p is not None:
-        return p
-    by_sku = await session.execute(
+    rows = list(by_chrt.scalars().all())
+    if rows:
+        return (rows[0] if len(rows) == 1 else None), len(rows) > 1
+    legacy = await session.execute(
         select(Product).where(
             Product.tenant_id == tenant_id,
-            Product.sku_code == sku,
             Product.seller_id == seller_id,
+            Product.wb_chrt_id.is_(None),
+            or_(
+                Product.wb_barcode.in_(variant.barcodes),
+                Product.sku_code == sku,
+            ),
         )
     )
-    return by_sku.scalar_one_or_none()
+    legacy_rows = list(legacy.scalars().all())
+    return (
+        legacy_rows[0] if len(legacy_rows) == 1 else None,
+        len(legacy_rows) > 1,
+    )
 
 
 def _apply_variant_fields(
@@ -182,23 +195,96 @@ def _apply_variant_fields(
     nm: int | None,
     vendor: str | None,
     title: str,
-    sku: str,
     variant: WbSizeVariant,
     category: str | None,
 ) -> None:
     if p.seller_id is None:
         p.seller_id = seller_id
-    p.sku_code = sku
+    # Existing Product.sku_code is an operator-visible identity. In particular,
+    # do not rewrite legacy values such as ``V1/0`` to the current ``V1`` format.
+    # Every other imported WB field keeps the pre-WMS-535 refresh semantics.
     p.name = title
     if nm is not None:
         p.wb_nm_id = nm
     if vendor is not None:
         p.wb_vendor_code = vendor
     p.wb_chrt_id = variant.chrt_id
-    p.wb_barcode = variant.barcode
+    if not p.wb_barcode or not p.wb_barcode.strip():
+        p.wb_barcode = variant.barcode
     p.wb_size = variant.size_label
     if category is not None:
         p.category = category
+
+
+async def _barcode_conflicts_for_variant(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    barcodes: tuple[str, ...],
+    incoming_product_id: uuid.UUID | None,
+) -> list[tuple[str, Product]]:
+    """Return every conflicting owner, including legacy primary-only barcodes."""
+    if not barcodes:
+        return []
+    owners_by_key: dict[tuple[str, uuid.UUID], Product] = {}
+    alias_rows = (
+        await session.execute(
+            select(ProductBarcode.barcode, Product)
+            .join(Product, Product.id == ProductBarcode.product_id)
+            .where(
+                ProductBarcode.tenant_id == tenant_id,
+                ProductBarcode.seller_id == seller_id,
+                ProductBarcode.barcode.in_(barcodes),
+            )
+        )
+    ).all()
+    for barcode, owner in alias_rows:
+        if owner.id != incoming_product_id:
+            owners_by_key[(barcode, owner.id)] = owner
+    primary_rows = list(
+        (
+            await session.execute(
+                select(Product).where(
+                    Product.tenant_id == tenant_id,
+                    Product.seller_id == seller_id,
+                    Product.wb_barcode.in_(barcodes),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for owner in primary_rows:
+        if owner.id != incoming_product_id and owner.wb_barcode is not None:
+            owners_by_key[(owner.wb_barcode, owner.id)] = owner
+    return [
+        (barcode, owner)
+        for (barcode, _owner_id), owner in sorted(
+            owners_by_key.items(), key=lambda item: (item[0][0], str(item[0][1]))
+        )
+    ]
+
+
+def _append_barcode_conflicts(
+    details: list[dict[str, object]],
+    *,
+    variant: WbSizeVariant,
+    incoming_product_id: uuid.UUID | None,
+    conflicts: list[tuple[str, Product]],
+) -> None:
+    details.extend(
+        {
+            "barcode": barcode,
+            "incoming_chrt_id": variant.chrt_id,
+            "incoming_product_id": (
+                str(incoming_product_id) if incoming_product_id is not None else None
+            ),
+            "existing_chrt_id": owner.wb_chrt_id,
+            "existing_product_id": str(owner.id),
+        }
+        for barcode, owner in conflicts
+    )
 
 
 async def upsert_products_from_wb_cards(
@@ -206,17 +292,19 @@ async def upsert_products_from_wb_cards(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cards: list[object],
-) -> dict[str, int]:
-    """
-    Create/update Product rows for seller based on WB cards.
-
-    One Product per size barcode (``sizes[].skus``). Multi-size cards get
-    distinct ``sku_code`` values (``vendor/size``) and separate stock rows.
-    """
+) -> dict[str, Any]:
+    """Create or update one Product per WB ``chrtID`` and retain every size SKU."""
     created = 0
     updated = 0
     skipped = 0
     legacy_marked_old = 0
+    missing_chrt_id = 0
+    duplicate_chrt_id = 0
+    missing_chrt_id_details: list[dict[str, object]] = []
+    barcode_conflicts = 0
+    barcode_conflict_details: list[dict[str, object]] = []
+    barcodes_added = 0
+    barcodes_existing = 0
 
     for item in cards:
         if not isinstance(item, dict):
@@ -232,7 +320,10 @@ async def upsert_products_from_wb_cards(
         if not variants:
             skipped += 1
             continue
-        multi = len(variants) > 1
+        # Before WMS-535 there was one variant per barcode. Preserve that exact
+        # SKU formatting rule for newly created products even though all barcodes
+        # of a size now live on one Product.
+        multi = sum(len(variant.barcodes) for variant in variants) > 1
         legacy_marked_old += await _mark_legacy_products_for_card(
             session,
             tenant_id,
@@ -242,53 +333,156 @@ async def upsert_products_from_wb_cards(
         )
 
         for variant in variants:
+            if variant.chrt_id is None:
+                skipped += 1
+                missing_chrt_id += 1
+                missing_chrt_id_details.append(
+                    {
+                        "nm_id": nm,
+                        "vendor_code": vendor,
+                        "size": variant.size_label,
+                        "barcodes": list(variant.barcodes),
+                    }
+                )
+                continue
             sku = sku_code_for_wb_variant(vendor, nm, variant, multi_variant=multi)
             title = product_display_name(base_title, variant, multi_variant=multi)
-            p = await _find_product_for_variant(session, tenant_id, seller_id, sku, variant)
-
-            if p is None:
-                p = Product(
+            saved = False
+            for attempt in range(2):
+                p, duplicate = await _find_product_for_variant(
+                    session, tenant_id, seller_id, sku, variant
+                )
+                if duplicate:
+                    skipped += 1
+                    duplicate_chrt_id += 1
+                    break
+                is_new = p is None
+                retained_codes = variant.barcodes
+                if p is not None and p.wb_barcode and p.wb_barcode.strip():
+                    retained_codes = tuple(
+                        dict.fromkeys((p.wb_barcode.strip(), *retained_codes))
+                    )
+                conflicts = await _barcode_conflicts_for_variant(
+                    session,
                     tenant_id=tenant_id,
                     seller_id=seller_id,
-                    name=title,
-                    sku_code=sku,
-                    category=category,
-                    wb_nm_id=nm,
-                    wb_vendor_code=vendor,
-                    wb_chrt_id=variant.chrt_id,
-                    wb_barcode=variant.barcode,
-                    wb_size=variant.size_label,
-                    length_mm=card_length_mm,
-                    width_mm=card_width_mm,
-                    height_mm=card_height_mm,
-                    wb_country_of_origin=card_country,
-                    wb_shelf_life=card_shelf_life,
+                    barcodes=retained_codes,
+                    incoming_product_id=p.id if p is not None else None,
                 )
-                session.add(p)
-                try:
-                    await session.commit()
-                except IntegrityError:
-                    await session.rollback()
-                    p2 = await _find_product_for_variant(
-                        session, tenant_id, seller_id, sku, variant
+                if conflicts:
+                    _append_barcode_conflicts(
+                        barcode_conflict_details,
+                        variant=variant,
+                        incoming_product_id=p.id if p is not None else None,
+                        conflicts=conflicts,
                     )
-                    if p2 is None:
-                        skipped += 1
-                        continue
-                    p = p2
+                    skipped += 1
+                    barcode_conflicts += len(conflicts)
+                    break
+                if p is None:
+                    p = Product(
+                        tenant_id=tenant_id,
+                        seller_id=seller_id,
+                        name=title,
+                        sku_code=sku,
+                        category=category,
+                        wb_nm_id=nm,
+                        wb_vendor_code=vendor,
+                        wb_chrt_id=variant.chrt_id,
+                        wb_barcode=variant.barcode,
+                        wb_size=variant.size_label,
+                        length_mm=card_length_mm,
+                        width_mm=card_width_mm,
+                        height_mm=card_height_mm,
+                        wb_country_of_origin=card_country,
+                        wb_shelf_life=card_shelf_life,
+                    )
+                    session.add(p)
                 else:
-                    created += 1
+                    _apply_variant_fields(
+                        p,
+                        seller_id=seller_id,
+                        nm=nm,
+                        vendor=vendor,
+                        title=title,
+                        variant=variant,
+                        category=category,
+                    )
+                try:
+                    await session.flush()
+                    barcode_result = await add_barcodes_to_product(
+                        session, p, retained_codes
+                    )
+                    if barcode_result.conflicts:
+                        existing_product_ids = {
+                            existing_product_id
+                            for _barcode, existing_product_id in barcode_result.conflicts
+                        }
+                        existing_products = {
+                            existing.id: existing
+                            for existing in (
+                                await session.execute(
+                                    select(Product).where(
+                                        Product.tenant_id == tenant_id,
+                                        Product.seller_id == seller_id,
+                                        Product.id.in_(existing_product_ids),
+                                    )
+                                )
+                            )
+                            .scalars()
+                            .all()
+                        }
+                        barcode_conflict_details.extend(
+                            {
+                                "barcode": barcode,
+                                "incoming_chrt_id": variant.chrt_id,
+                                "incoming_product_id": str(p.id) if not is_new else None,
+                                "existing_chrt_id": (
+                                    existing_products[existing_product_id].wb_chrt_id
+                                    if existing_product_id in existing_products
+                                    else None
+                                ),
+                                "existing_product_id": str(existing_product_id),
+                            }
+                            for barcode, existing_product_id in barcode_result.conflicts
+                        )
+                        await session.rollback()
+                        skipped += 1
+                        barcode_conflicts += len(barcode_result.conflicts)
+                        break
+
+                    dims_are_stub = (
+                        p.length_mm == DEFAULT_PRODUCT_DIM_MM
+                        and p.width_mm == DEFAULT_PRODUCT_DIM_MM
+                        and p.height_mm == DEFAULT_PRODUCT_DIM_MM
+                    )
+                    if not is_new:
+                        if (p.length_mm is None or dims_are_stub) and card_length_mm is not None:
+                            p.length_mm = card_length_mm
+                        if (p.width_mm is None or dims_are_stub) and card_width_mm is not None:
+                            p.width_mm = card_width_mm
+                        if (p.height_mm is None or dims_are_stub) and card_height_mm is not None:
+                            p.height_mm = card_height_mm
                     if (
                         card_length_mm is not None
                         and card_width_mm is not None
                         and card_height_mm is not None
                     ):
-                        p.volume_liters = volume_liters_from_mm(
+                        wb_volume_liters = volume_liters_from_mm(
                             card_length_mm, card_width_mm, card_height_mm
                         )
-                        p.dimensions_source = "wb"
-                        p.dimensions_updated_at = datetime.now(UTC)
-                        p.dimensions_updated_by_user_id = None
+                        active_event = await session.scalar(
+                            select(ProductDimensionEvent).where(
+                                ProductDimensionEvent.product_id == p.id,
+                                ProductDimensionEvent.applied.is_(True),
+                            )
+                        )
+                        protected_manual_measurement = (
+                            not is_new
+                            and active_event is not None
+                            and active_event.source
+                            in {"manual", "container_override", "container"}
+                        )
                         await _record_dimension_event(
                             session,
                             p,
@@ -298,112 +492,70 @@ async def upsert_products_from_wb_cards(
                             width_mm=card_width_mm,
                             height_mm=card_height_mm,
                             weight_g=p.weight_g,
-                            volume_liters=p.volume_liters,
+                            volume_liters=wb_volume_liters,
                             container_basis=None,
                             fingerprint=_dimension_fingerprint(
-                                card_length_mm, card_width_mm, card_height_mm,
-                                p.weight_g, p.volume_liters, "wb", None,
+                                card_length_mm,
+                                card_width_mm,
+                                card_height_mm,
+                                p.weight_g,
+                                wb_volume_liters,
+                                "wb",
+                                None,
                             ),
-                            apply=True,
+                            apply=not protected_manual_measurement,
                         )
-                        await session.commit()
+                        if not protected_manual_measurement:
+                            p.volume_liters = wb_volume_liters
+                            p.dimensions_source = "wb"
+                            p.dimensions_updated_at = datetime.now(UTC)
+                            p.dimensions_updated_by_user_id = None
+                    if p.wb_country_of_origin is None and card_country is not None:
+                        p.wb_country_of_origin = card_country
+                    if p.wb_shelf_life is None and card_shelf_life is not None:
+                        p.wb_shelf_life = card_shelf_life
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    if attempt == 1:
+                        concurrent_conflicts = await _barcode_conflicts_for_variant(
+                            session,
+                            tenant_id=tenant_id,
+                            seller_id=seller_id,
+                            barcodes=variant.barcodes,
+                            incoming_product_id=None,
+                        )
+                        if concurrent_conflicts:
+                            _append_barcode_conflicts(
+                                barcode_conflict_details,
+                                variant=variant,
+                                incoming_product_id=None,
+                                conflicts=concurrent_conflicts,
+                            )
+                            barcode_conflicts += len(concurrent_conflicts)
+                        skipped += 1
                     continue
-
-            if p.seller_id is not None and p.seller_id != seller_id:
-                skipped += 1
-                continue
-            sku_changed = p.sku_code != sku
-            _apply_variant_fields(
-                p,
-                seller_id=seller_id,
-                nm=nm,
-                vendor=vendor,
-                title=title,
-                sku=sku,
-                variant=variant,
-                category=category,
-            )
-            try:
-                # WMS-277: WB size changes can map a known barcode onto another
-                # Product's SKU. Detect this before dimension queries autoflush
-                # outside the commit guard; preserve both existing identities.
-                if sku_changed:
-                    await session.flush()
-            except IntegrityError:
+                barcodes_added += barcode_result.added
+                barcodes_existing += barcode_result.existing
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+                saved = True
+                break
+            if not saved:
                 await session.rollback()
-                skipped += 1
-                continue
-            # Fill empty dimension fields with values from WB card, and also correct
-            # the legacy DEFAULT_PRODUCT_DIM_MM stub (10x10x10) that an old, now
-            # removed sync default used to write in place of real data. Product has
-            # no field marking "entered by hand" vs "imported", so anything other
-            # than that exact stub triple is left untouched -- the safest reading of
-            # "never overwrite a measurement someone typed in".
-            dims_are_stub = (
-                p.length_mm == DEFAULT_PRODUCT_DIM_MM
-                and p.width_mm == DEFAULT_PRODUCT_DIM_MM
-                and p.height_mm == DEFAULT_PRODUCT_DIM_MM
-            )
-            if (p.length_mm is None or dims_are_stub) and card_length_mm is not None:
-                p.length_mm = card_length_mm
-            if (p.width_mm is None or dims_are_stub) and card_width_mm is not None:
-                p.width_mm = card_width_mm
-            if (p.height_mm is None or dims_are_stub) and card_height_mm is not None:
-                p.height_mm = card_height_mm
-            if (
-                card_length_mm is not None
-                and card_width_mm is not None
-                and card_height_mm is not None
-            ):
-                wb_volume_liters = volume_liters_from_mm(
-                    card_length_mm, card_width_mm, card_height_mm
-                )
-                active_event = await session.scalar(
-                    select(ProductDimensionEvent).where(
-                        ProductDimensionEvent.product_id == p.id,
-                        ProductDimensionEvent.applied.is_(True),
-                    )
-                )
-                protected_manual_measurement = active_event is not None and active_event.source in {
-                    "manual", "container_override", "container"
-                }
-                await _record_dimension_event(
-                    session, p, source="wb", author_user_id=None,
-                    length_mm=card_length_mm, width_mm=card_width_mm, height_mm=card_height_mm,
-                    weight_g=p.weight_g, volume_liters=wb_volume_liters, container_basis=None,
-                    fingerprint=_dimension_fingerprint(
-                        card_length_mm, card_width_mm, card_height_mm,
-                        p.weight_g, wb_volume_liters, "wb", None,
-                    ),
-                    apply=not protected_manual_measurement,
-                )
-                if not protected_manual_measurement:
-                    p.volume_liters = wb_volume_liters
-                    p.dimensions_source = "wb"
-                    p.dimensions_updated_at = datetime.now(UTC)
-                    p.dimensions_updated_by_user_id = None
-            # Same rule for country of origin / shelf life: WB card fills the gap,
-            # never overwrites a value already present (e.g. entered by hand).
-            if p.wb_country_of_origin is None and card_country is not None:
-                p.wb_country_of_origin = card_country
-            if p.wb_shelf_life is None and card_shelf_life is not None:
-                p.wb_shelf_life = card_shelf_life
-            try:
-                await session.commit()
-            except IntegrityError:
-                # Two WB cards can share vendor code and size while carrying different
-                # barcodes, so both map onto one sku_code, which is unique per tenant.
-                # The insert branch above already tolerates that; without the same guard
-                # here the whole request dies with a 500 and the seller cannot save the
-                # API key at all. Skip the conflicting variant instead.
-                await session.rollback()
-                skipped += 1
-                continue
-            updated += 1
 
     return {
         "products_created": created,
         "products_updated": updated,
         "products_skipped": skipped,
         "legacy_marked_old": legacy_marked_old,
+        "sizes_missing_chrt_id": missing_chrt_id,
+        "missing_chrt_id_details": missing_chrt_id_details,
+        "duplicate_chrt_id": duplicate_chrt_id,
+        "barcode_conflicts": barcode_conflicts,
+        "barcode_conflict_details": barcode_conflict_details,
+        "barcodes_added": barcodes_added,
+        "barcodes_existing": barcodes_existing,
     }
