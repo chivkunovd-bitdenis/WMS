@@ -16,7 +16,22 @@ export const KIND_TITLE: Record<NodeKind, string> = {
 
 export type ProductNode = {
   kind: 'product'
+  /** Строка документа: товар на одном месте. */
   id: string
+  /**
+   * Карточка товара.
+   *
+   * Одна карточка может лежать в документе несколькими строками — россыпью в
+   * ячейке и в коробе. Скан ищет карточку, а не строку: иначе одна и та же
+   * карточка в двух местах выглядела бы как два разных товара с общим кодом.
+   * Нет поля (заглушки экрана) — карточкой считается сама строка.
+   */
+  productId?: string
+  /**
+   * Все коды карточки, которые отдал сервер (WMS-536): основной и все WB-коды
+   * размера, Ozon external_barcodes. Нет поля — ищем по barcode, wbBarcode и sku.
+   */
+  scanCodes?: readonly string[]
   name: string
   sku: string
   seller: string

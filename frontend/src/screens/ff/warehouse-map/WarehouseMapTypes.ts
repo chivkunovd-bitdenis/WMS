@@ -16,6 +16,15 @@ export type ProductNode = {
   /** Артикул продавца из карточки WB, не внутренний SKU склада. */
   seller_article: string | null
   barcode: string | null
+  /**
+   * Коды карточки для поиска сканером (WMS-536). Необязательные: старый сервер
+   * их не отдаёт, и тогда товар ищется, как раньше, по `barcode`.
+   *
+   * `scan_codes` — основной и все WB-коды размера, Ozon external_barcodes;
+   * `sku_code` — внутренний артикул карточки.
+   */
+  scan_codes?: string[] | null
+  sku_code?: string | null
   photo_url: string | null
   qty: number
 }

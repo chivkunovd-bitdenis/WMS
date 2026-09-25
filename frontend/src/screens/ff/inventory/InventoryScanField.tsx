@@ -35,15 +35,25 @@ export function InventoryScanField({
   expects: string
   error?: string | null
   notice?: string | null
-  onScan: (code: string) => void
+  /**
+   * `code` — код как пришёл. `layoutCandidate` есть только у клавиатурного
+   * сканера: тот же код в латинской раскладке по физическим клавишам.
+   */
+  onScan: (code: string, layoutCandidate?: string) => void
   enabled?: boolean
   testId: string
 }) {
-  useBarcodeScanner({ onScan, enabled })
+  useBarcodeScanner({
+    // Сканер отдаёт оба прочтения, и нужны оба: исходные символы — чтобы
+    // найти кириллический артикул, латиница — чтобы найти код, пикнутый в
+    // русской раскладке (WMS-536 R7). Раньше сюда доезжала только латиница.
+    onScan: (code, scan) => onScan(scan.raw, code),
+    enabled,
+  })
 
   return (
     <ScannerField
-      onScan={onScan}
+      onScan={(code) => onScan(code)}
       expects={expects}
       error={error ?? null}
       notice={notice ?? null}

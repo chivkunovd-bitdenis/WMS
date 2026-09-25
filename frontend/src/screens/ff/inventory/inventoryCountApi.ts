@@ -47,6 +47,9 @@ export function inventoryAuthHeaders(token: string): Record<string, string> {
 export type ApiProduct = {
   kind: 'product'
   id: string
+  product_id?: string
+  /** WMS-536: все коды карточки; старый сервер поле не отдаёт. */
+  scan_codes?: string[] | null
   name: string
   sku: string
   seller: string
@@ -139,6 +142,8 @@ function toProduct(node: ApiProduct): ProductNode {
   return {
     kind: 'product',
     id: node.id,
+    ...(node.product_id ? { productId: node.product_id } : {}),
+    ...(node.scan_codes ? { scanCodes: node.scan_codes } : {}),
     name: node.name,
     sku: node.sku,
     seller: node.seller,

@@ -11,6 +11,7 @@ import {
 } from './WarehouseMapToolbar'
 import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../../utils/labelSize'
+import { PRODUCT_SCAN_AMBIGUOUS_MESSAGE } from '../../../utils/productScanResolver'
 import {
   EMPTY_FILTERS,
   allExpandableKeys,
@@ -128,13 +129,18 @@ export function FfWarehouseMapScreen({
   function handleScan(code: string) {
     setScanValue('')
     if (!data) return
-    const hit = findByBarcode(data, code)
-    if (!hit) {
+    const result = findByBarcode(data, code)
+    if (result.status !== 'found') {
       setScanNotice(null)
-      setScanError(`Штрихкод ${code} на этом складе не нашёлся`)
+      setScanError(
+        result.status === 'ambiguous'
+          ? PRODUCT_SCAN_AMBIGUOUS_MESSAGE
+          : `Штрихкод ${code} на этом складе не нашёлся`,
+      )
       setHighlightedKey(null)
       return
     }
+    const hit = result.target
     // Путь к найденному раскрываем принудительно: пикнутый короб не должен
     // остаться спрятанным под свёрнутой ячейкой — ровно это и просили перенести
     // сюда из блока коробов в каталоге.

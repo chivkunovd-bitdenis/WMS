@@ -7,6 +7,12 @@ import {
   type MapNode,
   type WarehouseMapData,
 } from './WarehouseMapTypes'
+import {
+  buildProductScanIndex,
+  resolveProductScan,
+  type ProductScanIndex,
+  type ProductScanSource,
+} from '../../../utils/productScanResolver'
 
 // Дерево склада разворачивается в один плоский список строк, и таблица на экране
 // остаётся одной таблицей с одной шапкой. Вторая таблица под строкой читалась бы
@@ -323,28 +329,34 @@ export function missingTokens(data: WarehouseMapData, query: string): string[] {
   return tokens.filter((token) => !found.has(token))
 }
 
-/**
- * Найти по штрихкороду короб, палету, грузоместо, ячейку или товар.
- *
- * Это перенос уже существующего поведения из блока коробов в каталоге: пикнул
- * короб — он раскрылся и подсветился. Здесь то же самое, только цель ещё и
- * показывает, на какой ячейке лежит, потому что дерево видно целиком.
- */
-export function findByBarcode(
-  data: WarehouseMapData,
-  barcode: string,
-): { key: string; ancestorKeys: string[]; title: string; placeLabel: string } | null {
-  const needle = barcode.trim().toLowerCase()
-  if (!needle) return null
+/** Найденная сканером строка: что раскрыть, что подсветить и что сказать. */
+export type MapScanTarget = { key: string; ancestorKeys: string[]; title: string; placeLabel: string }
 
+export type MapScanResult =
+  | { status: 'found'; target: MapScanTarget }
+  /** Код ведёт к нескольким карточкам — ни одну не подсвечиваем (WMS-536 R2). */
+  | { status: 'ambiguous' }
+  | { status: 'not_found' }
+
+/**
+ * Первая в порядке дерева строка, подходящая под условие.
+ *
+ * Порядок тот же, что видит оператор: сначала «Без ячеек», потом ячейки по
+ * очереди, внутри каждой — вглубь.
+ */
+function locate(
+  data: WarehouseMapData,
+  matchNode: (node: MapNode) => boolean,
+  matchCell: (cell: CellNode) => boolean,
+): MapScanTarget | null {
   const walk = (
     node: MapNode,
     parentKey: string,
     ancestors: string[],
     placeLabel: string,
-  ): { key: string; ancestorKeys: string[]; title: string; placeLabel: string } | null => {
+  ): MapScanTarget | null => {
     const key = `${parentKey}/${node.id}`
-    if ((node.barcode ?? '').toLowerCase() === needle) {
+    if (matchNode(node)) {
       return { key, ancestorKeys: ancestors, title: nodeTitle(node), placeLabel }
     }
     if (node.kind === 'product') return null
@@ -360,7 +372,7 @@ export function findByBarcode(
     if (hit) return hit
   }
   for (const cell of data.cells) {
-    if ((cell.barcode ?? '').toLowerCase() === needle) {
+    if (matchCell(cell)) {
       return { key: cell.id, ancestorKeys: [], title: cell.code, placeLabel: `Ячейка ${cell.code}` }
     }
     for (const node of cell.children) {
@@ -369,6 +381,75 @@ export function findByBarcode(
     }
   }
   return null
+}
+
+function mapProductSources(data: WarehouseMapData): ProductScanSource[] {
+  const sources: ProductScanSource[] = []
+  const visit = (node: MapNode) => {
+    if (node.kind !== 'product') {
+      node.children.forEach(visit)
+      return
+    }
+    sources.push({
+      productId: node.product_id,
+      skuCode: node.sku_code,
+      wbPrimaryBarcode: node.barcode,
+      // Все коды карточки от сервера одним списком — WB и Ozon; индексу
+      // источник безразличен.
+      wbBarcodes: node.scan_codes,
+    })
+  }
+  data.unassigned.forEach(visit)
+  data.cells.forEach((cell) => cell.children.forEach(visit))
+  return sources
+}
+
+// Индекс «код → карточки» по загруженной карте. Карта меняется только с
+// перезагрузкой, а каждый скан — это поиск в готовом индексе (R13).
+const productIndexByMap = new WeakMap<WarehouseMapData, ProductScanIndex>()
+
+function mapProductScanIndex(data: WarehouseMapData): ProductScanIndex {
+  const cached = productIndexByMap.get(data)
+  if (cached) return cached
+  const index = buildProductScanIndex(mapProductSources(data))
+  productIndexByMap.set(data, index)
+  return index
+}
+
+/**
+ * Найти по штрихкоду короб, палету, грузоместо, ячейку или товар.
+ *
+ * Это перенос уже существующего поведения из блока коробов в каталоге: пикнул
+ * короб — он раскрылся и подсветился. Здесь то же самое, только цель ещё и
+ * показывает, на какой ячейке лежит, потому что дерево видно целиком.
+ *
+ * Сначала ячейка и тара по их штрихкоду, потом товар — единым поиском по
+ * карточкам склада (WMS-536): основной и все WB-коды, артикул, коды Ozon.
+ * Код, общий у ячейки и товара, находит ячейку. Товар лежит в нескольких
+ * местах — подсвечивается первое по дереву. Код двух разных карточек —
+ * неоднозначность: ничего не подсвечиваем, выбирать наугад нельзя.
+ */
+export function findByBarcode(data: WarehouseMapData, barcode: string): MapScanResult {
+  const needle = barcode.trim().toLowerCase()
+  if (!needle) return { status: 'not_found' }
+
+  const sameBarcode = (value: string | null) => (value ?? '').toLowerCase() === needle
+  const place = locate(
+    data,
+    (node) => node.kind !== 'product' && sameBarcode(node.barcode),
+    (cell) => sameBarcode(cell.barcode),
+  )
+  if (place) return { status: 'found', target: place }
+
+  const product = resolveProductScan(mapProductScanIndex(data), barcode)
+  if (product.status === 'ambiguous') return { status: 'ambiguous' }
+  if (product.status === 'not_found') return { status: 'not_found' }
+  const target = locate(
+    data,
+    (node) => node.kind === 'product' && node.product_id === product.productId,
+    () => false,
+  )
+  return target ? { status: 'found', target } : { status: 'not_found' }
 }
 
 /** Ключи всех строк, которые вообще можно раскрыть — для «развернуть всё». */

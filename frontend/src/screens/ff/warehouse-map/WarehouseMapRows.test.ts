@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_FILTERS, buildRows } from './WarehouseMapRows'
+import { EMPTY_FILTERS, buildRows, findByBarcode } from './WarehouseMapRows'
 import type { WarehouseMapData } from './WarehouseMapTypes'
 
 // TC-NEW-218 — чип «Пустая» на карте склада не должен врать при поиске.
@@ -100,4 +100,159 @@ describe('карта склада: идентификаторы товара', (
       expect(product?.barcode).toBe('4680000000001')
     },
   )
+})
+
+// WMS-536: скан на карте склада. Сначала ячейка и тара по их штрихкоду, потом
+// товар единым поиском по карточкам склада. Фикстуры — раздел 9 постановки.
+describe('WMS-536: поиск сканером на карте склада', () => {
+  const WB_P = '4601234567893'
+  const WB_A = '4601234567886'
+  const OZN = 'OZN-987654'
+  const CYR = 'ФА_МОД8-4а/083/42'
+
+  type Product = Extract<WarehouseMapData['unassigned'][number], { kind: 'product' }>
+
+  function productNode(overrides: Partial<Product> = {}): Product {
+    return {
+      kind: 'product',
+      id: 'balance-p',
+      product_id: 'prod-p',
+      name: 'Товар P',
+      seller_name: 'ИП',
+      category: null,
+      seller_article: 'ART-P',
+      barcode: WB_P,
+      scan_codes: [WB_P, WB_A, OZN],
+      sku_code: 'AbC-42',
+      photo_url: null,
+      qty: 3,
+      ...overrides,
+    }
+  }
+
+  /** «Без ячеек» с `unassigned`, ячейка А-01 с коробом КР-1 и россыпью `loose`. */
+  function map(
+    inBox: Product[],
+    loose: Product[] = [],
+    unassigned: WarehouseMapData['unassigned'] = [],
+  ): WarehouseMapData {
+    return {
+      warehouses: [],
+      sellers: [],
+      categories: [],
+      journal: [],
+      unassigned,
+      cells: [
+        {
+          id: 'c1',
+          code: 'А-01',
+          barcode: 'LOC-A01',
+          qty: 5,
+          children: [
+            {
+              kind: 'box',
+              id: 'b1',
+              code: 'КР-1',
+              barcode: 'BOX-1',
+              seller_name: null,
+              qty: 3,
+              children: inBox,
+            },
+            ...loose,
+          ],
+        },
+      ],
+    }
+  }
+
+  function foundKey(data: WarehouseMapData, code: string): string | null {
+    const result = findByBarcode(data, code)
+    return result.status === 'found' ? result.target.key : null
+  }
+
+  it.each([
+    ['основной WB-ШК', WB_P],
+    ['дополнительный WB-ШК размера', WB_A],
+    ['Ozon-штрихкод', OZN],
+    ['SKU в другом регистре', 'aBc-42'],
+    ['код с пробелами по краям', `  ${WB_P}\t`],
+  ])('%s находит строку товара', (_label, code) => {
+    const result = findByBarcode(map([productNode()]), code)
+    expect(result).toEqual({
+      status: 'found',
+      target: {
+        key: 'c1/b1/balance-p',
+        ancestorKeys: ['c1', 'c1/b1'],
+        title: 'Товар P',
+        placeLabel: 'Короб КР-1',
+      },
+    })
+  })
+
+  it('кириллический артикул находится как есть', () => {
+    expect(foundKey(map([productNode({ sku_code: CYR })]), CYR)).toBe('c1/b1/balance-p')
+  })
+
+  it('русская раскладка на карте не исправляется: поле ручное', () => {
+    const data = map([productNode({ sku_code: 'Chin-56005' })])
+    expect(findByBarcode(data, 'Сршт-56005')).toEqual({ status: 'not_found' })
+  })
+
+  it('код двух разных карточек — неоднозначность, ничего не подсвечивается', () => {
+    const data = map(
+      [productNode({ sku_code: 'DUP-536' })],
+      [productNode({ id: 'balance-q', product_id: 'prod-q', barcode: '4609999999990', scan_codes: ['DUP-536'], sku_code: 'Q' })],
+    )
+    expect(findByBarcode(data, 'DUP-536')).toEqual({ status: 'ambiguous' })
+  })
+
+  it('одна карточка в двух местах — не неоднозначность: подсвечивается первая по дереву', () => {
+    const data = map([productNode()], [productNode({ id: 'balance-p-loose', qty: 2 })])
+    expect(foundKey(data, WB_A)).toBe('c1/b1/balance-p')
+  })
+
+  it('код ячейки и короба важнее кода товара — даже товара в «Без ячеек»', () => {
+    const product = productNode({ scan_codes: [WB_P, 'LOC-A01', 'BOX-1'] })
+    const data = map([], [], [product])
+    expect(foundKey(data, 'LOC-A01')).toBe('c1')
+    expect(foundKey(data, 'BOX-1')).toBe('c1/b1')
+    // Сам товар по-прежнему находится своим кодом.
+    expect(foundKey(data, WB_P)).toBe('unassigned/balance-p')
+  })
+
+  it('КИЗ с GS и без GS товаром не считается', () => {
+    const data = map([productNode()])
+    expect(findByBarcode(data, '010460123456789321SERIAL536\x1d91ABCD\x1d92SIGNATURE536')).toEqual({
+      status: 'not_found',
+    })
+    expect(findByBarcode(data, '010460123456789321SERIAL53691ABCD92SIGNATURE536')).toEqual({
+      status: 'not_found',
+    })
+  })
+
+  it('13 и 14 знаков — разные коды', () => {
+    const data = map(
+      [productNode({ scan_codes: ['4601234567893'], barcode: '4601234567893' })],
+      [productNode({ id: 'balance-q', product_id: 'prod-q', barcode: '04601234567893', scan_codes: ['04601234567893'], sku_code: 'Q' })],
+    )
+    expect(foundKey(data, '4601234567893')).toBe('c1/b1/balance-p')
+    expect(foundKey(data, '04601234567893')).toBe('c1/balance-q')
+
+    const onlyP = map([productNode({ scan_codes: ['4601234567893'], barcode: '4601234567893' })])
+    expect(findByBarcode(onlyP, '04601234567893')).toEqual({ status: 'not_found' })
+  })
+
+  it('сервер без scan_codes и sku_code: товар находится по barcode, как раньше', () => {
+    const legacy = productNode({ scan_codes: undefined, sku_code: undefined })
+    const data = map([legacy])
+    expect(foundKey(data, WB_P)).toBe('c1/b1/balance-p')
+    expect(findByBarcode(data, WB_A)).toEqual({ status: 'not_found' })
+  })
+
+  it('палета и грузоместо по-прежнему находятся по своему штрихкоду', () => {
+    const data = dataWithPallet()
+    expect(foundKey(data, 'plt-4')).toBe('c1/p1')
+    expect(foundKey(data, '4680000000001')).toBe('c1/p1/b1')
+    expect(findByBarcode(data, '')).toEqual({ status: 'not_found' })
+  })
 })
