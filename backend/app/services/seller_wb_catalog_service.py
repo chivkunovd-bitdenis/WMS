@@ -17,6 +17,8 @@ from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import (
+    ID_IN_BATCH_SIZE,
+    chunked,
     list_ozon_product_links,
     list_products,
     marketplace_scope_condition,
@@ -32,6 +34,11 @@ from app.services.wb_card_enrichment import (
     size_from_card_for_barcode,
     subject_name_from_card,
 )
+
+# Пары (seller_id, nm_id) в tuple_(...).in_(...) валят парсер Postgres при
+# заметно меньшем числе элементов, чем скалярный IN того же размера — берём
+# батч мельче (WMS-538).
+_PAIR_IN_BATCH_SIZE = 500
 
 
 @dataclass(frozen=True)
@@ -194,44 +201,48 @@ async def _load_fbs_sync_state_by_seller_chrt(
         return {}
 
     seller_ids = {p.seller_id for p in products if p.seller_id is not None}
-    stmt = (
-        select(
-            FbsWarehouseBinding.seller_id,
-            FbsStockSyncItem.chrt_id,
-            FbsStockSyncItem.last_confirmed_amount,
-            FbsStockSyncItem.status,
-            FbsStockSyncItem.updated_at,
-        )
-        .join(
-            FbsWarehouseBinding,
-            FbsWarehouseBinding.id == FbsStockSyncItem.binding_id,
-        )
-        .where(
-            FbsWarehouseBinding.tenant_id == tenant_id,
-            FbsWarehouseBinding.is_active.is_(True),
-            FbsWarehouseBinding.stock_sync_enabled.is_(True),
-            FbsStockSyncItem.chrt_id.in_(chrt_ids),
-        )
-    )
-    if seller_id is not None:
-        stmt = stmt.where(FbsWarehouseBinding.seller_id == seller_id)
-    elif seller_ids:
-        stmt = stmt.where(FbsWarehouseBinding.seller_id.in_(seller_ids))
-    else:
-        stmt = stmt.where(false())
-
-    res = await session.execute(stmt)
     state_by_key: dict[tuple[uuid.UUID, int], _FbsSyncState] = {}
-    for seller_id_row, chrt_id, published_amount, status, updated_at in res.all():
-        key = (seller_id_row, int(chrt_id))
-        current = state_by_key.get(key)
-        candidate = _FbsSyncState(
-            published_amount=published_amount,
-            status=status,
-            updated_at=updated_at,
+    # У крупного ФФ chrt_id-ов столько же, сколько товаров в области (десятки
+    # тысяч) — читаем порциями, чтобы не упереться в тот же лимит, что уронил
+    # /products/ff-catalog (WMS-538).
+    for chrt_batch in chunked(sorted(chrt_ids), ID_IN_BATCH_SIZE):
+        stmt = (
+            select(
+                FbsWarehouseBinding.seller_id,
+                FbsStockSyncItem.chrt_id,
+                FbsStockSyncItem.last_confirmed_amount,
+                FbsStockSyncItem.status,
+                FbsStockSyncItem.updated_at,
+            )
+            .join(
+                FbsWarehouseBinding,
+                FbsWarehouseBinding.id == FbsStockSyncItem.binding_id,
+            )
+            .where(
+                FbsWarehouseBinding.tenant_id == tenant_id,
+                FbsWarehouseBinding.is_active.is_(True),
+                FbsWarehouseBinding.stock_sync_enabled.is_(True),
+                FbsStockSyncItem.chrt_id.in_(chrt_batch),
+            )
         )
-        if _is_preferred_fbs_sync_state(candidate, current):
-            state_by_key[key] = candidate
+        if seller_id is not None:
+            stmt = stmt.where(FbsWarehouseBinding.seller_id == seller_id)
+        elif seller_ids:
+            stmt = stmt.where(FbsWarehouseBinding.seller_id.in_(seller_ids))
+        else:
+            stmt = stmt.where(false())
+
+        res = await session.execute(stmt)
+        for seller_id_row, chrt_id, published_amount, status, updated_at in res.all():
+            key = (seller_id_row, int(chrt_id))
+            current = state_by_key.get(key)
+            candidate = _FbsSyncState(
+                published_amount=published_amount,
+                status=status,
+                updated_at=updated_at,
+            )
+            if _is_preferred_fbs_sync_state(candidate, current):
+                state_by_key[key] = candidate
     return state_by_key
 
 
@@ -266,14 +277,17 @@ async def list_seller_wb_catalog_rows(
     # и запрос занимал секунды даже когда на экран уходила одна строка.
     nm_ids = {int(p.wb_nm_id) for p in products if p.wb_nm_id is not None}
     cards: list[SellerWildberriesImportedCard] = []
-    if nm_ids:
+    # Портал селлера без search грузит каталог целиком (лимита по умолчанию
+    # нет) — у крупного селлера nm_id-ов тоже могут быть десятки тысяч,
+    # читаем порциями (WMS-538).
+    for nm_batch in chunked(sorted(nm_ids), ID_IN_BATCH_SIZE):
         stmt = select(SellerWildberriesImportedCard).where(
             SellerWildberriesImportedCard.seller_id == seller_id,
             SellerWildberriesImportedCard.tenant_id == tenant_id,
-            SellerWildberriesImportedCard.nm_id.in_(nm_ids),
+            SellerWildberriesImportedCard.nm_id.in_(nm_batch),
         )
         res = await session.execute(stmt)
-        cards = list(res.scalars().all())
+        cards.extend(res.scalars().all())
     by_nm: dict[int, dict[str, Any] | None] = {}  # nm_id -> raw card json
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None
@@ -443,16 +457,19 @@ async def _enrich_linked_products(
         if p.seller_id is not None and p.wb_nm_id is not None
     }
     cards: list[SellerWildberriesImportedCard] = []
-    if card_keys:
+    # Один огромный IN по кортежам (seller_id, nm_id) ломает парсер Postgres —
+    # у ArtMaks (55 313 товаров) и «Империи» (25 029) /products/ff-catalog падал
+    # с "stack depth limit exceeded" (WMS-538). Читаем порциями.
+    for key_batch in chunked(sorted(card_keys), _PAIR_IN_BATCH_SIZE):
         card_stmt = select(SellerWildberriesImportedCard).where(
             SellerWildberriesImportedCard.tenant_id == tenant_id,
             tuple_(
                 SellerWildberriesImportedCard.seller_id,
                 SellerWildberriesImportedCard.nm_id,
-            ).in_(card_keys),
+            ).in_(key_batch),
         )
         card_res = await session.execute(card_stmt)
-        cards = list(card_res.scalars().all())
+        cards.extend(card_res.scalars().all())
     by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any] | None] = {}
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None

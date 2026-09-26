@@ -102,6 +102,14 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 _seller_id_query = Query(default=None)
 
+# У ArtMaks (55 313 товаров) и «Империи» (25 029) сплошной GET /products/ff-catalog
+# без фильтра занимал 11-16 с чистого CPU в единственном процессе uvicorn — на это
+# время вставал весь API у всех клиентов, а следом падал лимитом psycopg на 65 535
+# параметров в другом запросе (WMS-538). Порционная выборка карточек не спасает от
+# самой длительности прохода по всему каталогу тенанта, поэтому такой запрос без
+# seller_id и search отклоняется сразу, по одному лёгкому count(*).
+FF_CATALOG_MAX_UNSCOPED_PRODUCTS = 20_000
+
 
 class ProductCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
@@ -825,6 +833,20 @@ async def get_ff_catalog(
 ) -> list[FfCatalogOut]:
     if seller_id is not None and user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if seller_id is None and not (search or "").strip():
+        total_products = (
+            await session.scalar(
+                select(func.count())
+                .select_from(Product)
+                .where(Product.tenant_id == user.tenant_id)
+            )
+            or 0
+        )
+        if total_products > FF_CATALOG_MAX_UNSCOPED_PRODUCTS:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="catalog_too_large",
+            )
     rows = await list_ff_catalog_rows(
         session, user.tenant_id, seller_id=seller_id, search=search, marketplace=marketplace
     )
