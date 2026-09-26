@@ -1051,6 +1051,82 @@ async def test_inventory_count_found_is_idempotent_per_scan(
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_scan_of_expected_line_increments_without_found_notice(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-542 C1: скан уже числящейся по учёту строки идёт тем же путём.
+
+    Экран больше не считает такие сканы у себя — КАЖДЫЙ скан товара, включая
+    строку, которая уже была в документе при его заведении (числится по
+    учёту), уходит на сервер через /found, идентично настоящей находке.
+    Разница видна в ответе: строка та же самая (не новая), expected_quantity
+    остаётся тем, с чем документ завели (не обнуляется), а notice пустая —
+    предупреждать «строки не было, посчитайте место целиком» не о чем, место
+    и так в документе.
+    """
+    setup = await _tenant(async_client, "ExpectedScanCount")
+    counted = await _product(async_client, setup, name="Числится по учёту")
+    await _balance(setup, counted, 3)
+    async with SessionLocal() as session:
+        product = await session.get(Product, counted)
+        assert product is not None
+        product.wb_barcode = "4600000001234"
+        await session.commit()
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+    seeded_line = next(
+        line for line in created.json()["lines"] if line["product_id"] == str(counted)
+    )
+    assert seeded_line["expected_quantity"] == 3
+    assert seeded_line["actual_quantity"] is None
+
+    body = {
+        "barcodes": ["4600000001234"],
+        "cell_id": str(setup.location_id),
+        "scan_id": "scan-expected-0001",
+    }
+    first = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert first.status_code == 200, first.text
+    scanned_line = next(
+        line for line in first.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert scanned_line["id"] == seeded_line["id"], "скан обязан попасть в уже существующую строку"
+    assert scanned_line["expected_quantity"] == 3
+    assert scanned_line["actual_quantity"] == 1
+    assert first.json()["notice"] == ""
+
+    # R2: тот же scan_id (обрыв связи, повтор запроса) не удваивает штуку.
+    again = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert again.status_code == 200, again.text
+    line_again = next(
+        line for line in again.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert line_again["actual_quantity"] == 1
+
+    # Новый пик того же товара в том же месте — новая штука, тем же путём.
+    third_scan = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={**body, "scan_id": "scan-expected-0002"},
+    )
+    assert third_scan.status_code == 200, third_scan.text
+    line_third = next(
+        line for line in third_scan.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert line_third["actual_quantity"] == 2
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_drops_empty_places_but_keeps_them_scannable(
     async_client: AsyncClient,
 ) -> None:

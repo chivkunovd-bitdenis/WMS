@@ -326,7 +326,19 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         // нет, факт живёт в состоянии React до нажатия «Сохранить».
         const saved = await saveSnapshot(live)
         sentSnapshotRef.current = { ...live, comment: saved.comment }
-        return await recordCountFound(token, live.id, place)
+        const result = await recordCountFound(token, live.id, place)
+        // WMS-542: saveSnapshot выше уже пересчитал touchedRef относительно
+        // снимка ДО этого скана — в нём строка находки/скана снова выглядит
+        // «тронутой» (её факт сдвинулся из-за локального прироста, который
+        // ниже уходит на сервер отдельным плюс-одним). Переснимаем «тронуто»
+        // ещё раз, теперь относительно того, что сервер реально подтвердил
+        // (result.count) — иначе следующее «Сохранить» отправило бы то же
+        // число абсолютом и могло затереть скан другого оператора, прилетевший
+        // в эту же строку, пока мы ждали ответ.
+        if (countRef.current?.id === result.count.id) {
+          touchedRef.current = changedActualIds(countRef.current, result.count)
+        }
+        return result
       },
       onApplied: (found) => {
         setCount((live) => {
@@ -335,7 +347,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
           // на экране, но не в том снимке, который мы отправили.
           return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
         })
-        setNote(found.notice)
+        // WMS-542: обычный скан уже числящейся или уже найденной строки не
+        // несёт отдельного текста — сервер прислал пустую notice. Не затираем
+        // ею то, что уже показано (например, «Сохранено»): само число в
+        // дереве уже обновилось строкой выше.
+        if (found.notice) setNote(found.notice)
       },
       onRejected: (err) => {
         setError(err instanceof Error ? err.message : 'Не удалось записать находку')

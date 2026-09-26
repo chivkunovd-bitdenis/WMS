@@ -54,11 +54,15 @@ export type ScanResult = {
   message: string
   tone: ScanTone
   /**
-   * Находка: товар лежит там, где по учёту его нет.
+   * Скан товара, который нужно записать на сервере: +1 к строке этого товара
+   * в этом месте.
    *
-   * Скан сам строку не создаёт — её заводит сервер, потому что документ и его
-   * строки живут на сервере. Экран, получив это поле, дёргает ручку находки и
-   * перезагружает документ.
+   * WMS-542: раньше это поле означало только настоящую находку (товара нет в
+   * документе). Теперь оно приходит на КАЖДЫЙ скан товара — и по уже
+   * числящейся по учёту строке, и по уже найденной. Строку сам скан не
+   * создаёт и не увеличивает — это делает сервер, идемпотентно по scan_id,
+   * под блокировкой документа; локальный `count` в результате — лишь
+   * мгновенная подсказка на экране, ответ сервера её заменит.
    */
   found?: {
     /** Все прочтения кода: как пришло со сканера и как в латинской раскладке. */
@@ -385,12 +389,18 @@ export function applyScan(
     const inside = byBarcode.find((item) => item.containerId === open.containerId)
     if (inside) {
       return {
+        // Локальный прирост — только мгновенная подсказка на экране, пока летит
+        // запрос. WMS-542: этот же скан идёт на сервер тем же полем `found`, что
+        // и настоящая находка — сервер сам плюсует ровно эту строку под
+        // блокировкой документа и идемпотентно по scan_id; ответ сервера потом
+        // заменит это число настоящим (см. FfInventoryCountScreen.handleScan).
         count: bump(count, inside.product),
         open,
         focusRowKey: `product:${inside.product.id}`,
         focusPathKeys: inside.pathKeys,
         message: scannedMessage(inside.product),
         tone: 'ok',
+        found: place ? { barcodes: codes, ...place } : undefined,
       }
     }
     const openName = containerName(count, open.containerId)
@@ -421,12 +431,14 @@ export function applyScan(
   )
   if (loose) {
     return {
+      // См. комментарий у «inside» выше: та же логика для россыпи.
       count: bump(count, loose.product),
       open,
       focusRowKey: `product:${loose.product.id}`,
       focusPathKeys: loose.pathKeys,
       message: scannedMessage(loose.product),
       tone: 'ok',
+      found: place ? { barcodes: codes, ...place } : undefined,
     }
   }
 

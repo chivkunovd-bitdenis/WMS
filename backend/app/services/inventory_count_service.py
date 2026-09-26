@@ -1104,6 +1104,14 @@ async def record_found(
 
     Повторный скан того же товара в том же месте не плодит строки, а
     увеличивает счёт: человек считает штуками.
+
+    WMS-542: сюда же идёт КАЖДЫЙ скан товара в документе пересчёта — и по уже
+    числящейся по учёту строке, и по уже найденной, а не только настоящая
+    находка. Ручка одна на все три случая: адрес приходит из места (ячейка
+    или тара), а не из id строки, и код ниже сам решает по совпадению
+    (товар, место), новая это строка или уже существующая. Блокировка
+    документа (см. ниже) и идемпотентность по `scan_id` — общие для всех
+    трёх случаев, отдельного пути «просто плюс один» заводить не нужно.
     """
     # ⛔ Порядок здесь важен. Адрес находки вычисляется ДО блокировки.
     #
@@ -1161,9 +1169,9 @@ async def record_found(
         if seen is not None:
             loaded = await get_count(session, tenant_id, count_id)
             assert loaded is not None
-            return FoundResult(
-                loaded, seen.expected_quantity, _found_notice(seen.expected_quantity)
-            )
+            # WMS-542: повтор того же скана не показывает предупреждение о
+            # находке заново — штука уже учтена первым прогоном.
+            return FoundResult(loaded, seen.expected_quantity, "")
 
     # Сканер — обычная клавиатура, и в русской раскладке он отдаёт кириллицу.
     # Экран умеет переводить раскладку и присылает оба варианта, поэтому ищем по
@@ -1231,7 +1239,11 @@ async def record_found(
         await session.commit()
         loaded = await get_count(session, tenant_id, count_id)
         assert loaded is not None
-        return FoundResult(loaded, expected, _found_notice(expected))
+        # WMS-542: строка уже была в документе (числилась по учёту или уже
+        # найдена раньше) — обычный скан, а не находка. «Строки не было,
+        # посчитайте место целиком» тут неверно и не нужно: место и так в
+        # документе, экран сам покажет обновлённое число в дереве.
+        return FoundResult(loaded, expected, "")
 
     line = InventoryCountLine(
         count_id=count.id,
@@ -1260,6 +1272,9 @@ async def record_found(
         # уникальный индекс по строке документа сработал, значит соседний запрос
         # уже завёл её, и правильный ответ — прибавить штуку, а не отдать 500.
         await session.rollback()
+        # WMS-542: конкурент уже завёл эту строку первым — с точки зрения этого
+        # запроса она «уже существовала», предупреждение о находке отдаёт тот,
+        # чей insert прошёл; здесь — обычный инкремент.
         return await _increment_existing_found_line(
             session,
             tenant_id,
@@ -1268,6 +1283,7 @@ async def record_found(
             storage_location_id=storage_location_id,
             container_kind=container_kind,
             container_id=container_id,
+            notice=False,
         )
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
@@ -1504,6 +1520,10 @@ async def _increment_existing_found_line(
     container_kind: str | None,
     container_id: uuid.UUID | None,
     amount: int = 1,
+    # WMS-542: record_found передаёт False — эта строка для него уже не новая
+    # (см. вызов выше). add_manual_line своим вызовом ничего не меняет и
+    # получает прежний текст, это её собственная гонка «Добавить товар».
+    notice: bool = True,
 ) -> FoundResult:
     line = await session.scalar(
         select(InventoryCountLine)
@@ -1523,7 +1543,7 @@ async def _increment_existing_found_line(
     await session.commit()
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
-    return FoundResult(loaded, expected, _found_notice(expected))
+    return FoundResult(loaded, expected, _found_notice(expected) if notice else "")
 
 
 async def _current_quantity(
