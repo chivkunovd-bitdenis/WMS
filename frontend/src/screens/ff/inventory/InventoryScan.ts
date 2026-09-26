@@ -71,6 +71,17 @@ export type ScanResult = {
     cellId: string | null
     containerKind: ContainerKind | null
     containerId: string | null
+    /**
+     * WMS-542 (ревью Astra №1, F4): id строки, которую экран уже показывает
+     * в открытом месте — оператор сканирует то, что и так видит в дереве.
+     * Заполнено только для скана уже известной строки (её id и так есть на
+     * экране); у настоящей находки строки ещё нет, и поле остаётся пустым —
+     * сервер сам решает по штрихкоду и месту, как раньше. С line_id сервер
+     * не ищет товар по штрихкоду всего арендатора и не может отказать
+     * barcode_is_ambiguous там, где строка в конкретном месте уже однозначна
+     * (одинаковый штрихкод у другого продавца в другом месте документа).
+     */
+    lineId?: string
   }
 }
 
@@ -400,7 +411,9 @@ export function applyScan(
         focusPathKeys: inside.pathKeys,
         message: scannedMessage(inside.product),
         tone: 'ok',
-        found: place ? { barcodes: codes, ...place } : undefined,
+        // WMS-542 (F4): строка уже известна на экране — её id снимает
+        // неоднозначность штрихкода на сервере (см. тип поля `found` выше).
+        found: place ? { barcodes: codes, ...place, lineId: inside.product.id } : undefined,
       }
     }
     const openName = containerName(count, open.containerId)
@@ -438,7 +451,8 @@ export function applyScan(
       focusPathKeys: loose.pathKeys,
       message: scannedMessage(loose.product),
       tone: 'ok',
-      found: place ? { barcodes: codes, ...place } : undefined,
+      // WMS-542 (F4): см. комментарий у «inside» выше.
+      found: place ? { barcodes: codes, ...place, lineId: loose.product.id } : undefined,
     }
   }
 

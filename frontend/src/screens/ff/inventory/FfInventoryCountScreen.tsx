@@ -133,6 +133,15 @@ type Props = {
     touchedLineId?: string,
     commentChanged?: boolean,
   ) => void
+  /**
+   * WMS-542 (ревью Astra №1): ручная правка числа строки — отдельный от
+   * скана путь. Страница ведёт её как несохранённую правку со своей
+   * версией (lineId → значение), а не как общий признак «строка тронута»:
+   * скан той же строки сначала кладёт эту правку целевым PUT, потом
+   * прибавляет свою штуку. Экран, у которого нет такого обработчика
+   * (демо-превью без сервера), правит документ по-старому — через onChange.
+   */
+  onManualEdit?: (lineId: string, value: number | null) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
@@ -171,6 +180,8 @@ type Props = {
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
     scanId: string
+    /** WMS-542 (F4): id строки, если скан пришёлся на уже известную строку. */
+    lineId?: string
   }) => void
   /**
    * Каталог товаров для модалки «Добавить товар». null — ещё грузится или не
@@ -211,6 +222,7 @@ export function FfInventoryCountScreen({
   error,
   note,
   onChange,
+  onManualEdit,
   onSave,
   onPost,
   onCancelDocument,
@@ -286,18 +298,13 @@ export function FfInventoryCountScreen({
       onFound?.({ ...result.found, scanId: randomId() })
     }
     if (result.count !== count) {
-      // WMS-542: локальный прирост от скана — только мгновенная подсказка,
-      // сама штука уже ушла на сервер строкой выше (result.found). В touchedRef
-      // эту строку не кладём: следующее «Сохранить» иначе отправило бы то же
-      // число абсолютом поверх чужого скана. Строку без found (например,
-      // экран без доступа к серверу находок) по-прежнему помечаем тронутой —
-      // для неё это единственный путь сохранить пик.
-      const touched = result.found
-        ? undefined
-        : result.focusRowKey?.startsWith('product:')
-          ? result.focusRowKey.slice('product:'.length)
-          : undefined
-      onChange(result.count, touched)
+      // WMS-542 (ревью Astra №1): скан больше никогда не помечает строку
+      // «тронутой» — ни здесь, ни где-либо ещё. Ручная правка (несохранённое
+      // число) и скан теперь два независимых слоя (см. scanReconciliation.ts):
+      // локальный прирост ниже — только мгновенная подсказка на экране, сама
+      // штука уже ушла на сервер отдельным путём (result.found), под своим
+      // учётом на странице. Второй аргумент onChange здесь всегда пуст.
+      onChange(result.count, undefined)
     }
   }
 
@@ -348,7 +355,12 @@ export function FfInventoryCountScreen({
   const selectedRow = rows.find((row) => row.key === selectedKey) ?? null
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value), row.id)
+    // WMS-542 (ревью Astra №1): ручная правка идёт отдельным от скана путём
+    // (onManualEdit — своя версия правки на странице), а не общим «тронуто».
+    // Экран без такого обработчика (демо-превью без сервера) правит документ
+    // по-старому — через onChange.
+    if (onManualEdit) onManualEdit(row.id, value)
+    else onChange(setActual(count, row.id, value), row.id)
   }
 
   // Опись печатается из документа, каким он на экране сейчас: кладовщик клеит

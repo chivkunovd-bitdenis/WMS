@@ -411,6 +411,8 @@ export async function recordCountFound(
     containerId: string | null
     /** Один идентификатор на пик: повтор того же скана не прибавит вторую штуку. */
     scanId: string
+    /** WMS-542 (F4): id уже известной строки — снимает неоднозначность штрихкода. */
+    lineId?: string
   },
 ): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
@@ -422,6 +424,7 @@ export async function recordCountFound(
       container_kind: place.containerKind,
       container_id: place.containerId,
       scan_id: place.scanId,
+      line_id: place.lineId ?? null,
     }),
   })
   if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)

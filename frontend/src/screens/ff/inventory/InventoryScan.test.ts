@@ -114,6 +114,9 @@ describe('inventory product scan', () => {
       cellId: null,
       containerKind: 'box',
       containerId: 'box-1',
+      // WMS-542 (F4): строка уже известна на экране — её id снимает
+      // неоднозначность штрихкода на сервере (двух продавцов с одним кодом).
+      lineId: 'line-1',
     })
   })
 
@@ -143,6 +146,7 @@ describe('inventory product scan', () => {
       cellId: 'cell-1',
       containerKind: null,
       containerId: null,
+      lineId: 'line-loose',
     })
   })
 
