@@ -2414,12 +2414,15 @@ export function FfFbsSupplyWorkspace({
     })
   }, [workspace])
 
-  const orderPrintDone = useCallback(
-    (order: FbsWorkspace['orders'][number]) =>
-      (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
-      fbsOrderMarkingAccepted(order.metadata),
-    [],
-  )
+  // WB ставит ЧЗ в optional, поэтому после «Очистить ЧЗ» проверка «метки приняты»
+  // проходит по пустому списку. Без кода заказ не напечатан, иначе «Печать всего»
+  // уходит в перепечатку, и сервер молча отвечает nothing_to_reprint.
+  const orderPrintDone = (order: FbsWorkspace['orders'][number]) =>
+    (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
+    fbsOrderMarkingAccepted(order.metadata) &&
+    (isOzonSupply
+      || !requiresOrderHonestSign(order)
+      || order.metadata.states.some((state) => state.kind === 'sgtin' && Boolean(state.value_tail)))
 
   const packingShowsSize = fbsPackingShowsSize(packingOrders, isOzonSupply)
   // Слот «Доступно ЧЗ» занимает место во всех строках вкладки, если он нужен хотя бы
