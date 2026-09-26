@@ -757,8 +757,15 @@ export default function App() {
           setSelectedWarehouseId(null)
         }
         if (canLoadProductCatalog) {
-          await refreshProducts(token)
+          // WMS-538: у крупного ФФ (ArtMaks — 55 тыс. товаров) полный список товаров
+          // собирается на сервере секунды. Селлеры не должны его ждать: грузим их первыми,
+          // а товары догружаем в фоне — ошибка или медленность списка не держит интерфейс.
           await refreshSellers(token)
+          void refreshProducts(token).catch((e: unknown) => {
+            setCatalogError(
+              e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
+            )
+          })
         } else {
           setProducts([])
           setSellers([])
