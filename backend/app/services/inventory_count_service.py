@@ -1093,6 +1093,7 @@ async def record_found(
     container_kind: str | None,
     container_id: uuid.UUID | None,
     scan_id: str | None = None,
+    line_id: uuid.UUID | None = None,
 ) -> FoundResult:
     """Записывает находку: товар лежит там, где по учёту его нет.
 
@@ -1179,59 +1180,95 @@ async def record_found(
     # который экран только что нашёл, и оператор видел два взаимоисключающих
     # сообщения сразу.
     lowered = [candidate.lower() for candidate in codes]
-    product_stmt = select(Product).where(
-        Product.tenant_id == tenant_id,
-        or_(
-            func.lower(Product.wb_barcode).in_(lowered),
-            func.lower(Product.sku_code).in_(lowered),
-        ),
-    )
-    # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
-    # пересчёт одного селлера начнёт править остатки другого.
-    if count.seller_id is not None:
-        product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
-    products = list((await session.execute(product_stmt)).scalars().all())
-    if not products:
-        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon свой код
-        # вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
-        from app.services.ozon_product_import_service import (
-            find_product_ids_by_marketplace_barcode,
-        )
-
-        product_ids = await find_product_ids_by_marketplace_barcode(
-            session,
-            tenant_id,
-            list(codes),
-            seller_id=count.seller_id,
-        )
-        if product_ids:
-            fallback_stmt = select(Product).where(
-                Product.tenant_id == tenant_id,
-                Product.id.in_(product_ids),
-            )
-            if count.seller_id is not None:
-                fallback_stmt = fallback_stmt.where(Product.seller_id == count.seller_id)
-            products = list((await session.execute(fallback_stmt)).scalars().all())
-    if not products:
-        raise InventoryCountError("product_not_found")
-    if len(products) > 1:
-        raise InventoryCountError("barcode_is_ambiguous")
-    product = products[0]
 
     await _clear_empty_confirmation(
         session, count, {(container_kind, str(container_id))}, {storage_location_id},
     )
-    existing = next(
-        (
-            line
-            for line in count.lines
-            if line.product_id == product.id
-            and line.storage_location_id == storage_location_id
-            and line.container_kind == container_kind
-            and line.container_id == container_id
-        ),
-        None,
-    )
+
+    if line_id is not None:
+        # WMS-542 (F4): экран уже показывает конкретную строку в открытом
+        # месте и прислал её id вместе со сканом. Ищем СТРОГО в этом
+        # документе и на этом месте, а не штрихкодом по всему арендатору —
+        # `wb_barcode`/`sku_code` уникальны внутри продавца, а не арендатора,
+        # и одинаковый код у другого продавца превращал однозначный скан уже
+        # выбранной строки в отказ barcode_is_ambiguous. line_id снимает эту
+        # неоднозначность: адрес и продавец уже зафиксированы самой строкой.
+        existing = next(
+            (
+                row
+                for row in count.lines
+                if row.id == line_id
+                and row.storage_location_id == storage_location_id
+                and row.container_kind == container_kind
+                and row.container_id == container_id
+            ),
+            None,
+        )
+        if existing is None:
+            raise InventoryCountError("line_not_found")
+        line_codes = {
+            value.lower()
+            for value in (existing.product.wb_barcode, existing.product.sku_code)
+            if value
+        }
+        if line_codes.isdisjoint(lowered):
+            # Экран прислал не тот код для этой строки — довериться голому
+            # id нельзя, могли пикнуть чужой штрихкод рядом со старым адресом.
+            raise InventoryCountError("line_barcode_mismatch")
+        # existing уже не None — код ниже, создающий новую строку, для этой
+        # ветки недостижим, но product должен быть определён для type checker.
+        product = existing.product
+    else:
+        product_stmt = select(Product).where(
+            Product.tenant_id == tenant_id,
+            or_(
+                func.lower(Product.wb_barcode).in_(lowered),
+                func.lower(Product.sku_code).in_(lowered),
+            ),
+        )
+        # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
+        # пересчёт одного селлера начнёт править остатки другого.
+        if count.seller_id is not None:
+            product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
+        products = list((await session.execute(product_stmt)).scalars().all())
+        if not products:
+            # Запасной поиск по штрихкодам маркетплейса: у товара Ozon свой код
+            # вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
+            from app.services.ozon_product_import_service import (
+                find_product_ids_by_marketplace_barcode,
+            )
+
+            product_ids = await find_product_ids_by_marketplace_barcode(
+                session,
+                tenant_id,
+                list(codes),
+                seller_id=count.seller_id,
+            )
+            if product_ids:
+                fallback_stmt = select(Product).where(
+                    Product.tenant_id == tenant_id,
+                    Product.id.in_(product_ids),
+                )
+                if count.seller_id is not None:
+                    fallback_stmt = fallback_stmt.where(Product.seller_id == count.seller_id)
+                products = list((await session.execute(fallback_stmt)).scalars().all())
+        if not products:
+            raise InventoryCountError("product_not_found")
+        if len(products) > 1:
+            raise InventoryCountError("barcode_is_ambiguous")
+        product = products[0]
+        existing = next(
+            (
+                row
+                for row in count.lines
+                if row.product_id == product.id
+                and row.storage_location_id == storage_location_id
+                and row.container_kind == container_kind
+                and row.container_id == container_id
+            ),
+            None,
+        )
+
     if existing is not None:
         existing.actual_quantity = int(existing.actual_quantity or 0) + 1
         expected = int(existing.expected_quantity)
