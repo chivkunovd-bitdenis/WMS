@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
-import { changedActualIds, mergeInFlightActuals } from './InventoryRows'
+import { applyScanResponse, confirmedTouchedIds, mergeInFlightActuals } from './InventoryRows'
 import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
 import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 
@@ -195,6 +195,13 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   }
 
   async function saveSnapshot(snapshot: InventoryCount): Promise<InventoryCount> {
+    // WMS-542: id тронутых строк фиксируем ДО запроса — это ровно то, что уйдёт
+    // в PUT. Пересчёт «что ещё тронуто» ниже смотрит только среди них, а не
+    // среди всех строк документа: иначе локальный прирост от скана (он не
+    // имеет отношения к этому PUT и никогда не был в touchedRef) снова
+    // попадал бы в тронутые просто потому, что успел отличаться от снимка,
+    // отправленного до скана.
+    const sentTouched = new Set(touchedRef.current)
     const saved = await saveCountActuals(token, snapshot, touchedRef.current,
       commentTouchedRef.current
         ? { updateComment: true, comment: snapshot.comment, expectedComment: savedCommentRef.current }
@@ -202,7 +209,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     if (countRef.current?.id === snapshot.id) {
       savedCommentRef.current = saved.comment
       // Changes entered while a request was in flight remain local and dirty.
-      touchedRef.current = changedActualIds(countRef.current, snapshot)
+      touchedRef.current = confirmedTouchedIds(sentTouched, snapshot, countRef.current)
       commentTouchedRef.current = countRef.current.comment !== snapshot.comment
     }
     return saved
@@ -215,6 +222,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       const commentOptions = commentTouchedRef.current
         ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
         : undefined
+      // WMS-542: та же причина, что в saveSnapshot — фиксируем, что реально
+      // уходит в PUT, до самого запроса.
+      const sentTouched = new Set(touchedRef.current)
       const res = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -225,7 +235,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       if (countRef.current?.id !== saved.id) return
       setCount((current) => current ? mergeInFlightActuals(saved, count, current) : current)
       savedCommentRef.current = saved.comment
-      touchedRef.current = changedActualIds(countRef.current, count)
+      touchedRef.current = confirmedTouchedIds(sentTouched, count, countRef.current)
       commentTouchedRef.current = countRef.current.comment !== count.comment
       setNote('Сохранено. Остатки не тронуты.')
     } catch (err) {
@@ -307,10 +317,6 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    * серверная защита от повтора его не узнавала. Теперь повторяем мы сами и тем
    * же идентификатором.
    */
-  // Снимок документа на момент отправки скана. Без него слияние сравнивало
-  // текущее состояние с самим собой, ничего не находило и молча затирало
-  // количества, введённые кладовщиком, пока летел запрос.
-  const sentSnapshotRef = useRef<InventoryCount | null>(null)
   const foundQueueRef = useRef<ReturnType<typeof createFoundQueue<FoundResponse>> | null>(null)
   if (foundQueueRef.current === null) {
     foundQueueRef.current = createFoundQueue<FoundResponse>({
@@ -322,30 +328,25 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
           throw new FoundPlaceDeferredError('Находка относится к другому документу пересчёта')
         }
         if (live.status !== 'draft') throw new Error('Документ уже закрыт')
-        // Кладём на сервер то, что оператор насчитал: автосохранения в экране
-        // нет, факт живёт в состоянии React до нажатия «Сохранить».
-        const saved = await saveSnapshot(live)
-        sentSnapshotRef.current = { ...live, comment: saved.comment }
-        const result = await recordCountFound(token, live.id, place)
-        // WMS-542: saveSnapshot выше уже пересчитал touchedRef относительно
-        // снимка ДО этого скана — в нём строка находки/скана снова выглядит
-        // «тронутой» (её факт сдвинулся из-за локального прироста, который
-        // ниже уходит на сервер отдельным плюс-одним). Переснимаем «тронуто»
-        // ещё раз, теперь относительно того, что сервер реально подтвердил
-        // (result.count) — иначе следующее «Сохранить» отправило бы то же
-        // число абсолютом и могло затереть скан другого оператора, прилетевший
-        // в эту же строку, пока мы ждали ответ.
-        if (countRef.current?.id === result.count.id) {
-          touchedRef.current = changedActualIds(countRef.current, result.count)
-        }
-        return result
+        // Кладём на сервер то, что оператор насчитал руками: автосохранения в
+        // экране нет, факт живёт в состоянии React до нажатия «Сохранить».
+        // saveSnapshot шлёт ТОЛЬКО тронутые (touchedRef) строки — а сам скан,
+        // который мы сейчас отправляем ниже, никогда не помечает строку
+        // тронутой (см. FfInventoryCountScreen.handleScan), так что бампнутая
+        // им строка сюда не попадёт и её нечем задвоить.
+        await saveSnapshot(live)
+        return await recordCountFound(token, live.id, place)
       },
       onApplied: (found) => {
         setCount((live) => {
           if (!live || live.id !== found.count.id) return live
-          // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
-          // на экране, но не в том снимке, который мы отправили.
-          return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
+          // WMS-542, найдено на приёмке 26.09.2026: число строки на экране —
+          // серверное для всех строк, включая те, что тем временем поменял
+          // ДРУГОЙ оператор своим сканом. Исключение — строки с настоящей
+          // несохранённой ручной правкой этого оператора (touchedRef); скан
+          // в touchedRef никогда не попадает, поэтому подменить им чужой
+          // серверный счёт здесь нечем.
+          return applyScanResponse(found.count, live, touchedRef.current, commentTouchedRef.current)
         })
         // WMS-542: обычный скан уже числящейся или уже найденной строки не
         // несёт отдельного текста — сервер прислал пустую notice. Не затираем

@@ -543,3 +543,59 @@ export function changedActualIds(edited: InventoryCount, original: InventoryCoun
   const before = new Map(allProducts(original).map((item) => [item.id, item.actual]))
   return new Set(allProducts(edited).filter((item) => before.get(item.id) !== item.actual).map((item) => item.id))
 }
+
+/**
+ * Строки, где PUT реально подтвердил присланное значение.
+ *
+ * WMS-542: раньше «что ещё тронуто после PUT» пересчитывали разницей по ВСЕМ
+ * строкам документа (`changedActualIds(current, sent)`) — тому, что реально
+ * ушло в этом PUT, было всё равно. Это было корректно, пока единственным
+ * способом тронуть строку была ручная правка числа: любое расхождение с
+ * отправленным снимком означало правку, сделанную, пока летел запрос. Теперь
+ * скан сам локально бампает строку ещё ДО своего ответа (см. InventoryScan.
+ * bump) — и расхождение с тем, что отправили секундой раньше, стало верно
+ * для каждого скана без исключения, даже когда рядом никто ничего не
+ * трогал. Пересчитывать нужно только среди того, что реально отправили
+ * (`sentIds`): не изменилось с тех пор — PUT подтвердил, строка больше не
+ * тронута; изменилось (оператор успел поправить ещё раз, пока летел запрос,
+ * или скан локально бампнул её же) — остаётся тронутой.
+ */
+export function confirmedTouchedIds(
+  sentIds: ReadonlySet<string>,
+  before: InventoryCount,
+  after: InventoryCount,
+): Set<string> {
+  const beforeValues = new Map(allProducts(before).map((item) => [item.id, item.actual]))
+  const afterValues = new Map(allProducts(after).map((item) => [item.id, item.actual]))
+  return new Set([...sentIds].filter((id) => beforeValues.get(id) !== afterValues.get(id)))
+}
+
+/**
+ * Применяет ответ сервера на скан: число строки на экране — серверное, кроме
+ * строк с несохранённой РУЧНОЙ правкой этого оператора (`touched`).
+ *
+ * WMS-542, найдено на приёмке 26.09.2026: раньше здесь стоял
+ * `mergeInFlightActuals`, сравнивавший не с тронутыми строками, а с тем, что
+ * отправили (`sent`) до этого скана. Но скан сам локально бампает строку ещё
+ * до ответа — «локальное отличается от отправленного» верно для КАЖДОГО
+ * скана без исключения, даже когда рядом никто не работал. Поэтому чужой
+ * скан, прилетевший на сервер параллельно (другой оператор, другая вкладка),
+ * подменялся устаревшим локальным числом, а следующее «Сохранить» стирало
+ * чужую штуку абсолютным PUT. После ответа на скан источник истины —
+ * сервер; touched здесь обязан содержать только строки с настоящей ручной
+ * правкой (скан НИКОГДА не должен в него попадать — ни сразу, ни через
+ * пересчёт в saveSnapshot/save, ни после собственного ответа).
+ */
+export function applyScanResponse(
+  server: InventoryCount,
+  current: InventoryCount,
+  touched: ReadonlySet<string>,
+  keepLocalComment: boolean,
+): InventoryCount {
+  if (current.id !== server.id) return current
+  let merged = keepLocalComment ? { ...server, comment: current.comment } : server
+  for (const item of allProducts(current)) {
+    if (touched.has(item.id)) merged = setActual(merged, item.id, item.actual)
+  }
+  return merged
+}
