@@ -3,11 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TypeVar
 
 from sqlalchemy import String, cast, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +39,33 @@ class CatalogError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+_T = TypeVar("_T")
+
+# Postgres ломает парсер на длинном списке IN (stack depth limit exceeded)
+# заметно раньше, чем упирается в лимит psycopg на 65 535 параметров запроса —
+# у крупных ФФ (ArtMaks 55 313 товаров, «Империя» 25 029) /products/ff-catalog
+# падал именно так (WMS-538). Любой .in_(...) по полному каталогу тенанта или
+# селлера обязан идти порциями через chunked(...).
+ID_IN_BATCH_SIZE = 2000
+
+
+def chunked(items: Iterable[_T], size: int) -> Iterator[list[_T]]:
+    """Split ``items`` into fixed-size batches, preserving order.
+
+    Used to keep SQL ``IN (...)`` lists short enough for Postgres to parse
+    (see ``ID_IN_BATCH_SIZE`` above) instead of sending tens of thousands of
+    values in a single clause.
+    """
+    batch: list[_T] = []
+    for item in items:
+        batch.append(item)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
 
 
 class _SkipSentinel:
@@ -798,15 +826,18 @@ async def list_ozon_product_links(
 ) -> dict[uuid.UUID, ProductMarketplaceLink]:
     if not product_ids:
         return {}
-    result = await session.execute(
-        select(ProductMarketplaceLink).where(
-            ProductMarketplaceLink.tenant_id == tenant_id,
-            ProductMarketplaceLink.product_id.in_(product_ids),
-            ProductMarketplaceLink.marketplace == "ozon",
-            ProductMarketplaceLink.is_active.is_(True),
+    links: dict[uuid.UUID, ProductMarketplaceLink] = {}
+    for batch in chunked(sorted(product_ids), ID_IN_BATCH_SIZE):
+        result = await session.execute(
+            select(ProductMarketplaceLink).where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.product_id.in_(batch),
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.is_active.is_(True),
+            )
         )
-    )
-    return {link.product_id: link for link in result.scalars().all()}
+        links.update({link.product_id: link for link in result.scalars().all()})
+    return links
 
 
 # Ключ, под которым импорт карточек Ozon кладёт ссылку на главное фото товара в
