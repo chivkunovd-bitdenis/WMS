@@ -1051,6 +1051,202 @@ async def test_inventory_count_found_is_idempotent_per_scan(
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_scan_of_expected_line_increments_without_found_notice(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-542 C1: скан уже числящейся по учёту строки идёт тем же путём.
+
+    Экран больше не считает такие сканы у себя — КАЖДЫЙ скан товара, включая
+    строку, которая уже была в документе при его заведении (числится по
+    учёту), уходит на сервер через /found, идентично настоящей находке.
+    Разница видна в ответе: строка та же самая (не новая), expected_quantity
+    остаётся тем, с чем документ завели (не обнуляется), а notice пустая —
+    предупреждать «строки не было, посчитайте место целиком» не о чем, место
+    и так в документе.
+    """
+    setup = await _tenant(async_client, "ExpectedScanCount")
+    counted = await _product(async_client, setup, name="Числится по учёту")
+    await _balance(setup, counted, 3)
+    async with SessionLocal() as session:
+        product = await session.get(Product, counted)
+        assert product is not None
+        product.wb_barcode = "4600000001234"
+        await session.commit()
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+    seeded_line = next(
+        line for line in created.json()["lines"] if line["product_id"] == str(counted)
+    )
+    assert seeded_line["expected_quantity"] == 3
+    assert seeded_line["actual_quantity"] is None
+
+    body = {
+        "barcodes": ["4600000001234"],
+        "cell_id": str(setup.location_id),
+        "scan_id": "scan-expected-0001",
+    }
+    first = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert first.status_code == 200, first.text
+    scanned_line = next(
+        line for line in first.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert scanned_line["id"] == seeded_line["id"], "скан обязан попасть в уже существующую строку"
+    assert scanned_line["expected_quantity"] == 3
+    assert scanned_line["actual_quantity"] == 1
+    assert first.json()["notice"] == ""
+
+    # R2: тот же scan_id (обрыв связи, повтор запроса) не удваивает штуку.
+    again = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert again.status_code == 200, again.text
+    line_again = next(
+        line for line in again.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert line_again["actual_quantity"] == 1
+
+    # Новый пик того же товара в том же месте — новая штука, тем же путём.
+    third_scan = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={**body, "scan_id": "scan-expected-0002"},
+    )
+    assert third_scan.status_code == 200, third_scan.text
+    line_third = next(
+        line for line in third_scan.json()["count"]["lines"] if line["product_id"] == str(counted)
+    )
+    assert line_third["actual_quantity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_scan_with_line_id_resolves_same_barcode_across_sellers(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-542 F4: line_id снимает неоднозначность одинакового штрихкода.
+
+    У товара `wb_barcode`/`sku_code` уникальны внутри продавца, не всего
+    арендатора — два разных продавца законно заводят карточки с одним и тем
+    же кодом. Документ без фильтра по продавцу видит оба. Экран уже
+    показывает однозначную строку в открытом месте (адрес сам разрешает
+    неоднозначность) и присылает её id вместе со сканом — сервер обязан
+    прибавить именно её, не отказывая barcode_is_ambiguous. Без line_id
+    (старое поведение, настоящая находка без выбранной строки) отказ
+    остаётся обоснованным.
+    """
+    setup = await _tenant(async_client, "AmbiguousBarcodeCount")
+    seller_a = await _seller(async_client, setup, "Продавец А")
+    seller_b = await _seller(async_client, setup, "Продавец Б")
+    product_a = await _product(async_client, setup, name="Товар А", seller_id=seller_a)
+    product_b = await _product(async_client, setup, name="Товар Б", seller_id=seller_b)
+    shared_barcode = "4600000098765"
+    async with SessionLocal() as session:
+        for product_id in (product_a, product_b):
+            product = await session.get(Product, product_id)
+            assert product is not None
+            product.wb_barcode = shared_barcode
+        await session.commit()
+
+    location_y = await async_client.post(
+        f"/warehouses/{setup.warehouse_id}/locations",
+        headers=setup.headers,
+        json={"code": "Y-01"},
+    )
+    assert location_y.status_code == 200
+    location_y_id = uuid.UUID(location_y.json()["id"])
+
+    # X — существующая ячейка тенанта (setup.location_id), Y — вторая.
+    await _balance(setup, product_a, 2, location_id=setup.location_id)
+    await _balance(setup, product_b, 3, location_id=location_y_id)
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+    line_a = next(
+        line for line in created.json()["lines"] if line["product_id"] == str(product_a)
+    )
+    assert line_a["storage_location_id"] == str(setup.location_id)
+
+    # Без line_id: штрихкод общий на двух продавцов — отказ, как и раньше.
+    ambiguous = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [shared_barcode],
+            "cell_id": str(setup.location_id),
+            "scan_id": "f4-no-line-id",
+        },
+    )
+    assert ambiguous.status_code == 409, ambiguous.text
+    assert ambiguous.json()["detail"] == "barcode_is_ambiguous"
+
+    # С line_id: строка в ячейке X однозначна — прибавляем именно её.
+    resolved = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [shared_barcode],
+            "cell_id": str(setup.location_id),
+            "scan_id": "f4-with-line-id",
+            "line_id": line_a["id"],
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["notice"] == ""
+    updated_line_a = next(
+        line for line in resolved.json()["count"]["lines"] if line["id"] == line_a["id"]
+    )
+    assert updated_line_a["product_id"] == str(product_a)
+    assert updated_line_a["actual_quantity"] == 1
+    line_b_untouched = next(
+        line for line in resolved.json()["count"]["lines"] if line["product_id"] == str(product_b)
+    )
+    assert line_b_untouched["actual_quantity"] is None
+
+    # Повтор того же scan_id по-прежнему идемпотентен и в этом пути.
+    replay = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [shared_barcode],
+            "cell_id": str(setup.location_id),
+            "scan_id": "f4-with-line-id",
+            "line_id": line_a["id"],
+        },
+    )
+    assert replay.status_code == 200, replay.text
+    replay_line_a = next(
+        line for line in replay.json()["count"]["lines"] if line["id"] == line_a["id"]
+    )
+    assert replay_line_a["actual_quantity"] == 1
+
+    # line_id, указывающий на строку в ДРУГОМ месте, чем открыто сейчас — отказ.
+    wrong_place = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [shared_barcode],
+            "cell_id": str(location_y_id),
+            "scan_id": "f4-wrong-place",
+            "line_id": line_a["id"],
+        },
+    )
+    assert wrong_place.status_code == 404, wrong_place.text
+    assert wrong_place.json()["detail"] == "line_not_found"
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_drops_empty_places_but_keeps_them_scannable(
     async_client: AsyncClient,
 ) -> None:

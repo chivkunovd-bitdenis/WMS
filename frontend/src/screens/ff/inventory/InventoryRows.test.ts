@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { changedActualIds, markUncountedEmptyIn, mergeInFlightActuals, setActual } from './InventoryRows'
+import {
+  changedActualIds,
+  markUncountedEmptyIn,
+  mergeInFlightActuals,
+  setActual,
+} from './InventoryRows'
 import type { InventoryCount } from './InventoryTypes'
 
 // WMS-154: «Здесь пусто» — не удаление сущностей и не отдельный жизненный
@@ -137,3 +142,8 @@ describe('WMS-155 concurrent edits', () => {
     expect(changedActualIds({ ...original, comment: 'Only a comment' }, original).size).toBe(0)
   })
 })
+
+// WMS-542: согласование ответов сервера со сканами и ручными правками
+// заменено единой очередью операций документа (countOpsQueue.ts) и покрыто
+// тестами там (countOpsQueue.test.ts) — управляемым порядком выполнения
+// запросов и доставки ответов по сценариям обоих ревью Astra.
