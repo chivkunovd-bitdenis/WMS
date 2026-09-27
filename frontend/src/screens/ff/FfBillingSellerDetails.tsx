@@ -150,10 +150,14 @@ export function documentTitleCell(
         <StatusChip
           label={status}
           tone={status === 'ВБ получил' ? 'ok' : 'neutral'}
+          // WMS-549 (ревью Astra, F4): в кабинете селлера всплывающих
+          // пояснений быть не должно — сам статус остаётся, объяснение нет.
           hint={
-            status === 'ВБ получил'
-              ? 'Wildberries подтвердил приём — заказ тарифицируется'
-              : 'Заказ передан, подтверждения от Wildberries ещё нет'
+            sellerScope
+              ? undefined
+              : status === 'ВБ получил'
+                ? 'Wildberries подтвердил приём — заказ тарифицируется'
+                : 'Заказ передан, подтверждения от Wildberries ещё нет'
           }
         />
       </Stack>
@@ -280,6 +284,20 @@ function sectionRate(entries: SellerReportEntry[]): number | null {
       .filter((rate): rate is number => typeof rate === 'number'),
   )
   return rates.size === 1 ? ([...rates][0] ?? null) : null
+}
+
+/**
+ * Ячейка «Ставка» раздела: сумма или «разные» с пояснением — кроме кабинета
+ * селлера, где поясняющих подсказок быть не должно (WMS-549, ревью Astra F4).
+ * Вынесено в отдельную функцию, чтобы проверить оба режима без раскрытия
+ * раздела в таблице.
+ */
+export function sectionRateCell(entries: SellerReportEntry[], sellerScope: boolean): ReactNode {
+  const rate = sectionRate(entries)
+  if (rate === null) {
+    return <TextCell value="разные" hint={sellerScope ? undefined : 'Документы раздела прошли по разным ставкам'} />
+  }
+  return <MoneyCell minor={rate} />
 }
 
 export function buildSections(details: SellerReportDetails | null): SectionRow[] {
@@ -553,15 +571,8 @@ export function FfBillingSellerDetails({
             header: 'Ставка',
             width: 130,
             align: 'right' as const,
-            render: (row: SectionRow) => {
-              if (row.kind === 'storage') return <TextCell value="—" />
-              const rate = sectionRate(row.entries)
-              return rate === null ? (
-                <TextCell value="разные" hint="Документы раздела прошли по разным ставкам" />
-              ) : (
-                <MoneyCell minor={rate} />
-              )
-            },
+            render: (row: SectionRow) =>
+              row.kind === 'storage' ? <TextCell value="—" /> : sectionRateCell(row.entries, sellerScope),
           },
           {
             key: 'amount',
