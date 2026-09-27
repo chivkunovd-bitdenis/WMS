@@ -99,20 +99,30 @@ export function buildInventorySheetHtml(sheet: ApiPrintSheet): string {
         overflow-wrap: anywhere;
       }
       td.barcode {
-        width: 40mm;
         font-family: "Courier New", ui-monospace, monospace;
         white-space: nowrap;
         overflow-wrap: normal;
         word-break: keep-all;
       }
-      td.article { width: 28mm; }
-      td.num { width: 22mm; text-align: right; }
-      td.fact { width: 26mm; }
+      td.num { text-align: right; }
     </style>
   </head>
   <body>
     <div class="head">${head}</div>
     <table>
+      <!-- table-layout: fixed берёт ширины колонок из ПЕРВОЙ строки таблицы —
+           это строка thead, а не тела. Ширина на td тут не сработала бы: до
+           20-значный штрихкод наезжал на «Артикул» (нашли в PDF-проверке),
+           пока ширины не переехали в colgroup — он один задаёт ширину колонки
+           независимо от того, что и где внутри неё написано. -->
+      <colgroup>
+        <col style="width: 52mm" />
+        <col style="width: 26mm" />
+        <col />
+        <col style="width: 20mm" />
+        <col style="width: 20mm" />
+        <col style="width: 26mm" />
+      </colgroup>
       <thead>
         <tr>
           <th>ШК</th>
