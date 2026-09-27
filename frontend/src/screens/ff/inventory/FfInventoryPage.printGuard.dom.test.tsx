@@ -99,33 +99,39 @@ const tick = () => act(async () => {
   await Promise.resolve()
 })
 
+/** Тот же роутер fetch нужен обоим сценариям (F1 и F2) — вынесен один раз. */
+function stubFetchForOneDocument() {
+  const printSheetRequests: Array<{ resolve: (body: unknown) => void }> = []
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/api/operations/inventory-counts')) {
+      return Promise.resolve(new Response(JSON.stringify([listSummary]), { status: 200 }))
+    }
+    if (url.endsWith('/api/products/categories')) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+    }
+    if (url.endsWith('/api/products/ff-catalog')) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+    }
+    if (url.endsWith(`/api/operations/inventory-counts/${DOC_ID}`)) {
+      return Promise.resolve(new Response(JSON.stringify(docDetail), { status: 200 }))
+    }
+    if (url.endsWith(`/api/operations/inventory-counts/${DOC_ID}/print-sheet`)) {
+      const d = deferred<Response>()
+      printSheetRequests.push({
+        resolve: (body) => d.resolve(new Response(JSON.stringify(body), { status: 200 })),
+      })
+      return d.promise
+    }
+    throw new Error(`неожиданный fetch: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return printSheetRequests
+}
+
 describe('WMS-497 F1: защита от повторной печати держится до фактического print()', () => {
   it('второй клик после ответа API, но до iframe.onload/таймера — один запрос, один print(); после завершения повтор снова доступен', async () => {
-    const printSheetRequests: Array<{ resolve: (body: unknown) => void }> = []
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url.endsWith('/api/operations/inventory-counts')) {
-        return Promise.resolve(new Response(JSON.stringify([listSummary]), { status: 200 }))
-      }
-      if (url.endsWith('/api/products/categories')) {
-        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
-      }
-      if (url.endsWith('/api/products/ff-catalog')) {
-        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
-      }
-      if (url.endsWith(`/api/operations/inventory-counts/${DOC_ID}`)) {
-        return Promise.resolve(new Response(JSON.stringify(docDetail), { status: 200 }))
-      }
-      if (url.endsWith(`/api/operations/inventory-counts/${DOC_ID}/print-sheet`)) {
-        const d = deferred<Response>()
-        printSheetRequests.push({
-          resolve: (body) => d.resolve(new Response(JSON.stringify(body), { status: 200 })),
-        })
-        return d.promise
-      }
-      throw new Error(`неожиданный fetch: ${url}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    const printSheetRequests = stubFetchForOneDocument()
 
     await mount(<FfInventoryPage token="t" sellers={[]} warehouses={[]} />)
     await click(`inv-open-${DOC_ID}`)
@@ -162,5 +168,65 @@ describe('WMS-497 F1: защита от повторной печати держ
     // Печать состоялась — намеренный повторный клик снова доступен и уходит новым запросом.
     await click('inv-print-sheet')
     expect(printSheetRequests).toHaveLength(2)
+  })
+})
+
+// WMS-497, ревью Astra №2 (F2): если загрузка iframe обрывается раньше
+// onload, промис раньше не разрешался никогда — кнопка оставалась
+// заблокированной до перезагрузки страницы. Тот же настоящий компонент,
+// что и в блоке F1 выше, только на этот раз iframe.onload вообще не вызываем.
+describe('WMS-497 F2: обрыв загрузки iframe не блокирует кнопку навсегда', () => {
+  it('onload не наступает → отказ по ограниченному ожиданию → кнопка снова доступна → новый запрос работает; поздний onload старой попытки не печатает', async () => {
+    const printSheetRequests = stubFetchForOneDocument()
+
+    await mount(<FfInventoryPage token="t" sellers={[]} warehouses={[]} />)
+    await click(`inv-open-${DOC_ID}`)
+    await tick()
+    expect($('inv-print-sheet')).toBeTruthy()
+
+    // Поддельные таймеры — уже здесь: printInventorySheet ставит свой
+    // setTimeout ограниченного ожидания загрузки внутри обработчика клика,
+    // и он обязан попасть под подмену с самого начала. Включать её позже
+    // (после клика) бессмысленно — таймер к этому моменту уже поставлен
+    // настоящим setTimeout и продвижением виртуального времени не тронется
+    // (так и было в первой версии этого теста — кнопка оставалась disabled).
+    vi.useFakeTimers()
+    try {
+      await click('inv-print-sheet')
+      expect(printSheetRequests).toHaveLength(1)
+
+      await act(async () => {
+        printSheetRequests[0]!.resolve(printSheetBody)
+      })
+      const iframe = document.body.querySelector('iframe')
+      expect(iframe).toBeTruthy()
+      // Пока попытка «готовится» — кнопка отключена (F1: второй клик не проходит).
+      expect(($('inv-print-sheet') as HTMLButtonElement).disabled).toBe(true)
+
+      // Загрузка не наступает вовсе: ни onload, ни error.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100)
+      })
+
+      // Отказ по ограниченному ожиданию — кнопка снова доступна, iframe убран.
+      expect(($('inv-print-sheet') as HTMLButtonElement).disabled).toBe(false)
+      expect(document.body.contains(iframe)).toBe(false)
+
+      // Новый клик после отказа — новый (второй) запрос уходит по-настоящему.
+      await click('inv-print-sheet')
+      expect(printSheetRequests).toHaveLength(2)
+
+      // Поздний onload СТАРОЙ (первой, уже брошенной) попытки печати не делает.
+      const oldFrameWindow = iframe!.contentWindow as Window | null
+      const printSpy = oldFrameWindow ? vi.spyOn(oldFrameWindow, 'print').mockImplementation(() => {}) : null
+      expect((iframe as unknown as { onload: unknown }).onload).toBeNull()
+      iframe!.dispatchEvent(new Event('load'))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(printSpy ? printSpy.mock.calls.length : 0).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

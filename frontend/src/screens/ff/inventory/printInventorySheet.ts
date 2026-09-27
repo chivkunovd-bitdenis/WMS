@@ -142,6 +142,14 @@ export function buildInventorySheetHtml(sheet: ApiPrintSheet): string {
 }
 
 /**
+ * Сколько ждать загрузки скрытого iframe, прежде чем считать попытку печати
+ * неудавшейся. Содержимое инлайновое (srcdoc, без сетевого запроса) — в любом
+ * настоящем браузере `onload` наступает почти сразу; это только защита от
+ * оборванной загрузки (WMS-497, ревью Astra №2, F2), а не обычный сценарий.
+ */
+const LOAD_TIMEOUT_MS = 5000
+
+/**
  * Печать листа инвентаризации (A4, браузер). На листе нет фото, поэтому
  * ничего не ждём для сборки — но саму печать (`frameWindow.print()`) браузер
  * запускает не сразу: только после загрузки iframe и ещё через 100 мс.
@@ -153,6 +161,15 @@ export function buildInventorySheetHtml(sheet: ApiPrintSheet): string {
  * сразу после синхронного возврата этой функции, то есть до того, как
  * `print()` вообще был вызван, и второе нажатие в этом промежутке уходило
  * вторым запросом на сервер и открывало второе окно печати.
+ *
+ * Единственным путём до F2 был `iframe.onload`: если загрузка обрывалась
+ * (или браузер по какой-то причине не отдавал это событие) раньше него,
+ * Promise не завершался никогда — кнопка оставалась заблокированной до
+ * перезагрузки страницы. `LOAD_TIMEOUT_MS` — ограниченное ожидание с тем же
+ * исходом, что и явный отказ: обработчики снимаются, iframe убирается,
+ * Promise разрешается. Обработчики снимаются именно поэтому — если загрузка
+ * всё же случится позже (сама по себе или после того, как истёк наш лимит),
+ * она не должна напечатать устаревший лист поверх уже новой попытки.
  */
 export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   const html = buildInventorySheetHtml(sheet)
@@ -179,14 +196,35 @@ export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   }
 
   return new Promise<void>((resolve) => {
-    let printed = false
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
+    let loadTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      loadTimeoutId = null
+      // Загрузка не случилась вовремя — печатать нечего. Снимаем обработчики
+      // (поздний onload/error после этого — no-op) и убираем iframe: он не
+      // должен напечатать это старьё поверх следующей попытки оператора.
+      iframe.onload = null
+      iframe.onerror = null
+      cleanup()
+      finish()
+    }, LOAD_TIMEOUT_MS)
+
     const printNow = () => {
-      if (printed) return
-      printed = true
+      // Уже отказали по таймауту (или другим путём) — поздний onload игнорируем.
+      if (settled) return
+      if (loadTimeoutId !== null) {
+        clearTimeout(loadTimeoutId)
+        loadTimeoutId = null
+      }
       const frameWindow = iframe.contentWindow
       if (!frameWindow) {
         cleanup()
-        resolve()
+        finish()
         return
       }
       try {
@@ -207,12 +245,24 @@ export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
           // Попытка печати сделана (открылось окно печати или нет — не
           // важно для гварда): страница может снова принимать нажатие —
           // намеренная повторная печать того же документа не блокируется.
-          resolve()
+          finish()
         }
       }, 100)
     }
 
-    iframe.srcdoc = html
     iframe.onload = printNow
+    // Явный сигнал отказа загрузки (если браузер его пришлёт) — тот же
+    // отказ, что и по таймауту, только раньше него.
+    iframe.onerror = () => {
+      if (loadTimeoutId !== null) {
+        clearTimeout(loadTimeoutId)
+        loadTimeoutId = null
+      }
+      iframe.onload = null
+      iframe.onerror = null
+      cleanup()
+      finish()
+    }
+    iframe.srcdoc = html
   })
 }

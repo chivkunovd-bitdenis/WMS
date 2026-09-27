@@ -74,3 +74,83 @@ describe('printInventorySheet: промис завершается не рань
     await expect(promise).resolves.toBeUndefined()
   })
 })
+
+// WMS-497, ревью Astra №2 (F2): единственным путём завершения промиса был
+// iframe.onload — если загрузка обрывалась раньше него, промис не
+// разрешался никогда, и флаг страницы оставался поднятым до перезагрузки.
+// Сценарий на уровне экрана (кнопка снова доступна, новый запрос уходит) —
+// в FfInventoryPage.printGuard.dom.test.tsx; здесь — сам контракт промиса.
+describe('printInventorySheet: обрыв загрузки iframe не вешает промис навсегда', () => {
+  it('onload не наступает — промис разрешается по ограниченному ожиданию, iframe убирается', async () => {
+    vi.useFakeTimers()
+    try {
+      let settled = false
+      const promise = printInventorySheet(sheet())
+      void promise.then(() => {
+        settled = true
+      })
+
+      const iframe = document.body.querySelector('iframe')
+      expect(iframe).toBeTruthy()
+
+      // Задолго до предела — попытка ещё «готовится», iframe на месте.
+      await vi.advanceTimersByTimeAsync(4000)
+      expect(settled).toBe(false)
+      expect(document.body.contains(iframe)).toBe(true)
+
+      // Предел истёк — попытка брошена.
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(settled).toBe(true)
+      expect(document.body.contains(iframe)).toBe(false)
+      // Обработчик снят — самого React/браузера обращения к нему больше не будет.
+      expect((iframe as unknown as { onload: unknown }).onload).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('поздний onload брошенной попытки не печатает (обработчик уже снят)', async () => {
+    vi.useFakeTimers()
+    try {
+      const promise = printInventorySheet(sheet())
+      const iframe = document.body.querySelector('iframe')!
+      const frameWindow = iframe.contentWindow as Window
+      const printSpy = vi.spyOn(frameWindow, 'print').mockImplementation(() => {})
+
+      // Значение — то же ограничение ожидания, что в printInventorySheet.ts
+      // (не экспортируется: деталь реализации, а не контракт модуля).
+      await vi.advanceTimersByTimeAsync(5000)
+      await promise
+
+      // «Поздний» onload: пробуем вызвать то, что было обработчиком — его уже нет.
+      const stillOnload = (iframe as unknown as { onload: (() => void) | null }).onload
+      expect(stillOnload).toBeNull()
+      // На случай, если бы браузер всё же прислал реальное DOM-событие load —
+      // без зарегистрированного onload-обработчика оно тоже ничего не вызовет.
+      iframe.dispatchEvent(new Event('load'))
+      await vi.advanceTimersByTimeAsync(200)
+      expect(printSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('явный error от iframe тоже освобождает попытку — не только таймаут', async () => {
+    vi.useFakeTimers()
+    try {
+      let settled = false
+      const promise = printInventorySheet(sheet())
+      void promise.then(() => {
+        settled = true
+      })
+      const iframe = document.body.querySelector('iframe')!
+
+      ;(iframe as unknown as { onerror: () => void }).onerror()
+      await Promise.resolve()
+      expect(settled).toBe(true)
+      expect(document.body.contains(iframe)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
