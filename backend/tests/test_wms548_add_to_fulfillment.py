@@ -456,3 +456,121 @@ async def test_add_to_fulfillment_accepts_ozon_ids_field_and_reports_unknown_one
     assert body["added"] == []
     reasons = {s["id"]: s["reason"] for s in body["skipped"]}
     assert reasons == {"123": "not_found", "456": "not_found"}
+
+
+@pytest.mark.asyncio
+async def test_f1_concurrent_different_nm_ids_sharing_a_vendor_code_do_not_steal_identity(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-548 review-astra-1 F1 (blocker).
+
+    Before the fix, the vendor_code_conflict pre-check and
+    upsert_products_from_wb_cards were not one atomic section: two requests
+    for different nmIDs computing the same sku/barcode could both see "no
+    conflict" (neither product existed yet), then upsert's own unique-
+    constraint retry silently handed the product's identity — nmID, barcode,
+    name — to whichever request committed last. Both responses said "added"
+    while only one of the two selected cards actually remained on
+    fulfillment; the other vanished with no error at all.
+
+    _wb_card_identity_claim now serializes the whole
+    "check free -> claim it" section per seller, so the outcome is
+    deterministic regardless of asyncio scheduling: whichever request's
+    section runs first commits cleanly and is genuinely "added"; the other
+    can only start its own check after that commit is visible, so it
+    correctly reports "vendor_code_conflict" instead of a false "added".
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    card_a = _wb_card(8_500_001, f"RACE-{suffix}", "Гонка А", ["4500000000001"])
+    card_b = _wb_card(8_500_002, f"RACE-{suffix}", "Гонка Б", ["4500000000002"])
+    await _seed_snapshot_card(tenant_id, seller_id, card_a)
+    await _seed_snapshot_card(tenant_id, seller_id, card_b)
+
+    async def _add(nm_id: int) -> Any:
+        return await async_client.post(
+            "/seller-catalog/add-to-fulfillment",
+            headers=seller_headers,
+            json={"wb_nm_ids": [nm_id], "ozon_product_ids": []},
+        )
+
+    res_a, res_b = await asyncio.gather(_add(8_500_001), _add(8_500_002))
+    assert res_a.status_code == 200, res_a.text
+    assert res_b.status_code == 200, res_b.text
+
+    outcomes = [res_a.json(), res_b.json()]
+    added_ids = [a["id"] for o in outcomes for a in o["added"]]
+    conflict_ids = [
+        s["id"] for o in outcomes for s in o["skipped"] if s["reason"] == "vendor_code_conflict"
+    ]
+    # Exactly one nmID actually won the race and was added; the other is a
+    # clean, honest rejection — never both "added" (identity theft) and
+    # never both rejected (the winner must still succeed).
+    assert len(added_ids) == 1, outcomes
+    assert len(conflict_ids) == 1, outcomes
+    assert {added_ids[0], conflict_ids[0]} == {"8500001", "8500002"}
+
+    async with SessionLocal() as session:
+        products = (
+            (
+                await session.execute(
+                    select(Product).where(
+                        Product.tenant_id == uuid.UUID(tenant_id),
+                        Product.seller_id == uuid.UUID(seller_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(products) == 1
+    assert str(products[0].wb_nm_id) == added_ids[0]
+
+
+@pytest.mark.asyncio
+async def test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WMS-548 review-astra-1 F3 (существенное).
+
+    Snapshot rows for the whole batch were loaded as ORM objects up front.
+    After one card's upsert failed and its exception handler called
+    session.rollback(), SQLAlchemy marked every object tracked by that
+    session — including the *next* card's already-loaded snapshot row — as
+    needing a fresh read. Reading that next card's card.vendor_code/
+    raw_json (even though done "before the try", per the earlier, narrower
+    fix) triggered an implicit lazy reload that AsyncSession does not
+    support outside an explicit await, and the whole request died with
+    MissingGreenlet instead of skipping just the one bad card.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    failing_card = _wb_card(8_700_001, f"FAIL-{suffix}", "Падает", ["4700000000001"])
+    ok_card = _wb_card(8_700_002, f"OK-{suffix}", "Работает", ["4700000000002"])
+    await _seed_snapshot_card(tenant_id, seller_id, failing_card)
+    await _seed_snapshot_card(tenant_id, seller_id, ok_card)
+
+    import app.services.seller_fulfillment_catalog_service as catalog_svc
+    from app.services.wildberries_product_import_service import (
+        upsert_products_from_wb_cards as original_upsert,
+    )
+
+    async def flaky_upsert(session: Any, tenant_id_arg: Any, seller_id_arg: Any, cards: Any) -> Any:
+        if cards[0].get("nmID") == 8_700_001:
+            raise RuntimeError("WMS-548 F3 simulated failure")
+        return await original_upsert(session, tenant_id_arg, seller_id_arg, cards)
+
+    monkeypatch.setattr(catalog_svc, "upsert_products_from_wb_cards", flaky_upsert)
+
+    res = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [8_700_001, 8_700_002], "ozon_product_ids": []},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert {s["id"]: s["reason"] for s in body["skipped"]} == {"8700001": "internal_error"}
+    assert {a["id"] for a in body["added"]} == {"8700002"}
+    assert await _product_count(tenant_id, seller_id, 8_700_002) == 1

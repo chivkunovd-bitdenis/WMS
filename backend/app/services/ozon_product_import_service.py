@@ -368,17 +368,6 @@ async def fetch_product_cards(
     return cards
 
 
-def _link_matches(link: ProductMarketplaceLink, card: Mapping[str, Any]) -> bool:
-    sku = _text_or_none(card.get("sku"))
-    offer_id = _text_or_none(card.get("offer_id"))
-    product_id = _text_or_none(card.get("id"))
-    return bool(
-        (sku is not None and link.external_sku == sku)
-        or (offer_id is not None and link.external_offer_id == offer_id)
-        or (product_id is not None and link.external_product_id == product_id)
-    )
-
-
 def card_product_name(card: Mapping[str, Any]) -> str:
     """Название заводимого товара. Пустым оно быть не может, поле обязательное."""
     for key in ("name", "offer_id", "sku", "id"):
@@ -547,11 +536,69 @@ class OzonMatchContext(NamedTuple):
     Rebuilding this per card would mean re-reading every product of the seller
     for each of up to 500 cards in one "add to fulfillment" request — the same
     class of cost WMS-538 paid for an unbatched full-catalog read.
+
+    Existing links are indexed by identity, not scanned linearly per card
+    (WMS-548 F5): processing N cards against M existing links costs
+    O(N + M), not O(N * M) — a seller with many prior links must not make
+    every single-card add slower.
     """
 
-    links: list[ProductMarketplaceLink]
     taken_product_ids: set[uuid.UUID]
     match_index: ProductMatchIndex
+    links_by_product_id: dict[str, ProductMarketplaceLink]
+    links_by_sku: dict[str, ProductMarketplaceLink]
+    links_by_offer: dict[str, ProductMarketplaceLink]
+
+
+def _index_ozon_link(context: OzonMatchContext, link: ProductMarketplaceLink) -> None:
+    """Place (or replace) ``link`` in the context's lookup by its current identity.
+
+    Once a link carries its own ``external_product_id``, only that field is
+    ever used to find it again (see ``_find_ozon_link``), and any stale
+    ``sku``/``offer_id`` entries pointing at it are dropped here — a live
+    cabinet can carry two genuinely different cards sharing the same
+    ``offer_id`` (schema allows it) or, more rarely, ``sku``; without this,
+    a *different* card sharing that offer_id/sku could still find and steal
+    an already-identified link through the fallback path (WMS-548 F2). A
+    link with no ``external_product_id`` yet (never synced, or a legacy row
+    from before this field was filled) stays matchable by the softer fields
+    so a first sync can find and complete it — there is no settled identity
+    yet to steal.
+    """
+    if link.external_product_id:
+        context.links_by_product_id[link.external_product_id] = link
+        for mapping, value in (
+            (context.links_by_sku, link.external_sku),
+            (context.links_by_offer, link.external_offer_id),
+        ):
+            if value is not None and mapping.get(value) is link:
+                del mapping[value]
+        return
+    if link.external_sku:
+        context.links_by_sku[link.external_sku] = link
+    if link.external_offer_id:
+        context.links_by_offer[link.external_offer_id] = link
+
+
+def _find_ozon_link(
+    context: OzonMatchContext, card: Mapping[str, Any]
+) -> ProductMarketplaceLink | None:
+    product_id = _text_or_none(card.get("id"))
+    if product_id is not None:
+        link = context.links_by_product_id.get(product_id)
+        if link is not None:
+            return link
+    sku = _text_or_none(card.get("sku"))
+    if sku is not None:
+        link = context.links_by_sku.get(sku)
+        if link is not None:
+            return link
+    offer_id = _text_or_none(card.get("offer_id"))
+    if offer_id is not None:
+        link = context.links_by_offer.get(offer_id)
+        if link is not None:
+            return link
+    return None
 
 
 async def build_ozon_match_context(
@@ -578,7 +625,16 @@ async def build_ozon_match_context(
     # склада не бывает двумя карточками сразу.
     taken_product_ids = {link.product_id for link in links}
     index = build_match_index(await _candidate_products(session, tenant_id, seller_id))
-    return OzonMatchContext(links=links, taken_product_ids=taken_product_ids, match_index=index)
+    context = OzonMatchContext(
+        taken_product_ids=taken_product_ids,
+        match_index=index,
+        links_by_product_id={},
+        links_by_sku={},
+        links_by_offer={},
+    )
+    for link in links:
+        _index_ozon_link(context, link)
+    return context
 
 
 async def process_one_ozon_card(
@@ -601,26 +657,30 @@ async def process_one_ozon_card(
     product``) are untouched — this only decides whether an unmatched card's
     already-existing "create a new product" branch may run at all.
     """
-    links, taken_product_ids, match_index = context
-    link = next((item for item in links if _link_matches(item, card)), None)
+    link = _find_ozon_link(context, card)
     if link is None:
         if not allow_create:
-            match = match_card_to_product(card, match_index, taken_product_ids)
+            match = match_card_to_product(card, context.match_index, context.taken_product_ids)
             if match.product_id is None:
                 offer_id = _text_or_none(card.get("offer_id"))
                 if offer_id is not None:
                     result.unmatched_offer_ids.append(offer_id)
                 return None
         link = await _link_card_to_product(
-            session, tenant_id, seller_id, card, match_index, taken_product_ids, result
+            session,
+            tenant_id,
+            seller_id,
+            card,
+            context.match_index,
+            context.taken_product_ids,
+            result,
         )
         if link is None:
             offer_id = _text_or_none(card.get("offer_id"))
             if offer_id is not None:
                 result.unmatched_offer_ids.append(offer_id)
             return None
-        links.append(link)
-        taken_product_ids.add(link.product_id)
+        context.taken_product_ids.add(link.product_id)
     else:
         result.links_matched += 1
 
@@ -648,6 +708,10 @@ async def process_one_ozon_card(
             # JSON-колонка не отслеживает правку по месту: присваиваем целиком.
             link.provider_data = provider_data
             result.images_applied += 1
+    # Идентичность могла обновиться выше (external_product_id/sku/offer_id) —
+    # переиндексируем, чтобы следующая карточка этой же порции видела её
+    # правильно и не могла перехватить через мягкое совпадение (WMS-548 F2/F5).
+    _index_ozon_link(context, link)
 
     product = await session.get(Product, link.product_id)
     if product is None:

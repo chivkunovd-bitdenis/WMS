@@ -347,3 +347,234 @@ async def test_r13_adding_wb_card_auto_links_a_preexisting_ozon_twin(
         params={"marketplace": "ozon", "on_fulfillment": "no"},
     )
     assert page.json()["total"] == 0  # the twin no longer sits unmatched
+
+
+@pytest.mark.asyncio
+async def test_f2_ozon_cards_sharing_an_offer_id_do_not_steal_each_others_link(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-548 review-astra-1 F2 (blocker).
+
+    ``_link_matches`` used to treat "any of offer_id/sku/id matches" as
+    "this is the same card, safe to refresh in place". A live Ozon cabinet
+    can carry two genuinely different listings sharing the same offer_id
+    (the schema does not forbid it). Adding the first card created its link
+    correctly; adding the second one then found *that* link via the shared
+    offer_id and silently moved it onto the second card's own
+    external_product_id — the first card's claim vanished from the
+    fulfillment catalog with no error at all (reviewer's exact reproduction:
+    "В БД остаётся одна привязка (external_product_id=802,
+    external_sku=1801, ...)" — a hybrid identity belonging to neither card).
+
+    Both cards computing the same sku_code from that shared offer_id
+    (``card_product_sku_code`` — untouched, out of F2's scope) means the
+    second card genuinely cannot become a *second* product here; the fixed,
+    honest outcome is that it is reported ``not_added`` instead of silently
+    stealing the first card's link. What F2 actually guards is the first
+    card: it must come out of this completely untouched, not go missing.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    card_first = _ozon_card("9600801", "SAME-OFFER", "5600801", "Карточка 801")
+    card_second = _ozon_card("9600802", "SAME-OFFER", "5600802", "Карточка 802")
+    await _seed_ozon_card(tenant_id, seller_id, card_first)
+    await _seed_ozon_card(tenant_id, seller_id, card_second)
+
+    add_first = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [], "ozon_product_ids": ["9600801"]},
+    )
+    assert add_first.status_code == 200, add_first.text
+    assert add_first.json()["added"][0]["products_added"] == 1
+    link_before = await _ozon_link_for(tenant_id, seller_id, "9600801")
+    assert link_before is not None
+    product_id_before = link_before.product_id
+
+    add_second = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [], "ozon_product_ids": ["9600802"]},
+    )
+    assert add_second.status_code == 200, add_second.text
+    # The second card is honestly rejected (sku collision on the shared
+    # offer_id) — it must never silently take over the first card's link.
+    assert add_second.json()["added"] == []
+    assert add_second.json()["skipped"] == [
+        {
+            "marketplace": "ozon",
+            "id": "9600802",
+            "vendor_code": "SAME-OFFER",
+            "reason": "not_added",
+        }
+    ]
+
+    # The first card's claim is completely intact: same product, same
+    # external_product_id — nothing about it changed underneath it.
+    assert await _product_count(tenant_id, seller_id) == 1
+    link_after = await _ozon_link_for(tenant_id, seller_id, "9600801")
+    assert link_after is not None
+    assert link_after.product_id == product_id_before
+    assert link_after.external_product_id == "9600801"
+    assert link_after.external_sku == "5600801"
+
+    page = await async_client.get(
+        "/seller-catalog/page",
+        headers=seller_headers,
+        params={"marketplace": "ozon", "on_fulfillment": "no"},
+    )
+    # "9600801" (successfully linked) did not reappear as unmatched; the
+    # rejected "9600802" is still there, still pickable by the seller later.
+    not_on_ff_ids = {item["ozon_product_id"] for item in page.json()["items"]}
+    assert not_on_ff_ids == {"9600802"}
+
+
+@pytest.mark.asyncio
+async def test_f3_one_failing_ozon_card_does_not_crash_the_rest_of_the_batch(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WMS-548 review-astra-1 F3 (существенное), ветка Ozon.
+
+    The shared match context's indexed links are ORM objects too: after one
+    card's processing fails and rolls back, those cached links are expired
+    the same way the WB snapshot rows were. The next card's lookup used to
+    read the stale context and crash the whole request instead of just
+    skipping the one bad card — the context must be rebuilt after a rollback.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    failing_card = _ozon_card("9650001", "FAIL-OFFER", "5650001", "Падает")
+    ok_card = _ozon_card("9650002", "OK-OFFER", "5650002", "Работает")
+    await _seed_ozon_card(tenant_id, seller_id, failing_card)
+    await _seed_ozon_card(tenant_id, seller_id, ok_card)
+
+    import app.services.seller_fulfillment_catalog_service as catalog_svc
+    from app.services.ozon_product_import_service import (
+        process_one_ozon_card as original_process,
+    )
+
+    async def flaky_process(
+        session: Any, tenant_id_arg: Any, seller_id_arg: Any, raw: Any, *args: Any, **kwargs: Any
+    ) -> Any:
+        if raw.get("id") == "9650001":
+            raise RuntimeError("WMS-548 F3 simulated Ozon failure")
+        return await original_process(session, tenant_id_arg, seller_id_arg, raw, *args, **kwargs)
+
+    monkeypatch.setattr(catalog_svc, "process_one_ozon_card", flaky_process)
+
+    res = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [], "ozon_product_ids": ["9650001", "9650002"]},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert {s["id"]: s["reason"] for s in body["skipped"]} == {"9650001": "internal_error"}
+    assert {a["id"] for a in body["added"]} == {"9650002"}
+
+
+@pytest.mark.asyncio
+async def test_f5_wb_twin_backfill_reads_only_matching_ozon_candidates(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WMS-548 review-astra-1 F5 (существенное).
+
+    Adding one WB card used to read every not-yet-linked Ozon snapshot card
+    of the seller (full raw_json, all of them) looking for a twin. A seller
+    with many Ozon cards paid for scanning all of them on every single WB
+    card added, however unrelated. The backfill must look only at Ozon
+    cards whose own offer_id/sku/barcode could actually match the
+    just-added WB product.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    for i in range(200):
+        await _seed_ozon_card(
+            tenant_id,
+            seller_id,
+            _ozon_card(f"97{i:06d}", f"UNRELATED-{suffix}-{i}", f"58{i:06d}", f"Товар {i}"),
+        )
+    twin = _ozon_card("9700999", "OZTWIN-F5", "5700999", "Твин", barcodes=["4800000000999"])
+    await _seed_ozon_card(tenant_id, seller_id, twin)
+
+    wb_card = _wb_card(8_800_001, f"TWIN-F5-{suffix}", "Твин WB", "4800000000999")
+    await _seed_wb_card(tenant_id, seller_id, wb_card)
+
+    import app.services.seller_fulfillment_catalog_service as catalog_svc
+    from app.services.ozon_product_import_service import (
+        process_one_ozon_card as original_process,
+    )
+
+    seen_ids: list[str] = []
+
+    async def counting_process(
+        session: Any, tenant_id_arg: Any, seller_id_arg: Any, raw: Any, *args: Any, **kwargs: Any
+    ) -> Any:
+        seen_ids.append(raw.get("id"))
+        return await original_process(
+            session, tenant_id_arg, seller_id_arg, raw, *args, **kwargs
+        )
+
+    monkeypatch.setattr(catalog_svc, "process_one_ozon_card", counting_process)
+
+    res = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [8_800_001], "ozon_product_ids": []},
+    )
+    assert res.status_code == 200, res.text
+
+    # Only the one real candidate was ever looked at — not all 201 cards.
+    assert seen_ids == ["9700999"]
+
+    link = await _ozon_link_for(tenant_id, seller_id, "9700999")
+    assert link is not None
+
+
+@pytest.mark.asyncio
+async def test_f6_added_ozon_product_is_still_findable_by_its_own_barcode(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-548 review-astra-1 F6 (существенное).
+
+    Before selection, the snapshot's raw_json carries the card's barcode and
+    search finds it there. After the card becomes a product, search switched
+    to the product/link fields — external_sku and external_offer_id — but
+    never checked external_barcodes, so the very same product stopped being
+    findable by its own barcode right after being added.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    card = _ozon_card(
+        "9600900", "SEARCH-OFFER", "5600900", "Поиск", barcodes=["SPECIAL-BAR-900"]
+    )
+    await _seed_ozon_card(tenant_id, seller_id, card)
+
+    before = await async_client.get(
+        "/seller-catalog/page",
+        headers=seller_headers,
+        params={"search": "SPECIAL-BAR-900"},
+    )
+    assert before.status_code == 200, before.text
+    assert before.json()["total"] == 1
+    assert before.json()["items"][0]["on_fulfillment"] is False
+
+    add = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [], "ozon_product_ids": ["9600900"]},
+    )
+    assert add.status_code == 200, add.text
+
+    after = await async_client.get(
+        "/seller-catalog/page",
+        headers=seller_headers,
+        params={"search": "SPECIAL-BAR-900"},
+    )
+    assert after.status_code == 200, after.text
+    assert after.json()["total"] == 1
+    assert after.json()["items"][0]["on_fulfillment"] is True

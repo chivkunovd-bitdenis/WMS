@@ -117,20 +117,25 @@ describe('cardMarketplaceId', () => {
 })
 
 describe('itemMarketplaces', () => {
+  // R7: строка товара на ФФ — «как сейчас», один в один с etalon. Etalon
+  // показывал чип только когда у товара есть Ozon-привязка (ozon_sku/
+  // ozon_offer_id) и никогда не показывал чип для WB — этот экран строки
+  // на ФФ не меняет, включая объединённую (R13) карточку.
   it('shows only Ozon on a product created purely from Ozon import (no WB nmID)', () => {
     expect(
       itemMarketplaces(product({ wb_nm_id: null, ozon_sku: 'oz-1', ozon_offer_id: null })),
     ).toEqual(['ozon'])
   })
 
-  it('shows both marketplaces for a merged card (WMS-548 R13)', () => {
-    expect(itemMarketplaces(product({ wb_nm_id: 10, ozon_sku: 'oz-1' }))).toEqual(['wb', 'ozon'])
+  it('shows only the Ozon chip for a merged card (WMS-548 R13) — WB stays without a chip, as in etalon', () => {
+    expect(itemMarketplaces(product({ wb_nm_id: 10, ozon_sku: 'oz-1' }))).toEqual(['ozon'])
   })
 
-  it('shows nothing extra for a WB-only product (existing convention: WB has no chip)', () => {
-    expect(itemMarketplaces(product({ wb_nm_id: 10, ozon_sku: null, ozon_offer_id: null }))).toEqual(['wb'])
+  it('shows no chip at all for a WB-only product (etalon convention unchanged)', () => {
+    expect(itemMarketplaces(product({ wb_nm_id: 10, ozon_sku: null, ozon_offer_id: null }))).toEqual([])
   })
 
+  // R7: карточка не на ФФ — новая строка, значок площадки обязателен для неё.
   it('marks a not-on-fulfillment WB card as wb', () => {
     expect(itemMarketplaces(wbCard())).toEqual(['wb'])
   })
