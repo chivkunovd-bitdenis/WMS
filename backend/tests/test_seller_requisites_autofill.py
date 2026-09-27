@@ -304,6 +304,12 @@ _EXPECTED_MOCK_CARDS_SAVE_RESPONSE: dict[str, Any] = {
     "products_created": 0,
     "products_updated": 0,
     "products_skipped": 0,
+    # WMS-535: диагностика хранения всех ШК размера WB — на этом мок-снимке
+    # конфликтов и пропусков нет, все счётчики нулевые.
+    "sizes_missing_chrt_id": 0,
+    "duplicate_chrt_id": 0,
+    "barcode_conflicts": 0,
+    "barcode_conflict_details": [],
 }
 
 
