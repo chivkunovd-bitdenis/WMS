@@ -1506,6 +1506,7 @@ async def list_product_movements(
     search: str | None = None,
     page: int = 1,
     limit: int = MOVEMENT_PAGE_LIMIT,
+    before: datetime | None = None,
 ) -> tuple[list[dict[str, object]], bool, int]:
     """Движения за период — то, что видно при раскрытии строки отчёта.
 
@@ -1525,6 +1526,16 @@ async def list_product_movements(
     товара, и это та же функция, что строит отчёт «Остатки и движения» —
     историчность остатка не считается вторым независимым способом
     (AGENTS.md §3, решение 9 в docs/requirements/WMS-490.md).
+
+    WMS-490 ревью Astra №1, F5: `before` — верхняя граница `created_at`,
+    зафиксированная вызывающей стороной на первой странице. Без неё OFFSET
+    считается от текущего общего числа строк — приёмка или инвентаризация
+    между запросом первой и второй страницы сдвигает выборку: последняя
+    строка первой страницы приходит снова, а новая строка, оказавшаяся
+    впереди сортировки, вообще не загружается. `before` не трогает сам
+    отчёт `GET /inventory/movements` — тот всегда вызывается с готовым
+    периодом и этот параметр не передаёт; используется только новой
+    ручкой карточки товара (`api/reports.py: get_product_movement_history`).
     """
     del warehouse_id
     if product_id is None and operation is None:
@@ -1544,6 +1555,8 @@ async def list_product_movements(
         assert date_to is not None
         filters.append(InventoryMovement.created_at >= date_from)
         filters.append(InventoryMovement.created_at < date_to)
+    if before is not None:
+        filters.append(InventoryMovement.created_at <= before)
     if product_id is not None:
         filters.append(InventoryMovement.product_id == product_id)
     if seller_id is not None or search:

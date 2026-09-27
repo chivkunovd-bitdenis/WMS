@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import urllib.parse
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -118,6 +118,7 @@ async def get_product_movement_history(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     product_id: Annotated[uuid.UUID, Query()],
     page: Annotated[int, Query(ge=1)] = 1,
+    before: Annotated[datetime | None, Query()] = None,
 ) -> dict[str, object]:
     """WMS-490 D2: все движения одного товара за всю историю — источник
     вкладки «Движения» карточки товара. Строки строит и обогащает та же
@@ -127,8 +128,18 @@ async def get_product_movement_history(
     считаться в одном месте (AGENTS.md §3). Права и границы клиента —
     ровно как у отчёта: `assert_inventory_read_access` и
     `seller_line_product_scope` для кабинета селлера.
+
+    WMS-490 ревью Astra №1, F5: без периода OFFSET-страницы неустойчивы к
+    новым движениям, попавшим в базу между запросами (приёмка или
+    инвентаризация сдвигает счёт, и последняя строка первой страницы
+    приходит на второй ещё раз, а действительно новая строка теряется).
+    `before` фиксирует верхнюю границу набора: первый запрос страницы её не
+    присылает и получает снимок «сейчас» в ответе (`before`), следующие
+    страницы обязаны прислать то же значение назад. Отчёт `GET
+    /inventory/movements` этот параметр не получает и не меняется.
     """
     await assert_inventory_read_access(session, user)
+    snapshot = before or datetime.now(UTC)
     try:
         rows, truncated, total = await list_product_movements(
             session,
@@ -136,6 +147,7 @@ async def get_product_movement_history(
             product_id=product_id,
             seller_id=seller_scope,
             page=page,
+            before=snapshot,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -144,6 +156,7 @@ async def get_product_movement_history(
     return {
         "rows": rows, "truncated": truncated, "total": total,
         "page": page, "limit": MOVEMENT_PAGE_LIMIT,
+        "before": snapshot.isoformat(),
     }
 
 

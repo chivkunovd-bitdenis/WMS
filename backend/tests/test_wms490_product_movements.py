@@ -222,6 +222,94 @@ async def test_full_history_pagination_has_no_duplicates_or_gaps(
 
 
 @pytest.mark.asyncio
+async def test_full_history_pagination_is_stable_when_a_movement_lands_between_pages(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-490 ревью Astra №1, F5: приёмка или инвентаризация между запросом
+    первой и второй страницы не должна ни задваивать последнюю строку первой
+    страницы, ни терять новую. Первая страница отдаёт снимок `before`; вторая
+    страница обязана прислать его назад — тогда набор для догрузки остаётся
+    тем же, каким был на момент первой страницы, а новое движение появится
+    только при перечитывании с начала (F1 делает это по `stockVersion`)."""
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _context(async_client)
+    total_count = 201
+    async with SessionLocal() as session:
+        product_id = uuid.uuid4()
+        session.add(Product(
+            id=product_id, tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
+            name="Товар с гонкой", sku_code=f"PMH-RACE-{uuid.uuid4().hex[:6]}",
+        ))
+        movement_ids: list[uuid.UUID] = []
+        for index in range(total_count):
+            movement_id = uuid.uuid4()
+            movement_ids.append(movement_id)
+            session.add(InventoryMovement(
+                id=movement_id, tenant_id=tenant_id, product_id=product_id,
+                seller_id=uuid.UUID(seller_id), warehouse_id=uuid.UUID(warehouse_id),
+                storage_location_id=uuid.UUID(location_id), quantity_delta=1,
+                movement_type="inbound_intake",
+                created_at=datetime(2020, 1, 1, tzinfo=UTC) + timedelta(minutes=index),
+            ))
+        await session.commit()
+
+    first = await async_client.get(
+        "/reports/inventory/product-movements", headers=headers,
+        params={"product_id": str(product_id), "page": 1},
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert len(first_body["rows"]) == MOVEMENT_PAGE_LIMIT
+    assert first_body["truncated"] is True
+    assert first_body["total"] == total_count
+    snapshot_before = first_body["before"]
+    assert snapshot_before
+    first_ids = {row["id"] for row in first_body["rows"]}
+
+    # Ровно то, из-за чего сдвигался OFFSET: новое движение появляется между
+    # запросом первой и второй страницы, отсортируется первым (самое новое).
+    new_movement_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(InventoryMovement(
+            id=new_movement_id, tenant_id=tenant_id, product_id=product_id,
+            seller_id=uuid.UUID(seller_id), warehouse_id=uuid.UUID(warehouse_id),
+            storage_location_id=uuid.UUID(location_id), quantity_delta=1,
+            movement_type="inbound_intake", created_at=datetime.now(UTC),
+        ))
+        await session.commit()
+
+    second = await async_client.get(
+        "/reports/inventory/product-movements", headers=headers,
+        params={"product_id": str(product_id), "page": 2, "before": snapshot_before},
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    # Набор второй страницы зафиксирован снимком первой: ровно одна
+    # оставшаяся старая строка, без повтора последней строки первой страницы
+    # и без вновь появившегося движения (оно новее снимка).
+    assert second_body["total"] == total_count
+    assert second_body["truncated"] is False
+    second_ids = {row["id"] for row in second_body["rows"]}
+    assert len(second_ids) == 1
+    assert not (second_ids & first_ids), "последняя строка первой страницы повторилась"
+    assert str(new_movement_id) not in second_ids
+
+    combined_ids = first_ids | second_ids
+    assert combined_ids == {str(mid) for mid in movement_ids}
+    assert str(new_movement_id) not in combined_ids
+
+    # F1: перечитывание с первой страницы (новый снимок, без `before`) видит
+    # новое движение — оно должно быть первой строкой (самое новое).
+    refreshed = await async_client.get(
+        "/reports/inventory/product-movements", headers=headers,
+        params={"product_id": str(product_id), "page": 1},
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    refreshed_body = refreshed.json()
+    assert refreshed_body["total"] == total_count + 1
+    assert refreshed_body["rows"][0]["id"] == str(new_movement_id)
+
+
+@pytest.mark.asyncio
 async def test_full_history_quantity_sum_matches_accumulated_stock(
     async_client: AsyncClient,
 ) -> None:
