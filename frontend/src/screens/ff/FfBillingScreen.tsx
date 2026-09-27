@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material'
 import {
   DataTable,
@@ -21,6 +22,7 @@ import { FfBillingSellerDetails, type SellerReportDetails } from './FfBillingSel
 import { FfBillingProfilesDialog } from './FfBillingProfilesDialog'
 import { FbsSupplyHistoryDialog } from '../v2/FbsSupplyHistoryDialog'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
+import { resolveInitialSellerFilter } from '../../utils/urlSellerFilter'
 
 type Seller = { id: string; name: string }
 type Props = { sellers?: Seller[]; token: string; onOpenInbound: (id: string) => void }
@@ -216,6 +218,15 @@ export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; pe
 
 export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [tab, setTab] = useState<BillingTab>('charges')
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sellerIdAutoAppliedRef = useRef<string | null>(null)
+  // WMS-491 (правка F2 после ревью): следующая смена location.key — наша же
+  // чистка ?seller_id= (см. ниже), а не новый вход из меню — эффект сброса
+  // должен её пропустить.
+  const sellerFilterOwnCleanupRef = useRef(false)
+  // Текущее значение sellerId пришло из адреса и ещё не тронуто вручную.
+  const sellerFilterFromUrlRef = useRef(false)
   const [sellerId, setSellerId] = useState('all')
   const search = ''
   const [loading, setLoading] = useState(true)
@@ -253,6 +264,52 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     setDetailsLoading(false)
     setDetailsError(false)
   }
+
+  // Ссылка ?seller_id=<id> ведёт сюда из карточки селлера (кнопка «Выставить
+  // счёт», WMS-491 D1): выставляет фильтр «Селлер» на этого селлера. Список
+  // sellers при прямом открытии адреса может прийти позже — ждём его загрузки,
+  // чтобы не потерять параметр раньше времени. Параметр убирается из адреса
+  // сразу после применения: обновление страницы после ручной смены фильтра не
+  // должно возвращать прежнего селлера.
+  useEffect(() => {
+    const sellerIdParam = searchParams.get('seller_id')
+    if (!sellerIdParam || sellers.length === 0) return
+    if (sellerIdAutoAppliedRef.current === sellerIdParam) return
+    sellerIdAutoAppliedRef.current = sellerIdParam
+    const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
+    if (resolved) {
+      setSellerId(resolved)
+      sellerFilterFromUrlRef.current = true
+    }
+    sellerFilterOwnCleanupRef.current = true
+    const next = new URLSearchParams(searchParams)
+    next.delete('seller_id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, sellers, setSearchParams])
+
+  // Правка F2 (ревью Astra): переход по адресу с ?seller_id= меняет только
+  // search — react-router не размонтирует экран при повторном клике по тому
+  // же пункту меню («Расчёты»), поэтому локальный фильтр из эффекта выше сам
+  // по себе не сбросится (R9/C9). location.key меняется при КАЖДОЙ навигации,
+  // в отличие от searchParams (переход на тот же пустой адрес его ссылку не
+  // меняет — react-router мемоизирует по строке location.search) — этим и
+  // ловим повторный вход из меню. Собственную чистку параметра эффектом выше
+  // пропускаем через sellerFilterOwnCleanupRef; если фильтр выставлен вручную
+  // (sellerFilterFromUrlRef уже false), эффект его не трогает.
+  useEffect(() => {
+    if (searchParams.get('seller_id')) return
+    if (sellerFilterOwnCleanupRef.current) {
+      sellerFilterOwnCleanupRef.current = false
+      return
+    }
+    if (sellerFilterFromUrlRef.current) {
+      sellerFilterFromUrlRef.current = false
+      setSellerId('all')
+    }
+    // Реагируем только на новую навигацию (location.key), не на любую смену
+    // searchParams/sellers — иначе ручной выбор фильтра можно случайно сбить.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
 
   useEffect(() => {
     if (tab !== 'charges') return
@@ -345,7 +402,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     </Tabs>
     {tab === 'charges' ? <FilterBar testId="billing-filter-bar">
       <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack></>
-      <SelectInput label="Селлер" value={sellerId} onChange={(value) => { clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
+      <SelectInput label="Селлер" value={sellerId} onChange={(value) => { sellerFilterFromUrlRef.current = false; clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
     </FilterBar> : null}
     {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'inbound', label: 'Принято', value: report.totals.inbound_items ?? 0 }, { key: 'packing', label: 'Упаковано', value: report.totals.packing_items ?? 0 }, { key: 'outbound', label: 'Отгружено ФБО', value: report.totals.outbound_items ?? 0 }, { key: 'fbs', label: 'Отгружено FBS', value: report.totals.fbs_items ?? 0 }, { key: 'storage', label: 'Хранение', value: storageLiterDays, unit: 'л·дн', nullValueLabel: 'Считается' }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup><FfBillingProfilesDialog token={token} sellers={sellers} />{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} includeStorage={storageSelected && Boolean(reportDetails?.storage_row)} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} onOpenFbsOrder={setHistorySupplyId} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
     <FbsSupplyHistoryDialog token={token} supplyId={historySupplyId} open={Boolean(historySupplyId)} onClose={() => setHistorySupplyId(null)} />
