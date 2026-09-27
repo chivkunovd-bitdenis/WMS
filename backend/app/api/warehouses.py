@@ -567,11 +567,11 @@ async def post_warehouse(
             code=body.code,
         )
     except CatalogError as exc:
-        if exc.code != "warehouse_code_taken":
+        if exc.code not in {"warehouse_code_taken", "warehouse_code_reserved"}:
             raise
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="warehouse_code_taken",
+            detail=exc.code,
         ) from None
     return WarehouseOut(
         id=str(w.id), name=w.name, code=w.code, barcode=w.barcode, is_operational=w.is_operational

@@ -78,7 +78,9 @@ SKIP = _SkipSentinel()
 async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[Warehouse]:
     stmt = (
         select(Warehouse)
-        .where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True))
+        .where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True),
+               func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+               ~func.lower(Warehouse.code).startswith("fbs-wb-"))
         .order_by(Warehouse.name)
     )
     res = await session.execute(stmt)
@@ -88,6 +90,8 @@ async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[W
 async def create_warehouse(
     session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str, commit: bool = True
 ) -> Warehouse:
+    if code.strip().lower() == "fbs-wb" or code.strip().lower().startswith("fbs-wb-"):
+        raise CatalogError("warehouse_code_reserved")
     wh = Warehouse(
         tenant_id=tenant_id,
         name=name.strip(),
@@ -121,6 +125,8 @@ async def resolve_warehouse_scan(
                 select(Warehouse).where(
                     Warehouse.tenant_id == tenant_id,
                     Warehouse.is_operational.is_(True),
+                    func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+                    ~func.lower(Warehouse.code).startswith("fbs-wb-"),
                     (func.lower(Warehouse.code) == value.lower()) | (Warehouse.barcode == value),
                 )
             )
@@ -148,10 +154,16 @@ async def resolve_warehouse_scan(
 
 
 async def get_warehouse(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID,
+    *, include_non_operational: bool = False,
 ) -> Warehouse | None:
     wh = await session.get(Warehouse, warehouse_id)
-    if wh is None or wh.tenant_id != tenant_id:
+    if wh is None or wh.tenant_id != tenant_id or (
+        not include_non_operational and (
+            not wh.is_operational or wh.code.lower() in {"fbs-wb", "__defect__"}
+            or wh.code.lower().startswith("fbs-wb-")
+        )
+    ):
         return None
     return wh
 
@@ -1518,16 +1530,16 @@ async def apply_products_fbs_stock_limit_from_balance(
             updated=updated, skipped=skipped, reset_products_count=0
         )
 
-    warehouses_stmt = select(Warehouse.id).where(Warehouse.tenant_id == tenant_id)
-    warehouse_ids = [wid for (wid,) in (await session.execute(warehouses_stmt)).all()]
-
-    available_by_product: dict[uuid.UUID, int] = dict.fromkeys(found_ids, 0)
-    for warehouse_id in warehouse_ids:
-        per_warehouse = await fbs_stock_availability_service.fbs_available_qty_by_product(
-            session, tenant_id, warehouse_id, found_ids
-        )
-        for pid, qty in per_warehouse.items():
-            available_by_product[pid] = available_by_product.get(pid, 0) + qty
+    # WMS-530: Доступно организации — один расчёт (R1-R3). Раньше здесь суммировался
+    # «свободный» каждого склада по отдельности, и общее ручное направление
+    # (не привязанное к складу) вычиталось из каждого слагаемого повторно —
+    # тем больше складов, тем сильнее заниженный итог.
+    totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
+        session, tenant_id, found_ids
+    )
+    available_by_product: dict[uuid.UUID, int] = {
+        pid: totals[pid].available_for_checks if pid in totals else 0 for pid in found_ids
+    }
 
     async with _legacy_wb_publication_update(
         session, [products_by_id[pid] for pid in found_ids], enabled=True,

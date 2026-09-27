@@ -40,8 +40,6 @@ from app.models.fbs_stock_sync_item import (
     FbsStockSyncItem,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
-from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
-from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
@@ -358,27 +356,21 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     async_client: AsyncClient,
     emulator_stack: httpx.AsyncClient,
 ) -> None:
-    """Publish one free unit → purchase → intake reserves it; other FBO stock is ignored.
+    """Publish one free unit → purchase → intake reserves it; then free stock is zero.
 
-    The current percentage model publishes Product.fbs_percent of free stock on
-    the served WMS warehouse. With one free unit and a 100% rule, WB receives
-    one. A reservation of 50 units on a different physical FBO warehouse must
-    not reduce that amount. After the WB order is imported and reserves the FBS
-    unit, free stock becomes zero and the next sync publishes zero.
+    The current percentage model publishes Product.fbs_percent of Доступно
+    организации (WMS-530 R5): the organization-wide available quantity, not
+    the balance of one physical warehouse. With one free unit and a 100% rule,
+    WB receives one. After the WB order is imported and reserves the FBS unit,
+    free stock becomes zero and the next sync publishes zero. A separate
+    WMS-530 test covers a reservation on a different physical warehouse of the
+    same organization correctly reducing this number (R4/R5), which this test
+    intentionally does not add here to keep the WB round-trip cycle readable.
     """
     emu_client = emulator_stack
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
     await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_ID, fbs_wh_id)
-
-    # Second warehouse for FBO reserve isolation (different physical pool).
-    fbo_wh = await async_client.post(
-        "/warehouses",
-        headers=headers,
-        json={"name": "FBO WH", "code": f"fbo-{suffix[-8:]}"},
-    )
-    assert fbo_wh.status_code in (200, 201), fbo_wh.text
-    fbo_wh_id = fbo_wh.json()["id"]
 
     location = await async_client.post(
         f"/warehouses/{fbs_wh_id}/locations",
@@ -421,33 +413,6 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             quantity_delta=1,
             movement_type="inbound_intake",
             actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
-        )
-
-        unload = MarketplaceUnloadRequest(
-            tenant_id=tenant_id,
-            warehouse_id=uuid.UUID(fbo_wh_id),
-            seller_id=uuid.UUID(seller_id),
-            status="collecting",
-            ff_modified=False,
-            has_discrepancy=False,
-        )
-        session.add(unload)
-        await session.flush()
-        unload_line = MarketplaceUnloadLine(
-            request_id=unload.id,
-            product_id=product_id,
-            quantity=50,
-        )
-        session.add(unload_line)
-        await session.flush()
-        session.add(
-            MarketplaceUnloadReservation(
-                tenant_id=tenant_id,
-                marketplace_unload_line_id=unload_line.id,
-                product_id=product_id,
-                warehouse_id=uuid.UUID(fbo_wh_id),
-                quantity=50,
-            )
         )
         await session.commit()
 

@@ -16,7 +16,6 @@ from app.models.document_event import (
     EVENT_DATA_CHANGED,
     EVENT_DOCUMENT_CREATED,
 )
-from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -31,7 +30,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.billing_ledger_service import (
     PACKING_SERVICE_CODE,
     BillingLedgerError,
@@ -110,12 +109,6 @@ class MarketplaceUnloadAvailableProduct:
     sku_code: str
     product_name: str
     available: int
-
-
-@dataclass(frozen=True)
-class MarketplaceUnloadAvailability:
-    available: int
-    uses_free_fbo_pool: bool
 
 
 def assert_request_visible(
@@ -373,9 +366,18 @@ async def list_requests(
 async def _outbound_reserved_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
+    warehouse_id: uuid.UUID | None,
     product_ids: list[uuid.UUID],
+    *,
+    exclude_request_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, int]:
+    """Бронь старой «Отгрузки» по товару. ``warehouse_id=None`` — вся организация.
+
+    WMS-530 R8: сама заявка не должна вычитать из доступного собственную же
+    бронь — ``exclude_request_id`` убирает все её строки целиком, а не только
+    ту, что сейчас проверяется, иначе вторая строка того же товара в этой же
+    заявке ошибочно считалась бы чужой бронью.
+    """
     if not product_ids:
         return {}
     stmt = (
@@ -391,14 +393,18 @@ async def _outbound_reserved_by_product(
             OutboundShipmentRequest,
             OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
         )
-        .outerjoin(
-            StorageLocation,
-            StorageLocation.id == InventoryReservation.storage_location_id,
-        )
         .where(
             InventoryReservation.tenant_id == tenant_id,
             InventoryReservation.product_id.in_(product_ids),
             OutboundShipmentRequest.status.in_(inventory_service.OUTBOUND_RESERVE_STATUSES),
+        )
+        .group_by(InventoryReservation.product_id)
+    )
+    if warehouse_id is not None:
+        stmt = stmt.outerjoin(
+            StorageLocation,
+            StorageLocation.id == InventoryReservation.storage_location_id,
+        ).where(
             or_(
                 and_(
                     InventoryReservation.storage_location_id.isnot(None),
@@ -409,10 +415,10 @@ async def _outbound_reserved_by_product(
                     InventoryReservation.storage_location_id.is_(None),
                     InventoryReservation.warehouse_id == warehouse_id,
                 ),
-            ),
+            )
         )
-        .group_by(InventoryReservation.product_id)
-    )
+    if exclude_request_id is not None:
+        stmt = stmt.where(OutboundShipmentRequest.id != exclude_request_id)
     result = await session.execute(stmt)
     return {product_id: int(quantity or 0) for product_id, quantity in result.all()}
 
@@ -420,11 +426,12 @@ async def _outbound_reserved_by_product(
 async def _mp_reserved_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
+    warehouse_id: uuid.UUID | None,
     product_ids: list[uuid.UUID],
     *,
     exclude_request_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, int]:
+    """Бронь отгрузки на МП по товару. ``warehouse_id=None`` — вся организация."""
     if not product_ids:
         return {}
     stmt = (
@@ -442,114 +449,22 @@ async def _mp_reserved_by_product(
         )
         .where(
             MarketplaceUnloadReservation.tenant_id == tenant_id,
-            MarketplaceUnloadReservation.warehouse_id == warehouse_id,
             MarketplaceUnloadReservation.product_id.in_(product_ids),
             MarketplaceUnloadRequest.status.in_(RESERVE_STATUSES),
         )
         .group_by(MarketplaceUnloadReservation.product_id)
     )
+    if warehouse_id is not None:
+        stmt = stmt.where(MarketplaceUnloadReservation.warehouse_id == warehouse_id)
     if exclude_request_id is not None:
         stmt = stmt.where(MarketplaceUnloadRequest.id != exclude_request_id)
     result = await session.execute(stmt)
     return {product_id: int(quantity or 0) for product_id, quantity in result.all()}
 
 
-async def _mp_reserved_qty_for_product(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-    *,
-    exclude_request_id: uuid.UUID | None = None,
-) -> int:
-    reserved = await _mp_reserved_by_product(
-        session,
-        tenant_id,
-        warehouse_id,
-        [product_id],
-        exclude_request_id=exclude_request_id,
-    )
-    return int(reserved.get(product_id, 0))
-
-
-async def _available_product_qty_in_warehouse(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-    *,
-    exclude_request_id: uuid.UUID | None = None,
-) -> int:
-    availability = await _available_product_availability_in_warehouse(
-        session,
-        tenant_id,
-        warehouse_id,
-        product_id,
-        exclude_request_id=exclude_request_id,
-    )
-    return availability.available
-
-
-async def _available_product_availability_in_warehouse(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-    *,
-    exclude_request_id: uuid.UUID | None = None,
-) -> MarketplaceUnloadAvailability:
-    on_hand = await inventory_service.storage_on_hand_in_warehouse(
-        session, tenant_id, warehouse_id, product_id
-    )
-    sorting_on_hand = await inventory_service.sorting_on_hand_in_warehouse(
-        session, tenant_id, warehouse_id, product_id
-    )
-    reserved_outbound = (
-        await _outbound_reserved_by_product(session, tenant_id, warehouse_id, [product_id])
-    ).get(product_id, 0)
-    reserved_mp = await _mp_reserved_qty_for_product(
-        session,
-        tenant_id,
-        warehouse_id,
-        product_id,
-        exclude_request_id=exclude_request_id,
-    )
-    from app.services.fbs_stock_availability_service import (
-        fbs_reserved_qty_for_product,
-    )
-
-    reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
-    directions = await stock_direction_service.direction_totals_by_product(
-        session, tenant_id, [product_id]
-    )
-    direction_total = directions.get(product_id)
-    if direction_total is not None and direction_total.has_any:
-        # Existing order reservations protect real stock in every publication mode.
-        return MarketplaceUnloadAvailability(
-            available=on_hand
-            + sorting_on_hand
-            - direction_total.total
-            - reserved_outbound
-            - reserved_mp
-            - reserved_fbs,
-            uses_free_fbo_pool=True,
-        )
-    return MarketplaceUnloadAvailability(
-        available=(
-            on_hand
-            + sorting_on_hand
-            - reserved_outbound
-            - reserved_mp
-            - reserved_fbs
-        ),
-        uses_free_fbo_pool=False,
-    )
-
-
 async def _assert_available_for_unload_quantity(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
     *,
@@ -557,36 +472,40 @@ async def _assert_available_for_unload_quantity(
     product_name: str | None = None,
     sku_code: str | None = None,
 ) -> None:
+    """WMS-530 R8: проверка идёт по Доступно организации, а не складу документа.
+
+    Склад документа остаётся местом физического подбора и списания (D5); он
+    здесь не участвует и в сообщении об отказе не упоминается (R12).
+    """
     await inventory_service.lock_stock_product(session, tenant_id, product_id)
-    availability = await _available_product_availability_in_warehouse(
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
+
+    totals = await organization_stock_totals_by_product(
         session,
         tenant_id,
-        warehouse_id,
-        product_id,
-        exclude_request_id=exclude_request_id,
+        [product_id],
+        exclude_mp_unload_request_id=exclude_request_id,
     )
-    if availability.available >= quantity:
+    total = totals.get(product_id)
+    available = total.available_for_checks if total is not None else 0
+    if available >= quantity:
         return
-    code = "insufficient_free_fbo" if availability.uses_free_fbo_pool else "insufficient_available"
     product_label = product_name or sku_code or str(product_id)
     suffix = f" ({sku_code})" if sku_code and sku_code != product_name else ""
-    prefix = (
-        "Недостаточно свободного FBO остатка"
-        if availability.uses_free_fbo_pool
-        else "Недостаточно доступного остатка"
-    )
     raise MarketplaceUnloadError(
-        code,
+        "insufficient_available",
         {
-            "code": code,
+            "code": "insufficient_available",
             "product_id": str(product_id),
             "product_name": product_name,
             "sku_code": sku_code,
-            "available": availability.available,
+            "available": available,
             "attempted": quantity,
             "message": (
-                f"{prefix}: {product_label}{suffix}. "
-                f"Доступно {availability.available} шт, пытаются {quantity} шт."
+                f"Недостаточно доступного остатка: {product_label}{suffix}. "
+                f"Доступно {available} шт, пытаются {quantity} шт."
             ),
         },
     )
@@ -600,7 +519,12 @@ async def list_available_products(
     seller_id: uuid.UUID,
     exclude_request_id: uuid.UUID | None = None,
 ) -> list[MarketplaceUnloadAvailableProduct]:
-    """Readonly MP availability: storage + sorting - outbound - other MP reserves."""
+    """WMS-530 R8: все товары селлера с Доступно организации больше нуля.
+
+    Склад документа остаётся только местом подбора и списания (D5); товар,
+    который лежит на другом рабочем складе или только в сортировке, всё равно
+    попадает в список — расположение не решает, что можно отгрузить (R11).
+    """
     warehouse = await get_warehouse(session, tenant_id, warehouse_id)
     if warehouse is None:
         raise MarketplaceUnloadError("warehouse_not_found")
@@ -616,66 +540,38 @@ async def list_available_products(
         ):
             raise MarketplaceUnloadError("not_found")
 
-    stock_stmt = (
-        select(
-            Product.id,
-            Product.sku_code,
-            Product.name,
-            func.coalesce(func.sum(InventoryBalance.quantity), 0),
-        )
-        .join(InventoryBalance, InventoryBalance.product_id == Product.id)
-        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
-        .where(
-            Product.tenant_id == tenant_id,
-            Product.seller_id == seller_id,
-            InventoryBalance.tenant_id == tenant_id,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
-        )
-        .group_by(Product.id, Product.sku_code, Product.name)
+    products_stmt = (
+        select(Product.id, Product.sku_code, Product.name)
+        .where(Product.tenant_id == tenant_id, Product.seller_id == seller_id)
         .order_by(Product.sku_code)
     )
-    stock_rows = (await session.execute(stock_stmt)).all()
-    product_ids = [product_id for product_id, *_ in stock_rows]
-    outbound_reserved = await _outbound_reserved_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
-    mp_reserved = await _mp_reserved_by_product(
-        session,
-        tenant_id,
-        warehouse_id,
-        product_ids,
-        exclude_request_id=exclude_request_id,
-    )
+    product_rows = (await session.execute(products_stmt)).all()
+    product_ids = [product_id for product_id, *_ in product_rows]
     from app.services.fbs_stock_availability_service import (
-        fbs_reserved_by_product,
+        organization_stock_totals_by_product,
     )
 
-    fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
-    direction_totals = await stock_direction_service.direction_totals_by_product(
-        session, tenant_id, product_ids
+    totals = await organization_stock_totals_by_product(
+        session,
+        tenant_id,
+        product_ids,
+        exclude_mp_unload_request_id=exclude_request_id,
     )
-    return [
-        MarketplaceUnloadAvailableProduct(
-            product_id=product_id,
-            sku_code=sku_code,
-            product_name=product_name,
-            available=max(
-                0,
-                quantity_total
-                - (
-                    direction_totals[product_id].total
-                    if direction_totals.get(product_id) is not None
-                    and direction_totals[product_id].has_any
-                    else 0
-                )
-                - fbs_reserved.get(product_id, 0)
-                - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0),
-            ),
+    result: list[MarketplaceUnloadAvailableProduct] = []
+    for product_id, sku_code, product_name in product_rows:
+        total = totals.get(product_id)
+        available = total.available_for_checks if total is not None else 0
+        if available <= 0:
+            continue
+        result.append(
+            MarketplaceUnloadAvailableProduct(
+                product_id=product_id,
+                sku_code=sku_code,
+                product_name=product_name,
+                available=available,
+            )
         )
-        for product_id, sku_code, product_name, quantity_total in stock_rows
-    ]
+    return result
 
 
 async def _schedule_fbs_publish_for_request(session: AsyncSession, request_id: uuid.UUID) -> None:
@@ -743,7 +639,6 @@ async def add_line(
     await _assert_available_for_unload_quantity(
         session,
         tenant_id,
-        req.warehouse_id,
         product_id,
         quantity,
         exclude_request_id=req.id if req.status in RESERVE_STATUSES else None,
@@ -802,7 +697,6 @@ async def replace_lines(
         await _assert_available_for_unload_quantity(
             session,
             tenant_id,
-            req.warehouse_id,
             product_id,
             qty,
             product_name=prod.name,
@@ -853,7 +747,6 @@ async def plan_request(
         await _assert_available_for_unload_quantity(
             session,
             tenant_id,
-            req.warehouse_id,
             ln.product_id,
             ln.quantity,
             exclude_request_id=req.id,
@@ -915,7 +808,6 @@ async def confirm_request(
             await _assert_available_for_unload_quantity(
                 session,
                 tenant_id,
-                req.warehouse_id,
                 ln.product_id,
                 ln.quantity,
                 exclude_request_id=req.id,
