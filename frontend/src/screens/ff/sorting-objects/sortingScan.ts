@@ -5,7 +5,7 @@ export type ScanContext = { cellId: string | null; objectId: string | null }
 export const emptyScanContext: ScanContext = { cellId: null, objectId: null }
 
 export function scanCandidates(raw: string): string[] {
-  return [raw.trim().replace(/^\][A-Za-z][0-9]/, '')]
+  return [raw.trim().replace(/^[\]ъЪ][A-Za-zА-Яа-яЁё][0-9]/, '')]
 }
 
 /** Context changes and stock requests share one queue, including rapid scanner bursts. */
@@ -33,7 +33,7 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
       const candidates = scanCandidates(raw)
       const matches = (value: string) => candidates.some((code) => fbsSameStickerScan(code.toLowerCase(), value.toLowerCase()))
       const { cells, objects } = dependencies.data()
-      const cell = cells.find((one) => matches(one.barcode) || matches(one.code))
+      const cell = cells.find((one) => matches(one.barcode)) ?? cells.find((one) => matches(one.code))
       if (cell) {
         const closing = context.cellId === cell.id
         change(closing ? emptyScanContext : { cellId: cell.id, objectId: null })
