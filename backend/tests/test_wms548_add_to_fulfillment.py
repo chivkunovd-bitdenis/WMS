@@ -434,12 +434,12 @@ async def test_add_to_fulfillment_requires_seller_role_with_products_permission(
 
 
 @pytest.mark.asyncio
-async def test_add_to_fulfillment_accepts_ozon_ids_without_creating_products(
+async def test_add_to_fulfillment_accepts_ozon_ids_field_and_reports_unknown_ones(
     async_client: AsyncClient,
 ) -> None:
-    """D2 does not yet have an Ozon snapshot (that is WMS-548 D3) — the contract
-    field must still be accepted so the frontend (D4/D5) does not break, and
-    every id in it comes back explicitly skipped rather than silently ignored.
+    """The contract field is accepted even with no matching Ozon cards (WMS-548
+    D3 implements real Ozon selection — see test_wms548_ozon_selection.py for
+    that; this only guards that the request shape itself never breaks).
     """
     suffix = str(int(time.time() * 1000))
     _tenant_id, _seller_id, seller_headers, _ = await _register_with_seller(
@@ -455,4 +455,4 @@ async def test_add_to_fulfillment_accepts_ozon_ids_without_creating_products(
     body = res.json()
     assert body["added"] == []
     reasons = {s["id"]: s["reason"] for s in body["skipped"]}
-    assert reasons == {"123": "ozon_not_supported_yet", "456": "ozon_not_supported_yet"}
+    assert reasons == {"123": "not_found", "456": "not_found"}
