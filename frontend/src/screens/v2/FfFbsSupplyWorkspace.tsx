@@ -67,6 +67,7 @@ import {
   fbsMarkingPresentation,
   fbsMarkingVerdictsSummary,
   fbsBoxEditingDisabled,
+  fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
@@ -2492,6 +2493,7 @@ export function FfFbsSupplyWorkspace({
     deliveryConfirmed,
   )
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
+  const boxProductProgress = fbsBoxProductProgress(workspace?.orders ?? [], assignedBoxOrderIds, boxProductQty)
   const availableForBox = fbsOrdersAvailableForBox(workspace?.orders ?? [], assignedBoxOrderIds)
   const boxAssignBox = workspace?.boxes.find((box) => box.id === boxAssignTarget)
   const boxAssignName = boxAssignBox?.box_number
@@ -4049,6 +4051,7 @@ export function FfFbsSupplyWorkspace({
                 )
               }) : boxAssignRows.map((row) => {
                 const value = boxProductQty[row.key] ?? ''
+                const progress = boxProductProgress.get(row.key)!
                 return (
                   <Stack key={row.key} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                     <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={44} />
@@ -4056,18 +4059,23 @@ export function FfFbsSupplyWorkspace({
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
                       <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography>
                     </Box>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={value}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const next = Math.min(row.orders.length, Math.max(0, Number(event.target.value) || 0))
-                        setBoxProductQty((current) => ({ ...current, [row.key]: next > 0 ? String(next) : '' }))
-                      }}
-                      slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
-                      sx={{ width: 96 }}
-                    />
+                    <Stack spacing={0.5} sx={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={value}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const next = Math.min(row.orders.length, Math.max(0, Number(event.target.value) || 0))
+                          setBoxProductQty((current) => ({ ...current, [row.key]: next > 0 ? String(next) : '' }))
+                        }}
+                        slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
+                        sx={{ width: 96 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }} data-testid={`fbs-box-product-progress-${row.key}`}>
+                        План: {progress.planned} · Осталось: {progress.remaining}
+                      </Typography>
+                    </Stack>
                   </Stack>
                 )
               })}
