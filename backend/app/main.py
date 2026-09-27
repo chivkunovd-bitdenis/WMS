@@ -15,6 +15,7 @@ from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
+from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
 from app.api.client_errors import router as client_errors_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
@@ -171,6 +172,7 @@ def create_app() -> FastAPI:
     app.include_router(background_jobs_router)
     app.include_router(billing_router)
     app.include_router(billing_invoices_v2_router)
+    app.include_router(billing_profile_marketplace_router)
     app.include_router(storage_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)

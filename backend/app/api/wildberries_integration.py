@@ -23,6 +23,9 @@ from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.services.seller_marketplace_requisites_service import (
+    autofill_requisites_after_key_saved,
+)
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -433,6 +436,16 @@ async def patch_seller_wildberries_tokens(
         from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
         background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, seller_id)
+    # WMS-547 R5: админ ФФ сохранил непустой токен WB селлера — попробовать
+    # один раз подтянуть реквизиты (не трогает уже существующую запись, R6).
+    if any(
+        isinstance(value, str) and value.strip()
+        for value in (content, supplies, marketplace)
+        if value is not SKIP
+    ):
+        background_tasks.add_task(
+            autofill_requisites_after_key_saved, user.tenant_id, seller_id, marketplace="wb"
+        )
     return WildberriesSellerTokensOut(
         seller_id=str(seller_id),
         has_content_token=has_c,
@@ -518,6 +531,12 @@ async def save_and_validate_self_content_token(
             supplies_api_token=token if marketplace_validation_ok else SKIP,
             marketplace_api_token=token if marketplace_validation_ok else SKIP,
             marketplace_scope_ok=marketplace_validation_ok,
+        )
+        # WMS-547 R5: ключ сохранён — метод сведений о продавце принимает
+        # токен любой категории, поэтому пробуем и когда нет прав "Маркетплейс"
+        # (validation_error != None). Не трогает уже существующую запись (R6).
+        background_tasks.add_task(
+            autofill_requisites_after_key_saved, tenant_id, seller_id, marketplace="wb"
         )
         if validation_error is None:
             saved = await upsert_imported_cards(
