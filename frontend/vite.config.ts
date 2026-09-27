@@ -85,6 +85,7 @@ export default defineConfig({
         schet: 'schet.html',
         knowledge: 'knowledge.html',
         kbScenes: 'kb-scenes.html',
+        psp2Mockup: 'psp2-mockup.html',
         fbsOrders: 'fbs-orders.html',
         fbsPick: 'fbs-pick.html',
         packaging: 'packaging.html',
