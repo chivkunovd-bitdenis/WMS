@@ -17,6 +17,47 @@ function setup(place = vi.fn(async () => {})) {
 }
 
 describe('WMS-550 sorting scan workflow', () => {
+  it('resolves all 882 CSV cell barcodes before names in either keyboard layout, with AIM and repeat scans', async () => {
+    const grid = [
+      ['А', 'A', 5, 21], ['Б', 'B', 5, 21], ['В', 'V', 5, 21],
+      ['Г', 'G', 5, 21], ['Д', 'D', 5, 21], ['Е', 'E', 5, 21],
+      ['Ж', 'J', 5, 28], ['К', 'K', 3, 9], ['Л', 'L', 3, 9],
+      ['М', 'M', 2, 17], ['Н', 'N', 2, 9],
+    ] as const
+    const allCells = grid.flatMap(([name, barcode, rows, columns]) =>
+      Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, column) => ({
+        id: `${name}-${row + 1}-${column + 1}`, code: `${name}-${row + 1}-${column + 1}`,
+        barcode: `${barcode}-${row + 1}-${column + 1}`,
+      }))).flat(),
+    ).concat([...'АБВГДЕ'].map((name, index) => ({
+      id: `${name}-5-22`, code: `${name}-5-22`, barcode: `${['A', 'B', 'V', 'G', 'D', 'E'][index]}-5-22`,
+    }))).reverse() // М precedes В: V must still select the authoritative barcode В.
+    expect(allCells).toHaveLength(882)
+    const keyboard = Object.fromEntries([...'QWERTYUIOP[]ASDFGHJKL;\'ZXCVBNM,.'].map((char, index) =>
+      [char, [...'ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ'][index]],
+    ))
+    const russianLayout = (value: string) => [...value].map((char) => keyboard[char] ?? char).join('')
+    let context = emptyScanContext
+    const place = vi.fn(async () => {})
+    const product = vi.fn(async () => {})
+    const error = vi.fn()
+    const scanner = createSortingScanner(context, {
+      data: () => ({ cells: allCells, objects: [] }), place, product,
+      changed: (next) => { context = next }, notice: vi.fn(), error,
+    })
+    for (const cell of allCells) {
+      for (const code of [cell.barcode, russianLayout(cell.barcode), `]Q3${cell.barcode}`, russianLayout(`]Q3${cell.barcode}`)]) {
+        await scanner.scan(code)
+        expect(context, code).toEqual({ cellId: cell.id, objectId: null })
+        await scanner.scan(code)
+        expect(context, code).toEqual(emptyScanContext)
+      }
+    }
+    expect(place).not.toHaveBeenCalled()
+    expect(product).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
   it('reopens a placed box without moving it again, including a box on a pallet', async () => {
     let currentObjects: WarehouseObject[] = objects.map((one) => ({ ...one }))
     let context = emptyScanContext
