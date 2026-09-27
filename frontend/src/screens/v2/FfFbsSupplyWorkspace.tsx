@@ -57,6 +57,7 @@ import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import {
   buildFbsPickingListPrintHtml,
   fbsPickSourceLabels,
@@ -492,6 +493,10 @@ export function FfFbsSupplyWorkspace({
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
+  const selectStage = (next: StageKey) => {
+    if (supplyId) saveFbsWorkspaceStage(supplyId, next)
+    setStage(next)
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -646,7 +651,7 @@ export function FfFbsSupplyWorkspace({
         setWorkspace(next)
         onApplied?.(next)
         if (!silent) {
-          setStage((current) => fbsStageAfterWorkspaceRefresh(
+          setStage((current) => readFbsWorkspaceStage(supplyId) ?? fbsStageAfterWorkspaceRefresh(
             next.supply.marketplace,
             current,
             visualStage(next.stage),
@@ -671,7 +676,7 @@ export function FfFbsSupplyWorkspace({
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
-    setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
+    setStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition'))
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
@@ -859,7 +864,7 @@ export function FfFbsSupplyWorkspace({
       const applied = write.isLatest()
       if (applied) {
         setWorkspace(next)
-        setStage((current) => fbsStageAfterWorkspaceRefresh(
+        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
           next.supply.marketplace,
           current,
           visualStage(next.stage),
@@ -939,7 +944,7 @@ export function FfFbsSupplyWorkspace({
         // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
         // setStage перекидывал человека с упаковки или коробов на подбор. Правило
         // проекта: серверные факты не управляют навигацией в рабочем месте WB.
-        setStage((current) => fbsStageAfterWorkspaceRefresh(
+        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
           next.supply.marketplace,
           current,
           visualStage(next.stage),
@@ -1820,7 +1825,7 @@ export function FfFbsSupplyWorkspace({
       setBoxProductQty({})
       setBoxSelectedPositionIds(new Set())
       setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
-      setStage('boxes')
+      selectStage('boxes')
     }
   }
 
@@ -1875,7 +1880,7 @@ export function FfFbsSupplyWorkspace({
       isOzonSupply ? () => refreshAfterLostRace() : undefined,
     )
     if (!next) return
-    setStage('boxes')
+    selectStage('boxes')
     const box = next.boxes.find((item) => item.id === boxId)
     if (box?.qr_asset?.status === 'ready' && box.qr_asset.preview_url) openAssetPreview([box.qr_asset])
     else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетка Ozon ещё не готова — повторите получение через минуту.')
@@ -1978,7 +1983,7 @@ export function FfFbsSupplyWorkspace({
       const nextKey = createFbsIdempotencyKey()
       deliveryKeyRef.current = nextKey
       setDeliverySubmitted(true)
-      setStage('boxes')
+      selectStage('boxes')
     }
   }
 
@@ -2610,7 +2615,7 @@ export function FfFbsSupplyWorkspace({
         size="large"
         disabled={!unlocked || busy}
         onClick={() => {
-          setStage(next.key)
+          selectStage(next.key)
           setError(null)
           setNotice(null)
         }}
@@ -2798,7 +2803,7 @@ export function FfFbsSupplyWorkspace({
       <Tabs
         value={stage}
         onChange={(_, value) => {
-          if (STAGES.findIndex((item) => item.key === value) <= accessibleStageIndex) setStage(value)
+          if (STAGES.findIndex((item) => item.key === value) <= accessibleStageIndex) selectStage(value)
           setError(null)
           setNotice(null)
         }}
