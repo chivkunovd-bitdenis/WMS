@@ -547,6 +547,12 @@ async def add_cards_to_fulfillment(
                     }
                 )
                 continue
+            # Захватываем поля карточки в локальные переменные до апсерта: он
+            # коммитит, а неудача ниже коммитит откат, который на этой же
+            # сессии истекает атрибуты всех загруженных объектов — ленивая
+            # подгрузка `card.vendor_code` после отката под конкурентной
+            # нагрузкой уже падала MissingGreenlet вместо честного skipped.
+            vendor_code = card.vendor_code
             raw = card.raw_json if isinstance(card.raw_json, dict) else None
             variants = iter_size_variants_from_card(raw) if raw else []
             if not variants:
@@ -554,21 +560,21 @@ async def add_cards_to_fulfillment(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
+                        "vendor_code": vendor_code,
                         "reason": "no_size_variants",
                     }
                 )
                 continue
             try:
                 conflict = await _card_has_vendor_code_conflict(
-                    session, tenant_id, seller_id, nm_id, card.vendor_code, variants
+                    session, tenant_id, seller_id, nm_id, vendor_code, variants
                 )
                 if conflict:
                     skipped.append(
                         {
                             "marketplace": "wildberries",
                             "id": str(nm_id),
-                            "vendor_code": card.vendor_code,
+                            "vendor_code": vendor_code,
                             "reason": "vendor_code_conflict",
                         }
                     )
@@ -587,19 +593,22 @@ async def add_cards_to_fulfillment(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
+                        "vendor_code": vendor_code,
                         "reason": "internal_error",
                     }
                 )
                 continue
             products_added = counts["products_created"] + counts["products_updated"]
             if products_added == 0:
+                # Не наш конфликт-предчек (тот уже отсёк выше) — упсерт сам не
+                # завёл и не обновил ни одного варианта (например, гонка
+                # уникального индекса, которую не разрешил повторный поиск).
                 skipped.append(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
-                        "reason": "vendor_code_conflict",
+                        "vendor_code": vendor_code,
+                        "reason": "not_added",
                     }
                 )
                 continue
@@ -607,7 +616,7 @@ async def add_cards_to_fulfillment(
                 {
                     "marketplace": "wildberries",
                     "id": str(nm_id),
-                    "vendor_code": card.vendor_code,
+                    "vendor_code": vendor_code,
                     "products_added": products_added,
                 }
             )

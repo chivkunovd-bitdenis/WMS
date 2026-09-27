@@ -109,6 +109,25 @@ async def _product_count(tenant_id: str, seller_id: str, nm_id: int) -> int:
         )
 
 
+async def _product_identity(tenant_id: str, seller_id: str, nm_id: int) -> dict[str, Any]:
+    """The fields a conflicting card must never be allowed to overwrite (А12)."""
+    async with SessionLocal() as session:
+        product = (
+            await session.execute(
+                select(Product).where(
+                    Product.tenant_id == uuid.UUID(tenant_id),
+                    Product.seller_id == uuid.UUID(seller_id),
+                    Product.wb_nm_id == nm_id,
+                )
+            )
+        ).scalar_one()
+        return {
+            "wb_nm_id": product.wb_nm_id,
+            "wb_barcode": product.wb_barcode,
+            "name": product.name,
+        }
+
+
 @pytest.mark.asyncio
 async def test_add_to_fulfillment_creates_products_only_for_requested_cards(
     async_client: AsyncClient,
@@ -226,6 +245,7 @@ async def test_add_to_fulfillment_skips_unaddable_cards_with_reasons(
     )
     assert add_existing.status_code == 200, add_existing.text
     assert add_existing.json()["added"][0]["products_added"] == 1
+    identity_before = await _product_identity(tenant_id, seller_id, 8_200_010)
 
     conflicting_card = _wb_card(
         8_200_011, f"SAME-{suffix}", "Конфликт артикула", ["4200000000011"]
@@ -261,8 +281,122 @@ async def test_add_to_fulfillment_skips_unaddable_cards_with_reasons(
     assert await _product_count(tenant_id, seller_id, 8_200_001) == 0
     assert await _product_count(tenant_id, seller_id, 8_200_011) == 0
     assert await _product_count(tenant_id, seller_id, 8_200_020) == 1
-    # The vendor-code owner (already on FF before the request) is unaffected.
+    # The vendor-code owner (already on FF before the request) is unaffected —
+    # not just in count, but in identity: the rejected card must not have
+    # overwritten its nmID, barcode or name (А12, решение 27.09).
     assert await _product_count(tenant_id, seller_id, 8_200_010) == 1
+    assert await _product_identity(tenant_id, seller_id, 8_200_010) == identity_before
+
+
+@pytest.mark.asyncio
+async def test_add_to_fulfillment_barcode_conflict_leaves_other_card_untouched(
+    async_client: AsyncClient,
+) -> None:
+    """А12: a card sharing another already-on-FF card's barcode (different
+    vendor code) must be skipped, not silently steal that product's identity.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, _ = await _register_with_seller(async_client, suffix)
+
+    shared_barcode = f"5{suffix}"[:13].ljust(13, "0")
+    owner_card = _wb_card(8_300_010, f"OWNER-{suffix}", "Владелец ШК", [shared_barcode])
+    await _seed_snapshot_card(tenant_id, seller_id, owner_card)
+    add_owner = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [8_300_010], "ozon_product_ids": []},
+    )
+    assert add_owner.status_code == 200, add_owner.text
+    assert add_owner.json()["added"][0]["products_added"] == 1
+    identity_before = await _product_identity(tenant_id, seller_id, 8_300_010)
+
+    # Different nmID, different vendor code, but the exact same barcode.
+    colliding_card = _wb_card(
+        8_300_011, f"OTHER-VENDOR-{suffix}", "Чужой ШК", [shared_barcode]
+    )
+    await _seed_snapshot_card(tenant_id, seller_id, colliding_card)
+
+    res = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [8_300_011], "ozon_product_ids": []},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["added"] == []
+    assert body["skipped"] == [
+        {
+            "marketplace": "wildberries",
+            "id": "8300011",
+            "vendor_code": f"OTHER-VENDOR-{suffix}",
+            "reason": "vendor_code_conflict",
+        }
+    ]
+    assert await _product_count(tenant_id, seller_id, 8_300_011) == 0
+    assert await _product_count(tenant_id, seller_id, 8_300_010) == 1
+    assert await _product_identity(tenant_id, seller_id, 8_300_010) == identity_before
+
+
+@pytest.mark.asyncio
+async def test_add_to_fulfillment_adopts_a_manual_product_without_nm_id(
+    async_client: AsyncClient,
+) -> None:
+    """А12: the conflict guard only protects products that already belong to a
+    different WB card (``wb_nm_id`` set). A manually created product (no
+    nmID yet — the same physical item) is adopted exactly like today's import.
+    """
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id, seller_headers, admin_headers = await _register_with_seller(
+        async_client, suffix
+    )
+
+    barcode = f"6{suffix}"[:13].ljust(13, "0")
+    # Manual product creation (Excel/ФФ-created, no nmID) is a fulfillment-only
+    # action — done here with the admin token, exactly as an operator would.
+    manual = await async_client.post(
+        "/products",
+        headers=admin_headers,
+        json={
+            "name": "Ручной товар ФФ",
+            "sku_code": f"MANUAL-{suffix}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+            "wb_barcode": barcode,
+        },
+    )
+    assert manual.status_code == 200, manual.text
+
+    card = _wb_card(8_300_020, f"CARD-{suffix}", "WB-карточка того же товара", [barcode])
+    await _seed_snapshot_card(tenant_id, seller_id, card)
+
+    res = await async_client.post(
+        "/seller-catalog/add-to-fulfillment",
+        headers=seller_headers,
+        json={"wb_nm_ids": [8_300_020], "ozon_product_ids": []},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["skipped"] == []
+    assert res.json()["added"][0]["products_added"] == 1
+
+    async with SessionLocal() as session:
+        products = (
+            (
+                await session.execute(
+                    select(Product).where(
+                        Product.tenant_id == uuid.UUID(tenant_id),
+                        Product.seller_id == uuid.UUID(seller_id),
+                        Product.wb_barcode == barcode,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(products) == 1  # adopted in place, no duplicate row
+    assert products[0].wb_nm_id == 8_300_020
+    assert products[0].name == "WB-карточка того же товара"
 
 
 @pytest.mark.asyncio
