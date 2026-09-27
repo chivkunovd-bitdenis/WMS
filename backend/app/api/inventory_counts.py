@@ -261,6 +261,33 @@ class InventoryCountPostOut(BaseModel):
     stock_write_off: list[InventoryStockWriteOffOut] = Field(default_factory=list)
 
 
+class InventoryCountPrintSheetFiltersOut(BaseModel):
+    """WMS-497 R4: незаданный параметр — null, фронт такую строку не печатает."""
+
+    object: bool
+    warehouse_name: str | None = None
+    seller_name: str | None = None
+    category: str | None = None
+    product_articles: list[str] = Field(default_factory=list)
+
+
+class InventoryCountPrintSheetRowOut(BaseModel):
+    product_id: str
+    barcode: str | None = None
+    article: str
+    name: str
+    total: int
+    reserved: int
+
+
+class InventoryCountPrintSheetOut(BaseModel):
+    number: str
+    created_at: str
+    created_by: str
+    filters: InventoryCountPrintSheetFiltersOut
+    rows: list[InventoryCountPrintSheetRowOut]
+
+
 def _number(count: InventoryCount) -> str:
     return f"ИНВ-{str(count.id).split('-')[0].upper()}"
 
@@ -749,6 +776,50 @@ async def get_inventory_count(
     if count is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     return await _detail_out(session, count)
+
+
+@router.get("/{count_id}/print-sheet", response_model=InventoryCountPrintSheetOut)
+async def get_inventory_count_print_sheet(
+    count_id: uuid.UUID,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountPrintSheetOut:
+    """WMS-497 R1, R13: данные для листа — тот же документ, только на чтение.
+
+    Ничего не сохраняет и не проводит: ``get_count`` и
+    ``service.print_sheet_data`` — чистые запросы, доступные тому же кругу
+    пользователей, что и сам документ (``require_inventory_access`` — та же
+    зависимость, что у ``get_inventory_count``, поэтому границы арендатора и
+    права идентичны обычному открытию документа).
+    """
+
+    count = await service.get_count(session, user.tenant_id, count_id)
+    if count is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    data = await service.print_sheet_data(session, user.tenant_id, count)
+    return InventoryCountPrintSheetOut(
+        number=_number(count),
+        created_at=count.created_at.isoformat(),
+        created_by=count.created_by.display_name,
+        filters=InventoryCountPrintSheetFiltersOut(
+            object=data.filters.object,
+            warehouse_name=data.filters.warehouse_name,
+            seller_name=data.filters.seller_name,
+            category=data.filters.category,
+            product_articles=data.filters.product_articles,
+        ),
+        rows=[
+            InventoryCountPrintSheetRowOut(
+                product_id=str(row.product_id),
+                barcode=row.barcode,
+                article=row.article,
+                name=row.name,
+                total=row.total,
+                reserved=row.reserved,
+            )
+            for row in data.rows
+        ],
+    )
 
 
 @router.put("/{count_id}/lines", response_model=InventoryCountDetailOut)

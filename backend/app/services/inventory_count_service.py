@@ -25,18 +25,20 @@ from app.models.inventory_count import (
 from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
 from app.models.pallet import Pallet
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import (
+    fbs_stock_availability_service,
     inventory_service,
     pallet_service,
     tenant_settings_service,
     warehouse_map_service,
 )
-from app.services.catalog_service import load_ozon_primary_image_urls
+from app.services.catalog_service import list_ozon_product_links, load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -92,6 +94,45 @@ class PostResult:
     unchanged_lines: int
     changed_balances: list[ChangedBalance]
     stock_deductions: list[inventory_service.StockDeduction]
+
+
+@dataclass(frozen=True)
+class PrintSheetFilters:
+    """WMS-497 R4: отбор, с которым создан документ, для шапки печатного листа."""
+
+    object: bool
+    warehouse_name: str | None
+    seller_name: str | None
+    category: str | None
+    product_articles: list[str]
+
+
+@dataclass(frozen=True)
+class PrintSheetRow:
+    """WMS-497 R6-R8: одна строка листа — один товар документа."""
+
+    product_id: uuid.UUID
+    barcode: str | None
+    article: str
+    name: str
+    total: int
+    reserved: int
+
+
+@dataclass(frozen=True)
+class PrintSheetData:
+    filters: PrintSheetFilters
+    rows: list[PrintSheetRow]
+
+
+def _unique_preserve_order(ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    seen: set[uuid.UUID] = set()
+    ordered: list[uuid.UUID] = []
+    for value in ids:
+        if value not in seen:
+            seen.add(value)
+            ordered.append(value)
+    return ordered
 
 
 def _product_category_column() -> Any | None:
@@ -376,6 +417,17 @@ async def create_count(
         elif not address_enabled and len(warehouse_ids) > 1:
             raise InventoryCountError("warehouse_required_without_address_storage")
 
+    # WMS-497 R5: запоминаем выбор товаров только когда он реально сужал отбор —
+    # пустой список (или его отсутствие) исторически означает «все товары
+    # остального фильтра», и печатный лист не должен путать это с «выбраны
+    # именно эти товары». Дубликаты из формы схлопываем, порядок — как выбирал
+    # оператор (важно для строки «Товары» на листе, R4).
+    selected_product_ids = (
+        [str(pid) for pid in _unique_preserve_order(filters.product_ids)]
+        if filters is not None and filters.product_ids
+        else None
+    )
+
     count = InventoryCount(
         tenant_id=tenant_id,
         status=STATUS_DRAFT,
@@ -385,6 +437,7 @@ async def create_count(
         category=category,
         created_by_user_id=user_id,
         comment=comment.strip() if comment and comment.strip() else None,
+        selected_product_ids=selected_product_ids,
     )
     session.add(count)
     await session.flush()
@@ -450,6 +503,117 @@ async def get_count(
         .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
+
+
+def _print_sheet_barcode(
+    product: Product, ozon_link: ProductMarketplaceLink | None
+) -> str | None:
+    """WMS-497 R7: ШК WB, иначе первый ШК Ozon из привязки, иначе нет значения."""
+
+    if product.wb_barcode:
+        return product.wb_barcode
+    if ozon_link is not None and ozon_link.external_barcodes:
+        first = ozon_link.external_barcodes[0]
+        if isinstance(first, str) and first.strip():
+            return first.strip()
+    return None
+
+
+def _print_sheet_article(
+    product: Product, ozon_link: ProductMarketplaceLink | None
+) -> str:
+    """WMS-497 R7: артикул продавца WB, иначе offer_id Ozon, иначе SKU WMS."""
+
+    if product.wb_vendor_code:
+        return product.wb_vendor_code
+    if ozon_link is not None and ozon_link.external_offer_id:
+        return ozon_link.external_offer_id
+    return product.sku_code
+
+
+async def print_sheet_data(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count: InventoryCount,
+) -> PrintSheetData:
+    """Данные печатного листа инвентаризации (WMS-497 R4, R6-R8).
+
+    Строки листа — по товарам документа (``count.lines``, уже загружены
+    ``get_count``), а не по местам: один товар в нескольких ячейках/таре даёт
+    одну строку (R6). «Товары» в шапке (R4) — по сохранённому при создании
+    выбору (``selected_product_ids``, R5), который мог включать товар без
+    остатка на момент создания и потому отсутствующий среди строк документа —
+    такие товары подгружаются отдельно, только чтобы вывести их артикул.
+    «Всего»/«В резерве» — единый расчёт организации (R8), один вызов на все
+    товары строк, без второго независимого источника.
+    """
+
+    lines_products: dict[uuid.UUID, Product] = {}
+    for line in count.lines:
+        lines_products.setdefault(line.product_id, line.product)
+
+    selected_ids: list[uuid.UUID] = []
+    if count.selected_product_ids:
+        selected_ids = _unique_preserve_order(
+            [uuid.UUID(raw) for raw in count.selected_product_ids]
+        )
+
+    missing_selected_ids = [pid for pid in selected_ids if pid not in lines_products]
+    selected_products: dict[uuid.UUID, Product] = dict(lines_products)
+    if missing_selected_ids:
+        result = await session.execute(
+            select(Product).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(missing_selected_ids),
+            )
+        )
+        for product in result.scalars().all():
+            selected_products[product.id] = product
+
+    all_product_ids = set(lines_products) | set(selected_products)
+    ozon_links = await list_ozon_product_links(session, tenant_id, all_product_ids)
+
+    totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
+        session, tenant_id, list(lines_products)
+    )
+
+    rows = [
+        PrintSheetRow(
+            product_id=pid,
+            barcode=_print_sheet_barcode(product, ozon_links.get(pid)),
+            article=_print_sheet_article(product, ozon_links.get(pid)),
+            name=product.name,
+            total=totals[pid].on_hand if pid in totals else 0,
+            reserved=totals[pid].reserved if pid in totals else 0,
+        )
+        for pid, product in lines_products.items()
+    ]
+    rows.sort(key=lambda row: (row.name, row.article, row.barcode or ""))
+
+    product_articles: list[str] = []
+    for pid in selected_ids:
+        selected_product = selected_products.get(pid)
+        if selected_product is None:
+            # Товар удалён между созданием документа и печатью — пропускаем,
+            # печатать нечего.
+            continue
+        article = _print_sheet_article(selected_product, ozon_links.get(pid))
+        if article not in product_articles:
+            product_articles.append(article)
+
+    is_object = count.source == SOURCE_OBJECT
+    filters = PrintSheetFilters(
+        object=is_object,
+        warehouse_name=(
+            None if is_object else (count.warehouse.name if count.warehouse is not None else None)
+        ),
+        seller_name=(
+            None if is_object else (count.seller.name if count.seller is not None else None)
+        ),
+        category=None if is_object else count.category,
+        product_articles=[] if is_object else product_articles,
+    )
+    return PrintSheetData(filters=filters, rows=rows)
 
 
 async def list_counts(
