@@ -10,6 +10,8 @@ from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeBoxLine, InboundIntakeDistributionLine
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.seller import Seller
+from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import inbound_intake_service as intake
 from app.services import warehouse_map_service as warehouse_map
 from app.services.sorting_scan_service import scan_product
@@ -130,3 +132,40 @@ async def test_two_scanners_cannot_spend_last_unit_twice(async_client):
     results = await asyncio.gather(scan(args), scan(args), return_exceptions=True)
     assert sum(isinstance(result, dict) for result in results) == 1
     assert await qty(product, args["cell_id"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_saved_variant_alternative_and_primary_share_stock(async_client):
+    args, product, _, _ = await seed(async_client, loose=2, boxed=0)
+    async with SessionLocal() as session:
+        item = await session.get(Product, product)
+        seller = Seller(tenant_id=item.tenant_id, name="WMS556")
+        other_seller = Seller(tenant_id=item.tenant_id, name="WMS556 other")
+        session.add_all([seller, other_seller])
+        await session.flush()
+        item.seller_id = seller.id
+        item.wb_nm_id = 556
+        item.wb_chrt_id = 50
+        session.add(SellerWildberriesImportedCard(
+            tenant_id=item.tenant_id, seller_id=item.seller_id, nm_id=556,
+            raw_json={"sizes": [
+                {"chrtID": 50, "skus": ["WMS550-SKU", "2039751597840"]},
+                {"chrtID": 52, "skus": ["OTHER-SIZE"]},
+            ]},
+        ))
+        session.add(SellerWildberriesImportedCard(
+            tenant_id=item.tenant_id, seller_id=other_seller.id, nm_id=556,
+            raw_json={"sizes": [{"chrtID": 50, "skus": ["OTHER-SELLER"]}]},
+        ))
+        await session.commit()
+    with pytest.raises(warehouse_map.WarehouseMapError, match="product_not_on_request"):
+        await scan(args, barcode="OTHER-SIZE")
+    with pytest.raises(warehouse_map.WarehouseMapError, match="product_not_on_request"):
+        await scan(args, barcode="OTHER-SELLER")
+    op = uuid.uuid4()
+    assert (await scan(args, op, barcode="2039751597840"))["moved_qty"] == 1
+    assert (await scan(args, op, barcode="2039751597840"))["reload"] is True
+    await scan(args)
+    assert await qty(product, args["cell_id"]) == 2
+    async with SessionLocal() as session:
+        assert (await session.get(Product, product)).wb_barcode == "WMS550-SKU"
