@@ -20,6 +20,7 @@ import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
+import { FfBillingScreen } from '../../screens/ff/FfBillingScreen'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -519,6 +520,21 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   sellers={[]}
                   warehouses={reportWarehouseOptions(warehouses)}
                   contentInset={288}
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.documents ? (
+                <FfBillingScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  onOpenInbound={() => {}}
+                  sellerScope
                 />
               ) : (
                 accessDenied
