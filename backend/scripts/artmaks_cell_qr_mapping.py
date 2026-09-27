@@ -14,6 +14,7 @@ import io
 import json
 import sys
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 if "__file__" in globals():
@@ -53,7 +54,7 @@ def parse_mapping(raw: bytes) -> dict[str, str]:
     return mapping
 
 
-async def run(mapping: dict[str, str], *, tenant_id: UUID, apply: bool) -> dict:
+async def run(mapping: dict[str, str], *, tenant_id: UUID, apply: bool) -> dict[str, Any]:
     async with SessionLocal() as session, session.begin():
         warehouse = await session.get(Warehouse, WAREHOUSE_ID)
         if tenant_id != TENANT_ID or warehouse is None or warehouse.tenant_id != tenant_id:
@@ -87,7 +88,7 @@ async def run(mapping: dict[str, str], *, tenant_id: UUID, apply: bool) -> dict:
                 raise ValueError(
                     f"Barcode collision: {cell.barcode} already belongs to cell {cell.id}"
                 )
-        audit = [
+        audit: list[dict[str, Any]] = [
             {"id": str(cell.id), "code": cell.code,
              "before": cell.barcode, "after": mapping[cell.code]}
             for cell in sorted(cells, key=lambda cell: cell.code)

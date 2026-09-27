@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import uuid
+from typing import Any
 
 from sqlalchemy import text
 
@@ -15,13 +16,13 @@ WAREHOUSE = "5740eda2-b353-4c98-9755-0f2df4e862bc"
 SORTING = "9f3fbb36-2996-43bb-a2b8-4e7fe4ba9977"
 
 
-async def main():
+async def main() -> None:
     async with SessionLocal() as s:
         await s.execute(text("SET LOCAL lock_timeout='5s'"))
         await s.execute(text("SET LOCAL statement_timeout='20s'"))
         params = {"req": REQ, "tenant": TENANT, "warehouse": WAREHOUSE, "sorting": SORTING}
 
-        async def rows(sql):
+        async def rows(sql: str) -> list[dict[str, Any]]:
             return [dict(row) for row in (await s.execute(text(sql), params)).mappings()]
 
         request = await rows("SELECT * FROM inbound_intake_requests WHERE id=:req FOR UPDATE")
