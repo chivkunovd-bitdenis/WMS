@@ -111,6 +111,42 @@ async def get_product_movements(
     }
 
 
+@router.get("/inventory/product-movements")
+async def get_product_movement_history(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    product_id: Annotated[uuid.UUID, Query()],
+    page: Annotated[int, Query(ge=1)] = 1,
+) -> dict[str, object]:
+    """WMS-490 D2: все движения одного товара за всю историю — источник
+    вкладки «Движения» карточки товара. Строки строит и обогащает та же
+    функция, что и отчёт «Остатки и движения» (`GET /inventory/movements`):
+    без периода и без лимита 366 дней, потому что владелец просил именно
+    «все движения по этому артикулу», а историчность остатка должна
+    считаться в одном месте (AGENTS.md §3). Права и границы клиента —
+    ровно как у отчёта: `assert_inventory_read_access` и
+    `seller_line_product_scope` для кабинета селлера.
+    """
+    await assert_inventory_read_access(session, user)
+    try:
+        rows, truncated, total = await list_product_movements(
+            session,
+            user.tenant_id,
+            product_id=product_id,
+            seller_id=seller_scope,
+            page=page,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return {
+        "rows": rows, "truncated": truncated, "total": total,
+        "page": page, "limit": MOVEMENT_PAGE_LIMIT,
+    }
+
+
 @router.get("/overview")
 async def get_reports_overview(
     user: Annotated[User, Depends(get_current_user)],
