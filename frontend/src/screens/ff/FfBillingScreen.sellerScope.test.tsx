@@ -46,7 +46,9 @@ describe('WMS-549 empty states without FF hints', () => {
 describe('WMS-549 FfBillingScreen seller scope', () => {
   it('shows «Начисления» instead of «Селлеры», hides the seller filter/FF actions/purpose line/seller table, shows the drill-down right away', () => {
     const markup = renderToStaticMarkup(
-      <FfBillingScreen token="seller-token" onOpenInbound={() => {}} sellerScope />,
+      <MemoryRouter>
+        <FfBillingScreen token="seller-token" onOpenInbound={() => {}} sellerScope />
+      </MemoryRouter>,
     )
 
     expect(markup).not.toContain('data-testid="billing-seller"')
@@ -69,11 +71,13 @@ describe('WMS-549 FfBillingScreen seller scope', () => {
 
   it('keeps the FF screen unchanged by default: tab is still «Селлеры», seller table renders, no eager drill-down', () => {
     const markup = renderToStaticMarkup(
-      <FfBillingScreen
-        token="ff-token"
-        onOpenInbound={() => {}}
-        sellers={[{ id: 'seller-1', name: 'Ромашка' }]}
-      />,
+      <MemoryRouter>
+        <FfBillingScreen
+          token="ff-token"
+          onOpenInbound={() => {}}
+          sellers={[{ id: 'seller-1', name: 'Ромашка' }]}
+        />
+      </MemoryRouter>,
     )
 
     expect(markup).toContain('data-testid="billing-seller"')
