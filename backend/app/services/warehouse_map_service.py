@@ -141,7 +141,7 @@ async def resolve_container_paths(
             parent_pallet_id = warehouse_box.pallet_id
         elif kind == "box" and container_id in inbound_box_by_id:
             inbound_box = inbound_box_by_id[container_id]
-            code = f"КР-{inbound_box.box_number:06d}"
+            code = inbound_box.internal_barcode
             parent_pallet_id = inbound_box.pallet_id
         elif kind == "cargo_place" and container_id in cargo_place_by_id:
             cargo_place = cargo_place_by_id[container_id]
@@ -570,7 +570,7 @@ async def get_warehouse_map(
         nodes[key] = {
             "kind": "box",
             "id": str(inbound_box.id),
-            "code": f"КР-{inbound_box.box_number:06d}",
+            "code": inbound_box.internal_barcode,
             "barcode": inbound_box.internal_barcode,
             "seller_name": None,
             "qty": 0,
@@ -938,7 +938,7 @@ async def _container_code(
             except ValueError:
                 pass
             else:
-                return f"КР-{inbound.box_number:06d}"
+                return inbound.internal_barcode
     else:
         warehouse_cargo_place = await session.get(WarehouseBox, container_id)
         if (

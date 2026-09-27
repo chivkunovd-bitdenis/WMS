@@ -23,6 +23,7 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import warehouse_map_service
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -551,7 +552,7 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
             tenant_id=tenant.id,
             request_id=request.id,
             box_number=1,
-            internal_barcode=f"BOX-PENDING-{suffix}",
+            internal_barcode=f"WB_{suffix}",
             storage_location_id=cell.id,
         )
         cargo = InboundIntakeCargoPlace(
@@ -585,6 +586,16 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
         cell_id = cell.id
         cargo_id = cargo.id
         expected = {str(box.id): 5, str(cargo.id): 4}
+        box_id = box.id
+        box_barcode = box.internal_barcode
+        paths = await warehouse_map_service.resolve_container_paths(
+            session, tenant.id, warehouse_id, {("box", box_id)}
+        )
+        assert paths[("box", box_id)][-1].code == box_barcode
+        assert paths[("box", box_id)][-1].label == f"Короб {box_barcode}"
+        assert await warehouse_map_service._container_code(
+            session, tenant.id, warehouse_id, "box", box_id
+        ) == box_barcode
 
     response = await async_client.get(
         f"/warehouses/{warehouse_id}/map",
@@ -594,6 +605,8 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
     assert response.status_code == 200, response.text
     target_cell = next(row for row in response.json()["cells"] if row["id"] == str(cell_id))
     by_id = {row["id"]: row for row in target_cell["children"]}
+    assert by_id[str(box_id)]["code"] == box_barcode
+    assert by_id[str(box_id)]["barcode"] == box_barcode
     for container_id, remaining_qty in expected.items():
         assert by_id[container_id]["qty"] == remaining_qty
         assert by_id[container_id]["source_document_number"] == (
