@@ -23,7 +23,7 @@ function filterLines(filters: ApiPrintSheet['filters']): string[] {
   if (filters.warehouse_name) lines.push(`Склад: ${filters.warehouse_name}`)
   if (filters.seller_name) lines.push(`Селлер: ${filters.seller_name}`)
   if (filters.category) lines.push(`Категория: ${filters.category}`)
-  if (filters.product_articles && filters.product_articles.length > 0) {
+  if (filters.product_articles.length > 0) {
     lines.push(`Товары: ${filters.product_articles.join(', ')}`)
   }
   return lines
@@ -31,8 +31,8 @@ function filterLines(filters: ApiPrintSheet['filters']): string[] {
 
 function rowHtml(row: ApiPrintSheet['rows'][number], index: number): string {
   return `<tr class="${index % 2 === 1 ? 'odd' : 'even'}" data-testid="inv-sheet-row">
-      <td class="barcode">${escapeLabelHtml(row.barcode ?? '—')}</td>
-      <td class="article">${escapeLabelHtml(row.article ?? '—')}</td>
+      <td class="barcode">${escapeLabelHtml(row.barcode || '—')}</td>
+      <td class="article">${escapeLabelHtml(row.article || '—')}</td>
       <td class="name">${escapeLabelHtml(row.name)}</td>
       <td class="num total">${row.total}</td>
       <td class="num reserved">${row.reserved}</td>

@@ -57,7 +57,7 @@ describe('buildInventorySheetHtml', () => {
 
   it('не печатает строку незаданного параметра отбора (без "Селлер: все")', () => {
     const html = buildInventorySheetHtml(
-      sheet({ filters: { object: false, warehouse_name: 'Основной', seller_name: null, category: null, product_articles: null } }),
+      sheet({ filters: { object: false, warehouse_name: 'Основной', seller_name: null, category: null, product_articles: [] } }),
     )
     expect(html).toContain('Склад: Основной')
     expect(html).not.toContain('Селлер')
@@ -101,9 +101,9 @@ describe('buildInventorySheetHtml', () => {
     expect(html).not.toMatch(/data-testid="inv-sheet-fact">[^<]+</)
   })
 
-  it('строка «—» для отсутствующего ШК или артикула (R7)', () => {
+  it('строка «—» для отсутствующего ШК (R7); пустой артикул — тоже «—», хотя контракт сервера гарантирует непустой', () => {
     const html = buildInventorySheetHtml(
-      sheet({ rows: [{ product_id: 'p3', barcode: null, article: null, name: 'Товар без кодов', total: 4, reserved: 0 }] }),
+      sheet({ rows: [{ product_id: 'p3', barcode: null, article: '', name: 'Товар без кодов', total: 4, reserved: 0 }] }),
     )
     expect(html).toContain('<td class="barcode">—</td>')
     expect(html).toContain('<td class="article">—</td>')

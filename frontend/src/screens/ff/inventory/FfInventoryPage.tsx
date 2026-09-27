@@ -254,14 +254,21 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   }
 
   // WMS-497: печать листа — отдельный от очереди операций документа запрос.
-  // Он ничего не сохраняет и не проводит, поэтому не идёт через ops.action;
-  // `printingSheet` — единственная защита от второго окна печати при повторном
-  // нажатии, пока сервер готовит лист (R1).
+  // Он ничего не сохраняет и не проводит, поэтому не идёт через ops.action.
+  //
+  // `printingSheet` (state) только красит кнопку — React обновляет state не
+  // синхронно, а следующим рендером, и два клика подряд (быстрее, чем успевает
+  // отрисоваться кнопка) оба застают его ещё «false» и оба уходят в сеть —
+  // проверено Playwright: без рефа второе окно печати всё-таки открывалось.
+  // `printingRef` — тот же флаг, но обычная переменная, меняется в момент
+  // присваивания, поэтому второй клик в тот же тик видит уже актуальное «true».
   const [printingSheet, setPrintingSheet] = useState(false)
+  const printingRef = useRef(false)
 
   async function printSheet() {
-    if (!count || printingSheet) return
+    if (!count || printingRef.current) return
     const id = count.id
+    printingRef.current = true
     setPrintingSheet(true)
     setError(null)
     try {
@@ -272,6 +279,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     } catch (err) {
       if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось подготовить лист')
     } finally {
+      printingRef.current = false
       setPrintingSheet(false)
     }
   }

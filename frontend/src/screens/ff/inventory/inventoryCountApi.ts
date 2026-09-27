@@ -513,13 +513,15 @@ export type ApiPrintSheetFilters = {
   warehouse_name: string | null
   seller_name: string | null
   category: string | null
-  product_articles: string[] | null
+  /** Сервер шлёт пустой список, если отбора по товарам не было (не null). */
+  product_articles: string[]
 }
 
 export type ApiPrintSheetRow = {
   product_id: string
   barcode: string | null
-  article: string | null
+  /** R7: сервер всегда подставляет WB/Ozon-артикул или SKU — пустой строки не бывает. */
+  article: string
   name: string
   total: number
   reserved: number
