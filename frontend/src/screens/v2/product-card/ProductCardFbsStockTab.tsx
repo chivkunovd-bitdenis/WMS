@@ -1,26 +1,74 @@
-import type { ReactNode } from 'react'
-import { Box } from '@mui/material'
+import { useState } from 'react'
+import { ErrorNotice } from '../../../ui-kit'
+import { FbsStockDialogContainer } from '../../ff/products-fbs/FbsStockDialogContainer'
+import type { FbsStockDialogRow } from '../../ff/products-fbs/fbsStockDialogLoader'
 
-// Заглушка куска D3: вкладку целиком собирает D6 (WMS-490) — тело окна
-// «Остаток для FBS» (`FbsStockDialogContainer`/`FbsStockDialog`), вынесенное в
-// общий компонент и встроенное сюда без переделки (R12). Кнопки
-// «Отмена»/«Сохранить» уходят в нижнюю панель окна карточки через
-// `onFooterActionsChange` — слот уже подключён в `ProductCardDialog.tsx`.
-// Сигнатура пропсов — контракт для D6, чтобы не трогать сам диалог карточки.
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
+
 type Props = {
   productId: string
+  productName: string
+  productSku: string
+  productSize: string | null
+  /** Вкладка существует только у товара с продавцом (R3) — id уже проверен вызывающей стороной. */
   sellerId: string
-  sellerName: string
+  sellerName: string | null
   token: string
-  authHeaders: (t: string) => Record<string, string>
-  warehouses: { id: string; name: string; code: string; is_operational: boolean }[]
+  warehouses: WarehouseRow[]
   canEditBindings: boolean
-  /** «Сохранить» закрывает карточку целиком, как окно закрывается сейчас (R12). */
+  /** Нижняя панель карточки, куда порталятся «Отмена»/«Сохранить», пока эта вкладка активна. */
+  footerSlotEl: HTMLElement | null
+  /** «Сохранить» и «Отмена» закрывают карточку целиком, как окно закрывается сейчас (R12). */
   onCardClose: (changed: boolean) => void
-  /** Кнопки «Отмена»/«Сохранить» рисуются в нижней панели окна карточки, не во вкладке. */
-  onFooterActionsChange: (actions: ReactNode | null) => void
+  /** Идёт запись — карточка не даёт переключить вкладку, пока запрос не завершится. */
+  onBusyChange: (busy: boolean) => void
 }
 
-export function ProductCardFbsStockTab(_props: Props) {
-  return <Box data-testid="product-card-fbs-stock-tab-placeholder" />
+/**
+ * Вкладка «Задать остаток» карточки товара (WMS-490 D6): то же окно
+ * «Остаток для FBS», что открывается кнопкой «Задать остаток» и значком в
+ * строке каталога, — тот же контейнер с сетью, то же тело, без переделки.
+ * Здесь только сборка одного товара в строку окна и место для ошибки
+ * загрузки, которая не закрывает карточку (R16) — окно на её месте просто
+ * закрывалось бы, а вкладка обязана остаться на месте.
+ */
+export function ProductCardFbsStockTab({
+  productId,
+  productName,
+  productSku,
+  productSize,
+  sellerId,
+  sellerName,
+  token,
+  warehouses,
+  canEditBindings,
+  footerSlotEl,
+  onCardClose,
+  onBusyChange,
+}: Props) {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  if (loadError) {
+    return <ErrorNotice testId="product-card-fbs-stock-error">{loadError}</ErrorNotice>
+  }
+
+  const chosen: FbsStockDialogRow[] = [
+    { id: productId, name: productName, sku_code: productSku, wb_size: productSize },
+  ]
+
+  return (
+    <FbsStockDialogContainer
+      token={token}
+      sellerId={sellerId}
+      sellerName={sellerName ?? '—'}
+      chosen={chosen}
+      warehouses={warehouses}
+      canEditBindings={canEditBindings}
+      embedded
+      footerSlotEl={footerSlotEl}
+      onClose={() => onCardClose(true)}
+      onLoadError={setLoadError}
+      onBusyChange={onBusyChange}
+    />
+  )
 }
