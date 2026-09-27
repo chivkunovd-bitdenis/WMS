@@ -101,6 +101,21 @@ export function selectionPlacement(row: InvRow | null): ManualAddPlacement {
 }
 
 /**
+ * WMS-543: в какую ячейку ставить новую тару («Создать короб / палету /
+ * грузоместо»).
+ *
+ * Выделенная строка важнее: для любой выделенной строки результат прежний —
+ * ячейка из selectionPlacement (у тары, товара и «Без ячеек» это null).
+ * Выделения нет — берём ячейку, открытую сканером; открыта тара — ячейку, в
+ * которой она стоит. «Без ячеек» — не адрес склада, как и в selectionPlacement.
+ * Ничего не открыто — null: тара уезжает в зону сортировки, как и раньше.
+ */
+export function containerTargetCell(row: InvRow | null, open: ScanOpenPlace): string | null {
+  if (row) return selectionPlacement(row).cellId
+  return open.cellId && UUID_RE.test(open.cellId) ? open.cellId : null
+}
+
+/**
  * Тара, на которой стоит выделение, — для двух новых действий (задачи 2 и 3
  * доработки от 03.09.2026, WMS-153): «Переложить сюда» и «Удалить тару».
  * Обе умеют работать только с тарой, а не с ячейкой — переносить умеем
@@ -154,8 +169,9 @@ type Props = {
   pendingFound?: number
   /**
    * Создать тару. Второй аргумент — ячейка, на которой стоит выделение
-   * (задача 1 доработки от 03.09.2026, WMS-153); null — тара уезжает в зону
-   * сортировки, как и раньше.
+   * (задача 1 доработки от 03.09.2026, WMS-153), а без выделения — ячейка,
+   * открытая сканером (WMS-543); null — тара уезжает в зону сортировки,
+   * как и раньше.
    */
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place', cellId: string | null) => void
   /**
@@ -449,21 +465,21 @@ export function FfInventoryCountScreen({
       <Box sx={{ mb: 2 }}>
         <ActionGroup>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('box', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('box', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-box"
           >
             Создать короб
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('pallet', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('pallet', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-pallet"
           >
             Создать палету
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('cargo_place', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('cargo_place', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-cargo-place"
           >
