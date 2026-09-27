@@ -1,6 +1,7 @@
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createSortingScanner, emptyScanContext, type ScanContext } from './sortingScan'
 import {
   ActionGroup,
   AppDialog,
@@ -88,6 +89,8 @@ type SortingScreenProps = {
    * которая ничего не делает.
    */
   savedImmediately?: boolean
+  scanStorageKey?: string
+  onProductScan?: (barcode: string, context: ScanContext) => Promise<string | void>
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
@@ -97,7 +100,7 @@ type SortingScreenProps = {
     qty: number
     /** Holder before the move; only loose stock may be replayed after a lost reply. */
     sourceHolder: Holder
-  }) => void
+  }) => void | Promise<void>
 }
 
 export function SortingObjectsScreen({
@@ -114,6 +117,8 @@ export function SortingObjectsScreen({
   onClose,
   onCreateObject,
   savedImmediately,
+  scanStorageKey,
+  onProductScan,
 }: SortingScreenProps) {
   const theme = useTheme()
   const products = productsProp ?? PRODUCTS
@@ -121,8 +126,19 @@ export function SortingObjectsScreen({
   const [lines, setLines] = useState<GoodsLine[]>(initialLines ?? INITIAL_LINES)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [carried, setCarried] = useState<Carried | null>(null)
-  const [activeCellId, setActiveCellId] = useState<string | null>(null)
-  const [scanValue, setScanValue] = useState('')
+  const [scanContext, setScanContext] = useState<ScanContext>(() => {
+    try {
+      const stored = scanStorageKey ? sessionStorage.getItem(scanStorageKey) : null
+      if (stored) {
+        const parsed = JSON.parse(stored) as ScanContext
+        if (initialCells?.some((one) => one.id === parsed.cellId)) {
+          return { cellId: parsed.cellId, objectId: initialObjects?.some((one) => one.id === parsed.objectId && whereIs(one.holder, initialObjects, initialCells).cell?.id === parsed.cellId) ? parsed.objectId : null }
+        }
+      }
+    } catch { /* Selection persistence is optional; stock writes are not. */ }
+    return emptyScanContext
+  })
+  const activeCellId = scanContext.cellId
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [asking, setAsking] = useState<Carried | null>(null)
@@ -137,6 +153,35 @@ export function SortingObjectsScreen({
 
   const cells = [...(initialCells ?? CELLS), ...extraCells]
   const activeCell = cells.find((one) => one.id === activeCellId) ?? null
+  const activeObject = objects.find((one) => one.id === scanContext.objectId) ?? null
+  useEffect(() => { if (initialObjects) setObjects(initialObjects) }, [initialObjects])
+  useEffect(() => { if (initialLines) setLines(initialLines) }, [initialLines])
+  const scanDependencies = useRef({ cells, objects, onPlace, onProductScan })
+  scanDependencies.current = { cells, objects, onPlace, onProductScan }
+  const scannerRef = useRef<ReturnType<typeof createSortingScanner> | null>(null)
+  if (!scannerRef.current) {
+    scannerRef.current = createSortingScanner(scanContext, {
+      data: () => scanDependencies.current,
+      place: async (object, cellId) => {
+        if (scanDependencies.current.onPlace) {
+          await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null })
+        } else {
+          setObjects((current) => current.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one))
+        }
+      },
+      product: async (barcode, context) => {
+        if (!scanDependencies.current.onProductScan) throw new Error('Скан товара доступен в документе приёмки')
+        return scanDependencies.current.onProductScan(barcode, context)
+      },
+      changed: (next) => {
+        setScanContext(next)
+        try { if (scanStorageKey) sessionStorage.setItem(scanStorageKey, JSON.stringify(next)) } catch { /* Optional UI context. */ }
+      },
+      notice: (message) => { setScanError(null); setScanNotice(message) },
+      error: (error) => { setScanNotice(null); setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.') },
+    })
+  }
+  const setActiveCellId = (id: string) => { void scannerRef.current?.selectCell(id) }
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
   const totalQty = lines.reduce((sum, line) => sum + line.qty, 0)
@@ -171,7 +216,7 @@ export function SortingObjectsScreen({
     // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
     // `object_not_found`: экран откатывал перенос и перечитывал склад, а
     // оператор видел, что строка «сбрасывается».
-    onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })
+    void Promise.resolve(onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })).catch(() => undefined)
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
@@ -184,7 +229,7 @@ export function SortingObjectsScreen({
   }
 
   function moveObject(object: WarehouseObject, target: Holder, label: string) {
-    onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })
+    void Promise.resolve(onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })).catch(() => undefined)
     setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
     onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
   }
@@ -277,28 +322,7 @@ export function SortingObjectsScreen({
   }
 
   function handleScan(code: string) {
-    setScanValue('')
-    const cell = cells.find((one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase())
-    if (cell) {
-      setActiveCellId(cell.id)
-      setScanError(null)
-      setScanNotice(`Ячейка ${cell.code} — плюс у строки поставит сюда`)
-      return
-    }
-    const object = objects.find((one) => one.barcode === code)
-    if (object) {
-      if (!activeCell) {
-        setScanNotice(null)
-        setScanError('Сначала пикните ячейку — иначе непонятно, куда ставим')
-        return
-      }
-      moveObject(object, cellRef(activeCell.id), `ячейку ${activeCell.code}`)
-      setScanError(null)
-      setScanNotice(`${KIND_TITLE[object.kind]} ${object.code} → ячейка ${activeCell.code}`)
-      return
-    }
-    setScanNotice(null)
-    setScanError(`Штрихкод ${code} — ни ячейка, ни объект этой приёмки`)
+    void scannerRef.current?.scan(code)
   }
 
   const destinations = asking ? destinationsFor(asking, objects, cells) : []
@@ -316,13 +340,8 @@ export function SortingObjectsScreen({
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack spacing={1.5}>
           <ScannerField
-            value={scanValue}
-            onChange={(value) => {
-              setScanValue(value)
-              setScanError(null)
-            }}
             onScan={handleScan}
-            expects={activeCell ? 'объект, который ставим' : 'ячейку с полки'}
+            expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
             error={scanError}
             notice={scanNotice}
             testId="objects-scan"

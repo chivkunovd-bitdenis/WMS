@@ -1,0 +1,205 @@
+"""One scanner intent places one accepted unit, using existing movement receipts."""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any, cast
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeCargoPlace,
+    InboundIntakeDistributionLine,
+)
+from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import InventoryMovement
+from app.models.pallet import Pallet
+from app.models.warehouse_box import WarehouseBox
+from app.models.warehouse_map_event import WarehouseMapEvent
+from app.services import inbound_intake_service as intake
+from app.services import inventory_service as inventory
+from app.services import warehouse_map_service as warehouse_map
+from app.services.defect_warehouse_service import get_or_create_defect_location
+from app.services.inventory_container_service import ContainerKind
+from app.services.sorting_location_service import get_or_create_sorting_location
+
+
+async def scan_product(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    operation_id: uuid.UUID,
+    barcode: str,
+    cell_id: uuid.UUID,
+    to_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    error = warehouse_map.WarehouseMapError
+    barcode = barcode.strip()
+    req = await intake.get_request(session, tenant_id, inbound_request_id, for_update=True)
+    if req is None or req.warehouse_id != warehouse_id:
+        raise error("inbound_request_not_found")
+    # Bind the movement group to the complete intent. The existing distribution
+    # primary key serializes retries; no additional receipt table is necessary.
+    group_id = uuid.uuid5(
+        operation_id, f"sorting-scan:{inbound_request_id}:{barcode}:{cell_id}:{to_id}"
+    )
+    prior = await session.get(InboundIntakeDistributionLine, operation_id)
+    if prior is not None:
+        evidence = await session.scalar(select(InventoryMovement.id).where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.transfer_group_id == group_id,
+        ).limit(1))
+        if prior.request_id != req.id or evidence is None:
+            raise error("operation_conflict")
+        return {"id": str(operation_id), "moved_qty": 1}
+    if await session.get(WarehouseMapEvent, operation_id) is not None:
+        raise error("operation_conflict")
+    matches = [row for row in req.lines if barcode and row.product.wb_barcode == barcode]
+    if not matches:
+        raise error("product_not_on_request")
+    if len(matches) != 1:
+        raise error("ambiguous_product")
+    line = matches[0]
+    await inventory.lock_stock_product(session, tenant_id, line.product_id)
+    _, _, _, cell_label = await warehouse_map._destination(
+        session, tenant_id, warehouse_id, "cell", cell_id
+    )
+    target_kind: ContainerKind | None = None
+    target_label = cell_label
+    if to_id is not None:
+        target_kind = await warehouse_map._sorting_destination_kind(
+            session, tenant_id, warehouse_id, to_id
+        )
+        location, _, _, target_label = await warehouse_map._destination(
+            session, tenant_id, warehouse_id, target_kind, to_id
+        )
+        if location != cell_id:
+            raise error("container_cell_mismatch")
+        owned_containers: list[InboundIntakeBox | InboundIntakeCargoPlace] = [
+            *req.boxes, *req.cargo_places,
+        ]
+        belongs_to_request = any(container.id == to_id for container in owned_containers)
+        if target_kind == "pallet":
+            pallet = await session.get(Pallet, to_id)
+            belongs_to_request = (
+                pallet is not None and pallet.inbound_request_id == req.id
+            ) or any(container.pallet_id == to_id for container in owned_containers)
+        elif not belongs_to_request:
+            generic = await session.get(WarehouseBox, to_id)
+            belongs_to_request = generic is not None and generic.inbound_request_id == req.id
+        if not belongs_to_request:
+            raise error("destination_not_found")
+
+    async def no_remaining_source() -> None:
+        if to_id is not None and await session.scalar(select(InventoryBalance.id).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == line.product_id,
+            InventoryBalance.container_id == to_id,
+            InventoryBalance.storage_location_id == cell_id,
+            InventoryBalance.quantity > 0,
+        ).limit(1)) is not None:
+            raise error("already_in_target")
+        raise error("nothing_to_move")
+
+    if (
+        req.status != intake.STATUS_SORTING
+        or line.posted_qty >= intake._accepted_qty_for_line(line)
+    ):
+        await no_remaining_source()
+
+    sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+    balances = list((await session.scalars(select(InventoryBalance).where(
+        InventoryBalance.tenant_id == tenant_id,
+        InventoryBalance.product_id == line.product_id,
+        InventoryBalance.storage_location_id == sorting.id,
+        InventoryBalance.quantity > 0,
+    ).with_for_update())).all())
+    physical = {(row.container_kind, row.container_id): row for row in balances}
+    candidates: list[tuple[InventoryBalance | None, Any | None]] = []
+    pending = 0
+    for kind, containers in (("box", req.boxes), ("cargo_place", req.cargo_places)):
+        for container in containers:
+            for content in container.lines:
+                if content.product_id != line.product_id:
+                    continue
+                remaining = max(0, content.quantity - content.posted_qty)
+                pending += remaining
+                if remaining and container.id != to_id:
+                    candidates.append((physical.get((kind, container.id)), content))
+    generic_qty = 0
+    for balance in balances:
+        owner: Pallet | WarehouseBox | None = None
+        if balance.container_kind == "pallet":
+            owner = await session.get(Pallet, balance.container_id)
+        elif balance.container_id is not None:
+            owner = await session.get(WarehouseBox, balance.container_id)
+        if owner is not None and owner.inbound_request_id == req.id:
+            if balance.container_id == to_id:
+                continue
+            candidates.append((balance, None))
+            generic_qty += balance.quantity
+    loose_remaining = intake._accepted_qty_for_line(line) - line.posted_qty - pending - generic_qty
+    if loose_remaining > 0:
+        candidates.append((physical.get((None, None)), None))
+    if not candidates:
+        await no_remaining_source()
+    if len(candidates) > 1:
+        raise error("ambiguous_source")
+    source_balance, source_content = candidates[0]
+    if source_balance is None:
+        raise error("container_stock_missing")
+    source_kind = cast(ContainerKind | None, source_balance.container_kind)
+    from_label = "Сортировка"
+    if source_kind is not None and source_balance.container_id is not None:
+        code = await warehouse_map._container_code(
+            session, tenant_id, warehouse_id, source_kind, source_balance.container_id
+        )
+        from_label = warehouse_map._container_title(source_kind, code)
+    good_total = max(0, intake._accepted_qty_for_line(line) - line.defective_qty)
+    try:
+        if line.posted_qty < good_total:
+            await inventory.apply_putaway_from_sorting(
+                session, tenant_id, from_storage_location_id=sorting.id,
+                to_storage_location_id=cell_id, product_id=line.product_id, quantity=1,
+                inbound_intake_line_id=line.id, actor_user_id=actor_user_id,
+                from_container_kind=source_kind, from_container_id=source_balance.container_id,
+                to_container_kind=target_kind, to_container_id=to_id,
+                transfer_group_id=group_id,
+            )
+        else:
+            defect = await get_or_create_defect_location(session, tenant_id)
+            await inventory.apply_return_defect_putaway(
+                session, tenant_id, from_storage_location_id=sorting.id,
+                to_storage_location_id=defect.id, product_id=line.product_id, quantity=1,
+                inbound_intake_line_id=line.id, actor_user_id=actor_user_id,
+                from_container_kind=source_kind, from_container_id=source_balance.container_id,
+                transfer_group_id=group_id,
+            )
+    except ValueError as exc:
+        if str(exc) == "insufficient stock":
+            raise error("insufficient_sorting_stock") from exc
+        raise
+    line.posted_qty += 1
+    if source_content is not None:
+        source_content.posted_qty += 1
+    session.add(InboundIntakeDistributionLine(
+        id=operation_id, request_id=req.id, product_id=line.product_id,
+        storage_location_id=cell_id, quantity=1,
+        box_id=(source_balance.container_id
+                if source_kind == "box" and source_content is not None else None),
+    ))
+    session.add(WarehouseMapEvent(
+        id=operation_id, tenant_id=tenant_id, warehouse_id=warehouse_id,
+        actor_user_id=actor_user_id, subject=line.product.name, quantity=1,
+        from_label=from_label, to_label=target_label,
+    ))
+    intake._maybe_set_distribution_completed(req)
+    intake._maybe_complete_request(req)
+    await intake._record_charge_if_done(session, req, performer_id=actor_user_id)
+    await session.commit()
+    return {"id": str(operation_id), "moved_qty": 1}
