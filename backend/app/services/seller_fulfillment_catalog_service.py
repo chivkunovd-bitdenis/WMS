@@ -409,16 +409,22 @@ async def list_seller_catalog_page(
     )
     page_rows = list((await session.execute(page_stmt)).all())
 
+    # PostgreSQL требует, чтобы выражение в ORDER BY при SELECT DISTINCT было
+    # ровно тем же элементом плана, что и в списке выборки — два раздельных
+    # вызова .as_string() дают два разных bind-параметра и валят запрос
+    # InvalidColumnReference (SQLite этого не проверяет и не ловит). Заводим
+    # выражение один раз и переиспользуем объект везде.
+    subject_expr = SellerWildberriesImportedCard.raw_json["subjectName"].as_string()
     category_stmt = (
-        select(SellerWildberriesImportedCard.raw_json["subjectName"].as_string())
+        select(subject_expr)
         .where(
             SellerWildberriesImportedCard.tenant_id == tenant_id,
             SellerWildberriesImportedCard.seller_id == seller_id,
-            SellerWildberriesImportedCard.raw_json["subjectName"].as_string().is_not(None),
-            SellerWildberriesImportedCard.raw_json["subjectName"].as_string() != "",
+            subject_expr.is_not(None),
+            subject_expr != "",
         )
         .distinct()
-        .order_by(SellerWildberriesImportedCard.raw_json["subjectName"].as_string())
+        .order_by(subject_expr)
     )
     categories = [str(value) for value in (await session.scalars(category_stmt)).all()]
 
