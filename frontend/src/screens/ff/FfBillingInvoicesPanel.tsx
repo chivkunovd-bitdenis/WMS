@@ -50,9 +50,13 @@ export type InvoiceHistoryRow = {
  * Раньше дочитка страниц и React-ключ строки опирались только на id: при
  * совпадении id разных origin вторая запись считалась уже виденной и
  * терялась, а дочитка могла решить, что показывать больше нечего.
+ *
+ * Владелец прямо запретил менять «Расчёты» ФФ ни на миллиметр (R11), поэтому
+ * исправление действует только в кабинете селлера — у ФФ ключ, склейка
+ * страниц и testid остаются по голому id, как в etalon (аудит после F7).
  */
-export function invoiceRowKey(row: { origin: 'legacy' | 'v2'; id: string }): string {
-  return `${row.origin}:${row.id}`
+export function invoiceRowKey(row: { origin: 'legacy' | 'v2'; id: string }, sellerScope: boolean): string {
+  return sellerScope ? `${row.origin}:${row.id}` : row.id
 }
 
 /** Открытый счёт, приведённый к одному виду независимо от эпохи. */
@@ -277,8 +281,8 @@ export function FfBillingInvoicesPanel({
         // одну из двух разных записей (WMS-549 F7).
         setRows((current) => {
           if (!cursor) return data.invoices
-          const seen = new Set(current.map(invoiceRowKey))
-          return [...current, ...data.invoices.filter((row) => !seen.has(invoiceRowKey(row)))]
+          const seen = new Set(current.map((row) => invoiceRowKey(row, sellerScope)))
+          return [...current, ...data.invoices.filter((row) => !seen.has(invoiceRowKey(row, sellerScope)))]
         })
         setNextCursor(data.next_cursor)
       })
@@ -399,7 +403,7 @@ export function FfBillingInvoicesPanel({
       render: (row: InvoiceHistoryRow) => (
         <IconAction
           title="Открыть счёт"
-          testId={`billing-invoice-open-${invoiceRowKey(row)}`}
+          testId={`billing-invoice-open-${invoiceRowKey(row, sellerScope)}`}
           onClick={() => void openInvoice(row)}
         >
           <ExpandMore fontSize="small" />
@@ -465,7 +469,7 @@ export function FfBillingInvoicesPanel({
         columns={columns}
         rows={rows}
         loading={loading}
-        getRowKey={invoiceRowKey}
+        getRowKey={(row) => invoiceRowKey(row, sellerScope)}
         testId="billing-invoices-table"
         empty={invoiceHistoryEmptyState(sellerScope)}
       />
