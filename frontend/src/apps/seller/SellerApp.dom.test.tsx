@@ -16,6 +16,12 @@ import { FfBillingInvoicesPanel } from '../../screens/ff/FfBillingInvoicesPanel'
 // (F6). Оба сценария проверены тестами «от обратного»: ниже показано, что
 // со старым выражением ключа падает ровно тот тест, который должен падать.
 
+// Настоящий React-рендер в jsdom с несколькими act() на тест — на занятой
+// машине штатный таймаут 5с иногда не хватает; сама проверка не зависит от
+// времени выполнения. Ставится на уровне модуля, до регистрации it(), иначе
+// не успевает подействовать на объявленные тесты.
+vi.setConfig({ testTimeout: 30000 })
+
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 })
@@ -111,10 +117,10 @@ describe('WMS-549 F1: смена магазина не смешивает стр
     // 1. Сессия S1: первая страница, затем «Загрузить ещё».
     await mount(<Harness token={tokenS1} me={{ active_seller_id: 's1' }} />)
     await tick()
-    expect(document.querySelector('[data-row-key="s1-first"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
     await clickLoadMore()
-    expect(document.querySelector('[data-row-key="s1-first"]')).not.toBeNull()
-    expect(document.querySelector('[data-row-key="s1-second"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).not.toBeNull()
 
     // 2. Переключение магазина: applyToken() уже дал новый токен с seller_id=s2
     // в claims, но me — тот же самый объект, каким он был до ответа /auth/me
@@ -124,9 +130,9 @@ describe('WMS-549 F1: смена магазина не смешивает стр
 
     // Новый ключ (он зависит от seller_id в claims токена, а не только от me)
     // пересоздал панель: в DOM нет ни одной строки S1, есть только строка S2.
-    expect(document.querySelector('[data-row-key="s1-first"]')).toBeNull()
-    expect(document.querySelector('[data-row-key="s1-second"]')).toBeNull()
-    expect(document.querySelector('[data-row-key="s2-bill"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s2-bill"]')).not.toBeNull()
 
     // Запрос новой сессии ушёл без курсора прежней страницы S1.
     const s2Calls = headerCalls.filter((c) => c.startsWith(`Bearer ${tokenS2}`))
@@ -153,7 +159,7 @@ describe('WMS-549 F1: смена магазина не смешивает стр
     await tick()
     // Со старой формулой ключ не меняется (me тот же) — компонент не
     // пересоздаётся, строка S1 остаётся видна вместо пересоздания на S2.
-    expect(document.querySelector('[data-row-key="s1-first"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
   })
 })
 
@@ -179,8 +185,8 @@ describe('WMS-549 F6 (ревью Astra №2): перевыпуск токена 
     await mount(<Harness token={tokenA} me={{ active_seller_id: 's1' }} />)
     await tick()
     await clickLoadMore()
-    expect(document.querySelector('[data-row-key="s1-first"]')).not.toBeNull()
-    expect(document.querySelector('[data-row-key="s1-second"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).not.toBeNull()
 
     // Перевыпуск токена той же области (например, будущий silent-refresh или
     // повторный /auth/switch-seller на тот же магазин): claims не изменились,
@@ -188,8 +194,8 @@ describe('WMS-549 F6 (ревью Astra №2): перевыпуск токена 
     await rerender(<Harness token={tokenB} me={{ active_seller_id: 's1' }} />)
     await tick()
 
-    expect(document.querySelector('[data-row-key="s1-first"]')).not.toBeNull()
-    expect(document.querySelector('[data-row-key="s1-second"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).not.toBeNull()
   })
 
   it('от обратного: если бы ключ по-прежнему включал всю строку токена, дочитанная страница терялась бы', async () => {
@@ -215,13 +221,87 @@ describe('WMS-549 F6 (ревью Astra №2): перевыпуск токена 
     await mount(<RawTokenKeyHarness token={tokenA} />)
     await tick()
     await clickLoadMore()
-    expect(document.querySelector('[data-row-key="s1-second"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).not.toBeNull()
 
     await rerender(<RawTokenKeyHarness token={tokenB} />)
     await tick()
 
     // С ключом по всей строке токена перевыпуск (другая подпись) пересоздал
     // панель заново — вторая страница потеряна, ровно дефект F6.
-    expect(document.querySelector('[data-row-key="s1-second"]')).toBeNull()
+    expect(document.querySelector('[data-row-key="v2:s1-second"]')).toBeNull()
+  })
+})
+
+describe('WMS-549 F6 остаток (ревью Astra №3): отсутствующий seller_id claim — тот же основной магазин', () => {
+  it('claims без seller_id (домашний магазин) → токен с явным ID того же домашнего магазина не пересоздаёт панель', async () => {
+    const tokenNoClaim = fakeJwt({ tenant_id: 't1', sub: 'manager' }) // сервер трактует это как основной магазин
+    const tokenExplicitHome = fakeJwt({ tenant_id: 't1', sub: 'manager', seller_id: 'home-s1' }, '-explicit')
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ invoices: [invoiceRow('s1-first', 'S1-СЧЁТ-1')], next_cursor: null }), { status: 200 }),
+    ))
+    const me = { active_seller_id: 'home-s1', home_seller_id: 'home-s1' }
+    await mount(<Harness token={tokenNoClaim} me={me} />)
+    await tick()
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+
+    await rerender(<Harness token={tokenExplicitHome} me={me} />)
+    await tick()
+
+    // Тот же основной магазин — ключ не изменился, панель не пересоздалась
+    // (строка от первого рендера всё ещё на месте, второго fetch не потребовалось
+    // для потери состояния — принципиально то, что панель не сброшена в пустую).
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+  })
+
+  it('от обратного: если отсутствующий claim нормализовать к отдельной метке «no-seller», тот же переход пересоздаёт панель', async () => {
+    const tokenNoClaim = fakeJwt({ tenant_id: 't1', sub: 'manager' })
+    const tokenExplicitHome = fakeJwt({ tenant_id: 't1', sub: 'manager', seller_id: 'home-s1' }, '-explicit')
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ invoices: [invoiceRow('s1-first', 'S1-СЧЁТ-1')], next_cursor: null }), { status: 200 }),
+    ))
+    // Старая (неполная) формула F6-исправления: отсутствие claim → 'no-seller'.
+    const NoSellerTagHarness = ({ token }: { token: string }) => {
+      const part = token.split('.')[1] ?? ''
+      const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')))
+      const key = `${json.tenant_id}:${json.sub}:${json.seller_id ?? 'no-seller'}`
+      return <FfBillingInvoicesPanel key={key} token={token} sellerScope />
+    }
+    await mount(<NoSellerTagHarness token={tokenNoClaim} />)
+    await tick()
+    await rerender(<NoSellerTagHarness token={tokenExplicitHome} />)
+    await tick()
+    // Ключ сменился с 't1:manager:no-seller' на 't1:manager:home-s1' —
+    // панель пересоздалась и потеряла состояние ровно из-за формулы.
+    expect(document.querySelector('[data-row-key="v2:s1-first"]')).not.toBeNull()
+  })
+})
+
+describe('WMS-549 F7 (ревью Astra №3): совпадение id у legacy и V2 счетов не склеивается', () => {
+  it('V2 на первой странице и legacy с тем же id на второй — обе строки остаются после «Загрузить ещё»', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.searchParams.get('cursor') === 'PAGE2') {
+        return new Response(
+          JSON.stringify({
+            invoices: [{ ...invoiceRow('X', 'LEGACY-SECOND'), origin: 'legacy' as const }],
+            next_cursor: null,
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response(
+        JSON.stringify({ invoices: [invoiceRow('X', 'V2-FIRST')], next_cursor: 'PAGE2' }),
+        { status: 200 },
+      )
+    }))
+    await mount(<Harness token={fakeJwt({ tenant_id: 't1', sub: 'u', seller_id: 's1' })} me={{ active_seller_id: 's1' }} />)
+    await tick()
+    expect(document.querySelector('[data-row-key="v2:X"]')).not.toBeNull()
+    await clickLoadMore()
+
+    // Совпадение UUID между разными эпохами (origin) — разные счета: обе
+    // строки должны остаться видны, ни одна не должна быть отброшена как дубль.
+    expect(document.querySelector('[data-row-key="v2:X"]')).not.toBeNull()
+    expect(document.querySelector('[data-row-key="legacy:X"]')).not.toBeNull()
   })
 })

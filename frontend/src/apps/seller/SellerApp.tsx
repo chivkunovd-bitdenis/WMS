@@ -97,14 +97,29 @@ function decodeJwtClaims(token: string): { tenant_id?: string; sub?: string; sel
  * (испорчен или в тесте подставлена не настоящая строка), используется вся
  * строка токена как безопасный запасной вариант: он не может занизить
  * пересоздание при смене области, только может пересоздать лишний раз.
+ *
+ * Остаток F6 (ревью Astra №3): сервер трактует токен без claim seller_id как
+ * основной магазин пользователя (`resolve_effective_seller_id` в deps.py) —
+ * это не «магазин без имени», а тот же самый основной магазин, что и явный ID
+ * в переизданном токене. Раньше отсутствие claim нормализовалось к отдельной
+ * метке 'no-seller', поэтому токен без claim и токен с явным ID того же
+ * основного магазина давали РАЗНЫЕ ключи и лишний раз пересоздавали раздел.
+ * Теперь отсутствующий claim нормализуется к home_seller_id профиля (тот же
+ * основной магазин, что получит и явный токен) — эта величина не меняется при
+ * переключении активного магазина, поэтому её безопасно брать из уже
+ * загруженного `me`, в отличие от active_seller_id (тот меняется только после
+ * /auth/me и подстановка его сюда вернула бы F1: см. выше). Когда claims
+ * присутствуют явно — они и есть источник истины, home_seller_id профиля
+ * здесь не участвует.
  */
 export function sellerCatalogScopeKey(
   token: string | null,
-  me: { active_seller_id?: string | null; seller_id?: string | null },
+  me: { active_seller_id?: string | null; seller_id?: string | null; home_seller_id?: string | null },
 ): string {
   const claims = token ? decodeJwtClaims(token) : null
   if (claims) {
-    return `${claims.tenant_id ?? 'no-tenant'}:${claims.sub ?? 'no-user'}:${claims.seller_id ?? 'no-seller'}`
+    const sellerScope = claims.seller_id ?? me.home_seller_id ?? me.seller_id ?? 'home'
+    return `${claims.tenant_id ?? 'no-tenant'}:${claims.sub ?? 'no-user'}:${sellerScope}`
   }
   return `${token ?? 'anon'}:${me.active_seller_id ?? me.seller_id ?? 'none'}`
 }

@@ -42,6 +42,19 @@ export type InvoiceHistoryRow = {
   total_amount_kopecks: number
 }
 
+/**
+ * Настоящая идентичность строки истории счетов — пара (origin, id), а не
+ * голый id (WMS-549, ревью Astra №3, F7). Legacy- и V2-счета лежат в разных
+ * таблицах без общего ограничения уникальности UUID между ними, поэтому один
+ * и тот же id может встретиться у счёта из разных эпох — это разные счета.
+ * Раньше дочитка страниц и React-ключ строки опирались только на id: при
+ * совпадении id разных origin вторая запись считалась уже виденной и
+ * терялась, а дочитка могла решить, что показывать больше нечего.
+ */
+export function invoiceRowKey(row: { origin: 'legacy' | 'v2'; id: string }): string {
+  return `${row.origin}:${row.id}`
+}
+
 /** Открытый счёт, приведённый к одному виду независимо от эпохи. */
 export type OpenedInvoice = {
   id: string
@@ -259,11 +272,13 @@ export function FfBillingInvoicesPanel({
         return response.json() as Promise<{ invoices: InvoiceHistoryRow[]; next_cursor: string | null }>
       })
       .then((data) => {
-        // Дозагрузка склеивается по id: повтор страницы не должен раздвоить счёт.
+        // Дозагрузка склеивается по (origin, id): повтор страницы не должен
+        // раздвоить счёт, а совпадение id между legacy и V2 не должно стереть
+        // одну из двух разных записей (WMS-549 F7).
         setRows((current) => {
           if (!cursor) return data.invoices
-          const seen = new Set(current.map((row) => row.id))
-          return [...current, ...data.invoices.filter((row) => !seen.has(row.id))]
+          const seen = new Set(current.map(invoiceRowKey))
+          return [...current, ...data.invoices.filter((row) => !seen.has(invoiceRowKey(row)))]
         })
         setNextCursor(data.next_cursor)
       })
@@ -384,7 +399,7 @@ export function FfBillingInvoicesPanel({
       render: (row: InvoiceHistoryRow) => (
         <IconAction
           title="Открыть счёт"
-          testId={`billing-invoice-open-${row.id}`}
+          testId={`billing-invoice-open-${invoiceRowKey(row)}`}
           onClick={() => void openInvoice(row)}
         >
           <ExpandMore fontSize="small" />
@@ -450,7 +465,7 @@ export function FfBillingInvoicesPanel({
         columns={columns}
         rows={rows}
         loading={loading}
-        getRowKey={(row) => row.id}
+        getRowKey={invoiceRowKey}
         testId="billing-invoices-table"
         empty={invoiceHistoryEmptyState(sellerScope)}
       />
