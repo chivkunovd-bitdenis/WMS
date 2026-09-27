@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfProductsCatalogScreen } from './FfProductsCatalogScreen'
 
@@ -11,6 +11,11 @@ import { FfProductsCatalogScreen } from './FfProductsCatalogScreen'
 // сбрасывал — react-router не размонтирует компонент при переходе на тот же
 // маршрут. Нарушение R9/C9. Тест монтирует настоящий компонент (createRoot,
 // реальные эффекты, реальный клик по ссылке меню), не статический рендер.
+//
+// Правка F6 (ревью Astra №2, docs/reviews/artifacts/wms-491/review-astra-2.md):
+// эффект сброса выше считал новым входом из меню любую смену location.key без
+// ?seller_id=, а его создаёт и собственная чистка ?fbs_limit= каталогом (окно
+// раскладки остатка по складам WB) — фильтр слетал сам, без участия оператора.
 
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -26,7 +31,15 @@ let host: HTMLDivElement
 let root: Root
 
 function Nav() {
-  return <Link data-testid="menu-catalog" to="/app/ff/products">Каталог</Link>
+  const loc = useLocation()
+  return <>
+    <Link data-testid="menu-catalog" to="/app/ff/products">Каталог</Link>
+    <span data-testid="location">{loc.pathname}{loc.search}</span>
+  </>
+}
+
+function currentSearch(): string {
+  return host.querySelector('[data-testid="location"]')?.textContent?.split('?')[1] ?? ''
 }
 
 function response(data: unknown): Response {
@@ -133,5 +146,55 @@ describe('FfProductsCatalogScreen — filter applied from ?seller_id= survives o
 
     await clickMenuCatalog()
     expect(sellerFilterValue()).toBe('seller-b')
+  })
+
+  it('the catalog own cleanup of ?fbs_limit= does not drop the ?seller_id= filter (F6)', async () => {
+    // ff-catalog-page отдаёт один товар, чтобы у каталога было что раскладывать
+    // по складам; fbs_limit ссылается на несуществующий товар — окно раскладки
+    // не откроется, но эффект всё равно чистит параметр из адреса (это и есть
+    // источник лишней смены location.key).
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/products/ff-catalog-page')) {
+          return response({
+            items: [{
+              id: 'product-a', seller_id: 'seller-a', seller_name: 'WMS-491 Селлер А',
+              name: 'Товар А', sku_code: 'SKU-A', wb_nm_id: null, wb_vendor_code: null,
+              wb_subject_name: null, wb_primary_image_url: null, wb_barcodes: [],
+              wb_primary_barcode: null, wb_size: null, wb_color: null, wb_brand: null,
+              wb_composition: null, packaging_instructions: null,
+              requires_honest_sign: false, has_packaging_instructions: false,
+            }],
+            total: 1, scope_total: 1, categories: [],
+          })
+        }
+        if (url.includes('/operations/inventory-balances/summary')) return response([])
+        return response([])
+      }),
+    )
+
+    await mount('/app/ff/products?seller_id=seller-a&fbs_limit=missing-product')
+    await waitForSellerFilter()
+    expect(sellerFilterValue()).toBe('seller-a')
+
+    // Дожидаемся, пока каталог загрузится и собственный эффект fbs_limit
+    // почистит свой параметр из адреса — меню оператор не нажимал.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const search = new URLSearchParams(currentSearch())
+      if (!search.has('fbs_limit') && !search.has('seller_id')) break
+      await flush()
+    }
+
+    expect(sellerFilterValue()).toBe('seller-a')
+    const finalSearch = new URLSearchParams(currentSearch())
+    expect(finalSearch.has('seller_id')).toBe(false)
+    expect(finalSearch.has('fbs_limit')).toBe(false)
+
+    // Меню всё ещё сбрасывает фильтр — техническая чистка адреса не должна
+    // была «израсходовать» будущую способность эффекта отличать вход из меню.
+    await clickMenuCatalog()
+    expect(sellerFilterValue()).toBe('')
   })
 })

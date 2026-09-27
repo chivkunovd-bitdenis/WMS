@@ -185,6 +185,42 @@ describe('SellerCardScreen ignores a stale profile response for the same seller 
   })
 })
 
+describe('SellerCardScreen ignores a stale profile response held up inside res.json() (F4, review #2)', () => {
+  it('a first request whose body arrives late cannot overwrite the reload that followed save', async () => {
+    // Ревью №2: первая версия проверяла только номер запроса сразу после
+    // `await fetch(...)`, до чтения тела. Здесь задерживается именно
+    // `res.json()` — `fetch` для первого запроса разрешается сразу
+    // (как настоящий Response), а его тело («Legal OLD») приходит позже,
+    // уже после того как сохранение перечитало карточку («Legal NEW»).
+    const original = globalThis.fetch
+    let releaseFirstJson!: (data: unknown) => void
+    const firstJson = new Promise((resolve) => {
+      releaseFirstJson = resolve
+    })
+    let getCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init: RequestInit = {}) => {
+        if (!String(input).includes('/profiles/sellers/')) return original(input, init)
+        if (init.method === 'PUT') return Promise.resolve(response(profile('NEW')))
+        getCount += 1
+        if (getCount === 1) {
+          return Promise.resolve({ ok: true, status: 200, json: () => firstJson } as Response)
+        }
+        return Promise.resolve(response(profile('NEW')))
+      }),
+    )
+    await mount(cardRoutes(), '/app/ff/sellers/seller-a')
+    await click('billing-profiles-open')
+    await click('billing-profiles-save')
+    expect(host.querySelector('[data-testid="seller-card-requisites"]')?.textContent).toContain('Legal NEW')
+    await act(async () => releaseFirstJson(profile('OLD')))
+    await flush()
+    expect(host.querySelector('[data-testid="seller-card-requisites"]')?.textContent).toContain('Legal NEW')
+    expect(host.querySelector('[data-testid="seller-card-requisites"]')?.textContent).not.toContain('Legal OLD')
+  })
+})
+
 describe('SellerCardScreen tells a read failure apart from genuinely empty requisites (F5)', () => {
   it('shows a load-error notice instead of claiming the profile is unfilled', async () => {
     const original = globalThis.fetch
@@ -200,6 +236,86 @@ describe('SellerCardScreen tells a read failure apart from genuinely empty requi
     expect(host.querySelector('[data-testid="seller-card-requisites-empty"]')).toBeNull()
     expect(host.querySelector('[data-testid="seller-card-requisites-error"]')?.textContent).toContain(
       'Не удалось загрузить реквизиты',
+    )
+  })
+})
+
+describe('FfBillingInvoicesPanel discards a late invoice-open response from before the seller switch (F3, review #2)', () => {
+  it('never shows the opened invoice of the previous fixed seller after switching', async () => {
+    // Ревью №2: очистка `opened` при смене `fixedSellerId` не отменяла уже
+    // выполняющийся `openInvoice` — задерживается именно GET одного счёта
+    // (не список), нажатый до смены селлера; смена происходит, пока GET ещё
+    // висит, и только потом ответ приходит.
+    const original = globalThis.fetch
+    const listRow = (id: string, seller: string) => ({
+      id,
+      number: id,
+      origin: 'v2',
+      seller_id: seller,
+      seller_name: seller,
+      issued_at: '2026-09-27T10:00:00Z',
+      period_start: null,
+      period_end: null,
+      creation_mode: 'manual',
+      status: 'issued',
+      total_amount_kopecks: 100,
+    })
+    const openedPayload = (id: string) => ({
+      id,
+      number: id,
+      status: 'issued',
+      issued_at: '2026-09-27T10:00:00Z',
+      period_start: null,
+      period_end: null,
+      creation_mode: 'manual',
+      total_amount_kopecks: 100,
+      lines: [],
+    })
+    let releaseOpenA!: (r: Response) => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url.includes('/invoices-v2?')) {
+          const params = new URL(url, 'http://localhost').searchParams
+          const who = params.get('seller_id')!
+          return Promise.resolve(
+            response({ invoices: [listRow(who === 'seller-a' ? 'A-INVOICE-1' : 'B-INVOICE-1', who)], next_cursor: null }),
+          )
+        }
+        if (url.endsWith('/invoices-v2/A-INVOICE-1')) {
+          return new Promise<Response>((r) => {
+            releaseOpenA = r
+          })
+        }
+        if (url.endsWith('/invoices-v2/B-INVOICE-1')) {
+          return Promise.resolve(response(openedPayload('B-INVOICE-1')))
+        }
+        return original(input, init)
+      }),
+    )
+    await act(async () => {
+      root.render(<FfBillingInvoicesPanel token="test" fixedSellerId="seller-a" />)
+    })
+    await flush()
+    await click('billing-invoice-open-A-INVOICE-1')
+
+    await act(async () => {
+      root.render(<FfBillingInvoicesPanel token="test" fixedSellerId="seller-b" />)
+    })
+    await flush()
+    // Дождались B и, для полноты сценария, тоже открыли его счёт.
+    expect(host.textContent).toContain('B-INVOICE-1')
+    await click('billing-invoice-open-B-INVOICE-1')
+    expect(document.querySelector('[data-testid="billing-invoice-dialog"]')?.textContent).toContain('B-INVOICE-1')
+
+    await act(async () => releaseOpenA(response(openedPayload('A-INVOICE-1'))))
+    await flush()
+    // Поздний ответ A не должен подменить уже открытый диалог B — ни номером,
+    // ни повторным открытием после того, как оператор его закрыл бы.
+    expect(document.querySelector('[data-testid="billing-invoice-dialog"]')?.textContent).toContain('B-INVOICE-1')
+    expect(document.querySelector('[data-testid="billing-invoice-dialog"]')?.textContent).not.toContain(
+      'A-INVOICE-1',
     )
   })
 })
