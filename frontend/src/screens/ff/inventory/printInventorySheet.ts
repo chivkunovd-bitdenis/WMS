@@ -141,8 +141,20 @@ export function buildInventorySheetHtml(sheet: ApiPrintSheet): string {
 </html>`
 }
 
-/** Печать листа инвентаризации (A4, браузер). Ничего не ждёт — на листе нет фото. */
-export function printInventorySheet(sheet: ApiPrintSheet): void {
+/**
+ * Печать листа инвентаризации (A4, браузер). На листе нет фото, поэтому
+ * ничего не ждём для сборки — но саму печать (`frameWindow.print()`) браузер
+ * запускает не сразу: только после загрузки iframe и ещё через 100 мс.
+ *
+ * Возвращаем Promise, который разрешается не раньше фактической попытки
+ * печати (вызов `print()`, каким бы ни был исход) — до этого момента
+ * документ ещё «готовится». Страница держит на этом промисе свой флаг
+ * повторного нажатия (WMS-497, ревью Astra №1, F1): раньше флаг снимался
+ * сразу после синхронного возврата этой функции, то есть до того, как
+ * `print()` вообще был вызван, и второе нажатие в этом промежутке уходило
+ * вторым запросом на сервер и открывало второе окно печати.
+ */
+export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   const html = buildInventorySheetHtml(sheet)
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
     window.__WMS_LAST_PRINT_HTML__ = html
@@ -166,33 +178,41 @@ export function printInventorySheet(sheet: ApiPrintSheet): void {
     }
   }
 
-  let printed = false
-  const printNow = () => {
-    if (printed) return
-    printed = true
-    const frameWindow = iframe.contentWindow
-    if (!frameWindow) {
-      cleanup()
-      return
-    }
-    try {
-      frameWindow.focus()
-    } catch {
-      // фокус не обязателен
-    }
-    setTimeout(() => {
-      frameWindow.addEventListener('afterprint', cleanup, { once: true })
-      try {
-        if (window.__WMS_CAPTURE_PRINT_HTML__) {
-          window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
-        }
-        frameWindow.print()
-      } catch {
+  return new Promise<void>((resolve) => {
+    let printed = false
+    const printNow = () => {
+      if (printed) return
+      printed = true
+      const frameWindow = iframe.contentWindow
+      if (!frameWindow) {
         cleanup()
+        resolve()
+        return
       }
-    }, 100)
-  }
+      try {
+        frameWindow.focus()
+      } catch {
+        // фокус не обязателен
+      }
+      setTimeout(() => {
+        frameWindow.addEventListener('afterprint', cleanup, { once: true })
+        try {
+          if (window.__WMS_CAPTURE_PRINT_HTML__) {
+            window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
+          }
+          frameWindow.print()
+        } catch {
+          cleanup()
+        } finally {
+          // Попытка печати сделана (открылось окно печати или нет — не
+          // важно для гварда): страница может снова принимать нажатие —
+          // намеренная повторная печать того же документа не блокируется.
+          resolve()
+        }
+      }, 100)
+    }
 
-  iframe.srcdoc = html
-  iframe.onload = printNow
+    iframe.srcdoc = html
+    iframe.onload = printNow
+  })
 }

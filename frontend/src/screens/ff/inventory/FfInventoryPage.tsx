@@ -262,6 +262,16 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   // проверено Playwright: без рефа второе окно печати всё-таки открывалось.
   // `printingRef` — тот же флаг, но обычная переменная, меняется в момент
   // присваивания, поэтому второй клик в тот же тик видит уже актуальное «true».
+  //
+  // Ревью Astra №1 (F1): флаг обязан держаться не только на время сетевого
+  // запроса, а до фактической попытки печати. printInventorySheet сама по
+  // себе синхронна (заводит iframe и назначает обработчик загрузки) и сразу
+  // возвращает управление — реальный `print()` браузер вызывает позже, после
+  // загрузки iframe и ещё 100 мс таймера. Раньше guard снимался сразу после
+  // этого синхронного возврата, то есть до print(), и повторное нажатие в
+  // этом промежутке успевало запустить второй запрос и второе окно печати.
+  // Теперь printInventorySheet возвращает Promise, который разрешается не
+  // раньше самой попытки печати, и guard ждёт именно его.
   const [printingSheet, setPrintingSheet] = useState(false)
   const printingRef = useRef(false)
 
@@ -275,7 +285,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       const sheet = await fetchPrintSheet(tokenRef.current, id)
       // Оператор мог уйти с документа, пока лист готовился, — тогда печатать
       // уже нечего: окно печати документа, который он не смотрит, только мешает.
-      if (ops.currentId() === id) printInventorySheet(sheet)
+      if (ops.currentId() === id) await printInventorySheet(sheet)
     } catch (err) {
       if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось подготовить лист')
     } finally {
