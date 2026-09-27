@@ -352,7 +352,7 @@ export function ObjectsTree({
     // Отступы внутри ячеек поджаты именно здесь. По умолчанию их 16 слева и
     // справа, на шести колонках это почти двести пикселей — больше, чем занимает
     // само название товара. Для плотного дерева это непозволительная роскошь.
-    <Box sx={{ '& .MuiTableCell-root': { pl: 1, pr: 1 }, ...(activeObjectId ? { [`& [data-row-key="o-${activeObjectId}"]`]: { animation: 'sorting-box-flash 700ms ease-out' }, '@keyframes sorting-box-flash': { from: { opacity: 0.35 }, to: { opacity: 1 } } } : {}) }}>
+    <Box sx={{ '& .MuiTableCell-root': { pl: 1, pr: 1 } }}>
     <DataTable
       testId={testId}
       columns={columns}

@@ -7,7 +7,6 @@ import {
   AppDialog,
   NumberInput,
   PrimaryAction,
-  PrintAction,
   ScannerField,
   ScreenHeader,
   SecondaryAction,
@@ -24,7 +23,6 @@ import {
   INITIAL_OBJECTS,
   PRODUCTS,
   KIND_TITLE,
-  cellQty,
   cellRef,
   productById,
   type Cell,
@@ -37,10 +35,9 @@ import {
 } from './objectsStub'
 import {
   canPut,
-  cellRows,
+  allRows,
   destinationsFor,
   objectTitle,
-  unplacedRows,
   type Carried,
   type ObjectRow,
 } from './objectsRows'
@@ -147,7 +144,8 @@ export function SortingObjectsScreen({
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [pendingScans, setPendingScans] = useState({ count: 0, paused: false })
-  const activePanel = useRef<HTMLDivElement>(null)
+  const mainList = useRef<HTMLDivElement>(null)
+  const activeCellTile = useRef<HTMLDivElement>(null)
   const [asking, setAsking] = useState<Carried | null>(null)
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
@@ -195,15 +193,16 @@ export function SortingObjectsScreen({
   }
   useEffect(() => { void scannerRef.current?.resume() }, [])
   useEffect(() => {
-    if (scanContext.objectId) setCollapsed((current) => {
-      const next = new Set(current)
-      next.delete(scanContext.objectId!)
-      return next
-    })
-    const panel = activePanel.current
-    const row = scanContext.objectId ? panel?.querySelector(`[data-row-key="o-${scanContext.objectId}"]`) : null
-    ;(row ?? panel)?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+    const row = scanContext.objectId ? mainList.current?.querySelector(`[data-row-key="o-${scanContext.objectId}"]`) : null
+    ;(row ?? activeCellTile.current)?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
   }, [scanContext.cellId, scanContext.objectId])
+  const visibleCollapsed = new Set(collapsed)
+  let openObject = activeObject
+  while (openObject) {
+    visibleCollapsed.delete(openObject.id)
+    const parentId: string | undefined = openObject.holder?.startsWith('obj:') ? openObject.holder.slice(4) : undefined
+    openObject = objects.find((one) => one.id === parentId) ?? null
+  }
   const setActiveCellId = (id: string) => { void scannerRef.current?.selectCell(id) }
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
@@ -378,7 +377,7 @@ export function SortingObjectsScreen({
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Box sx={{
+        <Box ref={mainList} sx={{
             // Таблица занимает всю оставшуюся ширину, а не «по содержимому».
             // По содержимому она схлопывалась на коротких кодах коробов, и
             // полэкрана уходило в пустоту — а в согласованном макете таблица
@@ -426,10 +425,11 @@ export function SortingObjectsScreen({
             </SecondaryAction>
           </Stack>
           <ObjectsTree
-            rows={unplacedRows(objects, lines, products, collapsed)}
+            rows={allRows(objects, lines, products, cells, visibleCollapsed)}
             objects={objects}
             carried={carried}
             testId="objects-tree"
+            activeObjectId={scanContext.objectId}
             empty={{
               title: 'Всё расставлено по ячейкам',
               hint: 'Ни товара россыпью, ни собранных объектов не осталось.',
@@ -482,6 +482,7 @@ export function SortingObjectsScreen({
                 return (
                   <Box
                     key={cell.id}
+                    ref={active ? activeCellTile : undefined}
                     role="button"
                     tabIndex={0}
                     onClick={() => setActiveCellId(cell.id)}
@@ -502,9 +503,7 @@ export function SortingObjectsScreen({
                       borderRadius: 1.5,
                       cursor: 'pointer',
                       border: '1px solid',
-                      borderColor: 'divider',
-                      animation: active ? 'sorting-cell-flash 700ms ease-out' : 'none',
-                      '@keyframes sorting-cell-flash': { from: { backgroundColor: alpha(theme.palette.primary.main, 0.25) }, to: { backgroundColor: 'transparent' } },
+                      borderColor: active ? 'primary.main' : 'divider',
                       outline: target && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
                       outlineOffset: '-3px',
                     }}
@@ -520,96 +519,6 @@ export function SortingObjectsScreen({
               })}
             </Stack>
           </Paper>
-          {activeCell ? (
-            <Paper
-          key={activeCell.id}
-          ref={activePanel}
-          variant="outlined"
-          sx={{
-            order: -1,
-            mt: '0 !important',
-            mb: 2,
-            minWidth: 0,
-            maxHeight: '55vh',
-            overflow: 'auto',
-            scrollMarginTop: 90,
-            animation: 'sorting-panel-flash 700ms ease-out',
-            '@keyframes sorting-panel-flash': { from: { backgroundColor: alpha(theme.palette.primary.main, 0.18) }, to: { backgroundColor: 'background.paper' } },
-            p: 2,
-            outline:
-              carried && canPut(carried, cellRef(activeCell.id), objects)
-                ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
-                : 'none',
-            outlineOffset: '-4px',
-          }}
-          onDragOver={(event) => {
-            if (carried && canPut(carried, cellRef(activeCell.id), objects)) event.preventDefault()
-          }}
-          onDrop={() => drop(cellRef(activeCell.id))}
-          data-testid="objects-active-cell"
-            >
-          <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-            {/* Код ячейки не переносится на вторую строку (канон R-36):
-                заголовок, разорванный пополам, перестаёт читаться как код. */}
-            <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
-              {activeCell.code}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            >
-              {cellQty(activeCell.id, objects, lines)} шт — по составу того, что стоит
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <PrintAction
-              what="ШК ячейки"
-              placement="row"
-              // В состояние кладём сам код ячейки, а не подпись: печать ищет
-              // объект по коду, и строка «ячейка А 1.1» не совпадала ни с чем —
-              // печать молча ничего не делала.
-              onClick={() => setPrinting({ title: activeCell.code, barcode: activeCell.barcode })}
-              testId="objects-print-cell"
-            />
-          </Stack>
-          <ObjectsTree
-            rows={cellRows(activeCell, objects, lines, products, collapsed)}
-            objects={objects}
-            carried={carried}
-            testId="objects-cell-tree"
-            activeObjectId={scanContext.objectId}
-            compact
-            empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
-            onToggle={toggle}
-            onPlace={(row: ObjectRow) =>
-              openDialog(
-                row.kind === 'goods'
-                  ? { kind: 'goods', line: row.line }
-                  : { kind: 'object', object: row.object },
-              )
-            }
-            onDragStart={(row: ObjectRow) =>
-              setCarried(
-                row.kind === 'goods'
-                  ? { kind: 'goods', line: row.line }
-                  : { kind: 'object', object: row.object },
-              )
-            }
-            onDragEnd={() => setCarried(null)}
-            onDropOn={drop}
-            onTakeOut={takeOut}
-            onMinus={takeOffCell}
-            onPrint={(row) =>
-              setPrinting(
-                row.kind === 'object'
-                  ? { title: objectTitle(row.object), barcode: row.object.barcode }
-                  : { title: row.name, barcode: row.barcode },
-              )
-            }
-            onPickCell={setActiveCellId}
-          />
-            </Paper>
-          ) : null}
 
         </Stack>
       </Stack>
