@@ -20,6 +20,21 @@ type Props = {
   onNotFound: () => void
   /** Открыть документ приёмки по ссылке в строке движения — как у отчёта «Остатки и движения». */
   onOpenInbound?: (id: string) => void
+  /**
+   * Растёт после успешного изменения остатка (проведённый пересчёт, «Задать
+   * остаток» и т. п.) — сигнал перечитать журнал с первой страницы, сбросив
+   * загруженные порции (WMS-490 ревью Astra №1, F1). Диалог карточки передаёт
+   * его во все вкладки; пока конкретная сборка диалога его не присылает,
+   * значение не приходит вовсе и поведение вкладки не меняется.
+   */
+  stockVersion?: number
+  /**
+   * Вкладка сейчас выбрана в карточке (видна оператору). Возврат на вкладку
+   * после сбоя загрузки повторяет её — иначе оператор должен был бы сам
+   * найти кнопку «Повторить» на вкладке, которую до этого не видел (F1).
+   * Без этого пропа поведение то же, что раньше.
+   */
+  active?: boolean
 }
 
 type MovementsPage = {
@@ -27,9 +42,28 @@ type MovementsPage = {
   truncated?: boolean
   total?: number
   page?: number
+  /**
+   * Верхняя граница набора (`created_at`), зафиксированная сервером на
+   * первой странице (WMS-490 ревью Astra №1, F5). Без периода OFFSET
+   * неустойчив к новым движениям между запросами страниц: приёмка или
+   * инвентаризация сдвигает выборку — последняя строка первой страницы
+   * приходит на второй ещё раз, а действительно новая строка вообще не
+   * загружается. Каждая следующая страница обязана прислать это же
+   * значение назад; перечитывание с первой страницы снимает его и получает
+   * новый снимок.
+   */
+  before?: string
 }
 
-export function ProductCardMovementsTab({ productId, token, authHeaders, onNotFound, onOpenInbound }: Props) {
+export function ProductCardMovementsTab({
+  productId,
+  token,
+  authHeaders,
+  onNotFound,
+  onOpenInbound,
+  stockVersion,
+  active,
+}: Props) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [rows, setRows] = useState<MovementRow[]>([])
   const [hasMore, setHasMore] = useState(false)
@@ -39,15 +73,28 @@ export function ProductCardMovementsTab({ productId, token, authHeaders, onNotFo
   // обновилась бы только на следующий рендер, «Загрузить ещё» могла бы
   // успеть уйти дважды с одним и тем же номером страницы.
   const nextPageRef = useRef(1)
+  // Снимок верхней границы набора для текущей серии страниц (F5) — тоже не
+  // состояние: нужен синхронно внутри `loadMore`, а не только на следующий рендер.
+  const beforeRef = useRef<string | null>(null)
   // Единственный синхронный флаг «идёт запрос» — им же ловится двойное
   // нажатие внутри одного события, до которого React ещё не перерисовал
   // задизейбленную кнопку (R9).
   const loadingRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  // Последнее увиденное значение stockVersion — чтобы отличить «пришло
+  // впервые при монтировании» (перечитывать не нужно, это уже сделает
+  // эффект по productId) от «изменилось после успешной записи» (F1).
+  const stockVersionRef = useRef(stockVersion)
+  // Текущий статус, доступный синхронно внутри эффекта реактивации (F1) —
+  // без рефа пришлось бы держать `status` в зависимостях эффекта и он бы
+  // срабатывал на каждый переход в error, а не только на возврат на вкладку.
+  const statusRef = useRef(status)
+  statusRef.current = status
 
   const fetchPage = useCallback(
-    async (requestedPage: number, signal: AbortSignal): Promise<MovementsPage> => {
+    async (requestedPage: number, signal: AbortSignal, before: string | null): Promise<MovementsPage> => {
       const params = new URLSearchParams({ product_id: productId, page: String(requestedPage) })
+      if (before) params.set('before', before)
       const res = await fetch(apiUrl(`/reports/inventory/product-movements?${params.toString()}`), {
         headers: { ...authHeaders(token) },
         signal,
@@ -74,12 +121,14 @@ export function ProductCardMovementsTab({ productId, token, authHeaders, onNotFo
     setHasMore(false)
     setMoreError(false)
     nextPageRef.current = 1
-    fetchPage(1, controller.signal)
+    beforeRef.current = null
+    fetchPage(1, controller.signal, null)
       .then((body) => {
         if (controller.signal.aborted) return
         setRows(body.rows ?? [])
         setHasMore(Boolean(body.truncated))
         nextPageRef.current = (body.page ?? 1) + 1
+        beforeRef.current = body.before ?? null
         setStatus('ready')
       })
       .catch((e) => {
@@ -101,6 +150,29 @@ export function ProductCardMovementsTab({ productId, token, authHeaders, onNotFo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId])
 
+  // F1: остаток изменился где-то в карточке (пересчёт в «Расположении»,
+  // сохранение в «Задать остаток») — журнал устарел, перечитываем его с
+  // первой страницы новым снимком, даже если сейчас на вкладке не смотрят.
+  useEffect(() => {
+    if (stockVersion === undefined) return
+    if (stockVersionRef.current === stockVersion) return
+    stockVersionRef.current = stockVersion
+    loadFirst()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockVersion])
+
+  // F1: вернулись на вкладку после сбоя загрузки — повторяем её сами, а не
+  // ждём, что оператор станет искать кнопку «Повторить» на вкладке, которую
+  // только что открыл заново. Срабатывает именно на переход `active`, а не
+  // на сам факт ошибки — обычная активная вкладка после сбоя ждёт нажатия
+  // кнопки, как и раньше.
+  useEffect(() => {
+    if (!active) return
+    if (statusRef.current !== 'error') return
+    loadFirst()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+
   const loadMore = useCallback(() => {
     if (loadingRef.current || !hasMore) return
     loadingRef.current = true
@@ -108,7 +180,8 @@ export function ProductCardMovementsTab({ productId, token, authHeaders, onNotFo
     setMoreError(false)
     const controller = new AbortController()
     const requestedPage = nextPageRef.current
-    fetchPage(requestedPage, controller.signal)
+    const before = beforeRef.current
+    fetchPage(requestedPage, controller.signal, before)
       .then((body) => {
         setRows((current) => [...current, ...(body.rows ?? [])])
         setHasMore(Boolean(body.truncated))

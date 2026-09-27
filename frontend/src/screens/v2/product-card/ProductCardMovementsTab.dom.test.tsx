@@ -158,6 +158,132 @@ describe('WMS-490 R9: догрузка страниц', () => {
   })
 })
 
+describe('WMS-490 ревью Astra №1, F5: устойчивый снимок страниц', () => {
+  it('вторая страница присылает назад снимок «before», полученный с первой', async () => {
+    const snapshot = '2026-09-01T00:00:00+00:00'
+    const calls: string[] = []
+    const fetchMock = vi.fn(async (url: string) => {
+      calls.push(url)
+      const parsed = new URL(url, 'http://x')
+      if (parsed.searchParams.get('page') === '2') {
+        expect(parsed.searchParams.get('before')).toBe(snapshot)
+        return new Response(
+          JSON.stringify({ rows: [movement('m3')], truncated: false, total: 3, page: 2, before: snapshot }),
+          { status: 200 },
+        )
+      }
+      expect(parsed.searchParams.has('before')).toBe(false)
+      return new Response(
+        JSON.stringify({ rows: [movement('m1'), movement('m2')], truncated: true, total: 3, page: 1, before: snapshot }),
+        { status: 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(<ProductCardMovementsTab {...baseProps()} />)
+    await tick()
+    await click('product-card-movements-load-more')
+    await tick()
+
+    expect(document.body.textContent).toContain('ПРИЕМ-m3')
+    expect(calls.some((u) => u.includes('page=2') && u.includes(encodeURIComponent(snapshot)))).toBe(true)
+  })
+})
+
+describe('WMS-490 ревью Astra №1, F1: реакция на stockVersion и active', () => {
+  it('смена stockVersion перечитывает журнал с первой страницы новым снимком', async () => {
+    let call = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      call += 1
+      const parsed = new URL(url, 'http://x')
+      if (call === 1) {
+        return new Response(
+          JSON.stringify({ rows: [movement('m1')], truncated: false, total: 1, page: 1, before: '2026-09-01T00:00:00+00:00' }),
+          { status: 200 },
+        )
+      }
+      // Перечитывание после смены stockVersion — снова первая страница и без
+      // старого before: это новый снимок, а не догрузка прежней серии.
+      expect(parsed.searchParams.get('page')).toBe('1')
+      expect(parsed.searchParams.has('before')).toBe(false)
+      return new Response(
+        JSON.stringify({ rows: [movement('m2')], truncated: false, total: 1, page: 1, before: '2026-09-02T00:00:00+00:00' }),
+        { status: 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(<ProductCardMovementsTab {...baseProps({ stockVersion: 0 })} />)
+    await tick()
+    expect(document.body.textContent).toContain('ПРИЕМ-m1')
+
+    await act(async () => {
+      root!.render(<ProductCardMovementsTab {...baseProps({ stockVersion: 1 })} />)
+    })
+    await tick()
+
+    expect(document.body.textContent).toContain('ПРИЕМ-m2')
+    expect(document.body.textContent).not.toContain('ПРИЕМ-m1')
+    expect(call).toBe(2)
+  })
+
+  it('первое значение stockVersion при монтировании не вызывает лишний запрос', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ rows: [movement('m1')], truncated: false, total: 1, page: 1 }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(<ProductCardMovementsTab {...baseProps({ stockVersion: 5 })} />)
+    await tick()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('возврат на вкладку (active: false → true) после сбоя повторяет загрузку', async () => {
+    let call = 0
+    const fetchMock = vi.fn(async () => {
+      call += 1
+      if (call === 1) return new Response(JSON.stringify({ detail: 'boom' }), { status: 500 })
+      return new Response(JSON.stringify({ rows: [movement('m1')], truncated: false, total: 1, page: 1 }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(<ProductCardMovementsTab {...baseProps({ active: true })} />)
+    await tick()
+    expect($('product-card-movements-error')).not.toBeNull()
+    expect(call).toBe(1)
+
+    // Ушли с вкладки — сама по себе потеря активности запрос не шлёт.
+    await act(async () => {
+      root!.render(<ProductCardMovementsTab {...baseProps({ active: false })} />)
+    })
+    await tick()
+    expect(call).toBe(1)
+
+    // Вернулись на вкладку — загрузка повторяется сама, без нажатия «Повторить».
+    await act(async () => {
+      root!.render(<ProductCardMovementsTab {...baseProps({ active: true })} />)
+    })
+    await tick()
+
+    expect(call).toBe(2)
+    expect(document.body.textContent).toContain('ПРИЕМ-m1')
+    expect(maybe('product-card-movements-error')).toBeNull()
+  })
+
+  it('active=true при монтировании без ошибки не вызывает лишний запрос', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ rows: [movement('m1')], truncated: false, total: 1, page: 1 }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(<ProductCardMovementsTab {...baseProps({ active: true })} />)
+    await tick()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('WMS-490 R9: пустое состояние и ошибка', () => {
   it('у товара нет движений — таблица с заголовком «Движений нет», без кнопки догрузки', async () => {
     const fetchMock = vi.fn(async () =>
