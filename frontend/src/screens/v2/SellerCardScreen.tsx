@@ -187,6 +187,8 @@ function SellerCardScreenForSeller({ token, authHeaders, sellers }: Props) {
               token={token}
               sellerId={seller.id}
               sellerName={seller.name}
+              wbConnected={Boolean(seller.wb_has_key)}
+              ozonConnected={Boolean(seller.ozon_connected)}
               onSaved={() => void loadProfile()}
             />
             <Button

@@ -81,6 +81,14 @@ async def lookup_party_by_inn(inn: str) -> dict[str, Any]:
         logger.warning("dadata answered non-json")
         raise DadataError("dadata_unavailable") from exc
 
+    if not isinstance(payload, dict):
+        # DaData ответил 200 с валидным JSON, но не объектом — null, массив
+        # или строка (независимое ревью WMS-547, F2). Это сбой ответа, а не
+        # «организация не найдена»: `party_not_found` показал бы пользователю
+        # неверный совет «проверьте ИНН», когда на самом деле DaData глюкнул.
+        logger.warning("dadata answered non-object json: %s", type(payload).__name__)
+        raise DadataError("dadata_unavailable")
+
     party = _first_party(payload)
     if party is None:
         raise DadataError("party_not_found")
