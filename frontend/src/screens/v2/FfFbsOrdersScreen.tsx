@@ -1254,7 +1254,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         open={cancelledAfterPackOpen} token={token} authHeaders={authHeaders}
         sellerId={sellerId === '__all__' ? undefined : sellerId}
         onClose={() => setCancelledAfterPackOpen(false)}
-        onOpenSupply={(id) => { setWorkspaceId(id); setWorkspaceSeed(null); setWorkspaceOpen(true) }}
+        onOpenSupply={(id) => openWorkspace(id)}
       /></ErrorBoundary>
 
       {/* Среднее время сборки крупной цифрой над таблицей — согласованный блок.

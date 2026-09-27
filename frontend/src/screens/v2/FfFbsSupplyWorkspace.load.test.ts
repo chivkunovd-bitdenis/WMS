@@ -26,7 +26,7 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no })
   return { promise, resolve, reject }
 }
-function fixture() {
+function fixture(savedStages = new Map<string, string>()) {
   const generation = { current: 1 }
   const writeSeq = { current: 0 }
   // Поставка, чей состав на экране, идёт следом за применённым снимком — так же,
@@ -51,7 +51,7 @@ function fixture() {
   const callbackFactory = new Function('fetchFbsWorkspace', 'beginWorkspaceWrite',
     'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
-    'authHeaders', `${callbackJs}; return load`) as (...args: unknown[]) => (
+    'authHeaders', 'readFbsWorkspaceStage', `${callbackJs}; return load`) as (...args: unknown[]) => (
       silent?: boolean, onApplied?: (applied: unknown) => void) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
@@ -62,12 +62,28 @@ function fixture() {
     (next: string) => { visible.error = next }, (next: boolean) => { visible.busy = next },
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
+    (supplyId: string) => savedStages.get(supplyId) ?? null,
   )
   return { generation, writeSeq, pending, visible, load }
 }
 const workspace = (id: string) => ({ supply: { id, marketplace: 'wb' }, stage: id })
 
 describe('FBS workspace delayed response isolation', () => {
+  it.each(['boxes', 'packing', 'composition'])('keeps the saved %s on initial reload', async (stage) => {
+    const f = fixture(new Map([['A', stage]]))
+    const loading = f.load('A')()
+    f.pending.get('A')!.resolve(workspace('A')); await loading
+    expect(f.visible.stage).toBe(stage)
+    expect(f.visible.error).toBe('')
+  })
+
+  it('does not reuse the previous supply saved stage', async () => {
+    const f = fixture(new Map([['A', 'boxes']]))
+    const loading = f.load('B')()
+    f.pending.get('B')!.resolve(workspace('B')); await loading
+    expect(f.visible.stage).toBe('B')
+  })
+
   it('keeps B when the previous A HTTP response finishes last', async () => {
     const f = fixture()
     const a = f.load('A')()

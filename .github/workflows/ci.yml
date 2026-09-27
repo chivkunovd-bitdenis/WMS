@@ -24,6 +24,18 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wms_test_517
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wms_test_517"
+          --health-interval 5s --health-timeout 3s --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -55,6 +67,19 @@ jobs:
         # с 20 минут 38 секунд до 4 минут 48 секунд при том же составе тестов:
         # 1431 до, 1431 после, ни один не сменил исход.
         run: pytest -n auto
+      - name: PostgreSQL locks and immutable migration guards
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517
+        run: pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py
+      - name: Fresh PostgreSQL migration chain and withdrawal rollback
+        env:
+          DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517_migrations
+          JWT_SECRET_KEY: fixture-only-ci-migration-key-not-a-secret
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_517_migrations'); c.close()"
+          alembic upgrade head
+          alembic downgrade 20260923_0517
+          alembic upgrade head
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -72,5 +97,7 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Verify WMS-517 attached CAdES auth profile
+        run: npm run test:crypto-auth
       - name: Build
         run: npm run build

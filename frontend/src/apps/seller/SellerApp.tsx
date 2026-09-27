@@ -17,6 +17,7 @@ import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
+import { SellerKizWithdrawalScreen } from '../../screens/v2/SellerKizWithdrawalScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
@@ -327,6 +328,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     }
     const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
     const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
+    const withdrawalEnabled = me.withdrawal_enabled === true && !shopsBusy
     const accessDenied = (
       <Alert severity="warning" data-testid="seller-access-denied">
         Нет доступа к этому разделу. Обратитесь к администратору селлера.
@@ -500,6 +502,21 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
             element={
               <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                  withdrawalEnabled={withdrawalEnabled}
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/honest-sign/withdrawals"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign && withdrawalEnabled ? (
+                <SellerKizWithdrawalScreen
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
