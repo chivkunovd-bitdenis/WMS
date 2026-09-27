@@ -37,6 +37,7 @@ from app.services import (
     warehouse_map_service,
 )
 from app.services.catalog_service import load_ozon_primary_image_urls
+from app.services.defect_warehouse_service import DEFECT_LOCATION_CODE
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -256,7 +257,14 @@ def _balance_query(
     if warehouse_id is not None:
         stmt = stmt.where(StorageLocation.warehouse_id == warehouse_id)
     if not address_storage_enabled:
-        stmt = stmt.where(StorageLocation.code == SORTING_LOCATION_CODE)
+        # WMS-530 review F4 (R1/D2): без адресного хранения весь обычный
+        # остаток лежит в сортировке, но брак всё равно пишется в свой
+        # штатный __DEFECT__ независимо от этой настройки (defect_warehouse_
+        # service её не проверяет) — раньше он выпадал из инвентаризации,
+        # хотя входит в Остаток.
+        stmt = stmt.where(
+            StorageLocation.code.in_((SORTING_LOCATION_CODE, DEFECT_LOCATION_CODE))
+        )
     if category is not None:
         # Категория товара приходит из двух мест: собственное поле каталога и
         # карточка Wildberries. У импортированных товаров заполнено одно, у
@@ -373,8 +381,11 @@ async def create_count(
         warehouse_ids = {location.warehouse_id for _, _, location in balances}
         if len(warehouse_ids) == 1:
             warehouse_id = next(iter(warehouse_ids))
-        elif not address_enabled and len(warehouse_ids) > 1:
-            raise InventoryCountError("warehouse_required_without_address_storage")
+        # WMS-530 review F4 (R9/R11): без адресного хранения остаток товара
+        # мог и раньше лежать на нескольких рабочих складах одновременно —
+        # это расположение, оно не должно мешать провести инвентаризацию на
+        # весь остаток товара одним документом. `warehouse_id` документа
+        # остаётся None, как уже работает для адресного хранения выше.
 
     count = InventoryCount(
         tenant_id=tenant_id,

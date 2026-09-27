@@ -83,7 +83,10 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
 
     row = await read_summary()
     assert row["quantity"] == physical
-    assert row["reserved"] == reserve_qty
+    # WMS-530 R2: Резерв организации включает и бронь заказа, и ручное
+    # направление — раньше "reserved" считал только бронь, а направление
+    # входило лишь в отдельное поле quantity_free_fbo.
+    assert row["reserved"] == reserve_qty + direction_qty
     assert row["quantity_free_fbo"] == expected_free
     assert row["available"] == expected_free
     assert row["quantity_fbs"] == (reserve_qty if units_mode else 0)
@@ -92,8 +95,12 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
         headers=headers, params={"warehouse_id": str(warehouse_id), "seller_id": seller_id},
     )
     assert picker.status_code == 200, picker.text
-    picked_row = next(item for item in picker.json() if item["product_id"] == str(product_id))
-    assert picked_row["available"] == expected_free
+    if expected_free > 0:
+        picked_row = next(item for item in picker.json() if item["product_id"] == str(product_id))
+        assert picked_row["available"] == expected_free
+    else:
+        # WMS-530 R8: список показывает только товары с Доступно больше нуля.
+        assert all(item["product_id"] != str(product_id) for item in picker.json())
 
     # Releasing the existing reservation changes only derived availability.
     async with SessionLocal() as session:

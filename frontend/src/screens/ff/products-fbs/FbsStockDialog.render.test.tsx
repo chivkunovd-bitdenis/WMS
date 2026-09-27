@@ -72,7 +72,9 @@ describe('WMS-469 окно «Остаток для FBS»: структура', (
     expect(markup).toContain('data-testid="fbs-stock-block-b-wb"')
     expect(markup).toContain('E2E Seller Warehouse')
     expect(tag(markup, 'fbs-stock-bind-b-wb')).toContain('<select')
-    expect(markup).toContain('на складе 120 шт, занято 0 — свободно')
+    // WMS-530 R12: те же слова, что в каталоге.
+    expect(markup).toContain('остаток 120 шт, резерв 0 — доступно')
+    expect(markup).not.toContain('свободно')
     expect(markup).toContain('Принимаем заказы продавца со склада «E2E Seller Warehouse»')
     expect(markup).toContain('Передавать остаток на')
     expect(markup).toContain('data-testid="fbs-stock-percent-b-wb"')

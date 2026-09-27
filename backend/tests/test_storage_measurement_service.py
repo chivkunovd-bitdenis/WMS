@@ -14,10 +14,14 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
-from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    get_or_create_sorting_location,
+)
 from app.services.storage_measurement_service import (
     MOSCOW,
     _stock_segments,
@@ -283,8 +287,12 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
         tenant_id = operational.tenant_id
         technical = Warehouse(
             tenant_id=tenant_id,
-            name="FBS WB technical",
-            code=f"fbs-wb-{suffix}",
+            name="Non-operational technical",
+            # WMS-516 reserves the "fbs-wb-" code prefix for marketplace legacy
+            # warehouses and blocks new physical records on them (including a
+            # sorting location below); this test only needs a non-operational
+            # warehouse, not that specific reserved identity.
+            code=f"technical-{suffix}",
             is_operational=False,
         )
         calculated_seller = Seller(tenant_id=tenant_id, name="Calculated seller")
@@ -317,7 +325,18 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
         operational_location = await get_or_create_sorting_location(
             session, tenant_id, operational.id
         )
-        technical_location = await get_or_create_sorting_location(session, tenant_id, technical.id)
+        # WMS-516 (R2/R3) closes get_warehouse()/get_or_create_sorting_location()
+        # to any non-operational warehouse (any new physical record), so the
+        # non-operational "technical" warehouse used to test exclusion from
+        # storage measurement needs its sorting location seeded directly.
+        technical_location = StorageLocation(
+            tenant_id=tenant_id,
+            warehouse_id=technical.id,
+            code=SORTING_LOCATION_CODE,
+            barcode=f"SORT-{technical.id.hex[:12].upper()}",
+        )
+        session.add(technical_location)
+        await session.flush()
         session.add_all(
             [
                 InventoryMovement(

@@ -21,14 +21,14 @@ def _tenant_id(token: str) -> uuid.UUID:
 async def _seed_movement(
     *, tenant_id: uuid.UUID, product_id: str, seller_id: str, warehouse_id: str,
     storage_location_id: str, quantity_delta: int, created_at: datetime,
-    transfer_group_id: uuid.UUID | None = None,
+    transfer_group_id: uuid.UUID | None = None, movement_type: str = "test_movement",
 ) -> None:
     async with SessionLocal() as session:
         session.add(InventoryMovement(
             tenant_id=tenant_id, product_id=uuid.UUID(product_id), seller_id=uuid.UUID(seller_id),
             warehouse_id=uuid.UUID(warehouse_id),
             storage_location_id=uuid.UUID(storage_location_id),
-            quantity_delta=quantity_delta, movement_type="test_movement", created_at=created_at,
+            quantity_delta=quantity_delta, movement_type=movement_type, created_at=created_at,
             transfer_group_id=transfer_group_id,
         ))
         await session.commit()
@@ -114,6 +114,7 @@ async def test_reports_overview_uses_moscow_half_open_dates_and_fills_daily_gaps
         tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
         warehouse_id=warehouse_id, storage_location_id=location_id, quantity_delta=100,
         created_at=datetime(2026, 8, 2, 12, tzinfo=UTC), transfer_group_id=transfer_group,
+        movement_type="stock_transfer_in",
     )
     async with SessionLocal() as session:
         session.add(InventoryBalance(
@@ -164,7 +165,7 @@ async def test_reports_overview_uses_moscow_half_open_dates_and_fills_daily_gaps
 
 
 @pytest.mark.asyncio
-async def test_reports_overview_counts_internal_transfer_only_for_selected_warehouse(
+async def test_reports_overview_never_counts_location_moves_as_stock(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -198,9 +199,10 @@ async def test_reports_overview_counts_internal_transfer_only_for_selected_wareh
         location_ids.append(location.json()["id"])
 
     transfer_group = uuid.uuid4()
-    for warehouse_id, location_id, quantity_delta in (
-        (warehouse_ids[0], location_ids[0], -5),
-        (warehouse_ids[1], location_ids[1], 5),
+    # WMS-530: перенос между складами меняет только расположение.
+    for warehouse_id, location_id, quantity_delta, movement_type in (
+        (warehouse_ids[0], location_ids[0], -5, "stock_transfer_out"),
+        (warehouse_ids[1], location_ids[1], 5, "stock_transfer_in"),
     ):
         await _seed_movement(
             tenant_id=tenant_id,
@@ -211,6 +213,7 @@ async def test_reports_overview_counts_internal_transfer_only_for_selected_wareh
             quantity_delta=quantity_delta,
             created_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
             transfer_group_id=transfer_group,
+            movement_type=movement_type,
         )
 
     params = {
@@ -232,13 +235,8 @@ async def test_reports_overview_counts_internal_transfer_only_for_selected_wareh
     assert all_warehouses.json()["daily"] == []
     assert selected_warehouse.status_code == 200
     assert selected_warehouse.json()["in_qty"] == 0
-    assert selected_warehouse.json()["out_qty"] == 5
-    assert selected_warehouse.json()["daily"][0] == {
-        "date": "2026-08-01",
-        "in_qty": 0,
-        "out_qty": 5,
-        "previous_out_qty": 0,
-    }
+    assert selected_warehouse.json()["out_qty"] == 0
+    assert selected_warehouse.json()["daily"] == []
 
 
 @pytest.mark.asyncio
