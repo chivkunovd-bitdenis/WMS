@@ -2,44 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "wms490-d5-api",
-      "runtimeExecutable": "env",
-      "runtimeArgs": [
-        "WMS_AUTO_CREATE_SCHEMA=1",
-        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
-        "DATABASE_URL=sqlite+aiosqlite:////Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d5/wms490d5.db",
-        "JWT_SECRET_KEY=wms490d5-local-secret",
-        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
-        "-m",
-        "uvicorn",
-        "app.main:app",
-        "--app-dir",
-        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d5/backend",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "18570"
-      ],
-      "port": 18570,
-      "url": "http://127.0.0.1:18570"
-    },
-    {
-      "name": "wms490-d5-web",
-      "runtimeExecutable": "env",
-      "runtimeArgs": [
-        "VITE_API_PROXY=http://127.0.0.1:18570",
-        "npm",
-        "--prefix",
-        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d5/frontend",
-        "run",
-        "dev",
-        "--",
-        "--port",
-        "5570",
-        "--strictPort"
-      ],
-      "port": 5570,
-      "url": "http://localhost:5570"
+      "name": "wms-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5199", "--strictPort"],
+      "port": 5199
     }
   ]
 }
