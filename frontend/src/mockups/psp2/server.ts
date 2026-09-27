@@ -240,9 +240,12 @@ function productMovementsPage(ctx: Ctx) {
   if (!p) return reply(404, { detail: 'product_not_found' })
   const page = Math.max(1, Number(ctx.query.get('page') ?? 1))
   const limit = 200
-  const rows = productMovements(p)
+  // Как на сервере: первый запрос получает снимок «сейчас» (before), следующие
+  // страницы читают историю не позже него — новые движения не сдвигают страницы.
+  const before = ctx.query.get('before') ?? new Date().toISOString()
+  const rows = productMovements(p).filter((m) => m.at <= before)
   const slice = rows.slice((page - 1) * limit, page * limit)
-  return { rows: slice, truncated: (page - 1) * limit + slice.length < rows.length, total: rows.length, page, limit }
+  return { rows: slice, truncated: (page - 1) * limit + slice.length < rows.length, total: rows.length, page, limit, before }
 }
 
 // ── Карта склада, отфильтрованная по товару (вкладка «Расположение») ──────
