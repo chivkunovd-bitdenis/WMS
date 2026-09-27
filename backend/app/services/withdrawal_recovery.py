@@ -31,6 +31,7 @@ from app.services.true_api_withdrawal import (
     TrueApiWithdrawalClient,
     safe_provider_error,
 )
+from app.services.withdrawal_access import allowed_withdrawal_sellers, withdrawal_allowed
 
 
 def aware(value: datetime) -> datetime:
@@ -102,11 +103,15 @@ async def claim_work(
     *,
     now: datetime | None = None,
 ) -> RecoveryWork | None:
+    sellers = allowed_withdrawal_sellers()
+    if not sellers:
+        return None
     now = now or datetime.now(UTC)
     document = await session.scalar(
         select(WithdrawalDocument)
         .where(
             WithdrawalDocument.state.in_(["submitting", "submitted", "reconciling"]),
+            WithdrawalDocument.seller_id.in_(sellers),
             WithdrawalDocument.next_poll_at <= now,
             or_(WithdrawalDocument.lease_until.is_(None), WithdrawalDocument.lease_until <= now),
         )
@@ -311,6 +316,8 @@ async def apply_recovery(
     reconciliation_ids: list[str] | None = None,
     now: datetime | None = None,
 ) -> bool:
+    if not withdrawal_allowed(work.scope.seller_id):
+        return False
     now = now or datetime.now(UTC)
     operation = await get_operation(session, work.scope, work.operation_id, lock=True)
     document = await session.scalar(
@@ -422,6 +429,8 @@ async def record_create_result(
     Submit persists state=submitting, request_started_at and next_poll_at before
     network I/O. The production create path has a separate release gate.
     """
+    if not withdrawal_allowed(scope.seller_id):
+        return
     if (gis_document_id is None) == (error is None):
         raise WithdrawalError("invalid_create_result")
     operation = await get_operation(session, scope, operation_id, lock=True)
@@ -479,6 +488,8 @@ async def recover_one(
     client: TrueApiWithdrawalClient,
 ) -> None:
     """Network work runs outside a database transaction; the final write is fenced."""
+    if not withdrawal_allowed(work.scope.seller_id):
+        return
     info = None
     error = None
     incident = None
@@ -517,10 +528,14 @@ async def recover_one(
 
 
 async def purge_expired_tokens(session: AsyncSession) -> None:
+    sellers = allowed_withdrawal_sellers()
+    if not sellers:
+        return
     await session.execute(
         update(WithdrawalOperation)
         .where(
             WithdrawalOperation.token_enc.is_not(None),
+            WithdrawalOperation.seller_id.in_(sellers),
             or_(
                 WithdrawalOperation.token_expires_at.is_(None),
                 WithdrawalOperation.token_expires_at <= datetime.now(UTC),

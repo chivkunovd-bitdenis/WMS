@@ -48,10 +48,67 @@ const createRows = (): DemoRow[] => Array.from({ length: 324 }, (_, index) => {
 const copyOperation = (operation: WithdrawalOperation): WithdrawalOperation =>
   structuredClone(operation)
 
+// Demo-only persistence. Keeps the fake pipeline visible across F5 so a single
+// browser QA pass can observe transferring -> awaiting_crpt -> terminal without
+// touching product storage. Nothing here is used outside the demo bundle.
+const DEMO_STORAGE_KEY = 'wms517:demo:acceptance:v2'
+const DEMO_TRANSFER_MS = 8_000
+const DEMO_AWAITING_MS = 20_000
+
+type DemoDueAt = { awaitingAt: number; terminalAt: number }
+
+type DemoSnapshot = {
+  rows: DemoRow[]
+  operations: [string, WithdrawalOperation][]
+  operationRows: [string, string[]][]
+  dueAt: [string, DemoDueAt][]
+}
+
+const readSnapshot = (): DemoSnapshot | null => {
+  try {
+    const raw = window.sessionStorage.getItem(DEMO_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as DemoSnapshot
+    if (!Array.isArray(parsed.rows) || !Array.isArray(parsed.operations)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+const writeSnapshot = (snapshot: DemoSnapshot): void => {
+  try {
+    window.sessionStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(snapshot))
+  } catch {
+    // Storage may be blocked; the demo still runs in memory for this tab.
+  }
+}
+
 class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
-  #rows = createRows()
-  #operations = new Map<string, WithdrawalOperation>()
-  #operationRows = new Map<string, string[]>()
+  #rows: DemoRow[]
+  #operations: Map<string, WithdrawalOperation>
+  #operationRows: Map<string, string[]>
+  #dueAt: Map<string, DemoDueAt>
+
+  constructor() {
+    const snapshot = readSnapshot()
+    this.#rows = snapshot?.rows ?? createRows()
+    this.#operations = new Map(snapshot?.operations ?? [])
+    this.#operationRows = new Map(snapshot?.operationRows ?? [])
+    this.#dueAt = new Map(snapshot?.dueAt ?? [])
+    // Catch up any transitions whose scheduled moment already elapsed while the
+    // tab was closed, then schedule what remains.
+    for (const operationId of this.#dueAt.keys()) this.#resumeWorker(operationId)
+  }
+
+  #persist(): void {
+    writeSnapshot({
+      rows: this.#rows,
+      operations: [...this.#operations.entries()],
+      operationRows: [...this.#operationRows.entries()],
+      dueAt: [...this.#dueAt.entries()],
+    })
+  }
 
   async list(query: WithdrawalRegistryQuery): Promise<WithdrawalPage> {
     const needle = query.search.trim().toLocaleLowerCase('ru')
@@ -106,6 +163,7 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
     }
     this.#operations.set(operationId, operation)
     this.#operationRows.set(operationId, input.rowIds)
+    this.#persist()
     return copyOperation(operation)
   }
 
@@ -127,6 +185,7 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
     operation.documents = []
     operation.items = operation.items.map((item) => ({ ...item, status: 'not_withdrawn', error: null }))
     this.#operations.set(operation.operation_id, operation)
+    this.#persist()
     return copyOperation(operation)
   }
 
@@ -142,6 +201,7 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
       data: `WMS517-REAUTH-${operation.attempt}`,
     }
     this.#operations.set(operation.operation_id, operation)
+    this.#persist()
     return copyOperation(operation)
   }
 
@@ -164,6 +224,7 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
       thumbprint: input.thumbprint,
     }]
     this.#operations.set(operation.operation_id, operation)
+    this.#persist()
     return copyOperation(operation)
   }
 
@@ -172,19 +233,78 @@ class AcceptanceWithdrawalApi implements SellerWithdrawalApi {
     documents: WithdrawalDocumentSignatureInput[]
   }): Promise<WithdrawalOperation> {
     const operation = await this.getOperation(input.operationId)
-    const selectedIds = this.#operationRows.get(input.operationId) ?? []
-    const failedIds = new Set(this.#rows.filter((row) => selectedIds.includes(row.row_id) && row.submitFailure).map((row) => row.row_id))
+    // Mirror the durable Redis/Celery submission pipeline: signatures are accepted
+    // synchronously, but the row does not become "выведен" until the worker POSTs
+    // to CRPT and the polling worker sees CHECKED_OK. Absolute due-at timestamps
+    // let a reload resume the phase the worker would already be in.
+    operation.documents = []
+    operation.items = operation.items.map((item) => ({ ...item, status: 'transferring', error: null }))
+    this.#rows = this.#rows.map((row) => {
+      const item = operation.items.find((candidate) => candidate.row_id === row.row_id)
+      return item
+        ? { ...row, status: item.status, error: null, operation_id: operation.operation_id }
+        : row
+    })
+    this.#operations.set(operation.operation_id, operation)
+    const now = Date.now()
+    this.#dueAt.set(operation.operation_id, {
+      awaitingAt: now + DEMO_TRANSFER_MS,
+      terminalAt: now + DEMO_AWAITING_MS,
+    })
+    this.#persist()
+    this.#resumeWorker(operation.operation_id)
+    return copyOperation(operation)
+  }
+
+  #resumeWorker(operationId: string): void {
+    const due = this.#dueAt.get(operationId)
+    if (!due) return
+    const now = Date.now()
+    if (now >= due.awaitingAt) this.#advanceToAwaitingCrpt(operationId)
+    if (now >= due.terminalAt) {
+      this.#advanceToTerminal(operationId)
+      return
+    }
+    if (now < due.awaitingAt) {
+      setTimeout(() => this.#advanceToAwaitingCrpt(operationId), due.awaitingAt - now)
+    }
+    setTimeout(() => this.#advanceToTerminal(operationId), Math.max(0, due.terminalAt - now))
+  }
+
+  #advanceToAwaitingCrpt(operationId: string): void {
+    const operation = this.#operations.get(operationId)
+    if (!operation) return
+    operation.items = operation.items.map((item) =>
+      item.status === 'transferring' ? { ...item, status: 'awaiting_crpt' } : item,
+    )
+    this.#rows = this.#rows.map((row) => {
+      const item = operation.items.find((candidate) => candidate.row_id === row.row_id)
+      return item ? { ...row, status: item.status } : row
+    })
+    this.#operations.set(operationId, operation)
+    this.#persist()
+  }
+
+  #advanceToTerminal(operationId: string): void {
+    const operation = this.#operations.get(operationId)
+    if (!operation) return
+    const selectedIds = this.#operationRows.get(operationId) ?? []
+    const failedIds = new Set(
+      this.#rows
+        .filter((row) => selectedIds.includes(row.row_id) && row.submitFailure)
+        .map((row) => row.row_id),
+    )
     operation.items = operation.items.map((item) => failedIds.has(item.row_id)
       ? { ...item, status: 'error', error: { source: 'crpt', code: 'product_cost_missing', message: 'ЧЗ не принял документ: цена продажи не указана' } }
       : { ...item, status: 'withdrawn', error: null })
     operation.state = failedIds.size > 0 ? 'partial_failed' : 'succeeded'
-    operation.documents = []
     this.#rows = this.#rows.map((row) => {
       const item = operation.items.find((candidate) => candidate.row_id === row.row_id)
-      return item ? { ...row, status: item.status, error: item.error, operation_id: operation.operation_id } : row
+      return item ? { ...row, status: item.status, error: item.error } : row
     })
-    this.#operations.set(operation.operation_id, operation)
-    return copyOperation(operation)
+    this.#operations.set(operationId, operation)
+    this.#dueAt.delete(operationId)
+    this.#persist()
   }
 }
 

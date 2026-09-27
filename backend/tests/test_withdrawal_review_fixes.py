@@ -35,6 +35,7 @@ async def test_production_gate_blocks_submit_but_does_not_block_read_recovery(
 ) -> None:
     monkeypatch.setattr(settings, "withdrawal_environment", "production")
     monkeypatch.setattr(settings, "withdrawal_production_submit_enabled", False)
+    monkeypatch.setattr(settings, "withdrawal_seller_allowlist", str(uuid.uuid4()))
 
     def forbidden(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("production create must stop before DB/HTTP")

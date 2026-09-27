@@ -109,6 +109,14 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture(autouse=True)
+def isolated_withdrawal_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.settings import settings
+
+    # Tests opt in only their own generated fixture sellers, never a production identity.
+    monkeypatch.setattr(settings, "withdrawal_seller_allowlist", "")
+
+
+@pytest.fixture(autouse=True)
 def isolated_login_rate_limit():
     from app.services.login_rate_limit import (
         configure_for_tests,

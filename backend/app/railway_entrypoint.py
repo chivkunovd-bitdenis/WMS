@@ -2,7 +2,8 @@
 
 Use railway.toml for API, railway.worker.toml and railway.beat.toml for background
 services. All three must reference the SAME DATABASE_URL, CELERY_BROKER_URL,
-WMS_SECRETS_FERNET_KEY, WITHDRAWAL_ENVIRONMENT and submit flag in Railway.
+WMS_SECRETS_FERNET_KEY, WITHDRAWAL_ENVIRONMENT, WITHDRAWAL_SELLER_ALLOWLIST and
+submit flag in Railway. The allowlist defaults to empty in the shared image.
 This entrypoint proves configuration prerequisites, not a running deployment.
 """
 

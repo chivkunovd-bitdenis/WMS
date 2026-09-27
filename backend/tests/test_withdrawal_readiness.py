@@ -227,6 +227,7 @@ def test_deployment_roles_share_image_and_safe_configuration() -> None:
     config = yaml.safe_load((root / "docker-compose.prod.yml").read_text())
     services = config["services"]
     keys = [
+        "WITHDRAWAL_SELLER_ALLOWLIST",
         "WITHDRAWAL_ENVIRONMENT",
         "WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED",
         "CELERY_BROKER_URL",

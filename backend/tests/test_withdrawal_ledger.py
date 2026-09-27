@@ -129,6 +129,11 @@ async def seed(
         row={"finalPrice": 99999999999999999, "currencyCode": 643},
     )
     await session.commit()
+    from app.core.settings import settings
+
+    settings.withdrawal_seller_allowlist = ",".join(
+        filter(None, [settings.withdrawal_seller_allowlist, str(seller.id)])
+    )
     return WithdrawalScope(tenant.id, seller.id, user.id), marking, order, supply
 
 
@@ -659,6 +664,14 @@ async def test_api_gates_signatures_scopes_and_never_returns_tokens(
                 "client_request_id": str(uuid.uuid4()),
             },
         )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
+        existing = await create_operation(
+            db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4(),
+            environment="production",
+        )
+        await db_session.commit()
+        response = await http.get(prefix + f"/operations/{existing.id}")
         assert response.status_code == 200
         data = response.json()
         assert data["integration_gate"] == "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"

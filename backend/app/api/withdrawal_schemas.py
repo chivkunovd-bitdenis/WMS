@@ -59,9 +59,13 @@ class WithdrawalRow(BaseModel):
     sku: str
     product_name: str
     cis: str
-    status: Literal["not_withdrawn", "withdrawn", "error"]
+    status: Literal["not_withdrawn", "transferring", "awaiting_crpt", "withdrawn", "error"]
     error: dict[str, Any] | None = None
     operation_id: uuid.UUID | None = None
+    # True only when the linked operation is stuck on token expiry mid-submit.
+    # The client uses it to allow the row into the same-op reauth path without
+    # unlocking a fresh create — an in-flight document has no external idempotency.
+    resume_required: bool = False
 
 
 class WithdrawalPage(BaseModel):
@@ -73,7 +77,7 @@ class OperationItem(BaseModel):
     row_id: uuid.UUID
     cis: str
     wb_order_id: str = ""
-    status: Literal["not_withdrawn", "withdrawn", "error"]
+    status: Literal["not_withdrawn", "transferring", "awaiting_crpt", "withdrawn", "error"]
     error: dict[str, Any] | None = None
 
 

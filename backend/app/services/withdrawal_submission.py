@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.withdrawal_repository import WithdrawalError, WithdrawalScope
 from app.models.marking_withdrawal import WithdrawalDocument, WithdrawalOperation
 from app.services.true_api_withdrawal import AuthSession, CreateOutcome, TrueApiError
+from app.services.withdrawal_access import allowed_withdrawal_sellers, withdrawal_allowed
 from app.services.withdrawal_orchestration import current_auth
 from app.services.withdrawal_recovery import record_create_result
 from app.services.withdrawal_runtime import WithdrawalRuntime
@@ -31,7 +32,8 @@ class SubmitWork:
 
 
 async def claim_submit(session: AsyncSession, runtime: WithdrawalRuntime) -> SubmitWork | None:
-    if not runtime.enabled:
+    sellers = allowed_withdrawal_sellers()
+    if not runtime.enabled or not sellers:
         return None
     now = datetime.now(UTC)
     eligible = (
@@ -43,6 +45,7 @@ async def claim_submit(session: AsyncSession, runtime: WithdrawalRuntime) -> Sub
         select(WithdrawalOperation)
         .where(
             WithdrawalOperation.environment == runtime.config.environment,
+            WithdrawalOperation.seller_id.in_(sellers),
             exists(
                 select(WithdrawalDocument.id).where(
                     WithdrawalDocument.operation_id == WithdrawalOperation.id,
@@ -118,6 +121,8 @@ async def submit_one(
     async with sessions() as session:
         work = await claim_submit(session, runtime)
     if work is None:
+        return False
+    if not withdrawal_allowed(work.scope.seller_id):
         return False
     client = runtime.client(work.auth.participant_inn, work.environment)
     external_id = None

@@ -34,6 +34,7 @@ from app.db.withdrawal_repository import (
     current_items,
     eligible_rows,
     get_operation,
+    project_item_status,
     registry,
 )
 from app.models.fbs_order import FbsOrder
@@ -41,6 +42,7 @@ from app.models.marking_withdrawal import WithdrawalOperation
 from app.models.product import Product
 from app.models.user import User
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+from app.services.withdrawal_access import withdrawal_allowed
 from app.services.withdrawal_orchestration import (
     CertificateSelection,
     SignedWithdrawalDocument,
@@ -67,6 +69,8 @@ async def _scope(
     if user.role != FULFILLMENT_SELLER or seller_id is None:
         raise HTTPException(403, "seller_session_required")
     await assert_seller_permission(session, user, PERM_HONEST_SIGN)
+    if not withdrawal_allowed(seller_id):
+        raise HTTPException(403, "withdrawal_not_available")
     return WithdrawalScope(user.tenant_id, seller_id, user.id)
 
 
@@ -93,6 +97,7 @@ async def _output(
         ).all()
     }
     documents = await scoped_documents(session, scope, operation)
+    docs_by_id = {doc.id: doc for doc in documents}
     return OperationOut(
         operation_id=operation.id,
         state=operation.state,
@@ -127,12 +132,18 @@ async def _output(
                 row_id=item.marking_id,
                 cis=item.cis,
                 wb_order_id=str(orders.get(item.order_id, "")),
-                status=(
-                    "withdrawn"
-                    if item.state == "succeeded"
-                    else "error"
-                    if item.state == "failed"
-                    else "not_withdrawn"
+                status=project_item_status(
+                    item.state,
+                    (
+                        docs_by_id[item.document_id].state
+                        if item.document_id and item.document_id in docs_by_id
+                        else None
+                    ),
+                    (
+                        docs_by_id[item.document_id].signature is not None
+                        if item.document_id and item.document_id in docs_by_id
+                        else False
+                    ),
                 ),
                 error=item.error if item.state == "failed" else None,
             )
@@ -174,6 +185,8 @@ async def list_withdrawals(
 async def start_withdrawal(
     payload: CreateWithdrawal, session: Db, scope: Scope, runtime: Runtime
 ) -> OperationOut:
+    if not runtime.enabled:
+        raise HTTPException(409, {"code": "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"})
     try:
         operation = await create_operation(
             session,
@@ -221,6 +234,8 @@ async def retry_withdrawal(
     scope: Scope,
     runtime: Runtime,
 ) -> OperationOut:
+    if not runtime.enabled:
+        raise HTTPException(409, {"code": "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"})
     try:
         operation = await retry_operation(
             session,

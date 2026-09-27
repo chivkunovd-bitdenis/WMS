@@ -17,6 +17,7 @@ from app.services.true_api_withdrawal import (
     TrueApiConfig,
     TrueApiWithdrawalClient,
 )
+from app.services.withdrawal_access import allowed_withdrawal_sellers
 from app.services.withdrawal_recovery import claim_work, purge_expired_tokens, recover_one
 from app.services.withdrawal_runtime import withdrawal_runtime
 from app.services.withdrawal_submission import submit_one
@@ -29,12 +30,16 @@ async def run_withdrawal_recovery(*, batch_size: int = 100) -> int:
     """
     if not 1 <= batch_size <= 1000:
         raise ValueError("invalid_withdrawal_batch_size")
+    sellers = allowed_withdrawal_sellers()
+    if not sellers:
+        return 0
     async with SessionLocal() as session:
         await purge_expired_tokens(session)
         exists = await session.scalar(
             select(WithdrawalDocument.id)
             .where(
                 WithdrawalDocument.state.in_(["submitting", "submitted", "polling", "reconciling"]),
+                WithdrawalDocument.seller_id.in_(sellers),
             )
             .limit(1)
         )
@@ -66,6 +71,8 @@ async def run_withdrawal_recovery(*, batch_size: int = 100) -> int:
 async def run_withdrawal_jobs(*, batch_size: int = 100) -> int:
     if not 1 <= batch_size <= 1000:
         raise ValueError("invalid_withdrawal_batch_size")
+    if not allowed_withdrawal_sellers():
+        return 0
     submitted = 0
     async with withdrawal_runtime() as runtime:
         for _ in range(batch_size):

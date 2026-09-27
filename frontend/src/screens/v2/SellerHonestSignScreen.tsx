@@ -6,12 +6,13 @@ import { SellerHonestSignTabs } from './SellerKizWithdrawalScreen'
 type Props = {
   token: string
   sellerId: string
+  withdrawalEnabled?: boolean
 }
 
-export function SellerHonestSignScreen({ token, sellerId }: Props) {
+export function SellerHonestSignScreen({ token, sellerId, withdrawalEnabled = false }: Props) {
   return (
     <Stack spacing={2}>
-      <SellerHonestSignTabs active="pools" />
+      {withdrawalEnabled && <SellerHonestSignTabs active="pools" />}
       <HonestSignScreen
         token={token}
         sellerId={sellerId}

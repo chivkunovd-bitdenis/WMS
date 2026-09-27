@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         "Unset: API runs background jobs via FastAPI BackgroundTasks.",
     )
     withdrawal_environment: Literal["sandbox", "production"] = "sandbox"
+    withdrawal_seller_allowlist: str = Field(
+        default="",
+        description="Server-only comma-separated seller UUIDs. Empty or invalid closes withdrawal.",
+    )
     withdrawal_production_submit_enabled: bool = Field(
         default=False,
         description="Production create requires separate release authorization; default closed.",

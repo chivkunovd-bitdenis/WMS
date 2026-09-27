@@ -328,6 +328,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     }
     const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
     const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
+    const withdrawalEnabled = me.withdrawal_enabled === true && !shopsBusy
     const accessDenied = (
       <Alert severity="warning" data-testid="seller-access-denied">
         Нет доступа к этому разделу. Обратитесь к администратору селлера.
@@ -504,6 +505,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                  withdrawalEnabled={withdrawalEnabled}
                 />
               ) : (
                 accessDenied
@@ -513,7 +515,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
           <Route
             path="/honest-sign/withdrawals"
             element={
-              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign && withdrawalEnabled ? (
                 <SellerKizWithdrawalScreen
                   key={catalogScopeKey}
                   token={token}
