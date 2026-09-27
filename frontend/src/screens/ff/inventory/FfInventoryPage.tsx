@@ -2,8 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
-import { changedActualIds, mergeInFlightActuals } from './InventoryRows'
-import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
+import {
+  CountOpDeferredError,
+  createCountOps,
+  type CountOps,
+  type CountOpsView,
+  type ScanPlace,
+} from './countOpsQueue'
 import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 
 /**
@@ -14,13 +19,11 @@ import type { WbProductPickerCatalogRow } from '../../../components/WbProductPic
  */
 type ManualAddCatalogRow = WbProductPickerCatalogRow & { seller_id: string | null }
 
-type FoundResponse = Awaited<ReturnType<typeof recordCountFound>>
 import { FfInventoryListScreen } from './FfInventoryListScreen'
 import { InventoryCreateDialog, type CreateFill } from './InventoryCreateDialog'
 import type { CountListItem, InventoryCount } from './InventoryTypes'
 import {
   INVENTORY_BASE as BASE,
-  actualPayload,
   inventoryAuthHeaders as authHeaders,
   postResultNote,
   toCount,
@@ -28,7 +31,9 @@ import {
   type ApiDetail,
   type ApiSummary,
   recordCountFound,
-  saveCountActuals,
+  fetchCount,
+  putCountLines,
+  postCountOnly,
   markCountPlaceEmpty,
   createCountContainer,
   addManualLine,
@@ -46,6 +51,9 @@ import {
 //
 // Разбор ответов сервера и отправка факта живут в inventoryCountApi: тем же
 // путём документ заводится со строки карты склада, и расходиться им нельзя.
+//
+// WMS-542: все изменения открытого документа идут одной очередью операций
+// (countOpsQueue.ts) — см. комментарий у её создания ниже.
 
 /**
  * Коды ошибок «Переложить в тару» и «Удалить тару» (WMS-153), которых нет в
@@ -66,6 +74,10 @@ const INVENTORY_ERROR_MESSAGES: Record<string, string> = {
   object_not_found: 'Этот товар уже переместили или списали — обновите документ.',
   insufficient_stock: 'На исходном месте уже нет нужного количества — обновите документ.',
   destination_not_found: 'Тара назначения уже недоступна — обновите документ.',
+  // WMS-542 (F4): line_id указывал не на ту строку — экран устарел, надо
+  // перечитать документ, а не пробовать тем же id ещё раз.
+  line_not_found: 'Эта строка уже изменилась — обновите документ.',
+  line_barcode_mismatch: 'Код не соответствует этой строке — обновите документ.',
 }
 
 function inventoryErrorMessage(err: unknown, fallback: string): string {
@@ -81,7 +93,6 @@ type Props = {
 
 export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   const [items, setItems] = useState<CountListItem[]>([])
-  const [count, setCount] = useState<InventoryCount | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -146,90 +157,73 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     })()
   }, [token])
 
-  const openVersionRef = useRef(0)
+  // WMS-542: всё, что меняет открытый документ на сервере, — скан (+1),
+  // ручное число строки, комментарий, перечитывание, тара, перенос, «здесь
+  // пусто», проведение, отмена — идёт ОДНОЙ очередью по одной операции
+  // (countOpsQueue.ts). Раньше скан, ручная правка и «Сохранить» уходили
+  // разными путями, обгоняли друг друга и затирали друг друга на сервере и на
+  // экране (ревью Astra №1 и №2, F1–F9). Документ на экране — `view.count`:
+  // последний ответ сервера плюс ещё не подтверждённые операции и черновики.
+  const [view, setView] = useState<CountOpsView>({ count: null, pendingScans: 0 })
+  const count = view.count
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  const opsRef = useRef<CountOps | null>(null)
+  if (opsRef.current === null) {
+    opsRef.current = createCountOps({
+      transport: {
+        found: async (countId, place) => {
+          const found = await recordCountFound(tokenRef.current, countId, place)
+          return { count: found.count, notice: found.notice }
+        },
+        putLines: (countId, lines, comment) => putCountLines(tokenRef.current, countId, lines, comment),
+        get: (countId) => fetchCount(tokenRef.current, countId),
+      },
+      // Обрыв связи и шлюз, который на секунду отвалился при выкатке, —
+      // повторяем той же операцией. Отказ сервера — показываем человеку.
+      isRetryable: (err) => !(err instanceof InventoryHttpError) || err.status >= 502,
+      onChange: setView,
+      // Обычный скан несёт пустой текст — не затираем им «Сохранено» и т.п.
+      onScanNotice: (notice) => setNote(notice),
+      onRejected: (err) => setError(inventoryErrorMessage(err, 'Не удалось записать находку')),
+    })
+  }
+  const ops = opsRef.current
 
   async function open(id: string) {
-    const version = ++openVersionRef.current
     setLoading(true)
     setError(null)
     setNote(null)
     try {
-      const res = await fetch(apiUrl(`${BASE}/${id}`), { headers: { ...authHeaders(token) } })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const opened = toCount((await res.json()) as ApiDetail)
-      if (version !== openVersionRef.current) return
-      setCount(opened)
-      countRef.current = opened
-      savedCommentRef.current = opened.comment
-      touchedRef.current = new Set()
-      commentTouchedRef.current = false
-      // Сканы, отложенные из-за ухода в другой документ, снова в работе — и
-      // снова держат проведение, пока не доедут.
-      foundQueueRef.current?.resumeFor(opened.id)
+      // Отложенные сканы этого документа (оператор уходил в другой) уходят
+      // раньше перечитывания и снова держат проведение, пока не доедут.
+      await ops.open(id)
     } catch (err) {
-      if (version === openVersionRef.current) {
+      if (ops.currentId() === id) {
         setError(err instanceof Error ? err.message : 'Не удалось открыть документ')
       }
     } finally {
-      if (version === openVersionRef.current) setLoading(false)
+      if (ops.currentId() === id) setLoading(false)
     }
   }
 
-  // Строки, которые правил ИМЕННО этот оператор в этом сеансе. Отправляем на
-  // сервер только их: документ один, а кладовщиков в нём может быть двое, и
-  // запись всего документа целиком стирает чужую работу.
-  const touchedRef = useRef<Set<string>>(new Set())
-  // WMS-155: тот же принцип для комментария. Правил ли этот оператор поле
-  // «Комментарий» в этом сеансе — только тогда посылаем его на сервер, иначе
-  // сохранение фактов затрёт чужой комментарий. Флаг сбрасывается после успеха.
-  const commentTouchedRef = useRef<boolean>(false)
-  const savedCommentRef = useRef('')
-  // Очередь работает асинхронно и обязана видеть документ, каким он стал
-  // к моменту отправки, а не каким был при постановке в очередь.
-  const countRef = useRef<InventoryCount | null>(null)
-  countRef.current = count
-
-  function noteTouched(lineId?: string, commentChanged?: boolean) {
-    if (lineId) touchedRef.current.add(lineId)
-    if (commentChanged) commentTouchedRef.current = true
-  }
-
-  async function saveSnapshot(snapshot: InventoryCount): Promise<InventoryCount> {
-    const saved = await saveCountActuals(token, snapshot, touchedRef.current,
-      commentTouchedRef.current
-        ? { updateComment: true, comment: snapshot.comment, expectedComment: savedCommentRef.current }
-        : undefined)
-    if (countRef.current?.id === snapshot.id) {
-      savedCommentRef.current = saved.comment
-      // Changes entered while a request was in flight remain local and dirty.
-      touchedRef.current = changedActualIds(countRef.current, snapshot)
-      commentTouchedRef.current = countRef.current.comment !== snapshot.comment
-    }
-    return saved
+  /** Документ ушёл из-под рук (закрыли), пока ждали очередь, — ошибку не показываем. */
+  function stillOpen(id: string, err: unknown): boolean {
+    return !(err instanceof CountOpDeferredError) && ops.currentId() === id
   }
 
   async function save() {
     if (!count || loading) return
+    const id = count.id
     setLoading(true)
     try {
-      const commentOptions = commentTouchedRef.current
-        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
-        : undefined
-      const res = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const saved = toCount((await res.json()) as ApiDetail)
-      if (countRef.current?.id !== saved.id) return
-      setCount((current) => current ? mergeInFlightActuals(saved, count, current) : current)
-      savedCommentRef.current = saved.comment
-      touchedRef.current = changedActualIds(countRef.current, count)
-      commentTouchedRef.current = countRef.current.comment !== count.comment
-      setNote('Сохранено. Остатки не тронуты.')
+      // Несохранённые ручные числа и комментарий встают в очередь за всем, что
+      // уже отсканировано, и «Сохранить» ждёт их. Нечего отправлять — документ
+      // перечитывается в той же очереди: экран подтянет и чужие сканы.
+      await ops.save()
+      if (ops.currentId() === id) setNote('Сохранено. Остатки не тронуты.')
     } catch (err) {
-      setError(inventoryErrorMessage(err, 'Не удалось сохранить'))
+      if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось сохранить'))
     } finally {
       setLoading(false)
     }
@@ -237,40 +231,21 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
 
   async function post() {
     if (!count || loading) return
+    const id = count.id
     setLoading(true)
     try {
-      // Сначала кладём введённое, потом проводим: иначе проведём то, что сервер
-      // помнит с прошлого сохранения, а не то, что человек видит на экране.
-      // WMS-155: комментарий, если оператор его редактировал, уходит здесь же.
-      const commentOptions = commentTouchedRef.current
-        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
-        : undefined
-      const saved = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
-      })
-      if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
-      const savedDetail = toCount(await saved.json() as ApiDetail)
-      if (countRef.current?.id === count.id) {
-        savedCommentRef.current = savedDetail.comment
-        commentTouchedRef.current = false
-      }
-      const res = await fetch(apiUrl(`${BASE}/${count.id}/post`), {
-        method: 'POST',
-        headers: { ...authHeaders(token) },
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const result = (await res.json()) as {
-        posted_lines: number
-        changed_balance_count: number
-      }
-      if (countRef.current?.id !== count.id) return
-      await open(count.id)
+      // Сначала кладём введённое руками, потом проводим: иначе проведём то,
+      // что сервер помнит с прошлого сохранения, а не то, что человек видит
+      // на экране. WMS-155: комментарий, если оператор его редактировал,
+      // уходит здесь же.
+      await ops.flush()
+      const result = await ops.action(async () => ({ count: null, result: await postCountOnly(tokenRef.current, id) }))
+      if (ops.currentId() !== id) return
+      await open(id)
       await loadList()
       setNote(postResultNote(result))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось провести')
+      if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось провести')
     } finally {
       setLoading(false)
     }
@@ -278,79 +253,47 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
 
   async function cancelDocument() {
     if (!count) return
+    const id = count.id
     try {
-      const res = await fetch(apiUrl(`${BASE}/${count.id}`), {
-        method: 'DELETE',
-        headers: { ...authHeaders(token) },
+      await ops.action(async () => {
+        const res = await fetch(apiUrl(`${BASE}/${id}`), {
+          method: 'DELETE',
+          headers: { ...authHeaders(tokenRef.current) },
+        })
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        return { count: null, result: null }
       })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCount(null)
+      ops.close()
       await loadList()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось отменить документ')
+      if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось отменить документ')
     }
   }
 
-  // Недоставленные сканы находок. Пока их больше нуля, документ проводить
-  // нельзя: проведение зафиксировало бы остаток без того, что оператор уже
-  // отсканировал, а вернуться в проведённый документ уже не получится.
-  const [pendingFound, setPendingFound] = useState(0)
-
-  /**
-   * Очередь находок: строго по одной и с повтором того же скана при обрыве.
-   *
-   * Раньше каждый скан улетал независимо. Ответы возвращались вперемешку, и
-   * поздний ответ со старым состоянием документа стирал с экрана строку,
-   * которую добавил ранний, — оператор видел, что находки нет, и сканировал её
-   * заново, получая двойной остаток. А при обрыве связи экран показывал ошибку
-   * и выбрасывал запрос: человек пикал ещё раз, это был уже другой скан, и
-   * серверная защита от повтора его не узнавала. Теперь повторяем мы сами и тем
-   * же идентификатором.
-   */
-  // Снимок документа на момент отправки скана. Без него слияние сравнивало
-  // текущее состояние с самим собой, ничего не находило и молча затирало
-  // количества, введённые кладовщиком, пока летел запрос.
-  const sentSnapshotRef = useRef<InventoryCount | null>(null)
-  const foundQueueRef = useRef<ReturnType<typeof createFoundQueue<FoundResponse>> | null>(null)
-  if (foundQueueRef.current === null) {
-    foundQueueRef.current = createFoundQueue<FoundResponse>({
-      send: async (place) => {
-        const live = countRef.current
-        if (!live || live.id !== place.countId) {
-          // Оператор ушёл в другой документ, пока скан не доехал. Он не потерян:
-          // очередь отложит его до возвращения в свой пересчёт.
-          throw new FoundPlaceDeferredError('Находка относится к другому документу пересчёта')
-        }
-        if (live.status !== 'draft') throw new Error('Документ уже закрыт')
-        // Кладём на сервер то, что оператор насчитал: автосохранения в экране
-        // нет, факт живёт в состоянии React до нажатия «Сохранить».
-        const saved = await saveSnapshot(live)
-        sentSnapshotRef.current = { ...live, comment: saved.comment }
-        return await recordCountFound(token, live.id, place)
-      },
-      onApplied: (found) => {
-        setCount((live) => {
-          if (!live || live.id !== found.count.id) return live
-          // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
-          // на экране, но не в том снимке, который мы отправили.
-          return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
-        })
-        setNote(found.notice)
-      },
-      onRejected: (err) => {
-        setError(err instanceof Error ? err.message : 'Не удалось записать находку')
-      },
-      onPendingChange: setPendingFound,
-      isRetryable: (err) => !(err instanceof InventoryHttpError),
-    })
+  function recordFound(place: ScanPlace) {
+    // Сканы не отбрасываются и во время «Сохранить»: встают в очередь за ним.
+    if (!count || count.status !== 'draft') return
+    setError(null)
+    ops.scan(place)
   }
 
-  function recordFound(place: Omit<FoundPlace, 'countId'>) {
-    if (!count || loading || count.status !== 'draft') return
-    setError(null)
-    // Находка принадлежит тому документу, в котором её отсканировали, а не
-    // тому, который открыт в момент повторной отправки.
-    foundQueueRef.current?.push({ ...place, countId: count.id })
+  /** Ручная правка числа строки — черновик до «Сохранить» (или до скана этой строки). */
+  function manualEdit(lineId: string, value: number | null) {
+    if (!count || loading) return
+    ops.editLine(lineId, value)
+  }
+
+  /**
+   * Структурное действие над документом: сначала несохранённые ручные числа
+   * (иначе действие подхватило бы прошлые числа, а не то, что оператор только
+   * что набрал), потом само действие — в той же очереди, после сканов.
+   */
+  async function runAction(run: () => Promise<InventoryCount>): Promise<InventoryCount> {
+    await ops.flush()
+    return ops.action(async () => {
+      const updated = await run()
+      return { count: updated, result: updated }
+    })
   }
 
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place', cellId: string | null) {
@@ -359,6 +302,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       setError('Не удалось определить склад документа')
       return
     }
+    const id = count.id
 
     setLoading(true)
     setError(null)
@@ -368,11 +312,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       // её из дерева сразу после создания (см. inventoryCountApi). cellId —
       // выделенная ячейка (задача 1 доработки 03.09.2026): без неё тара
       // уезжает в зону сортировки, как и раньше.
-      await saveSnapshot(count)
-      const updated = await createCountContainer(token, count.id, kind, cellId)
-      setCount((current) => current?.id === updated.id ? updated : current)
+      await runAction(() => createCountContainer(tokenRef.current, id, kind, cellId))
     } catch (err) {
-      setError(inventoryErrorMessage(err, 'Не удалось создать тару'))
+      if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось создать тару'))
     } finally {
       setLoading(false)
     }
@@ -386,15 +328,14 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    */
   async function moveLine(lineId: string, target: { containerKind: 'pallet' | 'box' | 'cargo_place'; containerId: string }) {
     if (!count || loading || count.status !== 'draft') return
+    const id = count.id
     setLoading(true)
     setError(null)
     try {
-      await saveSnapshot(count)
-      const updated = await moveCountLine(token, count.id, lineId, target)
-      setCount((current) => current?.id === updated.id ? updated : current)
+      await runAction(() => moveCountLine(tokenRef.current, id, lineId, target))
       setNote('Товар перенесён.')
     } catch (err) {
-      setError(inventoryErrorMessage(err, 'Не удалось перенести товар'))
+      if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось перенести товар'))
     } finally {
       setLoading(false)
     }
@@ -406,15 +347,14 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    */
   async function deleteContainer(target: { kind: 'pallet' | 'box' | 'cargo_place'; id: string }) {
     if (!count || loading || count.status !== 'draft') return
+    const id = count.id
     setLoading(true)
     setError(null)
     try {
-      await saveSnapshot(count)
-      const updated = await deleteCountContainer(token, count.id, target)
-      setCount((current) => current?.id === updated.id ? updated : current)
+      await runAction(() => deleteCountContainer(tokenRef.current, id, target))
       setNote('Тара удалена.')
     } catch (err) {
-      setError(inventoryErrorMessage(err, 'Не удалось удалить тару'))
+      if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось удалить тару'))
     } finally {
       setLoading(false)
     }
@@ -436,21 +376,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     const kind = target.kind === 'cell' ? 'cell'
       : container?.kind ?? count.cells.map((cell) => findKind(cell.children)).find(Boolean)
     if (!kind) return
+    const id = count.id
     setLoading(true)
     setError(null)
     try {
-      await saveCountActuals(token, count, touchedRef.current, commentTouchedRef.current
-        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
-        : undefined)
-      const updated = await markCountPlaceEmpty(token, count.id, { kind, id: target.id })
-      if (countRef.current?.id !== updated.id) return
-      setCount(updated)
-      savedCommentRef.current = updated.comment
-      touchedRef.current = new Set()
-      commentTouchedRef.current = false
+      // Ответ сервера становится документом на экране; сканы, сделанные уже
+      // после нажатия, стоят в очереди за этим действием и лягут поверх.
+      await runAction(() => markCountPlaceEmpty(tokenRef.current, id, { kind, id: target.id }))
+      if (ops.currentId() !== id) return
       setNote('Пустое место подтверждено. При проведении остатки здесь станут нулевыми; пустая складская тара будет удалена.')
     } catch (err) {
-      setError(inventoryErrorMessage(err, 'Не удалось подтвердить пустое место'))
+      if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось подтвердить пустое место'))
     } finally {
       setLoading(false)
     }
@@ -472,28 +408,29 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     },
   ) {
     if (!count || loading) return
+    const id = count.id
     setLoading(true)
     setError(null)
     try {
-      let current = await saveSnapshot(count)
+      await ops.flush()
       let lastNotice: string | null = null
       for (const [productId, rawQty] of Object.entries(selections)) {
         const quantity = Number.isFinite(rawQty) ? Math.floor(rawQty) : 0
         if (quantity <= 0) continue
-        const result = await addManualLine(token, current.id, {
-          productId,
-          quantity,
-          cellId: placement.cellId,
-          containerKind: placement.containerKind,
-          containerId: placement.containerId,
+        lastNotice = await ops.action(async () => {
+          const result = await addManualLine(tokenRef.current, id, {
+            productId,
+            quantity,
+            cellId: placement.cellId,
+            containerKind: placement.containerKind,
+            containerId: placement.containerId,
+          })
+          return { count: result.count, result: result.notice }
         })
-        current = result.count
-        lastNotice = result.notice
       }
-      setCount((live) => live?.id === current.id ? current : live)
-      if (lastNotice) setNote(lastNotice)
+      if (lastNotice && ops.currentId() === id) setNote(lastNotice)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось добавить товар')
+      if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось добавить товар')
     } finally {
       setLoading(false)
     }
@@ -523,10 +460,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const created = toCount((await res.json()) as ApiDetail)
-      savedCommentRef.current = created.comment
-      touchedRef.current = new Set()
-      commentTouchedRef.current = false
-      setCount(created)
+      ops.show(created)
       await loadList()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать документ')
@@ -553,15 +487,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         loading={loading}
         error={error}
         note={note}
-        onChange={(next, touchedLineId, commentChanged) => {
+        onChange={(next, _touchedLineId, commentChanged) => {
+          // Числа строк сюда больше не приходят: скан — это операция очереди
+          // (onFound), ручное число — onManualEdit. Здесь только комментарий.
           if (loading) return
-          noteTouched(touchedLineId, commentChanged)
-          setCount(next)
+          if (commentChanged) ops.editComment(next.comment)
         }}
+        onManualEdit={(lineId, value) => manualEdit(lineId, value)}
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
-        pendingFound={pendingFound}
+        pendingFound={view.pendingScans}
         onCreateContainer={(kind, cellId) => void createContainer(kind, cellId)}
         onMoveLine={(lineId, target) => void moveLine(lineId, target)}
         onDeleteContainer={(target) => void deleteContainer(target)}
@@ -571,9 +507,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onAddProduct={(selections, placement) => addProduct(selections, placement)}
         onMarkEmpty={(target) => void markEmpty(target)}
         onBack={() => {
-          openVersionRef.current += 1
-          countRef.current = null
-          setCount(null)
+          // Несохранённые черновики пропадают, как и раньше; сканы и уже
+          // отправленные правки этого документа дождутся возвращения в него.
+          ops.close()
           setNote(null)
           setError(null)
           void loadList()

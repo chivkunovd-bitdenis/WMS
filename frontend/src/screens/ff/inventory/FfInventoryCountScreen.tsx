@@ -133,6 +133,14 @@ type Props = {
     touchedLineId?: string,
     commentChanged?: boolean,
   ) => void
+  /**
+   * WMS-542: ручная правка числа строки — отдельный от скана путь. Страница
+   * держит её черновиком до «Сохранить»; скан той же строки ставит в очередь
+   * сначала это число, потом свою штуку. Экран, у которого нет такого
+   * обработчика (демо-превью без сервера), правит документ по-старому —
+   * через onChange.
+   */
+  onManualEdit?: (lineId: string, value: number | null) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
@@ -171,6 +179,8 @@ type Props = {
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
     scanId: string
+    /** WMS-542 (F4): id строки, если скан пришёлся на уже известную строку. */
+    lineId?: string
   }) => void
   /**
    * Каталог товаров для модалки «Добавить товар». null — ещё грузится или не
@@ -211,6 +221,7 @@ export function FfInventoryCountScreen({
   error,
   note,
   onChange,
+  onManualEdit,
   onSave,
   onPost,
   onCancelDocument,
@@ -277,13 +288,17 @@ export function FfInventoryCountScreen({
       // Идентификатор скана рождается здесь, на одном пике. Если ответ не
       // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
       // повтор этого же запроса сервер узнает и не посчитает дважды.
+      //
+      // WMS-542: на странице скан — операция единой очереди документа
+      // (countOpsQueue.ts), она же сама рисует +1 до ответа сервера.
       onFound?.({ ...result.found, scanId: randomId() })
     }
     if (result.count !== count) {
-      const touched = result.focusRowKey?.startsWith('product:')
-        ? result.focusRowKey.slice('product:'.length)
-        : undefined
-      onChange(result.count, touched)
+      // WMS-542: скан никогда не помечает строку «тронутой». Страница с
+      // сервером этот локальный прирост не берёт — у неё скан уже стоит в
+      // очереди операций (onFound выше); прирост нужен экрану без сервера
+      // (демо-превью). Второй аргумент onChange здесь всегда пуст.
+      onChange(result.count, undefined)
     }
   }
 
@@ -334,7 +349,12 @@ export function FfInventoryCountScreen({
   const selectedRow = rows.find((row) => row.key === selectedKey) ?? null
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value), row.id)
+    // WMS-542: ручная правка идёт отдельным от скана путём (onManualEdit —
+    // черновик на странице), а не общим «тронуто».
+    // Экран без такого обработчика (демо-превью без сервера) правит документ
+    // по-старому — через onChange.
+    if (onManualEdit) onManualEdit(row.id, value)
+    else onChange(setActual(count, row.id, value), row.id)
   }
 
   // Опись печатается из документа, каким он на экране сейчас: кладовщик клеит

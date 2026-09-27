@@ -543,3 +543,7 @@ export function changedActualIds(edited: InventoryCount, original: InventoryCoun
   const before = new Map(allProducts(original).map((item) => [item.id, item.actual]))
   return new Set(allProducts(edited).filter((item) => before.get(item.id) !== item.actual).map((item) => item.id))
 }
+
+// WMS-542: сверка ответов сервера со сканами и ручными правками здесь не
+// живёт — её заменила единая очередь операций документа (countOpsQueue.ts):
+// ответы применяются строго по порядку, поверх — ещё не подтверждённое.

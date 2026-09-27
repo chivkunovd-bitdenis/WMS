@@ -411,6 +411,8 @@ export async function recordCountFound(
     containerId: string | null
     /** Один идентификатор на пик: повтор того же скана не прибавит вторую штуку. */
     scanId: string
+    /** WMS-542 (F4): id уже известной строки — снимает неоднозначность штрихкода. */
+    lineId?: string
   },
 ): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
@@ -422,6 +424,7 @@ export async function recordCountFound(
       container_kind: place.containerKind,
       container_id: place.containerId,
       scan_id: place.scanId,
+      line_id: place.lineId ?? null,
     }),
   })
   if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
@@ -486,6 +489,58 @@ export async function saveCountActuals(
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * WMS-542: перечитать документ. Отказ сервера — InventoryHttpError, обрыв
+ * связи — обычная ошибка fetch: очередь операций различает их для повтора.
+ */
+export async function fetchCount(token: string, countId: string): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}`), { headers: { ...inventoryAuthHeaders(token) } })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * WMS-542: положить ручные числа ровно этих строк и/или комментарий — одна
+ * операция очереди. В отличие от saveCountActuals, строки передаются явно, а
+ * не выбираются из документа на экране: так в запрос не попадёт ничего, кроме
+ * самой правки (ни оптимистичные сканы, ни чужие строки).
+ */
+export async function putCountLines(
+  token: string,
+  countId: string,
+  lines: Array<{ lineId: string; value: number | null }>,
+  comment?: { value: string; expected: string },
+): Promise<InventoryCount> {
+  const body: {
+    lines: Array<{ line_id: string; actual_quantity: number | null }>
+    update_comment?: boolean
+    comment?: string | null
+    expected_comment?: string | null
+  } = { lines: lines.map((line) => ({ line_id: line.lineId, actual_quantity: line.value })) }
+  if (comment) {
+    body.update_comment = true
+    body.comment = comment.value
+    body.expected_comment = comment.expected
+  }
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/lines`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/** WMS-542: только проведение — ручные числа к этому моменту уже ушли очередью. */
+export async function postCountOnly(token: string, countId: string): Promise<PostResult> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/post`), {
+    method: 'POST',
+    headers: { ...inventoryAuthHeaders(token) },
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return (await res.json()) as PostResult
 }
 
 /**

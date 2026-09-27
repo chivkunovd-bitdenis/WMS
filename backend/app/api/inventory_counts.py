@@ -93,6 +93,15 @@ class InventoryCountFoundIn(BaseModel):
     # Идентификатор скана: экран генерирует его один раз на пик. Повтор того же
     # скана (оборвался вайфай, оператор пикнул ещё раз) ничего не прибавляет.
     scan_id: str | None = Field(default=None, max_length=64)
+    # WMS-542 (F4): строка, которую экран уже показывает в открытом месте —
+    # оператор сканирует то, что и так видит в дереве. Без него сервер ищет
+    # товар штрихкодом по всему арендатору, а `wb_barcode`/`sku_code`
+    # уникальны только внутри продавца: одинаковый код у другого продавца
+    # превращал однозначный скан уже выбранной строки в отказ
+    # barcode_is_ambiguous. С line_id сервер проверяет её адрес и товар и
+    # прибавляет штуку без поиска по чужим карточкам. Для настоящей находки
+    # (строки ещё нет на экране) поле не шлют — тогда поведение прежнее.
+    line_id: uuid.UUID | None = None
 
 
 class CountFillOut(BaseModel):
@@ -861,6 +870,7 @@ async def record_inventory_count_found(
             container_kind=body.container_kind,
             container_id=body.container_id,
             scan_id=body.scan_id,
+            line_id=body.line_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
