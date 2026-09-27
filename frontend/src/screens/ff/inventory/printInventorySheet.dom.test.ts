@@ -3,13 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { printInventorySheet } from './printInventorySheet'
 import type { ApiPrintSheet } from './inventoryCountApi'
 
-// WMS-497, ревью Astra №1 (F1): printInventorySheet должна отдавать сигнал
-// о том, что попытка печати действительно СОСТОЯЛАСЬ (frameWindow.print()
-// вызван, каким бы ни был исход), а не сразу после синхронного возврата —
-// та часть работы (загрузка iframe, 100-миллисекундный таймер) идёт позже.
-// Раньше страница снимала защиту от повторного нажатия сразу после этого
-// синхронного возврата, то есть до print(); сценарий на уровне экрана —
-// в FfInventoryPage.printGuard.dom.test.tsx.
+// WMS-497, ревью Astra №1–№3: одна попытка печати — явный конечный автомат
+// loading → scheduled → printed | failed (см. комментарий у самой функции
+// в printInventorySheet.ts). Этот файл проверяет таблицу исходов автомата
+// напрямую на функции; сценарий на уровне экрана (кнопка, повторный запрос
+// к серверу) — в FfInventoryPage.printGuard.dom.test.tsx.
+//
+// Тайминги ниже используют ограничение ожидания загрузки (сейчас 20000 мс —
+// см. обоснование и реальный замер в комментарии у LOAD_TIMEOUT_MS) и паузу
+// перед печатью (100 мс, PRINT_DELAY_MS). Значения продублированы здесь как
+// литералы: это тест поведения по контракту функции, а не импорт внутренних
+// констант, которые модуль намеренно не экспортирует.
+const LOAD_TIMEOUT_MS = 20000
+const PRINT_DELAY_MS = 100
 
 function sheet(): ApiPrintSheet {
   return {
@@ -21,12 +27,21 @@ function sheet(): ApiPrintSheet {
   }
 }
 
+/** Подменяет print/focus на iframe и глушит фоновый шум jsdom (window.focus). */
+function stubFrameWindow(iframe: HTMLIFrameElement) {
+  const frameWindow = iframe.contentWindow as Window
+  const printSpy = vi.spyOn(frameWindow, 'print').mockImplementation(() => {})
+  vi.spyOn(frameWindow, 'focus').mockImplementation(() => {})
+  return printSpy
+}
+
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
-describe('printInventorySheet: промис завершается не раньше фактической попытки печати', () => {
+describe('printInventorySheet: успешная печать и её тайминг (F1)', () => {
   it('висит до iframe.onload и 100-миллисекундного таймера; print() вызывается один раз', async () => {
     let settled = false
     const promise = printInventorySheet(sheet())
@@ -42,12 +57,7 @@ describe('printInventorySheet: промис завершается не рань
 
     const iframe = document.body.querySelector('iframe')
     expect(iframe).toBeTruthy()
-    const frameWindow = iframe!.contentWindow
-    expect(frameWindow).toBeTruthy()
-    const printSpy = vi.spyOn(frameWindow as Window, 'print').mockImplementation(() => {})
-    // jsdom не реализует window.focus и шумит в stderr при вызове — печати это
-    // не мешает (код и так ловит исключение), но глушим ради чистого лога теста.
-    vi.spyOn(frameWindow as Window, 'focus').mockImplementation(() => {})
+    const printSpy = stubFrameWindow(iframe!)
 
     // jsdom не грузит содержимое srcdoc-iframe сам (проверено отдельно) —
     // вызываем обработчик так же, как это сделал бы браузер.
@@ -58,7 +68,7 @@ describe('printInventorySheet: промис завершается не рань
     expect(printSpy).not.toHaveBeenCalled()
     expect(settled).toBe(false)
 
-    await new Promise((resolve) => setTimeout(resolve, 120))
+    await new Promise((resolve) => setTimeout(resolve, PRINT_DELAY_MS + 20))
     expect(printSpy).toHaveBeenCalledTimes(1)
     expect(settled).toBe(true)
   })
@@ -73,84 +83,171 @@ describe('printInventorySheet: промис завершается не рань
     ;(iframe as unknown as { onload: () => void }).onload()
     await expect(promise).resolves.toBeUndefined()
   })
+
+  it('повторная печать после завершения — новый вызов работает независимо и тоже печатает один раз', async () => {
+    // Первая попытка — от начала до конца.
+    const first = printInventorySheet(sheet())
+    const firstIframe = document.body.querySelector('iframe')!
+    const firstPrintSpy = stubFrameWindow(firstIframe)
+    ;(firstIframe as unknown as { onload: () => void }).onload()
+    await new Promise((resolve) => setTimeout(resolve, PRINT_DELAY_MS + 20))
+    await first
+    expect(firstPrintSpy).toHaveBeenCalledTimes(1)
+
+    // Вторая, отдельная попытка — свой iframe, свой автомат состояний. Первый
+    // iframe печатью не убирается (это делает `afterprint`, которого jsdom
+    // не шлёт) — он остаётся в DOM, поэтому ищем именно НОВЫЙ элемент.
+    const second = printInventorySheet(sheet())
+    const iframesAfterSecondCall = Array.from(document.body.querySelectorAll('iframe'))
+    expect(iframesAfterSecondCall).toHaveLength(2)
+    const secondIframe = iframesAfterSecondCall.find((el) => el !== firstIframe)!
+    expect(secondIframe).toBeTruthy()
+    const secondPrintSpy = stubFrameWindow(secondIframe)
+    ;(secondIframe as unknown as { onload: () => void }).onload()
+    await new Promise((resolve) => setTimeout(resolve, PRINT_DELAY_MS + 20))
+    await second
+    expect(secondPrintSpy).toHaveBeenCalledTimes(1)
+    // Первая попытка не печатала повторно из-за второй.
+    expect(firstPrintSpy).toHaveBeenCalledTimes(1)
+  })
 })
 
-// WMS-497, ревью Astra №2 (F2): единственным путём завершения промиса был
-// iframe.onload — если загрузка обрывалась раньше него, промис не
-// разрешался никогда, и флаг страницы оставался поднятым до перезагрузки.
-// Сценарий на уровне экрана (кнопка снова доступна, новый запрос уходит) —
-// в FfInventoryPage.printGuard.dom.test.tsx; здесь — сам контракт промиса.
-describe('printInventorySheet: обрыв загрузки iframe не вешает промис навсегда', () => {
-  it('onload не наступает — промис разрешается по ограниченному ожиданию, iframe убирается', async () => {
-    vi.useFakeTimers()
-    try {
-      let settled = false
-      const promise = printInventorySheet(sheet())
-      void promise.then(() => {
-        settled = true
-      })
+describe('printInventorySheet: F3 — повторный onload не ставит второй таймер печати', () => {
+  it('два события onload подряд (до таймера печати) — print() вызывается ровно один раз', async () => {
+    const promise = printInventorySheet(sheet())
+    const iframe = document.body.querySelector('iframe')!
+    const printSpy = stubFrameWindow(iframe)
 
-      const iframe = document.body.querySelector('iframe')
-      expect(iframe).toBeTruthy()
+    const onload = (iframe as unknown as { onload: () => void }).onload
+    onload()
+    onload() // повторный onload того же iframe — до истечения PRINT_DELAY_MS
 
-      // Задолго до предела — попытка ещё «готовится», iframe на месте.
-      await vi.advanceTimersByTimeAsync(4000)
-      expect(settled).toBe(false)
-      expect(document.body.contains(iframe)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, PRINT_DELAY_MS + 20))
+    expect(printSpy).toHaveBeenCalledTimes(1)
+    await expect(promise).resolves.toBeUndefined()
+  })
+})
 
-      // Предел истёк — попытка брошена.
-      await vi.advanceTimersByTimeAsync(1500)
-      expect(settled).toBe(true)
-      expect(document.body.contains(iframe)).toBe(false)
-      // Обработчик снят — самого React/браузера обращения к нему больше не будет.
-      expect((iframe as unknown as { onload: unknown }).onload).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
+describe('printInventorySheet: F2 — отказ после onload отменяет уже поставленную печать', () => {
+  it('onload, затем error до истечения таймера печати — print() не вызывается вообще', async () => {
+    let settled = false
+    const promise = printInventorySheet(sheet())
+    void promise.then(() => {
+      settled = true
+    })
+    const iframe = document.body.querySelector('iframe')!
+    const printSpy = stubFrameWindow(iframe)
+
+    ;(iframe as unknown as { onload: () => void }).onload()
+    // Отказ приходит ПОСЛЕ onload (таймер печати уже поставлен), но раньше
+    // его срабатывания.
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(settled).toBe(false)
+    ;(iframe as unknown as { onerror: () => void }).onerror()
+    // resolve() внутри fail() — синхронный вызов, но .then() коллбэк всегда
+    // приходит следующим микротаском, а не сразу.
+    await Promise.resolve()
+    expect(settled).toBe(true)
+    expect(document.body.contains(iframe)).toBe(false)
+
+    // Ждём дольше, чем был бы таймер печати, — print() всё равно не случился.
+    await new Promise((resolve) => setTimeout(resolve, PRINT_DELAY_MS + 50))
+    expect(printSpy).not.toHaveBeenCalled()
+    await expect(promise).resolves.toBeUndefined()
   })
 
-  it('поздний onload брошенной попытки не печатает (обработчик уже снят)', async () => {
+  it('явный error без предшествующего onload тоже освобождает попытку', async () => {
+    let settled = false
+    const promise = printInventorySheet(sheet())
+    void promise.then(() => {
+      settled = true
+    })
+    const iframe = document.body.querySelector('iframe')!
+
+    ;(iframe as unknown as { onerror: () => void }).onerror()
+    await Promise.resolve()
+    expect(settled).toBe(true)
+    expect(document.body.contains(iframe)).toBe(false)
+  })
+})
+
+describe('printInventorySheet: обрыв загрузки (ни onload, ни error) не вешает попытку навсегда', () => {
+  it('ограничение ожидания истекает — промис разрешается, iframe убирается, оба обработчика сняты', async () => {
     vi.useFakeTimers()
-    try {
-      const promise = printInventorySheet(sheet())
-      const iframe = document.body.querySelector('iframe')!
-      const frameWindow = iframe.contentWindow as Window
-      const printSpy = vi.spyOn(frameWindow, 'print').mockImplementation(() => {})
+    let settled = false
+    const promise = printInventorySheet(sheet())
+    void promise.then(() => {
+      settled = true
+    })
 
-      // Значение — то же ограничение ожидания, что в printInventorySheet.ts
-      // (не экспортируется: деталь реализации, а не контракт модуля).
-      await vi.advanceTimersByTimeAsync(5000)
-      await promise
+    const iframe = document.body.querySelector('iframe')
+    expect(iframe).toBeTruthy()
 
-      // «Поздний» onload: пробуем вызвать то, что было обработчиком — его уже нет.
-      const stillOnload = (iframe as unknown as { onload: (() => void) | null }).onload
-      expect(stillOnload).toBeNull()
-      // На случай, если бы браузер всё же прислал реальное DOM-событие load —
-      // без зарегистрированного onload-обработчика оно тоже ничего не вызовет.
-      iframe.dispatchEvent(new Event('load'))
-      await vi.advanceTimersByTimeAsync(200)
-      expect(printSpy).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
+    // Задолго до предела — попытка ещё «готовится», iframe на месте.
+    await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS - 1000)
+    expect(settled).toBe(false)
+    expect(document.body.contains(iframe)).toBe(true)
+
+    // Предел истёк — попытка брошена.
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(settled).toBe(true)
+    expect(document.body.contains(iframe)).toBe(false)
+    expect((iframe as unknown as { onload: unknown }).onload).toBeNull()
+    expect((iframe as unknown as { onerror: unknown }).onerror).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('явный error от iframe тоже освобождает попытку — не только таймаут', async () => {
+  it('поздний onload брошенной попытки не печатает (state уже не loading)', async () => {
     vi.useFakeTimers()
-    try {
-      let settled = false
-      const promise = printInventorySheet(sheet())
-      void promise.then(() => {
-        settled = true
-      })
-      const iframe = document.body.querySelector('iframe')!
+    const promise = printInventorySheet(sheet())
+    const iframe = document.body.querySelector('iframe')!
+    const frameWindow = iframe.contentWindow as Window
+    const printSpy = vi.spyOn(frameWindow, 'print').mockImplementation(() => {})
 
-      ;(iframe as unknown as { onerror: () => void }).onerror()
-      await Promise.resolve()
-      expect(settled).toBe(true)
-      expect(document.body.contains(iframe)).toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
+    await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS)
+    await promise
+
+    // «Поздний» onload: пробуем вызвать то, что было обработчиком, — его уже нет.
+    const stillOnload = (iframe as unknown as { onload: (() => void) | null }).onload
+    expect(stillOnload).toBeNull()
+    // На случай, если бы браузер всё же прислал реальное DOM-событие load —
+    // без зарегистрированного обработчика оно тоже ничего не вызовет.
+    iframe.dispatchEvent(new Event('load'))
+    await vi.advanceTimersByTimeAsync(PRINT_DELAY_MS + 100)
+    expect(printSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('printInventorySheet: ограничение ожидания на реальном листе 1200 строк', () => {
+  it('загрузка на 4999 мс (в пределах лимита) — печатает один раз; загрузка на 20100 мс (за пределом) — не печатает', async () => {
+    // Настоящий лист такого размера строится в printInventorySheet.test.ts
+    // (buildInventorySheetHtml) и реально замерен в headless Chromium
+    // (162–232 мс, см. комментарий у LOAD_TIMEOUT_MS) — здесь важна только
+    // сама граница алгоритма по виртуальному времени, не построение HTML.
+    vi.useFakeTimers()
+
+    // В пределах — печать состоится.
+    const within = printInventorySheet(sheet())
+    const withinIframe = document.body.querySelector('iframe')!
+    const withinPrintSpy = vi.spyOn(withinIframe.contentWindow as Window, 'print').mockImplementation(() => {})
+    vi.spyOn(withinIframe.contentWindow as Window, 'focus').mockImplementation(() => {})
+    await vi.advanceTimersByTimeAsync(4999)
+    ;(withinIframe as unknown as { onload: () => void }).onload()
+    await vi.advanceTimersByTimeAsync(PRINT_DELAY_MS + 20)
+    await within
+    expect(withinPrintSpy).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+
+    document.body.innerHTML = ''
+
+    // За пределом — ограничение уже отменило попытку, onload опоздал.
+    const beyond = printInventorySheet(sheet())
+    const beyondIframe = document.body.querySelector('iframe')!
+    const beyondPrintSpy = vi.spyOn(beyondIframe.contentWindow as Window, 'print').mockImplementation(() => {})
+    await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS + 100)
+    ;(beyondIframe as unknown as { onload: (() => void) | null }).onload?.()
+    await vi.advanceTimersByTimeAsync(PRINT_DELAY_MS + 20)
+    await beyond
+    expect(beyondPrintSpy).not.toHaveBeenCalled()
   })
 })

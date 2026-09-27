@@ -205,7 +205,7 @@ describe('WMS-497 F2: обрыв загрузки iframe не блокирует
 
       // Загрузка не наступает вовсе: ни onload, ни error.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5100)
+        await vi.advanceTimersByTimeAsync(20100)
       })
 
       // Отказ по ограниченному ожиданию — кнопка снова доступна, iframe убран.
@@ -225,6 +225,76 @@ describe('WMS-497 F2: обрыв загрузки iframe не блокирует
         await vi.advanceTimersByTimeAsync(200)
       })
       expect(printSpy ? printSpy.mock.calls.length : 0).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+// WMS-497, ревью Astra №3 (F2, оставшаяся часть): отказ, пришедший ПОСЛЕ
+// onload (когда таймер печати уже поставлен), должен отменять и его — иначе
+// старая (уже брошенная) попытка печатает поверх новой. Ровно сценарий
+// воспроизведения из отчёта ревью: попытка A получает onload, затем error
+// через 50 мс — печатать должна только следующая попытка B, ни разу не A.
+describe('WMS-497 F2 (оставшаяся часть): отказ после onload отменяет уже поставленную печать этой попытки', () => {
+  it('A: onload → error(50 мс) — A не печатает, кнопка снова доступна; B: новый клик печатает один раз, A — ноль', async () => {
+    const printSheetRequests = stubFetchForOneDocument()
+
+    await mount(<FfInventoryPage token="t" sellers={[]} warehouses={[]} />)
+    await click(`inv-open-${DOC_ID}`)
+    await tick()
+    expect($('inv-print-sheet')).toBeTruthy()
+
+    vi.useFakeTimers()
+    try {
+      // Попытка A.
+      await click('inv-print-sheet')
+      expect(printSheetRequests).toHaveLength(1)
+      await act(async () => {
+        printSheetRequests[0]!.resolve(printSheetBody)
+      })
+      const iframeA = document.body.querySelector('iframe')!
+      const printSpyA = vi.spyOn(iframeA.contentWindow as Window, 'print').mockImplementation(() => {})
+      vi.spyOn(iframeA.contentWindow as Window, 'focus').mockImplementation(() => {})
+
+      ;(iframeA as unknown as { onload: () => void }).onload()
+      // Отказ приходит через 50 мс — таймер печати A (100 мс) уже поставлен,
+      // но ещё не сработал.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      ;(iframeA as unknown as { onerror: () => void }).onerror()
+      await tick()
+
+      // A брошена — кнопка снова доступна, iframe A убран.
+      expect(($('inv-print-sheet') as HTMLButtonElement).disabled).toBe(false)
+      expect(document.body.contains(iframeA)).toBe(false)
+
+      // Ждём дольше, чем был бы таймер печати A, — печати всё равно не случилось.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      expect(printSpyA).not.toHaveBeenCalled()
+
+      // Попытка B — новый клик, новый запрос, настоящая загрузка.
+      await click('inv-print-sheet')
+      expect(printSheetRequests).toHaveLength(2)
+      await act(async () => {
+        printSheetRequests[1]!.resolve(printSheetBody)
+      })
+      const iframeB = document.body.querySelector('iframe')!
+      expect(iframeB).not.toBe(iframeA)
+      const printSpyB = vi.spyOn(iframeB.contentWindow as Window, 'print').mockImplementation(() => {})
+      vi.spyOn(iframeB.contentWindow as Window, 'focus').mockImplementation(() => {})
+
+      ;(iframeB as unknown as { onload: () => void }).onload()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(150)
+      })
+
+      expect(printSpyB).toHaveBeenCalledTimes(1)
+      expect(printSpyA).not.toHaveBeenCalled()
+      expect(($('inv-print-sheet') as HTMLButtonElement).disabled).toBe(false)
     } finally {
       vi.useRealTimers()
     }

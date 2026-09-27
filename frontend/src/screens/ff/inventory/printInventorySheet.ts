@@ -143,33 +143,55 @@ export function buildInventorySheetHtml(sheet: ApiPrintSheet): string {
 
 /**
  * Сколько ждать загрузки скрытого iframe, прежде чем считать попытку печати
- * неудавшейся. Содержимое инлайновое (srcdoc, без сетевого запроса) — в любом
- * настоящем браузере `onload` наступает почти сразу; это только защита от
- * оборванной загрузки (WMS-497, ревью Astra №2, F2), а не обычный сценарий.
+ * неудавшейся. Содержимое инлайновое (srcdoc, без сетевого запроса) — реально
+ * замерено (headless Chromium, реальный лист на 1200 строк, ~416 КБ HTML,
+ * 10 повторов): `onload` наступает через 162–232 мс (в среднем ~205 мс), см.
+ * коммит WMS-497 (ревью Astra №3). 20 секунд — это ~85-кратный запас поверх
+ * худшего замера: с одной стороны, документ на порядок больше или устройство
+ * на порядок медленнее не должны упереться в предел раньше времени; с другой,
+ * оператор не ждёт неопределённо долго, если загрузка правда не удалась.
  */
-const LOAD_TIMEOUT_MS = 5000
+const LOAD_TIMEOUT_MS = 20000
+
+/** Пауза между загрузкой iframe и вызовом `print()` — браузеру нужно время
+ * применить стили печати, прежде чем открывать окно (см. также `PRINT_DELAY_MS`
+ * в тестах, где значение продублировано для явности сценариев). */
+const PRINT_DELAY_MS = 100
+
+/**
+ * Состояния одной попытки печати (WMS-497, ревью Astra №2 и №3 — F2, F3):
+ *
+ * `loading` — iframe создан, ждём `onload`/`onerror` или истечения ожидания.
+ * `scheduled` — `onload` случился, ждём `PRINT_DELAY_MS` перед `print()`.
+ * `printed` / `failed` — попытка завершена; терминальные состояния.
+ *
+ * Раньше защиту от гонок держали отдельные флаги (`printed`, потом `settled`),
+ * каждый заводился в своём месте под своё событие — и между ними оставались
+ * промежутки: отказ, пришедший ПОСЛЕ `onload` (когда уже поставлен таймер
+ * печати), не отменял этот таймер (F2 остаток), а повторный `onload` до этого
+ * таймера заводил второй такой же таймер (F3) — оба давали два `print()` на
+ * одну попытку или печать поверх уже брошенной. Явное состояние закрывает оба
+ * случая одним правилом: `state` — единственный источник истины, каждое
+ * событие сверяется с ним ПЕРЕД тем, как что-то сделать, переход в `loading`
+ * → `scheduled` происходит не больше одного раза, а переход в любое из двух
+ * терминальных состояний — единственное место, где снимаются все таймеры и
+ * оба обработчика и разрешается Promise.
+ */
+type PrintAttemptState = 'loading' | 'scheduled' | 'printed' | 'failed'
 
 /**
  * Печать листа инвентаризации (A4, браузер). На листе нет фото, поэтому
  * ничего не ждём для сборки — но саму печать (`frameWindow.print()`) браузер
- * запускает не сразу: только после загрузки iframe и ещё через 100 мс.
+ * запускает не сразу: только после загрузки iframe и ещё через
+ * `PRINT_DELAY_MS`.
  *
- * Возвращаем Promise, который разрешается не раньше фактической попытки
- * печати (вызов `print()`, каким бы ни был исход) — до этого момента
- * документ ещё «готовится». Страница держит на этом промисе свой флаг
- * повторного нажатия (WMS-497, ревью Astra №1, F1): раньше флаг снимался
- * сразу после синхронного возврата этой функции, то есть до того, как
- * `print()` вообще был вызван, и второе нажатие в этом промежутке уходило
- * вторым запросом на сервер и открывало второе окно печати.
- *
- * Единственным путём до F2 был `iframe.onload`: если загрузка обрывалась
- * (или браузер по какой-то причине не отдавал это событие) раньше него,
- * Promise не завершался никогда — кнопка оставалась заблокированной до
- * перезагрузки страницы. `LOAD_TIMEOUT_MS` — ограниченное ожидание с тем же
- * исходом, что и явный отказ: обработчики снимаются, iframe убирается,
- * Promise разрешается. Обработчики снимаются именно поэтому — если загрузка
- * всё же случится позже (сама по себе или после того, как истёк наш лимит),
- * она не должна напечатать устаревший лист поверх уже новой попытки.
+ * Возвращаем Promise, который разрешается не раньше фактического исхода
+ * попытки — печать вызвана (`printed`) либо окончательно не может случиться
+ * (`failed`) — до этого момента документ ещё «готовится». Страница держит на
+ * этом промисе свой флаг повторного нажатия (WMS-497, ревью Astra №1, F1):
+ * раньше флаг снимался сразу после синхронного возврата этой функции, то
+ * есть до того, как `print()` вообще был вызван, и второе нажатие в этом
+ * промежутке уходило вторым запросом на сервер и открывало второе окно печати.
  */
 export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   const html = buildInventorySheetHtml(sheet)
@@ -187,7 +209,7 @@ export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   iframe.style.border = '0'
   document.body.appendChild(iframe)
 
-  const cleanup = () => {
+  const removeIframe = () => {
     try {
       document.body.removeChild(iframe)
     } catch {
@@ -196,35 +218,66 @@ export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
   }
 
   return new Promise<void>((resolve) => {
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      resolve()
-    }
+    let state: PrintAttemptState = 'loading'
+    let loadTimeoutId: ReturnType<typeof setTimeout> | null = null
+    let printTimeoutId: ReturnType<typeof setTimeout> | null = null
 
-    let loadTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      loadTimeoutId = null
-      // Загрузка не случилась вовремя — печатать нечего. Снимаем обработчики
-      // (поздний onload/error после этого — no-op) и убираем iframe: он не
-      // должен напечатать это старьё поверх следующей попытки оператора.
-      iframe.onload = null
-      iframe.onerror = null
-      cleanup()
-      finish()
-    }, LOAD_TIMEOUT_MS)
-
-    const printNow = () => {
-      // Уже отказали по таймауту (или другим путём) — поздний onload игнорируем.
-      if (settled) return
+    function cancelTimers() {
       if (loadTimeoutId !== null) {
         clearTimeout(loadTimeoutId)
         loadTimeoutId = null
       }
+      if (printTimeoutId !== null) {
+        clearTimeout(printTimeoutId)
+        printTimeoutId = null
+      }
+    }
+
+    function detach() {
+      iframe.onload = null
+      iframe.onerror = null
+    }
+
+    /**
+     * `loading` или `scheduled` → `failed`: загрузка не удалась (`onerror`)
+     * или не наступила вовремя (истёк `LOAD_TIMEOUT_MS`) — в любом из этих
+     * двух состояний печатать уже нечего. Из терминального состояния —
+     * не более одного раза, второй вызов (например, поздний `onerror` после
+     * уже случившегося `print()`) — no-op.
+     */
+    function fail() {
+      if (state === 'printed' || state === 'failed') return
+      state = 'failed'
+      cancelTimers()
+      detach()
+      removeIframe()
+      resolve()
+    }
+
+    /** `scheduled` → `printed`: попытка печати сделана (исход `print()` не важен для guard'а страницы). */
+    function markPrinted() {
+      if (state === 'printed' || state === 'failed') return
+      state = 'printed'
+      cancelTimers()
+      detach()
+      resolve()
+    }
+
+    loadTimeoutId = setTimeout(fail, LOAD_TIMEOUT_MS)
+
+    iframe.onload = () => {
+      // Переход `loading` → `scheduled` — ровно один раз: повторный `onload`
+      // (F3) или поздний `onload` уже брошенной/напечатанной попытки — no-op.
+      if (state !== 'loading') return
+      state = 'scheduled'
+      if (loadTimeoutId !== null) {
+        clearTimeout(loadTimeoutId)
+        loadTimeoutId = null
+      }
+
       const frameWindow = iframe.contentWindow
       if (!frameWindow) {
-        cleanup()
-        finish()
+        fail()
         return
       }
       try {
@@ -232,37 +285,34 @@ export function printInventorySheet(sheet: ApiPrintSheet): Promise<void> {
       } catch {
         // фокус не обязателен
       }
-      setTimeout(() => {
-        frameWindow.addEventListener('afterprint', cleanup, { once: true })
+
+      printTimeoutId = setTimeout(() => {
+        printTimeoutId = null
+        // Отказали между `onload` и этим таймером (например, поздний
+        // `onerror`, F2) — печатать уже нечего.
+        if (state !== 'scheduled') return
+        frameWindow.addEventListener('afterprint', removeIframe, { once: true })
         try {
           if (window.__WMS_CAPTURE_PRINT_HTML__) {
             window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
           }
           frameWindow.print()
         } catch {
-          cleanup()
+          removeIframe()
         } finally {
-          // Попытка печати сделана (открылось окно печати или нет — не
-          // важно для гварда): страница может снова принимать нажатие —
-          // намеренная повторная печать того же документа не блокируется.
-          finish()
+          // Попытка печати сделана (открылось окно печати или нет — не важно
+          // для guard'а): страница может снова принимать нажатие — намеренная
+          // повторная печать того же документа не блокируется.
+          markPrinted()
         }
-      }, 100)
+      }, PRINT_DELAY_MS)
     }
 
-    iframe.onload = printNow
-    // Явный сигнал отказа загрузки (если браузер его пришлёт) — тот же
-    // отказ, что и по таймауту, только раньше него.
-    iframe.onerror = () => {
-      if (loadTimeoutId !== null) {
-        clearTimeout(loadTimeoutId)
-        loadTimeoutId = null
-      }
-      iframe.onload = null
-      iframe.onerror = null
-      cleanup()
-      finish()
-    }
+    // Явный сигнал отказа загрузки (если браузер его пришлёт) — тот же отказ,
+    // что и по истечении ожидания, только раньше; работает и до, и после
+    // `onload` (F2 остаток: отказ после `onload` теперь тоже отменяет
+    // уже поставленный таймер печати через `cancelTimers()` внутри `fail()`).
+    iframe.onerror = fail
     iframe.srcdoc = html
   })
 }
