@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Badge,
@@ -216,6 +216,7 @@ export function FfProductsCatalogScreen({
   canManageCatalog = false, addressStorageEnabled = true,
 }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   // Сумма всех четырнадцати колонок из colgroup ниже. Держать в согласии с ним:
   // при tableLayout: 'fixed' колонка без своей ширины забирает весь свободный
@@ -238,6 +239,12 @@ export function FfProductsCatalogScreen({
   const fbsLimitAutoOpenedRef = useRef<string | null>(null)
   // WMS-491 (D1): ?seller_id=<id> в адресе — из карточки селлера.
   const sellerIdAutoAppliedRef = useRef<string | null>(null)
+  // WMS-491 (правка F2 после ревью): следующая смена location.key — наша же
+  // чистка ?seller_id= (см. ниже), а не новый вход из меню — эффект сброса
+  // должен её пропустить.
+  const sellerFilterOwnCleanupRef = useRef(false)
+  // Текущее значение filterSellerId пришло из адреса и ещё не тронуто вручную.
+  const sellerFilterFromUrlRef = useRef(false)
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
@@ -647,11 +654,39 @@ export function FfProductsCatalogScreen({
     if (sellerIdAutoAppliedRef.current === sellerIdParam) return
     sellerIdAutoAppliedRef.current = sellerIdParam
     const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
-    if (resolved) setFilterSellerId(resolved)
+    if (resolved) {
+      setFilterSellerId(resolved)
+      sellerFilterFromUrlRef.current = true
+    }
+    sellerFilterOwnCleanupRef.current = true
     const next = new URLSearchParams(searchParams)
     next.delete('seller_id')
     setSearchParams(next, { replace: true })
   }, [searchParams, sellers, setSearchParams])
+
+  // Правка F2 (ревью Astra): переход по адресу с ?seller_id= меняет только
+  // search — react-router не размонтирует экран при повторном клике по тому
+  // же пункту меню («Каталог»), поэтому локальный фильтр из строки выше сам
+  // по себе не сбросится (R9/C9). location.key меняется при КАЖДОЙ навигации,
+  // в отличие от searchParams (для перехода на тот же пустой адрес его ссылка
+  // не меняется — react-router мемоизирует по строке location.search) — этим
+  // и ловим повторный вход из меню. Собственную чистку параметра эффектом
+  // выше пропускаем через sellerFilterOwnCleanupRef; если фильтр выставлен
+  // вручную (sellerFilterFromUrlRef уже false), эффект его не трогает.
+  useEffect(() => {
+    if (searchParams.get('seller_id')) return
+    if (sellerFilterOwnCleanupRef.current) {
+      sellerFilterOwnCleanupRef.current = false
+      return
+    }
+    if (sellerFilterFromUrlRef.current) {
+      sellerFilterFromUrlRef.current = false
+      setFilterSellerId('')
+    }
+    // Реагируем только на новую навигацию (location.key), не на любую смену
+    // searchParams/sellers — иначе ручной выбор фильтра можно случайно сбить.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
@@ -955,6 +990,9 @@ export function FfProductsCatalogScreen({
                 label="Селлер"
                 value={filterSellerId}
                 onChange={(e) => {
+                  // Ручной выбор в выпадающем списке — свой, не из адреса:
+                  // эффект сброса при повторном входе из меню его не трогает.
+                  sellerFilterFromUrlRef.current = false
                   setFilterSellerId(e.target.value)
                   setFilterCategory('')
                 }}

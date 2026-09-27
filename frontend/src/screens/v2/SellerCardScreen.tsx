@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { Box, Button, IconButton, Paper, Skeleton, Stack, Typography } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import { apiUrl } from '../../api'
-import { ActionGroup, EmptyState } from '../../ui-kit'
+import { ActionGroup, EmptyState, ErrorNotice } from '../../ui-kit'
 import { PageHeader } from '../../ui/PageHeader'
 import { sellerWbStatusLabel } from '../../utils/sellerWbStatus'
 import { FfBillingProfilesDialog } from '../ff/FfBillingProfilesDialog'
@@ -58,7 +58,30 @@ export function SellerRequisitesBlock({ profile }: { profile: ProfileSnapshot | 
   )
 }
 
-export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
+/**
+ * Обёртка держит страницу закреплённой за одним `sellerId`.
+ *
+ * Внутри одного и того же маршрута `/app/ff/sellers/:sellerId` React не
+ * пересоздаёт компонент при смене только параметра — предыдущий экземпляр
+ * (со всем его состоянием: окно реквизитов, загруженный профиль, панель
+ * счетов) просто получает новые пропсы. Перекрёстное ревью нашло на этом
+ * реальный дефект (WMS-491 F1): открыли селлера A, перешли к B, вернулись по
+ * истории браузера сразу на A — открытое окно «Реквизиты» продолжало слать
+ * запросы к B под заголовком A, и сохранение уходило не тому селлеру.
+ *
+ * `key={sellerId}` — самый прямой способ сказать React «это другая
+ * страница»: при смене id всё поддерево (карточка, окно реквизитов, панель
+ * счетов) размонтируется и создаётся заново с чистым состоянием, как раньше
+ * была устроена строка списка со своим `key={s.id}`. Точечные защиты внутри
+ * (F4/F5 ниже) остаются — этот ключ не отменяет гонку двух ответов одного и
+ * того же селлера, только гонку между разными селлерами.
+ */
+export function SellerCardScreen(props: Props) {
+  const { sellerId } = useParams<{ sellerId: string }>()
+  return <SellerCardScreenForSeller key={sellerId ?? 'none'} {...props} />
+}
+
+function SellerCardScreenForSeller({ token, authHeaders, sellers }: Props) {
   const { sellerId } = useParams<{ sellerId: string }>()
 
   const fromList = useMemo(() => sellers.find((s) => s.id === sellerId) ?? null, [sellers, sellerId])
@@ -66,7 +89,9 @@ export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
   // селлер находится сразу. Прямое открытие адреса может опередить загрузку
   // общего списка в App.tsx: тогда список ещё пуст, и карточка спрашивает
   // тот же `GET /sellers` сама, чтобы отличить «ещё грузится» от «не найден».
-  const [ownFetchStatus, setOwnFetchStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  // Отдельное состояние `error` (WMS-491 F5) — сбой этого запроса не должен
+  // выглядеть как «селлера не существует»: это разные сообщения пользователю.
+  const [ownFetchStatus, setOwnFetchStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [ownFetchSeller, setOwnFetchSeller] = useState<SellerCardRow | null>(null)
 
   useEffect(() => {
@@ -84,8 +109,7 @@ export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
       })
       .catch(() => {
         if (!cancelled) {
-          setOwnFetchSeller(null)
-          setOwnFetchStatus('done')
+          setOwnFetchStatus('error')
         }
       })
     return () => {
@@ -94,24 +118,37 @@ export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
   }, [authHeaders, fromList, sellerId, sellers.length, token])
 
   const seller = fromList ?? ownFetchSeller
-  const isLoading = !fromList && sellers.length === 0 && ownFetchStatus !== 'done'
-  const notFound = !seller && !isLoading
+  const isLoading = !fromList && sellers.length === 0 && (ownFetchStatus === 'idle' || ownFetchStatus === 'loading')
+  const loadError = !fromList && sellers.length === 0 && ownFetchStatus === 'error'
+  const notFound = !seller && !isLoading && !loadError
 
   const [profile, setProfile] = useState<ProfileSnapshot | null | undefined>(undefined)
+  const [profileError, setProfileError] = useState(false)
+  // WMS-491 F4: более старый запрос может завершиться позже нового (сразу
+  // после сохранения карточка перечитывает профиль, а до этого мог висеть
+  // предыдущий запрос с устаревшим снимком). Побеждает только последний
+  // начатый запрос — остальные ответы, включая ошибочные, молча отбрасываются.
+  const profileRequestRef = useRef(0)
 
   const loadProfile = useCallback(async () => {
     if (!sellerId) return
+    const requestId = ++profileRequestRef.current
     try {
       const res = await fetch(apiUrl(`/billing/profiles/sellers/${sellerId}`), {
         headers: authHeaders(token),
       })
+      if (requestId !== profileRequestRef.current) return
       if (!res.ok) {
-        setProfile(null)
+        // Сбой чтения — не то же самое, что «реквизитов нет» (F5): прежние
+        // показанные данные не трогаем, просто сообщаем о сбое отдельно.
+        setProfileError(true)
         return
       }
+      setProfileError(false)
       setProfile((await res.json()) as ProfileSnapshot | null)
     } catch {
-      setProfile(null)
+      if (requestId !== profileRequestRef.current) return
+      setProfileError(true)
     }
   }, [authHeaders, sellerId, token])
 
@@ -172,6 +209,11 @@ export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
       </Stack>
 
       {isLoading ? <Skeleton height={120} data-testid="seller-card-loading" /> : null}
+      {loadError ? (
+        <ErrorNotice testId="seller-card-load-error">
+          Не удалось проверить селлера. Обновите страницу или повторите позже.
+        </ErrorNotice>
+      ) : null}
       {notFound ? <EmptyState title="Селлер не найден." testId="seller-card-not-found" /> : null}
 
       {seller ? (
@@ -189,7 +231,13 @@ export function SellerCardScreen({ token, authHeaders, sellers }: Props) {
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
               Реквизиты
             </Typography>
-            <SellerRequisitesBlock profile={profile} />
+            {profileError ? (
+              <ErrorNotice testId="seller-card-requisites-error">
+                Не удалось загрузить реквизиты. Обновите страницу или повторите позже.
+              </ErrorNotice>
+            ) : (
+              <SellerRequisitesBlock profile={profile} />
+            )}
           </Paper>
 
           <Box data-testid="seller-card-invoices">

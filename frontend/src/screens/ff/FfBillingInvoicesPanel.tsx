@@ -240,10 +240,23 @@ export function FfBillingInvoicesPanel({
     setRows([])
   }, [])
 
+  // WMS-491 F3: смена закреплённого селлера (карточка A → карточка B без
+  // размонтирования панели) раньше меняла только `sellerId`, а курсор,
+  // накопленные строки, поиск, статус и открытый счёт оставались от A —
+  // следующая страница уходила с курсором A и подмешивалась к его строкам.
+  // Полный сброс — начинать независимый список заново, как при первом входе.
   useEffect(() => {
-    if (fixedSellerId) {
-      setSellerId(fixedSellerId)
-    }
+    if (!fixedSellerId) return
+    setSellerId(fixedSellerId)
+    setCursor(null)
+    setNextCursor(null)
+    setRows([])
+    setSearch('')
+    setStatus('all')
+    setOpened(null)
+    setOpenError(false)
+    setCancelConfirm(false)
+    setCancelError(null)
   }, [fixedSellerId])
 
   useEffect(() => {
