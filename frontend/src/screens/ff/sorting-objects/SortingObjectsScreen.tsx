@@ -90,7 +90,9 @@ type SortingScreenProps = {
    */
   savedImmediately?: boolean
   scanStorageKey?: string
-  onProductScan?: (barcode: string, context: ScanContext) => Promise<string | void>
+  onProductScan?: (barcode: string, context: ScanContext, operationId: string) => Promise<string | void>
+  onScanIdle?: () => void
+  remainingQty?: number
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
@@ -100,6 +102,7 @@ type SortingScreenProps = {
     qty: number
     /** Holder before the move; only loose stock may be replayed after a lost reply. */
     sourceHolder: Holder
+    operationId?: string
   }) => void | Promise<void>
 }
 
@@ -119,6 +122,8 @@ export function SortingObjectsScreen({
   savedImmediately,
   scanStorageKey,
   onProductScan,
+  onScanIdle,
+  remainingQty,
 }: SortingScreenProps) {
   const theme = useTheme()
   const products = productsProp ?? PRODUCTS
@@ -141,6 +146,8 @@ export function SortingObjectsScreen({
   const activeCellId = scanContext.cellId
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
+  const [pendingScans, setPendingScans] = useState({ count: 0, paused: false })
+  const activePanel = useRef<HTMLDivElement>(null)
   const [asking, setAsking] = useState<Carried | null>(null)
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
@@ -156,24 +163,27 @@ export function SortingObjectsScreen({
   const activeObject = objects.find((one) => one.id === scanContext.objectId) ?? null
   useEffect(() => { if (initialObjects) setObjects(initialObjects) }, [initialObjects])
   useEffect(() => { if (initialLines) setLines(initialLines) }, [initialLines])
-  const scanDependencies = useRef({ cells, objects, onPlace, onProductScan })
-  scanDependencies.current = { cells, objects, onPlace, onProductScan }
+  const scanDependencies = useRef({ cells, objects, onPlace, onProductScan, onScanIdle })
+  scanDependencies.current = { cells, objects, onPlace, onProductScan, onScanIdle }
   const scannerRef = useRef<ReturnType<typeof createSortingScanner> | null>(null)
   if (!scannerRef.current) {
     scannerRef.current = createSortingScanner(scanContext, {
       data: () => scanDependencies.current,
-      place: async (object, cellId) => {
+      storage: scanStorageKey ? { storage: localStorage, key: `${scanStorageKey}:queue` } : undefined,
+      pending: (count, paused) => setPendingScans({ count, paused }),
+      idle: () => scanDependencies.current.onScanIdle?.(),
+      place: async (object, cellId, operationId) => {
         if (scanDependencies.current.onPlace) {
-          await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null })
+          await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null, operationId })
         }
         const placed = scanDependencies.current.objects.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one)
         // The next queued scan can run before React renders the confirmed move.
         scanDependencies.current.objects = placed
         setObjects(placed)
       },
-      product: async (barcode, context) => {
+      product: async (barcode, context, operationId) => {
         if (!scanDependencies.current.onProductScan) throw new Error('Скан товара доступен в документе приёмки')
-        return scanDependencies.current.onProductScan(barcode, context)
+        return scanDependencies.current.onProductScan(barcode, context, operationId)
       },
       changed: (next) => {
         setScanContext(next)
@@ -183,13 +193,29 @@ export function SortingObjectsScreen({
       error: (error) => { setScanNotice(null); setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.') },
     })
   }
+  useEffect(() => { void scannerRef.current?.resume() }, [])
+  useEffect(() => {
+    if (scanContext.objectId) setCollapsed((current) => {
+      const next = new Set(current)
+      next.delete(scanContext.objectId!)
+      return next
+    })
+    const panel = activePanel.current
+    const row = scanContext.objectId ? panel?.querySelector(`[data-row-key="o-${scanContext.objectId}"]`) : null
+    ;(row ?? panel)?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+  }, [scanContext.cellId, scanContext.objectId])
   const setActiveCellId = (id: string) => { void scannerRef.current?.selectCell(id) }
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
   const totalQty = lines.reduce((sum, line) => sum + line.qty, 0)
-  const leftQty = lines
+  const leftQty = remainingQty ?? lines
     .filter((line) => !whereIs(line.holder, objects, cells).cell)
     .reduce((sum, line) => sum + line.qty, 0)
+  const quantitiesByCell = new Map<string, number>()
+  for (const line of lines) {
+    const id = whereIs(line.holder, objects, cells).cell?.id
+    if (id) quantitiesByCell.set(id, (quantitiesByCell.get(id) ?? 0) + line.qty)
+  }
 
   function toggle(objectId: string) {
     setCollapsed((current) => {
@@ -345,7 +371,7 @@ export function SortingObjectsScreen({
             onScan={handleScan}
             expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
             error={scanError}
-            notice={scanNotice}
+            notice={pendingScans.count && !pendingScans.paused ? `${scanNotice ?? ''} · Ожидают подтверждения: ${pendingScans.count}` : scanNotice}
             testId="objects-scan"
           />
         </Stack>
@@ -451,7 +477,7 @@ export function SortingObjectsScreen({
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {cells.map((cell) => {
                 const active = activeCellId === cell.id
-                const qty = cellQty(cell.id, objects, lines)
+                const qty = quantitiesByCell.get(cell.id) ?? 0
                 const target = Boolean(carried && canPut(carried, cellRef(cell.id), objects))
                 return (
                   <Box
@@ -476,8 +502,9 @@ export function SortingObjectsScreen({
                       borderRadius: 1.5,
                       cursor: 'pointer',
                       border: '1px solid',
-                      borderColor: active ? 'primary.main' : 'divider',
-                      backgroundColor: active ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+                      borderColor: 'divider',
+                      animation: active ? 'sorting-cell-flash 700ms ease-out' : 'none',
+                      '@keyframes sorting-cell-flash': { from: { backgroundColor: alpha(theme.palette.primary.main, 0.25) }, to: { backgroundColor: 'transparent' } },
                       outline: target && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
                       outlineOffset: '-3px',
                     }}
@@ -495,8 +522,19 @@ export function SortingObjectsScreen({
           </Paper>
           {activeCell ? (
             <Paper
+          key={activeCell.id}
+          ref={activePanel}
           variant="outlined"
           sx={{
+            order: -1,
+            mt: '0 !important',
+            mb: 2,
+            minWidth: 0,
+            maxHeight: '55vh',
+            overflow: 'auto',
+            scrollMarginTop: 90,
+            animation: 'sorting-panel-flash 700ms ease-out',
+            '@keyframes sorting-panel-flash': { from: { backgroundColor: alpha(theme.palette.primary.main, 0.18) }, to: { backgroundColor: 'background.paper' } },
             p: 2,
             outline:
               carried && canPut(carried, cellRef(activeCell.id), objects)
@@ -539,6 +577,7 @@ export function SortingObjectsScreen({
             objects={objects}
             carried={carried}
             testId="objects-cell-tree"
+            activeObjectId={scanContext.objectId}
             compact
             empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
             onToggle={toggle}

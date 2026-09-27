@@ -50,7 +50,7 @@ async def test_box_unit_scan_repeat_and_completion(async_client):
     args, product, box, other_cell = await seed(async_client, boxed=2)
     op = uuid.uuid4()
     assert (await scan(args, op))["moved_qty"] == 1
-    assert await scan(args, op) == {"id": str(op), "moved_qty": 1}
+    assert await scan(args, op) == {"id": str(op), "moved_qty": 1, "reload": True}
     with pytest.raises(warehouse_map.WarehouseMapError, match="operation_conflict"):
         await scan(args, op, cell_id=other_cell)
     assert await qty(product, args["cell_id"]) == 1
@@ -62,7 +62,7 @@ async def test_box_unit_scan_repeat_and_completion(async_client):
     assert await qty(product, args["cell_id"]) == 2
     with pytest.raises(warehouse_map.WarehouseMapError, match="nothing_to_move"):
         await scan(args)
-    assert await scan(args, op) == {"id": str(op), "moved_qty": 1}
+    assert await scan(args, op) == {"id": str(op), "moved_qty": 1, "reload": True}
     async with SessionLocal() as session:
         request = await intake.get_request(session, args["tenant_id"], args["inbound_request_id"])
         assert request.lines[0].posted_qty == 2
@@ -89,7 +89,16 @@ async def test_scan_loose_into_selected_container_and_retry(async_client):
             inbound_request_id=args["inbound_request_id"],
         )
     op = uuid.uuid4()
-    await scan(args, op, to_id=target_id)
+    result = await scan(args, op, to_id=target_id)
+    assert result["reload"] is False
+    assert result["remaining_qty"] == 1
+    assert result["product_id"] == str(product)
+    assert result["target_holder"] == f"obj:{target_id}"
+    async with SessionLocal() as session:
+        target_balance = await session.get(InventoryBalance, uuid.UUID(result["target_id"]))
+        source_balance = await session.get(InventoryBalance, uuid.UUID(result["source_id"]))
+        assert target_balance.quantity == source_balance.quantity == 1
+        assert target_balance.container_id == target_id
     await scan(args, op, to_id=target_id)
     await scan(args, to_id=target_id)
     assert await qty(product, args["cell_id"]) == 2

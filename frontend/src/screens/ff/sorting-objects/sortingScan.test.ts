@@ -93,7 +93,7 @@ describe('WMS-550 sorting scan workflow', () => {
     await t.scanner.scan('BOX-123')
     expect(t.place).toHaveBeenCalledTimes(1)
     await t.scanner.scan('4601234567890')
-    expect(t.product).toHaveBeenLastCalledWith('4601234567890', { cellId: 'a', objectId: null })
+    expect(t.product).toHaveBeenLastCalledWith('4601234567890', { cellId: 'a', objectId: null }, expect.any(String))
     await t.scanner.scan('BOX-123')
     await t.scanner.scan('LOC-456')
     expect(t.context()).toEqual({ cellId: 'b', objectId: null })
@@ -113,8 +113,8 @@ describe('WMS-550 sorting scan workflow', () => {
     finish()
     await Promise.all([box, first, second])
     expect(t.product.mock.calls).toEqual([
-      ['4601234567890', { cellId: 'a', objectId: 'box' }],
-      ['4601234567890', { cellId: 'a', objectId: 'box' }],
+      ['4601234567890', { cellId: 'a', objectId: 'box' }, expect.any(String)],
+      ['4601234567890', { cellId: 'a', objectId: 'box' }, expect.any(String)],
     ])
   })
 
