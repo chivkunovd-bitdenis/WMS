@@ -33,6 +33,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+from time import monotonic
 from typing import Any, Literal, TypeVar
 
 from sqlalchemy import (
@@ -51,7 +52,7 @@ from sqlalchemy import (
     text,
     union_all,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
@@ -95,8 +96,8 @@ ADD_TO_FULFILLMENT_MAX_IDS = 500
 
 _T = TypeVar("_T")
 
-# F1 (review-astra-1, блокер): два запроса с разными nmID, но одним и тем же
-# вычисленным артикулом/ШК, проходят _card_has_vendor_code_conflict
+# F1 (review-astra-1/2, блокер): два запроса с разными nmID, но одним и тем
+# же вычисленным артикулом/ШК, проходят _card_has_vendor_code_conflict
 # одновременно — ни один ещё не создал товар, конфликта не видно. Дальше
 # upsert_products_from_wb_cards разрешает гонку уникального индекса своим
 # штатным повторным поиском и молча переписывает найденный товар под вторую
@@ -105,16 +106,36 @@ _T = TypeVar("_T")
 # upsert_products_from_wb_cards трогать нельзя (граница WMS-535); общий
 # замок обмена (marketplace_seller_lock_service), который держит WB/Ozon
 # синк и от которого явно предостерёг ревьюер (владельческий случай B01 —
-# он не должен блокировать FBS), тоже не подходит и не переиспользуется.
+# он не должен блокировать FBS), тоже не подходит и не переиспользуется —
+# отдельное пространство ключей.
 #
-# Сервер — один процесс без --workers (Dockerfile.railway), поэтому
-# внутрипроцессный asyncio.Lock на (tenant, seller) уже сам по себе
-# полностью закрывает гонку. PostgreSQL advisory-lock поверх — задел на
-# случай будущего многопроцессного деплоя; сессионный (не транзакционный)
-# вариант выбран умышленно: upsert коммитит на каждый размер карточки по
-# отдельности, и lock уровня транзакции снялся бы уже на первом коммите
-# многоразмерной карточки, не защитив остальные её размеры.
+# Боевой API — два процесса (`uvicorn --workers 2`, WMS-538), поэтому
+# внутрипроцессный asyncio.Lock ниже сам по себе гонку МЕЖДУ процессами не
+# закрывает — он только экономит поход в PostgreSQL для гонки внутри одного
+# процесса; реальная межпроцессная защита — только advisory-lock.
+#
+# Раунд 1 брал сессионный pg_advisory_lock прямо на рабочей AsyncSession —
+# класс утечки WMS-435. upsert коммитит на каждый размер карточки отдельно;
+# после commit SQLAlchemy возвращает физическое соединение в пул, а
+# следующий запрос той же сессии может получить уже ДРУГОЕ соединение.
+# Сессионный лок остаётся висеть на первом, отданном в пул навсегда:
+# pg_advisory_unlock на втором соединении просто не находит, что снимать
+# (возвращает false). Транзакционный pg_advisory_xact_lock тоже не годится:
+# он снялся бы на первом же внутреннем коммите, не защитив остальные
+# размеры многоразмерной карточки. Правильный уровень — отдельное
+# закреплённое соединение (не рабочая session), которое берёт лок и само же
+# его снимает, живёт ровно на время операции и не возвращается в пул, если
+# снятие не удалось.
 _wb_claim_locks: dict[tuple[uuid.UUID, uuid.UUID], asyncio.Lock] = {}
+
+# Ждать замок ограниченное время, а не бесконечно: зависший запрос на одном
+# воркере не должен вечно держать открытым соединение другого воркера.
+_WB_CLAIM_LOCK_WAIT_SEC = 5.0
+_WB_CLAIM_LOCK_POLL_SEC = 0.1
+
+
+class WbClaimLockTimeout(RuntimeError):
+    """Не удалось получить замок притязания на карточку WB за отведённое время."""
 
 
 def _wb_claim_lock(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> asyncio.Lock:
@@ -138,26 +159,84 @@ async def _wb_card_identity_claim(
     """Serialize one seller's "is this sku/barcode free — then claim it" WB
     section end to end, so a concurrent card for a different nmID can never
     observe "free" before the first card's write is visible (WMS-548 F1, А12).
+
+    The advisory lock is acquired and released on its own dedicated
+    connection (``bind.connect()``), never on the caller's ``session`` —
+    that connection is held open for the whole ``yield``, independent of
+    however many times ``session`` itself commits inside it (WMS-435 class
+    of leak: a session-scoped lock taken on a connection that gets handed
+    back to the pool by an intervening commit is a lock nobody can ever
+    release again).
     """
     async with _wb_claim_lock(tenant_id, seller_id):
         bind = session.bind
         if bind is None or bind.dialect.name != "postgresql":
-            # SQLite (тесты и текущий стенд): нет отдельного процесса, с
-            # которым нужно делить advisory-lock — внутрипроцессный лок выше
-            # уже сериализовал секцию для реального асинхронного гонки.
+            # SQLite (тесты): нет отдельного процесса, с которым нужно
+            # делить advisory-lock — внутрипроцессный лок выше уже
+            # сериализовал секцию для реальной асинхронной гонки.
             yield
             return
         key = _wb_claim_advisory_key(tenant_id, seller_id)
-        await session.execute(text("select pg_advisory_lock(:key)"), {"key": key})
-        try:
-            yield
-        finally:
-            try:
-                await session.execute(text("select pg_advisory_unlock(:key)"), {"key": key})
-            except Exception:
-                logger.exception(
-                    "seller_catalog.add_to_fulfillment: failed to release WB claim lock",
+        engine = bind.engine if isinstance(bind, AsyncConnection) else bind
+        async with engine.connect() as lock_conn:
+            acquired = await _try_acquire_advisory_lock(
+                lock_conn, key, wait_sec=_WB_CLAIM_LOCK_WAIT_SEC, poll_sec=_WB_CLAIM_LOCK_POLL_SEC
+            )
+            if not acquired:
+                raise WbClaimLockTimeout(
+                    f"WB claim lock not acquired within {_WB_CLAIM_LOCK_WAIT_SEC}s "
+                    f"for seller {seller_id}"
                 )
+            try:
+                yield
+            finally:
+                await _release_advisory_lock(lock_conn, key, seller_id=seller_id)
+
+
+async def _try_acquire_advisory_lock(
+    connection: Any, key: int, *, wait_sec: float, poll_sec: float
+) -> bool:
+    deadline = monotonic() + wait_sec
+    while True:
+        result = await connection.execute(text("select pg_try_advisory_lock(:key)"), {"key": key})
+        if bool(result.scalar()):
+            return True
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return False
+        await asyncio.sleep(min(poll_sec, remaining))
+
+
+async def _release_advisory_lock(connection: Any, key: int, *, seller_id: uuid.UUID) -> None:
+    """Best-effort unlock; the connection is never returned to the pool alive
+    if we cannot confirm the lock was actually released on it (WMS-435).
+    """
+    try:
+        result = await connection.execute(text("select pg_advisory_unlock(:key)"), {"key": key})
+        if not bool(result.scalar()):
+            # Снятие вернуло false — лок не был удержан этим соединением
+            # (не должно происходить при корректной работе, но если
+            # случилось — соединение непредсказуемо, в пул не возвращаем).
+            logger.error(
+                "seller_catalog.add_to_fulfillment: pg_advisory_unlock returned false "
+                "for seller %s — invalidating the lock connection instead of pooling it",
+                seller_id,
+            )
+            await connection.invalidate()
+    except Exception:
+        logger.exception(
+            "seller_catalog.add_to_fulfillment: failed to release WB claim lock "
+            "for seller %s",
+            seller_id,
+        )
+        try:
+            await connection.invalidate()
+        except Exception:
+            logger.exception(
+                "seller_catalog.add_to_fulfillment: failed to invalidate the WB claim "
+                "lock connection for seller %s",
+                seller_id,
+            )
 
 
 def _dedupe_preserve_order(values: list[_T]) -> list[_T]:
