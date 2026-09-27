@@ -251,6 +251,70 @@ export async function loadSellerCatalogPage(
   }
 }
 
+export type SellerCatalogSyncOutcome = {
+  wbFailure: string | null
+  ozonFailure: string | null
+}
+
+/**
+ * «Синхронизировать по API» обновляет каждую подключённую площадку сама по
+ * себе — отказ WB не должен отменять Ozon и наоборот (R12; ревью Astra №1,
+ * WMS-548, замечание F4). Раньше сбой WB (нет ключа, отвечает 409) обрывал
+ * функцию до проверки Ozon, а сетевая ошибка самого запроса синхронизации
+ * Ozon тонула в catch, который должен был гасить только отказ проверки
+ * подключения — снаружи это выглядело так, будто кнопка вообще ничего не
+ * сделала.
+ *
+ * Проверка «подключён ли Ozon» — вспомогательный шаг: её собственный отказ
+ * не считается сбоем синхронизации, Ozon в этот раз просто не трогаем (как и
+ * раньше). А вот отказ самого запроса синхронизации Ozon — уже результат,
+ * который обязан быть виден.
+ */
+export async function syncSellerCatalogMarketplaces(
+  headers: Record<string, string>,
+): Promise<SellerCatalogSyncOutcome> {
+  let wbFailure: string | null = null
+  try {
+    const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+      method: 'POST',
+      headers,
+    })
+    if (!wbRes.ok) {
+      wbFailure = await readApiErrorMessage(wbRes)
+    }
+  } catch (e) {
+    wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
+  }
+
+  let ozonConnected = false
+  try {
+    const statusRes = await fetch(apiUrl('/integrations/ozon/self/account'), { headers })
+    if (statusRes.ok) {
+      const status = (await statusRes.json()) as { connected?: boolean }
+      ozonConnected = Boolean(status.connected)
+    }
+  } catch {
+    // См. комментарий выше: неудачная проверка подключения — не сбой синхронизации.
+  }
+
+  let ozonFailure: string | null = null
+  if (ozonConnected) {
+    try {
+      const ozonRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
+        method: 'POST',
+        headers,
+      })
+      if (!ozonRes.ok) {
+        ozonFailure = await readApiErrorMessage(ozonRes)
+      }
+    } catch (e) {
+      ozonFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Ozon.'
+    }
+  }
+
+  return { wbFailure, ozonFailure }
+}
+
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
@@ -551,38 +615,17 @@ export function SellerProductsStockScreen({
     setNotice(null)
     setBusy(true)
     try {
-      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-        method: 'POST',
-        headers: { ...authHeaders(token) },
-      })
-      if (!wbRes.ok) {
-        setError(await readApiErrorMessage(wbRes))
-        return
-      }
-      // Ozon синхронизируется той же кнопкой, если ключ подключён (R12).
-      // Отказ самой проверки подключения не должен ронять уже выполненную
-      // синхронизацию WB — тихо пропускаем Ozon в этом случае.
-      try {
-        const ozonStatusRes = await fetch(apiUrl('/integrations/ozon/self/account'), {
-          headers: { ...authHeaders(token) },
-        })
-        if (ozonStatusRes.ok) {
-          const ozonStatus = (await ozonStatusRes.json()) as { connected?: boolean }
-          if (ozonStatus.connected) {
-            const ozonSyncRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
-              method: 'POST',
-              headers: { ...authHeaders(token) },
-            })
-            if (!ozonSyncRes.ok) {
-              setError(await readApiErrorMessage(ozonSyncRes))
-              return
-            }
-          }
-        }
-      } catch {
-        // см. комментарий выше — Ozon необязателен для этой кнопки.
-      }
+      // Каждая площадка синхронизируется независимо (R12; ревью Astra №1,
+      // WMS-548, F4) — отказ WB не отменяет Ozon и наоборот.
+      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
       await load()
+      const failures = [
+        outcome.wbFailure,
+        outcome.ozonFailure ? `Ozon: ${outcome.ozonFailure}` : null,
+      ].filter((message): message is string => message != null)
+      if (failures.length > 0) {
+        setError(failures.join(' '))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
     } finally {
