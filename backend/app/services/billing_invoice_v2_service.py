@@ -816,6 +816,53 @@ def _sort_key(row: dict[str, Any]) -> tuple[datetime, str, str]:
     return (row["issued_at"], row["origin"], str(row["id"]))
 
 
+def _seek_where(
+    *,
+    origin_literal: str,
+    issued_at_column: Any,
+    id_column: Any,
+    cursor_issued_at: datetime,
+    cursor_origin: str,
+    cursor_id: uuid.UUID,
+) -> Any:
+    """WMS-549 F3 (ревью Astra №2): точная SQL-граница «строго после курсора».
+
+    Итоговый порядок объединённой истории — (issued_at, origin, id), все по
+    убыванию (`_sort_key`). Внутри одной ветки (`legacy_query`/`v2_query`)
+    origin — постоянная строка, поэтому сравнение (origin_literal, cursor_origin)
+    решается один раз в Python, а не в SQL. Раньше здесь стояла ослабленная
+    граница только по `issued_at <= cursor` — при курсоре, указывающем ровно
+    на границу большой группы счетов с одинаковым временем выставления, окно
+    `LIMIT limit+1` снова целиком занимали уже показанные строки той же
+    группы, Python вычищал их все, и `next_cursor` обнулялся раньше времени
+    (счета группы после курсора терялись). Точная граница ниже совпадает по
+    смыслу с исходным `_sort_key` и не пропускает мимо LIMIT ни одной строки,
+    которая должна попасть на следующую страницу.
+
+    Секундарная сортировка `id DESC` в SQL (добавлена рядом, в `list_invoices_v2`)
+    обязана совпадать по порядку с Python-сравнением `str(id)`: для колонки
+    `Uuid(as_uuid=True)` это проверено (SQLite хранит `.hex`, чьё лексикографическое
+    сравнение совпадает и с сравнением объектов `uuid.UUID`, и со сравнением
+    `str(uuid)` — дефисы стоят в одних и тех же позициях у любых двух канонических
+    UUID и никогда не решают сравнение). Без этого LIMIT мог бы взять
+    произвольное подмножество внутри большой группы совпадений вместо
+    настоящих «первых по порядку» — и часть счётов группы вообще ни разу не
+    попала бы ни в один SQL-запрос.
+    """
+    if origin_literal < cursor_origin:
+        # При равном issued_at эта ветка всегда «меньше» курсора по origin,
+        # id не имеет значения — годится вся ветка вплоть до cursor_issued_at
+        # включительно.
+        return issued_at_column <= cursor_issued_at
+    if origin_literal > cursor_origin:
+        # При равном issued_at эта ветка всегда «больше» курсора по origin —
+        # такие строки уже показаны, годится только строго более раннее время.
+        return issued_at_column < cursor_issued_at
+    return (issued_at_column < cursor_issued_at) | (
+        (issued_at_column == cursor_issued_at) & (id_column < cursor_id)
+    )
+
+
 async def list_invoices_v2(
     session: AsyncSession,
     *,
@@ -847,17 +894,30 @@ async def list_invoices_v2(
         .where(BillingInvoiceV2.tenant_id == tenant_id)
     )
     if after is not None:
-        # WMS-549 F3: раньше курсор применялся в Python уже ПОСЛЕ того, как
-        # каждый запрос забирал только первые limit+1 строк своей таблицы —
-        # окно выборки не двигалось со страницы на страницу, и вторая
-        # страница снова читала тот же верхний срез. Явные счета старше
-        # позиции курсора отсеются точным сравнением ниже; здесь достаточно
-        # ослабленной (issued_at <= курсора) границы — она никогда не
-        # отбросит нужную строку, а лишь избавляет БД от пересчёта одного и
-        # того же верхнего среза на каждой странице.
-        cursor_issued_at = after[0]
-        legacy_query = legacy_query.where(BillingInvoice.issued_at <= cursor_issued_at)
-        v2_query = v2_query.where(BillingInvoiceV2.issued_at <= cursor_issued_at)
+        # WMS-549 F3 (ревью Astra №1 и №2): курсор должен двигать окно SQL
+        # LIMIT точной границей, согласованной с итоговым (issued_at, origin,
+        # id) порядком — см. docstring `_seek_where`.
+        cursor_issued_at, cursor_origin, cursor_id = after
+        legacy_query = legacy_query.where(
+            _seek_where(
+                origin_literal="legacy",
+                issued_at_column=BillingInvoice.issued_at,
+                id_column=BillingInvoice.id,
+                cursor_issued_at=cursor_issued_at,
+                cursor_origin=cursor_origin,
+                cursor_id=cursor_id,
+            )
+        )
+        v2_query = v2_query.where(
+            _seek_where(
+                origin_literal="v2",
+                issued_at_column=BillingInvoiceV2.issued_at,
+                id_column=BillingInvoiceV2.id,
+                cursor_issued_at=cursor_issued_at,
+                cursor_origin=cursor_origin,
+                cursor_id=cursor_id,
+            )
+        )
     if seller_id is not None:
         legacy_query = legacy_query.where(BillingInvoice.seller_id == seller_id)
         v2_query = v2_query.where(BillingInvoiceV2.seller_id == seller_id)
@@ -871,7 +931,8 @@ async def list_invoices_v2(
     rows: list[dict[str, Any]] = []
     for invoice, seller_name in (
         await session.execute(
-            legacy_query.order_by(BillingInvoice.issued_at.desc()).limit(limit + 1)
+            legacy_query.order_by(BillingInvoice.issued_at.desc(), BillingInvoice.id.desc())
+            .limit(limit + 1)
         )
     ).all():
         month_start = invoice.period.replace(day=1)
@@ -901,7 +962,10 @@ async def list_invoices_v2(
             }
         )
     for invoice, seller_name in (
-        await session.execute(v2_query.order_by(BillingInvoiceV2.issued_at.desc()).limit(limit + 1))
+        await session.execute(
+            v2_query.order_by(BillingInvoiceV2.issued_at.desc(), BillingInvoiceV2.id.desc())
+            .limit(limit + 1)
+        )
     ).all():
         rows.append(
             {

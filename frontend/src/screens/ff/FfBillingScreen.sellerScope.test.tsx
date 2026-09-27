@@ -7,6 +7,7 @@ import {
   documentSupplyCell,
   documentTitleCell,
   FfBillingSellerDetails,
+  sectionRateCell,
   type SellerReportDetails,
   type SellerReportEntry,
 } from './FfBillingSellerDetails'
@@ -43,7 +44,7 @@ describe('WMS-549 empty states without FF hints', () => {
 })
 
 describe('WMS-549 FfBillingScreen seller scope', () => {
-  it('hides the seller filter, FF actions and the purpose line; keeps the period and tabs', () => {
+  it('shows «Начисления» instead of «Селлеры», hides the seller filter/FF actions/purpose line/seller table, shows the drill-down right away', () => {
     const markup = renderToStaticMarkup(
       <FfBillingScreen token="seller-token" onOpenInbound={() => {}} sellerScope />,
     )
@@ -53,13 +54,20 @@ describe('WMS-549 FfBillingScreen seller scope', () => {
     expect(markup).not.toContain('Выставить счёт')
     expect(markup).not.toContain('Селлеров')
     expect(markup).not.toContain('Начисления за работу склада и счета селлерам за выбранный период.')
+    // WMS-549 решение владельца 27.09: вкладка «Селлеры» заменена на «Начисления»,
+    // таблицы селлеров (с его же именем) под ней больше нет.
+    expect(markup).not.toContain('data-testid="billing-seller-summary"')
+    expect(markup).not.toContain('>Селлеры<')
     expect(markup).toContain('Расчёты')
-    expect(markup).toContain('Селлеры')
+    expect(markup).toContain('>Начисления<')
     expect(markup).toContain('Выставленные счета')
+    expect(markup).toContain('Ставки')
     expect(markup).toContain('Сегодня')
+    // Раскрытие FfBillingSellerDetails смонтировано сразу, без клика по строке.
+    expect(markup).toContain('data-testid="billing-seller-details-pending"')
   })
 
-  it('keeps the FF screen unchanged by default', () => {
+  it('keeps the FF screen unchanged by default: tab is still «Селлеры», seller table renders, no eager drill-down', () => {
     const markup = renderToStaticMarkup(
       <FfBillingScreen
         token="ff-token"
@@ -73,6 +81,10 @@ describe('WMS-549 FfBillingScreen seller scope', () => {
     expect(markup).toContain('Выставить счёт')
     expect(markup).toContain('Селлеров')
     expect(markup).toContain('Начисления за работу склада и счета селлерам за выбранный период.')
+    expect(markup).toContain('data-testid="billing-seller-summary"')
+    expect(markup).toContain('>Селлеры<')
+    expect(markup).not.toContain('>Ставки<')
+    expect(markup).not.toContain('data-testid="billing-seller-details-pending"')
   })
 })
 
@@ -161,6 +173,42 @@ describe('WMS-549 FfBillingSellerDetails seller scope', () => {
     expect(sellerSupply).not.toContain('<a ')
     expect(sellerSupply).toContain('ФБС-000012')
     expect(ffSupply).toContain('href="/app/ff/fbs?supply_id=supply-1"')
+  })
+})
+
+describe('WMS-549 F4 (ревью Astra): без поясняющих всплывающих подсказок у селлера', () => {
+  it('не передаёт hint статусу FBS в withStatus() для селлера, оставляет его у ФФ', () => {
+    const entryWithStatus: SellerReportEntry = {
+      ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry),
+      fbs_status_label: 'ВБ получил',
+    }
+
+    const sellerMarkup = renderToStaticMarkup(<>{documentTitleCell(entryWithStatus, true, () => {}, () => {})}</>)
+    const ffMarkup = renderToStaticMarkup(
+      <MemoryRouter>{documentTitleCell(entryWithStatus, false, () => {}, () => {})}</MemoryRouter>,
+    )
+
+    // Сам статус остаётся в обоих режимах (R10 его разрешает).
+    expect(sellerMarkup).toContain('ВБ получил')
+    expect(ffMarkup).toContain('ВБ получил')
+    // Объясняющий Tooltip добавляет aria-label с текстом пояснения — у селлера его быть не должно.
+    expect(sellerMarkup).not.toContain('aria-label="Wildberries подтвердил приём')
+    expect(ffMarkup).toContain('aria-label="Wildberries подтвердил приём')
+  })
+
+  it('не передаёт пояснение «Документы раздела прошли по разным ставкам» для селлера, оставляет его у ФФ', () => {
+    const entries: SellerReportEntry[] = [
+      { ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry), id: 'e1', rate_kopecks: 300 },
+      { ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry), id: 'e2', rate_kopecks: 500 },
+    ]
+
+    const sellerMarkup = renderToStaticMarkup(<>{sectionRateCell(entries, true)}</>)
+    const ffMarkup = renderToStaticMarkup(<>{sectionRateCell(entries, false)}</>)
+
+    expect(sellerMarkup).toContain('разные')
+    expect(ffMarkup).toContain('разные')
+    expect(sellerMarkup).not.toContain('aria-label="Документы раздела прошли по разным ставкам"')
+    expect(ffMarkup).toContain('aria-label="Документы раздела прошли по разным ставкам"')
   })
 })
 

@@ -49,6 +49,66 @@ type SellerAppProps = {
   navigationBasePath?: string
 }
 
+/**
+ * Читает claims JWT без проверки подписи — сервер и так проверяет токен на
+ * каждый запрос, здесь он нужен только как значение для ключа пересоздания,
+ * а не для авторизации.
+ */
+function decodeJwtClaims(token: string): { tenant_id?: string; sub?: string; seller_id?: string } | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+    const binary = atob(padded)
+    const json = decodeURIComponent(
+      Array.from(binary, (char) => '%' + char.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
+    )
+    return JSON.parse(json) as { tenant_id?: string; sub?: string; seller_id?: string }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Ключ пересоздания разделов кабинета селлера (WMS-549, ревью Astra F1, F6).
+ *
+ * Раньше ключ строился только по активному селлеру профиля. При переключении
+ * магазина applyToken() меняет токен сразу, а обновлённый /auth/me приходит
+ * отдельным, более медленным запросом — в этом окне экран уже получал новый
+ * токен, но со старым ключом и потому не пересоздавался: внутреннее состояние
+ * панелей с собственной дочиткой (например, страницы истории счетов, курсор,
+ * открытый счёт) успевало смешаться с ответом новой сессии, прежде чем профиль
+ * обновлялся и ключ менялся следом (F1).
+ *
+ * Первое исправление F1 включило в ключ всю строку токена — это остановило
+ * смешивание, но перевыпуск токена той же области (тот же пользователь,
+ * tenant и магазин — например, силовой /auth/switch-seller на тот же магазин
+ * или будущий silent-refresh) тоже стал менять ключ и пересоздавать все
+ * разделы, теряя вкладку, период, дочитанные страницы и открытый счёт без
+ * какой-либо смены данных (F6, найдено ревью Astra №2 как следствие F1).
+ *
+ * Ключ теперь строится из тех claims токена, которые и определяют область
+ * данных (tenant_id, sub, seller_id), а не из его полной строки. Эти claims
+ * приходят в самом токене и читаются синхронно в том же рендере, где меняется
+ * token — раньше /auth/me, поэтому F1 остаётся исправленным. Токен той же
+ * области (тот же tenant_id/sub/seller_id, другие iat/подпись) даёт тот же
+ * ключ — раздел не пересоздаётся, F6 исправлен. Если токен нечитаем как JWT
+ * (испорчен или в тесте подставлена не настоящая строка), используется вся
+ * строка токена как безопасный запасной вариант: он не может занизить
+ * пересоздание при смене области, только может пересоздать лишний раз.
+ */
+export function sellerCatalogScopeKey(
+  token: string | null,
+  me: { active_seller_id?: string | null; seller_id?: string | null },
+): string {
+  const claims = token ? decodeJwtClaims(token) : null
+  if (claims) {
+    return `${claims.tenant_id ?? 'no-tenant'}:${claims.sub ?? 'no-user'}:${claims.seller_id ?? 'no-seller'}`
+  }
+  return `${token ?? 'anon'}:${me.active_seller_id ?? me.seller_id ?? 'none'}`
+}
+
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -326,7 +386,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     if (!me) {
       return null
     }
-    const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
+    const catalogScopeKey = sellerCatalogScopeKey(token, me)
     const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
     const accessDenied = (
       <Alert severity="warning" data-testid="seller-access-denied">
