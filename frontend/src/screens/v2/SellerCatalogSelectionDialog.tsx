@@ -208,6 +208,16 @@ export type AddToFulfillmentOutcome = {
 }
 
 /**
+ * R3: окно закрывается только при полном успехе — ни одна отправленная порция
+ * не оборвалась ошибкой и ни одна карточка не пропущена. R9/А12: при ошибке
+ * или пропуске окно и выделение недобавленных остаются, чтобы селлер видел
+ * результат и мог повторить.
+ */
+export function shouldCloseAfterAddToFulfillment(outcome: AddToFulfillmentOutcome): boolean {
+  return !outcome.failureMessage && outcome.skipped.length === 0
+}
+
+/**
  * Отправляет отмеченные ключи порциями (R9, R15): порция сохраняется сама, обрыв
  * на середине не теряет уже добавленное — обработка останавливается на первой же
  * неудачной порции, а её ключи (и все последующие) остаются в выделении для повтора.
@@ -415,9 +425,13 @@ export function SellerCatalogSelectionDialog({ marketplace, token, authHeaders, 
         parts.push(`Не добавлены: ${outcome.skipped.map((s) => s.vendorCode ?? '—').join(', ')}`)
       }
       setAddError(parts.length > 0 ? parts.join(' ') : null)
-      await load()
       if (outcome.addedKeys.length > 0) {
         await onAdded?.()
+      }
+      if (shouldCloseAfterAddToFulfillment(outcome)) {
+        onClose()
+      } else {
+        await load()
       }
     } finally {
       setAddBusy(false)
