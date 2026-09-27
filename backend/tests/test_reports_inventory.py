@@ -157,7 +157,7 @@ async def test_reports_require_inventory_for_ff_staff_but_keep_allowed_roles(
     paths = (
         "/reports/overview",
         "/reports/inventory",
-        "/reports/inventory/export.csv",
+        "/reports/inventory/export.xlsx",
     )
 
     for path in paths:
@@ -229,16 +229,30 @@ async def test_reports_inventory_interprets_offsetless_boundaries_as_moscow_time
     async_client: AsyncClient,
 ) -> None:
     headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
-    await _seed_product_movement(
+    included_id = uuid.UUID(await _seed_product_movement(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
         location_id=location_id, number=1,
         created_at=datetime(2026, 7, 31, 22, 30, tzinfo=UTC),
-    )
-    await _seed_product_movement(
+    ))
+    excluded_id = uuid.UUID(await _seed_product_movement(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
         location_id=location_id, number=2,
         created_at=datetime(2026, 8, 1, 21, 0, tzinfo=UTC),
-    )
+    ))
+    # WMS-531 R6-R9: остаток на начало/конец откатывается от текущего остатка
+    # (InventoryBalance), а не от нуля — без этой строки товар вне периода
+    # выглядел бы так, будто у него отрицательный остаток «до» движения, и
+    # ошибочно проходил бы фильтр «показывать без движений, если есть остаток».
+    async with SessionLocal() as session:
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=included_id,
+            storage_location_id=uuid.UUID(location_id), quantity=1,
+        ))
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=excluded_id,
+            storage_location_id=uuid.UUID(location_id), quantity=1,
+        ))
+        await session.commit()
 
     response = await async_client.get(
         "/reports/inventory",
@@ -313,11 +327,12 @@ async def test_reports_inventory_never_counts_transfers_even_for_selected_wareho
     }
     all_warehouses = await async_client.get("/reports/inventory", headers=headers, params=params)
     assert all_warehouses.status_code == 200
+    # WMS-531: «Прочее» здесь не появляется — виды расположения не строки
+    # вовсе (R1), а integrity_error на уровне вида отчёт больше не считает:
+    # неполное перемещение помечает строку ТОВАРА (R7), у вида это не имело
+    # бы смысла без «Перемещения»-строки, которой в новой таблице нет.
     assert all_warehouses.json()["rows"] == [
-        {
-            "operation": "Приёмка", "in_qty": 3, "out_qty": 0,
-            "net": 3, "integrity_error": False,
-        }
+        {"operation": "Приёмка", "in_qty": 3, "out_qty": 0, "net": 3}
     ]
 
     selected_warehouse = await async_client.get(
