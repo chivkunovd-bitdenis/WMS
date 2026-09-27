@@ -165,9 +165,11 @@ export function SortingObjectsScreen({
       place: async (object, cellId) => {
         if (scanDependencies.current.onPlace) {
           await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null })
-        } else {
-          setObjects((current) => current.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one))
         }
+        const placed = scanDependencies.current.objects.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one)
+        // The next queued scan can run before React renders the confirmed move.
+        scanDependencies.current.objects = placed
+        setObjects(placed)
       },
       product: async (barcode, context) => {
         if (!scanDependencies.current.onProductScan) throw new Error('Скан товара доступен в документе приёмки')

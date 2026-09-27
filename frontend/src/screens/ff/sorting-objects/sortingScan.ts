@@ -1,5 +1,5 @@
 import { fbsSameStickerScan } from '../../v2/fbsUx'
-import type { Cell, WarehouseObject } from './objectsStub'
+import { whereIs, type Cell, type WarehouseObject } from './objectsStub'
 
 export type ScanContext = { cellId: string | null; objectId: string | null }
 export const emptyScanContext: ScanContext = { cellId: null, objectId: null }
@@ -51,7 +51,9 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
         // Clear the previous container even when opening the next one fails.
         change({ ...context, objectId: null })
         try {
-          await dependencies.place(object, context.cellId)
+          if (whereIs(object.holder, objects, cells).cell?.id !== context.cellId) {
+            await dependencies.place(object, context.cellId)
+          }
         } catch (error) {
           // Later buffered products must not fall through into the bare cell.
           change(emptyScanContext)
