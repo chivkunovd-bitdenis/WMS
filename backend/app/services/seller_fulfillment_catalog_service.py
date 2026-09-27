@@ -27,8 +27,12 @@ unmatched card may turn into a *new* product is decided here, same as for WB.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import logging
 import uuid
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from typing import Any, Literal, TypeVar
 
 from sqlalchemy import (
@@ -44,6 +48,7 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    text,
     union_all,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,6 +94,70 @@ MarketplaceFilter = Literal["wildberries", "ozon"]
 ADD_TO_FULFILLMENT_MAX_IDS = 500
 
 _T = TypeVar("_T")
+
+# F1 (review-astra-1, блокер): два запроса с разными nmID, но одним и тем же
+# вычисленным артикулом/ШК, проходят _card_has_vendor_code_conflict
+# одновременно — ни один ещё не создал товар, конфликта не видно. Дальше
+# upsert_products_from_wb_cards разрешает гонку уникального индекса своим
+# штатным повторным поиском и молча переписывает найденный товар под вторую
+# карточку (её nmID, ШК, название) — карточка, которую вторая карточка
+# должна была получить отказ, вместо этого ворует чужую. Внутренности
+# upsert_products_from_wb_cards трогать нельзя (граница WMS-535); общий
+# замок обмена (marketplace_seller_lock_service), который держит WB/Ozon
+# синк и от которого явно предостерёг ревьюер (владельческий случай B01 —
+# он не должен блокировать FBS), тоже не подходит и не переиспользуется.
+#
+# Сервер — один процесс без --workers (Dockerfile.railway), поэтому
+# внутрипроцессный asyncio.Lock на (tenant, seller) уже сам по себе
+# полностью закрывает гонку. PostgreSQL advisory-lock поверх — задел на
+# случай будущего многопроцессного деплоя; сессионный (не транзакционный)
+# вариант выбран умышленно: upsert коммитит на каждый размер карточки по
+# отдельности, и lock уровня транзакции снялся бы уже на первом коммите
+# многоразмерной карточки, не защитив остальные её размеры.
+_wb_claim_locks: dict[tuple[uuid.UUID, uuid.UUID], asyncio.Lock] = {}
+
+
+def _wb_claim_lock(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> asyncio.Lock:
+    key = (tenant_id, seller_id)
+    lock = _wb_claim_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _wb_claim_locks[key] = lock
+    return lock
+
+
+def _wb_claim_advisory_key(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> int:
+    digest = hashlib.sha256(f"wms548:wb-claim:{tenant_id}:{seller_id}".encode()).digest()[:8]
+    return int.from_bytes(digest, "big", signed=True)
+
+
+@asynccontextmanager
+async def _wb_card_identity_claim(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> AsyncIterator[None]:
+    """Serialize one seller's "is this sku/barcode free — then claim it" WB
+    section end to end, so a concurrent card for a different nmID can never
+    observe "free" before the first card's write is visible (WMS-548 F1, А12).
+    """
+    async with _wb_claim_lock(tenant_id, seller_id):
+        bind = session.bind
+        if bind is None or bind.dialect.name != "postgresql":
+            # SQLite (тесты и текущий стенд): нет отдельного процесса, с
+            # которым нужно делить advisory-lock — внутрипроцессный лок выше
+            # уже сериализовал секцию для реального асинхронного гонки.
+            yield
+            return
+        key = _wb_claim_advisory_key(tenant_id, seller_id)
+        await session.execute(text("select pg_advisory_lock(:key)"), {"key": key})
+        try:
+            yield
+        finally:
+            try:
+                await session.execute(text("select pg_advisory_unlock(:key)"), {"key": key})
+            except Exception:
+                logger.exception(
+                    "seller_catalog.add_to_fulfillment: failed to release WB claim lock",
+                )
 
 
 def _dedupe_preserve_order(values: list[_T]) -> list[_T]:
@@ -212,6 +281,14 @@ def _product_search_filters(tenant_id: uuid.UUID, search: str | None) -> list[An
             or_(
                 ProductMarketplaceLink.external_sku.ilike(pattern),
                 ProductMarketplaceLink.external_offer_id.ilike(pattern),
+                # WMS-548 F6: до добавления карточки её ШК находится через JSON
+                # снимка; после добавления это единственное место, где Ozon-ШК
+                # вообще хранится (в Product.wb_barcode их не копируем — один
+                # код в двух местах расходится со временем), иначе товар
+                # переставал находиться по своему ШК сразу после выбора.
+                cast(ProductMarketplaceLink.external_barcodes, String).ilike(
+                    f'%"{normalized}"%'
+                ),
             ),
         )
     )
@@ -674,6 +751,7 @@ async def add_cards_to_fulfillment(
     skipped: list[dict[str, Any]] = []
 
     nm_ids = _dedupe_preserve_order(wb_nm_ids)
+    added_wb_nm_ids: list[int] = []
     if nm_ids:
         cards_by_nm: dict[int, SellerWildberriesImportedCard] = {}
         for batch in chunked(sorted(set(nm_ids)), 2000):
@@ -685,9 +763,22 @@ async def add_cards_to_fulfillment(
             for card_row in (await session.execute(stmt)).scalars().all():
                 cards_by_nm[int(card_row.nm_id)] = card_row
 
+        # WMS-548 F3: карточки читаются в простые значения одним проходом,
+        # до первого апсерта. upsert_products_from_wb_cards коммитит на
+        # каждый размер отдельно, а неудача другой карточки в этом же цикле
+        # коммитит откат — он истекает атрибуты ВСЕХ объектов сессии, в том
+        # числе ещё не обработанных карточек из cards_by_nm. Чтение
+        # card.vendor_code/raw_json такого объекта после чужого отката
+        # запускало ленивую подгрузку и падало MissingGreenlet вместо
+        # честного skipped для всех карточек после сбойной.
+        card_data_by_nm: dict[int, tuple[str | None, dict[str, Any] | None]] = {
+            nm: (card.vendor_code, card.raw_json if isinstance(card.raw_json, dict) else None)
+            for nm, card in cards_by_nm.items()
+        }
+
         for nm_id in nm_ids:
-            card = cards_by_nm.get(nm_id)
-            if card is None:
+            card_data = card_data_by_nm.get(nm_id)
+            if card_data is None:
                 # Не своя карточка (чужой селлер/тенант) или её нет — не
                 # раскрываем, есть ли она вообще у кого-то ещё (R14).
                 skipped.append(
@@ -699,13 +790,7 @@ async def add_cards_to_fulfillment(
                     }
                 )
                 continue
-            # Захватываем поля карточки в локальные переменные до апсерта: он
-            # коммитит, а неудача ниже коммитит откат, который на этой же
-            # сессии истекает атрибуты всех загруженных объектов — ленивая
-            # подгрузка `card.vendor_code` после отката под конкурентной
-            # нагрузкой уже падала MissingGreenlet вместо честного skipped.
-            vendor_code = card.vendor_code
-            raw = card.raw_json if isinstance(card.raw_json, dict) else None
+            vendor_code, raw = card_data
             variants = iter_size_variants_from_card(raw) if raw else []
             if not variants:
                 skipped.append(
@@ -718,22 +803,26 @@ async def add_cards_to_fulfillment(
                 )
                 continue
             try:
-                conflict = await _card_has_vendor_code_conflict(
-                    session, tenant_id, seller_id, nm_id, vendor_code, variants
-                )
-                if conflict:
-                    skipped.append(
-                        {
-                            "marketplace": "wildberries",
-                            "id": str(nm_id),
-                            "vendor_code": vendor_code,
-                            "reason": "vendor_code_conflict",
-                        }
+                # WMS-548 F1: конфликт-предчек и апсерт — одна атомарная
+                # секция на весь seller: другая карточка того же продавца не
+                # может пройти свой предчек, пока эта не закончила запись.
+                async with _wb_card_identity_claim(session, tenant_id, seller_id):
+                    conflict = await _card_has_vendor_code_conflict(
+                        session, tenant_id, seller_id, nm_id, vendor_code, variants
                     )
-                    continue
-                counts = await upsert_products_from_wb_cards(
-                    session, tenant_id, seller_id, [raw]
-                )
+                    if conflict:
+                        skipped.append(
+                            {
+                                "marketplace": "wildberries",
+                                "id": str(nm_id),
+                                "vendor_code": vendor_code,
+                                "reason": "vendor_code_conflict",
+                            }
+                        )
+                        continue
+                    counts = await upsert_products_from_wb_cards(
+                        session, tenant_id, seller_id, [raw]
+                    )
             except Exception:
                 await session.rollback()
                 logger.exception(
@@ -772,14 +861,26 @@ async def add_cards_to_fulfillment(
                     "products_added": products_added,
                 }
             )
+            added_wb_nm_ids.append(nm_id)
 
         # R13: a WB card just added may have an Ozon twin already sitting in
         # this seller's Ozon snapshot, unlinked. Link it now (never create —
         # the product already exists) so the twin stops showing as a separate
         # "not on fulfillment" row. Best-effort: it never touches, let alone
         # undoes, the WB cards already committed above.
-        if any(a["marketplace"] == "wildberries" for a in added):
-            await _link_unmatched_ozon_twins(session, tenant_id, seller_id)
+        if added_wb_nm_ids:
+            added_product_ids = list(
+                (
+                    await session.scalars(
+                        select(Product.id).where(
+                            Product.tenant_id == tenant_id,
+                            Product.seller_id == seller_id,
+                            Product.wb_nm_id.in_(added_wb_nm_ids),
+                        )
+                    )
+                ).all()
+            )
+            await _link_unmatched_ozon_twins(session, tenant_id, seller_id, added_product_ids)
 
     ozon_ids = _dedupe_preserve_order(ozon_product_ids)
     if ozon_ids:
@@ -793,13 +894,23 @@ async def add_cards_to_fulfillment(
             for ozon_card_row in (await session.execute(ozon_stmt)).scalars().all():
                 ozon_cards_by_id[ozon_card_row.ozon_product_id] = ozon_card_row
 
+        # WMS-548 F3: тот же приём, что и для WB — простые значения одним
+        # проходом, не трогая карточку повторно после отката другой.
+        ozon_card_data_by_id: dict[str, tuple[str | None, dict[str, Any] | None]] = {
+            ozon_id: (
+                ozon_card.offer_id,
+                ozon_card.raw_json if isinstance(ozon_card.raw_json, dict) else None,
+            )
+            for ozon_id, ozon_card in ozon_cards_by_id.items()
+        }
+
         # Один контекст на весь запрос — не на карточку (WMS-538): иначе
         # каждая из до 500 карточек читала бы товары продавца заново.
         ozon_context = await build_ozon_match_context(session, tenant_id, seller_id)
 
         for ozon_id in ozon_ids:
-            ozon_card = ozon_cards_by_id.get(ozon_id)
-            if ozon_card is None:
+            ozon_card_data = ozon_card_data_by_id.get(ozon_id)
+            if ozon_card_data is None:
                 # Не своя карточка (чужой селлер/тенант) или её нет вовсе —
                 # не раскрываем, есть ли она у кого-то другого (R14).
                 skipped.append(
@@ -811,11 +922,7 @@ async def add_cards_to_fulfillment(
                     }
                 )
                 continue
-            # Тот же порядок, что и для WB: поля карточки — в локальные
-            # переменные до записи, чтобы skipped после отката не читал
-            # атрибуты уже истёкшего ORM-объекта.
-            vendor_code = ozon_card.offer_id
-            raw = ozon_card.raw_json if isinstance(ozon_card.raw_json, dict) else None
+            vendor_code, raw = ozon_card_data
             if raw is None:
                 skipped.append(
                     {
@@ -853,6 +960,11 @@ async def add_cards_to_fulfillment(
                         "reason": "internal_error",
                     }
                 )
+                # WMS-548 F3: откат истёк ссылки, закешированные в
+                # ozon_context (links_by_*) — следующая карточка этой же
+                # порции читала бы их атрибуты и падала MissingGreenlet.
+                # Пересобираем контекст с нуля перед следующей итерацией.
+                ozon_context = await build_ozon_match_context(session, tenant_id, seller_id)
                 continue
             if result.links_created == 0 and result.links_matched == 0:
                 # Не нашли товар и не завели (неоднозначный признак или у
@@ -880,25 +992,76 @@ async def add_cards_to_fulfillment(
 
 
 async def _link_unmatched_ozon_twins(
-    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    added_product_ids: Sequence[uuid.UUID],
 ) -> None:
     """R13, WB→Ozon direction: link (never create) any not-yet-linked Ozon
-    snapshot card that now matches a WB product just added in this request.
-    The opposite direction (adding an Ozon card that matches an existing WB
-    product) needs no extra step — ``process_one_ozon_card`` already searches
-    every product of the seller, WB-origin included.
+    snapshot card that now matches one of the WB products just added in this
+    request. The opposite direction (adding an Ozon card that matches an
+    existing WB product) needs no extra step — ``process_one_ozon_card``
+    already searches every product of the seller, WB-origin included.
+
+    WMS-548 F5: reads only Ozon snapshot rows that could possibly match one
+    of ``added_product_ids`` (by the same offer_id/sku/barcode signals
+    ``match_card_to_product`` itself uses) — not every not-yet-linked Ozon
+    card of the seller. A seller with thousands of unrelated Ozon cards must
+    not pay for scanning all of them on every single WB card added.
     """
+    if not added_product_ids:
+        return
     try:
+        rows = (
+            await session.execute(
+                select(
+                    Product.sku_code,
+                    Product.wb_barcode,
+                    Product.wb_nm_id,
+                    Product.wb_vendor_code,
+                ).where(
+                    Product.tenant_id == tenant_id,
+                    Product.seller_id == seller_id,
+                    Product.id.in_(added_product_ids),
+                )
+            )
+        ).all()
+        candidate_offer_ids: set[str] = set()
+        candidate_barcodes: set[str] = set()
+        for sku_code, wb_barcode, wb_nm_id, wb_vendor_code in rows:
+            if sku_code:
+                candidate_offer_ids.add(sku_code)
+            # Та же сборка, что и oz_transfer_offer_id в ozon_product_import_
+            # service (не импортируем ради одного товара с UUID-заглушкой,
+            # который эта функция всё равно не использует).
+            if wb_nm_id is not None and wb_vendor_code:
+                candidate_offer_ids.add(f"OZ{wb_nm_id}{wb_vendor_code}")
+            if wb_barcode:
+                candidate_barcodes.add(wb_barcode)
+        if not candidate_offer_ids and not candidate_barcodes:
+            return
+
+        candidate_conditions: list[Any] = []
+        if candidate_offer_ids:
+            candidate_conditions.append(
+                SellerOzonImportedCard.offer_id.in_(candidate_offer_ids)
+            )
+        for barcode in candidate_barcodes:
+            candidate_conditions.append(
+                cast(SellerOzonImportedCard.raw_json, Text).ilike(f'%"{barcode}"%')
+            )
+
         stmt = select(SellerOzonImportedCard).where(
             SellerOzonImportedCard.tenant_id == tenant_id,
             SellerOzonImportedCard.seller_id == seller_id,
             _ozon_not_on_fulfillment_condition(tenant_id, seller_id),
+            or_(*candidate_conditions),
         )
-        not_on_ff_cards = list((await session.execute(stmt)).scalars().all())
-        if not not_on_ff_cards:
+        candidate_cards = list((await session.execute(stmt)).scalars().all())
+        if not candidate_cards:
             return
         raw_cards = [
-            card.raw_json for card in not_on_ff_cards if isinstance(card.raw_json, dict)
+            card.raw_json for card in candidate_cards if isinstance(card.raw_json, dict)
         ]
         if not raw_cards:
             return
