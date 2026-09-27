@@ -296,9 +296,12 @@ _EXPECTED_MOCK_CARDS_SAVE_RESPONSE: dict[str, Any] = {
     # (см. app/services/wildberries_client.py, fetch_cards_list) — этот ответ
     # определяется мок-флагом, а не seller-info, и одинаков во всех сценариях
     # C7 независимо от того, чем ответил (или не ответил) seller-info.
+    # products_created=0: по новому порядку WMS-548 сохранение ключа только
+    # обновляет снимок карточек, товары фулфилмента создаются позже — после
+    # того как селлер выберет их в окне выбора («Добавить к фулфилменту»).
     "cards_received": 1,
     "cards_saved": 1,
-    "products_created": 1,
+    "products_created": 0,
     "products_updated": 0,
     "products_skipped": 0,
 }
