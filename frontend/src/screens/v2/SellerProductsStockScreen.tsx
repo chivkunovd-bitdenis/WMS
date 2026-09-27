@@ -33,7 +33,7 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
-import { MarketplaceChip, type MarketplaceKind } from '../../ui-kit'
+import { MarketplaceChip, MarketplaceIcon, type MarketplaceKind } from '../../ui-kit'
 import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 
 // WMS-548 D5: товар на фулфилменте (row сегодняшней строки /products/wb-catalog)
@@ -150,11 +150,11 @@ export function cardMarketplaceId(item: SellerCatalogCardItem): string | null {
 
 export function itemMarketplaces(item: SellerCatalogItem): MarketplaceKind[] {
   if (isProductItem(item)) {
-    const result: MarketplaceKind[] = []
-    if (item.wb_nm_id != null) result.push('wb')
-    if (item.ozon_sku || item.ozon_offer_id) result.push('ozon')
-    return result
+    // Товар на ФФ — «как сейчас» (R7): значок только для Ozon, точно как в
+    // etalon; WB остаётся без чипа, экран этих строк D5 не меняет.
+    return item.ozon_sku || item.ozon_offer_id ? ['ozon'] : []
   }
+  // Карточка не на ФФ — новая строка (R7): значок площадки обязателен.
   return [item.marketplace === 'ozon' ? 'ozon' : 'wb']
 }
 
@@ -249,6 +249,117 @@ export async function loadSellerCatalogPage(
       message: e instanceof Error ? e.message : 'Не удалось загрузить товары.',
     }
   }
+}
+
+export type SellerCatalogSyncOutcome = {
+  wbFailure: string | null
+  ozonFailure: string | null
+}
+
+/**
+ * «Синхронизировать по API» обновляет каждую подключённую площадку сама по
+ * себе — отказ WB не должен отменять Ozon и наоборот (R12; ревью Astra №1,
+ * WMS-548, замечание F4). Раньше сбой WB (нет ключа, отвечает 409) обрывал
+ * функцию до проверки Ozon, а сетевая ошибка самого запроса синхронизации
+ * Ozon тонула в catch, который должен был гасить только отказ проверки
+ * подключения — снаружи это выглядело так, будто кнопка вообще ничего не
+ * сделала.
+ *
+ * Обе площадки сначала проверяются на подключение (у WB — has_content_token,
+ * у Ozon — connected) и синхронизируются, только если ключ есть; неподключённая
+ * площадка пропускается молча — «ключа нет» не ошибка, а обычное состояние
+ * (после приёмки F4 голый `missing_content_token` на экране у селлера без
+ * WB выглядел как сбой там, где WB у него просто не подключён). Отказ самой
+ * проверки подключения — тоже не сбой синхронизации, площадку в этот раз
+ * просто не трогаем. А вот отказ самого запроса синхронизации уже
+ * подключённой площадки — результат, который обязан быть виден, человеческим
+ * текстом, а не кодом.
+ */
+/**
+ * Превращает код ошибки бэкенда в человеческую строку. Известные коды —
+ * своим текстом (как `invalid_wb_token` уже расшифрован в SellerSettingsScreen);
+ * всё остальное, что похоже на код, а не на готовую фразу (readApiErrorMessage
+ * уже умеет разворачивать часть кодов через общий словарь, но не все), —
+ * общим сообщением про площадку, а не голым идентификатором на экране
+ * (тот же приём, что и humanFfCatalogError в каталоге ФФ).
+ */
+function humanSyncFailureMessage(rawMessage: string, platformFallback: string): string {
+  const trimmed = rawMessage.trim()
+  if (trimmed.includes('invalid_wb_token')) {
+    return 'Ключ WB не подходит — проверка не прошла.'
+  }
+  if (/^[a-z0-9_:-]+$/.test(trimmed)) {
+    return platformFallback
+  }
+  return trimmed || platformFallback
+}
+
+export async function syncSellerCatalogMarketplaces(
+  headers: Record<string, string>,
+): Promise<SellerCatalogSyncOutcome> {
+  // Неподключённую площадку пропускаем молча — как и у Ozon, «ключа нет»
+  // не ошибка синхронизации, а обычное состояние (WMS-548, доработка после
+  // приёмки F4: голый missing_content_token на экране у селлера без WB пугал
+  // его там, где WB у него попросту не подключён).
+  let wbConnected = false
+  try {
+    const wbStatusRes = await fetch(apiUrl('/integrations/wildberries/self/tokens'), { headers })
+    if (wbStatusRes.ok) {
+      const wbStatus = (await wbStatusRes.json()) as { has_content_token?: boolean }
+      wbConnected = Boolean(wbStatus.has_content_token)
+    }
+  } catch {
+    // Неудачная проверка подключения — не сбой синхронизации, WB просто не трогаем.
+  }
+
+  let wbFailure: string | null = null
+  if (wbConnected) {
+    try {
+      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+        method: 'POST',
+        headers,
+      })
+      if (!wbRes.ok) {
+        wbFailure = humanSyncFailureMessage(
+          await readApiErrorMessage(wbRes),
+          'Не удалось синхронизировать Wildberries.',
+        )
+      }
+    } catch (e) {
+      wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
+    }
+  }
+
+  let ozonConnected = false
+  try {
+    const statusRes = await fetch(apiUrl('/integrations/ozon/self/account'), { headers })
+    if (statusRes.ok) {
+      const status = (await statusRes.json()) as { connected?: boolean }
+      ozonConnected = Boolean(status.connected)
+    }
+  } catch {
+    // См. комментарий выше: неудачная проверка подключения — не сбой синхронизации.
+  }
+
+  let ozonFailure: string | null = null
+  if (ozonConnected) {
+    try {
+      const ozonRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
+        method: 'POST',
+        headers,
+      })
+      if (!ozonRes.ok) {
+        ozonFailure = humanSyncFailureMessage(
+          await readApiErrorMessage(ozonRes),
+          'Не удалось синхронизировать Ozon.',
+        )
+      }
+    } catch (e) {
+      ozonFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Ozon.'
+    }
+  }
+
+  return { wbFailure, ozonFailure }
 }
 
 type Props = {
@@ -498,6 +609,8 @@ export function SellerProductsStockScreen({
           isProductItem(row) && selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
         ),
       )
+      setSelectedKeys(new Set())
+      setSelectedItemsByKey(new Map())
       setNotice(`Честный знак включён: ${body.updated_count} товаров.`)
       await load()
     } catch (e) {
@@ -551,38 +664,17 @@ export function SellerProductsStockScreen({
     setNotice(null)
     setBusy(true)
     try {
-      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-        method: 'POST',
-        headers: { ...authHeaders(token) },
-      })
-      if (!wbRes.ok) {
-        setError(await readApiErrorMessage(wbRes))
-        return
-      }
-      // Ozon синхронизируется той же кнопкой, если ключ подключён (R12).
-      // Отказ самой проверки подключения не должен ронять уже выполненную
-      // синхронизацию WB — тихо пропускаем Ozon в этом случае.
-      try {
-        const ozonStatusRes = await fetch(apiUrl('/integrations/ozon/self/account'), {
-          headers: { ...authHeaders(token) },
-        })
-        if (ozonStatusRes.ok) {
-          const ozonStatus = (await ozonStatusRes.json()) as { connected?: boolean }
-          if (ozonStatus.connected) {
-            const ozonSyncRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
-              method: 'POST',
-              headers: { ...authHeaders(token) },
-            })
-            if (!ozonSyncRes.ok) {
-              setError(await readApiErrorMessage(ozonSyncRes))
-              return
-            }
-          }
-        }
-      } catch {
-        // см. комментарий выше — Ozon необязателен для этой кнопки.
-      }
+      // Каждая площадка синхронизируется независимо (R12; ревью Astra №1,
+      // WMS-548, F4) — отказ WB не отменяет Ozon и наоборот.
+      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
       await load()
+      const failures = [
+        outcome.wbFailure,
+        outcome.ozonFailure ? `Ozon: ${outcome.ozonFailure}` : null,
+      ].filter((message): message is string => message != null)
+      if (failures.length > 0) {
+        setError(failures.join(' '))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
     } finally {
@@ -746,7 +838,7 @@ export function SellerProductsStockScreen({
       </Typography>
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error" onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error">
           {error}
         </Alert>
       ) : null}
@@ -908,23 +1000,17 @@ export function SellerProductsStockScreen({
           }}
         >
           <colgroup>
-            {/* WMS-548 D5: ширины колонок по свежему макету (docs/mockups/psp2-20260927/
-                WMS-548-catalog-selection.html) — на 1440 старые пропорции резали название,
-                уводили «Резервы» за край. На 1280 «Свободный FBO» ещё переносился на две
-                строки и на макетных 11%: у соседней «В ячейках»/«На ФФ» есть noWrap,
-                у неё не было — добавлен; Остаток дополнительно увеличен до 12% за счёт
-                ШК (11%→10%, баркоду хватает и так) — запас на случай трёхзначного остатка. */}
-            <col style={{ width: '4%' }} />
             <col style={{ width: '5%' }} />
-            <col style={{ width: '19%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '11%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '10.5%' }} />
+            <col style={{ width: '17.5%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '10.5%' }} />
+            <col style={{ width: '8%' }} />
             <col style={{ width: '10%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '4%' }} />
             <col style={{ width: '7.5%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '4.5%' }} />
-            <col style={{ width: '9%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -982,6 +1068,7 @@ export function SellerProductsStockScreen({
                       <Typography
                         variant="caption"
                         sx={{
+                          flex: '1 1 0',
                           minWidth: 0,
                           fontWeight: 600,
                           display: '-webkit-box',
@@ -993,13 +1080,28 @@ export function SellerProductsStockScreen({
                       >
                         {row.name}
                       </Typography>
-                      {itemMarketplaces(row).map((marketplace) => (
-                        <MarketplaceChip
-                          key={marketplace}
-                          marketplace={marketplace}
-                          testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                      {onFulfillment ? (
+                        itemMarketplaces(row).map((marketplace) => (
+                          <MarketplaceChip
+                            key={marketplace}
+                            marketplace={marketplace}
+                            testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                          />
+                        ))
+                      ) : (
+                        // Карточка не на ФФ — новая строка (R7), «значок площадки»
+                        // обязателен для каждой такой строки, а не изредка, как
+                        // сегодняшний чип «Ozon» на товаре. Полный текстовый чип
+                        // «Wildberries» (94px) в узкой колонке названия (10.5%,
+                        // как в etalon — ширины этот экран не меняет) съедал
+                        // название почти целиком; компактный квадратный значок
+                        // (22×22, тот же MarketplaceIcon, что и в окне «Задать
+                        // остаток») даёт место и значку, и названию.
+                        <MarketplaceIcon
+                          marketplace={row.marketplace === 'ozon' ? 'ozon' : 'wb'}
+                          testId={`seller-catalog-marketplace-${row.key}`}
                         />
-                      ))}
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -1067,7 +1169,6 @@ export function SellerProductsStockScreen({
                           sx={{ fontSize: '0.65rem' }}
                           data-testid={`seller-catalog-stock-free-fbo-${row.id}`}
                           title={`Свободный FBO ${bal?.quantity_free_fbo ?? bal?.quantity ?? 0}`}
-                          noWrap
                         >
                           Свободный FBO {bal?.quantity_free_fbo ?? bal?.quantity ?? 0}
                         </Typography>
