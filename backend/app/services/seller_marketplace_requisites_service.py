@@ -20,10 +20,17 @@
   ``SellerRequisitesLookupError``.
 * ``lookup_requisites`` — тот же разбор плюс наложение DaData, тоже возвращает
   ``None`` без исключения, если площадка не дала usable ИНН. Этим слоем
-  пользуется как кнопка (оборачивает ``None`` в ошибку ``inn_missing`` через
-  ``lookup_requisites_for_button``), так и будущее автозаполнение при
-  подключении ключа (WMS-547 D2): там отсутствие данных — не ошибка, а
-  «просто нечего сохранять».
+  пользуется и кнопка (оборачивает ``None`` в ошибку ``inn_missing`` через
+  ``lookup_requisites_for_button``), и автозаполнение при подключении ключа
+  (``autofill_requisites_after_key_saved``, WMS-547 D2): там отсутствие данных —
+  не ошибка, а «просто нечего сохранять».
+* ``autofill_requisites_after_key_saved`` — вызывается сразу после сохранения
+  ключа WB/Ozon (R5). Создаёт реквизиты, только если у селлера нет вообще
+  никакой записи (R6/R8 — введённое руками не трогаем и не дублируем);
+  никогда не поднимает исключение наружу, чтобы отказ площадки, DaData или
+  гонка с ручным сохранением не повлияли на ответ о сохранении ключа (R7).
+  Открывает свою сессию — вызывается и из фоновой задачи после ответа (WB),
+  и синхронно перед ответом (Ozon), в обоих случаях сессия запроса не годится.
 
 Значения токенов никогда не попадают в исключения и в текст логов — только
 код ошибки и код HTTP-ответа площадки.
@@ -37,11 +44,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
+from app.db.session import SessionLocal
+from app.models.billing import BillingProfile
+from app.models.document_event import DOCUMENT_TYPE_BILLING_PROFILE, EVENT_DATA_CHANGED
 from app.services.billing_configuration_service import BillingConfigurationError, validate_inn
 from app.services.dadata_party_service import DadataError, lookup_party_by_inn
+from app.services.document_event_service import record_document_mutation
 from app.services.marketplace_account_service import (
     MarketplaceAccountError,
     MarketplaceAccountService,
@@ -263,3 +276,87 @@ async def lookup_requisites_for_button(
     if requisites is None:
         raise SellerRequisitesLookupError("inn_missing")
     return requisites
+
+
+async def autofill_requisites_after_key_saved(
+    tenant_id: uuid.UUID, seller_id: uuid.UUID, *, marketplace: str
+) -> None:
+    """WMS-547 D2: заполнить реквизиты селлера сразу после подключения ключа.
+
+    R5/R13: только один запрос к площадке за раз, и только когда у селлера нет
+    вообще никакой записи реквизитов — это проверяется до всякого сетевого
+    вызова, чтобы не тратить суточный лимит WB на заведомо бесполезный ответ.
+
+    R6/R8: запись создаётся ПРЯМЫМ insert (не через ``save_profile``, который
+    умеет ещё и обновлять существующую запись). Причина — гонка: пока идёт
+    сетевой запрос к площадке, кто-то может успеть сохранить реквизиты руками.
+    Позвать в этот момент ``save_profile`` — значит дать ему увидеть уже
+    появившуюся чужую запись и молча ПЕРЕЗАПИСАТЬ её нашими значениями, а это
+    прямое нарушение R6. Прямой insert такой развилки не имеет: он либо
+    создаёт запись (её не было), либо падает с ``IntegrityError`` на
+    уникальном индексе ``uq_billing_profiles_tenant_seller`` (кто-то создал
+    её раньше) — и тогда мы просто уходим, не трогая чужие данные.
+
+    R7: любой отказ площадки или DaData проглатывается — сохранение ключа не
+    должно зависеть от этого пути и ничего не показывает пользователю.
+    """
+    try:
+        async with SessionLocal() as session:
+            existing_id = await session.scalar(
+                select(BillingProfile.id).where(
+                    BillingProfile.tenant_id == tenant_id,
+                    BillingProfile.seller_id == seller_id,
+                )
+            )
+            if existing_id is not None:
+                return
+            try:
+                requisites = await lookup_requisites(
+                    session,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    marketplace=marketplace,
+                )
+            except SellerRequisitesLookupError as exc:
+                logger.info("seller requisites autofill (%s): %s", marketplace, exc.code)
+                return
+            if requisites is None or requisites.legal_name is None:
+                # R5: реквизиты создаются, только если получены и ИНН, и
+                # наименование — площадка ответила, но подставлять нечего.
+                return
+            profile = BillingProfile(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                legal_name=requisites.legal_name,
+                inn=requisites.inn,
+                kpp=requisites.kpp,
+            )
+            session.add(profile)
+            try:
+                await session.flush()
+            except IntegrityError:
+                await session.rollback()
+                return
+            await record_document_mutation(
+                session,
+                tenant_id=tenant_id,
+                document_type=DOCUMENT_TYPE_BILLING_PROFILE,
+                document_id=profile.id,
+                event_type=EVENT_DATA_CHANGED,
+                before=None,
+                after={
+                    "seller_id": profile.seller_id,
+                    "legal_name": profile.legal_name,
+                    "inn": profile.inn,
+                    "kpp": profile.kpp,
+                    "bank_name": profile.bank_name,
+                    "bik": profile.bik,
+                    "settlement_account": profile.settlement_account,
+                    "correspondent_account": profile.correspondent_account,
+                },
+            )
+            await session.commit()
+    except Exception:
+        # Автозаполнение — побочный эффект подключения ключа, а не его часть:
+        # любая неучтённая ошибка здесь не имеет права уронить сохранение ключа.
+        logger.exception("seller requisites autofill: unexpected failure")
