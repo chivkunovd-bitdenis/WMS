@@ -289,7 +289,12 @@ describe('syncSellerCatalogMarketplaces', () => {
     expect(calledUrls.some((u) => u.includes('/integrations/ozon/self/sync-products'))).toBe(false)
   })
 
-  it('does not treat a failed Ozon connection check itself as a sync failure', async () => {
+  // F9 (ревью Astra №2): раньше отказ самой проверки подключения приравнивался
+  // к подтверждённому «ключа нет» — площадка молча пропускалась, пользователь
+  // не узнавал, что действие не выполнено. Теперь эти два случая различаются:
+  // «не смогли узнать» обязано оставить понятную ошибку своей площадки, не
+  // трогая при этом другую площадку.
+  it('shows a clear error when the Ozon connection check itself fails over the network, without blocking WB', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
@@ -303,16 +308,56 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: null })
+    expect(outcome).toEqual({ wbFailure: null, ozonFailure: 'Failed to fetch' })
   })
 
-  it('does not treat a failed WB connection check itself as a sync failure', async () => {
+  it('shows a clear error when the WB connection check itself fails over the network, without blocking Ozon', async () => {
+    const fetchImpl = fetchMock({
+      wbTokens: () => {
+        throw new TypeError('Failed to fetch')
+      },
+      ozonAccount: () => jsonResponse(200, { connected: true }),
+      ozonSync: () => jsonResponse(200, { updated: 1 }),
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
+
+    expect(outcome).toEqual({ wbFailure: 'Failed to fetch', ozonFailure: null })
+    const calledUrls = fetchImpl.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL))
+    // Не смогли узнать, подключён ли WB, — не гадаем, синхронизацию не пробуем.
+    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/sync-products'))).toBe(false)
+  })
+
+  it.each([403, 500, 503])(
+    'shows a clear error when GET /wildberries/self/tokens answers %i, instead of silently skipping WB',
+    async (status) => {
+      vi.stubGlobal(
+        'fetch',
+        fetchMock({
+          wbTokens: () => jsonResponse(status, { detail: 'boom' }),
+          ozonAccount: () => jsonResponse(200, { connected: true }),
+          ozonSync: () => jsonResponse(200, { updated: 1 }),
+        }),
+      )
+
+      const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
+
+      // 'boom' — код, похожий на машинный (readApiErrorMessage его не знает),
+      // поэтому экран не показывает его голым, а даёт человеческий текст —
+      // как и для отказа самой синхронизации (humanSyncFailureMessage).
+      // Важно здесь другое: сообщение вообще есть, и это сообщение WB.
+      expect(outcome.wbFailure).toBe('Не удалось проверить подключение Wildberries.')
+      expect(outcome.ozonFailure).toBeNull()
+    },
+  )
+
+  it('shows a clear error when GET /wildberries/self/tokens returns unparsable JSON', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
-        wbTokens: () => {
-          throw new TypeError('Failed to fetch')
-        },
+        wbTokens: () =>
+          new Response('not json', { status: 200, headers: { 'Content-Type': 'application/json' } }),
         ozonAccount: () => jsonResponse(200, { connected: true }),
         ozonSync: () => jsonResponse(200, { updated: 1 }),
       }),
@@ -320,6 +365,22 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
+    expect(outcome.wbFailure).not.toBeNull()
+    expect(outcome.ozonFailure).toBeNull()
+  })
+
+  it('still silently skips a confirmed-not-connected WB without any error', async () => {
+    const fetchImpl = fetchMock({
+      wbTokens: () => jsonResponse(200, { has_content_token: false }),
+      ozonAccount: () => jsonResponse(200, { connected: true }),
+      ozonSync: () => jsonResponse(200, { updated: 1 }),
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
+
     expect(outcome).toEqual({ wbFailure: null, ozonFailure: null })
+    const calledUrls = fetchImpl.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL))
+    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/sync-products'))).toBe(false)
   })
 })
