@@ -206,7 +206,9 @@ async def test_mp_availability_includes_sorting_reserves_and_isolation(
     )
     assert global_summary.status_code == 200, global_summary.text
     assert global_summary.json()[0]["quantity_in_sorting"] == 10
-    assert global_summary.json()[0]["available"] == 0
+    # WMS-530 R1-R3: Доступно организации = 10 (Остаток) - 6 (Резерв: 2 в
+    # старой «Отгрузке» + 3 collecting и 1 confirmed на МП) = 4.
+    assert global_summary.json()[0]["available"] == 4
 
     admin_available = await async_client.get(
         "/operations/marketplace-unload-requests/available-products",
@@ -427,7 +429,9 @@ async def test_mp_availability_uses_free_fbo_after_directions_and_active_reserve
         json={"product_id": str(product_id), "quantity": 401},
     )
     assert too_much.status_code == 422
-    assert too_much.json()["detail"]["code"] == "insufficient_free_fbo"
+    # WMS-530: единое Доступно организации — отдельного кода
+    # "insufficient_free_fbo" для случая с направлениями/бронями больше нет.
+    assert too_much.json()["detail"]["code"] == "insufficient_available"
 
     ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{unload_id}/lines",

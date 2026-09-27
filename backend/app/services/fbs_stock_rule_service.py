@@ -15,11 +15,9 @@ from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.services import stock_direction_service
 from app.services.catalog_service import list_ozon_product_links
 from app.services.fbs_stock_availability_service import (
-    FbsStockBreakdown,
-    fbs_stock_breakdown_by_product,
+    organization_stock_totals_by_product,
 )
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
@@ -269,66 +267,17 @@ async def _free_stock_by_product_for_binding(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     product_ids: list[uuid.UUID],
-    binding: FbsWarehouseBinding,
 ) -> dict[uuid.UUID, int]:
-    """Read one binding's free stock for a whole bulk selection without N+1 queries."""
-    breakdown = await fbs_stock_breakdown_by_product(
-        session,
-        tenant_id,
-        binding.wms_warehouse_id,
-        product_ids,
-        include_global_direction_reserve=False,
-    )
-    directions = await stock_direction_service.direction_totals_by_product(
-        session,
-        tenant_id,
-        product_ids,
-    )
-    free_by_product: dict[uuid.UUID, int] = {}
-    for product_id in product_ids:
-        row = breakdown.get(product_id)
-        free = row.free if row is not None else 0
-        direction = directions.get(product_id)
-        direction_reserved = int(direction.total) if direction is not None else 0
-        free_by_product[product_id] = max(0, free - direction_reserved)
-    return free_by_product
+    """WMS-530 R5/R6: доступно организации — одно и то же число для любой привязки.
 
-
-async def _free_stock_for_bindings(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    bindings: list[FbsWarehouseBinding],
-) -> tuple[int, int, int]:
-    """(on_hand, reserved, free) по всем нашим складам, откуда кормится этот продавец.
-
-    Обычно склад один: один физический склад фулфилмента кормит все адреса
-    продавца в кабинете WB. Но если их несколько, числа складываются — иначе на
-    экране было бы видно меньше товара, чем лежит.
+    Раньше здесь читался остаток только склада ФФ конкретной привязки; теперь
+    привязка на цифру не влияет (D4), поэтому параметр binding не нужен.
     """
-    warehouse_ids = {binding.wms_warehouse_id for binding in bindings}
-    on_hand = reserved = free = 0
-    for warehouse_id in sorted(warehouse_ids, key=str):
-        breakdown = await fbs_stock_breakdown_by_product(
-            session,
-            tenant_id,
-            warehouse_id,
-            [product_id],
-            include_global_direction_reserve=False,
-        )
-        row = breakdown.get(product_id)
-        if row is None:
-            continue
-        on_hand += row.on_hand
-        reserved += row.reserved
-        free += row.free
-    directions = (
-        await stock_direction_service.direction_totals_by_product(session, tenant_id, [product_id])
-    ).get(product_id)
-    direction_reserved = int(directions.total) if directions is not None else 0
-    reserved += direction_reserved
-    free = max(0, free - direction_reserved)
-    return on_hand, reserved, free
+    totals = await organization_stock_totals_by_product(session, tenant_id, product_ids)
+    return {
+        product_id: totals[product_id].available_for_checks if product_id in totals else 0
+        for product_id in product_ids
+    }
 
 
 def _binding_key(binding: FbsWarehouseBinding) -> str:
@@ -617,8 +566,10 @@ async def get_rule_views(
     """Получить правила нескольких товаров без поштучных запросов к БД.
 
     Товары группируются по продавцу, потому что у каждого продавца свой набор
-    складов WB. Остатки при этом считаются пакетно для всех товаров продавца на
-    каждом обслуживающем их физическом складе.
+    складов WB. WMS-530 R5/R6: Остаток/Резерв/Доступно теперь одни и те же для
+    товара во всей организации — привязка и её склад ФФ на эти три числа не
+    влияют (D4), поэтому они читаются один раз на продавца пакетно для всех
+    его товаров, а не по каждому обслуживающему физическому складу.
     """
     unique_ids = list(dict.fromkeys(product_ids))
     if not unique_ids:
@@ -669,41 +620,11 @@ async def get_rule_views(
             for pool in (await session.scalars(pool_stmt)).all():
                 pools_by_product[pool.product_id][pool.binding_id] = pool
 
-        stock_by_product = {product_id: [0, 0, 0] for product_id in seller_product_ids}
-        free_by_warehouse: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
-        stock_rows_by_warehouse: dict[
-            uuid.UUID, dict[uuid.UUID, FbsStockBreakdown]
-        ] = {}
-        warehouse_ids = sorted({binding.wms_warehouse_id for binding in bindings}, key=str)
-        for warehouse_id in warehouse_ids:
-            breakdown = await fbs_stock_breakdown_by_product(
-                session,
-                tenant_id,
-                warehouse_id,
-                seller_product_ids,
-                include_global_direction_reserve=False,
-            )
-            stock_rows_by_warehouse[warehouse_id] = dict(breakdown)
-            free_by_warehouse[warehouse_id] = {pid: row.free for pid, row in breakdown.items()}
-            for product_id, row in breakdown.items():
-                totals = stock_by_product[product_id]
-                totals[0] += row.on_hand
-                totals[1] += row.reserved
-                totals[2] += row.free
-
-        # StockDirection has no warehouse dimension: it reserves a product from
-        # the tenant-wide stock once.  Warehouse-specific outbound/FBS reserves
-        # above remain clamped inside their own physical warehouses; only this
-        # global reserve is applied after those warehouse results are summed.
-        direction_totals = await stock_direction_service.direction_totals_by_product(
+        # WMS-530 R5/R6: одно и то же Остаток/Резерв/Доступно организации на
+        # весь пакет товаров продавца — привязка и склад ФФ его не меняют.
+        totals = await organization_stock_totals_by_product(
             session, tenant_id, seller_product_ids
         )
-        for product_id in seller_product_ids:
-            directions = direction_totals.get(product_id)
-            direction_reserved = int(directions.total) if directions is not None else 0
-            totals = stock_by_product[product_id]
-            totals[1] += direction_reserved
-            totals[2] = max(0, totals[2] - direction_reserved)
 
         publishing = [binding for binding in bindings if binding.stock_sync_enabled]
         for product in seller_products:
@@ -711,30 +632,14 @@ async def get_rule_views(
             rule = rule_from_product(
                 product, pool_rows, bindings, has_ozon_link=product.id in ozon_links
             )
-            on_hand, reserved, free = stock_by_product[product.id]
-            directions = direction_totals.get(product.id)
-            direction_reserved = int(directions.total) if directions is not None else 0
-            amounts: dict[uuid.UUID, int] = {}
-            for warehouse_id in warehouse_ids:
-                local_bindings = [b for b in publishing if b.wms_warehouse_id == warehouse_id]
-                # Match publish_amounts_for_binding: global direction reserves
-                # are conservatively deducted from each physical warehouse.
-                local_free = max(
-                    0, free_by_warehouse[warehouse_id].get(product.id, 0) - direction_reserved
-                )
-                local_pools = {b.id: pool_rows[b.id] for b in local_bindings if b.id in pool_rows}
-                amounts.update(
-                    split_amounts(rule, local_free, local_bindings, pool_rows=local_pools)
-                )
+            total = totals.get(product.id)
+            on_hand = total.on_hand if total is not None else 0
+            reserved = total.reserved if total is not None else 0
+            free = total.available_for_checks if total is not None else 0
+            local_pools = {b.id: pool_rows[b.id] for b in publishing if b.id in pool_rows}
+            amounts = split_amounts(rule, free, publishing, pool_rows=local_pools)
             binding_views: dict[uuid.UUID, FbsBindingRuleView] = {}
             for binding in bindings:
-                local = free_by_warehouse.get(binding.wms_warehouse_id, {}).get(product.id)
-                stock = stock_rows_by_warehouse.get(binding.wms_warehouse_id, {}).get(
-                    product.id
-                )
-                local_on_hand = stock.on_hand if stock is not None else 0
-                local_reserved = (stock.reserved if stock is not None else 0) + direction_reserved
-                local_free = max(0, (local if local is not None else 0) - direction_reserved)
                 binding_rule = rule.by_binding[binding.id]
                 applicable = binding.marketplace != "ozon" or product.id in ozon_links
                 binding_views[binding.id] = FbsBindingRuleView(
@@ -752,9 +657,11 @@ async def get_rule_views(
                     units_configured=(
                         binding_rule.mode == "units" and binding_rule.units_configured
                     ),
-                    on_hand=local_on_hand,
-                    reserved=local_reserved,
-                    free_stock=local_free,
+                    # Все блоки показывают одни и те же три числа организации,
+                    # как каталог, а не остаток склада своей привязки (R6).
+                    on_hand=on_hand,
+                    reserved=reserved,
+                    free_stock=free,
                     published_now=amounts.get(binding.id, 0),
                 )
             views[product.id] = FbsRuleView(
@@ -1000,12 +907,10 @@ async def set_rule_for_products(
                 )
                 if not value_changed:
                     continue
-                binding = binding_by_id[binding_id]
                 free_by_product = await _free_stock_by_product_for_binding(
                     session,
                     tenant_id,
                     [product.id for product in products],
-                    binding,
                 )
                 free_rows = [
                     (product, free_by_product[product.id]) for product in products
@@ -1402,13 +1307,11 @@ async def publish_amounts_for_binding(
     )
     if not any(row.id == binding.id for row in seller_bindings):
         return {}
-    seller_bindings = [
-        row for row in seller_bindings if row.wms_warehouse_id == binding.wms_warehouse_id
-    ]
+    # WMS-530 R5: свободный остаток общий для всей организации — склад ФФ
+    # привязки на число не влияет, поэтому здесь больше не сужаем список
+    # привязок продавца до склада именно этой binding (D4).
     product_ids = [product.id for product in applicable]
-    breakdown = await fbs_stock_breakdown_by_product(
-        session, binding.tenant_id, binding.wms_warehouse_id, product_ids
-    )
+    totals = await organization_stock_totals_by_product(session, binding.tenant_id, product_ids)
     amounts: dict[uuid.UUID, int] = {}
     for product in applicable:
         pool_rows = await _pool_rows(session, product.id, [row.id for row in seller_bindings])
@@ -1420,7 +1323,8 @@ async def publish_amounts_for_binding(
         binding_rule = rule.by_binding.get(binding.id)
         if binding_rule is None or not binding_rule.publish:
             continue
-        free = breakdown[product.id].free if product.id in breakdown else 0
+        total = totals.get(product.id)
+        free = total.available_for_checks if total is not None else 0
         split = split_amounts(rule, free, seller_bindings, pool_rows=pool_rows)
         amounts[product.id] = split.get(binding.id, 0)
         # WMS-483: use the same free-stock snapshot as the published amount.

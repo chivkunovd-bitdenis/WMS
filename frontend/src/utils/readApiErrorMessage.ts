@@ -11,9 +11,11 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
 
   lines_missing_storage:
     'Назначьте ячейку на каждой строке с количеством перед отправкой заявки.',
-  insufficient_available: 'Недостаточно доступного остатка в выбранной ячейке.',
-  insufficient_free_fbo:
-    'Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.',
+  // WMS-530 R12: одно слово «доступно» без склада, ячейки, FBO и FBS-пула.
+  // Отгрузка на МП присылает полный текст с товаром и числами — он показывается
+  // как есть (structured.message ниже); эти строки — для ответа одним кодом.
+  insufficient_available: 'Недостаточно доступного остатка.',
+  insufficient_free_fbo: 'Недостаточно доступного остатка.',
   directions_exceed_stock: 'Нельзя распределить больше, чем есть на ФФ.',
   insufficient_sorting_stock:
     'Нельзя разложить столько: по заявке принято меньше. Проверьте пересчёт в приёмке или укажите меньшее количество.',
@@ -99,6 +101,21 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   inbound_request_required: 'Не указан документ приёмки.',
   inbound_request_not_receiving: 'Палету можно собрать только во время приёмки.',
   pallet_identifier_conflict: 'Не удалось выдать номер палеты, повторите.',
+}
+
+/**
+ * Отказ по доступному остатку, когда экран сам сверяет количество до запроса.
+ * Текст тот же, что присылает сервер при отгрузке на МП (WMS-530 R12), чтобы
+ * одна и та же нехватка не звучала по-разному.
+ */
+export function insufficientAvailableMessage(
+  product: { name: string | null; sku: string | null },
+  available: number,
+  attempted: number,
+): string {
+  const label = product.name || product.sku || 'товар'
+  const suffix = product.sku && product.sku !== product.name ? ` (${product.sku})` : ''
+  return `Недостаточно доступного остатка: ${label}${suffix}. Доступно ${Math.max(available, 0)} шт, пытаются ${attempted} шт.`
 }
 
 export async function readApiErrorMessage(res: Response): Promise<string> {

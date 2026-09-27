@@ -145,6 +145,16 @@ type Props = {
   onPost: () => void
   onCancelDocument: () => void
   /**
+   * WMS-497: напечатать лист документа на A4 (шапка + таблица с зеброй, факт
+   * пуст). Не отключается статусом документа, несохранёнными правками или
+   * незаконченным пересчётом — экран не меняется, ничего не сохраняется.
+   * Экран без такого обработчика (демо-превью без сервера) прячет причину
+   * недоступности, а не саму кнопку.
+   */
+  onPrintSheet?: () => void
+  /** Пока сервер готовит лист — второе нажатие не открывает второе окно печати. */
+  printingSheet?: boolean
+  /**
    * Сколько сканов находок ещё не доставлено на сервер.
    *
    * Пока их больше нуля, документ проводить нельзя: проведение зафиксирует
@@ -225,6 +235,8 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  onPrintSheet,
+  printingSheet = false,
   pendingFound = 0,
   onCreateContainer,
   onMoveLine,
@@ -685,6 +697,15 @@ export function FfInventoryCountScreen({
             Отменить документ
           </DangerAction>
         ) : null}
+        <SecondaryAction
+          onClick={onPrintSheet}
+          disabledReason={
+            printingSheet ? 'Лист готовится' : onPrintSheet ? undefined : 'Печать листа недоступна'
+          }
+          data-testid="inv-print-sheet"
+        >
+          Печать листа
+        </SecondaryAction>
         <SecondaryAction
           onClick={onSave}
           disabledReason={readOnly ? 'Документ уже проведён' : loading ? 'Дождитесь сохранения' : undefined}
