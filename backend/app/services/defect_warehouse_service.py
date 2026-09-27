@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import Concatenate, ParamSpec, TypeVar, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage_location import StorageLocation
@@ -14,7 +17,49 @@ DEFECT_WAREHOUSE_CODE = "__DEFECT__"
 DEFECT_WAREHOUSE_NAME = "Склад брака"
 DEFECT_LOCATION_CODE = "__DEFECT__"
 
+P = ParamSpec("P")
+T = TypeVar("T")
 
+
+def defect_service_write(
+    operation: Callable[Concatenate[AsyncSession, uuid.UUID, P], Awaitable[T]],
+) -> Callable[Concatenate[AsyncSession, uuid.UUID, P], Awaitable[T]]:
+    """Grant defect writes only within a service call; no permission survives it.
+
+    The savepoint restores PostgreSQL's transaction-local setting on exceptions.
+    Pending caller writes are flushed before granting the capability.
+    """
+    @wraps(operation)
+    async def wrapped(session: AsyncSession, tenant_id: uuid.UUID,
+                      *args: P.args, **kwargs: P.kwargs) -> T:
+        await session.flush()
+        connection = await session.connection()
+        postgres = session.get_bind().dialect.name == "postgresql"
+        info = await connection.run_sync(lambda conn: conn.info)
+        previous = info.get("wms_defect_tenant")
+        try:
+            async with session.begin_nested():
+                if postgres:
+                    old = await session.scalar(text(
+                        "SELECT current_setting('wms.defect_tenant', true)"))
+                    await session.execute(text(
+                        "SELECT set_config('wms.defect_tenant', :tenant, true)"),
+                        {"tenant": str(tenant_id)})
+                else:
+                    info["wms_defect_tenant"] = tenant_id.hex
+                result = await operation(session, tenant_id, *args, **kwargs)
+                await session.flush()
+                if postgres:
+                    await session.execute(text(
+                        "SELECT set_config('wms.defect_tenant', :old, true)"), {"old": old or ""})
+                return result
+        finally:
+            info["wms_defect_tenant"] = previous
+
+    return cast(Callable[Concatenate[AsyncSession, uuid.UUID, P], Awaitable[T]], wrapped)
+
+
+@defect_service_write
 async def get_or_create_defect_location(
     session: AsyncSession,
     tenant_id: uuid.UUID,

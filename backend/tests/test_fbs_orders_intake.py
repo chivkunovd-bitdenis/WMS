@@ -1763,7 +1763,8 @@ async def test_fbs_legacy_binding_with_assigned_order_is_not_repaired_or_moved(
         await session.refresh(persisted)
 
         assert binding.wms_warehouse_id == technical.id
-        assert binding.stock_sync_enabled is False
+        # Skipping an invalid physical route does not rewrite the operator's rule.
+        assert binding.stock_sync_enabled is True
         assert persisted.warehouse_id == technical.id
         assert persisted.warehouse_id != warehouse_uuid
 
