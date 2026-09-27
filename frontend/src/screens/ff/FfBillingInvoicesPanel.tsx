@@ -25,7 +25,7 @@ export const CANCEL_INVOICE_ERROR_MESSAGE =
   'Отмена не подтверждена. Проверьте статус счёта перед повторной попыткой.'
 
 type Seller = { id: string; name: string }
-type ProfileSnapshot = Record<string, string | null | undefined>
+export type ProfileSnapshot = Record<string, string | null | undefined>
 
 /** Строка истории: старый месячный счёт и новый лежат в одной таблице. */
 export type InvoiceHistoryRow = {
@@ -206,13 +206,21 @@ export function FfBillingInvoicesPanel({
   token,
   sellers = [],
   refreshToken = 0,
+  fixedSellerId,
 }: {
   token: string
   sellers?: Seller[]
   /** Меняется после выставления счёта, чтобы история перечиталась. */
   refreshToken?: number
+  /**
+   * Карточка селлера (WMS-491) закрепляет панель за одним селлером: без
+   * выпадающего списка «Селлер» и без одноимённой колонки — селлер и так
+   * один и виден в заголовке карточки. Остальное (статус, поиск по номеру,
+   * открытие счёта) — как в «Расчётах».
+   */
+  fixedSellerId?: string
 }) {
-  const [sellerId, setSellerId] = useState('all')
+  const [sellerId, setSellerId] = useState(fixedSellerId ?? 'all')
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<InvoiceHistoryRow[]>([])
@@ -231,6 +239,12 @@ export function FfBillingInvoicesPanel({
     setCursor(null)
     setRows([])
   }, [])
+
+  useEffect(() => {
+    if (fixedSellerId) {
+      setSellerId(fixedSellerId)
+    }
+  }, [fixedSellerId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -323,12 +337,16 @@ export function FfBillingInvoicesPanel({
       width: 170,
       render: (row: InvoiceHistoryRow) => <TextCell value={row.number} />,
     },
-    {
-      key: 'seller',
-      header: 'Селлер',
-      width: 220,
-      render: (row: InvoiceHistoryRow) => <TextCell value={row.seller_name} width={200} />,
-    },
+    ...(fixedSellerId
+      ? []
+      : [
+          {
+            key: 'seller',
+            header: 'Селлер',
+            width: 220,
+            render: (row: InvoiceHistoryRow) => <TextCell value={row.seller_name} width={200} />,
+          },
+        ]),
     {
       key: 'period',
       header: 'Период',
@@ -388,19 +406,21 @@ export function FfBillingInvoicesPanel({
         searchPlaceholder="Номер счёта"
         testId="billing-invoices-filter-bar"
       >
-        <SelectInput
-          label="Селлер"
-          value={sellerId}
-          onChange={(value) => {
-            resetPaging()
-            setSellerId(value)
-          }}
-          options={[
-            { value: 'all', label: 'Все селлеры' },
-            ...sellers.map((seller) => ({ value: seller.id, label: seller.name })),
-          ]}
-          testId="billing-seller"
-        />
+        {fixedSellerId ? null : (
+          <SelectInput
+            label="Селлер"
+            value={sellerId}
+            onChange={(value) => {
+              resetPaging()
+              setSellerId(value)
+            }}
+            options={[
+              { value: 'all', label: 'Все селлеры' },
+              ...sellers.map((seller) => ({ value: seller.id, label: seller.name })),
+            ]}
+            testId="billing-seller"
+          />
+        )}
         <SelectInput
           label="Статус"
           value={status}
@@ -436,7 +456,7 @@ export function FfBillingInvoicesPanel({
         testId="billing-invoices-table"
         empty={{
           title: 'Счета ещё не выставлены',
-          hint: 'Выставьте счёт на вкладке «Селлеры»',
+          hint: fixedSellerId ? undefined : 'Выставьте счёт на вкладке «Селлеры»',
         }}
       />
       {nextCursor ? (
