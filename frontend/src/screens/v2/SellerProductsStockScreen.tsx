@@ -33,10 +33,16 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
-import { MarketplaceChip } from '../../ui-kit'
+import { MarketplaceChip, type MarketplaceKind } from '../../ui-kit'
 import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 
-type WbCatalogRow = {
+// WMS-548 D5: товар на фулфилменте (row сегодняшней строки /products/wb-catalog)
+// и карточка, ещё не заведённая товаром WMS ("не на фулфилменте"), в одной
+// таблице. Второе — новое: без него селлер не увидит, что ещё можно добавить.
+export type SellerCatalogProductItem = {
+  key: string
+  on_fulfillment: true
+  marketplace: 'wildberries' | 'ozon'
   id: string
   sku_code: string
   name: string
@@ -54,8 +60,35 @@ type WbCatalogRow = {
   has_packaging_instructions: boolean
 }
 
+export type SellerCatalogCardItem = {
+  key: string
+  on_fulfillment: false
+  marketplace: 'wildberries' | 'ozon'
+  nm_id?: number | null
+  // Контракт D2: id карточки Ozon — строка (offer/product id), не число.
+  ozon_product_id?: string | null
+  vendor_code: string | null
+  name: string
+  photo_url: string | null
+  barcodes: string[]
+  sizes: string[]
+  category: string | null
+}
+
+export type SellerCatalogItem = SellerCatalogProductItem | SellerCatalogCardItem
+
+type SellerCatalogPage = {
+  items: SellerCatalogItem[]
+  total: number
+  scope_total: number
+  categories: string[]
+}
+
+type FulfillmentFilter = 'all' | 'yes' | 'no'
+
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
-// запрос и формат, что и в каталоге фулфилмента (см. CAT-20).
+// запрос и формат, что и в каталоге фулфилмента (см. CAT-20); не на ФФ карточки
+// в этом ответе не участвуют — им остаток не считается (R7).
 type StockSummaryRow = {
   product_id: string
   sku_code: string
@@ -81,49 +114,120 @@ type StockDirectionRow = {
   is_fbs: boolean
 }
 
-function matchesCatalogSearch(
-  row: {
-    name: string
-    wb_vendor_code: string | null
-    sku_code: string
-    wb_primary_barcode: string | null
-    wb_barcodes: string[]
-  },
-  query: string,
-): boolean {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  const haystack = [
-    row.name,
-    row.wb_vendor_code ?? '',
-    row.sku_code,
-    row.wb_primary_barcode ?? '',
-    ...row.wb_barcodes,
-  ]
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(needle)
+// Контракт D2 (backend/app/api/seller_catalog.py: AddToFulfillmentEntryOut /
+// AddToFulfillmentSkippedOut) — marketplace и id всегда есть, id строкой.
+export type AddToFulfillmentOutcomeEntry = {
+  marketplace: string
+  id: string
+  vendor_code: string | null
+  products_added?: number
+  reason?: string
 }
 
-export type SellerCatalogLoad =
+type AddToFulfillmentOutcome = {
+  added?: AddToFulfillmentOutcomeEntry[]
+  skipped?: AddToFulfillmentOutcomeEntry[]
+}
+
+const ADD_TO_FULFILLMENT_BATCH_SIZE = 500
+
+export function isProductItem(item: SellerCatalogItem): item is SellerCatalogProductItem {
+  return item.on_fulfillment
+}
+
+export function isCardItem(item: SellerCatalogItem): item is SellerCatalogCardItem {
+  return !item.on_fulfillment
+}
+
+// Строкой — контракт add-to-fulfillment сравнивает id как строку (backend
+// шлёт str(nm_id) для WB и сам ozon_product_id для Ozon).
+export function cardMarketplaceId(item: SellerCatalogCardItem): string | null {
+  if (item.marketplace === 'wildberries') {
+    return item.nm_id != null ? String(item.nm_id) : null
+  }
+  return item.ozon_product_id ?? null
+}
+
+export function itemMarketplaces(item: SellerCatalogItem): MarketplaceKind[] {
+  if (isProductItem(item)) {
+    const result: MarketplaceKind[] = []
+    if (item.wb_nm_id != null) result.push('wb')
+    if (item.ozon_sku || item.ozon_offer_id) result.push('ozon')
+    return result
+  }
+  return [item.marketplace === 'ozon' ? 'ozon' : 'wb']
+}
+
+function itemPhotoUrl(item: SellerCatalogItem): string | null {
+  return isProductItem(item) ? item.wb_primary_image_url : item.photo_url
+}
+
+function itemVendorCode(item: SellerCatalogItem): string | null {
+  return isProductItem(item) ? item.wb_vendor_code : item.vendor_code
+}
+
+export function itemPrimaryBarcode(item: SellerCatalogItem): string | null {
+  if (isProductItem(item)) {
+    return item.wb_primary_barcode ?? item.wb_barcodes[0] ?? null
+  }
+  return item.barcodes[0] ?? null
+}
+
+function itemAllBarcodes(item: SellerCatalogItem): string[] {
+  return isProductItem(item) ? item.wb_barcodes : item.barcodes
+}
+
+export function itemSizeLabel(item: SellerCatalogItem): string {
+  if (isProductItem(item)) {
+    return item.wb_size ?? '—'
+  }
+  return item.sizes.length > 0 ? item.sizes.join(', ') : '—'
+}
+
+/** Разбивает идентификаторы на порции не больше 500 штук (контракт D2). */
+export function chunk<T>(items: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size))
+  }
+  return result
+}
+
+export function outcomeEntryMarketplace(entry: AddToFulfillmentOutcomeEntry): 'wildberries' | 'ozon' {
+  return entry.marketplace === 'ozon' ? 'ozon' : 'wildberries'
+}
+
+// А12 (решение 27.09, коммит 89fddfc7): причину пропуска на экране не
+// расшифровываем — только артикул продавца (или, если его нет, id карточки).
+export function outcomeEntryLabel(entry: AddToFulfillmentOutcomeEntry, cards: SellerCatalogCardItem[]): string {
+  const marketplace = outcomeEntryMarketplace(entry)
+  const match = cards.find(
+    (card) => card.marketplace === marketplace && cardMarketplaceId(card) === entry.id,
+  )
+  return match?.vendor_code ?? entry.vendor_code ?? entry.id
+}
+
+export type SellerCatalogPageLoad =
   | { outcome: 'stale' }
-  | { outcome: 'loaded'; rows: WbCatalogRow[] }
+  | { outcome: 'loaded'; page: SellerCatalogPage }
   | { outcome: 'failed'; message: string }
 
 /**
- * Каталог применяется, только если к моменту ответа вкладка осталась в той же
- * сессии.
+ * Страница каталога применяется, только если к моменту ответа вкладка
+ * осталась в той же сессии.
  *
- * WMS-488: пока список грузился, сессию могли сменить (другой селлер в соседней
- * вкладке, переключение магазина). Запоздалый ответ — это товары прежнего
- * селлера, и на экране им места нет.
+ * WMS-488: пока список грузился, сессию могли сменить (другой селлер в
+ * соседней вкладке, переключение магазина). Запоздалый ответ — это карточки
+ * прежнего селлера, и на экране им места нет.
  */
-export async function loadSellerCatalog(
+export async function loadSellerCatalogPage(
   headers: Record<string, string>,
+  params: URLSearchParams,
   isCurrentSession: () => boolean,
-): Promise<SellerCatalogLoad> {
+  signal?: AbortSignal,
+): Promise<SellerCatalogPageLoad> {
   try {
-    const res = await fetch(apiUrl('/products/wb-catalog'), { headers })
+    const res = await fetch(apiUrl(`/seller-catalog/page?${params.toString()}`), { headers, signal })
     if (!isCurrentSession()) {
       return { outcome: 'stale' }
     }
@@ -131,9 +235,12 @@ export async function loadSellerCatalog(
       const message = await readApiErrorMessage(res)
       return isCurrentSession() ? { outcome: 'failed', message } : { outcome: 'stale' }
     }
-    const rows = (await res.json()) as WbCatalogRow[]
-    return isCurrentSession() ? { outcome: 'loaded', rows } : { outcome: 'stale' }
+    const page = (await res.json()) as SellerCatalogPage
+    return isCurrentSession() ? { outcome: 'loaded', page } : { outcome: 'stale' }
   } catch (e) {
+    if ((e as { name?: string }).name === 'AbortError') {
+      return { outcome: 'stale' }
+    }
     if (!isCurrentSession()) {
       return { outcome: 'stale' }
     }
@@ -164,21 +271,32 @@ export function SellerProductsStockScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [catalog, setCatalog] = useState<WbCatalogRow[]>([])
+  const [items, setItems] = useState<SellerCatalogItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [scopeTotal, setScopeTotal] = useState(0)
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
-  const [editProduct, setEditProduct] = useState<WbCatalogRow | null>(null)
+  const [editProduct, setEditProduct] = useState<SellerCatalogProductItem | null>(null)
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  // Отметка строк живёт между страницами и фильтрами (R9 D5) — иначе среди
+  // тысяч карточек нельзя набрать выборку для «Добавить к фулфилменту»
+  // постранично. Ключ строки — SellerCatalogItem.key.
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [selectedItemsByKey, setSelectedItemsByKey] = useState<Map<string, SellerCatalogItem>>(new Map())
   const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
-  const [stockDialogRows, setStockDialogRows] = useState<WbCatalogRow[] | null>(null)
+  const [addBusy, setAddBusy] = useState(false)
+  const [stockDialogRows, setStockDialogRows] = useState<SellerCatalogProductItem[] | null>(null)
 
-  // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
+  // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20;
+  //    «Фулфилмент» — новый, WMS-548 R7/А10) ─────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterFulfillment, setFilterFulfillment] = useState<FulfillmentFilter>('all')
 
   // ── Резервы: список направлений остатка, только чтение (CAT-20) ──────────
   const [reservesProductId, setReservesProductId] = useState<string | null>(null)
@@ -188,21 +306,48 @@ export function SellerProductsStockScreen({
   // Токен сессии, к которой относятся показанные строки. Держим в ref, чтобы
   // ответ, пришедший после смены сессии, было с чем сравнить (WMS-488).
   const sessionTokenRef = useRef(token)
+  const catalogAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     sessionTokenRef.current = token
     // Показанное принадлежит прежнему токену: до ответа по новому на экране
     // не должно остаться ни строки прежнего селлера.
-    setCatalog([])
+    setItems([])
     setStock([])
     setReserveDirections({})
+    setSelectedKeys(new Set())
+    setSelectedItemsByKey(new Map())
   }, [token])
 
-  const refreshAll = useCallback(async () => {
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(filterSearch.trim()), 250)
+    return () => window.clearTimeout(timeout)
+  }, [filterSearch])
+
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filterCategory, filterFulfillment, rowsPerPage])
+
+  const load = useCallback(async () => {
     const requestToken = token
     const isCurrentSession = () => sessionTokenRef.current === requestToken
+    catalogAbortRef.current?.abort()
+    const controller = new AbortController()
+    catalogAbortRef.current = controller
     setError(null)
     setBusy(true)
-    const result = await loadSellerCatalog({ ...authHeaders(requestToken) }, isCurrentSession)
+    const params = new URLSearchParams({
+      limit: String(rowsPerPage),
+      offset: String(page * rowsPerPage),
+      on_fulfillment: filterFulfillment,
+    })
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (filterCategory) params.set('category', filterCategory)
+    const result = await loadSellerCatalogPage(
+      { ...authHeaders(requestToken) },
+      params,
+      isCurrentSession,
+      controller.signal,
+    )
     if (result.outcome === 'stale') {
       return
     }
@@ -211,12 +356,30 @@ export function SellerProductsStockScreen({
       setError(result.message)
       return
     }
-    setCatalog(result.rows)
-  }, [authHeaders, token])
+    setItems(result.page.items)
+    setTotal(result.page.total)
+    setScopeTotal(result.page.scope_total)
+    setCategoryOptions(result.page.categories)
+    // Свежие данные выбранной строки (например, обновилось название после
+    // синхронизации) — но саму отметку не трогаем, даже если строки нет на
+    // этой странице.
+    setSelectedItemsByKey((current) => {
+      let changed = false
+      const next = new Map(current)
+      for (const item of result.page.items) {
+        if (next.has(item.key)) {
+          next.set(item.key, item)
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [authHeaders, debouncedSearch, filterCategory, filterFulfillment, page, rowsPerPage, token])
 
   useEffect(() => {
-    void refreshAll()
-  }, [refreshAll])
+    void load()
+    return () => catalogAbortRef.current?.abort()
+  }, [load])
 
   const loadStock = useCallback(async () => {
     const requestToken = token
@@ -248,70 +411,22 @@ export function SellerProductsStockScreen({
     void loadStock()
   }, [loadStock])
 
-  const rows = useMemo(() => {
-    const byProduct = new Map(stock.map((s) => [s.product_id, s]))
-    return catalog.map((p) => {
-      const bal = byProduct.get(p.id)
-      return {
-        ...p,
-        stock_on_hand: bal?.quantity ?? 0,
-        stock_in_storage: bal?.quantity_in_storage ?? 0,
-        stock_reserved_directions: bal?.quantity_reserved_directions ?? 0,
-        stock_free_fbo: bal?.quantity_free_fbo ?? bal?.quantity ?? 0,
-      }
-    })
-  }, [catalog, stock])
+  const stockByProductId = useMemo(() => new Map(stock.map((s) => [s.product_id, s])), [stock])
 
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of rows) {
-      const value = row.wb_subject_name?.trim()
-      if (value) set.add(value)
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
-  }, [rows])
+  const selectedItems = useMemo(() => [...selectedItemsByKey.values()], [selectedItemsByKey])
+  const selectedProductItems = useMemo(() => selectedItems.filter(isProductItem), [selectedItems])
+  const selectedCardItems = useMemo(() => selectedItems.filter(isCardItem), [selectedItems])
+  const selectedTotalCount = selectedKeys.size
 
-  const filteredRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          matchesCatalogSearch(row, filterSearch) &&
-          (!filterCategory || row.wb_subject_name === filterCategory),
-      ),
-    [rows, filterSearch, filterCategory],
-  )
-
-  useEffect(() => {
-    setPage(0)
-  }, [filterSearch, filterCategory])
-
-  const pagedRows = useMemo(() => {
-    const start = page * rowsPerPage
-    return filteredRows.slice(start, start + rowsPerPage)
-  }, [filteredRows, page, rowsPerPage])
-
-  const selectedRows = useMemo(
-    () => catalog.filter((row) => selectedProductIds.has(row.id)),
-    [catalog, selectedProductIds],
-  )
-  const selectedCount = selectedRows.length
-  const visibleProductIds = useMemo(() => pagedRows.map((row) => row.id), [pagedRows])
+  const visibleKeys = useMemo(() => items.map((row) => row.key), [items])
   const visibleSelectedCount = useMemo(
-    () => visibleProductIds.filter((id) => selectedProductIds.has(id)).length,
-    [selectedProductIds, visibleProductIds],
+    () => visibleKeys.filter((key) => selectedKeys.has(key)).length,
+    [selectedKeys, visibleKeys],
   )
-  const allVisibleSelected = visibleProductIds.length > 0 && visibleSelectedCount === visibleProductIds.length
+  const allVisibleSelected = visibleKeys.length > 0 && visibleSelectedCount === visibleKeys.length
   const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected
 
-  useEffect(() => {
-    const rowIds = new Set(catalog.map((row) => row.id))
-    setSelectedProductIds((current) => {
-      const next = new Set([...current].filter((id) => rowIds.has(id)))
-      return next.size === current.size ? current : next
-    })
-  }, [catalog])
-
-  function openPackagingEdit(p: WbCatalogRow) {
+  function openPackagingEdit(p: SellerCatalogProductItem) {
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
     setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
@@ -349,7 +464,7 @@ export function SellerProductsStockScreen({
         return
       }
       setEditProduct(null)
-      await refreshAll()
+      await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
     } finally {
@@ -358,7 +473,7 @@ export function SellerProductsStockScreen({
   }
 
   async function applyHonestSignToSelected() {
-    const productIdsToUpdate = [...selectedProductIds]
+    const productIdsToUpdate = selectedProductItems.map((item) => item.id)
     if (productIdsToUpdate.length === 0) return
     const selectedIds = new Set(productIdsToUpdate)
     setBulkHonestSignBusy(true)
@@ -378,14 +493,13 @@ export function SellerProductsStockScreen({
         return
       }
       const body = (await res.json()) as { updated_count: number }
-      setCatalog((current) =>
+      setItems((current) =>
         current.map((row) =>
-          selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
+          isProductItem(row) && selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
         ),
       )
-      setSelectedProductIds(new Set())
       setNotice(`Честный знак включён: ${body.updated_count} товаров.`)
-      await refreshAll()
+      await load()
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Не удалось включить Честный знак выбранным товарам.',
@@ -395,27 +509,41 @@ export function SellerProductsStockScreen({
     }
   }
 
-  const toggleSelectedProduct = useCallback((productId: string, checked: boolean) => {
-    setSelectedProductIds((current) => {
+  const toggleSelectedRow = useCallback((item: SellerCatalogItem, checked: boolean) => {
+    setSelectedKeys((current) => {
       const next = new Set(current)
-      if (checked) next.add(productId)
-      else next.delete(productId)
+      if (checked) next.add(item.key)
+      else next.delete(item.key)
+      return next
+    })
+    setSelectedItemsByKey((current) => {
+      const next = new Map(current)
+      if (checked) next.set(item.key, item)
+      else next.delete(item.key)
       return next
     })
   }, [])
 
-  const toggleVisibleProducts = useCallback(
+  const toggleVisibleRows = useCallback(
     (checked: boolean) => {
-      setSelectedProductIds((current) => {
+      setSelectedKeys((current) => {
         const next = new Set(current)
-        for (const productId of visibleProductIds) {
-          if (checked) next.add(productId)
-          else next.delete(productId)
+        for (const key of visibleKeys) {
+          if (checked) next.add(key)
+          else next.delete(key)
+        }
+        return next
+      })
+      setSelectedItemsByKey((current) => {
+        const next = new Map(current)
+        for (const row of items) {
+          if (checked) next.set(row.key, row)
+          else next.delete(row.key)
         }
         return next
       })
     },
-    [visibleProductIds],
+    [items, visibleKeys],
   )
 
   async function onSyncProducts() {
@@ -423,19 +551,121 @@ export function SellerProductsStockScreen({
     setNotice(null)
     setBusy(true)
     try {
-      const res = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
         method: 'POST',
         headers: { ...authHeaders(token) },
       })
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+      if (!wbRes.ok) {
+        setError(await readApiErrorMessage(wbRes))
         return
       }
-      await refreshAll()
+      // Ozon синхронизируется той же кнопкой, если ключ подключён (R12).
+      // Отказ самой проверки подключения не должен ронять уже выполненную
+      // синхронизацию WB — тихо пропускаем Ozon в этом случае.
+      try {
+        const ozonStatusRes = await fetch(apiUrl('/integrations/ozon/self/account'), {
+          headers: { ...authHeaders(token) },
+        })
+        if (ozonStatusRes.ok) {
+          const ozonStatus = (await ozonStatusRes.json()) as { connected?: boolean }
+          if (ozonStatus.connected) {
+            const ozonSyncRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
+              method: 'POST',
+              headers: { ...authHeaders(token) },
+            })
+            if (!ozonSyncRes.ok) {
+              setError(await readApiErrorMessage(ozonSyncRes))
+              return
+            }
+          }
+        }
+      } catch {
+        // см. комментарий выше — Ozon необязателен для этой кнопки.
+      }
+      await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function addSelectedToFulfillment() {
+    const cards = selectedCardItems
+    if (cards.length === 0) return
+    setAddBusy(true)
+    setError(null)
+    setNotice(null)
+    // Итоговое сообщение ставится только ПОСЛЕ перечитывания страницы (load()
+    // ниже сбрасывает error на время своего запроса) — иначе результат гас
+    // сразу же, не успев показаться (WMS-548 R9, решение А12).
+    let failureMessage: string | null = null
+    // id всегда строкой (контракт D2): для WB это nm_id, отправляется числом
+    // в теле запроса; для Ozon — как есть.
+    type Ref = { kind: 'wildberries' | 'ozon'; id: string }
+    const refs: Ref[] = []
+    for (const card of cards) {
+      const id = cardMarketplaceId(card)
+      if (id == null) continue
+      refs.push({ kind: card.marketplace, id })
+    }
+    const batches = chunk(refs, ADD_TO_FULFILLMENT_BATCH_SIZE)
+    const addedKeys = new Set<string>()
+    // А12: причину пропуска не расшифровываем — только артикулы, одной строкой.
+    const skippedLabels: string[] = []
+    for (const batch of batches) {
+      const body = {
+        wb_nm_ids: batch.filter((r) => r.kind === 'wildberries').map((r) => Number(r.id)),
+        ozon_product_ids: batch.filter((r) => r.kind === 'ozon').map((r) => r.id),
+      }
+      try {
+        const res = await fetch(apiUrl('/seller-catalog/add-to-fulfillment'), {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          failureMessage = await readApiErrorMessage(res)
+          break
+        }
+        const outcome = (await res.json()) as AddToFulfillmentOutcome
+        for (const entry of outcome.added ?? []) {
+          const marketplace = outcomeEntryMarketplace(entry)
+          const match = cards.find(
+            (card) => card.marketplace === marketplace && cardMarketplaceId(card) === entry.id,
+          )
+          if (match) addedKeys.add(match.key)
+        }
+        for (const entry of outcome.skipped ?? []) {
+          skippedLabels.push(outcomeEntryLabel(entry, cards))
+        }
+      } catch (e) {
+        failureMessage = e instanceof Error ? e.message : 'Не удалось добавить товары к фулфилменту.'
+        break
+      }
+    }
+    if (addedKeys.size > 0) {
+      setSelectedKeys((current) => {
+        const next = new Set(current)
+        for (const key of addedKeys) next.delete(key)
+        return next
+      })
+      setSelectedItemsByKey((current) => {
+        const next = new Map(current)
+        for (const key of addedKeys) next.delete(key)
+        return next
+      })
+    }
+    setAddBusy(false)
+    // load() само сбрасывает error в начале своего запроса — сообщение по
+    // итогу добавления ставим только после того, как оно отработает.
+    await load()
+    if (failureMessage) {
+      setError(failureMessage)
+    } else if (skippedLabels.length > 0) {
+      setError(`Не добавлены: ${skippedLabels.join(', ')}.`)
+    } else if (addedKeys.size > 0) {
+      setNotice(`Добавлено к фулфилменту: ${addedKeys.size}.`)
     }
   }
 
@@ -492,10 +722,11 @@ export function SellerProductsStockScreen({
     setReservesProductId(null)
   }, [])
 
-  const reservesProduct = useMemo(
-    () => rows.find((row) => row.id === reservesProductId) ?? null,
-    [reservesProductId, rows],
-  )
+  const reservesProduct = useMemo(() => {
+    const found = items.find((row) => isProductItem(row) && row.id === reservesProductId)
+    return found && isProductItem(found) ? found : null
+  }, [items, reservesProductId])
+  const reservesStock = reservesProduct ? stockByProductId.get(reservesProduct.id) : undefined
 
   return (
     <Box
@@ -515,7 +746,7 @@ export function SellerProductsStockScreen({
       </Typography>
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error">
+        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error" onClose={() => setError(null)}>
           {error}
         </Alert>
       ) : null}
@@ -543,7 +774,7 @@ export function SellerProductsStockScreen({
           <Button
             variant="outlined"
             color="success"
-            disabled={bulkHonestSignBusy || busy || selectedCount === 0}
+            disabled={bulkHonestSignBusy || busy || selectedProductItems.length === 0}
             onClick={() => void applyHonestSignToSelected()}
             data-testid="seller-products-bulk-honest-sign"
           >
@@ -554,7 +785,7 @@ export function SellerProductsStockScreen({
         </Stack>
       </Paper>
 
-      {selectedCount > 0 ? (
+      {selectedTotalCount > 0 ? (
         <Paper
           variant="outlined"
           sx={{ p: 2, mb: 2, borderColor: 'primary.main' }}
@@ -566,15 +797,27 @@ export function SellerProductsStockScreen({
             sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
           >
             <Typography variant="subtitle2" data-testid="seller-catalog-selection-count">
-              Выбрано {selectedCount}
+              Выбрано {selectedTotalCount}
             </Typography>
-            <Button
-              variant="contained"
-              onClick={() => setStockDialogRows(selectedRows)}
-              data-testid="seller-catalog-fbs-set-stock"
-            >
-              Задать остаток · {selectedCount}
-            </Button>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                disabled={selectedProductItems.length === 0}
+                onClick={() => setStockDialogRows(selectedProductItems)}
+                data-testid="seller-catalog-fbs-set-stock"
+              >
+                Задать остаток · {selectedProductItems.length}
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={addBusy || selectedCardItems.length === 0}
+                onClick={() => void addSelectedToFulfillment()}
+                data-testid="seller-catalog-add-to-fulfillment"
+              >
+                Добавить к фулфилменту
+              </Button>
+              {addBusy ? <CircularProgress size={18} /> : null}
+            </Stack>
           </Stack>
         </Paper>
       ) : null}
@@ -610,8 +853,22 @@ export function SellerProductsStockScreen({
               ))}
             </Select>
           </FormControl>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="seller-catalog-fulfillment-filter-label">Фулфилмент</InputLabel>
+            <Select
+              labelId="seller-catalog-fulfillment-filter-label"
+              label="Фулфилмент"
+              value={filterFulfillment}
+              onChange={(e) => setFilterFulfillment(e.target.value as FulfillmentFilter)}
+              data-testid="seller-catalog-fulfillment-filter"
+            >
+              <MenuItem value="all">Все товары</MenuItem>
+              <MenuItem value="yes">На фулфилменте</MenuItem>
+              <MenuItem value="no">Не на фулфилменте</MenuItem>
+            </Select>
+          </FormControl>
           <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
-            Найдено: {filteredRows.length} из {rows.length}
+            {busy ? 'Загрузка…' : `Найдено: ${total} из ${scopeTotal}`}
           </Typography>
         </Stack>
       </Paper>
@@ -651,17 +908,23 @@ export function SellerProductsStockScreen({
           }}
         >
           <colgroup>
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '10.5%' }} />
-            <col style={{ width: '17.5%' }} />
-            <col style={{ width: '17%' }} />
-            <col style={{ width: '10.5%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '6%' }} />
+            {/* WMS-548 D5: ширины колонок по свежему макету (docs/mockups/psp2-20260927/
+                WMS-548-catalog-selection.html) — на 1440 старые пропорции резали название,
+                уводили «Резервы» за край. На 1280 «Свободный FBO» ещё переносился на две
+                строки и на макетных 11%: у соседней «В ячейках»/«На ФФ» есть noWrap,
+                у неё не было — добавлен; Остаток дополнительно увеличен до 12% за счёт
+                ШК (11%→10%, баркоду хватает и так) — запас на случай трёхзначного остатка. */}
             <col style={{ width: '4%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '19%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '10%' }} />
             <col style={{ width: '7.5%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '4.5%' }} />
+            <col style={{ width: '9%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -670,8 +933,8 @@ export function SellerProductsStockScreen({
                   size="small"
                   checked={allVisibleSelected}
                   indeterminate={someVisibleSelected}
-                  disabled={visibleProductIds.length === 0}
-                  onChange={(event) => toggleVisibleProducts(event.target.checked)}
+                  disabled={visibleKeys.length === 0}
+                  onChange={(event) => toggleVisibleRows(event.target.checked)}
                   slotProps={{ input: { 'aria-label': 'Выбрать товары на странице' } }}
                   data-testid="seller-products-select-all"
                 />
@@ -689,171 +952,182 @@ export function SellerProductsStockScreen({
             </TableRow>
           </TableHead>
           <TableBody>
-            {pagedRows.map((p) => (
-              <TableRow
-                hover
-                selected={selectedProductIds.has(p.id)}
-                data-testid="seller-product-row"
-                key={p.id}
-                sx={{ height: 68 }}
-              >
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    size="small"
-                    checked={selectedProductIds.has(p.id)}
-                    onChange={(event) => toggleSelectedProduct(p.id, event.target.checked)}
-                    slotProps={{ input: { 'aria-label': `Выбрать товар ${p.sku_code}` } }}
-                    data-testid={`seller-product-select-${p.id}`}
-                  />
-                </TableCell>
-                <TableCell>
-                  <ProductPhotoThumb src={p.wb_primary_image_url} />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        minWidth: 0,
-                        fontWeight: 600,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                      title={p.name}
-                    >
-                      {p.name}
-                    </Typography>
-                    {p.ozon_sku || p.ozon_offer_id ? (
-                      <MarketplaceChip marketplace="ozon" testId="seller-catalog-marketplace-ozon" />
-                    ) : null}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontSize: '0.7rem' }}
-                    title={p.wb_vendor_code ?? '—'}
-                    noWrap
-                  >
-                    {p.wb_vendor_code ?? '—'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontSize: '0.7rem', fontWeight: 600 }}
-                    title={p.sku_code}
-                    noWrap
-                  >
-                    {p.sku_code}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontSize: '0.7rem' }}
-                    title={p.wb_primary_barcode ?? p.wb_barcodes[0] ?? '—'}
-                    noWrap
-                  >
-                    {p.wb_primary_barcode ?? p.wb_barcodes[0] ?? '—'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" title={p.wb_size ?? '—'} noWrap>
-                    {p.wb_size ?? '—'}
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                    {addressStorageEnabled ? <Typography
-                      variant="caption"
-                      sx={{ fontSize: '0.65rem' }}
-                      data-testid={`seller-catalog-stock-in-storage-${p.id}`}
-                      title={`В ячейках ${p.stock_in_storage}`}
-                      noWrap
-                    >
-                      В ячейках {p.stock_in_storage}
-                    </Typography> : null}
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.65rem' }}
-                      data-testid={`seller-catalog-stock-on-hand-${p.id}`}
-                      title={`На ФФ ${p.stock_on_hand}`}
-                      noWrap
-                    >
-                      На ФФ {p.stock_on_hand}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.65rem' }}
-                      data-testid={`seller-catalog-stock-free-fbo-${p.id}`}
-                      title={`Свободный FBO ${p.stock_free_fbo}`}
-                    >
-                      Свободный FBO {p.stock_free_fbo}
-                    </Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell sx={{ minWidth: 0 }}>
-                  <Button
-                    size="small"
-                    variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
-                    color={p.has_packaging_instructions ? 'primary' : 'inherit'}
-                    onClick={() => openPackagingEdit(p)}
-                    data-testid={`seller-packaging-edit-${p.id}`}
-                    aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
-                    title={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
-                    sx={{
-                      minWidth: 56,
-                      px: 1,
-                      ...(p.has_packaging_instructions
-                        ? {}
-                        : { color: 'text.secondary', borderColor: 'divider' }),
-                    }}
-                  >
-                    ТЗ
-                  </Button>
-                </TableCell>
-                <TableCell sx={{ minWidth: 0 }}>
-                  {p.requires_honest_sign ? (
-                    <Chip
+            {items.map((row) => {
+              const onFulfillment = isProductItem(row)
+              const bal = onFulfillment ? stockByProductId.get(row.id) : undefined
+              const primaryBarcode = itemPrimaryBarcode(row)
+              const allBarcodes = itemAllBarcodes(row)
+              return (
+                <TableRow
+                  hover
+                  selected={selectedKeys.has(row.key)}
+                  data-testid="seller-product-row"
+                  key={row.key}
+                  sx={{ height: 68 }}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
                       size="small"
-                      label="ЧЗ"
-                      color="info"
-                      variant="outlined"
-                      data-testid={`seller-honest-sign-status-${p.id}`}
+                      checked={selectedKeys.has(row.key)}
+                      onChange={(event) => toggleSelectedRow(row, event.target.checked)}
+                      slotProps={{ input: { 'aria-label': `Выбрать товар ${row.name}` } }}
+                      data-testid={`seller-product-select-${row.key}`}
                     />
-                  ) : null}
-                </TableCell>
-                <TableCell sx={{ minWidth: 0 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => void openReserves(p.id)}
-                    data-testid={`seller-catalog-reserves-${p.id}`}
-                    sx={{ minWidth: 0, px: 1 }}
-                  >
-                    Резервы
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {catalog.length === 0 ? (
+                  </TableCell>
+                  <TableCell>
+                    <ProductPhotoThumb src={itemPhotoUrl(row)} />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          minWidth: 0,
+                          fontWeight: 600,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                        title={row.name}
+                      >
+                        {row.name}
+                      </Typography>
+                      {itemMarketplaces(row).map((marketplace) => (
+                        <MarketplaceChip
+                          key={marketplace}
+                          marketplace={marketplace}
+                          testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                        />
+                      ))}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.7rem' }}
+                      title={itemVendorCode(row) ?? '—'}
+                      noWrap
+                    >
+                      {itemVendorCode(row) ?? '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.7rem', fontWeight: 600 }}
+                      title={onFulfillment ? row.sku_code : '—'}
+                      noWrap
+                    >
+                      {onFulfillment ? row.sku_code : '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.7rem' }}
+                      title={allBarcodes.length > 0 ? allBarcodes.join(', ') : undefined}
+                      noWrap
+                    >
+                      {primaryBarcode ?? '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" title={itemSizeLabel(row)} noWrap>
+                      {itemSizeLabel(row)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    {onFulfillment ? (
+                      <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
+                        {addressStorageEnabled ? (
+                          <Typography
+                            variant="caption"
+                            sx={{ fontSize: '0.65rem' }}
+                            data-testid={`seller-catalog-stock-in-storage-${row.id}`}
+                            title={`В ячейках ${bal?.quantity_in_storage ?? 0}`}
+                            noWrap
+                          >
+                            В ячейках {bal?.quantity_in_storage ?? 0}
+                          </Typography>
+                        ) : null}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.65rem' }}
+                          data-testid={`seller-catalog-stock-on-hand-${row.id}`}
+                          title={`На ФФ ${bal?.quantity ?? 0}`}
+                          noWrap
+                        >
+                          На ФФ {bal?.quantity ?? 0}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.65rem' }}
+                          data-testid={`seller-catalog-stock-free-fbo-${row.id}`}
+                          title={`Свободный FBO ${bal?.quantity_free_fbo ?? bal?.quantity ?? 0}`}
+                          noWrap
+                        >
+                          Свободный FBO {bal?.quantity_free_fbo ?? bal?.quantity ?? 0}
+                        </Typography>
+                      </Stack>
+                    ) : null}
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
+                    {onFulfillment ? (
+                      <Button
+                        size="small"
+                        variant={row.has_packaging_instructions ? 'contained' : 'outlined'}
+                        color={row.has_packaging_instructions ? 'primary' : 'inherit'}
+                        onClick={() => openPackagingEdit(row)}
+                        data-testid={`seller-packaging-edit-${row.id}`}
+                        aria-label={row.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
+                        title={row.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
+                        sx={{
+                          minWidth: 56,
+                          px: 1,
+                          ...(row.has_packaging_instructions
+                            ? {}
+                            : { color: 'text.secondary', borderColor: 'divider' }),
+                        }}
+                      >
+                        ТЗ
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
+                    {onFulfillment && row.requires_honest_sign ? (
+                      <Chip
+                        size="small"
+                        label="ЧЗ"
+                        color="info"
+                        variant="outlined"
+                        data-testid={`seller-honest-sign-status-${row.id}`}
+                      />
+                    ) : null}
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
+                    {onFulfillment ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void openReserves(row.id)}
+                        data-testid={`seller-catalog-reserves-${row.id}`}
+                        sx={{ minWidth: 0, px: 1 }}
+                      >
+                        Резервы
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+            {items.length === 0 && !busy ? (
               <TableRow>
                 <TableCell colSpan={11}>
                   <Typography variant="body2" color="text.secondary">
-                    Пока нет товаров.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : filteredRows.length === 0 && !busy ? (
-              <TableRow>
-                <TableCell colSpan={11}>
-                  <Typography variant="body2" color="text.secondary">
-                    Ничего не найдено.
+                    {scopeTotal === 0 ? 'Пока нет товаров.' : 'Ничего не найдено.'}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -862,7 +1136,7 @@ export function SellerProductsStockScreen({
         </Table>
         <TablePagination
           component="div"
-          count={filteredRows.length}
+          count={total}
           page={page}
           onPageChange={(_, next) => setPage(next)}
           rowsPerPage={rowsPerPage}
@@ -968,13 +1242,15 @@ export function SellerProductsStockScreen({
                   <Typography variant="caption" color="text.secondary">
                     Резервы
                   </Typography>
-                  <Typography variant="h6">{reservesProduct.stock_reserved_directions} шт</Typography>
+                  <Typography variant="h6">{reservesStock?.quantity_reserved_directions ?? 0} шт</Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     Свободный FBO
                   </Typography>
-                  <Typography variant="h6">{reservesProduct.stock_free_fbo} шт</Typography>
+                  <Typography variant="h6">
+                    {reservesStock?.quantity_free_fbo ?? reservesStock?.quantity ?? 0} шт
+                  </Typography>
                 </Box>
               </Stack>
               <Divider />
