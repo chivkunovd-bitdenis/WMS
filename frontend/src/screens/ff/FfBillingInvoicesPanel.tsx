@@ -42,6 +42,23 @@ export type InvoiceHistoryRow = {
   total_amount_kopecks: number
 }
 
+/**
+ * Настоящая идентичность строки истории счетов — пара (origin, id), а не
+ * голый id (WMS-549, ревью Astra №3, F7). Legacy- и V2-счета лежат в разных
+ * таблицах без общего ограничения уникальности UUID между ними, поэтому один
+ * и тот же id может встретиться у счёта из разных эпох — это разные счета.
+ * Раньше дочитка страниц и React-ключ строки опирались только на id: при
+ * совпадении id разных origin вторая запись считалась уже виденной и
+ * терялась, а дочитка могла решить, что показывать больше нечего.
+ *
+ * Владелец прямо запретил менять «Расчёты» ФФ ни на миллиметр (R11), поэтому
+ * исправление действует только в кабинете селлера — у ФФ ключ, склейка
+ * страниц и testid остаются по голому id, как в etalon (аудит после F7).
+ */
+export function invoiceRowKey(row: { origin: 'legacy' | 'v2'; id: string }, sellerScope: boolean): string {
+  return sellerScope ? `${row.origin}:${row.id}` : row.id
+}
+
 /** Открытый счёт, приведённый к одному виду независимо от эпохи. */
 export type OpenedInvoice = {
   id: string
@@ -71,6 +88,12 @@ const serviceLabels: Record<string, string> = {
   inbound: 'Приёмка',
   marketplace_outbound: 'Отгрузка',
   storage_liter_day: 'Хранение',
+}
+
+/** Пустая история счетов: у селлера нет вкладки «Селлеры» с фильтром, поэтому и совета быть не может. */
+export function invoiceHistoryEmptyState(sellerScope: boolean): { title: string; hint?: string } {
+  const title = 'Счета ещё не выставлены'
+  return sellerScope ? { title } : { title, hint: 'Выставьте счёт на вкладке «Селлеры»' }
 }
 
 export function formatMoscowDate(value: string): string {
@@ -207,6 +230,7 @@ export function FfBillingInvoicesPanel({
   sellers = [],
   refreshToken = 0,
   fixedSellerId,
+  sellerScope = false,
 }: {
   token: string
   sellers?: Seller[]
@@ -219,6 +243,8 @@ export function FfBillingInvoicesPanel({
    * открытие счёта) — как в «Расчётах».
    */
   fixedSellerId?: string
+  /** Кабинет селлера: только его счета, без фильтра «Селлер» и без отмены счёта. */
+  sellerScope?: boolean
 }) {
   const [sellerId, setSellerId] = useState(fixedSellerId ?? 'all')
   const [status, setStatus] = useState('all')
@@ -274,10 +300,12 @@ export function FfBillingInvoicesPanel({
     const controller = new AbortController()
     setLoading(true)
     setError(false)
-    const params = new URLSearchParams({ seller_id: sellerId, status })
+    const params = new URLSearchParams({ status })
+    if (!sellerScope) params.set('seller_id', sellerId)
     if (search) params.set('number', search)
     if (cursor) params.set('cursor', cursor)
-    fetch(`/api/billing/invoices-v2?${params}`, {
+    const listUrl = sellerScope ? `/api/seller-billing/invoices?${params}` : `/api/billing/invoices-v2?${params}`
+    fetch(listUrl, {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
     })
@@ -286,11 +314,13 @@ export function FfBillingInvoicesPanel({
         return response.json() as Promise<{ invoices: InvoiceHistoryRow[]; next_cursor: string | null }>
       })
       .then((data) => {
-        // Дозагрузка склеивается по id: повтор страницы не должен раздвоить счёт.
+        // Дозагрузка склеивается по (origin, id): повтор страницы не должен
+        // раздвоить счёт, а совпадение id между legacy и V2 не должно стереть
+        // одну из двух разных записей (WMS-549 F7).
         setRows((current) => {
           if (!cursor) return data.invoices
-          const seen = new Set(current.map((row) => row.id))
-          return [...current, ...data.invoices.filter((row) => !seen.has(row.id))]
+          const seen = new Set(current.map((row) => invoiceRowKey(row, sellerScope)))
+          return [...current, ...data.invoices.filter((row) => !seen.has(invoiceRowKey(row, sellerScope)))]
         })
         setNextCursor(data.next_cursor)
       })
@@ -299,7 +329,7 @@ export function FfBillingInvoicesPanel({
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [cursor, refreshToken, reload, search, sellerId, status, token])
+  }, [cursor, refreshToken, reload, search, sellerId, sellerScope, status, token])
 
   const openInvoice = async (row: InvoiceHistoryRow) => {
     // Запоминаем контекст закреплённого селлера на момент клика: если панель
@@ -309,8 +339,9 @@ export function FfBillingInvoicesPanel({
     const context = fixedSellerContext.current
     setOpenError(false)
     setCancelError(null)
-    const url =
-      row.origin === 'legacy' ? `/api/billing/invoices/${row.id}` : `/api/billing/invoices-v2/${row.id}`
+    const url = sellerScope
+      ? (row.origin === 'legacy' ? `/api/seller-billing/invoices/legacy/${row.id}` : `/api/seller-billing/invoices/v2/${row.id}`)
+      : (row.origin === 'legacy' ? `/api/billing/invoices/${row.id}` : `/api/billing/invoices-v2/${row.id}`)
     try {
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) throw new Error('open-invoice')
@@ -368,7 +399,7 @@ export function FfBillingInvoicesPanel({
       width: 170,
       render: (row: InvoiceHistoryRow) => <TextCell value={row.number} />,
     },
-    ...(fixedSellerId
+    ...(fixedSellerId || sellerScope
       ? []
       : [
           {
@@ -417,7 +448,7 @@ export function FfBillingInvoicesPanel({
       render: (row: InvoiceHistoryRow) => (
         <IconAction
           title="Открыть счёт"
-          testId={`billing-invoice-open-${row.id}`}
+          testId={`billing-invoice-open-${invoiceRowKey(row, sellerScope)}`}
           onClick={() => void openInvoice(row)}
         >
           <ExpandMore fontSize="small" />
@@ -437,7 +468,7 @@ export function FfBillingInvoicesPanel({
         searchPlaceholder="Номер счёта"
         testId="billing-invoices-filter-bar"
       >
-        {fixedSellerId ? null : (
+        {fixedSellerId || sellerScope ? null : (
           <SelectInput
             label="Селлер"
             value={sellerId}
@@ -483,12 +514,9 @@ export function FfBillingInvoicesPanel({
         columns={columns}
         rows={rows}
         loading={loading}
-        getRowKey={(row) => row.id}
+        getRowKey={(row) => invoiceRowKey(row, sellerScope)}
         testId="billing-invoices-table"
-        empty={{
-          title: 'Счета ещё не выставлены',
-          hint: fixedSellerId ? undefined : 'Выставьте счёт на вкладке «Селлеры»',
-        }}
+        empty={invoiceHistoryEmptyState(sellerScope || Boolean(fixedSellerId))}
       />
       {nextCursor ? (
         <SecondaryAction
@@ -518,7 +546,7 @@ export function FfBillingInvoicesPanel({
         actions={
           <ActionGroup>
             <PrintAction what="счёт" placement="panel" onClick={printInvoice} testId="billing-invoice-print" />
-            {opened?.status === 'issued' ? (
+            {!sellerScope && opened?.status === 'issued' ? (
               <DangerAction
                 onClick={() => {
                   setCancelError(null)
