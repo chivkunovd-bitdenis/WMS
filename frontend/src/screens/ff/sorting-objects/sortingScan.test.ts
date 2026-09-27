@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSortingScanner, emptyScanContext, type ScanContext } from './sortingScan'
 import { pendingScan, rememberScan, sendScan } from './pendingScan'
+import type { WarehouseObject } from './objectsStub'
 
 const cells = [{ id: 'a', code: 'А-1', barcode: 'LOC-123' }, { id: 'b', code: 'Б-2', barcode: 'LOC-456' }]
 const objects = [{ id: 'box', code: 'КР-1', barcode: 'BOX-123', kind: 'box' as const, holder: null }]
@@ -16,6 +17,32 @@ function setup(place = vi.fn(async () => {})) {
 }
 
 describe('WMS-550 sorting scan workflow', () => {
+  it('reopens a placed box without moving it again, including a box on a pallet', async () => {
+    let currentObjects: WarehouseObject[] = objects.map((one) => ({ ...one }))
+    let context = emptyScanContext
+    const place = vi.fn(async (object: WarehouseObject, cellId: string) => {
+      currentObjects = currentObjects.map((one) => one.id === object.id ? { ...one, holder: `cell:${cellId}` } : one)
+    })
+    const error = vi.fn()
+    const scanner = createSortingScanner(context, {
+      data: () => ({ cells, objects: currentObjects }), place, product: vi.fn(async () => {}),
+      changed: (next) => { context = next }, notice: vi.fn(), error,
+    })
+    await scanner.scan('LOC-123')
+    await Promise.all([scanner.scan('BOX-123'), scanner.scan('BOX-123'), scanner.scan('BOX-123')])
+    expect(place).toHaveBeenCalledTimes(1)
+    expect(context).toEqual({ cellId: 'a', objectId: 'box' })
+    await scanner.scan('BOX-123')
+    currentObjects = [
+      { ...currentObjects[0], holder: 'obj:pallet' },
+      { id: 'pallet', code: 'П-1', barcode: 'PAL-123', kind: 'pallet', holder: 'cell:a' },
+    ]
+    await scanner.scan('BOX-123')
+    expect(place).toHaveBeenCalledTimes(1)
+    expect(context).toEqual({ cellId: 'a', objectId: 'box' })
+    expect(error).not.toHaveBeenCalled()
+  })
+
   it('normalizes scanner layout/AIM and closes only the scanned context', async () => {
     const t = setup()
     await t.scanner.scan(']C0ДЩС-123')
