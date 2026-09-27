@@ -25,7 +25,7 @@ import app.services.reporting_service as reporting_service
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.inbound_intake import InboundIntakeRequest
+from app.models.inbound_intake import InboundIntakeBox, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from tests.test_reports_wms531 import (
     MSK_NOON,
@@ -788,3 +788,226 @@ async def test_f11_multi_product_box_move_does_not_flag_incomplete_transfer(
     overview = await async_client.get("/reports/overview", headers=headers, params=period)
     assert overview.status_code == 200, overview.text
     assert overview.json()["has_incomplete_transfer"] is False
+
+
+@pytest.mark.asyncio
+async def test_f8_round3_reversal_confirmation_not_leaked_to_ozon_sibling(
+    async_client: AsyncClient,
+) -> None:
+    """F8 (раунд 3): один журнал знает reversal_movement_id=R и одновременно
+    несёт в ozon_positions_json ДРУГУЮ, несвязанную положительную позицию M2.
+    Раньше `_apply_ledger_rows` ставила `is_confirmed_reversal=True` ВСЕМ
+    линкованным id этой ledger-строки, включая M2 — хотя подтверждена только
+    сама R (через reversal_movement_id). M2 обязана остаться просто «FBS»
+    независимо от того, идёт ли запрос по всей группе видов или по одному
+    товару M2."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f8r3")
+    seller_id = await _seller(async_client, headers, "F8r3 seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="f8r3wh")
+    async with SessionLocal() as session:
+        p1 = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name="P1", sku="F8R3-P1"
+        )
+        p2 = await _product(
+            session, tenant_id=tenant_id, seller_id=seller_id, name="P2", sku="F8R3-P2"
+        )
+        order = FbsOrder(
+            tenant_id=tenant_id, seller_id=seller_id, marketplace="ozon", wb_order_id=-44,
+            external_order_id="F8R3-PROBE", product_id=p1, warehouse_id=warehouse_id,
+            created_at_wb=datetime(2026, 9, 1, tzinfo=UTC),
+            deadline_at=datetime(2026, 9, 2, tzinfo=UTC),
+            mapping_status="mapped", reserve_status="no_stock",
+        )
+        session.add(order)
+        await session.flush()
+        m1 = _movement(
+            tenant_id=tenant_id, product_id=p1, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=-2,
+            movement_type="fbs_shipment", created_at=datetime(2026, 9, 1, MSK_NOON, tzinfo=UTC),
+        )
+        session.add(m1)
+        await session.flush()
+        reversal = _movement(
+            tenant_id=tenant_id, product_id=p1, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=2,
+            movement_type="fbs_shipment", created_at=datetime(2026, 9, 10, MSK_NOON, tzinfo=UTC),
+        )
+        m2 = _movement(
+            tenant_id=tenant_id, product_id=p2, seller_id=seller_id,
+            warehouse_id=warehouse_id, location_id=location_id, quantity_delta=1,
+            movement_type="fbs_shipment", created_at=datetime(2026, 9, 10, MSK_NOON, tzinfo=UTC),
+        )
+        session.add_all([reversal, m2])
+        await session.flush()
+        session.add(FbsShipmentReversalLedger(
+            tenant_id=tenant_id, fbs_order_id=order.id, product_id=p1,
+            storage_location_id=location_id, quantity=2,
+            shipment_movement_id=m1.id, reversal_movement_id=reversal.id,
+            ozon_positions_json=[
+                {"product_id": str(p1), "movement_id": str(m1.id)},
+                {"product_id": str(p2), "movement_id": str(m2.id)},
+            ],
+        ))
+        await session.commit()
+
+    # Общий запрос по виду «FBS» (обе строки на одной странице).
+    resp = await async_client.get(
+        "/reports/inventory/movements", headers=headers,
+        params={**PERIOD, "operation": "FBS"},
+    )
+    assert resp.status_code == 200, resp.text
+    by_id = {row["id"]: row for row in resp.json()["rows"]}
+    assert by_id[str(reversal.id)]["operation"] == "FBS, сторно"
+    assert by_id[str(m2.id)]["operation"] == "FBS"
+
+    # Тот же M2, но запрошен отдельно одним товаром — подпись обязана быть
+    # той же самой, а не зависеть от состава страницы/порции.
+    scoped = await async_client.get(
+        "/reports/inventory/movements", headers=headers,
+        params={**PERIOD, "product_id": str(p2)},
+    )
+    assert scoped.status_code == 200, scoped.text
+    scoped_rows = scoped.json()["rows"]
+    assert len(scoped_rows) == 1
+    assert scoped_rows[0]["operation"] == "FBS"
+
+    # Excel (обе группировки) обязан нести тот же нейтральный «FBS» — R13.
+    for group_by in ("product", "operation"):
+        xlsx = await async_client.get(
+            "/reports/inventory/export.xlsx", headers=headers,
+            params={**PERIOD, "group_by": group_by},
+        )
+        assert xlsx.status_code == 200, xlsx.text
+        workbook = load_workbook(io.BytesIO(xlsx.content))
+        sheet = workbook.active
+        assert sheet is not None
+        operations_by_row = [
+            (row[5], row[6]) for row in sheet.iter_rows(min_row=2, values_only=True)
+            if row[4] is not None
+        ]
+        # Индекс 4 — «Дата» (фильтр «это строка движения»), 5 — «Движение»,
+        # 6 — «Документ» (с колонкой «Селлер» впереди).
+        assert ("FBS, сторно", "Заказ Ozon №F8R3-PROBE") in operations_by_row
+        assert ("FBS", "Заказ Ozon №F8R3-PROBE") in operations_by_row
+        assert not any(op == "FBS, сторно" and doc is None for op, doc in operations_by_row)
+
+
+@pytest.mark.asyncio
+async def test_f12_pallet_multi_box_same_product_not_flagged_incomplete(
+    async_client: AsyncClient,
+) -> None:
+    """F12: перенос ПАЛЛЕТЫ с двумя коробами ОДНОГО товара пишет четыре
+    `warehouse_map_move` одним transfer_group_id — две независимые полные
+    пары (-7/+7 и -3/+3) одного товара, а не «не пара из двух строк» на весь
+    товар. Прежняя проверка `len(product_members) == 2` (уже поправленная
+    F11 до уровня «на товар», а не «на группу») всё ещё отвергала ЧЕТЫРЕ
+    строки одного товара внутри одной группы."""
+    headers, _user, tenant = await _register(async_client, "f12")
+    (
+        warehouse, cell, _sorting, product, _sorting_product, _loose, pallet, _box,
+    ) = await _seed_map(tenant.id)
+
+    async with SessionLocal() as session:
+        request = await session.scalar(
+            select(InboundIntakeRequest).where(InboundIntakeRequest.warehouse_id == warehouse.id)
+        )
+        assert request is not None
+        request.status = "done"
+        second_box = InboundIntakeBox(
+            tenant_id=tenant.id, request_id=request.id, box_number=42,
+            internal_barcode=f"BOX-F12-{uuid.uuid4().hex[:10]}", pallet_id=pallet.id,
+        )
+        session.add(second_box)
+        await session.flush()
+        session.add(InventoryBalance(
+            tenant_id=tenant.id, storage_location_id=cell.id, product_id=product.id,
+            container_kind="box", container_id=second_box.id, quantity=3,
+            quantity_unpacked=3, quantity_packed=0,
+        ))
+        await session.commit()
+
+    move = await async_client.post(
+        f"/warehouses/{warehouse.id}/map/move", headers=headers,
+        json={"kind": "pallet", "id": str(pallet.id), "to_kind": "sorting", "to_id": None},
+    )
+    assert move.status_code == 200, move.text
+    assert move.json()["moved_qty"] == 10  # 7 (box 41) + 3 (box 42), тот же товар
+
+    now = datetime.now(UTC)
+    date_from = now - timedelta(days=1)
+    date_to = now + timedelta(days=1)
+    period = {"date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
+    report = await async_client.get(
+        "/reports/inventory", headers=headers, params={**period, "group_by": "product"}
+    )
+    assert report.status_code == 200, report.text
+    rows = {row["sku_code"]: row for row in report.json()["rows"]}
+    assert rows[product.sku_code]["integrity_error"] is False
+
+    overview = await async_client.get("/reports/overview", headers=headers, params=period)
+    assert overview.status_code == 200, overview.text
+    assert overview.json()["has_incomplete_transfer"] is False
+
+
+@pytest.mark.asyncio
+async def test_f1_round3_operation_grouping_streams_without_full_buffer(
+    async_client: AsyncClient,
+) -> None:
+    """F1 (раунд 3): «По операциям» набиралась в тот же общий словарь
+    `movements_by_product`, что и «По товарам» — обе группировки держали
+    весь обогащённый журнал селлера в памяти целиком. Теперь сумма группы
+    считается отдельным SQL-агрегатом (`_sum_operation_groups`), а строки
+    читаются порциями по каждой группе (`_iter_group_movements_enriched`).
+    Этот тест не измеряет память напрямую (это делает независимый прогон
+    ревьюера), а проверяет, что при нескольких видах движения и нескольких
+    товарах результат остаётся арифметически верным и полным — сумма строк
+    движений равна «Итого», как и при прежней буферизации (R13)."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f1r3op")
+    seller_id = await _seller(async_client, headers, "F1r3 seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="f1r3wh")
+
+    async with SessionLocal() as session:
+        products = [
+            await _product(
+                session, tenant_id=tenant_id, seller_id=seller_id,
+                name=f"F1R3-{i}", sku=f"F1R3-{i}",
+            )
+            for i in range(5)
+        ]
+        batch = []
+        for i, product_id in enumerate(products):
+            for j in range(40):
+                batch.append(_movement(
+                    tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
+                    warehouse_id=warehouse_id, location_id=location_id,
+                    quantity_delta=1 if j % 2 == 0 else -1,
+                    movement_type="inbound_intake" if j % 2 == 0 else "marketplace_unload",
+                    created_at=datetime(2026, 9, 1, tzinfo=UTC) + timedelta(minutes=i * 100 + j),
+                ))
+            session.add(InventoryBalance(
+                tenant_id=tenant_id, product_id=product_id, storage_location_id=location_id,
+                quantity=0,
+            ))
+        session.add_all(batch)
+        await session.commit()
+
+    overview = await async_client.get("/reports/overview", headers=headers, params=PERIOD)
+    assert overview.status_code == 200, overview.text
+    ov = overview.json()
+
+    response = await async_client.get(
+        "/reports/inventory/export.xlsx", headers=headers,
+        params={**PERIOD, "group_by": "operation"},
+    )
+    assert response.status_code == 200, response.text
+    workbook = load_workbook(io.BytesIO(response.content))
+    sheet = workbook.active
+    assert sheet is not None
+    movement_rows = [row for row in sheet.iter_rows(min_row=2) if row[4].value is not None]
+    assert len(movement_rows) == 5 * 40
+
+    total_row = [cell.value for cell in sheet[sheet.max_row]]
+    assert total_row[0] == "Итого"
+    assert total_row[8] == ov["in_qty"]
+    assert total_row[9] == ov["out_qty"]
+    assert total_row[10] == ov["closing_balance"]

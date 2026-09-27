@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from collections.abc import AsyncIterator, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -394,13 +395,28 @@ async def incomplete_transfer_product_ids(
             pair_ok = types == _STOCK_TRANSFER_PAIR_TYPES or (
                 len(types) == 1 and next(iter(types)) in _SAME_TYPE_PAIR_TYPES
             )
+            # WMS-531 ревью Astra, раунд 3, F12: перенос ОДНОГО товара сразу в
+            # НЕСКОЛЬКИХ местах/коробах одной группы (штатный перенос паллеты,
+            # где в разных коробах лежит один и тот же товар —
+            # warehouse_map_service.py переносит каждый остаток отдельной
+            # строкой одним общим transfer_group_id) пишет НЕСКОЛЬКО
+            # независимых пар «-X/+X» одного товара. Прежняя проверка
+            # требовала РОВНО две строки на товар и ошибочно отвергала такие
+            # полные многопарные переносы. Полнота — это разбиение всех
+            # величин товара на пары противоположного знака одинакового
+            # модуля БЕЗ остатка; недостача одной пары не гасится избытком
+            # другой, потому что сравниваются подсчёты одинаковых модулей, а
+            # не голая сумма.
+            quantities = [quantity for quantity, _movement_type in product_members]
+            positive = Counter(q for q in quantities if q > 0)
+            negative = Counter(-q for q in quantities if q < 0)
+            has_zero = any(q == 0 for q in quantities)
             is_complete = (
-                len(product_members) == 2
-                and pair_ok
-                and product_members[0][0] != 0
-                and product_members[1][0] != 0
-                and product_members[0][0] * product_members[1][0] < 0
-                and abs(product_members[0][0]) == abs(product_members[1][0])
+                pair_ok
+                and len(product_members) >= 2
+                and len(product_members) % 2 == 0
+                and not has_zero
+                and positive == negative
             )
             if not is_complete:
                 incomplete.add(product_id)
@@ -1124,11 +1140,20 @@ async def _resolve_fbs_documents(
                     linked_ids.add(uuid.UUID(str(position.get("movement_id"))))
                 except (ValueError, AttributeError, TypeError):
                     continue
+            number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
             for linked_id in linked_ids & candidate_ids:
                 if linked_id in result:
                     continue
-                number = _fbs_order_number(marketplace, wb_order_id, external_order_id)
-                result[linked_id] = (number, supply_id, is_confirmed_reversal)
+                # WMS-531 ревью Astra, раунд 3, F8: подтверждение сторно
+                # относится ТОЛЬКО к самому movement_id колонки запроса
+                # (shipment_movement_id у исходного списания,
+                # reversal_movement_id у сторно) — не к его соседям по
+                # ozon_positions_json того же журнала. Сосед связан тем же
+                # заказом, но сам по себе отменой не доказан: раньше он
+                # наследовал is_confirmed_reversal=True целиком от ledger-строки,
+                # даже когда сам был обычной исходной позицией списания.
+                confirmed = is_confirmed_reversal and linked_id == movement_id
+                result[linked_id] = (number, supply_id, confirmed)
 
     if expanded_fbs_ids:
         by_shipment_id = await session.execute(
@@ -1764,16 +1789,113 @@ async def build_inventory_workbook(
             last = page[-1]
             cursor = (last.created_at, last.id)
 
+    async def _iter_group_movements_enriched(
+        seller_product_ids: list[uuid.UUID], group_label: str,
+    ) -> AsyncIterator[dict[str, object]]:
+        """Как `_iter_seller_movements_enriched`, но сразу для ОДНОЙ группы
+        «По операциям» по всем товарам селлера — курсор бежит по
+        `(created_at, id)` внутри группы, отдельно от других групп.
+
+        WMS-531 ревью Astra, раунд 3, F1: группировка «По операциям» держала
+        в памяти весь обогащённый журнал селлера ровно так же, как раньше
+        держала группировка «По товарам» — обе собирались в один общий
+        `movements_by_product`, и только потом раскладывались по строкам.
+        Групповая метка вычисляется в SQL через `operation_group_expr()` —
+        тот же CASE, что и у JSON-эндпоинта `_build_operation_rows`, поэтому
+        подмножество строк на группу совпадает с текущим `row_operation_label`
+        без построчного сравнения текста уже обогащённой строки.
+        """
+        operation = operation_group_expr()
+        cursor: tuple[datetime, uuid.UUID] | None = None
+        while True:
+            filters = [
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.created_at >= date_from,
+                InventoryMovement.created_at < date_to,
+                stock_movement_filter(),
+                InventoryMovement.product_id.in_(seller_product_ids),
+                operation == group_label,
+            ]
+            if cursor is not None:
+                filters.append(
+                    tuple_(InventoryMovement.created_at, InventoryMovement.id) > cursor
+                )
+            page = list(
+                (
+                    await session.execute(
+                        select(InventoryMovement)
+                        .outerjoin(
+                            InboundIntakeLine,
+                            InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id,
+                        )
+                        .outerjoin(
+                            InboundIntakeRequest,
+                            InboundIntakeRequest.id == InboundIntakeLine.request_id,
+                        )
+                        .where(*filters)
+                        .order_by(InventoryMovement.created_at.asc(), InventoryMovement.id.asc())
+                        .limit(_MOVEMENT_FETCH_CHUNK_SIZE)
+                    )
+                ).scalars().all()
+            )
+            if not page:
+                return
+            enriched_chunk = await _enrich_movement_rows(
+                session, tenant_id, page, date_from=date_from, date_to=date_to,
+                ozon_position_index=ozon_position_index,
+            )
+            for row in enriched_chunk:
+                yield row
+            if len(page) < _MOVEMENT_FETCH_CHUNK_SIZE:
+                return
+            last = page[-1]
+            cursor = (last.created_at, last.id)
+
+    async def _sum_operation_groups(
+        seller_product_ids: list[uuid.UUID],
+    ) -> dict[str, tuple[int, int]]:
+        """Группа «По операциям» -> (приход, расход) селлера — чистый SQL-агрегат
+        без единого движения в Python (F1): те же группы, что видит
+        `_iter_group_movements_enriched`, посчитанные `SUM`, а не накоплением
+        сырых строк. Заголовок группы Excel обязан нести сумму ДО того, как
+        начнут писаться её строки движения — иначе порядок «сначала группа,
+        потом её строки» в потоковой книге уже не поправить (см. докстринг
+        `build_inventory_workbook`)."""
+        if not seller_product_ids:
+            return {}
+        in_qty = func.coalesce(func.sum(case(
+            (InventoryMovement.quantity_delta > 0, InventoryMovement.quantity_delta), else_=0,
+        )), 0)
+        out_qty = func.coalesce(func.sum(case(
+            (InventoryMovement.quantity_delta < 0, -InventoryMovement.quantity_delta), else_=0,
+        )), 0)
+        operation = operation_group_expr()
+        rows = await session.execute(
+            select(operation.label("operation"), in_qty, out_qty)
+            .select_from(InventoryMovement)
+            .outerjoin(
+                InboundIntakeLine,
+                InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id,
+            )
+            .outerjoin(
+                InboundIntakeRequest,
+                InboundIntakeRequest.id == InboundIntakeLine.request_id,
+            )
+            .where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id.in_(seller_product_ids),
+                InventoryMovement.created_at >= date_from,
+                InventoryMovement.created_at < date_to,
+                stock_movement_filter(),
+            )
+            .group_by(operation)
+        )
+        return {label: (int(incoming), int(outgoing)) for label, incoming, outgoing in rows}
+
     total_opening = total_in = total_out = total_closing = 0
     for _seller_key, bucket in sorted(sellers.items(), key=lambda kv: str(kv[1]["seller_name"])):
         products: list[tuple[uuid.UUID, _ProductInfo, ProductPeriodFigures]] = bucket["products"]  # type: ignore[assignment]
         seller_product_ids = [pid for pid, _info, _fig in products]
-        movements_by_product: dict[str, list[dict[str, object]]] = {}
-        async for row in _iter_seller_movements_enriched(seller_product_ids):
-            row_product_id = row["product_id"]
-            if row_product_id is None:
-                continue
-            movements_by_product.setdefault(str(row_product_id), []).append(row)
 
         seller_opening = sum(fig.opening_balance for _p, _i, fig in products)
         seller_in = sum(fig.in_qty for _p, _i, fig in products)
@@ -1801,6 +1923,13 @@ async def build_inventory_workbook(
             _append(seller_row, outline_level=0)
 
         if group_by == "product":
+            # WMS-531 ревью Astra, раунд 3, F1: движения читаются и пишутся ПО
+            # ОДНОМУ ТОВАРУ за раз — не общим журналом селлера, собранным в
+            # словарь заранее. В моменте в памяти держится не больше одной
+            # порции `_MOVEMENT_FETCH_CHUNK_SIZE` движений ОДНОГО товара, а не
+            # весь обогащённый период селлера сразу. Суммы строки товара и так
+            # берутся из уже посчитанных `figures` — само движение нужно
+            # только для строк раскрытия, держать его дольше одной порции незачем.
             for pid, info, fig in sorted(products, key=_product_row_sort_key):
                 product_row: list[object] = [None] * len(headers)
                 if include_seller:
@@ -1813,7 +1942,7 @@ async def build_inventory_workbook(
                 product_row[col_out] = fig.out_qty
                 product_row[col_closing] = fig.closing_balance
                 _append(product_row, outline_level=top_level)
-                for movement in movements_by_product.get(str(pid), []):
+                async for movement in _iter_seller_movements_enriched([pid]):
                     movement_row: list[object] = [None] * len(headers)
                     if include_seller:
                         movement_row[0] = bucket["seller_name"]
@@ -1833,15 +1962,17 @@ async def build_inventory_workbook(
                         movement_row[col_out] = -quantity
                     _append(movement_row, outline_level=leaf_level)
         else:  # group_by == "operation"
-            by_group: dict[str, list[tuple[_ProductInfo, dict[str, object]]]] = {}
-            for pid, info, _fig in products:
-                for movement in movements_by_product.get(str(pid), []):
-                    group_label = _excel_operation_group(str(movement["operation"]))
-                    by_group.setdefault(group_label, []).append((info, movement))
-            for group_label, members in sorted(by_group.items()):
-                member_quantities = [_movement_quantity(m) for _i, m in members]
-                group_in = sum(q for q in member_quantities if q > 0)
-                group_out = sum(-q for q in member_quantities if q < 0)
+            # То же самое для «По операциям» (F1, раунд 3): сумма группы —
+            # отдельный SQL-агрегат `_sum_operation_groups` (без единого
+            # обогащённого движения в памяти), а строки движения читаются
+            # порциями ПО КОНКРЕТНОЙ ГРУППЕ через `_iter_group_movements_enriched`,
+            # а не общим журналом селлера, разложенным по группам заранее.
+            product_info_by_id: dict[uuid.UUID, _ProductInfo] = {
+                pid: info for pid, info, _fig in products
+            }
+            group_sums = await _sum_operation_groups(seller_product_ids)
+            for group_label in sorted(group_sums):
+                group_in, group_out = group_sums[group_label]
                 group_row: list[object] = [None] * len(headers)
                 if include_seller:
                     group_row[0] = bucket["seller_name"]
@@ -1849,11 +1980,19 @@ async def build_inventory_workbook(
                 group_row[col_in] = group_in
                 group_row[col_out] = group_out
                 _append(group_row, outline_level=top_level)
-                for info, movement in members:
+                async for movement in _iter_group_movements_enriched(
+                    seller_product_ids, group_label
+                ):
                     movement_row = [None] * len(headers)
                     if include_seller:
                         movement_row[0] = bucket["seller_name"]
-                    movement_row[col_name] = info.name
+                    movement_product_id = movement["product_id"]
+                    info = (
+                        product_info_by_id.get(uuid.UUID(str(movement_product_id)))
+                        if movement_product_id else None
+                    )
+                    if info is not None:
+                        movement_row[col_name] = info.name
                     movement_row[col_date] = _moscow_naive(
                         datetime.fromisoformat(str(movement["at"]))
                     )
@@ -1918,27 +2057,6 @@ def _excel_document_text(operation: str, document: dict[str, object] | None) -> 
     if template is None:
         return number
     return template.format(number=number)
-
-
-def _excel_operation_group(row_label: str) -> str:
-    """Группа «По операциям» для Excel по уже готовой подписи строки движения.
-
-    Группа не всегда совпадает с подписью (акт расхождений, сторно FBS,
-    обе стороны передачи между селлерами) — см. таблицу WMS-531 R2. Остальные
-    подписи уже равны своей группе (Приёмка, Возврат, Отгрузка на МП,
-    Отгрузка, Инвентаризация, Загрузка ТЗ, Корректировка).
-    """
-    if row_label == "Корректировка по акту расхождений":
-        return "Корректировка"
-    if row_label == "FBS, сторно":
-        return "FBS"
-    if row_label == "Приёмка при передаче между селлерами":
-        return "Передача между селлерами"
-    if row_label.startswith("Передано селлеру") or row_label.startswith("Получено от селлера"):
-        return "Передача между селлерами"
-    if row_label.startswith("Прочее"):
-        return "Прочее"
-    return row_label
 
 
 def inventory_workbook_filename(date_from: datetime, date_to: datetime) -> str:
