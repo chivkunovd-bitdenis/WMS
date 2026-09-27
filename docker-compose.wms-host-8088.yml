@@ -7,15 +7,15 @@ services:
     environment:
       FORWARDED_ALLOW_IPS: "172.21.0.0/16"
       WITHDRAWAL_SELLER_ALLOWLIST: &withdrawal-pilot "0b8da5d8-f43a-42f5-a2ec-43173ea844bd"
-      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: "false"
+      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: &withdrawal-pilot-submit "true"
   celery_worker:
     environment:
       WITHDRAWAL_SELLER_ALLOWLIST: *withdrawal-pilot
-      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: "false"
+      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: *withdrawal-pilot-submit
   celery_beat:
     environment:
       WITHDRAWAL_SELLER_ALLOWLIST: *withdrawal-pilot
-      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: "false"
+      WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: *withdrawal-pilot-submit
   web:
     ports: !override
       - "172.18.0.1:8088:80"
