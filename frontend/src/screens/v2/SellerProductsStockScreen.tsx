@@ -33,7 +33,7 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
-import { MarketplaceChip, type MarketplaceKind } from '../../ui-kit'
+import { MarketplaceChip, MarketplaceIcon, type MarketplaceKind } from '../../ui-kit'
 import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
 
 // WMS-548 D5: товар на фулфилменте (row сегодняшней строки /products/wb-catalog)
@@ -150,11 +150,11 @@ export function cardMarketplaceId(item: SellerCatalogCardItem): string | null {
 
 export function itemMarketplaces(item: SellerCatalogItem): MarketplaceKind[] {
   if (isProductItem(item)) {
-    const result: MarketplaceKind[] = []
-    if (item.wb_nm_id != null) result.push('wb')
-    if (item.ozon_sku || item.ozon_offer_id) result.push('ozon')
-    return result
+    // Товар на ФФ — «как сейчас» (R7): значок только для Ozon, точно как в
+    // etalon; WB остаётся без чипа, экран этих строк D5 не меняет.
+    return item.ozon_sku || item.ozon_offer_id ? ['ozon'] : []
   }
+  // Карточка не на ФФ — новая строка (R7): значок площадки обязателен.
   return [item.marketplace === 'ozon' ? 'ozon' : 'wb']
 }
 
@@ -609,6 +609,8 @@ export function SellerProductsStockScreen({
           isProductItem(row) && selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
         ),
       )
+      setSelectedKeys(new Set())
+      setSelectedItemsByKey(new Map())
       setNotice(`Честный знак включён: ${body.updated_count} товаров.`)
       await load()
     } catch (e) {
@@ -836,7 +838,7 @@ export function SellerProductsStockScreen({
       </Typography>
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error" onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error">
           {error}
         </Alert>
       ) : null}
@@ -998,23 +1000,17 @@ export function SellerProductsStockScreen({
           }}
         >
           <colgroup>
-            {/* WMS-548 D5: ширины колонок по свежему макету (docs/mockups/psp2-20260927/
-                WMS-548-catalog-selection.html) — на 1440 старые пропорции резали название,
-                уводили «Резервы» за край. На 1280 «Свободный FBO» ещё переносился на две
-                строки и на макетных 11%: у соседней «В ячейках»/«На ФФ» есть noWrap,
-                у неё не было — добавлен; Остаток дополнительно увеличен до 12% за счёт
-                ШК (11%→10%, баркоду хватает и так) — запас на случай трёхзначного остатка. */}
-            <col style={{ width: '4%' }} />
             <col style={{ width: '5%' }} />
-            <col style={{ width: '19%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '11%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '10.5%' }} />
+            <col style={{ width: '17.5%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '10.5%' }} />
+            <col style={{ width: '8%' }} />
             <col style={{ width: '10%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '4%' }} />
             <col style={{ width: '7.5%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '4.5%' }} />
-            <col style={{ width: '9%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -1072,6 +1068,7 @@ export function SellerProductsStockScreen({
                       <Typography
                         variant="caption"
                         sx={{
+                          flex: '1 1 0',
                           minWidth: 0,
                           fontWeight: 600,
                           display: '-webkit-box',
@@ -1083,13 +1080,28 @@ export function SellerProductsStockScreen({
                       >
                         {row.name}
                       </Typography>
-                      {itemMarketplaces(row).map((marketplace) => (
-                        <MarketplaceChip
-                          key={marketplace}
-                          marketplace={marketplace}
-                          testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                      {onFulfillment ? (
+                        itemMarketplaces(row).map((marketplace) => (
+                          <MarketplaceChip
+                            key={marketplace}
+                            marketplace={marketplace}
+                            testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                          />
+                        ))
+                      ) : (
+                        // Карточка не на ФФ — новая строка (R7), «значок площадки»
+                        // обязателен для каждой такой строки, а не изредка, как
+                        // сегодняшний чип «Ozon» на товаре. Полный текстовый чип
+                        // «Wildberries» (94px) в узкой колонке названия (10.5%,
+                        // как в etalon — ширины этот экран не меняет) съедал
+                        // название почти целиком; компактный квадратный значок
+                        // (22×22, тот же MarketplaceIcon, что и в окне «Задать
+                        // остаток») даёт место и значку, и названию.
+                        <MarketplaceIcon
+                          marketplace={row.marketplace === 'ozon' ? 'ozon' : 'wb'}
+                          testId={`seller-catalog-marketplace-${row.key}`}
                         />
-                      ))}
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -1157,7 +1169,6 @@ export function SellerProductsStockScreen({
                           sx={{ fontSize: '0.65rem' }}
                           data-testid={`seller-catalog-stock-free-fbo-${row.id}`}
                           title={`Свободный FBO ${bal?.quantity_free_fbo ?? bal?.quantity ?? 0}`}
-                          noWrap
                         >
                           Свободный FBO {bal?.quantity_free_fbo ?? bal?.quantity ?? 0}
                         </Typography>
