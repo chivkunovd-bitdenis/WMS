@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Stack, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import {
@@ -240,6 +240,16 @@ export function FfBillingInvoicesPanel({
     setRows([])
   }, [])
 
+  // WMS-491 F3 (ревью №2): синхронный сброс `opened` не делает уже
+  // выполняющийся `openInvoice` неактуальным — его ответ может прийти позже
+  // смены селлера и показать окно счёта прежнего селлера поверх нового
+  // списка. `fixedSellerContext` — счётчик именно этого сброса: `openInvoice`
+  // запоминает его значение при старте и не применяет ответ, если счётчик
+  // успел измениться, пока ждали сеть. В общей панели «Расчётов»
+  // (`fixedSellerId` не задан) этот эффект никогда не запускается, счётчик
+  // остаётся неизменным, и поведение не меняется.
+  const fixedSellerContext = useRef(0)
+
   // WMS-491 F3: смена закреплённого селлера (карточка A → карточка B без
   // размонтирования панели) раньше меняла только `sellerId`, а курсор,
   // накопленные строки, поиск, статус и открытый счёт оставались от A —
@@ -247,6 +257,7 @@ export function FfBillingInvoicesPanel({
   // Полный сброс — начинать независимый список заново, как при первом входе.
   useEffect(() => {
     if (!fixedSellerId) return
+    fixedSellerContext.current += 1
     setSellerId(fixedSellerId)
     setCursor(null)
     setNextCursor(null)
@@ -291,6 +302,11 @@ export function FfBillingInvoicesPanel({
   }, [cursor, refreshToken, reload, search, sellerId, status, token])
 
   const openInvoice = async (row: InvoiceHistoryRow) => {
+    // Запоминаем контекст закреплённого селлера на момент клика: если панель
+    // за время запроса переключат на другого селлера, этот ответ (успешный
+    // или ошибка) больше не про то, что сейчас на экране, — отбрасываем его,
+    // не открывая окно и не показывая ошибку в чужом контексте.
+    const context = fixedSellerContext.current
     setOpenError(false)
     setCancelError(null)
     const url =
@@ -299,12 +315,14 @@ export function FfBillingInvoicesPanel({
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) throw new Error('open-invoice')
       const payload = await response.json()
+      if (context !== fixedSellerContext.current) return
       setOpened(
         row.origin === 'legacy'
           ? legacyToOpened(payload as LegacyInvoice, row)
           : v2ToOpened(payload as V2Invoice, row.seller_name),
       )
     } catch {
+      if (context !== fixedSellerContext.current) return
       setOpenError(true)
     }
   }
