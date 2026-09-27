@@ -46,6 +46,10 @@ from app.services.wildberries_product_link_service import (
     WildberriesLinkError,
     link_product_to_wb_card,
 )
+from app.services.wildberries_product_sync_service import (
+    filter_wb_cards_to_selected,
+    get_selected_wb_nm_ids,
+)
 from app.services.wildberries_sync_service import fetch_all_cards
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
@@ -523,8 +527,14 @@ async def save_and_validate_self_content_token(
             saved = await upsert_imported_cards(
                 session, tenant_id, seller_id, total_cards
             )
+            # WMS-548 R4: сохранение ключа обновляет снимок карточек, но не заводит
+            # товары WMS для карточек, которых ещё нет на фулфилменте.
+            selected_nm_ids = await get_selected_wb_nm_ids(session, tenant_id, seller_id)
             prod_stats = await upsert_products_from_wb_cards(
-                session, tenant_id, seller_id, total_cards
+                session,
+                tenant_id,
+                seller_id,
+                filter_wb_cards_to_selected(total_cards, selected_nm_ids),
             )
             from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
@@ -608,11 +618,14 @@ async def sync_products_now(
 
     n = len(total_cards)
     saved = await upsert_imported_cards(session, user.tenant_id, effective_seller_id, total_cards)
+    # WMS-548 R5: ручная синхронизация обновляет только уже выбранные карточки,
+    # новые и невыбранные товарами WMS не становятся.
+    selected_nm_ids = await get_selected_wb_nm_ids(session, user.tenant_id, effective_seller_id)
     prod_stats = await upsert_products_from_wb_cards(
         session,
         user.tenant_id,
         effective_seller_id,
-        total_cards,
+        filter_wb_cards_to_selected(total_cards, selected_nm_ids),
     )
     return WildberriesSelfSyncOut(
         cards_received=n,
