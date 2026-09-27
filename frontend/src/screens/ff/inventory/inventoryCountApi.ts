@@ -25,7 +25,7 @@ export const INVENTORY_BASE = '/operations/inventory-counts'
  * машинный формат сервера они не знают. Переводим на границе, иначе оператор
  * видит «2026-08-28T20:39:37.982702+00:00».
  */
-function humanMoment(iso: string | null): string {
+export function humanMoment(iso: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (!Number.isFinite(d.getTime())) return iso
@@ -499,6 +499,52 @@ export async function fetchCount(token: string, countId: string): Promise<Invent
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}`), { headers: { ...inventoryAuthHeaders(token) } })
   if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
   return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * Данные печатного листа инвентаризации (WMS-497): шапка документа, его отбор
+ * и строки с остатком/резервом на момент печати. Контракт зафиксирован в
+ * `docs/requirements/WMS-497.md` (кусок 1, сервер) — поля здесь не переименовываем
+ * и не досочиняем, только читаем то, что отдаёт сервер.
+ */
+export type ApiPrintSheetFilters = {
+  /** Документ заведён со строки карты склада — печатаем «По объекту», остальные поля ниже игнорируем. */
+  object: boolean
+  warehouse_name: string | null
+  seller_name: string | null
+  category: string | null
+  product_articles: string[] | null
+}
+
+export type ApiPrintSheetRow = {
+  product_id: string
+  barcode: string | null
+  article: string | null
+  name: string
+  total: number
+  reserved: number
+}
+
+export type ApiPrintSheet = {
+  number: string
+  created_at: string
+  created_by: string
+  filters: ApiPrintSheetFilters
+  rows: ApiPrintSheetRow[]
+}
+
+/**
+ * WMS-497: данные для печати листа берутся у сервера в момент нажатия «Печать
+ * листа» — «Всего»/«В резерве» должны быть теми же числами, что сейчас
+ * показывает каталог (единый расчёт WMS-530), а не устаревшим срезом из уже
+ * открытого документа. Запрос ничего не пишет и не меняет документ на экране.
+ */
+export async function fetchPrintSheet(token: string, countId: string): Promise<ApiPrintSheet> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/print-sheet`), {
+    headers: { ...inventoryAuthHeaders(token) },
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return (await res.json()) as ApiPrintSheet
 }
 
 /**

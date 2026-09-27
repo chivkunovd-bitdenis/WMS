@@ -32,6 +32,7 @@ import {
   type ApiSummary,
   recordCountFound,
   fetchCount,
+  fetchPrintSheet,
   putCountLines,
   postCountOnly,
   markCountPlaceEmpty,
@@ -41,6 +42,7 @@ import {
   deleteCountContainer,
   InventoryHttpError,
 } from './inventoryCountApi'
+import { printInventorySheet } from './printInventorySheet'
 
 // Экран инвентаризации, подключённый к серверу.
 //
@@ -248,6 +250,29 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось провести')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // WMS-497: печать листа — отдельный от очереди операций документа запрос.
+  // Он ничего не сохраняет и не проводит, поэтому не идёт через ops.action;
+  // `printingSheet` — единственная защита от второго окна печати при повторном
+  // нажатии, пока сервер готовит лист (R1).
+  const [printingSheet, setPrintingSheet] = useState(false)
+
+  async function printSheet() {
+    if (!count || printingSheet) return
+    const id = count.id
+    setPrintingSheet(true)
+    setError(null)
+    try {
+      const sheet = await fetchPrintSheet(tokenRef.current, id)
+      // Оператор мог уйти с документа, пока лист готовился, — тогда печатать
+      // уже нечего: окно печати документа, который он не смотрит, только мешает.
+      if (ops.currentId() === id) printInventorySheet(sheet)
+    } catch (err) {
+      if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось подготовить лист')
+    } finally {
+      setPrintingSheet(false)
     }
   }
 
@@ -497,6 +522,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
+        onPrintSheet={() => void printSheet()}
+        printingSheet={printingSheet}
         pendingFound={view.pendingScans}
         onCreateContainer={(kind, cellId) => void createContainer(kind, cellId)}
         onMoveLine={(lineId, target) => void moveLine(lineId, target)}
