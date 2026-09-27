@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material'
 import {
   DataTable,
@@ -21,6 +22,7 @@ import { FfBillingSellerDetails, type SellerReportDetails } from './FfBillingSel
 import { FfBillingProfilesDialog } from './FfBillingProfilesDialog'
 import { FbsSupplyHistoryDialog } from '../v2/FbsSupplyHistoryDialog'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
+import { resolveInitialSellerFilter } from '../../utils/urlSellerFilter'
 
 type Seller = { id: string; name: string }
 type Props = { sellers?: Seller[]; token: string; onOpenInbound: (id: string) => void }
@@ -216,6 +218,8 @@ export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; pe
 
 export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [tab, setTab] = useState<BillingTab>('charges')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sellerIdAutoAppliedRef = useRef<string | null>(null)
   const [sellerId, setSellerId] = useState('all')
   const search = ''
   const [loading, setLoading] = useState(true)
@@ -253,6 +257,24 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     setDetailsLoading(false)
     setDetailsError(false)
   }
+
+  // Ссылка ?seller_id=<id> ведёт сюда из карточки селлера (кнопка «Выставить
+  // счёт», WMS-491 D1): выставляет фильтр «Селлер» на этого селлера. Список
+  // sellers при прямом открытии адреса может прийти позже — ждём его загрузки,
+  // чтобы не потерять параметр раньше времени. Параметр убирается из адреса
+  // сразу после применения: обновление страницы после ручной смены фильтра не
+  // должно возвращать прежнего селлера.
+  useEffect(() => {
+    const sellerIdParam = searchParams.get('seller_id')
+    if (!sellerIdParam || sellers.length === 0) return
+    if (sellerIdAutoAppliedRef.current === sellerIdParam) return
+    sellerIdAutoAppliedRef.current = sellerIdParam
+    const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
+    if (resolved) setSellerId(resolved)
+    const next = new URLSearchParams(searchParams)
+    next.delete('seller_id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, sellers, setSearchParams])
 
   useEffect(() => {
     if (tab !== 'charges') return
