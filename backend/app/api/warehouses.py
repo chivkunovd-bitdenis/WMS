@@ -356,9 +356,14 @@ async def get_warehouse_map_route(
     warehouse_id: uuid.UUID,
     user: Annotated[User, Depends(require_catalog_cells_read_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    # WMS-490 D1: карточка товара («Расположение») грузит карту одного товара,
+    # а не всего склада — без параметра ответ не меняется байт в байт.
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> WarehouseMapOut:
     try:
-        data = await warehouse_map_service.get_warehouse_map(session, user.tenant_id, warehouse_id)
+        data = await warehouse_map_service.get_warehouse_map(
+            session, user.tenant_id, warehouse_id, product_id=product_id
+        )
     except WarehouseMapError as exc:
         raise _map_error(exc) from None
     return WarehouseMapOut.model_validate(data)

@@ -34,6 +34,7 @@ from app.models.seller_wildberries_credentials import SellerWildberriesCredentia
 from app.models.stock_direction import StockDirection
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
+from app.services import warehouse_map_service
 from app.services.catalog_service import (
     SKIP as PATCH_SKIP,
 )
@@ -79,6 +80,7 @@ from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.seller_wb_catalog_service import (
     FfCatalogRow,
+    _enrich_linked_products,
     list_ff_catalog_rows,
     list_linked_wb_catalog_page_rows,
     list_linked_wb_catalog_rows,
@@ -207,6 +209,31 @@ class FfCatalogPageOut(BaseModel):
     limit: int
     offset: int
     categories: list[str]
+
+
+class ProductCardLocationWarehouseOut(BaseModel):
+    id: str
+    name: str
+
+
+class ProductCardOut(FfCatalogOut):
+    """WMS-490 D1: карточка товара — та же строка каталога плюс габариты, вес
+    и рабочие склады, где товар физически лежит.
+
+    Остаток, резерв и доступно карточка не отдаёт и не считает (R2, R17): их
+    фронт берёт из того же запроса сводки, что и ячейка «Остаток» каталога
+    (``/operations/inventory-balances/summary``). Когда в etalon вольётся
+    единый расчёт WMS-530/532, этого эндпоинта он не коснётся — переключение
+    произойдёт в самой сводке и в ``_ff_catalog_out_rows``/
+    ``_enrich_linked_products`` (строка «Остаток» каталога и эта карточка
+    читают одну и ту же функцию).
+    """
+
+    length_mm: int | None = None
+    width_mm: int | None = None
+    height_mm: int | None = None
+    weight_g: int | None = None
+    location_warehouses: list[ProductCardLocationWarehouseOut] = Field(default_factory=list)
 
 
 class ProductOut(BaseModel):
@@ -1108,6 +1135,42 @@ async def _ff_catalog_out_rows(
         )
         for r in rows
     ]
+
+
+@router.get("/{product_id}/card", response_model=ProductCardOut)
+async def get_product_card(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(require_catalog_cells_read_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductCardOut:
+    """WMS-490 D1: данные основной вкладки карточки товара.
+
+    Права те же, что у каталога ФФ (``require_catalog_cells_read_access``) —
+    продавцу карточка недоступна вовсе (R17). Значения не считаются заново:
+    строка собирается тем же сборщиком, что строка каталога
+    (``_enrich_linked_products`` + ``_ff_catalog_out_rows``, как у
+    ``/products/ff-catalog-page``); добавляются только габариты и вес товара
+    и список складов, где он физически лежит.
+    """
+    products = await list_products(session, user.tenant_id, product_ids={product_id})
+    if not products:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    product = products[0]
+    rows = await _enrich_linked_products(session, user.tenant_id, [product])
+    [card_row] = await _ff_catalog_out_rows(session, user.tenant_id, rows)
+    location_warehouses = await warehouse_map_service.list_product_location_warehouses(
+        session, user.tenant_id, product_id
+    )
+    return ProductCardOut(
+        **card_row.model_dump(),
+        length_mm=product.length_mm,
+        width_mm=product.width_mm,
+        height_mm=product.height_mm,
+        weight_g=product.weight_g,
+        location_warehouses=[
+            ProductCardLocationWarehouseOut(**warehouse) for warehouse in location_warehouses
+        ],
+    )
 
 
 @router.get("/import-tz/template")

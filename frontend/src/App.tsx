@@ -3185,7 +3185,9 @@ export default function App() {
                   authHeaders={authHeaders}
                   sellers={sellers}
                   warehouses={warehouses}
-                  canManageCatalog={isFulfillmentAdmin}
+                  canManageCatalog={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
+                  canViewMovements={isFulfillmentAdmin || canInventoryOps}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
               ) : (
                 ffAccessDenied
