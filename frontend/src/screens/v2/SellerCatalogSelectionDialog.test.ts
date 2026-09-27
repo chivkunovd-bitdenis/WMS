@@ -79,6 +79,35 @@ describe('displaySellerCatalogRow', () => {
     })
   })
 
+  it('reads a card not on fulfillment even when wb_barcodes/wb_size arrive as empty arrays, not null (real backend shape)', () => {
+    // Настоящий бэкенд (Pydantic default_factory=list) всегда шлёт оба поля ШК:
+    // у карточки не на ФФ wb_barcodes = [] (а не отсутствует/null). Простое
+    // «??»-слияние здесь ошибочно предпочло бы пустой список настоящему.
+    const row: SellerCatalogPageRow = {
+      key: 'wb:424242',
+      on_fulfillment: false,
+      marketplace: 'wildberries',
+      name: 'E2E-MOCK-BRAND',
+      wb_barcodes: [],
+      wb_primary_barcode: null,
+      wb_size: null,
+      vendor_code: 'E2E-MOCK',
+      photo_url: 'data:image/png;base64,xxx',
+      barcodes: ['E2E-MOCK-BARCODE'],
+      sizes: ['L'],
+    }
+    expect(displaySellerCatalogRow(row)).toEqual({
+      key: 'wb:424242',
+      name: 'E2E-MOCK-BRAND',
+      vendorCode: 'E2E-MOCK',
+      photoUrl: 'data:image/png;base64,xxx',
+      primaryBarcode: 'E2E-MOCK-BARCODE',
+      extraBarcodeCount: 0,
+      sizesText: 'L',
+      onFulfillment: false,
+    })
+  })
+
   it('falls back to dashes when nothing is known', () => {
     const row: SellerCatalogPageRow = {
       key: 'ozon:42',

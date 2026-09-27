@@ -80,7 +80,13 @@ export type SellerCatalogPage = {
 
 /** Единый вид строки для таблицы независимо от того, товар это на ФФ или ещё нет. */
 export function displaySellerCatalogRow(row: SellerCatalogPageRow) {
-  const barcodes = row.wb_barcodes ?? row.barcodes ?? []
+  // Бэкенд всегда присылает оба массива ШК (пустым, а не null, для неактуальной
+  // стороны — Pydantic default_factory=list), поэтому здесь нельзя merge-ить
+  // через `??`: пустой wb_barcodes у карточки не на ФФ молча забивал бы
+  // настоящий barcodes нулём найденных ШК.
+  const wbBarcodes = row.wb_barcodes ?? []
+  const genericBarcodes = row.barcodes ?? []
+  const barcodes = wbBarcodes.length > 0 ? wbBarcodes : genericBarcodes
   const primaryBarcode = row.wb_primary_barcode ?? barcodes[0] ?? null
   const sizes = row.wb_size ? [row.wb_size] : (row.sizes ?? [])
   return {
