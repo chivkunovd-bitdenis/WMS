@@ -482,6 +482,7 @@ async def test_every_seller_billing_route_enforces_the_common_scope_check(
             "/seller-billing/invoices",
             "/seller-billing/invoices/legacy/{invoice_id}",
             "/seller-billing/invoices/v2/{invoice_id}",
+            "/seller-billing/rates",
         }
     )
     for template in path_templates:

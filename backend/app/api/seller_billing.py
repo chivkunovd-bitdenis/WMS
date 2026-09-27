@@ -1,23 +1,22 @@
-"""Раздел «Расчёты» в кабинете селлера — только чтение (WMS-549, кусок К1).
-
-Ставки селлера (вкладка «Ставки», требование R7) — отдельный кусок К2, сюда
-не входят.
+"""Раздел «Расчёты» в кабинете селлера — только чтение (WMS-549, куски К1 и К2).
 
 Все ручки переиспользуют тот же серверный расчёт, что видит ФФ по этому
-селлеру (billing_seller_report_service, billing_invoice_v2_service): второго
-независимого расчёта нет. Область — всегда `require_seller_billing_scope`,
-общая для всех ручек этого роутера; в сигнатурах нет параметра `seller_id`,
-поэтому подменить её через строку запроса нечем. Ручки ФФ `/billing/*`
-(require_fulfillment_admin) этим файлом не затрагиваются.
+селлеру (billing_seller_report_service, billing_invoice_v2_service,
+billing_seller_rates_service): второго независимого расчёта нет. Область —
+всегда `require_seller_billing_scope`, общая для всех ручек этого роутера;
+в сигнатурах нет параметра `seller_id`, поэтому подменить её через строку
+запроса нечем. Ручки ФФ `/billing/*` (require_fulfillment_admin) этим файлом
+не затрагиваются.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +38,7 @@ from app.services.billing_invoice_v2_service import (
     invoice_v2_out,
     list_invoices_v2,
 )
+from app.services.billing_seller_rates_service import list_seller_billing_rates
 from app.services.billing_seller_report_service import (
     SellerReportError,
     build_seller_report,
@@ -47,6 +47,21 @@ from app.services.billing_seller_report_service import (
 )
 
 router = APIRouter(prefix="/seller-billing", tags=["seller-billing"])
+
+
+class SellerBillingRateOut(BaseModel):
+    service_code: str
+    unit: str
+    rate_kopecks: int
+    valid_from_at: datetime
+    # Пусто у строки «Все товары»; заполнено у ставки на конкретный товар.
+    product_id: uuid.UUID | None = None
+    product_sku: str | None = None
+    product_name: str | None = None
+
+
+class SellerBillingRatesOut(BaseModel):
+    rates: list[SellerBillingRateOut]
 
 
 @router.get("/summary", response_model=SellerReportFinancialSummaryOut)
@@ -191,3 +206,28 @@ async def get_seller_billing_invoice_v2(
         # же 404, чтобы не подтверждать даже сам факт существования счёта.
         raise HTTPException(status_code=404, detail="invoice_not_found")
     return await invoice_v2_out(session, invoice)
+
+
+@router.get("/rates", response_model=SellerBillingRatesOut)
+async def get_seller_billing_rates(
+    *,
+    seller_id: Annotated[uuid.UUID, Depends(require_seller_billing_scope)],
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SellerBillingRatesOut:
+    """Действующие сейчас ставки этого селлера (R7) — без периода, без фильтров."""
+    rows = await list_seller_billing_rates(session, tenant_id=user.tenant_id, seller_id=seller_id)
+    return SellerBillingRatesOut(
+        rates=[
+            SellerBillingRateOut(
+                service_code=row.service_code,
+                unit=row.unit,
+                rate_kopecks=row.rate_kopecks,
+                valid_from_at=row.valid_from_at,
+                product_id=row.product_id,
+                product_sku=row.product_sku,
+                product_name=row.product_name,
+            )
+            for row in rows
+        ]
+    )
