@@ -63,8 +63,20 @@ export function ProductCardDialog({
   const [metrics, setMetrics] = useState<ProductCardStockTotals>(emptyTotals)
   const metricsAbortRef = useRef<AbortController | null>(null)
 
+  // Контракт карточки для вкладок (ревью №1, F1): растёт при каждом
+  // завершённом изменении остатка, которое другая уже открытая вкладка не
+  // увидела бы сама, — проведённый пересчёт в «Расположении» и полное
+  // «Сохранить» в «Задать остаток». «Движения» (кусок D4) читает его, чтобы
+  // перечитать историю, не дожидаясь переоткрытия карточки; сама история
+  // здесь не переписывается.
+  const [stockVersion, setStockVersion] = useState(0)
+
   const markChanged = useCallback(() => {
     changedRef.current = true
+  }, [])
+
+  const bumpStockVersion = useCallback(() => {
+    setStockVersion((v) => v + 1)
   }, [])
 
   const loadCard = useCallback(
@@ -142,6 +154,7 @@ export function ProductCardDialog({
     changedRef.current = false
     setCardData(null)
     setFbsStockBusy(false)
+    setFbsStockError(false)
     void loadCard(row.id)
     void loadMetrics(row.id)
     return () => {
@@ -160,6 +173,11 @@ export function ProductCardDialog({
   // «конец одного действия не должен разблокировать…», перенесена на уровень
   // карточки).
   const [fbsStockBusy, setFbsStockBusy] = useState(false)
+
+  // Нерешённая ошибка загрузки вкладки «Задать остаток» — своих кнопок нет
+  // (вкладка вместо тела показывает ErrorNotice), поэтому нижняя панель
+  // обязана вернуть общую «Закрыть», а не остаться пустой (ревью №1, F2).
+  const [fbsStockError, setFbsStockError] = useState(false)
 
   const handleClose = useCallback(() => {
     if (fbsStockBusy) return
@@ -231,6 +249,9 @@ export function ProductCardDialog({
     />
   ) : null
 
+  // «Задать остаток» рисует свои кнопки сама (портал в footerSlot) только
+  // когда у неё есть что показывать; при нерешённой ошибке загрузки тело —
+  // ErrorNotice без кнопок, и общая «Закрыть» обязана вернуться (ревью №1, F2).
   const footer = notFound ? (
     <Button onClick={handleClose} data-testid="product-card-close">
       Закрыть
@@ -238,7 +259,7 @@ export function ProductCardDialog({
   ) : (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       {footerSlot}
-      {activeTab !== 'fbs_stock' ? (
+      {activeTab !== 'fbs_stock' || fbsStockError ? (
         <Button onClick={handleClose} disabled={fbsStockBusy} data-testid="product-card-close">
           Закрыть
         </Button>
@@ -318,6 +339,8 @@ export function ProductCardDialog({
                   authHeaders={authHeaders}
                   onNotFound={() => setNotFound(true)}
                   onOpenInbound={onOpenInbound}
+                  stockVersion={stockVersion}
+                  active={activeTab === 'movements'}
                 />
               ) : null}
             </Box>
@@ -334,19 +357,32 @@ export function ProductCardDialog({
                   onNotFound={() => setNotFound(true)}
                   onStockChanged={() => {
                     markChanged()
+                    bumpStockVersion()
                     void loadCard(row.id)
                     void loadMetrics(row.id)
                   }}
+                  stockVersion={stockVersion}
+                  active={activeTab === 'location'}
                 />
               ) : null}
             </Box>
           ) : null}
 
           {tabs.some((t) => t.key === 'fbs_stock') && row.seller_id ? (
-            // Решение 12 (27.09): тело «Задать остаток» не шире содержимого окна
-            // «Остаток для FBS» (оно AppDialog md — 900px по умолчанию темы MUI),
-            // хотя окно карточки шире (lg).
-            <Box hidden={activeTab !== 'fbs_stock'} sx={{ minWidth: 0, maxWidth: 900 }} data-testid="product-card-panel-fbs-stock">
+            // Решение 12 (27.09) + ревью №1 F3: тело «Задать остаток» не шире
+            // СОДЕРЖИМОГО исходного окна («Остаток для FBS» — AppDialog md), а
+            // не всего окна: у md 900px паспорта, но DialogContent с dividers
+            // забирает по 24px слева и справа (frontend/src/mui/theme.ts
+            // MuiDialog/MuiDialogContent не переопределены — это чистый MUI).
+            // 900 без вычета отступов растягивало блоки шире оригинала.
+            // Ширина берётся из той же точки, что и maxWidth="md" у AppDialog
+            // (breakpoints.values.md), а не отдельным числом, чтобы не разойтись
+            // с темой при её будущей правке.
+            <Box
+              hidden={activeTab !== 'fbs_stock'}
+              sx={{ minWidth: 0, maxWidth: (theme) => theme.breakpoints.values.md - 48 }}
+              data-testid="product-card-panel-fbs-stock"
+            >
               {visitedTabs.has('fbs_stock') ? (
                 <ProductCardFbsStockTab
                   productId={row.id}
@@ -361,6 +397,13 @@ export function ProductCardDialog({
                   footerSlotEl={footerSlotEl}
                   onCardClose={closeCardFromFbsTab}
                   onBusyChange={setFbsStockBusy}
+                  onChanged={() => {
+                    markChanged()
+                    bumpStockVersion()
+                  }}
+                  stockVersion={stockVersion}
+                  active={activeTab === 'fbs_stock'}
+                  onErrorChange={setFbsStockError}
                 />
               ) : null}
             </Box>

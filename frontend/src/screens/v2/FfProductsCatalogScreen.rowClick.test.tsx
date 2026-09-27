@@ -221,4 +221,19 @@ describe('WMS-490 R1: клик по строке каталога открыва
     expect(maybe('product-card-dialog')).toBeNull()
     expect(maybe('fbs-stock-dialog-stub')).not.toBeNull()
   })
+
+  it('ревью №1 F7: пустое место ячейки «Резервы» вокруг кнопки открывает карточку', async () => {
+    // Раньше stopPropagation стоял на всей TableCell, а не на самой кнопке —
+    // клик рядом с кнопкой, не по ней, ничего не делал (ни кнопки, ни карточки).
+    await mount()
+    await flush()
+
+    const cell = document.querySelector(`[data-testid="ff-catalog-reserves-cell-${PRODUCT_ID}"]`)
+    expect(cell).not.toBeNull()
+    await act(async () => { cell!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+
+    expect(maybe('product-card-dialog')).not.toBeNull()
+    expect(maybe(`ff-stock-directions-panel-${PRODUCT_ID}`)).toBeNull()
+  })
 })

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { Box, Stack, Typography } from '@mui/material'
-import { MarketplaceIcon } from '../../../ui-kit'
 import type { ProductCardData } from './productCardTypes'
 
 type Props = {
@@ -100,10 +99,7 @@ export function ProductCardMainTab({ data }: Props) {
 
       {hasWb ? (
         <Stack spacing={1} data-testid="product-card-wb-section">
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <MarketplaceIcon marketplace="wb" />
-            <Typography variant="subtitle2">Wildberries</Typography>
-          </Stack>
+          <Typography variant="subtitle2">Wildberries</Typography>
           <FieldGrid>
             <FieldRow
               label="Артикул продавца"
@@ -118,10 +114,7 @@ export function ProductCardMainTab({ data }: Props) {
 
       {hasOzon ? (
         <Stack spacing={1} data-testid="product-card-ozon-section">
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <MarketplaceIcon marketplace="ozon" />
-            <Typography variant="subtitle2">Ozon</Typography>
-          </Stack>
+          <Typography variant="subtitle2">Ozon</Typography>
           <FieldGrid>
             <FieldRow
               label="Артикул"

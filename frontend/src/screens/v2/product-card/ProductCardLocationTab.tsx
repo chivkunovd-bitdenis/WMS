@@ -60,6 +60,16 @@ type Props = {
   onNotFound: () => void
   /** Пересчёт на вкладке меняет остаток — карточка должна перечитать шапку и «Движения» (R11). */
   onStockChanged: () => void
+  /**
+   * Контракт карточки (ревью №1, F1): растёт при каждом завершённом изменении
+   * остатка. Свой собственный пересчёт вкладка уже перечитывает сама через
+   * `onCountPosted` → `load()`; проп остаётся ради единой сигнатуры вкладок
+   * (например, для будущей реакции на изменения из других вкладок), сама
+   * вкладка на чужие изменения остатка сейчас не реагирует.
+   */
+  stockVersion: number
+  /** Вкладка сейчас видна оператору — используется для повтора запроса после сбоя при возврате (ревью №1, F2). */
+  active: boolean
 }
 
 export function ProductCardLocationTab({
@@ -72,6 +82,7 @@ export function ProductCardLocationTab({
   // нет», поэтому вкладка его не вызывает.
   onNotFound: _onNotFound,
   onStockChanged,
+  active,
 }: Props) {
   const [warehouseId, setWarehouseId] = useState<string | null>(locationWarehouses[0]?.id ?? null)
   const [data, setData] = useState<WarehouseMapData | null>(
@@ -154,6 +165,16 @@ export function ProductCardLocationTab({
     void load()
   }, [load])
 
+  // Повторная активация вкладки после сбоя повторяет запрос — как и
+  // переоткрытие всей карточки (R16, ревью №1 F2). На первом монтировании
+  // ошибки ещё нет, условие ложно — лишней повторной загрузки не будет.
+  useEffect(() => {
+    if (active && loadError) void load()
+    // load/loadError читаются в момент срабатывания; реагировать нужно только
+    // на переход в активную вкладку, а не на каждое изменение load/loadError.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+
   function selectWarehouse(nextWarehouseId: string) {
     if (nextWarehouseId === selectedWarehouseRef.current) return
     loadVersionRef.current += 1
@@ -219,15 +240,16 @@ export function ProductCardLocationTab({
     })
   }
 
-  if (loadError) {
-    return <ErrorNotice testId="product-card-location-error">{loadError}</ErrorNotice>
-  }
-
   return (
     <Box data-testid="product-card-location-tab">
       {operationError ? (
         <ErrorNotice testId="product-card-location-operation-error">{operationError}</ErrorNotice>
       ) : null}
+      {/* Ошибка загрузки карты раньше заменяла всю вкладку целиком — вместе с
+          переключателем складов, единственным способом попробовать другой
+          склад до повторной активации вкладки. Теперь она — плашка на месте
+          дерева, переключатель остаётся (ревью №1, F2). */}
+      {loadError ? <ErrorNotice testId="product-card-location-error">{loadError}</ErrorNotice> : null}
       {locationWarehouses.length > 1 ? (
         <Box sx={{ mb: 1.5 }}>
           <WarehouseMapWarehouseSwitch
@@ -237,26 +259,32 @@ export function ProductCardLocationTab({
           />
         </Box>
       ) : null}
-      <WarehouseMapTree
-        rows={rows}
-        loading={loading}
-        carried={carried}
-        highlightedKey={null}
-        empty={{ title: 'Товара нет на складе' }}
-        onToggle={toggleRow}
-        onTakeOff={(row) => openIntent('takeOff', row, UNASSIGNED_TARGET)}
-        onDisband={(row) => openIntent('disband', row, UNASSIGNED_TARGET)}
-        onHistory={setHistoryRow}
-        onPrintCell={setPrintRow}
-        onInventory={(row) => void actions.openInventory(row)}
-        onDragStart={setCarried}
-        onDragEnd={() => setCarried(null)}
-        onDrop={(target) => {
-          if (!carried) return
-          openIntent('move', carried, target)
-          setCarried(null)
-        }}
-      />
+      {/* При ошибке данных нет (data === null) — дерево на пустых rows
+          показало бы вводящее в заблуждение «Товара нет на складе» рядом с
+          сообщением об ошибке. Переключатель выше при этом остаётся
+          доступен. */}
+      {!loadError ? (
+        <WarehouseMapTree
+          rows={rows}
+          loading={loading}
+          carried={carried}
+          highlightedKey={null}
+          empty={{ title: 'Товара нет на складе' }}
+          onToggle={toggleRow}
+          onTakeOff={(row) => openIntent('takeOff', row, UNASSIGNED_TARGET)}
+          onDisband={(row) => openIntent('disband', row, UNASSIGNED_TARGET)}
+          onHistory={setHistoryRow}
+          onPrintCell={setPrintRow}
+          onInventory={(row) => void actions.openInventory(row)}
+          onDragStart={setCarried}
+          onDragEnd={() => setCarried(null)}
+          onDrop={(target) => {
+            if (!carried) return
+            openIntent('move', carried, target)
+            setCarried(null)
+          }}
+        />
+      ) : null}
 
       <WarehouseMapMoveDialog
         intent={intent}

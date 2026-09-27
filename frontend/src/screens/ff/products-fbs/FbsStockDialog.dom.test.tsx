@@ -467,4 +467,23 @@ describe('WMS-490 D6: встроенный режим (вкладка «Зада
     expect(onBusyChange).toHaveBeenLastCalledWith(false)
     footerHost.remove()
   })
+
+  it('ревью №1 F4: немедленная запись (без «Сохранить»/«Отмена») сообщает onChanged сразу, а не только при закрытии', async () => {
+    // Карточка товара закрывается своей общей «Закрыть»/Escape/фоном, которые
+    // не проходят через close() контейнера (см. ProductCardDialog.tsx) — если
+    // бы onChanged срабатывал только внутри close(), запись «приём заказов»
+    // без последующего «Сохранить»/«Отмена» терялась бы для перечитывания
+    // каталога. embedded-режим обязан сообщить о ней сразу же.
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const onChanged = vi.fn()
+    const { element, onClose } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost, onChanged })
+    await mount(element)
+    expect(onChanged).not.toHaveBeenCalled()
+    await click('fbs-stock-served-b-wb')
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    footerHost.remove()
+  })
 })

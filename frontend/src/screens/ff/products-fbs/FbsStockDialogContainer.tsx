@@ -151,6 +151,19 @@ export function FbsStockDialogContainer({
     if (changedRef.current) onChanged?.()
   }
 
+  // Немедленное действие и частичное/неудачное «Сохранить» помечают
+  // `changedRef`, но не закрывают окно — `onChanged` из close() выше сработает
+  // только когда окно всё-таки закроется через сам контейнер. У встроенной
+  // вкладки карточки товара есть и другой путь закрытия — общая «Закрыть»,
+  // Escape, фон, — который обходит close() контейнера целиком (ревью WMS-490,
+  // F4). Поэтому в embedded-режиме сообщаем наверх сразу в момент записи, не
+  // дожидаясь close(); обычное окно эту тонкость не получает — оно закрывается
+  // только через контейнер, и раннее сообщение ему не нужно.
+  function notifyChanged() {
+    changedRef.current = true
+    if (embedded) onChanged?.()
+  }
+
   function begin() {
     setPending((count) => count + 1)
     setActionError(null)
@@ -189,7 +202,7 @@ export function FbsStockDialogContainer({
       if (outcome.data) setData(outcome.data)
       else staleRef.current = true
       if (!outcome.ok) setActionError(outcome.message)
-      changedRef.current = true
+      notifyChanged()
     } finally {
       end()
     }
@@ -235,7 +248,7 @@ export function FbsStockDialogContainer({
             // Свободный остаток изменился между открытием и сохранением, и сервер
             // сохранил меньше запрошенного. Успех есть, но не тот, что на экране:
             // показываем фактически сохранённое и подпись с ограничившим товаром.
-            changedRef.current = true
+            notifyChanged()
             const savedById = new Map(outcome.items.map((one) => [one.product_id, one]))
             setData((current) =>
               current
@@ -266,7 +279,7 @@ export function FbsStockDialogContainer({
             // повтор того же запроса состояние не удвоит (R22).
             if (outcome.data) setData(outcome.data)
             setActionError(outcome.message)
-            changedRef.current = true
+            notifyChanged()
             return
         }
       } finally {

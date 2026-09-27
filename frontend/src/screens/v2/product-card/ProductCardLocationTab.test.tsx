@@ -80,24 +80,36 @@ function stubFetch(byWarehouse: Record<string, WarehouseMapData>) {
   )
 }
 
+// Стабильная ссылка: в настоящем приложении `authHeaders` приходит от App.tsx
+// один раз и не создаётся заново на каждый рендер. Инлайновая стрелочная
+// функция здесь заставляла бы `load` (useCallback от authHeaders) менять
+// идентичность на каждый `renderTab`, а «всегда грузить» эффект — читать
+// заново независимо от `active`, что не соответствует настоящему поведению.
+const authHeaders = () => ({ Authorization: 'Bearer t' })
+
 let root: Root | null = null
 let host: HTMLDivElement | null = null
-async function mount(locationWarehouses: Array<{ id: string; name: string }>) {
-  host = document.createElement('div')
-  document.body.appendChild(host)
-  root = createRoot(host)
+async function renderTab(locationWarehouses: Array<{ id: string; name: string }>, active: boolean) {
   await act(async () => {
     root!.render(
       <ProductCardLocationTab
         productId={PRODUCT_ID}
         token="t"
-        authHeaders={() => ({ Authorization: 'Bearer t' })}
+        authHeaders={authHeaders}
         locationWarehouses={locationWarehouses}
         onNotFound={() => {}}
         onStockChanged={() => {}}
+        stockVersion={0}
+        active={active}
       />,
     )
   })
+}
+async function mount(locationWarehouses: Array<{ id: string; name: string }>, active = true) {
+  host = document.createElement('div')
+  document.body.appendChild(host)
+  root = createRoot(host)
+  await renderTab(locationWarehouses, active)
 }
 afterEach(async () => {
   if (root) await act(async () => { root!.unmount() })
@@ -165,5 +177,37 @@ describe('WMS-490 R10: товар без размещения', () => {
     await flush()
 
     expect(maybe('warehouse-map-table')?.textContent).toContain('Товара нет на складе')
+  })
+})
+
+describe('ревью №1 F2: сбой загрузки и возврат на вкладку', () => {
+  it('ошибка остаётся при уходе с вкладки и повторяет запрос при возврате; переключатель остаётся виден', async () => {
+    let call = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1
+        if (call === 1) return jsonResponse(500, { detail: 'boom' })
+        return jsonResponse(200, mapData('А-1.1', 3))
+      }),
+    )
+    await mount([WH_A, WH_B], true)
+    await flush()
+    expect(maybe('product-card-location-error')).not.toBeNull()
+    // Переключатель остаётся доступен даже при ошибке — раньше ранний return
+    // прятал его вместе со всей вкладкой (ревью №1 F2).
+    expect(maybe('warehouse-map-warehouses')).not.toBeNull()
+
+    // Уход с вкладки: ошибка остаётся (второй запрос не улетает сам по себе).
+    await renderTab([WH_A, WH_B], false)
+    await flush()
+    expect(call).toBe(1)
+
+    // Возврат на вкладку повторяет запрос без явного действия оператора.
+    await renderTab([WH_A, WH_B], true)
+    await flush()
+    expect(call).toBe(2)
+    expect(maybe('product-card-location-error')).toBeNull()
+    expect(maybe('warehouse-map-table')?.textContent).toContain('А-1.1')
   })
 })

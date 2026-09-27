@@ -1153,11 +1153,12 @@ export function FfProductsCatalogScreen({
                     onClick={() => setCardRow(p)}
                     sx={{ cursor: 'pointer' }}
                   >
-                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                    <TableCell padding="checkbox">
                       <Checkbox
                         checked={selectedIds.has(p.id)}
                         disabled={!canManageCatalog}
                         onChange={(e) => toggleRowSelected(p.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
                         data-testid={`ff-catalog-select-${p.id}`}
                       />
                     </TableCell>
@@ -1311,12 +1312,15 @@ export function FfProductsCatalogScreen({
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell sx={{ minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                    <TableCell sx={{ minWidth: 0 }}>
                       <Button
                         size="small"
                         variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
                         color={p.has_packaging_instructions ? 'primary' : 'inherit'}
-                        onClick={() => openPackagingEdit(p)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openPackagingEdit(p)
+                        }}
                         disabled={!canManageCatalog}
                         data-testid={`ff-packaging-edit-${p.id}`}
                         aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
@@ -1345,12 +1349,14 @@ export function FfProductsCatalogScreen({
                     <TableCell
                       data-testid={`ff-catalog-reserves-cell-${p.id}`}
                       sx={{ minWidth: 0 }}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => void openDirections(p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void openDirections(p.id)
+                        }}
                         data-testid={`ff-catalog-reserves-${p.id}`}
                       >
                         Резервы
@@ -1359,14 +1365,17 @@ export function FfProductsCatalogScreen({
                     <TableCell
                       align="center"
                       sx={{ borderLeft: '1px solid', borderLeftColor: 'divider' }}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         {/* Настройка остатка FBS по одному товару — как на
                             согласованном макете: значок в строке открывает ту же
-                            модалку с ползунками, что и массовая кнопка сверху. */}
+                            модалку с ползунками, что и массовая кнопка сверху.
+                            stopPropagation — на span-обёртке Tooltip, а не на
+                            всей ячейке: пустое место рядом со значками должно
+                            открывать карточку (R1, ревью №1 F7); обёртка ловит
+                            клик и по выключенной кнопке. */}
                         <Tooltip title="Остаток для FBS">
-                          <span>
+                          <span onClick={(e) => e.stopPropagation()}>
                             <IconButton
                               size="small"
                               aria-label={`Остаток для FBS ${p.sku_code}`}
@@ -1381,7 +1390,7 @@ export function FfProductsCatalogScreen({
                         <Tooltip
                           title={`Коды маркировки: ${markingCount}`}
                         >
-                          <span>
+                          <span onClick={(e) => e.stopPropagation()}>
                             <IconButton
                               size="small"
                               aria-label={`Коды маркировки ${p.sku_code}: ${markingCount}`}
@@ -1403,13 +1412,15 @@ export function FfProductsCatalogScreen({
                             </IconButton>
                           </span>
                         </Tooltip>
-                        <ProductBarcodePrintButton
-                          meta={displayMeta}
-                          testId={`ff-catalog-print-${p.id}`}
-                          productId={p.id}
-                          requiresHonestSign={p.requires_honest_sign}
-                          markingAvailable={markingCount}
-                        />
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <ProductBarcodePrintButton
+                            meta={displayMeta}
+                            testId={`ff-catalog-print-${p.id}`}
+                            productId={p.id}
+                            requiresHonestSign={p.requires_honest_sign}
+                            markingAvailable={markingCount}
+                          />
+                        </span>
                       </Stack>
                     </TableCell>
                   </TableRow>
