@@ -85,6 +85,7 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
+from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -190,6 +191,7 @@ __all__ = [
     "ProductTzImport",
     "Seller",
     "SellerMarkingCredentials",
+    "SellerOzonImportedCard",
     "SellerShopDelegation",
     "SellerStaffPermissions",
     "SellerWildberriesCredentials",

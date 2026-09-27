@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.tokens import decode_access_token
+from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
 
 @pytest.mark.asyncio
@@ -32,10 +33,12 @@ async def test_self_sync_creates_product_per_size(
         },
     )
     assert reg.status_code == 200
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
     ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
     sid = (await async_client.post("/sellers", headers=ah, json={"name": "Leggings IP"})).json()[
         "id"
     ]
+    seller_id = uuid.UUID(sid)
 
     acc = await async_client.post(
         "/auth/seller-accounts",
@@ -85,10 +88,21 @@ async def test_self_sync_creates_product_per_size(
         json={"content_api_token": "wb-content-test"},
     )
 
+    # WMS-548 R5: синхронизация обновляет только уже выбранные карточки. Карточка
+    # nm 900100 выбрана заранее — размер S уже заведён товаром WMS с тем же ШК,
+    # что и в реальной карточке, поэтому синк его обновит, а не задвоит.
+    async with SessionLocal() as session:
+        await upsert_products_from_wb_cards(session, tenant_id, seller_id, [{
+            "nmID": 900100, "vendorCode": "LEG-STRIP", "title": "Лосины (черновик)",
+            "sizes": [{"chrtID": 1, "techSize": "S", "skus": ["1110000000001"]}],
+        }])
+
     sync = await async_client.post("/integrations/wildberries/self/sync-products", headers=sh)
     assert sync.status_code == 200, sync.text
     body = sync.json()
-    assert body["products_created"] == 3
+    # Размеры M и L карточки заведены заново, S — обновлён (уже существовал).
+    assert body["products_created"] == 2
+    assert body["products_updated"] == 1
     assert body["cards_received"] == 101
     assert cursors == [None, 100]
 
