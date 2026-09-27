@@ -245,10 +245,12 @@ export function FfProductsCatalogScreen({
   const fbsLimitAutoOpenedRef = useRef<string | null>(null)
   // WMS-491 (D1): ?seller_id=<id> в адресе — из карточки селлера.
   const sellerIdAutoAppliedRef = useRef<string | null>(null)
-  // WMS-491 (правка F2 после ревью): следующая смена location.key — наша же
-  // чистка ?seller_id= (см. ниже), а не новый вход из меню — эффект сброса
-  // должен её пропустить.
-  const sellerFilterOwnCleanupRef = useRef(false)
+  // WMS-491 (правка F2, затем F6 после ревью): следующая смена location.key —
+  // это наша же чистка адреса (у ?seller_id= ниже и у ?fbs_limit= выше — оба
+  // эффекта выставляют этот флаг перед своим setSearchParams), а не новый вход
+  // из меню — эффект сброса фильтра должен её пропустить. Общий флаг на оба
+  // эффекта: смена location.key одна и та же, откуда бы адрес ни почистили.
+  const ownAddressCleanupRef = useRef(false)
   // Текущее значение filterSellerId пришло из адреса и ещё не тронуто вручную.
   const sellerFilterFromUrlRef = useRef(false)
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
@@ -644,6 +646,10 @@ export function FfProductsCatalogScreen({
       openFbsStockDialog([targetId])
     }
     fbsLimitAutoOpenedRef.current = targetId
+    // WMS-491 (F6): эта чистка тоже меняет location.key — помечаем её как
+    // свою же для эффекта сброса фильтра «Селлер» ниже, иначе он спутает её
+    // со входом из меню и снимет уже применённый ?seller_id=.
+    ownAddressCleanupRef.current = true
     const next = new URLSearchParams(searchParams)
     next.delete('fbs_limit')
     setSearchParams(next, { replace: true })
@@ -665,25 +671,29 @@ export function FfProductsCatalogScreen({
       setFilterSellerId(resolved)
       sellerFilterFromUrlRef.current = true
     }
-    sellerFilterOwnCleanupRef.current = true
+    ownAddressCleanupRef.current = true
     const next = new URLSearchParams(searchParams)
     next.delete('seller_id')
     setSearchParams(next, { replace: true })
   }, [searchParams, sellers, setSearchParams])
 
-  // Правка F2 (ревью Astra): переход по адресу с ?seller_id= меняет только
-  // search — react-router не размонтирует экран при повторном клике по тому
-  // же пункту меню («Каталог»), поэтому локальный фильтр из строки выше сам
-  // по себе не сбросится (R9/C9). location.key меняется при КАЖДОЙ навигации,
-  // в отличие от searchParams (для перехода на тот же пустой адрес его ссылка
-  // не меняется — react-router мемоизирует по строке location.search) — этим
-  // и ловим повторный вход из меню. Собственную чистку параметра эффектом
-  // выше пропускаем через sellerFilterOwnCleanupRef; если фильтр выставлен
-  // вручную (sellerFilterFromUrlRef уже false), эффект его не трогает.
+  // Правка F2 (ревью Astra №1), затем F6 (ревью №2): переход по адресу с
+  // ?seller_id= меняет только search — react-router не размонтирует экран при
+  // повторном клике по тому же пункту меню («Каталог»), поэтому локальный
+  // фильтр из эффекта выше сам по себе не сбросится (R9/C9). location.key
+  // меняется при КАЖДОЙ навигации, в отличие от searchParams (для перехода на
+  // тот же пустой адрес его ссылка не меняется — react-router мемоизирует по
+  // строке location.search) — этим и ловим повторный вход из меню. Но
+  // location.key меняется и от чужой в этом экране чистки ?fbs_limit= выше —
+  // её тоже нужно отличать от входа из меню, а не только свою. Обе чистки
+  // помечают следующую смену location.key общим ownAddressCleanupRef — эффект
+  // ниже пропускает её независимо от того, какая из двух сработала. Если
+  // фильтр выставлен вручную (sellerFilterFromUrlRef уже false), эффект его
+  // не трогает.
   useEffect(() => {
     if (searchParams.get('seller_id')) return
-    if (sellerFilterOwnCleanupRef.current) {
-      sellerFilterOwnCleanupRef.current = false
+    if (ownAddressCleanupRef.current) {
+      ownAddressCleanupRef.current = false
       return
     }
     if (sellerFilterFromUrlRef.current) {

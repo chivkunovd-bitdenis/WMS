@@ -128,6 +128,11 @@ function SellerCardScreenForSeller({ token, authHeaders, sellers }: Props) {
   // после сохранения карточка перечитывает профиль, а до этого мог висеть
   // предыдущий запрос с устаревшим снимком). Побеждает только последний
   // начатый запрос — остальные ответы, включая ошибочные, молча отбрасываются.
+  // Ревью №2: `fetch` разрешается раньше, чем прочитано тело ответа —
+  // проверку актуальности нужно повторить сразу перед каждым `setProfile`/
+  // `setProfileError`, после `await res.json()`, а не только сразу после
+  // `await fetch(...)`; иначе тело более старого ответа успевает прийти уже
+  // после нового запроса и всё равно затирает актуальные данные.
   const profileRequestRef = useRef(0)
 
   const loadProfile = useCallback(async () => {
@@ -137,18 +142,18 @@ function SellerCardScreenForSeller({ token, authHeaders, sellers }: Props) {
       const res = await fetch(apiUrl(`/billing/profiles/sellers/${sellerId}`), {
         headers: authHeaders(token),
       })
-      if (requestId !== profileRequestRef.current) return
       if (!res.ok) {
         // Сбой чтения — не то же самое, что «реквизитов нет» (F5): прежние
         // показанные данные не трогаем, просто сообщаем о сбое отдельно.
-        setProfileError(true)
+        if (requestId === profileRequestRef.current) setProfileError(true)
         return
       }
-      setProfileError(false)
-      setProfile((await res.json()) as ProfileSnapshot | null)
-    } catch {
+      const data = (await res.json()) as ProfileSnapshot | null
       if (requestId !== profileRequestRef.current) return
-      setProfileError(true)
+      setProfileError(false)
+      setProfile(data)
+    } catch {
+      if (requestId === profileRequestRef.current) setProfileError(true)
     }
   }, [authHeaders, sellerId, token])
 
