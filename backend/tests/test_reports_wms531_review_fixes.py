@@ -552,23 +552,32 @@ async def _seed_ozon_split_scenario(
 
 
 @pytest.mark.asyncio
-async def test_f1_round2_ozon_position_index_computed_once_per_export(
+async def test_f1_round4_ozon_position_index_scoped_per_seller(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F1 (раунд 2): раньше поиск по ozon_positions_json выполнялся заново на
-    каждую порцию (каждого селлера) — идентичный запрос ко всему подходящему
-    журналу арендатора повторялся N раз. Теперь `_load_ozon_position_index`
-    считается один раз на весь экспорт, независимо от числа селлеров."""
-    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f1r2")
+    """F1 (раунд 4): раунд 2 закрыл ПОВТОР одинакового полного запроса на
+    каждую порцию, посчитав индекс один раз на весь тенант и держа его в
+    памяти до конца экспорта — но для тенанта с одним крупным селлером это
+    сам по себе весь журнал Ozon арендатора за период. Раунд 4 (F1, находка
+    «остаётся») просит ограничить запрос выбранным продавцом: заказ Ozon
+    целиком принадлежит одному selleru (позиции JSON — line-items одного его
+    заказа), поэтому фильтр `FbsOrder.seller_id == seller_id` не теряет ни
+    одной позиции-соседа — в отличие от фильтра по товару, который отрезал
+    бы её (F2/F3). Теперь `_load_ozon_position_index` вызывается ПОРЦИОННО —
+    один раз на каждого продавца отчёта, каждый раз со своим `seller_id`, а
+    не один раз без фильтра на весь тенант."""
+    headers, tenant_id, _user_id = await _org(async_client, name="Wms531f1r4")
+    seller_ids: dict[str, uuid.UUID] = {}
     for tag in ("s1", "s2", "s3"):
-        await _seed_ozon_split_scenario(async_client, headers, tenant_id=tenant_id, tag=tag)
+        seller_ids[tag] = await _seed_ozon_split_scenario(
+            async_client, headers, tenant_id=tenant_id, tag=tag
+        )
 
-    call_count = 0
+    calls: list[uuid.UUID | None] = []
     original = reporting_service._load_ozon_position_index
 
     async def _counting_wrapper(*args: object, **kwargs: object) -> dict[object, object]:
-        nonlocal call_count
-        call_count += 1
+        calls.append(kwargs.get("seller_id"))  # type: ignore[arg-type]
         return await original(*args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(reporting_service, "_load_ozon_position_index", _counting_wrapper)
@@ -578,7 +587,10 @@ async def test_f1_round2_ozon_position_index_computed_once_per_export(
         params={**PERIOD, "group_by": "product"},
     )
     assert response.status_code == 200, response.text
-    assert call_count == 1, f"ozon position index computed {call_count} times, expected 1"
+    # Один вызов на каждого из трёх селлеров отчёта, не один общий на тенант.
+    assert len(calls) == 3, f"ozon position index computed {len(calls)} times, expected 3"
+    assert None not in calls, "each per-seller call must pass its own seller_id filter"
+    assert set(calls) == set(seller_ids.values())
 
     workbook = load_workbook(io.BytesIO(response.content))
     sheet = workbook.active
@@ -587,8 +599,8 @@ async def test_f1_round2_ozon_position_index_computed_once_per_export(
         cell.value for row in sheet.iter_rows(min_row=2) for cell in [row[6]]
         if cell.value is not None
     }
-    # Все три селлера должны получить документ своей второй позиции (P2),
-    # найденной только через общий индекс, а не отдельным запросом на порцию.
+    # Все три селлера должны получить документ своей второй позиции (P2) —
+    # фильтр по продавцу не должен отрезать позицию-соседа по JSON.
     for tag in ("s1", "s2", "s3"):
         assert f"Заказ Ozon №{tag}-PROBE" in documents
 

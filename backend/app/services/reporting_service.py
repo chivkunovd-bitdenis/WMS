@@ -1077,14 +1077,17 @@ async def _resolve_fbs_documents(
     граница периода, а дата журнала — нет. Старое ограничение по дате
     журнала теряло вторую и следующие позиции, если журнал готовили раньше.
 
-    WMS-531 ревью Astra, раунд 2, F1: этот же запрос по `ozon_positions_json`,
-    если выполнять его отдельно на каждую порцию (каждого селлера), повторяет
-    идентичное чтение всего подходящего по датам журнала арендатора столько
-    раз, сколько в отчёте селлеров. `build_inventory_workbook` считает его
-    ОДИН раз на весь запрос через `_load_ozon_position_index` и передаёт сюда
-    готовым словарём `ozon_position_index`; `list_product_movements` (один
-    вызов на запрос) им не пользуется и оставляет прежний путь — свой запрос,
-    ограниченный ровно тем же условием даты.
+    WMS-531 ревью Astra, раунд 2 и раунд 4, F1: этот же запрос по
+    `ozon_positions_json`, если выполнять его без фильтра отдельно на каждую
+    порцию (каждого селлера), повторяет идентичное чтение всего подходящего
+    по датам журнала арендатора столько раз, сколько в отчёте селлеров.
+    `build_inventory_workbook` считает его ПОРЦИОННО через
+    `_load_ozon_position_index`, по одному разу на каждого продавца отчёта со
+    своим `seller_id` (не один раз без фильтра на весь тенант — см. докстринг
+    той функции), и передаёт сюда готовым словарём `ozon_position_index`;
+    `list_product_movements` (один вызов на запрос) им не пользуется и
+    оставляет прежний путь — свой запрос, ограниченный ровно тем же условием
+    даты.
     """
     fbs_movement_ids = {
         row.id for row in rows if row.movement_type in {"fbs_shipment", "fbs_order_pick"}
@@ -1308,20 +1311,41 @@ async def _load_ozon_position_index(
     *,
     date_from: datetime,
     date_to: datetime,
+    seller_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, tuple[str, uuid.UUID | None]]:
     """movement_id -> (подпись заказа с площадкой, supply_id) для ЛЮБОЙ позиции
     Ozon-заказа, чей якорь (`shipment_movement_id`) создан в границах периода.
 
     WMS-531 ревью Astra, раунд 2, F1: тот же запрос, что в `_resolve_fbs_documents`
     делает для одной порции движений — но если вызывать его на КАЖДУЮ порцию
-    (каждого селлера в Excel), он повторяет идентичное чтение всего подходящего
-    по датам журнала арендатора столько раз, сколько в отчёте селлеров. Здесь
-    считается ОДИН раз на весь запрос экспорта; `build_inventory_workbook`
-    передаёт готовый результат в каждый вызов `_enrich_movement_rows`. Запрос
-    по-прежнему ограничен периодом (не всей историей арендатора) — граница та
-    же, что и раньше (F2): якорь, а не дата самого журнала.
+    БЕЗ фильтра, он повторяет идентичное чтение всего подходящего по датам
+    журнала арендатора столько раз, сколько в отчёте селлеров.
+
+    WMS-531 ревью Astra, раунд 4, F1: считать этот индекс ОДИН раз на весь
+    экспорт и держать его целиком (как было после раунда 2) — тоже накопление:
+    для организации с одним крупным селлером это весь журнал Ozon арендатора
+    за период, независимо от выбранного в запросе `seller_id`/`search`.
+    `ozon_positions_json` — это позиции ОДНОГО заказа Ozon, а у заказа
+    (`FbsOrder`) один продавец на все его позиции (`seller_id` — колонка
+    заказа, не отдельной позиции), поэтому фильтр по продавцу здесь не теряет
+    ни одной позиции чужого товара внутри того же заказа — в отличие от
+    фильтра по товару, который отрезал бы позиции-соседи по JSON (F2/F3).
+    `build_inventory_workbook` теперь вызывает эту функцию ПОРЦИОННО — на
+    каждого продавца отчёта со своим `seller_id`, а не один раз на весь
+    тенант: словарь предыдущего селлера освобождается, пока строится текущий.
+    Запрос по-прежнему ограничен периодом (не всей историей арендатора) —
+    граница та же, что и раньше (F2): якорь, а не дата самого журнала.
     """
     anchor_movement = aliased(InventoryMovement)
+    filters = [
+        FbsShipmentReversalLedger.tenant_id == tenant_id,
+        FbsOrder.tenant_id == tenant_id,
+        FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
+        anchor_movement.created_at >= date_from,
+        anchor_movement.created_at < date_to,
+    ]
+    if seller_id is not None:
+        filters.append(FbsOrder.seller_id == seller_id)
     rows = await session.execute(
         select(
             FbsShipmentReversalLedger.ozon_positions_json,
@@ -1333,13 +1357,7 @@ async def _load_ozon_position_index(
             anchor_movement,
             anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
         )
-        .where(
-            FbsShipmentReversalLedger.tenant_id == tenant_id,
-            FbsOrder.tenant_id == tenant_id,
-            FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
-            anchor_movement.created_at >= date_from,
-            anchor_movement.created_at < date_to,
-        )
+        .where(*filters)
     )
     index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
     for positions, marketplace, wb_order_id, external_order_id, supply_id in rows:
@@ -1418,8 +1436,9 @@ async def _enrich_movement_rows(
     там в одной пачке лежат разные товары.
 
     `ozon_position_index` — см. `_resolve_fbs_documents`/`_load_ozon_position_index`
-    (WMS-531 ревью Astra, раунд 2, F1): готовый словарь, который Excel считает
-    один раз на весь запрос вместо повторного чтения журнала на каждую порцию.
+    (WMS-531 ревью Astra, раунды 2 и 4, F1): готовый словарь, который Excel
+    считает порционно (по продавцу) вместо повторного нефильтрованного чтения
+    журнала на каждую порцию.
     """
     intake_line_ids = {row.inbound_intake_line_id for row in rows if row.inbound_intake_line_id}
     unload_ids = {
@@ -1643,10 +1662,14 @@ async def build_inventory_workbook(
        номера), а не одним `.all()`: размер порции чтения/обогащения
        ограничен константой `_MOVEMENT_FETCH_CHUNK_SIZE` независимо от того,
        сколько всего движений у этого селлера за период.
-    3. Поиск позиций Ozon в `ozon_positions_json` считается ОДИН раз на весь
-       запрос через `_load_ozon_position_index`, а не в каждой порции —
-       иначе идентичный запрос ко всему подходящему по датам журналу
-       арендатора повторялся бы по разу на каждого селлера/порцию.
+    3. Поиск позиций Ozon в `ozon_positions_json` (`_load_ozon_position_index`)
+       считается ПОРЦИОННО — на каждого продавца отчёта со своим `seller_id`
+       (F1, раунд 4), а не один раз на весь тенант: заказ Ozon целиком
+       принадлежит одному продавцу, поэтому фильтр по продавцу не теряет
+       позиций-соседей по JSON (в отличие от фильтра по товару — см.
+       докстринг `_load_ozon_position_index`), а держать индекс всех заказов
+       тенанта на весь экспорт (как раньше) не нужно: словарь предыдущего
+       селлера освобождается, пока строится текущий.
     """
     del warehouse_id
     date_from, date_to = normalize_period(date_from, date_to)
@@ -1674,10 +1697,6 @@ async def build_inventory_workbook(
     # движений тоже читается порциями, и не нужно держать все товары/фигуры
     # тенанта плоским списком одновременно с ними.
     del figures, infos
-
-    ozon_position_index = await _load_ozon_position_index(
-        session, tenant_id, date_from=date_from, date_to=date_to,
-    )
 
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Остатки и движения")
@@ -1742,6 +1761,16 @@ async def build_inventory_workbook(
                 cell.number_format = _XLSX_DATE_FORMAT
             cells.append(cell)
         sheet.append(cells)
+        # WMS-531 ревью Astra, раунд 4, F1: `WriteOnlyWorksheet.append` водит
+        # генератор `_write_rows` СИНХРОННО до следующего `yield` — к моменту,
+        # когда `append` выше вернул управление, `write_row` уже прочитал
+        # `sheet.row_dimensions.get(next_row, {})` и записал outlineLevel/hidden
+        # в XML-поток этой строки. Дальше запись держать незачем: без очистки
+        # `row_dimensions` растёт на объект `RowDimension` на каждую вложенную
+        # строку и не освобождается до конца всего экспорта (было 202 объекта
+        # на 200 движений одного товара).
+        if outline_level > 0 and next_row in sheet.row_dimensions:
+            del sheet.row_dimensions[next_row]
 
     _MOVEMENT_FETCH_CHUNK_SIZE = 1000
 
@@ -1896,6 +1925,16 @@ async def build_inventory_workbook(
     for _seller_key, bucket in sorted(sellers.items(), key=lambda kv: str(kv[1]["seller_name"])):
         products: list[tuple[uuid.UUID, _ProductInfo, ProductPeriodFigures]] = bucket["products"]  # type: ignore[assignment]
         seller_product_ids = [pid for pid, _info, _fig in products]
+        # F1, раунд 4: индекс позиций Ozon — порционно, на текущего продавца
+        # (см. докстрings `_load_ozon_position_index` и этой функции); "Без
+        # селлера" (seller_id пуст у всех товаров бакета) — без фильтра, эта
+        # группа сама по себе узкая. Предыдущий словарь селлера в этот момент
+        # уже не нужен — GC освобождает его, пока строится следующий.
+        current_seller_id = products[0][1].seller_id
+        ozon_position_index = await _load_ozon_position_index(
+            session, tenant_id, date_from=date_from, date_to=date_to,
+            seller_id=current_seller_id,
+        )
 
         seller_opening = sum(fig.opening_balance for _p, _i, fig in products)
         seller_in = sum(fig.in_qty for _p, _i, fig in products)
