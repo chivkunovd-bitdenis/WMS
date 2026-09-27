@@ -49,6 +49,26 @@ type SellerAppProps = {
   navigationBasePath?: string
 }
 
+/**
+ * Ключ пересоздания разделов кабинета селлера (WMS-549, ревью Astra F1).
+ *
+ * Раньше ключ строился только по активному селлеру профиля. При переключении
+ * магазина applyToken() меняет токен сразу, а обновлённый /auth/me приходит
+ * отдельным, более медленным запросом — в этом окне экран уже получал новый
+ * токен, но со старым ключом и потому не пересоздавался: внутреннее состояние
+ * панелей с собственной дочиткой (например, страницы истории счетов, курсор,
+ * открытый счёт) успевало смешаться с ответом новой сессии, прежде чем профиль
+ * обновлялся и ключ менялся следом. Токен меняется в том же рендере, что и
+ * подставляется сюда, поэтому пересоздание происходит одновременно со сменой
+ * сессии — раньше первого запроса новой сессией.
+ */
+export function sellerCatalogScopeKey(
+  token: string | null,
+  me: { active_seller_id?: string | null; seller_id?: string | null },
+): string {
+  return `${token ?? 'anon'}:${me.active_seller_id ?? me.seller_id ?? 'none'}`
+}
+
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -326,7 +346,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     if (!me) {
       return null
     }
-    const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
+    const catalogScopeKey = sellerCatalogScopeKey(token, me)
     const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
     const accessDenied = (
       <Alert severity="warning" data-testid="seller-access-denied">

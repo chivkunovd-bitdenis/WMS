@@ -7,6 +7,7 @@ import {
   documentSupplyCell,
   documentTitleCell,
   FfBillingSellerDetails,
+  sectionRateCell,
   type SellerReportDetails,
   type SellerReportEntry,
 } from './FfBillingSellerDetails'
@@ -161,6 +162,42 @@ describe('WMS-549 FfBillingSellerDetails seller scope', () => {
     expect(sellerSupply).not.toContain('<a ')
     expect(sellerSupply).toContain('ФБС-000012')
     expect(ffSupply).toContain('href="/app/ff/fbs?supply_id=supply-1"')
+  })
+})
+
+describe('WMS-549 F4 (ревью Astra): без поясняющих всплывающих подсказок у селлера', () => {
+  it('не передаёт hint статусу FBS в withStatus() для селлера, оставляет его у ФФ', () => {
+    const entryWithStatus: SellerReportEntry = {
+      ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry),
+      fbs_status_label: 'ВБ получил',
+    }
+
+    const sellerMarkup = renderToStaticMarkup(<>{documentTitleCell(entryWithStatus, true, () => {}, () => {})}</>)
+    const ffMarkup = renderToStaticMarkup(
+      <MemoryRouter>{documentTitleCell(entryWithStatus, false, () => {}, () => {})}</MemoryRouter>,
+    )
+
+    // Сам статус остаётся в обоих режимах (R10 его разрешает).
+    expect(sellerMarkup).toContain('ВБ получил')
+    expect(ffMarkup).toContain('ВБ получил')
+    // Объясняющий Tooltip добавляет aria-label с текстом пояснения — у селлера его быть не должно.
+    expect(sellerMarkup).not.toContain('aria-label="Wildberries подтвердил приём')
+    expect(ffMarkup).toContain('aria-label="Wildberries подтвердил приём')
+  })
+
+  it('не передаёт пояснение «Документы раздела прошли по разным ставкам» для селлера, оставляет его у ФФ', () => {
+    const entries: SellerReportEntry[] = [
+      { ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry), id: 'e1', rate_kopecks: 300 },
+      { ...(detailsWithLinkableEntries.entries[0] as SellerReportEntry), id: 'e2', rate_kopecks: 500 },
+    ]
+
+    const sellerMarkup = renderToStaticMarkup(<>{sectionRateCell(entries, true)}</>)
+    const ffMarkup = renderToStaticMarkup(<>{sectionRateCell(entries, false)}</>)
+
+    expect(sellerMarkup).toContain('разные')
+    expect(ffMarkup).toContain('разные')
+    expect(sellerMarkup).not.toContain('aria-label="Документы раздела прошли по разным ставкам"')
+    expect(ffMarkup).toContain('aria-label="Документы раздела прошли по разным ставкам"')
   })
 })
 
