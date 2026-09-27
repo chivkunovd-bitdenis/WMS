@@ -294,26 +294,50 @@ function humanSyncFailureMessage(rawMessage: string, platformFallback: string): 
   return trimmed || platformFallback
 }
 
+type ConnectionStatus = 'connected' | 'not_connected' | 'check_failed'
+
+/**
+ * F9 (ревью Astra №2): «не смогли узнать, подключена ли площадка» — это не
+ * то же самое, что «площадка точно не подключена». Раньше оба случая давали
+ * одно и то же false, и отказ самой проверки (403/500/503, сеть, битый
+ * JSON) молча отменял синхронизацию без единого слова пользователю. Здесь
+ * они различаются: подтверждённое отсутствие подключения — статус
+ * not_connected (площадку просто не трогаем, как и раньше), а неудача самой
+ * проверки — check_failed с сообщением, которое обязано быть видно.
+ */
+async function checkPlatformConnected(
+  headers: Record<string, string>,
+  url: string,
+  isConnected: (body: unknown) => boolean,
+): Promise<{ status: ConnectionStatus; message: string | null }> {
+  try {
+    const res = await fetch(apiUrl(url), { headers })
+    if (!res.ok) {
+      return { status: 'check_failed', message: await readApiErrorMessage(res) }
+    }
+    const body: unknown = await res.json()
+    return { status: isConnected(body) ? 'connected' : 'not_connected', message: null }
+  } catch (e) {
+    return { status: 'check_failed', message: e instanceof Error ? e.message : null }
+  }
+}
+
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
 ): Promise<SellerCatalogSyncOutcome> {
-  // Неподключённую площадку пропускаем молча — как и у Ozon, «ключа нет»
-  // не ошибка синхронизации, а обычное состояние (WMS-548, доработка после
-  // приёмки F4: голый missing_content_token на экране у селлера без WB пугал
-  // его там, где WB у него попросту не подключён).
-  let wbConnected = false
-  try {
-    const wbStatusRes = await fetch(apiUrl('/integrations/wildberries/self/tokens'), { headers })
-    if (wbStatusRes.ok) {
-      const wbStatus = (await wbStatusRes.json()) as { has_content_token?: boolean }
-      wbConnected = Boolean(wbStatus.has_content_token)
-    }
-  } catch {
-    // Неудачная проверка подключения — не сбой синхронизации, WB просто не трогаем.
-  }
+  const wbCheck = await checkPlatformConnected(
+    headers,
+    '/integrations/wildberries/self/tokens',
+    (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
+  )
 
   let wbFailure: string | null = null
-  if (wbConnected) {
+  if (wbCheck.status === 'check_failed') {
+    wbFailure = humanSyncFailureMessage(
+      wbCheck.message ?? '',
+      'Не удалось проверить подключение Wildberries.',
+    )
+  } else if (wbCheck.status === 'connected') {
     try {
       const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
         method: 'POST',
@@ -329,20 +353,21 @@ export async function syncSellerCatalogMarketplaces(
       wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
     }
   }
+  // wbCheck.status === 'not_connected' — площадку просто не трогаем, молча.
 
-  let ozonConnected = false
-  try {
-    const statusRes = await fetch(apiUrl('/integrations/ozon/self/account'), { headers })
-    if (statusRes.ok) {
-      const status = (await statusRes.json()) as { connected?: boolean }
-      ozonConnected = Boolean(status.connected)
-    }
-  } catch {
-    // См. комментарий выше: неудачная проверка подключения — не сбой синхронизации.
-  }
+  const ozonCheck = await checkPlatformConnected(
+    headers,
+    '/integrations/ozon/self/account',
+    (body) => Boolean((body as { connected?: boolean }).connected),
+  )
 
   let ozonFailure: string | null = null
-  if (ozonConnected) {
+  if (ozonCheck.status === 'check_failed') {
+    ozonFailure = humanSyncFailureMessage(
+      ozonCheck.message ?? '',
+      'Не удалось проверить подключение Ozon.',
+    )
+  } else if (ozonCheck.status === 'connected') {
     try {
       const ozonRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
         method: 'POST',
@@ -1068,7 +1093,12 @@ export function SellerProductsStockScreen({
                       <Typography
                         variant="caption"
                         sx={{
-                          flex: '1 1 0',
+                          // F8 (ревью Astra №2): flex — только у новой ветки строк
+                          // «не на ФФ» (нужен, чтобы MarketplaceIcon не съедал
+                          // название, см. коммит выше). У товара на ФФ — как в
+                          // etalon, без flex, чтобы не сдвигать существующий
+                          // Ozon-чип.
+                          ...(onFulfillment ? {} : { flex: '1 1 0' }),
                           minWidth: 0,
                           fontWeight: 600,
                           display: '-webkit-box',
@@ -1128,7 +1158,17 @@ export function SellerProductsStockScreen({
                     <Typography
                       variant="caption"
                       sx={{ fontSize: '0.7rem' }}
-                      title={allBarcodes.length > 0 ? allBarcodes.join(', ') : undefined}
+                      // F8 (ревью Astra №2): у товара на ФФ подсказка — как в
+                      // etalon, тот же код, что и в самой ячейке. Список всех
+                      // ШК в наведении — только у новой ветки «не на ФФ» (там
+                      // одна строка отвечает сразу за несколько ШК карточки).
+                      title={
+                        onFulfillment
+                          ? primaryBarcode ?? '—'
+                          : allBarcodes.length > 0
+                            ? allBarcodes.join(', ')
+                            : undefined
+                      }
                       noWrap
                     >
                       {primaryBarcode ?? '—'}
