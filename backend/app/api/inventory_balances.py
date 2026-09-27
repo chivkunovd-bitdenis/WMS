@@ -158,7 +158,7 @@ async def get_inventory_balances_summary(
                 available=(
                     max(0, dist.quantity_free_fbo - fbo_reserved)
                     if dist.quantity_fbs > 0 or dist.quantity_reserved > 0
-                    else max(0, qty - (sort_qty if address_enabled else 0) - rsv)
+                    else max(0, qty - rsv)
                 ),
                 quantity_fbs=dist.quantity_fbs,
                 quantity_reserved_directions=dist.quantity_reserved,
@@ -316,5 +316,5 @@ async def get_inventory_balances(
     for row in grouped.values():
         row.quantity_in_sorting = row.quantity if is_sorting else 0
         row.quantity_in_storage = 0 if is_sorting else row.quantity
-        row.available = 0 if is_sorting else row.quantity - row.reserved
+        row.available = row.quantity - row.reserved
     return list(grouped.values())
