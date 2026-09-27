@@ -54,6 +54,7 @@ import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
 import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
 import { MarketplaceChip } from '../../ui-kit'
+import { ProductCardDialog } from './product-card/ProductCardDialog'
 
 type SellerRow = { id: string; name: string }
 type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
@@ -161,6 +162,10 @@ type Props = {
   sellers: SellerRow[]
   warehouses: WarehouseRow[]
   canManageCatalog?: boolean; addressStorageEnabled?: boolean
+  /** Доступен отчёт «Остатки и движения» — решает, видна ли вкладка «Движения» в карточке товара (WMS-490, R3). */
+  canViewMovements?: boolean
+  /** Открыть документ приёмки из вкладки «Движения» карточки товара — как у отчёта. */
+  onOpenInbound?: (id: string) => void
 }
 
 function humanFfCatalogError(message: string): string {
@@ -213,6 +218,8 @@ export function FfProductsCatalogScreen({
   sellers,
   warehouses,
   canManageCatalog = false, addressStorageEnabled = true,
+  canViewMovements = false,
+  onOpenInbound,
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -249,6 +256,9 @@ export function FfProductsCatalogScreen({
   // WMS-469: all three entries use one container; this screen owns selection only.
   const [fbsDialogRows, setFbsDialogRows] = useState<FfCatalogRow[] | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
+
+  // ── Карточка товара (WMS-490): строка каталога открывает окно поверх него ──
+  const [cardRow, setCardRow] = useState<FfCatalogRow | null>(null)
 
   // ── Ручное объединение двух карточек (WMS-349) ──────────────────────────
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -1136,8 +1146,14 @@ export function FfProductsCatalogScreen({
                 const barcode = resolveProductPrimaryBarcode(displayMeta)
                 const markingCount = p.marking_available_count ?? 0
                 return (
-                  <TableRow key={p.id} hover data-testid="ff-product-row">
-                    <TableCell padding="checkbox">
+                  <TableRow
+                    key={p.id}
+                    hover
+                    data-testid="ff-product-row"
+                    onClick={() => setCardRow(p)}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(p.id)}
                         disabled={!canManageCatalog}
@@ -1295,7 +1311,7 @@ export function FfProductsCatalogScreen({
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell sx={{ minWidth: 0 }}>
+                    <TableCell sx={{ minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="small"
                         variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
@@ -1326,7 +1342,11 @@ export function FfProductsCatalogScreen({
                         />
                       ) : null}
                     </TableCell>
-                    <TableCell data-testid={`ff-catalog-reserves-cell-${p.id}`} sx={{ minWidth: 0 }}>
+                    <TableCell
+                      data-testid={`ff-catalog-reserves-cell-${p.id}`}
+                      sx={{ minWidth: 0 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Button
                         size="small"
                         variant="outlined"
@@ -1339,6 +1359,7 @@ export function FfProductsCatalogScreen({
                     <TableCell
                       align="center"
                       sx={{ borderLeft: '1px solid', borderLeftColor: 'divider' }}
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         {/* Настройка остатка FBS по одному товару — как на
@@ -1856,6 +1877,23 @@ export function FfProductsCatalogScreen({
             onClose={() => setFbsDialogRows(null)}
             onChanged={() => void load()}
             onLoadError={setFbsDialogError}
+          />
+        ) : null}
+
+        {cardRow ? (
+          <ProductCardDialog
+            row={cardRow}
+            token={token}
+            authHeaders={authHeaders}
+            canManageCatalog={canManageCatalog}
+            canViewMovements={canViewMovements}
+            addressStorageEnabled={addressStorageEnabled}
+            warehouses={warehouses}
+            onOpenInbound={onOpenInbound}
+            onClose={(changed) => {
+              setCardRow(null)
+              if (changed) void load()
+            }}
           />
         ) : null}
       </Box>
