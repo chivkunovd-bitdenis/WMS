@@ -265,25 +265,69 @@ export type SellerCatalogSyncOutcome = {
  * подключения — снаружи это выглядело так, будто кнопка вообще ничего не
  * сделала.
  *
- * Проверка «подключён ли Ozon» — вспомогательный шаг: её собственный отказ
- * не считается сбоем синхронизации, Ozon в этот раз просто не трогаем (как и
- * раньше). А вот отказ самого запроса синхронизации Ozon — уже результат,
- * который обязан быть виден.
+ * Обе площадки сначала проверяются на подключение (у WB — has_content_token,
+ * у Ozon — connected) и синхронизируются, только если ключ есть; неподключённая
+ * площадка пропускается молча — «ключа нет» не ошибка, а обычное состояние
+ * (после приёмки F4 голый `missing_content_token` на экране у селлера без
+ * WB выглядел как сбой там, где WB у него просто не подключён). Отказ самой
+ * проверки подключения — тоже не сбой синхронизации, площадку в этот раз
+ * просто не трогаем. А вот отказ самого запроса синхронизации уже
+ * подключённой площадки — результат, который обязан быть виден, человеческим
+ * текстом, а не кодом.
  */
+/**
+ * Превращает код ошибки бэкенда в человеческую строку. Известные коды —
+ * своим текстом (как `invalid_wb_token` уже расшифрован в SellerSettingsScreen);
+ * всё остальное, что похоже на код, а не на готовую фразу (readApiErrorMessage
+ * уже умеет разворачивать часть кодов через общий словарь, но не все), —
+ * общим сообщением про площадку, а не голым идентификатором на экране
+ * (тот же приём, что и humanFfCatalogError в каталоге ФФ).
+ */
+function humanSyncFailureMessage(rawMessage: string, platformFallback: string): string {
+  const trimmed = rawMessage.trim()
+  if (trimmed.includes('invalid_wb_token')) {
+    return 'Ключ WB не подходит — проверка не прошла.'
+  }
+  if (/^[a-z0-9_:-]+$/.test(trimmed)) {
+    return platformFallback
+  }
+  return trimmed || platformFallback
+}
+
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
 ): Promise<SellerCatalogSyncOutcome> {
-  let wbFailure: string | null = null
+  // Неподключённую площадку пропускаем молча — как и у Ozon, «ключа нет»
+  // не ошибка синхронизации, а обычное состояние (WMS-548, доработка после
+  // приёмки F4: голый missing_content_token на экране у селлера без WB пугал
+  // его там, где WB у него попросту не подключён).
+  let wbConnected = false
   try {
-    const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-      method: 'POST',
-      headers,
-    })
-    if (!wbRes.ok) {
-      wbFailure = await readApiErrorMessage(wbRes)
+    const wbStatusRes = await fetch(apiUrl('/integrations/wildberries/self/tokens'), { headers })
+    if (wbStatusRes.ok) {
+      const wbStatus = (await wbStatusRes.json()) as { has_content_token?: boolean }
+      wbConnected = Boolean(wbStatus.has_content_token)
     }
-  } catch (e) {
-    wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
+  } catch {
+    // Неудачная проверка подключения — не сбой синхронизации, WB просто не трогаем.
+  }
+
+  let wbFailure: string | null = null
+  if (wbConnected) {
+    try {
+      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+        method: 'POST',
+        headers,
+      })
+      if (!wbRes.ok) {
+        wbFailure = humanSyncFailureMessage(
+          await readApiErrorMessage(wbRes),
+          'Не удалось синхронизировать Wildberries.',
+        )
+      }
+    } catch (e) {
+      wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
+    }
   }
 
   let ozonConnected = false
@@ -305,7 +349,10 @@ export async function syncSellerCatalogMarketplaces(
         headers,
       })
       if (!ozonRes.ok) {
-        ozonFailure = await readApiErrorMessage(ozonRes)
+        ozonFailure = humanSyncFailureMessage(
+          await readApiErrorMessage(ozonRes),
+          'Не удалось синхронизировать Ozon.',
+        )
       }
     } catch (e) {
       ozonFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Ozon.'
