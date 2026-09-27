@@ -1,6 +1,12 @@
 # Порты на хосте по умолчанию вынесены из «типичных» 8000/5173/5432 — см. README.
 # Переопределение: WMS_DB_PORT, WMS_API_PORT, WMS_WEB_PORT, WMS_SELLER_WEB_PORT в .env или в shell.
 
+x-withdrawal-environment: &withdrawal-environment
+  WITHDRAWAL_ENVIRONMENT: ${WITHDRAWAL_ENVIRONMENT:-sandbox}
+  WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: ${WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED:-false}
+  WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:-}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-fixture-only-shared-key-never-production}
+
 services:
   db:
     image: postgres:16
@@ -30,6 +36,7 @@ services:
     build:
       context: ./backend
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
       WMS_DATA_DIR: /var/lib/wms/data
@@ -74,6 +81,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
     depends_on:
@@ -89,6 +97,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
     depends_on:

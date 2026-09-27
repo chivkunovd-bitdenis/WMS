@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         default=None,
         description="Redis URL for Celery (e.g. redis://redis:6379/0). "
         "Unset: API runs background jobs via FastAPI BackgroundTasks.",
+    )
+    withdrawal_environment: Literal["sandbox", "production"] = "sandbox"
+    withdrawal_production_submit_enabled: bool = Field(
+        default=False,
+        description="Production create requires separate release authorization; default closed.",
     )
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
