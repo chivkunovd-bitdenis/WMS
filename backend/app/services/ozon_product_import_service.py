@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.services.catalog_service import OZON_PRIMARY_IMAGE_KEY, update_product_dimensions
 from app.services.marketplace_provider import OzonMarketplaceProvider
 
@@ -491,22 +492,73 @@ async def _link_card_to_product(
     return link
 
 
-async def import_ozon_product_cards(
+async def upsert_ozon_imported_cards(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-    provider: OzonMarketplaceProvider,
-    *,
-    client_id: str,
-    api_key: str,
-    commit: bool = True,
-) -> OzonProductImportResult:
-    """Притянуть каталог Ozon: связать, чего нет — завести, всё — обогатить."""
-    cards = await fetch_product_cards(provider, client_id=client_id, api_key=api_key)
-    result = OzonProductImportResult(cards_read=len(cards))
-    if not cards:
-        return result
+    cards: Sequence[Mapping[str, Any]],
+) -> int:
+    """Write/refresh the seller's Ozon card snapshot. Returns rows written.
 
+    By the same reasoning as the WB snapshot (``wildberries_import_cards_service
+    .upsert_imported_cards``): this always runs, whether or not any card ends
+    up as a WMS product, so the seller can see and pick from the whole cabinet
+    without a live API call each time (WMS-548 A6).
+    """
+    n = 0
+    for card in cards:
+        product_id = _text_or_none(card.get("id"))
+        if product_id is None:
+            continue
+        stmt = select(SellerOzonImportedCard).where(
+            SellerOzonImportedCard.seller_id == seller_id,
+            SellerOzonImportedCard.ozon_product_id == product_id,
+        )
+        row = (await session.execute(stmt)).scalar_one_or_none()
+        sku = _text_or_none(card.get("sku"))
+        offer_id = _text_or_none(card.get("offer_id"))
+        name = _text_or_none(card.get("name"))
+        raw = dict(card) if card else None
+        if row is None:
+            session.add(
+                SellerOzonImportedCard(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    ozon_product_id=product_id,
+                    sku=sku,
+                    offer_id=offer_id,
+                    name=name,
+                    raw_json=raw,
+                )
+            )
+        else:
+            row.sku = sku
+            row.offer_id = offer_id
+            row.name = name
+            row.raw_json = raw
+        n += 1
+    await session.commit()
+    return n
+
+
+class OzonMatchContext(NamedTuple):
+    """Everything a card-processing pass needs, built once per request/sync run.
+
+    Rebuilding this per card would mean re-reading every product of the seller
+    for each of up to 500 cards in one "add to fulfillment" request — the same
+    class of cost WMS-538 paid for an unbatched full-catalog read.
+    """
+
+    links: list[ProductMarketplaceLink]
+    taken_product_ids: set[uuid.UUID]
+    match_index: ProductMatchIndex
+
+
+async def build_ozon_match_context(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> OzonMatchContext:
     links = list(
         (
             await session.execute(
@@ -526,78 +578,148 @@ async def import_ozon_product_cards(
     # склада не бывает двумя карточками сразу.
     taken_product_ids = {link.product_id for link in links}
     index = build_match_index(await _candidate_products(session, tenant_id, seller_id))
+    return OzonMatchContext(links=links, taken_product_ids=taken_product_ids, match_index=index)
 
-    for card in cards:
-        link = next((item for item in links if _link_matches(item, card)), None)
-        if link is None:
-            link = await _link_card_to_product(
-                session, tenant_id, seller_id, card, index, taken_product_ids, result
-            )
-            if link is None:
+
+async def process_one_ozon_card(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    card: Mapping[str, Any],
+    context: OzonMatchContext,
+    result: OzonProductImportResult,
+    *,
+    allow_create: bool,
+) -> ProductMarketplaceLink | None:
+    """Link (and, only when explicitly allowed, create) the product for one card.
+
+    ``allow_create=False`` is the sync/import default (WMS-548 R12 — a key
+    save or "Синхронизировать по API" must never turn the whole cabinet into
+    fulfillment products). ``allow_create=True`` is for a card the seller
+    explicitly picked in "Добавить к фулфилменту" (WMS-548 D3). Either way the
+    matching rules themselves (``match_card_to_product``, ``_link_card_to_
+    product``) are untouched — this only decides whether an unmatched card's
+    already-existing "create a new product" branch may run at all.
+    """
+    links, taken_product_ids, match_index = context
+    link = next((item for item in links if _link_matches(item, card)), None)
+    if link is None:
+        if not allow_create:
+            match = match_card_to_product(card, match_index, taken_product_ids)
+            if match.product_id is None:
                 offer_id = _text_or_none(card.get("offer_id"))
                 if offer_id is not None:
                     result.unmatched_offer_ids.append(offer_id)
-                continue
-            links.append(link)
-            taken_product_ids.add(link.product_id)
-        else:
-            result.links_matched += 1
+                return None
+        link = await _link_card_to_product(
+            session, tenant_id, seller_id, card, match_index, taken_product_ids, result
+        )
+        if link is None:
+            offer_id = _text_or_none(card.get("offer_id"))
+            if offer_id is not None:
+                result.unmatched_offer_ids.append(offer_id)
+            return None
+        links.append(link)
+        taken_product_ids.add(link.product_id)
+    else:
+        result.links_matched += 1
 
-        # `product_id` и `sku` у Ozon — разные числа, и публикация остатков
-        # подписывается именно product_id. Раньше поля под него не заполнял никто.
-        product_id = _text_or_none(card.get("id"))
-        if product_id is not None and link.external_product_id != product_id:
-            link.external_product_id = product_id
-            result.product_ids_applied += 1
-        sku = _text_or_none(card.get("sku"))
-        if sku is not None and not link.external_sku:
-            link.external_sku = sku
-        offer_id = _text_or_none(card.get("offer_id"))
-        if offer_id is not None and not link.external_offer_id:
-            link.external_offer_id = offer_id
-        barcodes = card_barcodes(card)
-        if barcodes and list(link.external_barcodes or []) != barcodes:
-            link.external_barcodes = barcodes
-            result.barcodes_applied += 1
-        image_url = card_primary_image_url(card)
-        if image_url is not None:
-            provider_data = dict(link.provider_data or {})
-            if provider_data.get(OZON_PRIMARY_IMAGE_KEY) != image_url:
-                provider_data[OZON_PRIMARY_IMAGE_KEY] = image_url
-                # JSON-колонка не отслеживает правку по месту: присваиваем целиком.
-                link.provider_data = provider_data
-                result.images_applied += 1
+    # `product_id` и `sku` у Ozon — разные числа, и публикация остатков
+    # подписывается именно product_id. Раньше поля под него не заполнял никто.
+    product_id = _text_or_none(card.get("id"))
+    if product_id is not None and link.external_product_id != product_id:
+        link.external_product_id = product_id
+        result.product_ids_applied += 1
+    sku = _text_or_none(card.get("sku"))
+    if sku is not None and not link.external_sku:
+        link.external_sku = sku
+    offer_id = _text_or_none(card.get("offer_id"))
+    if offer_id is not None and not link.external_offer_id:
+        link.external_offer_id = offer_id
+    barcodes = card_barcodes(card)
+    if barcodes and list(link.external_barcodes or []) != barcodes:
+        link.external_barcodes = barcodes
+        result.barcodes_applied += 1
+    image_url = card_primary_image_url(card)
+    if image_url is not None:
+        provider_data = dict(link.provider_data or {})
+        if provider_data.get(OZON_PRIMARY_IMAGE_KEY) != image_url:
+            provider_data[OZON_PRIMARY_IMAGE_KEY] = image_url
+            # JSON-колонка не отслеживает правку по месту: присваиваем целиком.
+            link.provider_data = provider_data
+            result.images_applied += 1
 
-        product = await session.get(Product, link.product_id)
-        if product is None:
-            continue
-        dimensions = card_dimensions_mm(card)
-        weight_g = card_weight_g(card)
-        if dimensions is None:
-            if card.get("depth") is not None or card.get("width") is not None:
-                result.skipped_unknown_units += 1
-            continue
-        if product.dimensions_source is not None and (
-            product.dimensions_source not in _OVERWRITABLE_SOURCES
-        ):
-            # Обмер, выбранный человеком, импорт не трогает.
-            result.skipped_manual_dimensions += 1
-            continue
-        length_mm, width_mm, height_mm = dimensions
-        await update_product_dimensions(
+    product = await session.get(Product, link.product_id)
+    if product is None:
+        return link
+    dimensions = card_dimensions_mm(card)
+    weight_g = card_weight_g(card)
+    if dimensions is None:
+        if card.get("depth") is not None or card.get("width") is not None:
+            result.skipped_unknown_units += 1
+        return link
+    if product.dimensions_source is not None and (
+        product.dimensions_source not in _OVERWRITABLE_SOURCES
+    ):
+        # Обмер, выбранный человеком, импорт не трогает.
+        result.skipped_manual_dimensions += 1
+        return link
+    length_mm, width_mm, height_mm = dimensions
+    await update_product_dimensions(
+        session,
+        tenant_id,
+        product.id,
+        length_mm=length_mm,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        weight_g=weight_g,
+        weight_g_set=weight_g is not None,
+        source=DIMENSIONS_SOURCE_OZON,
+        author_user_id=None,
+        commit=False,
+    )
+    result.dimensions_applied += 1
+    return link
+
+
+async def import_ozon_product_cards(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    commit: bool = True,
+    allow_create_for_unmatched: bool = False,
+) -> OzonProductImportResult:
+    """Притянуть каталог Ozon: сохранить снимок, связать, чего нашли — обогатить.
+
+    ``allow_create_for_unmatched`` по умолчанию ``False`` (WMS-548 R12): ключ
+    и «Синхронизировать по API» больше не превращают весь кабинет в товары
+    фулфилмента — карточка становится товаром только когда её выбрал селлер
+    (см. ``seller_fulfillment_catalog_service.add_cards_to_fulfillment``,
+    которая читает уже сохранённый снимок и вызывает обработку с ``True``,
+    не обращаясь к живому API повторно).
+    """
+    cards = await fetch_product_cards(provider, client_id=client_id, api_key=api_key)
+    result = OzonProductImportResult(cards_read=len(cards))
+    if not cards:
+        return result
+
+    await upsert_ozon_imported_cards(session, tenant_id, seller_id, cards)
+    context = await build_ozon_match_context(session, tenant_id, seller_id)
+
+    for card in cards:
+        await process_one_ozon_card(
             session,
             tenant_id,
-            product.id,
-            length_mm=length_mm,
-            width_mm=width_mm,
-            height_mm=height_mm,
-            weight_g=weight_g,
-            weight_g_set=weight_g is not None,
-            source=DIMENSIONS_SOURCE_OZON,
-            author_user_id=None,
-            commit=False,
+            seller_id,
+            card,
+            context,
+            result,
+            allow_create=allow_create_for_unmatched,
         )
-        result.dimensions_applied += 1
 
     if commit:
         await session.commit()

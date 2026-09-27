@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.marketplace_account import MarketplaceAccount
     from app.models.product import Product
     from app.models.seller_marking_credentials import SellerMarkingCredentials
+    from app.models.seller_ozon_imported_card import SellerOzonImportedCard
     from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
     from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
     from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
@@ -56,6 +57,11 @@ class Seller(Base):
     )
     wildberries_imported_cards: Mapped[list[SellerWildberriesImportedCard]] = relationship(
         "SellerWildberriesImportedCard",
+        back_populates="seller",
+        cascade="all, delete-orphan",
+    )
+    ozon_imported_cards: Mapped[list[SellerOzonImportedCard]] = relationship(
+        "SellerOzonImportedCard",
         back_populates="seller",
         cascade="all, delete-orphan",
     )

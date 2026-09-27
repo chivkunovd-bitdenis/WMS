@@ -15,18 +15,21 @@ into Python or building a giant ``IN`` clause — WMS-538 showed exactly what
 that does to a seller with tens of thousands of cards: the union of the two
 sources is paginated in SQL, and search/category filters run in SQL too.
 
-Only the WB half of the WMS-548 contract lives here. Ozon support (a new
-snapshot table, ``ozon_product_ids`` in the add call, Ozon rows in the page)
-is WMS-548 D3 and extends this module; until then ``marketplace="ozon"``
-yields no not-on-fulfillment rows and any ``ozon_product_ids`` passed to
-``add_cards_to_fulfillment`` come back skipped with ``ozon_not_supported_yet``.
+WMS-548 D3 adds the Ozon half by the same shape: a snapshot table
+(``seller_ozon_imported_cards``), an ``ozon_card`` branch in the union next to
+the WB one (gated by the same ``marketplace``/``on_fulfillment`` filters —
+Ozon carries no category, so a category filter simply excludes Ozon rows, as
+decided in А6), and real handling of ``ozon_product_ids`` in
+``add_cards_to_fulfillment``. Ozon's own matching/linking rules
+(``ozon_product_import_service``) are reused unchanged; only whether an
+unmatched card may turn into a *new* product is decided here, same as for WB.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from sqlalchemy import (
     ColumnElement,
@@ -48,9 +51,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import chunked, marketplace_scope_condition
+from app.services.ozon_product_import_service import (
+    OzonProductImportResult,
+    build_ozon_match_context,
+    process_one_ozon_card,
+)
+from app.services.ozon_product_import_service import (
+    card_barcodes as ozon_card_barcodes,
+)
+from app.services.ozon_product_import_service import (
+    card_primary_image_url as ozon_card_primary_image_url,
+)
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
@@ -73,8 +88,10 @@ MarketplaceFilter = Literal["wildberries", "ozon"]
 # скорее документирует лимит контракта, чем защищает от IN-запроса на тысячи id.
 ADD_TO_FULFILLMENT_MAX_IDS = 500
 
+_T = TypeVar("_T")
 
-def _dedupe_preserve_order(values: list[int]) -> list[int]:
+
+def _dedupe_preserve_order(values: list[_T]) -> list[_T]:
     return list(dict.fromkeys(values))
 
 
@@ -137,6 +154,48 @@ def _card_category_filters(category: str | None) -> list[Any]:
     if not normalized:
         return []
     return [SellerWildberriesImportedCard.raw_json["subjectName"].as_string() == normalized]
+
+
+def _ozon_not_on_fulfillment_condition(
+    tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> ColumnElement[bool]:
+    """True for an Ozon snapshot row with no active link to a WMS product yet."""
+    has_link = exists(
+        select(ProductMarketplaceLink.id).where(
+            ProductMarketplaceLink.tenant_id == tenant_id,
+            ProductMarketplaceLink.seller_id == seller_id,
+            ProductMarketplaceLink.marketplace == "ozon",
+            ProductMarketplaceLink.is_active.is_(True),
+            ProductMarketplaceLink.external_product_id == SellerOzonImportedCard.ozon_product_id,
+        )
+    )
+    return ~has_link
+
+
+def _ozon_card_search_filters(search: str | None) -> list[Any]:
+    normalized = (search or "").strip()
+    if not normalized:
+        return []
+    pattern = f"%{normalized}%"
+    return [
+        or_(
+            SellerOzonImportedCard.name.ilike(pattern),
+            SellerOzonImportedCard.offer_id.ilike(pattern),
+            SellerOzonImportedCard.sku.ilike(pattern),
+            SellerOzonImportedCard.ozon_product_id.ilike(pattern),
+            cast(SellerOzonImportedCard.raw_json, Text).ilike(pattern),
+        )
+    ]
+
+
+def _ozon_card_category_filters(category: str | None) -> list[Any]:
+    """Ozon carries no category (the import never receives one, А6) — a
+    category filter simply excludes every Ozon row rather than matching none
+    of them silently."""
+    normalized = (category or "").strip()
+    if not normalized:
+        return []
+    return [false()]
 
 
 def _product_search_filters(tenant_id: uuid.UUID, search: str | None) -> list[Any]:
@@ -228,6 +287,8 @@ async def list_seller_catalog_page(
     """
     marketplace_condition = marketplace_scope_condition(tenant_id, marketplace)
     card_join = _product_card_join(tenant_id)
+    include_wb = marketplace in (None, "wildberries")
+    include_ozon = marketplace in (None, "ozon")
 
     product_filters: list[Any] = [Product.tenant_id == tenant_id, Product.seller_id == seller_id]
     if marketplace_condition is not None:
@@ -235,17 +296,21 @@ async def list_seller_catalog_page(
     product_filters.extend(_product_search_filters(tenant_id, search))
     product_filters.extend(_card_category_filters(category))
 
-    card_filters: list[Any] = [
+    wb_card_filters: list[Any] = [
         SellerWildberriesImportedCard.tenant_id == tenant_id,
         SellerWildberriesImportedCard.seller_id == seller_id,
         _not_on_fulfillment_condition(tenant_id, seller_id),
     ]
-    # Снимка карточек Ozon нет — та часть заведена в WMS-548 D3. До неё
-    # marketplace=ozon просто не находит карточек, которых ещё нет на ФФ.
-    if marketplace == "ozon":
-        card_filters.append(false())
-    card_filters.extend(_card_search_filters(search))
-    card_filters.extend(_card_category_filters(category))
+    wb_card_filters.extend(_card_search_filters(search))
+    wb_card_filters.extend(_card_category_filters(category))
+
+    ozon_card_filters: list[Any] = [
+        SellerOzonImportedCard.tenant_id == tenant_id,
+        SellerOzonImportedCard.seller_id == seller_id,
+        _ozon_not_on_fulfillment_condition(tenant_id, seller_id),
+    ]
+    ozon_card_filters.extend(_ozon_card_search_filters(search))
+    ozon_card_filters.extend(_ozon_card_category_filters(category))
 
     product_branch = (
         select(
@@ -257,22 +322,38 @@ async def list_seller_catalog_page(
         .outerjoin(SellerWildberriesImportedCard, card_join)
         .where(*product_filters)
     )
-    card_branch = select(
+    wb_card_branch = select(
         literal("wb_card").label("kind"),
         func.coalesce(
             SellerWildberriesImportedCard.vendor_code,
             cast(SellerWildberriesImportedCard.nm_id, String),
         ).label("sort_key"),
         cast(SellerWildberriesImportedCard.nm_id, String).label("raw_key"),
-    ).where(*card_filters)
+    ).where(*wb_card_filters)
+    ozon_card_branch = select(
+        literal("ozon_card").label("kind"),
+        func.coalesce(
+            SellerOzonImportedCard.offer_id,
+            SellerOzonImportedCard.ozon_product_id,
+        ).label("sort_key"),
+        SellerOzonImportedCard.ozon_product_id.label("raw_key"),
+    ).where(*ozon_card_filters)
+
+    not_on_ff_branches = [
+        branch
+        for branch, enabled in ((wb_card_branch, include_wb), (ozon_card_branch, include_ozon))
+        if enabled
+    ]
 
     universe: Any
     if on_fulfillment == "yes":
         universe = product_branch
     elif on_fulfillment == "no":
-        universe = card_branch
+        universe = union_all(*not_on_ff_branches) if len(not_on_ff_branches) > 1 else (
+            not_on_ff_branches[0]
+        )
     else:
-        universe = union_all(product_branch, card_branch)
+        universe = union_all(product_branch, *not_on_ff_branches)
     universe_subq = universe.subquery("seller_catalog_universe")
 
     total = int(
@@ -285,26 +366,40 @@ async def list_seller_catalog_page(
     ]
     if marketplace_condition is not None:
         scope_product_filters.append(marketplace_condition)
-    scope_card_filters: list[Any] = [
+    scope_wb_card_filters: list[Any] = [
         SellerWildberriesImportedCard.tenant_id == tenant_id,
         SellerWildberriesImportedCard.seller_id == seller_id,
         _not_on_fulfillment_condition(tenant_id, seller_id),
     ]
-    if marketplace == "ozon":
-        scope_card_filters.append(false())
+    scope_ozon_card_filters: list[Any] = [
+        SellerOzonImportedCard.tenant_id == tenant_id,
+        SellerOzonImportedCard.seller_id == seller_id,
+        _ozon_not_on_fulfillment_condition(tenant_id, seller_id),
+    ]
     scope_total = int(
         await session.scalar(
             select(func.count()).select_from(Product).where(*scope_product_filters)
         )
         or 0
-    ) + int(
-        await session.scalar(
-            select(func.count())
-            .select_from(SellerWildberriesImportedCard)
-            .where(*scope_card_filters)
-        )
-        or 0
     )
+    if include_wb:
+        scope_total += int(
+            await session.scalar(
+                select(func.count())
+                .select_from(SellerWildberriesImportedCard)
+                .where(*scope_wb_card_filters)
+            )
+            or 0
+        )
+    if include_ozon:
+        scope_total += int(
+            await session.scalar(
+                select(func.count())
+                .select_from(SellerOzonImportedCard)
+                .where(*scope_ozon_card_filters)
+            )
+            or 0
+        )
 
     page_stmt = (
         select(universe_subq.c.kind, universe_subq.c.raw_key)
@@ -339,11 +434,14 @@ async def _build_page_items(
 ) -> list[dict[str, Any]]:
     product_ids: list[uuid.UUID] = []
     nm_ids: list[int] = []
+    ozon_product_ids: list[str] = []
     for kind, raw_key in page_rows:
         if kind == "product":
             product_ids.append(uuid.UUID(raw_key))
-        else:
+        elif kind == "wb_card":
             nm_ids.append(int(raw_key))
+        else:
+            ozon_product_ids.append(raw_key)
 
     wb_connected, ozon_connected = await _connection_flags(session, tenant_id, seller_id)
 
@@ -368,6 +466,17 @@ async def _build_page_items(
             for card_row in (await session.execute(stmt)).scalars().all():
                 cards_by_nm[int(card_row.nm_id)] = card_row
 
+    ozon_cards_by_id: dict[str, SellerOzonImportedCard] = {}
+    if ozon_product_ids:
+        for ozon_batch in chunked(sorted(set(ozon_product_ids)), 2000):
+            ozon_stmt = select(SellerOzonImportedCard).where(
+                SellerOzonImportedCard.tenant_id == tenant_id,
+                SellerOzonImportedCard.seller_id == seller_id,
+                SellerOzonImportedCard.ozon_product_id.in_(ozon_batch),
+            )
+            for ozon_card_row in (await session.execute(ozon_stmt)).scalars().all():
+                ozon_cards_by_id[ozon_card_row.ozon_product_id] = ozon_card_row
+
     items: list[dict[str, Any]] = []
     for kind, raw_key in page_rows:
         if kind == "product":
@@ -388,7 +497,7 @@ async def _build_page_items(
                     **product_data,
                 }
             )
-        else:
+        elif kind == "wb_card":
             nm_id = int(raw_key)
             card = cards_by_nm.get(nm_id)
             if card is None:
@@ -408,6 +517,27 @@ async def _build_page_items(
                     "category": subject_name_from_card(raw) if raw else None,
                 }
             )
+        else:
+            ozon_card = ozon_cards_by_id.get(raw_key)
+            if ozon_card is None:
+                continue
+            ozon_raw = ozon_card.raw_json if isinstance(ozon_card.raw_json, dict) else None
+            items.append(
+                {
+                    "key": f"ozon:{raw_key}",
+                    "on_fulfillment": False,
+                    "marketplace": "ozon",
+                    "ozon_product_id": raw_key,
+                    "vendor_code": ozon_card.offer_id,
+                    "name": ozon_card.name,
+                    "photo_url": (
+                        ozon_card_primary_image_url(ozon_raw) if ozon_raw else None
+                    ),
+                    "barcodes": ozon_card_barcodes(ozon_raw) if ozon_raw else [],
+                    "sizes": [],
+                    "category": None,
+                }
+            )
     return items
 
 
@@ -424,6 +554,8 @@ async def list_seller_catalog_keys(
     """All keys matching the same filters as the page — for "select all found"."""
     marketplace_condition = marketplace_scope_condition(tenant_id, marketplace)
     card_join = _product_card_join(tenant_id)
+    include_wb = marketplace in (None, "wildberries")
+    include_ozon = marketplace in (None, "ozon")
 
     product_filters: list[Any] = [Product.tenant_id == tenant_id, Product.seller_id == seller_id]
     if marketplace_condition is not None:
@@ -431,15 +563,21 @@ async def list_seller_catalog_keys(
     product_filters.extend(_product_search_filters(tenant_id, search))
     product_filters.extend(_card_category_filters(category))
 
-    card_filters: list[Any] = [
+    wb_card_filters: list[Any] = [
         SellerWildberriesImportedCard.tenant_id == tenant_id,
         SellerWildberriesImportedCard.seller_id == seller_id,
         _not_on_fulfillment_condition(tenant_id, seller_id),
     ]
-    if marketplace == "ozon":
-        card_filters.append(false())
-    card_filters.extend(_card_search_filters(search))
-    card_filters.extend(_card_category_filters(category))
+    wb_card_filters.extend(_card_search_filters(search))
+    wb_card_filters.extend(_card_category_filters(category))
+
+    ozon_card_filters: list[Any] = [
+        SellerOzonImportedCard.tenant_id == tenant_id,
+        SellerOzonImportedCard.seller_id == seller_id,
+        _ozon_not_on_fulfillment_condition(tenant_id, seller_id),
+    ]
+    ozon_card_filters.extend(_ozon_card_search_filters(search))
+    ozon_card_filters.extend(_ozon_card_category_filters(category))
 
     keys: list[str] = []
     if on_fulfillment in ("all", "yes"):
@@ -451,8 +589,16 @@ async def list_seller_catalog_keys(
         )
         keys.extend(f"product:{pid}" for pid in (await session.scalars(product_stmt)).all())
     if on_fulfillment in ("all", "no"):
-        card_stmt = select(SellerWildberriesImportedCard.nm_id).where(*card_filters)
-        keys.extend(f"wb:{nm_id}" for nm_id in (await session.scalars(card_stmt)).all())
+        if include_wb:
+            wb_card_stmt = select(SellerWildberriesImportedCard.nm_id).where(*wb_card_filters)
+            keys.extend(f"wb:{nm_id}" for nm_id in (await session.scalars(wb_card_stmt)).all())
+        if include_ozon:
+            ozon_card_stmt = select(SellerOzonImportedCard.ozon_product_id).where(
+                *ozon_card_filters
+            )
+            keys.extend(
+                f"ozon:{ozon_id}" for ozon_id in (await session.scalars(ozon_card_stmt)).all()
+            )
     return keys
 
 
@@ -547,6 +693,12 @@ async def add_cards_to_fulfillment(
                     }
                 )
                 continue
+            # Захватываем поля карточки в локальные переменные до апсерта: он
+            # коммитит, а неудача ниже коммитит откат, который на этой же
+            # сессии истекает атрибуты всех загруженных объектов — ленивая
+            # подгрузка `card.vendor_code` после отката под конкурентной
+            # нагрузкой уже падала MissingGreenlet вместо честного skipped.
+            vendor_code = card.vendor_code
             raw = card.raw_json if isinstance(card.raw_json, dict) else None
             variants = iter_size_variants_from_card(raw) if raw else []
             if not variants:
@@ -554,21 +706,21 @@ async def add_cards_to_fulfillment(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
+                        "vendor_code": vendor_code,
                         "reason": "no_size_variants",
                     }
                 )
                 continue
             try:
                 conflict = await _card_has_vendor_code_conflict(
-                    session, tenant_id, seller_id, nm_id, card.vendor_code, variants
+                    session, tenant_id, seller_id, nm_id, vendor_code, variants
                 )
                 if conflict:
                     skipped.append(
                         {
                             "marketplace": "wildberries",
                             "id": str(nm_id),
-                            "vendor_code": card.vendor_code,
+                            "vendor_code": vendor_code,
                             "reason": "vendor_code_conflict",
                         }
                     )
@@ -587,19 +739,22 @@ async def add_cards_to_fulfillment(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
+                        "vendor_code": vendor_code,
                         "reason": "internal_error",
                     }
                 )
                 continue
             products_added = counts["products_created"] + counts["products_updated"]
             if products_added == 0:
+                # Не наш конфликт-предчек (тот уже отсёк выше) — упсерт сам не
+                # завёл и не обновил ни одного варианта (например, гонка
+                # уникального индекса, которую не разрешил повторный поиск).
                 skipped.append(
                     {
                         "marketplace": "wildberries",
                         "id": str(nm_id),
-                        "vendor_code": card.vendor_code,
-                        "reason": "vendor_code_conflict",
+                        "vendor_code": vendor_code,
+                        "reason": "not_added",
                     }
                 )
                 continue
@@ -607,21 +762,151 @@ async def add_cards_to_fulfillment(
                 {
                     "marketplace": "wildberries",
                     "id": str(nm_id),
-                    "vendor_code": card.vendor_code,
+                    "vendor_code": vendor_code,
                     "products_added": products_added,
                 }
             )
 
-    # Ozon: снимка карточек ещё нет (WMS-548 D3) — идентификаторы принимаем по
-    # контракту, чтобы фронт D4/D5 не падал, но честно ничего не заводим.
-    for ozon_id in dict.fromkeys(ozon_product_ids):
-        skipped.append(
-            {
-                "marketplace": "ozon",
-                "id": ozon_id,
-                "vendor_code": None,
-                "reason": "ozon_not_supported_yet",
-            }
-        )
+        # R13: a WB card just added may have an Ozon twin already sitting in
+        # this seller's Ozon snapshot, unlinked. Link it now (never create —
+        # the product already exists) so the twin stops showing as a separate
+        # "not on fulfillment" row. Best-effort: it never touches, let alone
+        # undoes, the WB cards already committed above.
+        if any(a["marketplace"] == "wildberries" for a in added):
+            await _link_unmatched_ozon_twins(session, tenant_id, seller_id)
+
+    ozon_ids = _dedupe_preserve_order(ozon_product_ids)
+    if ozon_ids:
+        ozon_cards_by_id: dict[str, SellerOzonImportedCard] = {}
+        for ozon_batch in chunked(sorted(set(ozon_ids)), 2000):
+            ozon_stmt = select(SellerOzonImportedCard).where(
+                SellerOzonImportedCard.tenant_id == tenant_id,
+                SellerOzonImportedCard.seller_id == seller_id,
+                SellerOzonImportedCard.ozon_product_id.in_(ozon_batch),
+            )
+            for ozon_card_row in (await session.execute(ozon_stmt)).scalars().all():
+                ozon_cards_by_id[ozon_card_row.ozon_product_id] = ozon_card_row
+
+        # Один контекст на весь запрос — не на карточку (WMS-538): иначе
+        # каждая из до 500 карточек читала бы товары продавца заново.
+        ozon_context = await build_ozon_match_context(session, tenant_id, seller_id)
+
+        for ozon_id in ozon_ids:
+            ozon_card = ozon_cards_by_id.get(ozon_id)
+            if ozon_card is None:
+                # Не своя карточка (чужой селлер/тенант) или её нет вовсе —
+                # не раскрываем, есть ли она у кого-то другого (R14).
+                skipped.append(
+                    {
+                        "marketplace": "ozon",
+                        "id": ozon_id,
+                        "vendor_code": None,
+                        "reason": "not_found",
+                    }
+                )
+                continue
+            # Тот же порядок, что и для WB: поля карточки — в локальные
+            # переменные до записи, чтобы skipped после отката не читал
+            # атрибуты уже истёкшего ORM-объекта.
+            vendor_code = ozon_card.offer_id
+            raw = ozon_card.raw_json if isinstance(ozon_card.raw_json, dict) else None
+            if raw is None:
+                skipped.append(
+                    {
+                        "marketplace": "ozon",
+                        "id": ozon_id,
+                        "vendor_code": vendor_code,
+                        "reason": "not_added",
+                    }
+                )
+                continue
+            result = OzonProductImportResult()
+            try:
+                await process_one_ozon_card(
+                    session,
+                    tenant_id,
+                    seller_id,
+                    raw,
+                    ozon_context,
+                    result,
+                    allow_create=True,
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception(
+                    "seller_catalog.add_to_fulfillment: failed to add Ozon card %s for seller %s",
+                    ozon_id,
+                    seller_id,
+                )
+                skipped.append(
+                    {
+                        "marketplace": "ozon",
+                        "id": ozon_id,
+                        "vendor_code": vendor_code,
+                        "reason": "internal_error",
+                    }
+                )
+                continue
+            if result.links_created == 0 and result.links_matched == 0:
+                # Не нашли товар и не завели (неоднозначный признак или у
+                # карточки нет ни одного идентификатора) — та же причина, что
+                # у аналогичного случая на стороне WB.
+                skipped.append(
+                    {
+                        "marketplace": "ozon",
+                        "id": ozon_id,
+                        "vendor_code": vendor_code,
+                        "reason": "not_added",
+                    }
+                )
+                continue
+            added.append(
+                {
+                    "marketplace": "ozon",
+                    "id": ozon_id,
+                    "vendor_code": vendor_code,
+                    "products_added": result.products_created,
+                }
+            )
 
     return added, skipped
+
+
+async def _link_unmatched_ozon_twins(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> None:
+    """R13, WB→Ozon direction: link (never create) any not-yet-linked Ozon
+    snapshot card that now matches a WB product just added in this request.
+    The opposite direction (adding an Ozon card that matches an existing WB
+    product) needs no extra step — ``process_one_ozon_card`` already searches
+    every product of the seller, WB-origin included.
+    """
+    try:
+        stmt = select(SellerOzonImportedCard).where(
+            SellerOzonImportedCard.tenant_id == tenant_id,
+            SellerOzonImportedCard.seller_id == seller_id,
+            _ozon_not_on_fulfillment_condition(tenant_id, seller_id),
+        )
+        not_on_ff_cards = list((await session.execute(stmt)).scalars().all())
+        if not not_on_ff_cards:
+            return
+        raw_cards = [
+            card.raw_json for card in not_on_ff_cards if isinstance(card.raw_json, dict)
+        ]
+        if not raw_cards:
+            return
+        context = await build_ozon_match_context(session, tenant_id, seller_id)
+        result = OzonProductImportResult()
+        for raw in raw_cards:
+            await process_one_ozon_card(
+                session, tenant_id, seller_id, raw, context, result, allow_create=False
+            )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception(
+            "seller_catalog.add_to_fulfillment: failed to backfill Ozon twin links "
+            "for seller %s",
+            seller_id,
+        )
