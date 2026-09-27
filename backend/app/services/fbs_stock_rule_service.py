@@ -635,9 +635,14 @@ async def get_rule_views(
             total = totals.get(product.id)
             on_hand = total.on_hand if total is not None else 0
             reserved = total.reserved if total is not None else 0
-            free = total.available_for_checks if total is not None else 0
+            # WMS-530 review F2 (R3/D3): the screen must show Доступно as-is,
+            # including negative — only the publish/split base is clamped to
+            # zero. Showing the clamped number here hid an over-reserved
+            # product's true negative Available from the FBS window.
+            free_for_checks = total.available_for_checks if total is not None else 0
+            free_display = total.available if total is not None else 0
             local_pools = {b.id: pool_rows[b.id] for b in publishing if b.id in pool_rows}
-            amounts = split_amounts(rule, free, publishing, pool_rows=local_pools)
+            amounts = split_amounts(rule, free_for_checks, publishing, pool_rows=local_pools)
             binding_views: dict[uuid.UUID, FbsBindingRuleView] = {}
             for binding in bindings:
                 binding_rule = rule.by_binding[binding.id]
@@ -661,7 +666,7 @@ async def get_rule_views(
                     # как каталог, а не остаток склада своей привязки (R6).
                     on_hand=on_hand,
                     reserved=reserved,
-                    free_stock=free,
+                    free_stock=free_display,
                     published_now=amounts.get(binding.id, 0),
                 )
             views[product.id] = FbsRuleView(
@@ -671,7 +676,7 @@ async def get_rule_views(
                 rule=replace(rule, by_binding={}),
                 on_hand=on_hand,
                 reserved=reserved,
-                free_stock=free,
+                free_stock=free_display,
                 published_now=sum(amounts.values()),
                 units_remaining_by_warehouse=_units_by_wb(rule, bindings),
                 by_binding=binding_views,
@@ -1312,9 +1317,14 @@ async def publish_amounts_for_binding(
     # привязок продавца до склада именно этой binding (D4).
     product_ids = [product.id for product in applicable]
     totals = await organization_stock_totals_by_product(session, binding.tenant_id, product_ids)
+    # Ревью F5 (P3): один пакетный запрос пулов на все товары вместо запроса
+    # на каждый товар в цикле — тот же приём, что уже в get_rule_views.
+    pools_by_product = await _pool_rows_for_products(
+        session, product_ids, [row.id for row in seller_bindings]
+    )
     amounts: dict[uuid.UUID, int] = {}
     for product in applicable:
-        pool_rows = await _pool_rows(session, product.id, [row.id for row in seller_bindings])
+        pool_rows = pools_by_product[product.id]
         if not _binding_has_rule(product, binding.id, pool_rows):
             continue
         rule = rule_from_product(

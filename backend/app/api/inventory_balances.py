@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -17,6 +18,7 @@ from app.api.deps import (
 )
 from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
+from app.models.product import Product
 from app.models.user import User
 from app.services import (
     fbs_stock_availability_service,
@@ -122,17 +124,42 @@ async def get_inventory_balances_summary(
         warehouse_id=warehouse_id,
         product_ids=product_ids,
     )
-    product_ids = [pid for pid, *_ in rows]
+    known_product_ids = [pid for pid, *_ in rows]
+
+    # WMS-530 review addendum (R3/R4): list_balances_total finds products
+    # through an INNER JOIN on InventoryBalance, so a product with a live
+    # reserve (FBS booking, MP-unload plan, manual direction...) but not a
+    # single balance row left (fully written off/shipped, reserve still open)
+    # is invisible to it and would silently drop out of this summary instead
+    # of showing Остаток 0 / Резерв N / Доступно -N — unlike the FBS rule
+    # window, which reads Product directly and would show the same product.
+    orphan_ids = sorted(
+        (
+            await fbs_stock_availability_service.product_ids_with_any_reserve(
+                session, user.tenant_id, seller_id=effective_seller, product_ids=product_ids
+            )
+        )
+        - set(known_product_ids),
+        key=str,
+    )
+    orphan_products: dict[uuid.UUID, Product] = {}
+    if orphan_ids:
+        orphan_products = {
+            product.id: product
+            for product in (
+                await session.scalars(
+                    select(Product).where(
+                        Product.id.in_(orphan_ids), Product.tenant_id == user.tenant_id
+                    )
+                )
+            ).all()
+        }
+
+    all_product_ids = known_product_ids + list(orphan_products)
     distribution_map = await stock_direction_service.distributions_by_product(
         session,
         user.tenant_id,
-        product_ids,
-        warehouse_id=warehouse_id,
-    )
-    fbs_reserved_map = await stock_direction_service.fbs_reserved_totals_by_product(
-        session,
-        user.tenant_id,
-        product_ids,
+        all_product_ids,
         warehouse_id=warehouse_id,
     )
     address_enabled = await tenant_settings_service.is_address_storage_enabled(
@@ -143,47 +170,68 @@ async def get_inventory_balances_summary(
     # (тот продолжает сужать только то, какие строки вообще показаны, ради
     # старых полей ниже). Available показывается как есть, может быть < 0 (R3).
     totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
-        session, user.tenant_id, product_ids
+        session, user.tenant_id, all_product_ids
     )
-    return [
-        (
-            lambda fbo_reserved, dist, total: InventoryBalanceRowOut(
+
+    def _dist(pid: uuid.UUID, qty: int) -> stock_direction_service.StockDistribution:
+        return distribution_map.get(
+            pid,
+            stock_direction_service.StockDistribution(
+                product_id=pid,
+                quantity_total=qty,
+                quantity_fbs=0,
+                quantity_reserved=0,
+                quantity_free_fbo=qty,
+            ),
+        )
+
+    result = [
+        InventoryBalanceRowOut(
+            product_id=str(pid),
+            sku_code=sku_code,
+            product_name=product_name,
+            seller_id=None,
+            seller_name=None,
+            packaging_instructions=None,
+            requires_honest_sign=False,
+            quantity=totals[pid].on_hand if pid in totals else qty,
+            quantity_unpacked=unp,
+            quantity_packed=pck,
+            quantity_in_sorting=sort_qty if address_enabled else 0,
+            quantity_in_storage=(max(0, qty - sort_qty) if address_enabled else qty),
+            reserved=totals[pid].reserved if pid in totals else rsv,
+            available=totals[pid].available if pid in totals else qty - rsv,
+            quantity_fbs=_dist(pid, qty).quantity_fbs,
+            quantity_reserved_directions=_dist(pid, qty).quantity_reserved,
+            quantity_free_fbo=_dist(pid, qty).quantity_free_fbo,
+        )
+        for pid, sku_code, product_name, qty, sort_qty, unp, pck, rsv in rows
+    ]
+    for pid, product in orphan_products.items():
+        total = totals.get(pid)
+        dist = _dist(pid, 0)
+        result.append(
+            InventoryBalanceRowOut(
                 product_id=str(pid),
-                sku_code=sku_code,
-                product_name=product_name,
+                sku_code=product.sku_code,
+                product_name=product.name,
                 seller_id=None,
                 seller_name=None,
                 packaging_instructions=None,
                 requires_honest_sign=False,
                 quantity=total.on_hand if total is not None else 0,
-                quantity_unpacked=unp,
-                quantity_packed=pck,
-                quantity_in_sorting=sort_qty if address_enabled else 0,
-                quantity_in_storage=(
-                    max(0, qty - sort_qty) if address_enabled else qty
-                ),
+                quantity_unpacked=0,
+                quantity_packed=0,
+                quantity_in_sorting=0,
+                quantity_in_storage=0,
                 reserved=total.reserved if total is not None else 0,
                 available=total.available if total is not None else 0,
                 quantity_fbs=dist.quantity_fbs,
                 quantity_reserved_directions=dist.quantity_reserved,
                 quantity_free_fbo=dist.quantity_free_fbo,
             )
-        )(
-            max(0, rsv - int(fbs_reserved_map.get(pid, 0))),
-            distribution_map.get(
-                pid,
-                stock_direction_service.StockDistribution(
-                    product_id=pid,
-                    quantity_total=qty,
-                    quantity_fbs=0,
-                    quantity_reserved=0,
-                    quantity_free_fbo=qty,
-                ),
-            ),
-            totals.get(pid),
         )
-        for pid, sku_code, product_name, qty, sort_qty, unp, pck, rsv in rows
-    ]
+    return result
 
 
 @router.get("/monthly-snapshots", response_model=list[StockMonthlySnapshotOut])

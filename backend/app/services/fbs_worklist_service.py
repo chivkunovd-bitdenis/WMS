@@ -5,11 +5,12 @@ from __future__ import annotations
 import base64
 import json
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, and_, exists, func, or_, select
+from sqlalchemy import String, and_, exists, func, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -30,6 +31,8 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderMarking,
     FbsOrderProduct,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
     current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -550,7 +553,7 @@ async def _load_worklist_context(
         session, tenant_id, product_ids
     )
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
-    availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
+    availability = await _load_availability_by_order(session, tenant_id, orders)
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     locations = await _load_location_balances(session, tenant_id, orders) if address_enabled else {}
     markings = await _load_markings(session, order_ids)
@@ -715,40 +718,65 @@ async def _load_imported_cards(
     return out
 
 
-async def _load_availability_by_warehouse_product(
+async def _load_availability_by_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     orders: list[FbsOrder],
-) -> dict[tuple[uuid.UUID, uuid.UUID], int]:
-    """WMS-530 R10: доступное — Доступно организации, без брони этих же заказов.
+) -> dict[uuid.UUID, int]:
+    """WMS-530 review F3: доступное каждому заказу — без вычета ЕГО СОБСТВЕННОЙ
 
-    Ключ результата остаётся (склад заказа, товар) ради вызывающего кода, но
-    значение больше не зависит от склада: один и тот же товар на разных
-    складах заказов показывает одно и то же число (R4).
+    брони, а не брони всех заказов текущей страницы/подборки. Раньше вся
+    группа заказов исключалась из общего расчёта разом и результат хранился
+    по ключу (склад, товар) — значит два заказа одного товара на одном складе
+    получали одинаковое, завышенное число, а состав списка (какие заказы
+    вообще передали в функцию) менял доступное количество без движения
+    товара. Здесь расчёт остаётся один пакетный на все товары без каких-либо
+    исключений, а личная бронь каждого заказа прибавляется к его же числу
+    арифметически: Остаток - Резерв(все) + Резерв(этого заказа), не ниже нуля.
     """
-    by_product: dict[uuid.UUID, set[uuid.UUID]] = {}
-    warehouses_by_product: dict[uuid.UUID, set[uuid.UUID]] = {}
+    product_ids = list({o.product_id for o in orders if o.product_id is not None})
+    if not product_ids:
+        return {}
+    order_ids = [o.id for o in orders]
+    totals = await organization_stock_totals_by_product(session, tenant_id, product_ids)
+
+    # One UNION query for both marketplaces' own reservations (same idiom as
+    # fbs_stock_availability_service.fbs_reserved_by_product) — the worklist
+    # query budget must stay flat regardless of order count, not per-order.
+    wb_stmt = select(
+        FbsOrderReservation.fbs_order_id.label("order_id"),
+        FbsOrderReservation.product_id.label("product_id"),
+        FbsOrderReservation.quantity.label("quantity"),
+    ).where(FbsOrderReservation.fbs_order_id.in_(order_ids))
+    ozon_stmt = (
+        select(
+            FbsOrderProduct.order_id.label("order_id"),
+            FbsOrderProductReservation.product_id.label("product_id"),
+            FbsOrderProductReservation.quantity.label("quantity"),
+        )
+        .join(FbsOrderProduct, FbsOrderProduct.id == FbsOrderProductReservation.order_product_id)
+        .where(FbsOrderProduct.order_id.in_(order_ids))
+    )
+    combined = union_all(wb_stmt, ozon_stmt).subquery()
+    own_stmt = select(
+        combined.c.order_id,
+        combined.c.product_id,
+        func.coalesce(func.sum(combined.c.quantity), 0),
+    ).group_by(combined.c.order_id, combined.c.product_id)
+    own_by_order_product: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
+    for order_id, product_id, qty in (await session.execute(own_stmt)).all():
+        own_by_order_product[(order_id, product_id)] += int(qty)
+
+    result: dict[uuid.UUID, int] = {}
     for o in orders:
         if o.warehouse_id is None or o.product_id is None:
             continue
-        by_product.setdefault(o.product_id, set()).add(o.id)
-        warehouses_by_product.setdefault(o.product_id, set()).add(o.warehouse_id)
-    if not by_product:
-        return {}
-    product_ids = list(by_product)
-    exclude_order_ids = frozenset(oid for ids in by_product.values() for oid in ids)
-    totals = await organization_stock_totals_by_product(
-        session,
-        tenant_id,
-        product_ids,
-        exclude_fbs_order_ids=exclude_order_ids,
-    )
-    result: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
-    for pid, warehouse_ids in warehouses_by_product.items():
-        total = totals.get(pid)
-        available = total.available_for_checks if total is not None else 0
-        for wh_id in warehouse_ids:
-            result[(wh_id, pid)] = available
+        total = totals.get(o.product_id)
+        if total is None:
+            result[o.id] = 0
+            continue
+        own_qty = own_by_order_product.get((o.id, o.product_id), 0)
+        result[o.id] = max(0, total.on_hand - total.reserved + own_qty)
     return result
 
 
@@ -1046,12 +1074,15 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         size = product.wb_size
     elif card_raw:
         size = size_from_card_for_barcode(card_raw, barcode)
-    avail_key = (order.warehouse_id, order.product_id)
+    # Расположение — по (склад, товар), физический факт "где лежит".
+    # Доступное — по самому заказу (review F3): у разных заказов одного
+    # товара на одном складе своя собственная бронь, а не общая на всех.
+    loc_key = (order.warehouse_id, order.product_id)
     available = 0
     loc_rows: list[_LocationBalanceRow] = []
     if order.warehouse_id and order.product_id:
-        available = int(ctx["availability"].get(avail_key, 0))
-        loc_rows = ctx["locations"].get(avail_key, [])
+        available = int(ctx["availability"].get(order.id, 0))
+        loc_rows = ctx["locations"].get(loc_key, [])
     markings = ctx["markings"].get(order.id, [])
     pick_row = ctx["picks"].get(order.id)
     sticker_asset = ctx["sticker_assets"].get(order.id)
