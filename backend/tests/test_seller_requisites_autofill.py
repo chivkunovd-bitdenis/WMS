@@ -16,6 +16,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ozon_integration import OzonValidationResult
 from app.core.settings import settings
@@ -23,8 +24,8 @@ from app.db.session import SessionLocal
 from app.models.billing import BillingProfile
 from app.models.document_event import DOCUMENT_TYPE_BILLING_PROFILE, DocumentEvent
 from app.services import seller_marketplace_requisites_service as svc
-from app.services.billing_configuration_service import save_profile
 from app.services.marketplace_provider import FakeMarketplaceTransport, MarketplaceProviderError
+from app.services.wildberries_credentials_service import SKIP, patch_seller_tokens
 from tests.test_seller_marketplace_requisites import (
     OZON_VALID_INN,
     WB_VALID_INN,
@@ -395,12 +396,32 @@ async def test_c7_ozon_account_blocked_does_not_affect_key_save_response(
 # ---------------------------------------------------------------------------
 
 
+async def _all_profiles(tenant_id: Any, seller_id: Any) -> list[BillingProfile]:
+    async with SessionLocal() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(BillingProfile).where(
+                        BillingProfile.tenant_id == tenant_id,
+                        BillingProfile.seller_id == seller_id,
+                    )
+                )
+            ).all()
+        )
+
+
 @pytest.mark.asyncio
-async def test_c8_concurrent_manual_save_during_autofill_wins(
+async def test_c8_manual_save_via_http_wins_when_committed_before_autofill(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    owner_headers, _admin_id, tenant_id = await _register_admin(async_client, "c8-owner")
-    seller_id = await _create_seller(async_client, owner_headers, "WMS-547 C8")
+    """Очерёдность 1: ручное сохранение коммитится раньше автозаполнения.
+
+    По замечанию ревью F1 ручное сохранение идёт настоящим HTTP PUT с токеном
+    админа (не прямым вызовом save_profile) — так действительно проверяется
+    обработчик `PUT /billing/profiles/sellers/{id}`, а не только сервис.
+    """
+    owner_headers, _admin_id, tenant_id = await _register_admin(async_client, "c8a-owner")
+    seller_id = await _create_seller(async_client, owner_headers, "WMS-547 C8a")
     seller_headers = await _seller_login_headers(async_client, owner_headers, seller_id)
     _stub_wb_card_import(monkeypatch)
 
@@ -411,18 +432,15 @@ async def test_c8_concurrent_manual_save_during_autofill_wins(
     original_call_wb_seller_info = svc._call_wb_seller_info
 
     async def racing_call_wb_seller_info(token: str) -> dict[str, Any]:
-        # Пока «идёт» запрос к WB, кто-то успевает сохранить реквизиты руками —
-        # отдельная сессия, отдельный коммит, до того как автозаполнение дойдёт
-        # до своей записи.
-        async with SessionLocal() as race_session:
-            await save_profile(
-                race_session,
-                tenant_id=tenant_id,
-                seller_id=seller_id,
-                legal_name=manual_legal_name,
-                inn=manual_inn,
-            )
-            await race_session.commit()
+        # Пока «идёт» запрос к WB, кто-то успевает сохранить реквизиты руками
+        # через настоящий HTTP PUT — до того как автозаполнение дойдёт до
+        # своей записи.
+        put_response = await async_client.put(
+            f"/billing/profiles/sellers/{seller_id}",
+            headers=owner_headers,
+            json={"legal_name": manual_legal_name, "inn": manual_inn},
+        )
+        assert put_response.status_code == 200, put_response.text
         return await original_call_wb_seller_info(token)
 
     monkeypatch.setattr(svc, "_call_wb_seller_info", racing_call_wb_seller_info)
@@ -435,18 +453,81 @@ async def test_c8_concurrent_manual_save_during_autofill_wins(
     saved = await async_client.post(
         "/integrations/wildberries/self/content-token",
         headers=seller_headers,
-        json={"content_api_token": "wms547-c8-wb-key"},
+        json={"content_api_token": "wms547-c8a-wb-key"},
     )
     assert saved.status_code == 200, saved.text
 
+    profiles = await _all_profiles(tenant_id, seller_id)
+    assert len(profiles) == 1
+    assert profiles[0].legal_name == manual_legal_name
+    assert profiles[0].inn == manual_inn
+
+
+@pytest.mark.asyncio
+async def test_f1_manual_save_via_http_wins_even_when_autofill_inserts_first(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Очерёдность 2 (независимое ревью WMS-547, F1): ручной PUT уже прочитал
+    «записи нет», но до его собственной вставки автозаполнение успевает
+    создать запись и закоммититься первым.
+
+    До исправления это давало ручному PUT необработанный 500 (save_profile
+    сама ловила IntegrityError на вставке, а обработчик её не перехватывал).
+    Теперь save_profile перечитывает конфликтную запись и обновляет её
+    ручными значениями — человек побеждает, а не отдаёт 500.
+
+    Реальная интерливинг-гонка воспроизведена через monkeypatch на
+    AsyncSession.scalar: как только он видит «запись реквизитов ещё не
+    найдена» (это и есть чтение внутри save_profile), запускается и
+    завершается автозаполнение по WB-ключу в отдельной сессии — то есть
+    ровно в щели между чтением и вставкой ручного сохранения.
+    """
+    owner_headers, admin_id, tenant_id = await _register_admin(async_client, "f1-owner")
+    seller_id = await _create_seller(async_client, owner_headers, "WMS-547 F1")
+    _ = admin_id
+
+    manual_legal_name = "ООО Ручное Победило"
+    manual_inn = "7707083893"
+
     async with SessionLocal() as session:
-        profiles = (
-            await session.scalars(
-                select(BillingProfile).where(
-                    BillingProfile.tenant_id == tenant_id, BillingProfile.seller_id == seller_id
-                )
+        await patch_seller_tokens(
+            session,
+            tenant_id,
+            seller_id,
+            content_api_token="wms547-f1-wb-key",
+            supplies_api_token=SKIP,
+        )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_seller_info", True)
+
+    triggered = False
+    original_scalar = AsyncSession.scalar
+
+    async def patched_scalar(
+        self: AsyncSession, statement: Any, *args: object, **kwargs: object
+    ) -> Any:
+        nonlocal triggered
+        result = await original_scalar(self, statement, *args, **kwargs)
+        if not triggered and result is None and "billing_profiles" in str(statement):
+            triggered = True
+            await svc.autofill_requisites_after_key_saved(
+                tenant_id, seller_id, marketplace="wb"
             )
-        ).all()
-        assert len(profiles) == 1
-        assert profiles[0].legal_name == manual_legal_name
-        assert profiles[0].inn == manual_inn
+        return result
+
+    monkeypatch.setattr(AsyncSession, "scalar", patched_scalar)
+
+    put_response = await async_client.put(
+        f"/billing/profiles/sellers/{seller_id}",
+        headers=owner_headers,
+        json={"legal_name": manual_legal_name, "inn": manual_inn},
+    )
+    assert put_response.status_code == 200, put_response.text
+    assert put_response.json()["legal_name"] == manual_legal_name
+    assert put_response.json()["inn"] == manual_inn
+    assert triggered  # гонка действительно сработала, а не тест-заглушка
+
+    profiles = await _all_profiles(tenant_id, seller_id)
+    assert len(profiles) == 1
+    assert profiles[0].legal_name == manual_legal_name
+    assert profiles[0].inn == manual_inn

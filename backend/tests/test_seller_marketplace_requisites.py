@@ -334,6 +334,39 @@ async def test_c3_dadata_failure_keeps_marketplace_data_without_kpp(
     assert result == requisites
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "dadata_body", [None, [], "unexpected"], ids=["null", "empty-list", "string"]
+)
+async def test_c3_malformed_dadata_response_via_real_client_keeps_marketplace_data(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, dadata_body: object
+) -> None:
+    """WMS-547 review F2: настоящий ``lookup_party_by_inn`` на подставном HTTP-
+    транспорте (не подмена самой функции, как в остальных тестах C3 выше) —
+    DaData отвечает 200 с валидным JSON, но не объектом. Кнопка всё равно
+    отдаёт 200 с данными площадки и пустым КПП, а не падает 500."""
+    owner_headers, _admin_id, tenant_id = await _register_admin(async_client, "f2-owner")
+    seller_id = await _create_seller(async_client, owner_headers)
+    await _set_wb_token(tenant_id, seller_id, "wb-token-value")
+    monkeypatch.setattr(settings, "dadata_token", "test-dadata-token")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "suggestions.dadata.ru":
+            return httpx.Response(200, json=dadata_body)
+        return httpx.Response(200, json={"name": "ИП Тестов Т. Т.", "tin": WB_VALID_INN})
+
+    monkeypatch.setattr(svc.httpx, "AsyncClient", _wb_client_factory(handler))
+
+    response = await async_client.get(
+        REQUISITES_PATH.format(seller_id=seller_id),
+        headers=owner_headers,
+        params={"marketplace": "wb"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"inn": WB_VALID_INN, "legal_name": "ИП Тестов Т. Т.", "kpp": None}
+
+
 # ---------------------------------------------------------------------------
 # Сквозная проверка через HTTP-эндпоинт (D1: R1-R4, R11 коды ошибок)
 # ---------------------------------------------------------------------------
