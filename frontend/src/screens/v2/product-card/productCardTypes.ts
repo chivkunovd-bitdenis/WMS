@@ -60,12 +60,17 @@ export type ProductCardStockTotals = {
 
 /**
  * Минимум, который уже есть у строки каталога в момент клика — этого хватает,
- * чтобы сразу нарисовать заголовок (фото и название, R2) и решить, показывать
- * ли вкладку «Задать остаток» (R3), не дожидаясь ответа сети.
+ * чтобы сразу нарисовать заголовок (фото и название, R2), решить, показывать
+ * ли вкладку «Задать остаток» (R3), и открыть саму вкладку без ожидания
+ * `/products/{id}/card` (D1): окно «Остаток для FBS» испокон века строится из
+ * тех же полей строки каталога (`FbsStockDialogRow`), не из карточки (D6).
  */
 export type ProductCardTriggerRow = {
   id: string
   name: string
+  sku_code: string
+  wb_size: string | null
   wb_primary_image_url: string | null
   seller_id: string | null
+  seller_name: string | null
 }

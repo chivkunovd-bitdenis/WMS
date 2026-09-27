@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfProductsCatalogScreen } from './FfProductsCatalogScreen'
 import type { ProductCardData } from './product-card/productCardTypes'
 
@@ -18,6 +19,10 @@ vi.mock('../ff/products-fbs/FbsStockDialogContainer', () => ({
 
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
+
+beforeEach(() => {
+  stubFetch()
 })
 
 const PRODUCT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -122,14 +127,16 @@ async function mount() {
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <FfProductsCatalogScreen
-        token="t"
-        authHeaders={() => ({ Authorization: 'Bearer t' })}
-        sellers={[{ id: 's-1', name: 'Селлер Один' }]}
-        warehouses={[]}
-        canManageCatalog
-        addressStorageEnabled
-      />,
+      <MemoryRouter>
+        <FfProductsCatalogScreen
+          token="t"
+          authHeaders={() => ({ Authorization: 'Bearer t' })}
+          sellers={[{ id: 's-1', name: 'Селлер Один' }]}
+          warehouses={[]}
+          canManageCatalog
+          addressStorageEnabled
+        />
+      </MemoryRouter>,
     )
   })
 }
@@ -172,11 +179,14 @@ describe('WMS-490 R1: клик по строке каталога открыва
     await mount()
     await flush()
 
-    await act(async () => { $<HTMLInputElement>(`ff-catalog-select-${PRODUCT_ID}`).click() })
+    const checkboxInput = () =>
+      document.querySelector<HTMLInputElement>(`[data-testid="ff-catalog-select-${PRODUCT_ID}"] input`)!
+
+    await act(async () => { checkboxInput().click() })
     await flush()
 
     expect(maybe('product-card-dialog')).toBeNull()
-    expect($<HTMLInputElement>(`ff-catalog-select-${PRODUCT_ID}`).checked).toBe(true)
+    expect(checkboxInput().checked).toBe(true)
   })
 
   it('кнопка «ТЗ» не открывает карточку и открывает окно ТЗ', async () => {
@@ -212,6 +222,3 @@ describe('WMS-490 R1: клик по строке каталога открыва
     expect(maybe('fbs-stock-dialog-stub')).not.toBeNull()
   })
 })
-
-// Экспорт неиспользуемого stubFetch/PRODUCT_ID тестам ниже — подключается перед mount().
-beforeAll(() => { stubFetch() })

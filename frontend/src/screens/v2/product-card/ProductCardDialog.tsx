@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Box, Button, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -142,6 +141,7 @@ export function ProductCardDialog({
     setNotFound(false)
     changedRef.current = false
     setCardData(null)
+    setFbsStockBusy(false)
     void loadCard(row.id)
     void loadMetrics(row.id)
     return () => {
@@ -151,21 +151,53 @@ export function ProductCardDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the product changes
   }, [row.id])
 
+  // Идёт запись во вкладке «Задать остаток» — тело окна «Остаток для FBS»
+  // остаётся смонтированным при переключении вкладок (R9-подобный принцип:
+  // скрытая вкладка не теряет состояние), поэтому запрос переживёт уход с
+  // вкладки; но закрыть карточку или уйти с вкладки, пока ответ не пришёл, —
+  // значит либо потерять обратную связь о сохранении, либо неожиданно
+  // захлопнуть карточку, когда ответ придёт позже (R12, R16-подобная защита
+  // «конец одного действия не должен разблокировать…», перенесена на уровень
+  // карточки).
+  const [fbsStockBusy, setFbsStockBusy] = useState(false)
+
   const handleClose = useCallback(() => {
+    if (fbsStockBusy) return
     onClose(changedRef.current || notFound)
-  }, [notFound, onClose])
+  }, [fbsStockBusy, notFound, onClose])
 
-  const selectTab = useCallback((key: TabKey) => {
-    setActiveTab(key)
-    setVisitedTabs((current) => {
-      if (current.has(key)) return current
-      const next = new Set(current)
-      next.add(key)
-      return next
-    })
-  }, [])
+  // Закрытие, которым сама вкладка «Задать остаток» решает завершить
+  // карточку («Сохранить»/«Отмена», R12) — в отличие от `handleClose`
+  // (Закрыть/Escape/фон), не смотрит на `fbsStockBusy`: в момент вызова
+  // запрос только что успешно завершился, но `busy` ещё не долетел до этого
+  // состояния через эффект контейнера (пришлось бы ждать лишний рендер и
+  // карточка осталась бы открытой после удачного сохранения).
+  const closeCardFromFbsTab = useCallback(
+    (changed: boolean) => {
+      if (changed) markChanged()
+      onClose(changedRef.current || notFound)
+    },
+    [markChanged, notFound, onClose],
+  )
 
-  const [fbsStockFooter, setFbsStockFooter] = useState<ReactNode | null>(null)
+  const selectTab = useCallback(
+    (key: TabKey) => {
+      if (fbsStockBusy && key !== 'fbs_stock') return
+      setActiveTab(key)
+      setVisitedTabs((current) => {
+        if (current.has(key)) return current
+        const next = new Set(current)
+        next.add(key)
+        return next
+      })
+    },
+    [fbsStockBusy],
+  )
+
+  // Нижняя панель окна «Остаток для FBS» портaлится сюда, пока вкладка
+  // «Задать остаток» активна (решение 7 в требованиях; портал — не состояние
+  // React, чтобы обновление кнопок не гоняло лишний ререндер карточки).
+  const [footerSlotEl, setFooterSlotEl] = useState<HTMLDivElement | null>(null)
 
   const tabs: { key: TabKey; label: string }[] = [{ key: 'main', label: 'Основное' }]
   if (canViewMovements) tabs.push({ key: 'movements', label: 'Движения' })
@@ -187,15 +219,32 @@ export function ProductCardDialog({
   )
 
   // Нижняя панель — «Закрыть» на всех вкладках, кроме «Задать остаток»: там
-  // «Отмена»/«Сохранить» из общего компонента окна «Остаток для FBS» (R12).
-  const footer =
-    !notFound && activeTab === 'fbs_stock' && fbsStockFooter ? (
-      fbsStockFooter
-    ) : (
-      <Button onClick={handleClose} data-testid="product-card-close">
-        Закрыть
-      </Button>
-    )
+  // «Отмена»/«Сохранить» из общего компонента окна «Остаток для FBS» (R12),
+  // порталятся в footerSlot ниже. Слот смонтирован всегда (как только вкладка
+  // «Задать остаток» вообще доступна), чтобы тело вкладки, оставаясь
+  // смонтированным при уходе с неё, не теряло цель для портала.
+  const footerSlot = tabs.some((t) => t.key === 'fbs_stock') ? (
+    <Box
+      ref={setFooterSlotEl}
+      sx={{ display: activeTab === 'fbs_stock' ? 'contents' : 'none' }}
+      data-testid="product-card-fbs-footer-slot"
+    />
+  ) : null
+
+  const footer = notFound ? (
+    <Button onClick={handleClose} data-testid="product-card-close">
+      Закрыть
+    </Button>
+  ) : (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      {footerSlot}
+      {activeTab !== 'fbs_stock' ? (
+        <Button onClick={handleClose} disabled={fbsStockBusy} data-testid="product-card-close">
+          Закрыть
+        </Button>
+      ) : null}
+    </Stack>
+  )
 
   return (
     <AppDialog
@@ -296,23 +345,22 @@ export function ProductCardDialog({
           {tabs.some((t) => t.key === 'fbs_stock') && row.seller_id ? (
             // Решение 12 (27.09): тело «Задать остаток» не шире содержимого окна
             // «Остаток для FBS» (оно AppDialog md — 900px по умолчанию темы MUI),
-            // хотя окно карточки шире (lg). Точную ширину блоков сверяет со
-            // скриншотом окна кусок D6, здесь только верхняя граница контейнера.
+            // хотя окно карточки шире (lg).
             <Box hidden={activeTab !== 'fbs_stock'} sx={{ minWidth: 0, maxWidth: 900 }} data-testid="product-card-panel-fbs-stock">
               {visitedTabs.has('fbs_stock') ? (
                 <ProductCardFbsStockTab
                   productId={row.id}
+                  productName={row.name}
+                  productSku={row.sku_code}
+                  productSize={row.wb_size}
                   sellerId={row.seller_id}
-                  sellerName={cardData?.seller_name ?? '—'}
+                  sellerName={row.seller_name}
                   token={token}
-                  authHeaders={authHeaders}
                   warehouses={warehouses}
                   canEditBindings={canManageCatalog}
-                  onCardClose={(changed) => {
-                    if (changed) markChanged()
-                    handleClose()
-                  }}
-                  onFooterActionsChange={setFbsStockFooter}
+                  footerSlotEl={footerSlotEl}
+                  onCardClose={closeCardFromFbsTab}
+                  onBusyChange={setFbsStockBusy}
                 />
               ) : null}
             </Box>
