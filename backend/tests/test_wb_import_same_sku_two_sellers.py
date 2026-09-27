@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.services.tokens import decode_access_token
 from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
@@ -82,12 +83,23 @@ async def test_same_vendor_and_size_imports_for_both_sellers(
                 )
             ).scalars()
         )
+        aliases = list(
+            (
+                await session.execute(
+                    select(ProductBarcode).where(
+                        ProductBarcode.tenant_id == tenant_id,
+                        ProductBarcode.barcode == shared_barcode,
+                    )
+                )
+            ).scalars()
+        )
 
     assert len(rows) == 2
     assert {r.seller_id for r in rows} == {sid_a, sid_b}
     # Артикул у обоих одинаковый — именно это и запрещало старое ограничение.
     assert len({r.sku_code for r in rows}) == 1
     assert {r.wb_barcode for r in rows} == {shared_barcode}
+    assert {row.seller_id for row in aliases} == {sid_a, sid_b}
 
 
 @pytest.mark.asyncio
