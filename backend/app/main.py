@@ -45,6 +45,7 @@ from app.api.products import router as products_router
 from app.api.reports import router as reports_router
 from app.api.scan_resolver import router as scan_resolver_router
 from app.api.seller_billing import router as seller_billing_router
+from app.api.seller_catalog import router as seller_catalog_router
 from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(sellers_router)
     app.include_router(warehouses_router)
     app.include_router(products_router)
+    app.include_router(seller_catalog_router)
     app.include_router(inbound_intake_router)
     app.include_router(inbound_marking_router)
     app.include_router(kiz_reprints_router)

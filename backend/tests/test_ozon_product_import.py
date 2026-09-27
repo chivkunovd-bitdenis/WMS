@@ -185,13 +185,17 @@ async def test_unknown_units_are_skipped_rather_than_guessed(
     assert product.volume_liters is None
 
 
-async def test_card_without_a_match_becomes_a_product_of_its_own(
+async def test_sync_never_creates_a_product_for_an_unmatched_card(
     db_session: AsyncSession,
 ) -> None:
-    """WMS-347: селлер ввёл ключи — товары кабинета приехали сами.
+    """WMS-548 R12: ключ и «Синхронизировать по API» больше не заводят весь кабинет.
 
-    Раньше импорт принципиально не заводил товары, и каталог у чисто
-    озоновского продавца оставался пустым, пока оператор не наберёт его руками.
+    Раньше (WMS-347) импорт заводил товар для любой непарной карточки, и каталог
+    у чисто озоновского продавца наполнялся сам. Теперь это делает только явное
+    добавление селлером выбранной карточки (WMS-548 D3,
+    ``seller_fulfillment_catalog_service.add_cards_to_fulfillment``); обычный
+    импорт по-прежнему сохраняет снимок карточки и связывает то, что уже
+    совпало с товаром на фулфилменте, но непарную карточку не трогает.
     """
     tenant, seller, _product = await _seed(db_session)
 
@@ -206,34 +210,27 @@ async def test_card_without_a_match_becomes_a_product_of_its_own(
 
     assert result.cards_read == 2
     assert result.links_matched == 1
-    assert result.products_created == 1
-    assert result.links_created == 1
-    assert result.unmatched_offer_ids == []
+    assert result.products_created == 0
+    assert result.links_created == 0
+    assert result.unmatched_offer_ids == ["OZ562479787Sum1AVblack"]
     products = list((await db_session.execute(Product.__table__.select())).mappings().all())
-    assert len(products) == 2
-    created = next(row for row in products if row["sku_code"] == "OZ562479787Sum1AVblack")
-    assert created["name"] == "Сумка через плечо багет модная 2026"
-    assert created["seller_id"] == seller.id
-    # Габариты приезжают тем же проходом: без них литро-дни нулевые.
-    assert (created["length_mm"], created["width_mm"], created["height_mm"]) == (290, 170, 100)
-    assert created["weight_g"] == 470
-    link = (
-        await db_session.execute(
-            ProductMarketplaceLink.__table__.select().where(
-                ProductMarketplaceLink.product_id == created["id"]
-            )
-        )
-    ).one()
-    # Пометка «товар озоновский» — это и есть привязка, отдельного флага не заводим.
-    assert link.marketplace == "ozon"
-    assert link.external_sku == "5632831320"
-    assert link.external_product_id == "6149741392"
+    assert len(products) == 1  # only the pre-existing, matched product
+
+    from app.models.seller_ozon_imported_card import SellerOzonImportedCard
+
+    snapshot = list(
+        (await db_session.execute(SellerOzonImportedCard.__table__.select())).mappings().all()
+    )
+    assert len(snapshot) == 2  # both cards saved, matched or not — the seller can pick later
+    assert {row["ozon_product_id"] for row in snapshot} == {"6204279711", "6149741392"}
 
 
-async def test_second_run_does_not_create_the_same_product_twice(
+async def test_second_sync_of_an_unmatched_card_does_not_duplicate_the_snapshot(
     db_session: AsyncSession,
 ) -> None:
-    tenant, seller, _product = await _seed(db_session)
+    """A card nobody has selected yet stays a snapshot row, not a growing pile of them."""
+    tenant, seller = await _seed_without_link(db_session)
+
     for _ in range(2):
         result = await import_svc.import_ozon_product_cards(
             db_session,
@@ -245,9 +242,19 @@ async def test_second_run_does_not_create_the_same_product_twice(
         )
 
     assert result.products_created == 0
-    assert result.links_matched == 1
+    assert result.links_created == 0
+    assert result.links_matched == 0
+    assert result.unmatched_offer_ids == ["OZ562479787Sum1AVblack"]
     products = list((await db_session.execute(Product.__table__.select())).mappings().all())
-    assert len(products) == 2
+    assert products == []
+
+    from app.models.seller_ozon_imported_card import SellerOzonImportedCard
+
+    snapshot = list(
+        (await db_session.execute(SellerOzonImportedCard.__table__.select())).mappings().all()
+    )
+    assert len(snapshot) == 1  # upserted in place both times, not duplicated
+    assert snapshot[0]["ozon_product_id"] == "6149741392"
 
 
 async def test_scanner_finds_the_product_by_the_ozon_barcode(
