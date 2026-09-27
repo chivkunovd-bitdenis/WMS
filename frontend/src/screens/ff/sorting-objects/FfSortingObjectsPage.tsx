@@ -11,6 +11,8 @@ import type { LabelSize } from '../../../utils/labelSize'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
 import { SortingObjectsScreen } from './SortingObjectsScreen'
 import type { Cell, GoodsLine, ObjKind, Product, WarehouseObject } from './objectsStub'
+import { pendingScan, rememberScan, sendScan, type ScanBody } from './pendingScan'
+import type { ScanContext } from './sortingScan'
 
 // Раскладка по объектам, подключённая к серверу.
 //
@@ -57,19 +59,22 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
   }, [warehouses])
   const [data, setData] = useState<ApiSorting | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Счётчик загрузок нужен как ключ экрана.
-  //
-  // Экран принимает состав склада НАЧАЛЬНЫМ состоянием: он им дальше двигает
-  // сам, и перезаписывать его на каждый ответ сервера значило бы отменять
-  // работу оператора под руками. Но приехавшие позже данные он бы и не увидел.
-  // Смена ключа пересобирает экран заново — ровно тогда, когда пришёл новый
-  // состав, и ни разу между.
-  const [version, setVersion] = useState(0)
+  const [loadedContext, setLoadedContext] = useState('')
   const activeContext = useRef('')
   const context = `${token}:${warehouseId}:${inboundRequestId ?? ''}`
   activeContext.current = context
   const onPlacedRef = useRef(onPlaced)
   onPlacedRef.current = onPlaced
+  const scanKey = embedded && inboundRequestId && warehouseId
+    ? placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/scan`), inboundRequestId)
+    : null
+
+  const sendProductScan = useCallback(async (body: ScanBody, key: string) => {
+    if (activeContext.current !== context) throw new Error('Открыт другой документ или сотрудник')
+    return sendScan(localStorage, key, body, (confirmed) => fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects/scan`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...headers(token) }, body: JSON.stringify(confirmed),
+    }))
+  }, [context, token, warehouseId])
 
   const send = useCallback(async (body: PlacementBody, key: string | null) => {
     if (activeContext.current !== context) throw new Error('Открыт другой документ или сотрудник')
@@ -85,6 +90,14 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
   const load = useCallback(async (recover = true): Promise<boolean> => {
     if (!warehouseId) return false
     try {
+      if (recover && scanKey) {
+        const pending = pendingScan(localStorage, scanKey)
+        if (pending) {
+          const response = await sendProductScan(pending, scanKey)
+          if (!response.ok) throw new Error(await readApiErrorMessage(response))
+          await onPlacedRef.current?.()
+        }
+      }
       if (recover && embedded && inboundRequestId) {
         const key = placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/place`), inboundRequestId)
         const pending = pendingPlacement(localStorage, key)
@@ -104,7 +117,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       const loaded = (await res.json()) as ApiSorting
       if (activeContext.current !== context) return false
       setData(loaded)
-      setVersion((current) => current + 1)
+      setLoadedContext(context)
       return true
     } catch (err) {
       const message = placementFailureMessage(err)
@@ -113,7 +126,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       setError((current) => current ?? message)
       return false
     }
-  }, [context, embedded, inboundRequestId, token, warehouseId, send])
+  }, [context, embedded, inboundRequestId, token, warehouseId, send, scanKey, sendProductScan])
 
   useEffect(() => {
     void load()
@@ -127,7 +140,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     qty: number
     sourceHolder: string | null
   }) {
-    if (!warehouseId) return
+    if (!warehouseId) throw new Error('Склад не выбран')
     setError(null)
     try {
       const body = {
@@ -144,13 +157,39 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       const res = await send(confirmed, key)
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       await onPlacedRef.current?.()
-      await load(false)
+      if (!await load(false)) throw new Error('Размещение сохранено, но состав не обновлён. Обновите документ для проверки результата.')
     } catch (err) {
       // Экран уже переставил строку у себя. Показываем отказ и перечитываем
       // склад: иначе на экране будет одно, а в системе другое, и оператор
       // узнает об этом на инвентаризации.
       setError(`${placementFailureMessage(err)} Обновите документ, чтобы проверить результат размещения.`)
       if (!await load(false)) setData(null)
+      throw err
+    }
+  }
+
+  async function scanProduct(barcode: string, selected: ScanContext) {
+    if (!scanKey || !inboundRequestId || !selected.cellId) throw new Error('Откройте документ приёмки и отсканируйте ячейку')
+    setError(null)
+    try {
+      const body = rememberScan(localStorage, scanKey, {
+        inbound_request_id: inboundRequestId, barcode, cell_id: selected.cellId, to_id: selected.objectId,
+      })
+      const response = await sendProductScan(body, scanKey)
+      if (!response.ok) {
+        const detail = response.status === 409 ? (await response.clone().json() as { detail?: string }).detail : null
+        if (detail === 'already_in_target') {
+          if (!await load(false)) throw new Error('Не удалось обновить состав. Обновите документ для проверки результата.')
+          return 'Товар уже находится в выбранном месте'
+        }
+        throw new Error(await readApiErrorMessage(response))
+      }
+      await onPlacedRef.current?.()
+      if (!await load(false)) throw new Error('Скан сохранён, но состав не обновлён. Обновите документ для проверки результата.')
+    } catch (err) {
+      const message = placementFailureMessage(err)
+      setError(message)
+      throw new Error(message)
     }
   }
 
@@ -244,15 +283,17 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
           ))}
         </ToggleButtonGroup>
       </Stack>
-      {data ? (
+      {data && loadedContext === context ? (
         <SortingObjectsScreen
-          key={`${warehouseId}-${version}`}
+          key={context}
           onNote={() => undefined}
           initialObjects={data.objects}
           initialLines={data.lines}
           products={data.products}
           initialCells={data.cells}
-          onPlace={(payload) => void place(payload)}
+          onPlace={place}
+          onProductScan={scanProduct}
+          scanStorageKey={scanKey ? `${scanKey}:context` : undefined}
           purpose={
             embedded
               ? 'Собираем объект и ставим готовый объект на полку.'

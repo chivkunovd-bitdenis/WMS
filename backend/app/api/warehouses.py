@@ -283,6 +283,14 @@ class SortingPlaceIn(BaseModel):
     qty: int | None = Field(default=None, gt=0)
 
 
+class SortingScanIn(BaseModel):
+    inbound_request_id: uuid.UUID
+    operation_id: uuid.UUID
+    barcode: str = Field(min_length=1, max_length=512)
+    cell_id: uuid.UUID
+    to_id: uuid.UUID | None = None
+
+
 def _map_error(exc: WarehouseMapError) -> HTTPException:
     if exc.code in {
         "warehouse_not_found",
@@ -302,6 +310,10 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "qty_exceeds_accepted",
         "insufficient_sorting_stock",
         "operation_conflict",
+        "ambiguous_product",
+        "ambiguous_source",
+        "container_cell_mismatch",
+        "already_in_target",
         "not_distributable",
         "nothing_to_move",
         "pallet_disbanded",
@@ -528,6 +540,28 @@ async def place_sorting_object_route(
             quantity=body.qty,
             inbound_request_id=body.inbound_request_id,
             operation_id=body.operation_id,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return WarehouseMapMoveOut.model_validate(result)
+
+
+@router.post("/{warehouse_id}/sorting-objects/scan", response_model=WarehouseMapMoveOut)
+async def scan_sorting_product_route(
+    warehouse_id: uuid.UUID,
+    body: SortingScanIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseMapMoveOut:
+    from app.services.sorting_scan_service import scan_product
+
+    try:
+        result = await scan_product(
+            session, tenant_id=user.tenant_id, warehouse_id=warehouse_id,
+            actor_user_id=user.id, inbound_request_id=body.inbound_request_id,
+            operation_id=body.operation_id, barcode=body.barcode,
+            cell_id=body.cell_id, to_id=body.to_id,
         )
     except WarehouseMapError as exc:
         await session.rollback()
