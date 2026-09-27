@@ -16,6 +16,7 @@ import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
+import { SellerCardScreen } from './screens/v2/SellerCardScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -3569,6 +3570,17 @@ export default function App() {
                   sellers={sellers}
                   onRefresh={() => void refreshSellers(token)}
                 />
+              ) : (
+                ffAccessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+
+          <Route
+            path="ff/sellers/:sellerId"
+            element={
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <SellerCardScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -18,7 +19,7 @@ import {
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { sellerPortalUrl } from '../../utils/portalUrls'
-import { FfBillingProfilesDialog } from '../ff/FfBillingProfilesDialog'
+import { sellerWbStatusLabel } from '../../utils/sellerWbStatus'
 
 type SellerRow = {
   id: string
@@ -79,6 +80,7 @@ export function SellersScreen({
   sellers,
   onRefresh,
 }: Props) {
+  const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   // Реквизиты живут на селлере: заполняются один раз и дальше просто видны в
   // его строке. Счёт собирается по ним же — снимок берётся в момент выставления.
@@ -192,25 +194,36 @@ export function SellersScreen({
                 <TableCell>Название</TableCell>
                 <TableCell>Реквизиты для счетов</TableCell>
                 <TableCell>WB Marketplace</TableCell>
-                {isFulfillmentAdmin ? <TableCell align="right" /> : null}
               </TableRow>
             </TableHead>
             <TableBody>
               {sellers.map((s) => (
-                <TableRow key={s.id} hover data-testid="seller-row" data-seller-id={s.id}>
+                <TableRow
+                  key={s.id}
+                  hover
+                  data-testid="seller-row"
+                  data-seller-id={s.id}
+                  sx={isFulfillmentAdmin ? { cursor: 'pointer' } : undefined}
+                  role={isFulfillmentAdmin ? 'button' : undefined}
+                  tabIndex={isFulfillmentAdmin ? 0 : undefined}
+                  onClick={isFulfillmentAdmin ? () => navigate(`/app/ff/sellers/${s.id}`) : undefined}
+                  onKeyDown={
+                    isFulfillmentAdmin
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            navigate(`/app/ff/sellers/${s.id}`)
+                          }
+                        }
+                      : undefined
+                  }
+                >
                   <TableCell>{s.name}</TableCell>
                   <TableCell>
                     <SellerProfileSummary profile={profiles[s.id] ?? null} />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" data-testid="seller-wb-status">
-                      {s.wb_has_key === false
-                        ? 'Ключа нет'
-                        : s.wb_marketplace_scope_ok === true
-                          ? 'Проверка пройдена'
-                          : s.wb_marketplace_scope_ok === false
-                            ? 'Нет доступа к Marketplace'
-                            : 'Не проверяли'}
+                      {sellerWbStatusLabel(s)}
                     </Typography>
                     {s.wb_marketplace_scope_checked_at ? (
                       <Typography variant="caption" color="text.secondary" data-testid="seller-wb-checked-at">
@@ -220,21 +233,11 @@ export function SellersScreen({
                       </Typography>
                     ) : null}
                   </TableCell>
-                  {isFulfillmentAdmin ? (
-                    <TableCell align="right">
-                      <FfBillingProfilesDialog
-                        token={token}
-                        sellerId={s.id}
-                        sellerName={s.name}
-                        onSaved={() => void loadProfiles()}
-                      />
-                    </TableCell>
-                  ) : null}
                 </TableRow>
               ))}
               {sellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isFulfillmentAdmin ? 4 : 3}>
+                  <TableCell colSpan={3}>
                     <Typography variant="body2" color="text.secondary" data-testid="sellers-empty">
                       Пока нет селлеров. Добавьте первого в форме справа.
                     </Typography>

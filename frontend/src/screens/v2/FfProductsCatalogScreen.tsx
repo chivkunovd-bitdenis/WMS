@@ -46,6 +46,7 @@ import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintB
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
+import { resolveInitialSellerFilter } from '../../utils/urlSellerFilter'
 import {
   catalogRowToDisplayMeta,
   resolveProductPrimaryBarcode,
@@ -242,6 +243,8 @@ export function FfProductsCatalogScreen({
   const [importOpen, setImportOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const fbsLimitAutoOpenedRef = useRef<string | null>(null)
+  // WMS-491 (D1): ?seller_id=<id> в адресе — из карточки селлера.
+  const sellerIdAutoAppliedRef = useRef<string | null>(null)
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
@@ -642,6 +645,23 @@ export function FfProductsCatalogScreen({
     setSearchParams(next, { replace: true })
   }, [catalog, openFbsStockDialog, searchParams, setSearchParams])
 
+  // Ссылка ?seller_id=<id> ведёт сюда из карточки селлера (кнопка «Товары»,
+  // WMS-491 D1): выставляет фильтр «Селлер» на этого селлера. Список sellers
+  // при прямом открытии адреса может прийти позже — ждём его загрузки, чтобы
+  // не потерять параметр раньше времени. Дальше, как и у ?fbs_limit=, параметр
+  // убирается из адреса: обновление страницы после ручной смены фильтра не
+  // должно возвращать прежнего селлера.
+  useEffect(() => {
+    const sellerIdParam = searchParams.get('seller_id')
+    if (!sellerIdParam || sellers.length === 0) return
+    if (sellerIdAutoAppliedRef.current === sellerIdParam) return
+    sellerIdAutoAppliedRef.current = sellerIdParam
+    const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
+    if (resolved) setFilterSellerId(resolved)
+    const next = new URLSearchParams(searchParams)
+    next.delete('seller_id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, sellers, setSearchParams])
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
