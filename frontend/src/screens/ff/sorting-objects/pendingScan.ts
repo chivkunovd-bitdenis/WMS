@@ -7,9 +7,11 @@ export function pendingScan(storage: Storage, key: string): ScanBody | null {
   return raw ? JSON.parse(raw) as ScanBody : null
 }
 
-export function rememberScan(storage: Storage, key: string, body: Omit<ScanBody, 'operation_id'>): ScanBody {
-  if (pendingScan(storage, key)) throw new Error('Предыдущий скан ещё ожидает ответа. Обновите документ для проверки результата; затем повторите неотправленные сканы.')
-  const confirmed = { ...body, operation_id: randomId() }
+export function rememberScan(storage: Storage, key: string, body: Omit<ScanBody, 'operation_id'>, operationId = randomId()): ScanBody {
+  const previous = pendingScan(storage, key)
+  if (previous?.operation_id === operationId) return previous
+  if (previous) throw new Error('Предыдущий скан ещё ожидает ответа. Обновите документ для проверки результата; затем повторите неотправленные сканы.')
+  const confirmed = { ...body, operation_id: operationId }
   storage.setItem(key, JSON.stringify(confirmed))
   return confirmed
 }

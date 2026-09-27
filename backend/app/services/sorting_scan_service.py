@@ -56,7 +56,7 @@ async def scan_product(
         ).limit(1))
         if prior.request_id != req.id or evidence is None:
             raise error("operation_conflict")
-        return {"id": str(operation_id), "moved_qty": 1}
+        return {"id": str(operation_id), "moved_qty": 1, "reload": True}
     if await session.get(WarehouseMapEvent, operation_id) is not None:
         raise error("operation_conflict")
     matches = [row for row in req.lines if barcode and row.product.wb_barcode == barcode]
@@ -201,5 +201,23 @@ async def scan_product(
     intake._maybe_set_distribution_completed(req)
     intake._maybe_complete_request(req)
     await intake._record_charge_if_done(session, req, performer_id=actor_user_id)
+    result: dict[str, Any] = {"id": str(operation_id), "moved_qty": 1, "reload": True}
+    result["remaining_qty"] = sum(
+        max(0, intake._accepted_qty_for_line(row) - row.posted_qty) for row in req.lines
+    )
+    if line.posted_qty <= good_total:
+        target = await session.scalar(select(InventoryBalance).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == line.product_id,
+            InventoryBalance.storage_location_id == cell_id,
+            InventoryBalance.container_kind == target_kind,
+            InventoryBalance.container_id == to_id,
+        ))
+        if target is not None:
+            result.update(
+                reload=False, source_id=str(source_balance.id),
+                target_id=str(target.id), product_id=str(line.product_id),
+                target_holder=f"obj:{to_id}" if to_id else f"cell:{cell_id}",
+            )
     await session.commit()
-    return {"id": str(operation_id), "moved_qty": 1}
+    return result

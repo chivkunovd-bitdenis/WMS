@@ -180,6 +180,15 @@ class WarehouseMapMoveOut(BaseModel):
     moved_qty: int | None
 
 
+class SortingScanOut(WarehouseMapMoveOut):
+    reload: bool = True
+    remaining_qty: int | None = None
+    source_id: str | None = None
+    target_id: str | None = None
+    product_id: str | None = None
+    target_holder: str | None = None
+
+
 class WarehouseMapDisbandIn(BaseModel):
     id: uuid.UUID | None = None
     pallet_id: uuid.UUID | None = None
@@ -547,13 +556,13 @@ async def place_sorting_object_route(
     return WarehouseMapMoveOut.model_validate(result)
 
 
-@router.post("/{warehouse_id}/sorting-objects/scan", response_model=WarehouseMapMoveOut)
+@router.post("/{warehouse_id}/sorting-objects/scan", response_model=SortingScanOut)
 async def scan_sorting_product_route(
     warehouse_id: uuid.UUID,
     body: SortingScanIn,
     user: Annotated[User, Depends(require_cells_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> WarehouseMapMoveOut:
+) -> SortingScanOut:
     from app.services.sorting_scan_service import scan_product
 
     try:
@@ -566,7 +575,7 @@ async def scan_sorting_product_route(
     except WarehouseMapError as exc:
         await session.rollback()
         raise _map_error(exc) from None
-    return WarehouseMapMoveOut.model_validate(result)
+    return SortingScanOut.model_validate(result)
 
 
 @router.get("", response_model=list[WarehouseOut])
