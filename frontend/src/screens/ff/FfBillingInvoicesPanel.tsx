@@ -73,6 +73,12 @@ const serviceLabels: Record<string, string> = {
   storage_liter_day: 'Хранение',
 }
 
+/** Пустая история счетов: у селлера нет вкладки «Селлеры» с фильтром, поэтому и совета быть не может. */
+export function invoiceHistoryEmptyState(sellerScope: boolean): { title: string; hint?: string } {
+  const title = 'Счета ещё не выставлены'
+  return sellerScope ? { title } : { title, hint: 'Выставьте счёт на вкладке «Селлеры»' }
+}
+
 export function formatMoscowDate(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE }).format(new Date(value))
 }
@@ -206,11 +212,14 @@ export function FfBillingInvoicesPanel({
   token,
   sellers = [],
   refreshToken = 0,
+  sellerScope = false,
 }: {
   token: string
   sellers?: Seller[]
   /** Меняется после выставления счёта, чтобы история перечиталась. */
   refreshToken?: number
+  /** Кабинет селлера: только его счета, без фильтра «Селлер» и без отмены счёта. */
+  sellerScope?: boolean
 }) {
   const [sellerId, setSellerId] = useState('all')
   const [status, setStatus] = useState('all')
@@ -236,10 +245,12 @@ export function FfBillingInvoicesPanel({
     const controller = new AbortController()
     setLoading(true)
     setError(false)
-    const params = new URLSearchParams({ seller_id: sellerId, status })
+    const params = new URLSearchParams({ status })
+    if (!sellerScope) params.set('seller_id', sellerId)
     if (search) params.set('number', search)
     if (cursor) params.set('cursor', cursor)
-    fetch(`/api/billing/invoices-v2?${params}`, {
+    const listUrl = sellerScope ? `/api/seller-billing/invoices?${params}` : `/api/billing/invoices-v2?${params}`
+    fetch(listUrl, {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
     })
@@ -261,13 +272,14 @@ export function FfBillingInvoicesPanel({
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [cursor, refreshToken, reload, search, sellerId, status, token])
+  }, [cursor, refreshToken, reload, search, sellerId, sellerScope, status, token])
 
   const openInvoice = async (row: InvoiceHistoryRow) => {
     setOpenError(false)
     setCancelError(null)
-    const url =
-      row.origin === 'legacy' ? `/api/billing/invoices/${row.id}` : `/api/billing/invoices-v2/${row.id}`
+    const url = sellerScope
+      ? (row.origin === 'legacy' ? `/api/seller-billing/invoices/legacy/${row.id}` : `/api/seller-billing/invoices/v2/${row.id}`)
+      : (row.origin === 'legacy' ? `/api/billing/invoices/${row.id}` : `/api/billing/invoices-v2/${row.id}`)
     try {
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) throw new Error('open-invoice')
@@ -323,12 +335,16 @@ export function FfBillingInvoicesPanel({
       width: 170,
       render: (row: InvoiceHistoryRow) => <TextCell value={row.number} />,
     },
-    {
-      key: 'seller',
-      header: 'Селлер',
-      width: 220,
-      render: (row: InvoiceHistoryRow) => <TextCell value={row.seller_name} width={200} />,
-    },
+    ...(sellerScope
+      ? []
+      : [
+          {
+            key: 'seller',
+            header: 'Селлер',
+            width: 220,
+            render: (row: InvoiceHistoryRow) => <TextCell value={row.seller_name} width={200} />,
+          },
+        ]),
     {
       key: 'period',
       header: 'Период',
@@ -388,19 +404,21 @@ export function FfBillingInvoicesPanel({
         searchPlaceholder="Номер счёта"
         testId="billing-invoices-filter-bar"
       >
-        <SelectInput
-          label="Селлер"
-          value={sellerId}
-          onChange={(value) => {
-            resetPaging()
-            setSellerId(value)
-          }}
-          options={[
-            { value: 'all', label: 'Все селлеры' },
-            ...sellers.map((seller) => ({ value: seller.id, label: seller.name })),
-          ]}
-          testId="billing-seller"
-        />
+        {sellerScope ? null : (
+          <SelectInput
+            label="Селлер"
+            value={sellerId}
+            onChange={(value) => {
+              resetPaging()
+              setSellerId(value)
+            }}
+            options={[
+              { value: 'all', label: 'Все селлеры' },
+              ...sellers.map((seller) => ({ value: seller.id, label: seller.name })),
+            ]}
+            testId="billing-seller"
+          />
+        )}
         <SelectInput
           label="Статус"
           value={status}
@@ -434,10 +452,7 @@ export function FfBillingInvoicesPanel({
         loading={loading}
         getRowKey={(row) => row.id}
         testId="billing-invoices-table"
-        empty={{
-          title: 'Счета ещё не выставлены',
-          hint: 'Выставьте счёт на вкладке «Селлеры»',
-        }}
+        empty={invoiceHistoryEmptyState(sellerScope)}
       />
       {nextCursor ? (
         <SecondaryAction
@@ -467,7 +482,7 @@ export function FfBillingInvoicesPanel({
         actions={
           <ActionGroup>
             <PrintAction what="счёт" placement="panel" onClick={printInvoice} testId="billing-invoice-print" />
-            {opened?.status === 'issued' ? (
+            {!sellerScope && opened?.status === 'issued' ? (
               <DangerAction
                 onClick={() => {
                   setCancelError(null)

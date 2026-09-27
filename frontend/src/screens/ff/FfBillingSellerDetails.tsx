@@ -123,6 +123,103 @@ function formatLiterDays(value: number): string {
   return value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+/**
+ * Ячейка «Документ»: номер сам и есть переход, кроме кабинета селлера — там
+ * экраны ФФ и история поставки закрыты правами, поэтому обычный текст.
+ * Вынесено в отдельную функцию, чтобы проверить оба режима без раскрытия
+ * раздела в таблице.
+ */
+export function documentTitleCell(
+  entry: SellerReportEntry,
+  sellerScope: boolean,
+  onOpenInbound: (id: string) => void,
+  onOpenFbsOrder: (supplyId: string) => void,
+): ReactNode {
+  // Номер документа уже содержит его вид («Приёмка № 000045»), поэтому
+  // подпись типа добавляется только тогда, когда номера нет вовсе.
+  const title = entry.document_number ?? (sourceTypeLabels[entry.source_type] ?? 'Документ без номера')
+  const target = entry.source_target
+  const status = entry.fbs_status_label
+  // У заказа FBS статус — часть его имени: по нему видно, почему заказ
+  // уже в сумме или ещё нет. Отдельной колонкой ради одного раздела
+  // таблицу расширять незачем.
+  const withStatus = (node: ReactNode) =>
+    status ? (
+      <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+        {node}
+        <StatusChip
+          label={status}
+          tone={status === 'ВБ получил' ? 'ok' : 'neutral'}
+          hint={
+            status === 'ВБ получил'
+              ? 'Wildberries подтвердил приём — заказ тарифицируется'
+              : 'Заказ передан, подтверждения от Wildberries ещё нет'
+          }
+        />
+      </Stack>
+    ) : (
+      node
+    )
+  // Кабинет селлера: экраны ФФ и история поставки ему закрыты правами,
+  // поэтому номер документа — обычный текст, без перехода.
+  if (sellerScope) {
+    return withStatus(<TextCell value={title} />)
+  }
+  if (target?.kind === 'inbound') {
+    return withStatus(
+      <Link
+        component="button"
+        type="button"
+        sx={{ textAlign: 'left' }}
+        onClick={() => onOpenInbound(target.source_id)}
+      >
+        {title}
+      </Link>,
+    )
+  }
+  if (target?.kind === 'fbs_order') {
+    // Без поставки открывать нечего: отдельного экрана заказа в системе
+    // нет, история живёт на поставке. Ссылка, которая ничего не делает,
+    // хуже обычного текста — по ней жмут и решают, что сломалось.
+    const supply = entry.supply
+    if (!supply) return withStatus(<TextCell value={title} />)
+    return withStatus(
+      <Link
+        component="button"
+        type="button"
+        sx={{ textAlign: 'left' }}
+        onClick={() => onOpenFbsOrder(supply.id)}
+      >
+        {title}
+      </Link>,
+    )
+  }
+  if (target?.kind === 'route') {
+    return withStatus(
+      <Link component={RouterLink} to={target.to} sx={{ textAlign: 'left' }}>
+        {title}
+      </Link>,
+    )
+  }
+  return withStatus(
+    <TextCell value={title} hint={status ? undefined : 'Первоисточник недоступен или не поддерживает переход'} />,
+  )
+}
+
+/**
+ * Ячейка «Поставка»: ведёт в карточку поставки везде, кроме кабинета селлера,
+ * где эта карточка ему недоступна.
+ */
+export function documentSupplyCell(supply: { id: string; number: string } | null, sellerScope: boolean): ReactNode {
+  if (!supply) return <TextCell value="—" />
+  if (sellerScope) return <TextCell value={supply.number} />
+  return (
+    <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${supply.id}`} sx={{ textAlign: 'left' }}>
+      {supply.number}
+    </Link>
+  )
+}
+
 function formatMoscowDate(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE }).format(new Date(value))
 }
@@ -220,6 +317,7 @@ export function FfBillingSellerDetails({
   loading,
   error,
   includeFinance,
+  sellerScope = false,
   selectedRootIds,
   onToggleRoot,
   storageSelected,
@@ -232,6 +330,8 @@ export function FfBillingSellerDetails({
   loading: boolean
   error: boolean
   includeFinance: boolean
+  /** Кабинет селлера: без выбора документов в счёт и без переходов в экраны ФФ. */
+  sellerScope?: boolean
   selectedRootIds: string[]
   onToggleRoot: (rootId: string, checked: boolean) => void
   storageSelected: boolean
@@ -250,7 +350,7 @@ export function FfBillingSellerDetails({
 
   function documentColumns() {
     return [
-      ...(includeFinance
+      ...(includeFinance && !sellerScope
         ? [
             {
               key: 'pick',
@@ -299,82 +399,14 @@ export function FfBillingSellerDetails({
         key: 'document',
         header: 'Документ',
         width: 260,
-        render: (row: DocumentRow) => {
-          if (row.kind === 'storagePeriod') return <TextCell value="Хранение за период" />
-          // Номер документа уже содержит его вид («Приёмка № 000045»), поэтому
-          // подпись типа добавляется только тогда, когда номера нет вовсе.
-          const title =
-            row.entry.document_number ??
-            (sourceTypeLabels[row.entry.source_type] ?? 'Документ без номера')
-          const target = row.entry.source_target
-          // Номер документа сам и есть переход: отдельная колонка «Открыть»
-          // занимала место и заставляла искать глазами вторую точку клика.
-          const status = row.entry.fbs_status_label
-          // У заказа FBS статус — часть его имени: по нему видно, почему заказ
-          // уже в сумме или ещё нет. Отдельной колонкой ради одного раздела
-          // таблицу расширять незачем.
-          const withStatus = (node: ReactNode) =>
-            status ? (
-              <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                {node}
-                <StatusChip
-                  label={status}
-                  tone={status === 'ВБ получил' ? 'ok' : 'neutral'}
-                  hint={
-                    status === 'ВБ получил'
-                      ? 'Wildberries подтвердил приём — заказ тарифицируется'
-                      : 'Заказ передан, подтверждения от Wildberries ещё нет'
-                  }
-                />
-              </Stack>
-            ) : (
-              node
-            )
-          if (target?.kind === 'inbound') {
-            return withStatus(
-              <Link
-                component="button"
-                type="button"
-                sx={{ textAlign: 'left' }}
-                onClick={() => onOpenInbound(target.source_id)}
-              >
-                {title}
-              </Link>,
-            )
-          }
-          if (target?.kind === 'fbs_order') {
-            // Без поставки открывать нечего: отдельного экрана заказа в системе
-            // нет, история живёт на поставке. Ссылка, которая ничего не делает,
-            // хуже обычного текста — по ней жмут и решают, что сломалось.
-            const supply = row.entry.supply
-            if (!supply) return withStatus(<TextCell value={title} />)
-            return withStatus(
-              <Link
-                component="button"
-                type="button"
-                sx={{ textAlign: 'left' }}
-                onClick={() => onOpenFbsOrder(supply.id)}
-              >
-                {title}
-              </Link>,
-            )
-          }
-          if (target?.kind === 'route') {
-            return withStatus(
-              <Link component={RouterLink} to={target.to} sx={{ textAlign: 'left' }}>
-                {title}
-              </Link>,
-            )
-          }
-          return withStatus(
-            <TextCell
-              value={title}
-              hint={
-                status ? undefined : 'Первоисточник недоступен или не поддерживает переход'
-              }
-            />,
-          )
-        },
+        // Номер документа сам и есть переход: отдельная колонка «Открыть»
+        // занимала место и заставляла искать глазами вторую точку клика.
+        render: (row: DocumentRow) =>
+          row.kind === 'storagePeriod' ? (
+            <TextCell value="Хранение за период" />
+          ) : (
+            documentTitleCell(row.entry, sellerScope, onOpenInbound, onOpenFbsOrder)
+          ),
       },
       {
         key: 'supply',
@@ -383,19 +415,8 @@ export function FfBillingSellerDetails({
         // Отдельного экрана заказа в системе нет: смотреть его идут в поставку.
         // Поэтому у заказа два перехода — номер открывает историю, а эта
         // колонка ведёт в саму карточку поставки.
-        render: (row: DocumentRow) => {
-          const supply = row.kind === 'document' ? row.entry.supply : null
-          if (!supply) return <TextCell value="—" />
-          return (
-            <Link
-              component={RouterLink}
-              to={`/app/ff/fbs?supply_id=${supply.id}`}
-              sx={{ textAlign: 'left' }}
-            >
-              {supply.number}
-            </Link>
-          )
-        },
+        render: (row: DocumentRow) =>
+          documentSupplyCell(row.kind === 'document' ? (row.entry.supply ?? null) : null, sellerScope),
       },
       {
         key: 'quantity',
@@ -454,7 +475,7 @@ export function FfBillingSellerDetails({
   }
 
   const sectionColumns = [
-    ...(includeFinance
+    ...(includeFinance && !sellerScope
       ? [
           {
             key: 'pick',
