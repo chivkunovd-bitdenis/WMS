@@ -341,6 +341,56 @@ async def test_cursor_issued_for_another_seller_is_rejected(async_client: AsyncC
 
 
 # ---------------------------------------------------------------------------
+# R3, F2 (ревью Astra №1): курсор истории счетов, выданный другому селлеру,
+# тоже отклоняется — раньше он принимался и сдвигал позицию в чужой истории.
+# ---------------------------------------------------------------------------
+
+
+async def test_invoice_list_cursor_issued_for_another_seller_is_rejected(
+    async_client: AsyncClient,
+) -> None:
+    fx = await _seed()
+    # У S2 в истории два счёта (legacy + v2) — limit=1 гарантирует next_cursor.
+    first_page = await async_client.get(
+        "/seller-billing/invoices", headers=_headers(fx.users["owner2"]), params={"limit": "1"},
+    )
+    assert first_page.status_code == 200, first_page.text
+    foreign_cursor = first_page.json()["next_cursor"]
+    assert foreign_cursor
+
+    rejected = await async_client.get(
+        "/seller-billing/invoices",
+        headers=_headers(fx.users["owner1"]),
+        params={"cursor": foreign_cursor},
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert fx.sellers["s1"].name not in rejected.text
+    assert fx.sellers["s2"].name not in rejected.text
+
+    garbage = await async_client.get(
+        "/seller-billing/invoices",
+        headers=_headers(fx.users["owner1"]),
+        params={"cursor": "not-a-real-cursor"},
+    )
+    assert garbage.status_code == 422, garbage.text
+
+    # Свой курсор новой проверкой не задет — дочитка своей истории работает.
+    own_first = await async_client.get(
+        "/seller-billing/invoices", headers=_headers(fx.users["owner1"]), params={"limit": "1"},
+    )
+    assert own_first.status_code == 200, own_first.text
+    own_cursor = own_first.json()["next_cursor"]
+    assert own_cursor
+    own_second = await async_client.get(
+        "/seller-billing/invoices",
+        headers=_headers(fx.users["owner1"]),
+        params={"cursor": own_cursor},
+    )
+    assert own_second.status_code == 200, own_second.text
+    assert len(own_second.json()["invoices"]) == 1
+
+
+# ---------------------------------------------------------------------------
 # R3, R4, C11, C16: ручки ФФ /billing/* селлеру недоступны и наоборот.
 # ---------------------------------------------------------------------------
 

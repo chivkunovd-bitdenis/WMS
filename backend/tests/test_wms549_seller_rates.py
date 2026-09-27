@@ -218,7 +218,10 @@ async def test_seller_one_sees_own_priority_rate_and_own_product_only(
     assert ("fbs_order", None) not in by_service  # нет ни одной версии вовсе
     assert not any(row["rate_kopecks"] == 999 for row in rates)  # ни сотрудник, ни тенант Б
     assert str(fx.products["p2"].id) not in response.text  # чужой товар S2
-    assert "88" not in response.text  # ставка на чужой товар
+    # Сравниваем по числу в разобранном JSON, а не подстрокой по сырому тексту
+    # ответа: подстрока "88" случайно совпадает с фрагментом чужого UUID
+    # товара P1 (он законно присутствует в ответе) и даёт ложное падение.
+    assert not any(row["rate_kopecks"] == 88 for row in rates)  # ставка на чужой товар
 
 
 async def test_seller_two_falls_back_to_general_rate_and_own_product(
@@ -237,7 +240,9 @@ async def test_seller_two_falls_back_to_general_rate_and_own_product(
     packing = by_service[("packing", str(fx.products["p2"].id))]
     assert packing["rate_kopecks"] == 88
     assert ("packing", str(fx.products["p1"].id)) not in by_service  # чужой товар S1
-    assert "150" not in response.text  # индивидуальная ставка S1 не должна утечь
+    # По числу в JSON, не подстрокой по тексту: "150" может случайно совпасть
+    # с фрагментом легитимного UUID товара P2 в этом же ответе.
+    assert not any(row["rate_kopecks"] == 150 for row in rates)  # ставка S1 не утекла
     assert "SKU-P1" not in response.text
 
 
@@ -251,8 +256,12 @@ async def test_foreign_tenant_seller_sees_only_its_own_tenant_rate(
     assert len(rates) == 1
     assert rates[0]["service_code"] == "inbound"
     assert rates[0]["rate_kopecks"] == 999
-    for leaked in ("100", "150", "77", "88", "50"):
-        assert leaked not in response.text
+    assert rates[0]["product_id"] is None
+    # По числу в JSON: единственная строка и так проверена выше, но явный
+    # список запрещённых чисел фиксирует, что чужие ставки тенанта А сюда
+    # точно не попали ни под каким видом.
+    leaked_rates = {100, 150, 77, 88, 50}
+    assert not any(row["rate_kopecks"] in leaked_rates for row in rates)
 
 
 # ---------------------------------------------------------------------------
@@ -321,3 +330,32 @@ async def test_rate_shown_matches_live_charge_for_both_sellers(async_client: Asy
         )
         assert entry["rate_kopecks"] == expected_rate == rate_row["rate_kopecks"]
         assert entry["amount_kopecks"] == expected_rate * expected_qty
+
+
+# ---------------------------------------------------------------------------
+# R7, F5 (ревью Astra №1): «Действует с» приходит с явным часовым поясом.
+# На SQLite DateTime(timezone=True) отдаёт naive datetime — без нормализации
+# JS трактует такую строку как локальное время браузера и может показать
+# дату на сутки раньше вместо UTC-даты, которую мы храним.
+# ---------------------------------------------------------------------------
+
+
+async def test_valid_from_at_is_returned_with_explicit_utc_offset(
+    async_client: AsyncClient,
+) -> None:
+    fx = await _seed()
+    response = await async_client.get("/seller-billing/rates", headers=_headers(fx.users["owner1"]))
+    assert response.status_code == 200, response.text
+    rates = response.json()["rates"]
+
+    inbound = next(row for row in rates if row["service_code"] == "inbound")
+    raw = inbound["valid_from_at"]
+    parsed = datetime.fromisoformat(raw)
+    assert parsed.tzinfo is not None, raw
+    assert parsed.utcoffset() == timedelta(0), raw
+    assert parsed == _S1_OVERRIDE_FROM
+
+    packing = next(row for row in rates if row["service_code"] == "packing")
+    packing_parsed = datetime.fromisoformat(packing["valid_from_at"])
+    assert packing_parsed.tzinfo is not None, packing["valid_from_at"]
+    assert packing_parsed == _PAST

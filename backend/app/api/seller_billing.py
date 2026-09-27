@@ -11,6 +11,10 @@ billing_seller_rates_service): второго независимого расч�
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import uuid
 from datetime import date, datetime
 from typing import Annotated, Any
@@ -28,6 +32,7 @@ from app.api.billing_seller_report_schemas import (
     SellerReportFinancialSummaryOut,
 )
 from app.api.deps import get_current_user, require_seller_billing_scope
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.billing import BillingInvoice
 from app.models.seller import Seller
@@ -47,6 +52,56 @@ from app.services.billing_seller_report_service import (
 )
 
 router = APIRouter(prefix="/seller-billing", tags=["seller-billing"])
+
+# WMS-549 F2 (ревью Astra №1): курсор общей истории счетов (list_invoices_v2)
+# сам по себе не привязан к tenant/seller — для ФФ это осознанно (см. его
+# docstring: фильтры приходят явными параметрами запроса). Но у селлера
+# область фиксирована сервером на каждый запрос, и курсор, выданный другому
+# селлеру, не должен даже приниматься. Меняем не общий курсор ФФ (это чужой
+# контракт), а оборачиваем его подписанным конвертом только на этой ручке:
+# наружу отдаём конверт с tenant_id/seller_id, внутрь сервиса передаём
+# исходный курсор как есть.
+_INVOICE_CURSOR_CONTEXT = b"wms:seller-billing-invoice-cursor:v1"
+
+
+def _canonical_json(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _cursor_signature(payload: dict[str, Any]) -> str:
+    key = hmac.new(
+        settings.jwt_secret_key.encode(), _INVOICE_CURSOR_CONTEXT, hashlib.sha256
+    ).digest()
+    return hmac.new(key, _canonical_json(payload), hashlib.sha256).hexdigest()
+
+
+def _wrap_invoice_list_cursor(
+    inner_cursor: str, *, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> str:
+    payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "cursor": inner_cursor}
+    envelope = {"payload": payload, "signature": _cursor_signature(payload)}
+    return base64.urlsafe_b64encode(_canonical_json(envelope)).decode().rstrip("=")
+
+
+def _unwrap_invoice_list_cursor(
+    cursor: str, *, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> str:
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+        payload = decoded["payload"]
+        signature = decoded["signature"]
+        if not isinstance(payload, dict) or not isinstance(signature, str):
+            raise ValueError
+        if not hmac.compare_digest(signature, _cursor_signature(payload)):
+            raise ValueError
+        if payload.get("tenant_id") != str(tenant_id) or payload.get("seller_id") != str(seller_id):
+            raise ValueError
+        inner = payload.get("cursor")
+        if not isinstance(inner, str):
+            raise ValueError
+        return inner
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        raise HTTPException(status_code=422, detail="invalid_cursor") from None
 
 
 class SellerBillingRateOut(BaseModel):
@@ -150,18 +205,29 @@ async def list_seller_billing_invoices(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
+    inner_cursor = (
+        _unwrap_invoice_list_cursor(cursor, tenant_id=user.tenant_id, seller_id=seller_id)
+        if cursor is not None
+        else None
+    )
     try:
-        return await list_invoices_v2(
+        result = await list_invoices_v2(
             session,
             tenant_id=user.tenant_id,
             seller_id=seller_id,
             status=status,
             number=number,
-            cursor=cursor,
+            cursor=inner_cursor,
             limit=limit,
         )
     except BillingInvoiceV2Error as exc:
         raise _invoice_v2_error(exc) from exc
+    next_cursor = result.get("next_cursor")
+    if isinstance(next_cursor, str):
+        result["next_cursor"] = _wrap_invoice_list_cursor(
+            next_cursor, tenant_id=user.tenant_id, seller_id=seller_id
+        )
+    return result
 
 
 @router.get("/invoices/legacy/{invoice_id}", response_model=None)

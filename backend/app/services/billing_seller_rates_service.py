@@ -23,6 +23,16 @@ from app.services.billing_ledger_service import _resolve_v2_tariff
 from app.services.billing_tariff_matrix_service import MATRIX_SERVICE_CODES
 
 
+def _as_utc(value: datetime) -> datetime:
+    """WMS-549 F5: SQLite отдаёт `DateTime(timezone=True)` без tzinfo обратно.
+
+    Пишем всегда в UTC, поэтому голое время без пояса — это и есть UTC; тот
+    же приём уже используется у матрицы ФФ (billing.py, `_matrix_out.utc_value`).
+    На PostgreSQL значение уже aware, `astimezone` его не портит.
+    """
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 @dataclass(frozen=True)
 class SellerBillingRateRow:
     service_code: str
@@ -58,7 +68,7 @@ async def list_seller_billing_rates(
                 service_code=service_code,
                 unit=version.unit,
                 rate_kopecks=version.rate,
-                valid_from_at=version.valid_from_at,
+                valid_from_at=_as_utc(version.valid_from_at),
             )
         )
 
@@ -107,7 +117,7 @@ async def list_seller_billing_rates(
                 service_code=version.service_code,
                 unit=version.unit,
                 rate_kopecks=version.rate,
-                valid_from_at=version.valid_from_at,
+                valid_from_at=_as_utc(version.valid_from_at),
                 product_id=product.id,
                 product_sku=product.sku_code,
                 product_name=product.name,
