@@ -846,6 +846,18 @@ async def list_invoices_v2(
         .join(Seller, BillingInvoiceV2.seller_id == Seller.id)
         .where(BillingInvoiceV2.tenant_id == tenant_id)
     )
+    if after is not None:
+        # WMS-549 F3: раньше курсор применялся в Python уже ПОСЛЕ того, как
+        # каждый запрос забирал только первые limit+1 строк своей таблицы —
+        # окно выборки не двигалось со страницы на страницу, и вторая
+        # страница снова читала тот же верхний срез. Явные счета старше
+        # позиции курсора отсеются точным сравнением ниже; здесь достаточно
+        # ослабленной (issued_at <= курсора) границы — она никогда не
+        # отбросит нужную строку, а лишь избавляет БД от пересчёта одного и
+        # того же верхнего среза на каждой странице.
+        cursor_issued_at = after[0]
+        legacy_query = legacy_query.where(BillingInvoice.issued_at <= cursor_issued_at)
+        v2_query = v2_query.where(BillingInvoiceV2.issued_at <= cursor_issued_at)
     if seller_id is not None:
         legacy_query = legacy_query.where(BillingInvoice.seller_id == seller_id)
         v2_query = v2_query.where(BillingInvoiceV2.seller_id == seller_id)
