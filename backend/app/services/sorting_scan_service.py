@@ -5,25 +5,57 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeCargoPlace,
     InboundIntakeDistributionLine,
+    InboundIntakeLine,
+    InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
+from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_map_event import WarehouseMapEvent
 from app.services import inbound_intake_service as intake
 from app.services import inventory_service as inventory
 from app.services import warehouse_map_service as warehouse_map
+from app.services.catalog_service import ID_IN_BATCH_SIZE, chunked
 from app.services.defect_warehouse_service import get_or_create_defect_location
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import get_or_create_sorting_location
+
+
+async def matching_scan_lines(
+    session: AsyncSession, req: InboundIntakeRequest, barcode: str,
+) -> list[InboundIntakeLine]:
+    """Resolve saved WB alternatives only within the intake's exact variants."""
+    matches = [row for row in req.lines if barcode and row.product.wb_barcode == barcode]
+    if matches or not barcode:
+        return matches
+    keys = {(row.product.seller_id, row.product.wb_nm_id) for row in req.lines
+            if row.product.seller_id is not None and row.product.wb_nm_id is not None}
+    card_type = SellerWildberriesImportedCard
+    variants: set[tuple[uuid.UUID, int, str]] = set()
+    for batch in chunked(list(keys), min(ID_IN_BATCH_SIZE, 500)):
+        cards = await session.scalars(select(card_type).where(
+            card_type.tenant_id == req.tenant_id,
+            tuple_(card_type.seller_id, card_type.nm_id).in_(batch),
+        ))
+        for card in cards:
+            raw = card.raw_json if isinstance(card.raw_json, dict) else {}
+            for size in raw.get("sizes") or []:
+                if not isinstance(size, dict) or size.get("chrtID") is None:
+                    continue
+                if barcode in (size.get("skus") or []):
+                    variants.add((card.seller_id, card.nm_id, str(size["chrtID"])))
+    return [row for row in req.lines if (
+        row.product.seller_id, row.product.wb_nm_id, str(row.product.wb_chrt_id)
+    ) in variants]
 
 
 async def scan_product(
@@ -59,7 +91,7 @@ async def scan_product(
         return {"id": str(operation_id), "moved_qty": 1, "reload": True}
     if await session.get(WarehouseMapEvent, operation_id) is not None:
         raise error("operation_conflict")
-    matches = [row for row in req.lines if barcode and row.product.wb_barcode == barcode]
+    matches = await matching_scan_lines(session, req, barcode)
     if not matches:
         raise error("product_not_on_request")
     if len(matches) != 1:
