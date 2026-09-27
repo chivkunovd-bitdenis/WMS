@@ -257,23 +257,21 @@ export type SellerCatalogSyncOutcome = {
 }
 
 /**
- * «Синхронизировать по API» обновляет каждую подключённую площадку сама по
- * себе — отказ WB не должен отменять Ozon и наоборот (R12; ревью Astra №1,
- * WMS-548, замечание F4). Раньше сбой WB (нет ключа, отвечает 409) обрывал
- * функцию до проверки Ozon, а сетевая ошибка самого запроса синхронизации
- * Ozon тонула в catch, который должен был гасить только отказ проверки
- * подключения — снаружи это выглядело так, будто кнопка вообще ничего не
- * сделала.
+ * «Синхронизировать по API» обновляет WB и Ozon независимо — отказ одной
+ * площадки не должен отменять другую (R12; ревью Astra №1, WMS-548,
+ * замечание F4). Раньше сбой WB обрывал функцию до проверки Ozon.
  *
- * Обе площадки сначала проверяются на подключение (у WB — has_content_token,
- * у Ozon — connected) и синхронизируются, только если ключ есть; неподключённая
- * площадка пропускается молча — «ключа нет» не ошибка, а обычное состояние
- * (после приёмки F4 голый `missing_content_token` на экране у селлера без
- * WB выглядел как сбой там, где WB у него просто не подключён). Отказ самой
- * проверки подключения — тоже не сбой синхронизации, площадку в этот раз
- * просто не трогаем. А вот отказ самого запроса синхронизации уже
- * подключённой площадки — результат, который обязан быть виден, человеческим
- * текстом, а не кодом.
+ * Владелец 27.09.2026 отменил прошлое указание про предварительную проверку
+ * и humanSyncFailureMessage для WB как выход за рамки задачи («ни на
+ * миллиметр сверх задачи»): WB здесь — ровно поведение etalon, синхронизация
+ * вызывается напрямую, ошибка показывается текстом сервера как есть, без
+ * пропуска при отсутствии ключа. Единственное, что из этого сохранено, —
+ * требование R12/F4: сбой WB не отменяет попытку синхронизировать Ozon.
+ *
+ * Ozon — по-прежнему сначала проверяется на подключение (connected);
+ * неподключённый Ozon пропускается молча, а отказ самой проверки подключения
+ * или запроса синхронизации уже подключённого Ozon — результат, который
+ * обязан быть виден человеческим текстом (см. F9, ревью Astra №2).
  */
 /**
  * Превращает код ошибки бэкенда в человеческую строку. Известные коды —
@@ -325,35 +323,20 @@ async function checkPlatformConnected(
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
 ): Promise<SellerCatalogSyncOutcome> {
-  const wbCheck = await checkPlatformConnected(
-    headers,
-    '/integrations/wildberries/self/tokens',
-    (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
-  )
-
+  // WB — ровно поведение etalon (см. docstring выше): без предварительной
+  // проверки подключения, ошибка — текстом сервера как есть.
   let wbFailure: string | null = null
-  if (wbCheck.status === 'check_failed') {
-    wbFailure = humanSyncFailureMessage(
-      wbCheck.message ?? '',
-      'Не удалось проверить подключение Wildberries.',
-    )
-  } else if (wbCheck.status === 'connected') {
-    try {
-      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-        method: 'POST',
-        headers,
-      })
-      if (!wbRes.ok) {
-        wbFailure = humanSyncFailureMessage(
-          await readApiErrorMessage(wbRes),
-          'Не удалось синхронизировать Wildberries.',
-        )
-      }
-    } catch (e) {
-      wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Wildberries.'
+  try {
+    const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+      method: 'POST',
+      headers,
+    })
+    if (!wbRes.ok) {
+      wbFailure = await readApiErrorMessage(wbRes)
     }
+  } catch (e) {
+    wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать товары.'
   }
-  // wbCheck.status === 'not_connected' — площадку просто не трогаем, молча.
 
   const ozonCheck = await checkPlatformConnected(
     headers,
@@ -985,7 +968,7 @@ export function SellerProductsStockScreen({
             </Select>
           </FormControl>
           <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
-            {busy ? 'Загрузка…' : `Найдено: ${total} из ${scopeTotal}`}
+            {`Найдено: ${total} из ${scopeTotal}`}
           </Typography>
         </Stack>
       </Paper>
@@ -1081,8 +1064,23 @@ export function SellerProductsStockScreen({
                       size="small"
                       checked={selectedKeys.has(row.key)}
                       onChange={(event) => toggleSelectedRow(row, event.target.checked)}
-                      slotProps={{ input: { 'aria-label': `Выбрать товар ${row.name}` } }}
-                      data-testid={`seller-product-select-${row.key}`}
+                      // Аудит владельца («ни на миллиметр сверх задачи»): у товара
+                      // на ФФ aria-label/data-testid — как в etalon (SKU, product
+                      // id); новые значения (по названию/составному ключу row.key)
+                      // остаются только у карточек «не на ФФ», которых в etalon
+                      // не было и id/sku_code у них нет.
+                      slotProps={{
+                        input: {
+                          'aria-label': onFulfillment
+                            ? `Выбрать товар ${row.sku_code}`
+                            : `Выбрать товар ${row.name}`,
+                        },
+                      }}
+                      data-testid={
+                        onFulfillment
+                          ? `seller-product-select-${row.id}`
+                          : `seller-product-select-${row.key}`
+                      }
                     />
                   </TableCell>
                   <TableCell>
@@ -1111,11 +1109,14 @@ export function SellerProductsStockScreen({
                         {row.name}
                       </Typography>
                       {onFulfillment ? (
+                        // Аудит владельца: у товара на ФФ единственный возможный
+                        // чип — Ozon (itemMarketplaces возвращает ['ozon'] либо
+                        // []), testId — фиксированная строка, как в etalon.
                         itemMarketplaces(row).map((marketplace) => (
                           <MarketplaceChip
                             key={marketplace}
                             marketplace={marketplace}
-                            testId={`seller-catalog-marketplace-${marketplace}-${row.key}`}
+                            testId="seller-catalog-marketplace-ozon"
                           />
                         ))
                       ) : (
@@ -1264,11 +1265,19 @@ export function SellerProductsStockScreen({
                 </TableRow>
               )
             })}
-            {items.length === 0 && !busy ? (
+            {scopeTotal === 0 ? (
               <TableRow>
                 <TableCell colSpan={11}>
                   <Typography variant="body2" color="text.secondary">
-                    {scopeTotal === 0 ? 'Пока нет товаров.' : 'Ничего не найдено.'}
+                    Пока нет товаров.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : items.length === 0 && !busy ? (
+              <TableRow>
+                <TableCell colSpan={11}>
+                  <Typography variant="body2" color="text.secondary">
+                    Ничего не найдено.
                   </Typography>
                 </TableCell>
               </TableRow>
