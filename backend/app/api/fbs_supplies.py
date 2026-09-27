@@ -30,6 +30,7 @@ from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services import fbs_supply_transfer_service as transfer_svc
 from app.services import kiz_reprint_service as kiz_reprint_svc
 from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -3255,3 +3256,56 @@ async def get_fbs_supply_history(
         return await supply_history(session, tenant_id=user.tenant_id, supply_id=supply_id)
     except FbsOrderHistoryError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+class FbsSupplyTransferBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1)
+    target_supply_id: uuid.UUID | None = None
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsSupplyTransferTargetOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    wb_supply_id: str
+
+
+class FbsSupplyTransferOut(BaseModel):
+    target_supply_id: uuid.UUID | None
+    transferred_order_ids: list[uuid.UUID]
+    failed_order_ids: list[uuid.UUID]
+    pending_order_ids: list[uuid.UUID]
+    state: Literal["confirmed", "partial", "failed", "pending_confirmation"]
+    message: str | None
+
+
+@router.get("/{supply_id}/transfer-targets", response_model=list[FbsSupplyTransferTargetOut])
+async def get_transfer_targets(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsSupplyTransferTargetOut]:
+    try:
+        rows = await transfer_svc.list_transfer_targets(session, user.tenant_id, supply_id)
+    except supply_svc.FbsSupplyError as exc:
+        _raise_from_service(exc)
+    return [FbsSupplyTransferTargetOut.model_validate(row) for row in rows]
+
+
+@router.post("/{supply_id}/transfer-orders", response_model=FbsSupplyTransferOut)
+async def transfer_supply_orders(
+    supply_id: uuid.UUID,
+    body: FbsSupplyTransferBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsSupplyTransferOut:
+    async with httpx.AsyncClient() as client:
+        try:
+            result = await transfer_svc.transfer_orders(
+                session, user.tenant_id, supply_id, order_ids=body.order_ids,
+                target_supply_id=body.target_supply_id, idempotency_key=body.idempotency_key,
+                actor_user_id=user.id, http_client=client,
+            )
+        except supply_svc.FbsSupplyError as exc:
+            _raise_from_service(exc)
+    return FbsSupplyTransferOut.model_validate(result)

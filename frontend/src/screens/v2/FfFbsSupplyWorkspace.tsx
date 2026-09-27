@@ -57,6 +57,7 @@ import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import {
   buildFbsPickingListPrintHtml,
@@ -507,6 +508,8 @@ export function FfFbsSupplyWorkspace({
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [packingSelectedIds, setPackingSelectedIds] = useState<Set<string>>(() => new Set())
+  // WMS-562: перенос выбранных на упаковке заказов в другую поставку WB.
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [clearMarkingOrders, setClearMarkingOrders] = useState<FbsWorkspace['orders'] | null>(null)
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
@@ -681,6 +684,7 @@ export function FfFbsSupplyWorkspace({
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
     setPackingSelectedIds(new Set())
+    setTransferDialogOpen(false)
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
@@ -2996,6 +3000,15 @@ export function FfFbsSupplyWorkspace({
                             Очистить ЧЗ
                           </Button>
                         ) : null}
+                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
+                          <Button
+                            disabled={!packagingEditable || busy}
+                            onClick={() => setTransferDialogOpen(true)}
+                            data-testid="fbs-packing-transfer-supply"
+                          >
+                            Перенести в другую поставку
+                          </Button>
+                        ) : null}
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
                           Всё упаковано
                         </Button>
@@ -3699,6 +3712,30 @@ export function FfFbsSupplyWorkspace({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       /></ErrorBoundary>
+      {workspace ? (
+        <ErrorBoundary component="FbsTransferSupplyDialog">
+          <FbsTransferSupplyDialog
+            open={transferDialogOpen}
+            orderIds={selectedPackingOrders.map((order) => order.id)}
+            currentSupplyId={workspace.supply.id}
+            onClose={() => setTransferDialogOpen(false)}
+            onTransferred={(result) => {
+              if (shownSupplyId.current !== workspace.supply.id) return
+              if (result.state === 'confirmed') setTransferDialogOpen(false)
+              setPackingSelectedIds((current) => {
+                if (result.transferred_order_ids.length === 0) return current
+                const next = new Set(current)
+                for (const id of result.transferred_order_ids) next.delete(id)
+                return next
+              })
+              setNotice(result.message
+                ?? `Перенесено ${result.transferred_order_ids.length} ${ordersWord(result.transferred_order_ids.length)}.${result.pending_order_ids.length ? ` Ожидают подтверждения: ${result.pending_order_ids.length}.` : ''}${result.failed_order_ids.length ? ` Не перенесены: ${result.failed_order_ids.length}.` : ''}`)
+              void load(true)
+            }}
+            deps={makeFbsTransferSupplyDeps(token, authHeaders, workspace.supply.id)}
+          />
+        </ErrorBoundary>
+      ) : null}
       <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
