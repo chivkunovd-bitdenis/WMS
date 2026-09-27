@@ -245,6 +245,47 @@ function productMovementsPage(ctx: Ctx) {
   return { rows: slice, truncated: (page - 1) * limit + slice.length < rows.length, total: rows.length, page, limit }
 }
 
+// ── Карта склада, отфильтрованная по товару (вкладка «Расположение») ──────
+function warehouseMap(ctx: Ctx) {
+  const p = productById(ctx.query.get('product_id') ?? '')
+  const seller = p ? sellerById(p.seller_id)?.name ?? null : null
+  type Node = Record<string, unknown> & { children?: Node[] }
+  const cells = new Map<string, { id: string; code: string; barcode: string; qty: number; children: Node[] }>()
+  for (const pl of p ? productPlacements(p) : []) {
+    let cell = cells.get(pl.cell)
+    if (!cell) {
+      cell = { id: `cell-${pl.cell}`, code: pl.cell, barcode: `LOC${pl.cell.replace(/[^0-9]/g, '')}`, qty: 0, children: [] }
+      cells.set(pl.cell, cell)
+    }
+    const productNode: Node = {
+      kind: 'product',
+      id: `${p!.id}@${pl.cell}@${pl.container?.code ?? 'loose'}`,
+      product_id: p!.id,
+      name: p!.name,
+      seller_name: seller,
+      category: p!.wb_subject_name,
+      seller_article: p!.wb_vendor_code ?? p!.ozon_offer_id,
+      barcode: p!.wb_barcodes[0] ?? null,
+      photo_url: p!.photo,
+      qty: pl.qty,
+    }
+    cell.qty += pl.qty
+    cell.children.push(
+      pl.container
+        ? { kind: pl.container.kind, id: `cont-${pl.container.code}`, code: pl.container.code, barcode: pl.container.code, seller_name: seller, qty: pl.qty, children: [productNode] }
+        : productNode,
+    )
+  }
+  return {
+    warehouses: [{ id: WAREHOUSE.id, name: WAREHOUSE.name }],
+    sellers: seller ? [seller] : [],
+    categories: p?.wb_subject_name ? [p.wb_subject_name] : [],
+    cells: [...cells.values()].sort((a, b) => a.code.localeCompare(b.code, 'ru')),
+    unassigned: [],
+    journal: [],
+  }
+}
+
 // ── Окно «Остаток для FBS» ──────────────────────────────────────────────────
 const WB_WAREHOUSE_ID = 1402871
 const OZON_WAREHOUSE_ID = 1020001987654000
@@ -1078,6 +1119,7 @@ const routes: Route[] = [
   // Справочники ФФ.
   { method: 'GET', path: /^\/warehouses$/, handler: () => [WAREHOUSE] },
   { method: 'GET', path: /^\/warehouses\/[^/]+\/locations/, handler: () => [] },
+  { method: 'GET', path: /^\/warehouses\/([^/]+)\/map$/, handler: warehouseMap },
   { method: 'GET', path: /^\/sellers$/, handler: (c) => (c.cabinet === 'seller' ? [sellerList().find((s) => s.id === SELLER_KR)] : sellerList()) },
   { method: 'GET', path: /^\/operations\/(inbound-intake-requests|outbound-shipment-requests|marketplace-unload-requests|discrepancy-acts|background-jobs|stock-transfers)$/, handler: () => [] },
   { method: 'GET', path: /^\/operations\/inventory-movements/, handler: () => [] },

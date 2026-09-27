@@ -572,7 +572,7 @@ function invNumber(id: string): string {
   return `ИНВ-${id.replace(/[^0-9a-f]/gi, '').slice(0, 8).toUpperCase()}`
 }
 
-export const OBJECT_COUNT_CELL = 'Б 2.1'
+export const OBJECT_COUNT_CELL = 'Б-02-01'
 
 const invDraftId = '7c2e91a4-5d1f-4b8e-9a0c-2f6d3e1b7a55'
 const invPostedId = '51b0d3f2-9e4a-4c7d-8b21-6a0e9f3c2d18'
@@ -799,7 +799,7 @@ export function recordMovement(p: ProductFx, operation: string, quantity: number
 // ── Ячейки: где лежит товар (та же структура, что в «Ячейках») ────────────
 export type PlacementFx = { cell: string; container: { kind: 'pallet' | 'box'; code: string } | null; qty: number }
 
-const CELLS = ['А 1.1', 'А 1.2', 'А 1.3', 'А 2.1', 'А 2.2', 'Б 1.1', 'Б 1.2', 'Б 2.1', 'Б 2.2', 'В 1.1', 'В 1.2', 'В 3.1']
+const CELLS = ['А-01-01', 'А-01-02', 'А-01-03', 'А-02-01', 'А-02-02', 'Б-01-01', 'Б-01-02', 'Б-02-01', 'Б-02-02', 'В-01-01', 'В-01-02', 'В-03-01']
 const placementCache = new Map<string, PlacementFx[]>()
 
 export function productPlacements(p: ProductFx): PlacementFx[] {
@@ -814,9 +814,9 @@ export function productPlacements(p: ProductFx): PlacementFx[] {
     const cell = CELLS[(index * 3 + slot * 5) % CELLS.length]!
     const container =
       slot === 0 && qty > 40
-        ? { kind: 'pallet' as const, code: `П-${String(2310 + index).padStart(5, '0')}` }
+        ? { kind: 'pallet' as const, code: `П-${String(2310 + index).padStart(6, '0')}` }
         : slot === 1
-          ? { kind: 'box' as const, code: `WHB-${String(88120 + index * 3 + slot)}` }
+          ? { kind: 'box' as const, code: `КР-${String(4510 + index * 3 + slot).padStart(6, '0')}` }
           : null
     parts.push({ cell, container, qty })
     left -= qty
