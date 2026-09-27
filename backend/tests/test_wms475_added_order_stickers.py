@@ -1,4 +1,14 @@
-"""Late WB additions prefetch only their missing stickers without blocking packing."""
+"""Late WB additions prefetch only their missing stickers without blocking packing.
+
+WMS-537: the ``draft`` scenario used to assert that a draft supply skipped the
+sticker prefetch entirely (``batch_order_ids == []``). The owner reported that
+orders added to a draft supply never got their WB sticker until someone
+pressed "Start work" or printed manually. The fix removes the draft-only
+branch in ``add_orders_to_existing_supply`` so a draft behaves exactly like a
+supply already being worked on: added orders' stickers are requested right
+away. The ``draft`` scenario below now asserts the same prefetch as every
+other status, plus that the supply stays a draft with no packaging task.
+"""
 
 from __future__ import annotations
 
@@ -152,14 +162,19 @@ async def test_added_order_sticker_prefetch(
     )
     assert response.status_code == 200, response.text
     added_ids = order_ids[1:2] if scenario == "partial_confirmation" else order_ids[1:]
-    if scenario == "draft":
-        assert batch_order_ids == []
-    else:
-        assert len(batch_order_ids) == 1
-        assert set(batch_order_ids[0]) == set(added_ids)
+    # WMS-537: a draft supply is no longer a special case — the prefetch runs
+    # for the just-added orders regardless of supply status.
+    assert len(batch_order_ids) == 1
+    assert set(batch_order_ids[0]) == set(added_ids)
     assert len(wb_add_calls) == 1
     workspace = response.json()
     assert len(workspace["orders"]) == 1 + len(added_ids)
+    if scenario == "draft":
+        # The prefetch must not pull the supply out of `draft` or create a
+        # packaging task on its own (R2): that stays a separate operator
+        # action ("Начать работу с поставкой").
+        assert workspace["supply"]["status"] == "draft"
+        assert workspace["supply"]["packaging_task_id"] is None
     for order in workspace["orders"]:
         assert order["sticker"]["code"] == fetched_codes.get(order["wb_order_id"])
         if storage_failure and uuid.UUID(order["id"]) in added_ids:
