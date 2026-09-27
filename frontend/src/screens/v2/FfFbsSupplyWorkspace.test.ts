@@ -4,6 +4,7 @@ import {
   buildFbsSyncTargets,
   fbsAccessibleStageIndex,
   fbsBoxEditingDisabled,
+  fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
@@ -14,6 +15,40 @@ import {
   normalizeMetadataKind,
   summarizeDeliveryChecks,
 } from './fbsUx'
+
+describe('WMS-557 product quantities beside box input', () => {
+  const orders = Array.from({ length: 10 }, (_, index) => ({ id: `order-${index}`, product: { id: 'product-a' } }))
+  const firstBox = new Set(orders.slice(0, 5).map((order) => order.id))
+
+  it('keeps plan 10 after five units were saved in another box', () => {
+    expect(fbsBoxProductProgress(orders, firstBox, {}).get('product-a')).toEqual({ planned: 10, remaining: 5 })
+  })
+
+  it('deducts current input and restores it when input is cleared', () => {
+    expect(fbsBoxProductProgress(orders, firstBox, { 'product-a': '2' }).get('product-a')).toEqual({ planned: 10, remaining: 3 })
+    expect(fbsBoxProductProgress(orders, firstBox, { 'product-a': '' }).get('product-a')).toEqual({ planned: 10, remaining: 5 })
+  })
+
+  it('recomputes after saving and removing assignments without changing plan', () => {
+    const twoBoxes = new Set(orders.slice(0, 7).map((order) => order.id))
+    expect(fbsBoxProductProgress(orders, twoBoxes, {}).get('product-a')).toEqual({ planned: 10, remaining: 3 })
+    twoBoxes.delete('order-0')
+    expect(fbsBoxProductProgress(orders, twoBoxes, {}).get('product-a')).toEqual({ planned: 10, remaining: 4 })
+  })
+
+  it('counts distinct products and unmapped orders independently', () => {
+    const rows = [...orders, { id: 'other', product: { id: 'product-b' } }, { id: 'unmapped', product: { id: null } }]
+    const progress = fbsBoxProductProgress(rows, firstBox, { 'product-a': '2', unmapped: '1' })
+    expect(progress.get('product-b')).toEqual({ planned: 1, remaining: 1 })
+    expect(progress.get('unmapped')).toEqual({ planned: 1, remaining: 0 })
+  })
+
+  it('reflects the existing whole-order selection without negative remainder', () => {
+    expect(fbsBoxProductProgress(orders, firstBox, { 'product-a': '2.9' }).get('product-a')?.remaining).toBe(3)
+    expect(fbsBoxProductProgress(orders, firstBox, { 'product-a': '50' }).get('product-a')?.remaining).toBe(0)
+    expect(fbsBoxProductProgress(orders, firstBox, { 'product-a': '-2' }).get('product-a')?.remaining).toBe(5)
+  })
+})
 
 describe('Ozon FBS UI boundaries', () => {
   it('syncs every seller and marketplace pair from one action', () => {

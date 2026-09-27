@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { fbsMarkingVerdictsSummary } from './fbsUx'
+import { readFbsWorkspaceStage } from './fbsWorkspaceStage'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
 const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -84,6 +85,7 @@ function sandbox(code: string, given: Record<string, unknown>) {
     get: (_target, name) => {
       if (typeof name !== 'string') return undefined
       if (name in given) return given[name]
+      if (name === 'readFbsWorkspaceStage') return readFbsWorkspaceStage
       if (name in globalThis) return (globalThis as unknown as Record<string, unknown>)[name]
       return (value?: unknown) => { calls.push([name, value]) }
     },
@@ -166,7 +168,7 @@ function operator(options: {
   const run = (new Function(
     'beginWorkspaceWrite', 'refreshAfterLostRace', 'setBusy', 'setError', 'setNotice',
     'setRetryAction', 'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
-    'FbsApiError', 'fbsErrorText', `${asJs('run', runSource)}; return run`,
+    'FbsApiError', 'fbsErrorText', 'readFbsWorkspaceStage', `${asJs('run', runSource)}; return run`,
   ) as (...args: unknown[]) => (operation: () => Promise<unknown>, success: unknown) => Promise<unknown>)(
     beginWorkspaceWrite,
     (onApplied?: (fresh: unknown) => void) => { seen.reread += 1; recoveries.push(onApplied) },
@@ -182,6 +184,7 @@ function operator(options: {
     (stage: string) => stage,
     TestApiError,
     (message: string) => message,
+    readFbsWorkspaceStage,
   )
   return {
     seen, answer, generation, writeSeq, shownSupplyId,
@@ -446,6 +449,7 @@ describe('WMS-477 opening a supply drops the previous state', () => {
       persistentOperationKey: () => 'delivery-key',
       deliveryKeyRef: { current: '' },
       kizSelectedStickerRef: { current: 'sticker' },
+      pendingDirectReprintKeysRef: { current: new Set() },
     })
     run.invoke()
     return run.calls
