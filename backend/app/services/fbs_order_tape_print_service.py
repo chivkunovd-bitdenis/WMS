@@ -534,6 +534,13 @@ async def print_fbs_order_tape(
                 session, tenant_id, order, marking, http_client, actor_user_id,
             )
         except marking_svc.FbsMarkingError as exc:
+            if _wb_accepted_code_without_echo(exc):
+                # WMS-560: WB answered the write, only its readback has not echoed
+                # the value yet. The code is already bound to this order and the
+                # pending operation keeps tracking the WB result, so the label
+                # stays in the tape instead of failing the whole order.
+                await session.commit()
+                continue
             if (marking is not None and marking.id == marking_id
                     and exc.code != "wb_pending_confirmation"):
                 await _mark_printed_sgtin_not_sent(session, order)
@@ -611,6 +618,24 @@ async def _send_or_reconcile_printed_marking(
         order.metadata_delivery_allowed = False
         raise marking_svc.FbsMarkingError("wb_pending_confirmation") from error
     raise error
+
+
+def _wb_accepted_code_without_echo(exc: marking_svc.FbsMarkingError) -> bool:
+    """True when WB answered the KIZ write but has not echoed the value yet.
+
+    ``_send_or_reconcile_printed_marking`` raises ``wb_pending_confirmation``
+    for this case and also after a lost WB answer (transport, 408, 5xx). Only
+    the former is chained from ``wb_pending_confirmation`` itself. A lost answer
+    is chained from its own WB error code and still keeps the order out of the
+    tape, so the next print reconciles the write and resends the same code.
+    """
+    if exc.code != "wb_pending_confirmation":
+        return False
+    cause = exc.__cause__
+    return (
+        isinstance(cause, marking_svc.FbsMarkingError)
+        and cause.code == "wb_pending_confirmation"
+    )
 
 
 async def _load_supply(
