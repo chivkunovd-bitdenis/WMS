@@ -1,0 +1,5 @@
+{
+  "payload_utf8": "{\"inn\":\"7707083893\",\"action\":\"DISTANCE\",\"action_date\":\"2026-09-24\",\"products\":[{\"cis\":\"010460123456789021SERIAL-517-A\",\"product_cost\":123456},{\"cis\":\"010460123456789021SERIAL-517-B\",\"product_cost\":78900}]}",
+  "payload_base64": "eyJpbm4iOiI3NzA3MDgzODkzIiwiYWN0aW9uIjoiRElTVEFOQ0UiLCJhY3Rpb25fZGF0ZSI6IjIwMjYtMDktMjQiLCJwcm9kdWN0cyI6W3siY2lzIjoiMDEwNDYwMTIzNDU2Nzg5MDIxU0VSSUFMLTUxNy1BIiwicHJvZHVjdF9jb3N0IjoxMjM0NTZ9LHsiY2lzIjoiMDEwNDYwMTIzNDU2Nzg5MDIxU0VSSUFMLTUxNy1CIiwicHJvZHVjdF9jb3N0Ijo3ODkwMH1dfQ==",
+  "payload_sha256": "367c04db47414fbc0c8d455f2b727c2c6f6b65c54c40f64992be94d7d7731ed3"
+}
