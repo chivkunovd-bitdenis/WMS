@@ -6,6 +6,7 @@ import {
   displaySellerCatalogRow,
   fetchAddableSellerCatalogKeys,
   hasAnySellerCatalogCards,
+  shouldCloseAfterAddToFulfillment,
   shouldOpenCatalogSelectionAfterKeySave,
   type SellerCatalogPageRow,
 } from './SellerCatalogSelectionDialog'
@@ -289,5 +290,36 @@ describe('addKeysToFulfillment', () => {
     })
     const outcome = await addKeysToFulfillment(['wb:1'], 'wildberries', fetchImpl, 'http://x/add', {})
     expect(outcome).toEqual({ addedKeys: [], skipped: [], failureMessage: 'offline' })
+  })
+})
+
+// WMS-548 ревью Astra №1, F7: окно закрывается только при полном успехе —
+// ни одна порция не оборвалась и ни одна карточка не пропущена. При ошибке
+// или пропуске (R9, А12) окно и выделение недобавленных остаются.
+describe('shouldCloseAfterAddToFulfillment', () => {
+  it('closes when everything selected was added, nothing skipped', () => {
+    expect(
+      shouldCloseAfterAddToFulfillment({ addedKeys: ['wb:1'], skipped: [], failureMessage: null }),
+    ).toBe(true)
+  })
+
+  it('stays open when a chunk failed, even if something was added before the failure', () => {
+    expect(
+      shouldCloseAfterAddToFulfillment({
+        addedKeys: ['wb:1'],
+        skipped: [],
+        failureMessage: 'db_unavailable',
+      }),
+    ).toBe(false)
+  })
+
+  it('stays open when a card was skipped (conflict), even without a transport failure', () => {
+    expect(
+      shouldCloseAfterAddToFulfillment({
+        addedKeys: ['wb:1'],
+        skipped: [{ vendorCode: 'A-2', reason: 'vendor_code_conflict' }],
+        failureMessage: null,
+      }),
+    ).toBe(false)
   })
 })
