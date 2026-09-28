@@ -16,6 +16,7 @@ class SellerReportPhysicalTotals(BaseModel):
     packing_items: int = 0
     outbound_items: int = 0
     fbs_items: int = 0
+    return_items: int = 0
 
 
 class SellerReportFinancialTotals(SellerReportPhysicalTotals):
