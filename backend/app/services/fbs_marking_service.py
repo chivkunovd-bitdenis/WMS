@@ -110,6 +110,18 @@ class FbsMarkingError(Exception):
         super().__init__(code)
 
 
+class FbsMarkingWriteAcceptedError(FbsMarkingError):
+    """WB answered this call's metadata PUT; only the readback after it is unconfirmed.
+
+    WMS-579: callers must not infer an accepted write from the error code alone.
+    ``wb_pending_confirmation`` is also raised by a reconciling read that found
+    no order row, when no PUT happened in that call at all. ``code`` is
+    ``wb_pending_confirmation`` when the readback answered without the value (or
+    without the order row), or the readback's own WB error code when the read
+    itself failed.
+    """
+
+
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
@@ -1162,13 +1174,18 @@ async def attach_order_meta_to_wb_and_sync(
         marking.meta_status = META_STATUS_ASSIGNED
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
-    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    # WMS-579: from here on WB has answered the PUT, so every failure below is
+    # an unknown result of an accepted write, not a refusal of it.
+    try:
+        markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    except WildberriesClientError as exc:
+        raise FbsMarkingWriteAcceptedError(_wb_error_code(exc)) from exc
     remote_detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN) or {}
     if marking.kind == MARKING_KIND_SGTIN and (
         not markings.applied
         or not remote_detail.get("value")
     ):
-        raise FbsMarkingError("wb_pending_confirmation")
+        raise FbsMarkingWriteAcceptedError("wb_pending_confirmation")
     if notify_supply:
         await _notify_supply_marking_update(
             session, tenant_id, order.id, actor_user_id=actor_user_id,
