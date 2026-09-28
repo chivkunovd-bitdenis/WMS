@@ -52,6 +52,8 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printMarkingCodeLabels, printMarkingCodeTape } from '../../utils/printMarkingCodeLabel'
 import { startAutoKizReprintPrint } from '../../utils/kizReprintPrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
+import { useScanIntake } from '../../hooks/useScanIntake'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
@@ -59,6 +61,7 @@ import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
+import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
 import {
   buildFbsPickingListPrintHtml,
   fbsPickSourceLabels,
@@ -202,6 +205,25 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
 
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
 
+/**
+ * WMS-575: поле скана выключается на время запроса и теряет фокус, а ловушка
+ * фокуса окна MUI переводит его на контейнер окна карточки. Это не выбор
+ * оператора, поэтому право вернуть фокус в поле сохраняется.
+ */
+function isWorkspaceFocusFallback(element: Element | null | undefined): boolean {
+  return element instanceof HTMLElement
+    && element.classList.contains('MuiDialog-container')
+    && element.closest('[data-testid="fbs-workspace"]') !== null
+}
+
+/** Хвост кода маркировки для строки — так же, как его режет сервер (последние 8 знаков). */
+function kizValueTail(value: string): string {
+  // Python str.strip() снимает и разделители \x1c–\x1f, JS trim() — нет.
+  // eslint-disable-next-line no-control-regex
+  const cleaned = value.replace(/^[\s\x1c-\x1f]+|[\s\x1c-\x1f]+$/g, '')
+  return cleaned.length > 8 ? cleaned.slice(-8) : cleaned
+}
+
 // КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
 /** Хвост внесённого Честного знака — пустой, значит заказ ещё не сканировали. */
 function kizTail(order: FbsWorkspace['orders'][number]): string | null {
@@ -219,21 +241,6 @@ function hasRemovableKiz(order: FbsWorkspace['orders'][number], marketplace: 'wb
     (state) =>
       state.kind === 'sgtin' &&
       (state.source === 'operator' || (marketplace === 'wb' && state.source === 'pool')) &&
-      state.status !== 'missing' &&
-      (marketplace === 'wb' || state.status !== 'rejected'),
-  )
-}
-
-/** The inline FBS reprint is intentionally only for an operator-bound KIZ.
- * A pool code continues to use the existing order-level repeat flow. */
-function hasOperatorKiz(
-  state: FbsWorkspace['orders'][number]['metadata']['states'][number] | undefined,
-  marketplace: 'wb' | 'ozon',
-) {
-  return Boolean(
-    state?.id &&
-      state.kind === 'sgtin' &&
-      state.source === 'operator' &&
       state.status !== 'missing' &&
       (marketplace === 'wb' || state.status !== 'rejected'),
   )
@@ -563,6 +570,13 @@ export function FfFbsSupplyWorkspace({
   const busyHardwareScanBufferRef = useRef('')
   const busyHardwareCaptureEnabledRef = useRef(false)
   const scannerShouldRefocusRef = useRef(false)
+  // WMS-575: скан принимает вся вкладка (useScanIntake ниже). Поле скана и
+  // слушатель документа отдают код в один и тот же приём acceptPackingScan.
+  const acceptPackingScanRef = useRef<(raw: string) => void>(() => undefined)
+  const packingScanListeningRef = useRef(false)
+  // Хвост ЧЗ, сохранённого ответом commit, — пока перечитывание поставки не
+  // принесло его в строку. Ключ — заказ.
+  const [kizCommittedTails, setKizCommittedTails] = useState<Record<string, string>>({})
   const [queuedPackingScanVersion, setQueuedPackingScanVersion] = useState(0)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
@@ -723,6 +737,7 @@ export function FfFbsSupplyWorkspace({
     setKizConfirmTarget(null)
     setKizConfirmValue(null)
     setKizScanNotice(null)
+    setKizCommittedTails({})
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
 
@@ -741,11 +756,15 @@ export function FfFbsSupplyWorkspace({
   // The baseline scanner input is disabled while its request is running.
   // Native scanners then emit into document.body, so buffer only that case and
   // feed the same ordered queue. Ozon retains its pre-WMS-514 behaviour.
+  // WMS-575: пока вкладку слушает useScanIntake, коды ловит он, где бы ни был
+  // фокус, и этот буфер не нужен — иначе он собрал бы те же символы второй раз
+  // и подставил их в поле.
   useLayoutEffect(() => {
     const captureScope = (
       !isOzonSupply
       && open
       && stage === 'packing'
+      && !packingScanListeningRef.current
       && busyHardwareCaptureEnabledRef.current
     )
     if (!captureScope) {
@@ -793,6 +812,7 @@ export function FfFbsSupplyWorkspace({
         target instanceof HTMLIFrameElement
         && target.getAttribute('aria-hidden') === 'true'
       ) return
+      if (isWorkspaceFocusFallback(target as Element | null)) return
       if (target instanceof HTMLElement && target !== document.body) {
         scannerShouldRefocusRef.current = false
       }
@@ -979,9 +999,17 @@ export function FfFbsSupplyWorkspace({
   // Return focus only while the scanner still owns it. A delayed print must
   // never pull the operator out of another control they deliberately chose.
   const refocusKizInput = useCallback((force = false) => {
-    window.setTimeout(() => {
+    const attempt = (retriesLeft: number, delayMs: number) => window.setTimeout(() => {
       if (!force && !scannerShouldRefocusRef.current) return
       const input = kizScanInputRef.current
+      // WMS-575: поле выключено на время запроса и включается только следующей
+      // перерисовкой, а фокус в выключенное поле не встаёт — проверено в
+      // браузере: focus() приходил раньше перерисовки, и курсор оставался на
+      // контейнере окна. Ждём, пока поле включится.
+      if (input?.disabled && retriesLeft > 0) {
+        attempt(retriesLeft - 1, 16)
+        return
+      }
       const active = document.activeElement
       const hiddenPrintFrame = (
         active instanceof HTMLIFrameElement
@@ -989,12 +1017,20 @@ export function FfFbsSupplyWorkspace({
       )
       if (
         input
-        && (force || active == null || active === document.body || active === input || hiddenPrintFrame)
+        && (
+          force
+          || active == null
+          || active === document.body
+          || active === input
+          || hiddenPrintFrame
+          || isWorkspaceFocusFallback(active)
+        )
       ) {
         input.focus({ preventScroll: true })
       }
       scannerShouldRefocusRef.current = false
-    }, 0)
+    }, delayMs)
+    attempt(30, 0)
   }, [])
 
   const scanIdleCode = useCallback(
@@ -1017,6 +1053,7 @@ export function FfFbsSupplyWorkspace({
           const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
           if (!found.can_bind) {
             setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ ЧЗ внести нельзя'), debug: null })
+            playScanError()
             return
           }
           if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
@@ -1024,6 +1061,8 @@ export function FfFbsSupplyWorkspace({
           if (found.needs_confirmation) setKizConfirmTarget(found)
           else setKizScanActive(found)
           activeProductScanBarcodeRef.current = null
+          // WMS-575: строка заказа ожила — звук сразу, по ответу lookup.
+          playScanSuccess()
           return
         } catch (cause) {
           if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
@@ -1089,6 +1128,7 @@ export function FfFbsSupplyWorkspace({
                 ? 'Точная копия ЧЗ отправлена в печать.'
                 : 'Этот скан ЧЗ уже был отправлен в печать; повторная копия не создана.',
             )
+            playScanSuccess()
             return
           } catch (cause) {
             if (cause instanceof FbsApiError && cause.code === 'not_a_kiz') {
@@ -1127,6 +1167,9 @@ export function FfFbsSupplyWorkspace({
         attempt.scanId = result.scan_id
         attempt.orderId = result.order_id
         updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+        // WMS-575, Д5: заказ выбран сервером — звук по ответу scan-auto-print.
+        // Печать идёт своей очередью ниже; её сбой даст сигнал ошибки отдельно.
+        playScanSuccess()
 
         const qrStartedBefore = attempt.qrStarted
         const chzStartedBefore = attempt.chzStarted
@@ -1358,6 +1401,7 @@ export function FfFbsSupplyWorkspace({
             text: `Заказ WB № ${result.wb_order_id} выбран. ${printErrors.join(' ')}`,
             debug: null,
           })
+          playScanError()
           return
         }
         const sent = [
@@ -1380,9 +1424,11 @@ export function FfFbsSupplyWorkspace({
             ? `Перепечать ЧЗ заказа WB № ${result.wb_order_id} уже была запущена; повторная копия не создана.`
             : `Выбран заказ WB № ${result.wb_order_id}; автоматическая печать выключена.`,
         )
-        if (plan.printChz) await load(true)
+        // Перечитывание поставки догоняет в фоне и не держит следующий скан (Д5).
+        if (plan.printChz) void load(true)
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
+        playScanError()
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
@@ -1444,15 +1490,25 @@ export function FfFbsSupplyWorkspace({
           if (outcome.code === 'needs_confirmation' && isOzonSupply) {
             setKizConfirmValue(raw)
             setKizConfirmTarget(kizScanActive)
+            playScanSuccess()
             return
           }
           setKizScanError({
             text: kizErrorTextByCode(outcome.code ?? '', outcome.message ?? 'Не сохранено', null, providerName),
             debug: null,
           })
-          await load(true)
+          playScanError()
+          // Перечитывание — в фоне: следующий скан его не ждёт (WMS-575, Д5).
+          void load(true)
           return
         }
+        // WMS-575, Д5: код сохранён — хвост в строке и звук сразу, по ответу
+        // commit. Перечитывание поставки и вердикт WB догоняют ниже, в фоне.
+        if (outcome.bound_kiz) {
+          const committedTail = kizValueTail(outcome.bound_kiz)
+          setKizCommittedTails((current) => ({ ...current, [kizScanActive.order_id]: committedTail }))
+        }
+        playScanSuccess()
         let boundReprintStarted = false
         if (outcome.newly_bound === true && scan.enabled) {
           const durableScanId = pendingProductAttempt?.scanId
@@ -1545,24 +1601,42 @@ export function FfFbsSupplyWorkspace({
         }
         setKizScanActive(null)
         kizSelectedStickerRef.current = ''
-        const refreshed = await load(true)
-        if (!isOzonSupply) {
-          const savedOrder = refreshed?.orders.find((order) => order.id === kizScanActive.order_id)
-          const verdict = fbsMarkingPresentation(savedOrder?.metadata.states.find((state) => state.kind === 'sgtin'), providerName)
-          if (verdict.label) {
-            const text = `${verdict.label}${verdict.reason ? `: ${verdict.reason}` : ''} · ${fbsKizOrderNumber(kizScanActive)}`
-            if (verdict.tone === 'error') setKizScanError({ text, debug: null })
-            else setKizScanNotice(text)
+        const savedOrderId = kizScanActive.order_id
+        const savedOrderNumber = fbsKizOrderNumber(kizScanActive)
+        // Перечитывание поставки и вердикт WB приходят, когда придут, и не
+        // держат следующий скан (WMS-575, Д5): вкладка освобождается сразу.
+        void (async () => {
+          try {
+            const refreshed = await load(true)
+            if (!isOzonSupply) {
+              const savedOrder = refreshed?.orders.find((order) => order.id === savedOrderId)
+              const verdict = fbsMarkingPresentation(savedOrder?.metadata.states.find((state) => state.kind === 'sgtin'), providerName)
+              if (verdict.label) {
+                const text = `${verdict.label}${verdict.reason ? `: ${verdict.reason}` : ''} · ${savedOrderNumber}`
+                if (verdict.tone === 'error') {
+                  setKizScanError({ text, debug: null })
+                  playScanError()
+                } else setKizScanNotice(text)
+              }
+            }
+          } finally {
+            setKizCommittedTails((current) => {
+              if (!(savedOrderId in current)) return current
+              const next = { ...current }
+              delete next[savedOrderId]
+              return next
+            })
           }
-        }
+        })()
         // Native scanner typing can bring the input back into view. After the
         // updated row renders, return to the order whose KIZ was just saved.
         window.requestAnimationFrame(() => {
-          kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          kizRowRefs.current[savedOrderId]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
         })
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
-        await load(true)
+        playScanError()
+        void load(true)
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
@@ -1632,6 +1706,16 @@ export function FfFbsSupplyWorkspace({
         // a scanner burst that starts before the first request completes.
         scanInput.blur()
       }
+      acceptPackingScanRef.current(raw)
+    },
+    [kizScanValue, kizScanActive, dropKizScanActive],
+  )
+
+  // Один приём кода для поля скана и для слушателя всей вкладки (WMS-575):
+  // что делает скан, решает прежняя логика — ожидание ЧЗ, поиск стикера,
+  // галки WMS-514; код, пришедший во время обработки, ждёт в очереди.
+  const acceptPackingScan = useCallback(
+    (raw: string) => {
       const preferences = { ...scanPrintPreferences }
       if (kizScanBusy) {
         queuedPackingScansRef.current.push({ raw, preferences })
@@ -1640,13 +1724,33 @@ export function FfFbsSupplyWorkspace({
       }
       if (kizScanActive && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) {
         dropKizScanActive()
+        playScanSuccess()
         return
       }
       if (kizScanActive) void scanKizCode(raw, false, preferences)
       else void scanIdleCode(raw, preferences)
     },
-    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanIdleCode, dropKizScanActive, scanPrintPreferences],
+    [kizScanBusy, kizScanActive, scanKizCode, scanIdleCode, dropKizScanActive, scanPrintPreferences],
   )
+  useLayoutEffect(() => {
+    acceptPackingScanRef.current = acceptPackingScan
+  }, [acceptPackingScan])
+
+  // Код со сканера, пойманный слушателем вкладки, где бы ни стоял фокус.
+  const acceptHardwarePackingScan = useCallback((code: string) => {
+    const raw = code.replace(/[ \t\r\n\v\f]+$/, '')
+    if (!raw) return
+    const active = document.activeElement
+    // Фокус возвращается в поле, только если он и был у поля (или нигде):
+    // кнопку, которую оператор выбрал сам, сканер у него не отнимает.
+    scannerShouldRefocusRef.current = (
+      active == null
+      || active === document.body
+      || active === kizScanInputRef.current
+      || isWorkspaceFocusFallback(active)
+    )
+    acceptPackingScanRef.current(raw)
+  }, [])
 
   useEffect(() => {
     if (kizScanBusy) return
@@ -2497,6 +2601,20 @@ export function FfFbsSupplyWorkspace({
     ? ozonDeliveryRoute ?? 'Метод доставки Ozon не указан'
     : workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
   const packagingEditable = !deliveryConfirmed
+  // WMS-575: вкладка «Упаковка и маркировка» принимает скан, где бы ни стоял
+  // курсор, — ровно тогда, когда на ней есть рабочее поле скана.
+  const packingScanIntake = useScanIntake({
+    enabled: open
+      && stage === 'packing'
+      && Boolean(workspace)
+      && Boolean(packagingTask)
+      && anyOrderNeedsHonestSign
+      && packagingEditable,
+    onScan: acceptHardwarePackingScan,
+  })
+  useLayoutEffect(() => {
+    packingScanListeningRef.current = packingScanIntake.listening
+  }, [packingScanIntake.listening])
   // Короба — рабочая поверхность, а не ступень после упаковки. Серверный stage
   // не гасит действия внутри открытой вкладки; редактирование прекращается
   // только после передачи поставки.
@@ -3042,6 +3160,7 @@ export function FfFbsSupplyWorkspace({
                     <Box
                       sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
                       data-testid="fbs-kiz-scan-bar"
+                      ref={packingScanIntake.bindRoot}
                     >
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                         Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером
@@ -3226,7 +3345,9 @@ export function FfFbsSupplyWorkspace({
                       }
                       const markingColor = markingView.tone === 'success' ? 'success.dark'
                         : markingView.tone === 'error' ? 'error.main' : 'text.secondary'
-                      const tail = markingState?.value_tail ?? null
+                      // Хвост ЧЗ, только что сохранённого сканом, виден сразу по
+                      // ответу commit — до перечитывания поставки (WMS-575).
+                      const tail = kizCommittedTails[order.id] ?? markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
                       const rowSizes = packingShowsSize ? fbsPackingSizes(order, isOzonSupply) : []
                       return (
@@ -3924,7 +4045,15 @@ export function FfFbsSupplyWorkspace({
           disabled={!reprintOrder?.product.id}
           onClick={() => {
             // После «Очистить ЧЗ» у заказа нет кода — перепечатывать нечего, печатаем новый ЧЗ.
-            if (reprintOrder) openOrderMarkingPrint(reprintOrder, reprintLine, orderPrintDone(reprintOrder))
+            // Код оператора WB — точная копия этого кода, как «Перепечатать ЧЗ» (WMS-575, R10).
+            if (reprintOrder) {
+              const request = fbsMenuReprintRequest(
+                reprintOrder,
+                isOzonSupply ? 'ozon' : 'wb',
+                orderPrintDone(reprintOrder),
+              )
+              openOrderMarkingPrint(reprintOrder, reprintLine, request.reprint, request.reprintMarkingId)
+            }
             setReprintMenu(null)
           }}
           data-task-id="FBS-11"
