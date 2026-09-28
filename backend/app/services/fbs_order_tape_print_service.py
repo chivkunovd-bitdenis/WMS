@@ -785,7 +785,12 @@ async def _print_or_reprint_order_code(
                 ),
             ),
         )
-    if reprint:
+    # WMS-487: a reprint request with no bound code is only "nothing to
+    # reprint" when the order does not actually need a sgtin (e.g. WB marks
+    # it optional but the product itself is not marked). When the order does
+    # require sgtin, treat this the same as a first print and issue one from
+    # the pool instead of failing the whole tape with nothing_to_reprint.
+    if reprint and not _order_requires_sgtin(order):
         raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
 
     result = await mc_svc.print_codes_for_packaging_line(
