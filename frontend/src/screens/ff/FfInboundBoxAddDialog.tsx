@@ -50,6 +50,9 @@ import {
 import { scanErrorMessageRu } from './inboundReceivingHelpers'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 
+/** WMS-566: ручное количество в «В коробе» — до 999 999 штук. */
+const BOX_QTY_MAX_DIGITS = 6
+
 type InboundBoxLine = {
   id: string
   product_id: string
@@ -136,10 +139,15 @@ const BoxFillRow = memo(function BoxFillRow({
             type="number"
             size="small"
             value={draftQty}
-            onChange={(e) => onQtyChange(line.product_id, e.target.value)}
+            onChange={(e) => {
+              // WMS-566: не больше 6 цифр — длиннее бывает только скан, его забирает сканер.
+              if (e.target.value.length > BOX_QTY_MAX_DIGITS) return
+              onQtyChange(line.product_id, e.target.value)
+            }}
             slotProps={{
               htmlInput: {
                 min: 0,
+                max: 10 ** BOX_QTY_MAX_DIGITS - 1,
                 'data-testid': 'ff-inbound-box-add-manual-qty',
                 'data-product-id': line.product_id,
                 onBlur: (e: FocusEvent<HTMLInputElement>) =>
@@ -474,6 +482,8 @@ function FfInboundBoxAddDialogContent({
     // WMS-566: курсор в «В коробе» не должен съедать скан — там руками вводят
     // короткое число, а пачка со сканера уходит в короб, как из поля скана.
     isScanOnlyField: (el) => el?.dataset?.testid === 'ff-inbound-box-add-manual-qty',
+    // Руками в поле — до 6 цифр; все штрихкоды товаров от 13 символов, коробов — от 16.
+    scanOnlyFieldMinLength: BOX_QTY_MAX_DIGITS + 1,
   })
 
   useEffect(() => {
