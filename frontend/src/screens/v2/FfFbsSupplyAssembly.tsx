@@ -1,11 +1,9 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
-  Collapse,
   Dialog,
   DialogContent,
   IconButton,
@@ -22,10 +20,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
-import { alpha } from '@mui/material/styles'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CloseIcon from '@mui/icons-material/Close'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
@@ -33,10 +28,12 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { plural } from '../../utils/plural'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FfFbsAssemblyPick } from './FfFbsAssemblyPick'
+import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { useScanIntake } from '../../hooks/useScanIntake'
+import { playScanError } from '../../utils/scanFeedback'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
-  startFbsSupplyWork,
   type FbsPickOptionProduct,
   type FbsWorkspace,
 } from './fbsApi'
@@ -51,7 +48,6 @@ import {
   fbsAssemblyReadiness,
   fbsAssemblySupplyTitle,
   fbsSupplyRouteLabel,
-  fbsSupplyTransferred,
   readFbsAssemblyStage,
   saveFbsAssemblyStage,
   type FbsAssemblyStageKey,
@@ -88,7 +84,12 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // перезагрузки оператор снова жмёт «Начать работу с поставкой».
   const [activeSupplyId, setActiveSupplyId] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
-  const [startingSupplyId, setStartingSupplyId] = useState<string | null>(null)
+  // Рамки поставок — карточки поставок в режиме рамки. Они монтируются при
+  // первом открытии «Упаковки» и живут до закрытия окна, чтобы активная
+  // поставка и открытый короб не терялись при переходе между вкладками.
+  const [framesMounted, setFramesMounted] = useState(false)
+  const [noActiveSupply, setNoActiveSupply] = useState(false)
+  const escapeHandlerRef = useRef<(() => boolean) | null>(null)
   const openGeneration = useRef(0)
   const writeSeq = useRef(new Map<string, number>())
   const silentRefreshInFlight = useRef(false)
@@ -97,6 +98,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     if (supplyIds.length) saveFbsAssemblyStage(supplyIds, next)
     setStage(next)
     setError(null)
+    if (next === 'packing') setFramesMounted(true)
   }
 
   /** Читает одну поставку; применяет только последний начатый ответ по ней. */
@@ -135,15 +137,18 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setBusy(false)
     setActiveSupplyId(null)
     setExpandedIds(new Set())
-    setStartingSupplyId(null)
+    setNoActiveSupply(false)
     setHistorySupplyId(null)
-    setStage(readFbsAssemblyStage(ids) ?? 'composition')
+    const restoredStage = readFbsAssemblyStage(ids) ?? 'composition'
+    setStage(restoredStage)
+    setFramesMounted(restoredStage === 'packing')
     void loadAll()
   }, [open, idsKey, loadAll])
 
   // Тихое обновление раз в 15 с — как у карточки поставки на рабочих вкладках.
+  // На «Упаковке» рамки обновляются сами (карточка) и присылают снимок сюда.
   useEffect(() => {
-    if (!open || !idsKey || stage === 'composition') return
+    if (!open || !idsKey || stage !== 'picking') return
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible' || silentRefreshInFlight.current) return
       silentRefreshInFlight.current = true
@@ -166,41 +171,22 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     onClose()
   }
 
-  // R13: «Начать работу с поставкой» — тот же start-work, что у одноимённой
-  // кнопки карточки, и только если у поставки ещё нет задания упаковки (Д6).
-  // Активной бывает одна рамка: прежняя завершается без запросов (R15).
-  const startWork = async (supplyId: string) => {
-    const workspace = workspaces[supplyId]
-    if (!workspace || startingSupplyId) return
-    setError(null)
-    if (!workspace.supply.packaging_task_id) {
-      const generation = openGeneration.current
-      setStartingSupplyId(supplyId)
-      try {
-        const next = await startFbsSupplyWork(token, authHeaders, supplyId)
-        if (generation !== openGeneration.current) return
-        writeSeq.current.set(supplyId, (writeSeq.current.get(supplyId) ?? 0) + 1)
-        setWorkspaces((current) => ({ ...current, [supplyId]: next }))
-      } catch (cause) {
-        if (generation === openGeneration.current) {
-          setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
-        }
-        return
-      } finally {
-        if (generation === openGeneration.current) setStartingSupplyId(null)
-      }
-    }
-    setActiveSupplyId(supplyId)
+  // R13, R15: активной бывает одна рамка. Начать работу — рамка сама шлёт
+  // start-work и открывает короб (карточка в режиме рамки); здесь только
+  // «кто активен» и «кто развёрнут». Прежняя рамка завершается без запросов.
+  const activateSupply = (supplyId: string) => {
+    setNoActiveSupply(false)
     setExpandedIds((current) => {
       const next = new Set(current)
       if (activeSupplyId && activeSupplyId !== supplyId) next.delete(activeSupplyId)
       next.add(supplyId)
       return next
     })
+    setActiveSupplyId(supplyId)
   }
 
   const finishWork = (supplyId: string) => {
-    if (activeSupplyId === supplyId) setActiveSupplyId(null)
+    setActiveSupplyId((current) => (current === supplyId ? null : current))
     setExpandedIds((current) => {
       const next = new Set(current)
       next.delete(supplyId)
@@ -216,6 +202,25 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       return next
     })
   }
+
+  // Снимок поставки из рамки — для шапки окна и «Состава».
+  const onFrameWorkspace = useCallback((next: FbsWorkspace) => {
+    writeSeq.current.set(next.supply.id, (writeSeq.current.get(next.supply.id) ?? 0) + 1)
+    setWorkspaces((current) => (current[next.supply.id] === next ? current : { ...current, [next.supply.id]: next }))
+  }, [])
+
+  const registerEscape = useCallback((handler: (() => boolean) | null) => {
+    escapeHandlerRef.current = handler
+  }, [])
+
+  // R16: без активной поставки скан ничего не отправляет на сервер.
+  const { bindRoot: bindPackingRoot } = useScanIntake({
+    enabled: open && stage === 'packing' && allLoaded && activeSupplyId === null,
+    onScan: () => {
+      setNoActiveSupply(true)
+      playScanError()
+    },
+  })
 
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
@@ -273,7 +278,11 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   return (
     <Dialog
       open={open}
-      onClose={busy ? undefined : requestClose}
+      onClose={busy ? undefined : (_event, reason) => {
+        // Esc при ожидании ЧЗ снимает ожидание в активной рамке, как в карточке.
+        if (reason === 'escapeKeyDown' && escapeHandlerRef.current?.()) return
+        requestClose()
+      }}
       maxWidth={false}
       fullScreen={false}
       slotProps={{ paper: { sx: { width: 'min(1500px, 98vw)', height: '94vh', m: 1 } } }}
@@ -370,23 +379,41 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
             </Stack>
           ) : null}
 
-          {allLoaded && stage === 'packing' ? (
-            <Stack spacing={2} data-testid="fbs-assembly-packing">
-              {ordered.map((workspace) => (
-                <AssemblySupplyFrame
-                  key={workspace.supply.id}
-                  workspace={workspace}
-                  active={activeSupplyId === workspace.supply.id}
-                  expanded={activeSupplyId === workspace.supply.id || expandedIds.has(workspace.supply.id)}
-                  starting={startingSupplyId === workspace.supply.id}
-                  startDisabled={Boolean(startingSupplyId)}
-                  onToggle={() => toggleExpanded(workspace.supply.id)}
-                  onStart={() => void startWork(workspace.supply.id)}
-                  onFinish={() => finishWork(workspace.supply.id)}
-                >
-                  {null}
-                </AssemblySupplyFrame>
-              ))}
+          {/* Рамки держатся смонтированными после первого открытия «Упаковки»;
+              на других вкладках они скрыты и сканер не слушают. */}
+          {allLoaded && framesMounted ? (
+            <Stack
+              spacing={2}
+              ref={bindPackingRoot}
+              sx={{ display: stage === 'packing' ? 'flex' : 'none' }}
+              data-testid="fbs-assembly-packing"
+            >
+              {noActiveSupply && activeSupplyId === null ? (
+                <Alert severity="error" data-testid="fbs-assembly-no-active">Нет активной поставки.</Alert>
+              ) : null}
+              {ordered.map((workspace) => {
+                const supplyId = workspace.supply.id
+                return (
+                  <FfFbsSupplyWorkspace
+                    key={supplyId}
+                    token={token}
+                    authHeaders={authHeaders}
+                    supplyId={supplyId}
+                    open={open}
+                    onClose={() => undefined}
+                    assemblyFrame={{
+                      active: activeSupplyId === supplyId,
+                      expanded: expandedIds.has(supplyId),
+                      visible: stage === 'packing',
+                      onToggleExpanded: () => toggleExpanded(supplyId),
+                      onActivate: () => activateSupply(supplyId),
+                      onDeactivate: () => finishWork(supplyId),
+                      onWorkspaceChange: onFrameWorkspace,
+                      registerEscape,
+                    }}
+                  />
+                )
+              })}
             </Stack>
           ) : null}
         </Box>
@@ -399,97 +426,5 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
         onClose={() => setHistorySupplyId(null)}
       /></ErrorBoundary>
     </Dialog>
-  )
-}
-
-/**
- * Рамка поставки на «Упаковке и маркировке» (R12, R13, R15): шапка
- * «Поставка … · WB № … · селлер · Склад WB … · Склад / СЦ», «Упаковано X из Y»,
- * чипы по фактам поставки и «Начать / Завершить работу с поставкой».
- * Активная рамка — обводка success.main 2px и светло-зелёная шапка, как в макете.
- */
-function AssemblySupplyFrame({
-  workspace,
-  active,
-  expanded,
-  starting,
-  startDisabled,
-  onToggle,
-  onStart,
-  onFinish,
-  children,
-}: {
-  workspace: FbsWorkspace
-  active: boolean
-  expanded: boolean
-  starting: boolean
-  startDisabled: boolean
-  onToggle: () => void
-  onStart: () => void
-  onFinish: () => void
-  children: ReactNode
-}) {
-  const supplyId = workspace.supply.id
-  const transferred = fbsSupplyTransferred(workspace)
-  return (
-    <Paper
-      variant="outlined"
-      sx={{
-        overflow: 'hidden',
-        borderColor: active ? 'success.main' : 'divider',
-        borderWidth: active ? 2 : 1,
-      }}
-      data-testid={`fbs-assembly-supply-${supplyId}`}
-      data-active={active ? 'true' : 'false'}
-    >
-      <Box
-        sx={{
-          px: 2,
-          py: 1.5,
-          bgcolor: active ? (theme) => alpha(theme.palette.success.main, 0.12) : 'background.paper',
-          borderBottom: expanded && children ? 1 : 0,
-          borderColor: 'divider',
-        }}
-      >
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-            <IconButton size="small" onClick={onToggle} aria-label="Свернуть или развернуть поставку" data-testid={`fbs-assembly-supply-toggle-${supplyId}`}>
-              {expanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
-            </IconButton>
-            <Box sx={{ minWidth: 0 }}>
-              {/* Без noWrap: длинная шапка переносится целиком, без многоточия (R12). */}
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-                {fbsAssemblySupplyTitle(workspace)} · {fbsSupplyRouteLabel(workspace)}
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.25, flexWrap: 'wrap' }} useFlexGap>
-                <Typography variant="body2" color="text.secondary">
-                  Упаковано {workspace.progress.packed} из {workspace.progress.total}
-                </Typography>
-                {workspace.supply.honest_sign_skipped ? <Chip size="small" color="warning" label="Сдаём без Честного знака" /> : null}
-                {transferred ? <Chip size="small" color="success" label="Передана в WB" /> : null}
-              </Stack>
-            </Box>
-          </Stack>
-          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-            {active ? (
-              <Button variant="contained" onClick={onFinish} data-testid={`fbs-assembly-supply-finish-${supplyId}`}>
-                Завершить работу с поставкой
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                onClick={onStart}
-                disabled={startDisabled}
-                startIcon={starting ? <CircularProgress size={18} color="inherit" /> : undefined}
-                data-testid={`fbs-assembly-supply-start-${supplyId}`}
-              >
-                Начать работу с поставкой
-              </Button>
-            )}
-          </Stack>
-        </Stack>
-      </Box>
-      <Collapse in={expanded}>{children}</Collapse>
-    </Paper>
   )
 }

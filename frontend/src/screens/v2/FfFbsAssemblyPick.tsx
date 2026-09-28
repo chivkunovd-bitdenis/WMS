@@ -159,6 +159,9 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
   // Снятия группы идут строго по одному: раздача считается по числам,
   // которые предыдущее снятие уже поменяло.
   const chainRef = useRef<Promise<unknown>>(Promise.resolve())
+  // Последнее начатое перечитывание мест по поставке (WMS-575, Д5): его ждёт
+  // только следующий скан товара без выбранного места.
+  const refreshingRef = useRef(new Map<number, Promise<ApiPickProduct[] | null>>())
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
     const run = chainRef.current.then(task, task)
@@ -213,18 +216,28 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
     }
   }, [token, sellerKey])
 
-  const refreshSupply = useCallback(async (index: number) => {
+  const refreshSupply = useCallback((index: number): Promise<ApiPickProduct[] | null> => {
     const supplyId = supplyIds[index]
-    if (!supplyId) return
+    if (!supplyId) return Promise.resolve(null)
     const startedAt = mutationRef.current[index] ?? 0
-    try {
-      const next = await fetchOptions(supplyId)
-      if ((mutationRef.current[index] ?? 0) !== startedAt) return
-      statesRef.current[index] = supplyPickState(next)
-      setOptions((current) => current.map((one, position) => (position === index ? next : one)))
-    } catch {
-      setError('Снятие сохранено, список не обновлён. Обновите страницу.')
-    }
+    const refresh = (async () => {
+      try {
+        const next = await fetchOptions(supplyId)
+        if ((mutationRef.current[index] ?? 0) === startedAt) {
+          statesRef.current[index] = supplyPickState(next)
+          setOptions((current) => current.map((one, position) => (position === index ? next : one)))
+        }
+        return next
+      } catch {
+        setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        return null
+      }
+    })()
+    refreshingRef.current.set(index, refresh)
+    void refresh.then(() => {
+      if (refreshingRef.current.get(index) === refresh) refreshingRef.current.delete(index)
+    })
+    return refresh
   }, [fetchOptions, supplyIds])
 
   const screenData = useMemo(() => {
@@ -421,7 +434,12 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
       if (matchedProduct) {
         const productTargets = pickScanTargets(statesFor(matchedProduct.id, null))
         if (productTargets.length > 0) targets = productTargets
-        const option = options[targets[0]]?.find((one) => one.product_id === matchedProduct.id)
+        // Место не выбрано — источник ищется по доступному остатку; сразу после
+        // прошлого снятия берём свежий ответ мест, как экран одной поставки.
+        let supplyOptions = options[targets[0]] ?? []
+        const refreshing = refreshingRef.current.get(targets[0])
+        if (!containerSource && !locationId && refreshing) supplyOptions = (await refreshing) ?? supplyOptions
+        const option = supplyOptions.find((one) => one.product_id === matchedProduct.id)
         containerSource = resolveProductScanSource(
           matchedProduct,
           option?.locations ?? [],
