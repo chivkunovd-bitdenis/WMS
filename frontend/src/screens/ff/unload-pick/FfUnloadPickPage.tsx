@@ -360,17 +360,38 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     }
   }, [catalogById, detail, isOzonFbs, pickOptions, source])
 
-  const updateOption = useCallback(async () => {
-    if (!requestId) return
-    try {
-      const res = await fetch(apiUrl(`${BASE}/${requestId}/pick-options`), {
-        headers: headers(token),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setPickOptions((await res.json()) as ApiPickProduct[])
-    } catch {
-      setError('Снятие сохранено, список не обновлён. Обновите страницу.')
-    }
+  // WMS-575: места подбора перечитываются после снятия, но скан их не ждёт —
+  // счётчик меняется по ответу pick/scan. Здесь живёт последнее начатое
+  // перечитывание: его ждёт только следующий скан товара без выбранного места,
+  // которому нужно знать, где товар ещё доступен.
+  const optionsRefresh = useRef<Promise<ApiPickProduct[] | null> | null>(null)
+  const optionsRefreshSeq = useRef(0)
+
+  const updateOption = useCallback((): Promise<ApiPickProduct[] | null> => {
+    if (!requestId) return Promise.resolve(null)
+    optionsRefreshSeq.current += 1
+    const seq = optionsRefreshSeq.current
+    const refresh = (async () => {
+      try {
+        const res = await fetch(apiUrl(`${BASE}/${requestId}/pick-options`), {
+          headers: headers(token),
+        })
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const next = (await res.json()) as ApiPickProduct[]
+        // Перечитывания могут вернуться не по порядку: на экран ложится только
+        // последнее начатое, иначе старый ответ вернул бы уже снятое.
+        if (seq === optionsRefreshSeq.current) setPickOptions(next)
+        return next
+      } catch {
+        setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        return null
+      }
+    })()
+    optionsRefresh.current = refresh
+    void refresh.then(() => {
+      if (optionsRefresh.current === refresh) optionsRefresh.current = null
+    })
+    return refresh
   }, [BASE, requestId, token])
 
   const setPicked = useCallback(
@@ -436,7 +457,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         : null
       let locationId = containerSource?.locationId ?? sourceLocationId(sourceKey)
       if (matchedProduct) {
-        const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
+        // Место не выбрано — источник ищется по доступному остатку. Сразу после
+        // прошлого снятия этот остаток перечитывается: берём свежий ответ, а
+        // не список до снятия, иначе опустевшее место сочлось бы ещё раз.
+        let options = pickOptions
+        const refreshing = optionsRefresh.current
+        if (!containerSource && !locationId && refreshing) {
+          options = (await refreshing) ?? options
+        }
+        const option = options.find((one) => one.product_id === matchedProduct.id)
         containerSource = resolveProductScanSource(
           matchedProduct,
           option?.locations ?? [],
@@ -503,7 +532,8 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           throw new Error('Сервер не вернул результат снятия товара')
         }
         if (result.storage_location_id || containerSource) {
-          await updateOption()
+          // Счётчик и звук — по ответу pick/scan; места догоняют в фоне (WMS-575, Д5).
+          void updateOption()
         }
         return {
           kind: 'product',
