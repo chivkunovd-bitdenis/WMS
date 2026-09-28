@@ -479,4 +479,32 @@ describe('WMS-566: поле «только для скана» (количест
     type('2009989396966', 120)
     expect(onScan).toHaveBeenCalledWith('2009989396966')
   })
+
+  it('P3-2 (ревью 29.09.2026): Backspace при правке числа рвёт пачку — «150» → стереть → «1500» не считается сканом', () => {
+    // До фикса Backspace не записывался в буфер, но и не сбрасывал его: «150»
+    // (3 символа) + 3×Backspace (пропущены) + «1500» (4 символа) давали буфер
+    // «1501500» — 7 символов, >= scanOnlyFieldMinLength(7), и уходили как скан.
+    const field = { tagName: 'INPUT', value: '', dataset: { testid: 'qty' } }
+    const onScan = vi.fn()
+    let now = 0
+    const listener = createScannerListener({
+      onScan,
+      minLength: 5,
+      maxIntervalMs: 50,
+      scanOnlyFieldMinLength: 7,
+      isScanOnlyField: (el) => el?.dataset?.testid === 'qty',
+      getNow: () => now,
+      getActiveElement: () => field,
+    })
+    const press = (key: string, code: string) => {
+      now += 5
+      listener(makeEvent(key, { code }))
+    }
+    for (const ch of '150') press(ch, `Digit${ch}`)
+    for (let i = 0; i < 3; i += 1) press('Backspace', 'Backspace')
+    for (const ch of '1500') press(ch, `Digit${ch}`)
+    now += 5
+    listener(makeEvent('Enter', { code: 'Enter' }))
+    expect(onScan).not.toHaveBeenCalled()
+  })
 })
