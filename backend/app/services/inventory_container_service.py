@@ -17,6 +17,7 @@ from app.models.inbound_intake import (
 from app.models.pallet import Pallet
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
+from app.services.box_barcode_service import inbound_box_display_code
 
 ContainerKind = Literal["pallet", "box", "cargo_place"]
 
@@ -93,7 +94,11 @@ async def resolve_container_scan(
         )
     )
     matches.extend(
-        InventoryContainerScanMatch("box", box.id, f"КР-{box.box_number:06d}")
+        InventoryContainerScanMatch(
+            "box",
+            box.id,
+            inbound_box_display_code(tenant_id, box.box_number, box.internal_barcode),
+        )
         for box in inbound_boxes.all()
     )
     inbound_cargo = await session.scalars(

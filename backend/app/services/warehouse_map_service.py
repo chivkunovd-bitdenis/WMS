@@ -33,7 +33,7 @@ from app.services import (
     pallet_service,
     warehouse_box_service,
 )
-from app.services.box_barcode_service import is_generated_box_barcode
+from app.services.box_barcode_service import inbound_box_display_code
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
@@ -50,14 +50,9 @@ MOVEMENT_TYPE_WAREHOUSE_MAP = "warehouse_map_move"
 
 
 def _inbound_box_display_code(box: InboundIntakeBox) -> str:
-    """WMS-564: у части арендаторов (например «Империя ФФ») internal_barcode —
-    это системный INB-код, а на физических коробах уже наклеены «Короб 1»,
-    «Короб 2»… Для таких сгенерированных кодов подпись остаётся такой же, как
-    до WMS-551. Внешний код клиента (например WB_…, как у ArtMax) показываем
-    как есть, согласно WMS-551."""
-    if is_generated_box_barcode(box.internal_barcode, "INB"):
-        return f"КР-{box.box_number:06d}"
-    return box.internal_barcode
+    """WMS-564/565: «КР-00000N» только у «Империи ФФ» для системного кода;
+    остальным — сам код короба (WMS-551)."""
+    return inbound_box_display_code(box.tenant_id, box.box_number, box.internal_barcode)
 
 
 @dataclass(frozen=True)

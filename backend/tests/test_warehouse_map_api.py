@@ -23,7 +23,7 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
-from app.services import warehouse_map_service
+from app.services import box_barcode_service, warehouse_map_service
 from app.services.box_barcode_service import generate_box_barcode
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -635,7 +635,7 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
 
 
 async def test_map_shows_legacy_label_for_system_generated_inbound_box_barcode(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """WMS-564: у «Империя ФФ» internal_barcode — системный INB-код
 
@@ -651,6 +651,10 @@ async def test_map_shows_legacy_label_for_system_generated_inbound_box_barcode(
     hex-символов вместо нынешних 14 Crockford base32. Этот код тоже
     системный и должен вернуть тот же `КР-000001`.
     """
+    # WMS-565: подпись «КР-00000N» у системного кода — режим «Империи ФФ».
+    monkeypatch.setattr(
+        box_barcode_service, "uses_numbered_inbound_box_labels", lambda _tenant_id: True
+    )
     headers, _user, tenant = await _register(async_client, "generated-box-code")
     async with SessionLocal() as session:
         suffix = uuid.uuid4().hex[:10]
@@ -757,6 +761,25 @@ async def test_map_shows_legacy_label_for_system_generated_inbound_box_barcode(
     )
     assert by_id[str(external_box_id)]["code"] == external_barcode
     assert by_id[str(external_box_id)]["barcode"] == external_barcode
+
+    # WMS-565: у остальных арендаторов (ArtMaks) тот же системный короб
+    # подписан своим кодом — как на их этикетке.
+    monkeypatch.undo()
+    response = await async_client.get(f"/warehouses/{warehouse_id}/map", headers=headers)
+    assert response.status_code == 200, response.text
+    target_cell = next(row for row in response.json()["cells"] if row["id"] == str(cell_id))
+    by_id = {row["id"]: row for row in target_cell["children"]}
+    assert by_id[str(generated_box_id)]["code"] == generated_box.internal_barcode
+    assert by_id[str(legacy_generated_box_id)]["code"] == legacy_generated_box.internal_barcode
+    assert by_id[str(external_box_id)]["code"] == external_barcode
+
+
+def test_numbered_inbound_box_labels_only_for_imperiya() -> None:
+    imperiya = uuid.UUID("7b98a8aa-c03c-4649-9677-a645be45c622")
+    code = generate_box_barcode("INB")
+    assert box_barcode_service.inbound_box_display_code(imperiya, 7, code) == "КР-000007"
+    assert box_barcode_service.inbound_box_display_code(uuid.uuid4(), 7, code) == code
+    assert box_barcode_service.inbound_box_display_code(imperiya, 7, "WB_1") == "WB_1"
 
 
 async def test_empty_container_can_be_taken_off_a_cell(

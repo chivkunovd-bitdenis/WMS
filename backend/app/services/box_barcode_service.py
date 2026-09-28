@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import uuid
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _WB_BOX_BARCODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,30}$")
@@ -50,6 +51,26 @@ def is_generated_box_barcode(value: str, prefix: str) -> bool:
     return normalized_prefix == "INB" and bool(
         _LEGACY_GENERATED_INBOUND_BOX_BARCODE_PATTERN.fullmatch(value)
     )
+
+
+# WMS-565: подпись «КР-00000N» / «Короб № N» для системного кода нужна только
+# «Империи ФФ» — на её коробах наклеены бумажные «Короб 1», «Короб 2» (WMS-564).
+# Остальные, например ArtMaks, клеят этикетку с самим кодом и ищут короб по нему.
+NUMBERED_INBOUND_BOX_LABEL_TENANTS = frozenset(
+    {uuid.UUID("7b98a8aa-c03c-4649-9677-a645be45c622")}
+)
+
+
+def uses_numbered_inbound_box_labels(tenant_id: uuid.UUID) -> bool:
+    return tenant_id in NUMBERED_INBOUND_BOX_LABEL_TENANTS
+
+
+def inbound_box_display_code(tenant_id: uuid.UUID, box_number: int, internal_barcode: str) -> str:
+    if uses_numbered_inbound_box_labels(tenant_id) and is_generated_box_barcode(
+        internal_barcode, "INB"
+    ):
+        return f"КР-{box_number:06d}"
+    return internal_barcode
 
 
 def generate_box_barcode(prefix: str) -> str:

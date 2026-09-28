@@ -46,6 +46,7 @@ export type Me = {
   seller_permissions?: SellerPermissions | null
   withdrawal_enabled?: boolean
   address_storage_enabled?: boolean
+  numbered_inbound_box_labels?: boolean
   separate_marking_print_enabled?: boolean
   fbs_shipment_cutoff_time?: string | null
 }

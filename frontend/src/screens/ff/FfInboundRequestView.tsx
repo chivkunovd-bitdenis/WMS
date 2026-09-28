@@ -465,8 +465,10 @@ function isGeneratedInboundBoxBarcode(barcode: string): boolean {
   )
 }
 
-function inboundBoxDisplayLabel(boxNumber: number, barcode: string): string {
-  return isGeneratedInboundBoxBarcode(barcode) ? `№ ${boxNumber}` : barcode
+// WMS-565: «№ N» — только у «Империи ФФ» (признак из профиля); остальные
+// видят сам код короба, как на своей этикетке.
+function inboundBoxDisplayLabel(boxNumber: number, barcode: string, numbered: boolean): string {
+  return numbered && isGeneratedInboundBoxBarcode(barcode) ? `№ ${boxNumber}` : barcode
 }
 
 type Props = {
@@ -478,6 +480,7 @@ type Props = {
   onClose: () => void
   onDirtyChange?: (dirty: boolean) => void
   addressStorageEnabled?: boolean
+  numberedInboundBoxLabels?: boolean
 }
 
 export function FfInboundRequestView({
@@ -488,6 +491,7 @@ export function FfInboundRequestView({
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
+  numberedInboundBoxLabels = false,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
@@ -1645,7 +1649,7 @@ export function FfInboundRequestView({
       // диалог принтера для каждого короба и рвёт непрерывную ленту.
       printBarcodeLabels(targets.map((target) => ({
         title: target.kind === 'box'
-          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode)}`
+          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
           : `Грузоместо № ${target.number}`,
         barcode: target.barcode,
         barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
@@ -3205,7 +3209,7 @@ export function FfInboundRequestView({
                           >
                             {!box.pallet_id ? (
                               <CheckboxInput
-                                label={`Выбрать короб ${inboundBoxDisplayLabel(box.box_number, box.internal_barcode)}`}
+                                label={`Выбрать короб ${inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels)}`}
                                 hideLabel
                                 checked={selectedPalletBoxIds.has(box.id)}
                                 onChange={(checked) => {
@@ -3222,7 +3226,7 @@ export function FfInboundRequestView({
                             ) : null}
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               Короб{' '}
-                              {isGeneratedInboundBoxBarcode(box.internal_barcode)
+                              {numberedInboundBoxLabels && isGeneratedInboundBoxBarcode(box.internal_barcode)
                                 ? `№ ${box.box_number} `
                                 : null}
                               <Typography component="code" variant="body2">
@@ -3843,7 +3847,7 @@ export function FfInboundRequestView({
           onClose={() => setBoxAddDialogBoxId(null)}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
-          boxLabel={`Короб ${inboundBoxDisplayLabel(boxAddDialogBox.box_number, boxAddDialogBox.internal_barcode)}`}
+          boxLabel={`Короб ${inboundBoxDisplayLabel(boxAddDialogBox.box_number, boxAddDialogBox.internal_barcode, numberedInboundBoxLabels)}`}
           readOnly={!receivingActive && !ffDraft}
           ffDraft={ffDraft}
           ffInbound={ffInbound}
@@ -3947,7 +3951,7 @@ export function FfInboundRequestView({
           <Typography variant="body2">
             На палету встанут короба:{' '}
             {selectedPalletBoxes
-              .map((box) => inboundBoxDisplayLabel(box.box_number, box.internal_barcode))
+              .map((box) => inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels))
               .join(', ')}
           </Typography>
           <SelectInput
