@@ -1021,7 +1021,7 @@ async def _sync_order_meta_from_wb(
             # open-status selection, so once WB *does* catch up the order would
             # never resolve on its own again (R3/R4). Without an open operation,
             # behaviour is unchanged — WB genuinely has no code for this order.
-            awaiting_wb_echo = empty_sgtin and (
+            awaiting_wb_echo = empty_sgtin and decision == "required" and (
                 await pending_kiz_operation(session, marking) is not None
             )
             if decision == "required" and not meta_detail.value and not awaiting_wb_echo:
