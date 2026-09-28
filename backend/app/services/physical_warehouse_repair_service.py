@@ -76,7 +76,10 @@ def _typed(table: Table, values: Row) -> Row:
 
 
 def _refs(table: Table, parent: str) -> list[str]:
-    return sorted(fk.parent.name for fk in table.foreign_keys if fk.column.table.name == parent)
+    # A column can appear in more than one FK to the same parent table (e.g. a
+    # plain single-column FK plus a composite tenant-scoped one covering the
+    # same column); de-duplicate so callers see each referencing column once.
+    return sorted({fk.parent.name for fk in table.foreign_keys if fk.column.table.name == parent})
 
 
 def _tables() -> list[Table]:
@@ -134,9 +137,10 @@ async def _lock(session: AsyncSession) -> None:
 
 
 async def _snapshot(
-    session: AsyncSession, tenant_id: uuid.UUID, source: uuid.UUID, target: uuid.UUID | None,
+    session: AsyncSession, tenant_id: uuid.UUID, sources: list[uuid.UUID],
+    target: uuid.UUID | None,
 ) -> dict[str, list[Row]]:
-    warehouse_ids = [source] + ([target] if target else [])
+    warehouse_ids = list(sources) + ([target] if target else [])
     tables = _tables()
     rows_by_table: dict[str, dict[str, Row]] = {t.name: {} for t in tables}
     extras = {"products", "stock_directions", "product_marketplace_links"}
@@ -392,19 +396,25 @@ async def _summary_with_free(
 
 
 def _plan(
-    snapshot: dict[str, list[Row]], tenant: str, source: str, target: str | None,
+    snapshot: dict[str, list[Row]], tenant: str, sources: list[str], target: str | None,
 ) -> tuple[list[Row], list[str]]:
     blockers: list[str] = []
     warehouses = {w["id"]: w for w in snapshot["warehouses"]}
-    old, new = warehouses.get(source), warehouses.get(target or "")
-    if not old or old["tenant_id"] != tenant:
-        blockers.append("source_not_found_in_tenant")
-    elif old["is_operational"] or not (
-        old["code"].lower() == "fbs-wb" or old["code"].lower().startswith("fbs-wb-")
-        or old["name"].lower() == "fbs wb" or old["name"].lower().startswith("fbs wb ")
-    ):
-        blockers.append("source_is_not_legacy_marketplace_warehouse")
-    if (not new or not new["is_operational"] or new["tenant_id"] != tenant or source == target
+    if not sources:
+        blockers.append("source_required")
+    if len(sources) != len(set(sources)):
+        blockers.append("duplicate_source")
+    for source in sources:
+        old = warehouses.get(source)
+        if not old or old["tenant_id"] != tenant:
+            blockers.append(f"source_not_found_in_tenant:{source}")
+        elif old["is_operational"] or not (
+            old["code"].lower() == "fbs-wb" or old["code"].lower().startswith("fbs-wb-")
+            or old["name"].lower() == "fbs wb" or old["name"].lower().startswith("fbs wb ")
+        ):
+            blockers.append(f"source_is_not_legacy_marketplace_warehouse:{source}")
+    new = warehouses.get(target or "")
+    if (not new or not new["is_operational"] or new["tenant_id"] != tenant or target in sources
             or new["code"].lower() in {"__defect__", "fbs-wb"}
             or new["code"].lower().startswith("fbs-wb-")):
         blockers.append("physical_target_required: provide explicit mapping if multiple warehouses")
@@ -418,8 +428,9 @@ def _plan(
     if blockers:
         return [], blockers
 
+    source_set = set(sources)
     locations = snapshot["storage_locations"]
-    source_locations = [loc for loc in locations if loc["warehouse_id"] == source]
+    source_locations = [loc for loc in locations if loc["warehouse_id"] in source_set]
     target_locations = {loc["code"]: loc for loc in locations if loc["warehouse_id"] == target}
     location_map: dict[str, str] = {}
     removed_locations: set[str] = set()
@@ -441,13 +452,13 @@ def _plan(
         name = table.name
         projected[name] = []
         for row in snapshot[name]:
-            if name == "warehouses" and row["id"] == source:
+            if name == "warehouses" and row["id"] in source_set:
                 continue
             if name == "storage_locations" and row["id"] in removed_locations:
                 continue
             new_row = dict(row)
             for column in _refs(table, "warehouses"):
-                if row[column] == source:
+                if row[column] in source_set:
                     new_row[column] = target
             for column in _refs(table, "storage_locations"):
                 if row[column] in location_map:
@@ -571,14 +582,24 @@ async def _index_blockers(session: AsyncSession, patches: list[Row]) -> list[str
 
 async def prepare(
     session: AsyncSession, *, run_id: uuid.UUID, tenant_id: uuid.UUID,
-    source_id: uuid.UUID, target_id: uuid.UUID | None = None,
+    source_id: uuid.UUID | list[uuid.UUID], target_id: uuid.UUID | None = None,
 ) -> Row:
+    """Merge one or more legacy warehouses of the same tenant into one target.
+
+    ``source_id`` may be a single UUID (the common case) or a list: every
+    source is reclassified onto the same target inside one prepare/apply
+    transaction, so records that cross-reference each other's sources (e.g.
+    an order on one legacy warehouse whose pick references another) do not
+    block each other -- the whole family is in scope together (WMS-516 B2).
+    """
+    source_ids = [source_id] if isinstance(source_id, uuid.UUID) else list(source_id)
     await _lock(session)
     existing = await session.get(BackgroundJob, run_id)
+    scope_sources = sorted(str(s) for s in source_ids)
     if existing:
-        if existing.job_type != JOB_TYPE or existing.tenant_id != tenant_id or (
-            existing.payload_json or {}
-        ).get("source_id") != str(source_id) or (
+        if existing.job_type != JOB_TYPE or existing.tenant_id != tenant_id or sorted(
+            (existing.payload_json or {}).get("source_ids") or []
+        ) != scope_sources or (
             target_id is not None
             and (existing.payload_json or {}).get("target_id") != str(target_id)
         ):
@@ -593,15 +614,18 @@ async def prepare(
         ))).all())
         if len(ids) == 1:
             target_id = ids[0]
-    snapshot = await _snapshot(session, tenant_id, source_id, target_id)
-    patches, blockers = _plan(snapshot, str(tenant_id), str(source_id), str(target_id))
+    snapshot = await _snapshot(session, tenant_id, source_ids, target_id)
+    patches, blockers = _plan(
+        snapshot, str(tenant_id), [str(s) for s in source_ids], str(target_id),
+    )
     if not blockers:
         blockers.extend(await _index_blockers(session, patches))
     job = BackgroundJob(
         id=run_id, tenant_id=tenant_id, job_type=JOB_TYPE,
         status="blocked" if blockers else "prepared",
         payload_json={
-            "source_id": str(source_id), "target_id": str(target_id) if target_id else None,
+            "source_ids": [str(s) for s in source_ids],
+            "target_id": str(target_id) if target_id else None,
             "fingerprint": _fingerprint(snapshot), "patches": patches,
             "before": await _summary_with_free(session, tenant_id, snapshot), "blockers": blockers,
         },
@@ -616,7 +640,7 @@ def report(job: BackgroundJob) -> Row:
     # Do not print original rows: only IDs, counts and quantities leave this service.
     return {
         "run_id": str(job.id), "tenant_id": str(job.tenant_id), "status": job.status,
-        "source_id": payload.get("source_id"), "target_id": payload.get("target_id"),
+        "source_ids": payload.get("source_ids", []), "target_id": payload.get("target_id"),
         "fingerprint": payload.get("fingerprint"), "before": payload.get("before"),
         "blockers": payload.get("blockers", []), "result": job.result_json,
     }
@@ -645,8 +669,9 @@ async def apply(session: AsyncSession, run_id: uuid.UUID) -> Row:
     if job.status != "prepared":
         raise WarehouseRepairError(f"run_not_prepared:{job.status}")
     payload = job.payload_json or {}
-    source, target = uuid.UUID(payload["source_id"]), uuid.UUID(payload["target_id"])
-    snapshot = await _snapshot(session, job.tenant_id, source, target)
+    sources = [uuid.UUID(s) for s in payload["source_ids"]]
+    target = uuid.UUID(payload["target_id"])
+    snapshot = await _snapshot(session, job.tenant_id, sources, target)
     if _fingerprint(snapshot) != payload["fingerprint"]:
         job.status = "stale"
         job.result_json = {"blocker": "snapshot_changed: prepare a new run",
@@ -673,15 +698,16 @@ async def apply(session: AsyncSession, run_id: uuid.UUID) -> Row:
             if patch["table"] == name and "delete" in patch:
                 table = Base.metadata.tables[name]
                 await session.execute(delete(table).where(table.c.id == uuid.UUID(patch["id"])))
-    after = await _snapshot(session, job.tenant_id, source, target)
+    after = await _snapshot(session, job.tenant_id, sources, target)
     before_summary, after_summary = _summary(snapshot), _summary(after)
     if _physical_quantities(snapshot) != _physical_quantities(after) or (
         before_summary["reserved_by_table"] != after_summary["reserved_by_table"]
     ):
         raise WarehouseRepairError("quantity_conservation_failed")
     job.status = "completed"
+    source_id_strs = {str(s) for s in sources}
     source_locations = {loc["id"] for loc in snapshot["storage_locations"]
-                        if loc["warehouse_id"] == str(source)}
+                        if loc["warehouse_id"] in source_id_strs}
     affected_products = sorted({row["product_id"] for row in snapshot["inventory_balances"]
                                if row["storage_location_id"] in source_locations
                                and row["quantity"] != 0})
@@ -698,8 +724,9 @@ async def apply(session: AsyncSession, run_id: uuid.UUID) -> Row:
 async def verify(session: AsyncSession, run_id: uuid.UUID) -> Row:
     job = await _load(session, run_id)
     payload = job.payload_json or {}
+    sources = [uuid.UUID(s) for s in payload["source_ids"]]
     snapshot = await _snapshot(
-        session, job.tenant_id, uuid.UUID(payload["source_id"]),
+        session, job.tenant_id, sources,
         uuid.UUID(payload["target_id"]) if payload.get("target_id") else None,
     )
     result = report(job)
@@ -707,7 +734,8 @@ async def verify(session: AsyncSession, run_id: uuid.UUID) -> Row:
     result["matches_committed_snapshot"] = (
         _fingerprint(snapshot) == (job.result_json or {}).get("fingerprint")
     )
-    result["source_exists"] = any(w["id"] == payload["source_id"] for w in snapshot["warehouses"])
+    source_id_strs = set(payload["source_ids"])
+    result["source_exists"] = any(w["id"] in source_id_strs for w in snapshot["warehouses"])
     return result
 
 
@@ -721,8 +749,9 @@ async def rollback(session: AsyncSession, run_id: uuid.UUID) -> Row:
     if (job.result_json or {}).get("publication_started"):
         raise WarehouseRepairError("rollback_blocked_after_publication: use forward reconciliation")
     payload = job.payload_json or {}
-    source, target = uuid.UUID(payload["source_id"]), uuid.UUID(payload["target_id"])
-    current = await _snapshot(session, job.tenant_id, source, target)
+    sources = [uuid.UUID(s) for s in payload["source_ids"]]
+    target = uuid.UUID(payload["target_id"])
+    current = await _snapshot(session, job.tenant_id, sources, target)
     if _fingerprint(current) != (job.result_json or {}).get("fingerprint"):
         raise WarehouseRepairError("rollback_blocked_by_later_changes: reconcile manifest")
     job.status = "running"
@@ -743,7 +772,7 @@ async def rollback(session: AsyncSession, run_id: uuid.UUID) -> Row:
         if patch["table"] == "inventory_balances" and "delete" in patch:
             table = Base.metadata.tables[patch["table"]]
             await session.execute(insert(table).values(**_typed(table, patch["delete"])))
-    restored = await _snapshot(session, job.tenant_id, source, target)
+    restored = await _snapshot(session, job.tenant_id, sources, target)
     if _fingerprint(restored) != payload["fingerprint"]:
         raise WarehouseRepairError("rollback_manifest_mismatch")
     job.status = "rolled_back"

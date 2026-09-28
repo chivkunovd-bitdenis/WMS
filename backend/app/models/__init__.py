@@ -69,6 +69,7 @@ from app.models.marking_code import (
     MarkingCodeImportFile,
     MarkingPool,
     MarkingPoolProduct,
+    MarkingPrintBatch,
     MarkingReprintRequest,
 )
 from app.models.marking_withdrawal import (
@@ -180,6 +181,7 @@ __all__ = [
     "MarkingCodeImportFile",
     "MarkingPool",
     "MarkingPoolProduct",
+    "MarkingPrintBatch",
     "MarkingReprintRequest",
     "Notification",
     "OperationFact",

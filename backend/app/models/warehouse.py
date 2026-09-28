@@ -19,7 +19,12 @@ if TYPE_CHECKING:
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
-    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_warehouses_tenant_code"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_warehouses_tenant_code"),
+        # Backs the composite FK operation_facts(tenant_id, warehouse_id) (WMS-516):
+        # migration 20260826_0111 added this constraint on the real schema.
+        UniqueConstraint("tenant_id", "id", name="uq_warehouses_tenant_id_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(

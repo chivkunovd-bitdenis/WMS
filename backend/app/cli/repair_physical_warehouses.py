@@ -1,8 +1,13 @@
 """WMS-516 maintenance command. No marketplace call is part of the data transaction.
 
 python -m app.cli.repair_physical_warehouses prepare --run UUID --tenant UUID
-    --source UUID [--target UUID]
+    --source UUID [--source UUID ...] [--target UUID]
 python -m app.cli.repair_physical_warehouses apply|verify|rollback --run UUID
+
+Repeat --source to merge every listed legacy warehouse of the same tenant into
+one target in a single prepare/apply transaction (WMS-516 B2): records that
+cross-reference each other's sources are then in scope together instead of
+blocking one another.
 """
 
 from __future__ import annotations
@@ -21,7 +26,8 @@ async def main() -> None:
     parser.add_argument("action", choices=["prepare", "apply", "verify", "rollback", "publish"])
     parser.add_argument("--run", type=uuid.UUID, required=True)
     parser.add_argument("--tenant", type=uuid.UUID)
-    parser.add_argument("--source", type=uuid.UUID)
+    parser.add_argument("--source", type=uuid.UUID, action="append",
+                        help="repeat to merge several legacy warehouses in one transaction")
     parser.add_argument("--target", type=uuid.UUID)
     args = parser.parse_args()
     if args.action == "publish":

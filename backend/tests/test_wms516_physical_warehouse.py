@@ -141,6 +141,68 @@ async def test_repair_conserves_627_containers_other_seller_and_replays(db_sessi
         await cleanup(session)
 
 
+async def test_multi_source_merges_mutually_referencing_legacy_warehouses(db_session):
+    """WMS-516 B2: одной транзакцией переносим НЕСКОЛЬКО старых складов арендатора,
+    которые взаимно ссылаются друг на друга (как у «Империи ФФ»): по одиночке
+    ни один source не готовится, потому что его физический родитель лежит на
+    другом legacy-складе того же арендатора вне текущего scope."""
+    from app.models.pallet import Pallet
+
+    session = db_session
+    tenant, legacy_a, target, old_loc, new_loc, _product, box = await seed(session)
+    legacy_b = Warehouse(tenant_id=tenant.id, name="Legacy B", code="fbs-wb-2046998",
+                         is_operational=False)
+    session.add(legacy_b)
+    await session.flush()
+    pallet = Pallet(tenant_id=tenant.id, warehouse_id=legacy_b.id, code="B-PALLET",
+                    barcode="B-PALLET")
+    session.add(pallet)
+    await session.flush()
+    box.pallet_id = pallet.id
+    await session.commit()
+
+    await maybe_install(session)
+    try:
+        single = await repair.prepare(session, run_id=uuid.uuid4(), tenant_id=tenant.id,
+                                      source_id=legacy_a.id, target_id=target.id)
+        assert single["status"] == "blocked"
+        assert any("physical_parent_outside_repair_scope" in b for b in single["blockers"])
+
+        run = uuid.uuid4()
+        prepared = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                        source_id=[legacy_a.id, legacy_b.id], target_id=target.id)
+        assert prepared["status"] == "prepared", prepared
+        assert sorted(prepared["source_ids"]) == sorted([str(legacy_a.id), str(legacy_b.id)])
+        await session.commit()
+        result = await repair.apply(session, run)
+        assert result["status"] == "completed"
+        await session.commit()
+        assert await repair.apply(session, run) == result  # lost response after commit, idempotent
+        assert await session.scalar(select(WarehouseBox.warehouse_id).where(
+            WarehouseBox.id == box.id)) == target.id
+        assert await session.scalar(select(WarehouseBox.storage_location_id).where(
+            WarehouseBox.id == box.id)) == new_loc.id
+        assert await session.scalar(select(Pallet.warehouse_id).where(
+            Pallet.id == pallet.id)) == target.id
+        assert await session.scalar(select(func.count(Warehouse.id)).where(
+            Warehouse.id.in_([legacy_a.id, legacy_b.id]))) == 0
+        assert await session.scalar(select(func.sum(InventoryBalance.quantity))) == 1019
+        verify = await repair.verify(session, run)
+        assert verify["matches_committed_snapshot"]
+        assert not verify["source_exists"]
+        await session.commit()
+        assert (await repair.rollback(session, run))["status"] == "rolled_back"
+        await session.commit()
+        assert await session.scalar(select(func.count(Warehouse.id)).where(
+            Warehouse.id.in_([legacy_a.id, legacy_b.id]))) == 2
+        assert await session.scalar(select(Pallet.warehouse_id).where(
+            Pallet.id == pallet.id)) == legacy_b.id
+        assert await session.scalar(select(func.sum(InventoryBalance.quantity)).where(
+            InventoryBalance.storage_location_id == old_loc.id)) == 627
+    finally:
+        await cleanup(session)
+
+
 async def test_drift_and_ambiguous_target_are_durable_blockers(db_session):
     session = db_session
     tenant, legacy, target, *_ = await seed(session, second=True)
@@ -259,6 +321,13 @@ async def test_every_physical_fk_is_guarded_against_internal_insert(db_session):
             for fk in table.foreign_keys:
                 parent = fk.column.table.name
                 if parent not in {"warehouses", "storage_locations"}:
+                    continue
+                if fk.parent.name == "tenant_id":
+                    # A composite tenant-scoped FK (e.g. operation_facts ->
+                    # warehouses(tenant_id, id)) also reports its tenant_id leg
+                    # here, but the real tenant is always forced below -- that
+                    # leg alone never exercises the guard and would otherwise
+                    # leave the row missing its actual physical-FK column.
                     continue
                 with pytest.raises(IntegrityError, match="physical_warehouse_required"):
                     async with session.begin_nested():
