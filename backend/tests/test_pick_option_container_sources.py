@@ -24,6 +24,7 @@ from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import pick_option_location_service
+from app.services.box_barcode_service import generate_box_barcode
 from app.services.sorting_location_service import get_or_create_sorting_location
 
 
@@ -114,7 +115,8 @@ async def test_shared_pick_locations_keep_totals_and_expose_physical_paths(
             tenant_id=tenant_id,
             request_id=intake.id,
             box_number=41,
-            internal_barcode=f"INBOUND-BOX-{suffix}",
+            # WMS-564: системный INB-код даёт прежнюю подпись «КР-000041».
+            internal_barcode=generate_box_barcode("INB"),
             pallet_id=pallet.id,
         )
         cargo_place = InboundIntakeCargoPlace(
