@@ -442,3 +442,41 @@ it('removes focused input KIZ text while preserving GS in dispatched code', () =
   expect(onScan).toHaveBeenCalledExactlyOnceWith(prefix + '\x1d' + suffix)
   expect(el.value).toBe('7')
 })
+
+describe('WMS-566: поле «только для скана» (количество в коробе)', () => {
+  const field = { tagName: 'INPUT', value: '', dataset: { testid: 'qty' } }
+  const setup = () => {
+    const onScan = vi.fn()
+    let now = 0
+    const listener = createScannerListener({
+      onScan,
+      minLength: 5,
+      maxIntervalMs: 50,
+      scanOnlyFieldMinLength: 7,
+      isScanOnlyField: (el) => el?.dataset?.testid === 'qty',
+      getNow: () => now,
+      getActiveElement: () => field,
+    })
+    const type = (text: string, gapMs: number) => {
+      for (const ch of text) {
+        now += gapMs
+        listener(makeEvent(ch, { code: `Digit${ch}` }))
+      }
+      now += gapMs
+      listener(makeEvent('Enter', { code: 'Enter' }))
+    }
+    return { onScan, type }
+  }
+
+  it('6 цифр руками с Enter — ручное количество, не скан', () => {
+    const { onScan, type } = setup()
+    type('123456', 5)
+    expect(onScan).not.toHaveBeenCalled()
+  })
+
+  it('штрихкод от 7 символов — скан даже при медленном сканере', () => {
+    const { onScan, type } = setup()
+    type('2009989396966', 120)
+    expect(onScan).toHaveBeenCalledWith('2009989396966')
+  })
+})
