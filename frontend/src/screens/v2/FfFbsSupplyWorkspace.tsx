@@ -3923,7 +3923,8 @@ export function FfFbsSupplyWorkspace({
         <MenuItem
           disabled={!reprintOrder?.product.id}
           onClick={() => {
-            if (reprintOrder) openOrderMarkingPrint(reprintOrder, reprintLine, true)
+            // После «Очистить ЧЗ» у заказа нет кода — перепечатывать нечего, печатаем новый ЧЗ.
+            if (reprintOrder) openOrderMarkingPrint(reprintOrder, reprintLine, orderPrintDone(reprintOrder))
             setReprintMenu(null)
           }}
           data-task-id="FBS-11"
