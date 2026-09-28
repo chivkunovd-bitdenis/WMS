@@ -527,6 +527,7 @@ export function FfInboundRequestView({
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [cargoAddDialogPlaceId, setCargoAddDialogPlaceId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
+  const [clearBoxTarget, setClearBoxTarget] = useState<{ id: string; label: string } | null>(null)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
   const [lastScannedLineId, setLastScannedLineId] = useState<string | null>(null)
@@ -599,6 +600,7 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
+      clearBoxTarget == null &&
       !distOpen &&
       !kizReprintOpen,
     onScan: (code) => {
@@ -1969,6 +1971,28 @@ export function FfInboundRequestView({
     }
   }
 
+  // WMS-566: «Очистить» — все штуки короба уходят из приёмки одной операцией.
+  const clearInboundBox = async (boxId: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/clear`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        return
+      }
+      setClearBoxTarget(null)
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось очистить короб.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const deleteInboundBox = async (boxId: string) => {
     setBusy(true)
     setError(null)
@@ -3258,15 +3282,32 @@ export function FfInboundRequestView({
                               >
                                 Наполнить
                               </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={busy || !(receivingActive || ffDraft) || visibleLines.length > 0}
-                                onClick={() => void deleteInboundBox(box.id)}
-                                data-testid={`ff-inbound-box-delete-${box.id}`}
-                              >
-                                Удалить
-                              </Button>
+                              {visibleLines.length > 0 ? (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={busy || !(receivingActive || ffDraft)}
+                                  onClick={() =>
+                                    setClearBoxTarget({
+                                      id: box.id,
+                                      label: inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels),
+                                    })
+                                  }
+                                  data-testid={`ff-inbound-box-clear-${box.id}`}
+                                >
+                                  Очистить
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={busy || !(receivingActive || ffDraft)}
+                                  onClick={() => void deleteInboundBox(box.id)}
+                                  data-testid={`ff-inbound-box-delete-${box.id}`}
+                                >
+                                  Удалить
+                                </Button>
+                              )}
                               <Button
                                 size="small"
                                 variant="outlined"
@@ -4158,6 +4199,36 @@ export function FfInboundRequestView({
             data-testid="ff-inbound-discrepancy-confirm"
           >
             Завершить приёмку
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={clearBoxTarget !== null}
+        onClose={() => {
+          if (!busy) setClearBoxTarget(null)
+        }}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-box-clear-dialog"
+      >
+        <DialogTitle>Очистить короб {clearBoxTarget?.label}?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Все товары из этого короба уйдут из приёмки, «Принято» уменьшится.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setClearBoxTarget(null)}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={busy}
+            onClick={() => clearBoxTarget && void clearInboundBox(clearBoxTarget.id)}
+            data-testid="ff-inbound-box-clear-confirm"
+          >
+            Очистить
           </Button>
         </DialogActions>
       </Dialog>

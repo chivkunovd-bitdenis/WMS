@@ -301,3 +301,33 @@ async def test_inbound_unknown_inb_barcode(async_client: AsyncClient) -> None:
     )
     assert open_res.status_code == 404
     assert open_res.json()["detail"] == "box_not_found"
+
+
+@pytest.mark.asyncio
+async def test_inbound_box_clear_removes_units_and_allows_delete(async_client: AsyncClient) -> None:
+    """WMS-566: «Очистить» обнуляет короб одной операцией, штуки уходят из приёмки,
+    план селлера не меняется; после этого пустой короб удаляется."""
+    suffix = str(int(time.time() * 1000) + 566)
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
+        async_client, suffix=suffix, expected_qty=5, box_count=1
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+    box = boxes[0]
+    put = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}", headers=ah, json={"quantity": 4}
+    )
+    assert put.status_code == 200, put.text
+    blocked = await async_client.delete(f"{base}/boxes/{box['id']}", headers=ah)
+    assert blocked.status_code == 409, blocked.text
+
+    cleared = await async_client.post(f"{base}/boxes/{box['id']}/clear", headers=ah)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["lines"] == []
+    got = (await async_client.get(base, headers=ah)).json()
+    line = got["lines"][0]
+    assert line["expected_qty"] == 5
+    assert line["effective_actual_qty"] == 0
+    assert all(not b["lines"] for b in got["boxes"] if b["id"] == box["id"])
+
+    deleted = await async_client.delete(f"{base}/boxes/{box['id']}", headers=ah)
+    assert deleted.status_code == 204, deleted.text

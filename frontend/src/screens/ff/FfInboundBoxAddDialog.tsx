@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { isInboundMarkingScan } from './inboundMarkingCodes'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
   Alert,
@@ -48,6 +49,9 @@ import {
 } from './boxFillDialogLayout'
 import { scanErrorMessageRu } from './inboundReceivingHelpers'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
+
+/** WMS-566: ручное количество в «В коробе» — до 999 999 штук. */
+const BOX_QTY_MAX_DIGITS = 6
 
 type InboundBoxLine = {
   id: string
@@ -135,11 +139,17 @@ const BoxFillRow = memo(function BoxFillRow({
             type="number"
             size="small"
             value={draftQty}
-            onChange={(e) => onQtyChange(line.product_id, e.target.value)}
+            onChange={(e) => {
+              // WMS-566: не больше 6 цифр — длиннее бывает только скан, его забирает сканер.
+              if (e.target.value.length > BOX_QTY_MAX_DIGITS) return
+              onQtyChange(line.product_id, e.target.value)
+            }}
             slotProps={{
               htmlInput: {
                 min: 0,
+                max: 10 ** BOX_QTY_MAX_DIGITS - 1,
                 'data-testid': 'ff-inbound-box-add-manual-qty',
+                'data-product-id': line.product_id,
                 onBlur: (e: FocusEvent<HTMLInputElement>) =>
                   onQtySave(line.product_id, e.currentTarget.value),
                 onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
@@ -368,6 +378,7 @@ function FfInboundBoxAddDialogContent({
         if (!onMarkingScan) throw new Error('Коды ЧЗ нужно сканировать в документе приёмки.')
         await onMarkingScan(raw, lastProductLineId.current)
         setScanBarcode('')
+        playScanSuccess()
         return
       }
       lastProductLineId.current = null
@@ -385,6 +396,7 @@ function FfInboundBoxAddDialogContent({
         },
       )
       if (!res.ok) {
+        playScanError()
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
@@ -412,6 +424,7 @@ function FfInboundBoxAddDialogContent({
               (line) => line.product_id === scannedProductId,
             )
       if (!scannedLine) {
+        playScanError()
         setError('Сервер принял скан, но не вернул строку товара.')
         return
       }
@@ -428,12 +441,14 @@ function FfInboundBoxAddDialogContent({
       lastProductLineId.current = requestLines.find((line) => line.product_id === scannedLine.product_id)?.id ?? null
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
+      playScanSuccess()
       if (ffDraft || newLine) await onUpdated()
       // The POST response is authoritative for this box. Refresh the heavy parent
       // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
       // В черновике ФФ запрос идёт через sendIntakeMutations, и код отказа сервера
       // приходит текстом ошибки — переводим его той же картой, что и обычный ответ.
+      playScanError()
       setError(scanErrorMessageRu(e instanceof Error ? e.message : 'Не удалось выполнить скан.'))
     }
   }
@@ -454,9 +469,21 @@ function FfInboundBoxAddDialogContent({
   useBarcodeScanner({
     enabled: open && !readOnly,
     onScan: (code) => {
+      // Символы скана могли осесть в поле «В коробе», где стоял курсор (не только
+      // в конце строки) — возвращаем полю сохранённое количество.
+      const focused = document.activeElement as HTMLInputElement | null
+      const focusedProductId = focused?.dataset?.productId
+      if (focused?.dataset?.testid === 'ff-inbound-box-add-manual-qty' && focusedProductId) {
+        handleQtyChange(focusedProductId, String(qtyInBoxByProductId.get(focusedProductId) ?? 0))
+      }
       setScanBarcode(code)
       void enqueueScanIntoBox(code)
     },
+    // WMS-566: курсор в «В коробе» не должен съедать скан — там руками вводят
+    // короткое число, а пачка со сканера уходит в короб, как из поля скана.
+    isScanOnlyField: (el) => el?.dataset?.testid === 'ff-inbound-box-add-manual-qty',
+    // Руками в поле — до 6 цифр; все штрихкоды товаров от 13 символов, коробов — от 16.
+    scanOnlyFieldMinLength: BOX_QTY_MAX_DIGITS + 1,
   })
 
   useEffect(() => {
