@@ -1052,11 +1052,18 @@ async def _resolve_fbs_documents(
     tenant_id: uuid.UUID,
     rows: Sequence[InventoryMovement],
     *,
-    date_from: datetime,
-    date_to: datetime,
+    date_from: datetime | None,
+    date_to: datetime | None,
     ozon_position_index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] | None = None,
 ) -> dict[uuid.UUID, tuple[str, uuid.UUID | None, bool]]:
     """movement_id -> (подпись заказа с площадкой, supply_id, подтверждённое сторно).
+
+    WMS-490 D2: `date_from`/`date_to` могут быть `None` — карточка товара
+    запрашивает всю историю одного товара (`list_product_movements` без
+    периода). В этом режиме граница анкера ниже (F2) просто не накладывается:
+    сужать её произвольными датами нельзя, иначе позиция Ozon вне взятых
+    рамок осталась бы без документа. Отчёт и Excel всегда передают обе даты —
+    их путь не меняется.
 
     Списание FBS связано с заказом через журнал `FbsShipmentReversalLedger`:
     прямой id (исходное списание или его историческое сторно
@@ -1210,6 +1217,17 @@ async def _resolve_fbs_documents(
                     result[movement_id] = (number, supply_id, False)
         else:
             anchor_movement = aliased(InventoryMovement)
+            # WMS-490 D2: без периода (карточка товара, вся история) границы
+            # анкера не добавляем вовсе — см. докстринг выше.
+            where_clauses: list[ColumnElement[bool]] = [
+                FbsShipmentReversalLedger.tenant_id == tenant_id,
+                FbsOrder.tenant_id == tenant_id,
+                FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
+            ]
+            if date_from is not None:
+                where_clauses.append(anchor_movement.created_at >= date_from)
+            if date_to is not None:
+                where_clauses.append(anchor_movement.created_at < date_to)
             by_position = await session.execute(
                 select(
                     FbsShipmentReversalLedger.shipment_movement_id,
@@ -1222,13 +1240,7 @@ async def _resolve_fbs_documents(
                     anchor_movement,
                     anchor_movement.id == FbsShipmentReversalLedger.shipment_movement_id,
                 )
-                .where(
-                    FbsShipmentReversalLedger.tenant_id == tenant_id,
-                    FbsOrder.tenant_id == tenant_id,
-                    FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
-                    anchor_movement.created_at >= date_from,
-                    anchor_movement.created_at < date_to,
-                )
+                .where(*where_clauses)
             )
             await _apply_ledger_rows(
                 by_position, ozon_position_candidates, is_confirmed_reversal=False
@@ -1425,8 +1437,8 @@ async def _enrich_movement_rows(
     tenant_id: uuid.UUID,
     rows: Sequence[InventoryMovement],
     *,
-    date_from: datetime,
-    date_to: datetime,
+    date_from: datetime | None,
+    date_to: datetime | None,
     ozon_position_index: dict[uuid.UUID, tuple[str, uuid.UUID | None]] | None = None,
 ) -> list[dict[str, object]]:
     """Общая сборка обогащённых строк движения — использует и постраничный
@@ -1439,6 +1451,10 @@ async def _enrich_movement_rows(
     (WMS-531 ревью Astra, раунды 2 и 4, F1): готовый словарь, который Excel
     считает порционно (по продавцу) вместо повторного нефильтрованного чтения
     журнала на каждую порцию.
+
+    `date_from`/`date_to` — `None` только когда вызывающая сторона (карточка
+    товара, WMS-490 D2) сама запросила всю историю без периода; передаются в
+    `_resolve_fbs_documents` как есть.
     """
     intake_line_ids = {row.inbound_intake_line_id for row in rows if row.inbound_intake_line_id}
     unload_ids = {
@@ -1527,13 +1543,14 @@ async def list_product_movements(
     *,
     product_id: uuid.UUID | None = None,
     operation: str | None = None,
-    date_from: datetime,
-    date_to: datetime,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
     search: str | None = None,
     page: int = 1,
     limit: int = MOVEMENT_PAGE_LIMIT,
+    before: datetime | None = None,
 ) -> tuple[list[dict[str, object]], bool, int]:
     """Движения за период — то, что видно при раскрытии строки отчёта.
 
@@ -1544,17 +1561,46 @@ async def list_product_movements(
     WMS-531 ревью Astra, F4: `search` раньше не принимался вовсе — сводка по
     виду операции учитывала поиск, а раскрытие того же вида его теряло, и
     сумма раскрытых движений расходилась со строкой (R11, R13).
+
+    WMS-490 D2: `date_from=date_to=None` — режим «вся история одного
+    товара», разрешён только вместе с `product_id` (без периода группировка
+    по виду движения не имеет смысла — строк были бы миллионы, а лимит
+    366 дней не даёт эксплуатационного смысла эту проверку обходить иначе).
+    Владелец просил именно «все движения по этому артикулу» для карточки
+    товара, и это та же функция, что строит отчёт «Остатки и движения» —
+    историчность остатка не считается вторым независимым способом
+    (AGENTS.md §3, решение 9 в docs/requirements/WMS-490.md).
+
+    WMS-490 ревью Astra №1, F5: `before` — верхняя граница `created_at`,
+    зафиксированная вызывающей стороной на первой странице. Без неё OFFSET
+    считается от текущего общего числа строк — приёмка или инвентаризация
+    между запросом первой и второй страницы сдвигает выборку: последняя
+    строка первой страницы приходит снова, а новая строка, оказавшаяся
+    впереди сортировки, вообще не загружается. `before` не трогает сам
+    отчёт `GET /inventory/movements` — тот всегда вызывается с готовым
+    периодом и этот параметр не передаёт; используется только новой
+    ручкой карточки товара (`api/reports.py: get_product_movement_history`).
     """
     del warehouse_id
     if product_id is None and operation is None:
         raise ValueError("movements require a product or an operation group")
-    date_from, date_to = normalize_period(date_from, date_to)
+    if date_from is None or date_to is None:
+        if date_from is not None or date_to is not None:
+            raise ValueError("date_from and date_to must be provided together")
+        if product_id is None:
+            raise ValueError("full history without a period requires a product")
+    else:
+        date_from, date_to = normalize_period(date_from, date_to)
     filters = [
         InventoryMovement.tenant_id == tenant_id,
-        InventoryMovement.created_at >= date_from,
-        InventoryMovement.created_at < date_to,
         stock_movement_filter(),
     ]
+    if date_from is not None:
+        assert date_to is not None
+        filters.append(InventoryMovement.created_at >= date_from)
+        filters.append(InventoryMovement.created_at < date_to)
+    if before is not None:
+        filters.append(InventoryMovement.created_at <= before)
     if product_id is not None:
         filters.append(InventoryMovement.product_id == product_id)
     if seller_id is not None or search:

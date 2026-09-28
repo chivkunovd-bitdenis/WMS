@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
-import { Link as RouterLink } from 'react-router-dom'
+import { MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { ProductMovementsTable } from '../../components/ProductMovementsTable'
+import type { MovementRow } from '../../components/ProductMovementsTable'
 import { sellerQuickRange } from './FfBillingScreen'
 import {
   ActionGroup,
@@ -94,20 +95,6 @@ type SellerRow = {
   net: number
 }
 type OperationRow = { operation: string; in_qty: number; out_qty: number; net: number; integrity_error?: boolean }
-type MovementRow = {
-  id: string
-  at: string
-  operation: string
-  quantity: number
-  product_id?: string | null
-  product_name?: string | null
-  sku_code?: string | null
-  document: {
-    kind: 'inbound' | 'marketplace_unload' | 'fbs_supply' | 'fbs_order'
-    id: string
-    number: string
-  } | null
-}
 type Grouping = 'seller' | 'product' | 'operation'
 
 export function reportExcelDisabledReason(options: {
@@ -507,20 +494,14 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], contentInset
   const movementsTable = (options: { showProduct: boolean }) => movementsError
     ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения</ErrorNotice>
     : <Stack spacing={1}>
-        <DataTable<MovementRow> columns={[
-          { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
-          ...(options.showProduct ? [{ key: 'product', header: 'Товар', width: 260, render: (move: MovementRow) => <TextCell value={move.product_name ?? '—'} width={250} /> }] : []),
-          { key: 'operation', header: 'Движение', width: 260, render: (move: MovementRow) => <TextCell value={move.operation} /> },
-          { key: 'document', header: 'Документ', width: 200, render: (move: MovementRow) => {
-              const doc = move.document
-              if (!doc) return <TextCell value="—" />
-              if (doc.kind === 'inbound') return <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(doc.id)}>{doc.number}</Link>
-              if (doc.kind === 'marketplace_unload') return <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
-              if (doc.kind === 'fbs_supply') return <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
-              return <TextCell value={doc.number} />
-            } },
-          { key: 'qty', header: 'Штук', align: 'right', width: 110, render: (move: MovementRow) => <QtyCell value={move.quantity} /> },
-        ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-movements" />
+        <ProductMovementsTable
+          rows={movements}
+          loading={movementsLoading}
+          showProduct={options.showProduct}
+          onOpenInbound={onOpenInbound}
+          emptyTitle="Движений за период нет"
+          testId="ff-reports-movements"
+        />
         {movements.length < movementsTotal ? (
           <SecondaryAction
             data-testid="ff-reports-movements-load-more"
