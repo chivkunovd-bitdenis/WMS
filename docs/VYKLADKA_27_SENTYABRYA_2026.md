@@ -128,3 +128,64 @@ PR #271–276, реестр подготовленных-но-не-выложе�
 | Первый полный `pytest -n auto tests/` на этой ветке | 10 failed, 3358 passed | Впервые прогнан весь набор (раньше — только целевые файлы по задаче). Каждое падение проверено на чистом `origin/etalon` во временном `git worktree`: `test_fbs_openapi_contract`, `test_marketplace_unload_address_storage`, `test_inbound_box_reconciliation`, `test_pick_option_container_sources` — падают уже там, преэкзистентные, не трогал. Оставшиеся два — настоящие регрессии от совмещения задач пакета |
 | Фикс двух регрессий | `bbfa0f5ba6b22cbecfd21477598afbed3282aa65` | `test_seller_requisites_autofill.py::test_c7_*` (5 параметризаций) — ответ сохранения ключа WB пополнился полями WMS-535 (`sizes_missing_chrt_id`, `duplicate_chrt_id`, `barcode_conflicts`, `barcode_conflict_details`), добавлены в ожидаемый словарь. `test_wms538_ff_catalog_batch.py` — после WMS-535 основной ШК каталога берётся из `Product.wb_barcode`, а не из сырого `raw_json` карточки (тот же путь, что у настоящего импорта, `wildberries_product_import_service.py:213`); тест заводил товар без этого поля — добавлено. Дополнительно воспроизвёл флаки полного параллельного прогона (`-n auto`): и на этой ветке, и на чистом `origin/etalon` от запуска к запуску падают РАЗНЫЕ тесты (`test_full_flow_pvz_emulator`, `test_wms417_stock_http_contract`) — существующее свойство сьюта под `-n auto`, не регрессия PSP-2 |
 | Повторные проверки | `ruff check .` и `mypy .` — чисто. `bash scripts/ci/check-backlog-ref.sh origin/etalon` — «Гейт бэклога пройден» (16 номеров) | |
+
+## Выпуск 2 (`release/psp2-2-20260928`)
+
+Собран 28.09.2026 в отдельном worktree `.worktrees/release-psp2-2` от ветки `release/psp2-20260927`
+(выпуска 1). Выпуск 1 к моменту сборки уже был влит в `etalon` через PR #281 (`da5bdeea`, прод
+`3c27976e` на момент старта, `WMS-491, 547, 549, 548, 535, 560`) — выпуск 2 несёт только новые задачи
+поверх него.
+
+### Задачи выпуска 2
+
+| Задача | Суть | Статус приёмки |
+|---|---|---|
+| WMS-530 | Один остаток во всей системе — единый источник расчёта вместо нескольких независимых | Принято с оговорками (2 круга ревью Astra, F1–F4 закрыты) |
+| WMS-531 | Отчёт «Остатки и движения»: каждое движение по документу строкой, выгрузка в Excel | Принято с оговорками (4 круга ревью Astra, F1 закрыт по замеру) |
+| WMS-532 | Каталог: колонки «Остаток / Резерв / Доступно» вместо «В ячейках / На ФФ / Свободный FBO» | Принято с оговорками |
+| WMS-497 | Печатный лист инвентаризации — кнопка, шапка, таблица с зеброй | Принято с оговорками (4 круга ревью Astra) |
+| WMS-490 | Полноценная карточка товара: вкладки «Основное», «Движения», «Расположение», «Задать остаток» | **Принято, нарушений не найдено** (приёмка 28.09.2026 на сборке `7b03dd39` против `origin/etalon` `ec99a5d3`) |
+| WMS-516 | Склады WB/Ozon — не физические склады WMS; отдельно влит фикс ремонта (`feat/wms516-repair-fix`) | Принята к staging, production acceptance НЕ выдана — обязателен PG/staging gate (см. ниже) |
+
+### Слияния
+
+| Шаг | SHA | Конфликты |
+|---|---|---|
+| Ветка создана от `release/psp2-20260927` (`141fe1b8`) | — | Новый worktree `.worktrees/release-psp2-2`, симлинк `frontend/node_modules` на `.worktrees/_psp2-node/node_modules` создан |
+| Слияние WMS-530 (+531/532/534/516 постановка) | `af83081b09d3983131072b090d1c58dfb94aed36` | 2 конфликта: `docs/KANONICHESKIY_BACKLOG.md` (три карточки задач пакета «один остаток», сведены с уже влитыми) и `frontend/src/screens/v2/SellerProductsStockScreen.tsx` (модель WMS-548 `items`/`isProductItem` совмещена с трёхстрочным `ProductStockLines` WMS-530/532 — по образцу уже готового разрешения в `origin/mockup/psp2-clickable`; старая ячейка «В ячейках/На ФФ/Свободный FBO» с полями `quantity_in_storage` и т. п., которых больше нет в типе `StockSummaryRow`, заменена на `ProductStockLines`). `AGENTS.md`/`CLAUDE.md` синхронно дополнены правилом «остаток ≠ расположение» — сверено побайтно |
+| Merge-миграция alembic | `824f4771` (`20260928_0563_merge_psp2_2_heads.py`, `down_revision=("20260925_0530","20260927_0561")`) | Миграция WMS-516/530 форкнулась от `20260924_0526`, как и уже слитая `20260927_0561` — одна merge-точка |
+| Слияние WMS-531 | `f43ccb1c` | Без конфликтов |
+| Слияние WMS-497 | `64abec1b` | 2 конфликта: импорт в `inventory_count_service.py` (объединены оба набора импортов) и `docs/KANONICHESKIY_BACKLOG.md`. Своя миграция `20260927_0497` |
+| Merge-миграция alembic | `55ef0318` (`20260928_0564_merge_wms497_psp2_2.py`, `down_revision=("20260927_0497","20260928_0563")`) | Одна голова `20260928_0564` |
+| Слияние WMS-490 (карточка товара) | `2aa492ae` | 2 конфликта: `frontend/src/App.tsx` (пропы `canManageCatalog`+`addressStorageEnabled`+`canViewMovements`+`onOpenInbound` объединены) и `FfProductsCatalogScreen.tsx` (аналогично, тип `Props` и деструктуризация) |
+| Слияние WMS-490 D4 (вкладка «Движения») | `7b03dd39` | 4 конфликта: `docs/KANONICHESKIY_BACKLOG.md`; `reporting_service.py` (докстринг объединён); `FfReportsPage.tsx` (инлайновая таблица заменена на вынесенный `ProductMovementsTable`, сохранена пагинация «Загрузить ещё» из финального WMS-531 — устаревший `movementsTruncated`/`movementsLimit` из более старой версии ветки не перенесён, этих переменных больше нет нигде в файле); `ProductCardMovementsTab.tsx` (взята реальная реализация ветки с опциональными `stockVersion?`/`active?`, а не пустой контракт-заглушка из WMS-490 базовой ветки) |
+| Влит свежий `origin/etalon` (выпуск 1 через PR #281) | `d2765bd1` | Без конфликтов — release-2 уже содержал всю историю release-1 |
+| Слияние WMS-516 repair-fix (`feat/wms516-repair-fix`, `d8d724d6`) | `e946fa75` | Без конфликтов. Миграций нет |
+| Слияние приёмки WMS-490 аналитиком (`d81e88a9`) | `f0895320` | Без конфликтов, только `docs/requirements/WMS-490.md` |
+| Обновление карточек бэклога (WMS-490 → «принято», WMS-516 → факт фикса ремонта) | `03e6b611` | — |
+
+### Проверки (один прогон)
+
+`ruff check .` — все проверки пройдены. `mypy .` — Success, 524 source files. `pytest -n auto
+tests/test_wms530_single_stock.py tests/test_reports_wms531_review_fixes.py
+tests/test_inventory_count_print_sheet.py tests/test_wms490_product_card_api.py
+tests/test_wms490_product_movements.py` — 57 passed, 2 skipped (нужен PostgreSQL). `alembic heads` —
+одна голова `20260928_0564`. `npx tsc --noEmit -p tsconfig.app.json` — без ошибок. `npm run build` —
+успешно. `bash scripts/ci/check-backlog-ref.sh origin/etalon` — «Гейт бэклога пройден».
+
+### GATE-516 — обязательно после выкладки в etalon, до production
+
+Аналитик принял WMS-516 только «к staging» (раздел 15 `docs/requirements/WMS-516.md`), не к production.
+Перед боевой выкладкой этого выпуска обязательны по точному деплойному SHA: (1) применить Alembic
+и отдельно подтвердить фактический deployed SHA на staging; (2) на изолированном PostgreSQL staging —
+fresh upgrade, downgrade до `20260921_0490` и повторный upgrade с проверкой reserved-identity trigger
+и recursive guards; (3) на PostgreSQL повторить весь `test_wms516_physical_warehouse.py` целиком,
+включая два локально пропущенных сценария, и API-регрессии с включёнными DB guards (конкурентность,
+lock timeout, replay после потери ответа, stale между prepare/apply, rollback drift); (4) повторить
+preflight unique constraints/indexes на PostgreSQL, включая partial/expression индексы; (5) на
+синтетическом staging-наборе воспроизвести реальный кейс 627 единиц (619 box + 8 loose) с
+prepare/apply/verify и повтором run — без дублей и с сохранением истории; (6) глазами проверить оба
+режима адресного хранения на существующих экранах; (7) выполнить scoped-публикацию на тестовых
+product ID с readback и без удвоения при потере ответа; (8) зафиксировать CI и staging evidence в
+документе. Только после всех восьми шагов разовая CLI-команда `backend/app/cli/repair_physical_warehouses.py`
+(в этом выпуске — уже с фиксом `feat/wms516-repair-fix`) может запускаться на реальных складах FBS WB.

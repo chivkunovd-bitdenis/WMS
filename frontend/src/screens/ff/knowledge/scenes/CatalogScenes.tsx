@@ -369,7 +369,6 @@ function CatalogScreen() {
       sellers={SELLERS}
       warehouses={WAREHOUSES}
       canManageCatalog
-      addressStorageEnabled
     />
   )
 }

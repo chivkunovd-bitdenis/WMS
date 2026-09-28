@@ -31,6 +31,8 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { ProductStockLines } from '../../components/ProductStockLines'
+import { formatStockQty } from '../../utils/formatStockQty'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import { MarketplaceChip, MarketplaceIcon, type MarketplaceKind } from '../../ui-kit'
@@ -87,20 +89,16 @@ type SellerCatalogPage = {
 type FulfillmentFilter = 'all' | 'yes' | 'no'
 
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
-// запрос и формат, что и в каталоге фулфилмента (см. CAT-20); не на ФФ карточки
-// в этом ответе не участвуют — им остаток не считается (R7).
+// запрос и те же три числа Остаток / Резерв / Доступно, что в каталоге
+// фулфилмента (CAT-20, WMS-532 R4); не на ФФ карточки в этом ответе не
+// участвуют — им остаток не считается (R7).
 type StockSummaryRow = {
   product_id: string
   sku_code: string
   product_name: string
   quantity: number
-  quantity_in_sorting: number
-  quantity_in_storage: number
   reserved: number
   available: number
-  quantity_fbs: number
-  quantity_reserved_directions: number
-  quantity_free_fbo: number
 }
 
 // Направления остатка (резервы) — только чтение. Механику резервирования
@@ -373,7 +371,6 @@ export async function syncSellerCatalogMarketplaces(
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
-  addressStorageEnabled?: boolean
   sellerId: string
   sellerName: string
   warehouses: Array<{ id: string; name: string; code?: string; is_operational?: boolean }>
@@ -382,7 +379,6 @@ type Props = {
 export function SellerProductsStockScreen({
   token,
   authHeaders,
-  addressStorageEnabled = true,
   sellerId,
   sellerName,
   warehouses,
@@ -1007,15 +1003,18 @@ export function SellerProductsStockScreen({
             },
           }}
         >
+          {/* «Остаток» шире за счёт артикулов (WMS-532 R3, R4): на 1024 px в 10 %
+              не помещалось даже «Доступно 27», а «−1 234 567» срезалось. Артикулы
+              и SKU по-прежнему в одну строку с многоточием и подсказкой. */}
           <colgroup>
             <col style={{ width: '5%' }} />
             <col style={{ width: '5%' }} />
             <col style={{ width: '10.5%' }} />
-            <col style={{ width: '17.5%' }} />
-            <col style={{ width: '17%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '14.5%' }} />
             <col style={{ width: '10.5%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '15%' }} />
             <col style={{ width: '6%' }} />
             <col style={{ width: '4%' }} />
             <col style={{ width: '7.5%' }} />
@@ -1182,38 +1181,16 @@ export function SellerProductsStockScreen({
                   </TableCell>
                   <TableCell align="right">
                     {onFulfillment ? (
-                      <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                        {addressStorageEnabled ? (
-                          <Typography
-                            variant="caption"
-                            sx={{ fontSize: '0.65rem' }}
-                            data-testid={`seller-catalog-stock-in-storage-${row.id}`}
-                            title={`В ячейках ${bal?.quantity_in_storage ?? 0}`}
-                            noWrap
-                          >
-                            В ячейках {bal?.quantity_in_storage ?? 0}
-                          </Typography>
-                        ) : null}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.65rem' }}
-                          data-testid={`seller-catalog-stock-on-hand-${row.id}`}
-                          title={`На ФФ ${bal?.quantity ?? 0}`}
-                          noWrap
-                        >
-                          На ФФ {bal?.quantity ?? 0}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.65rem' }}
-                          data-testid={`seller-catalog-stock-free-fbo-${row.id}`}
-                          title={`Свободный FBO ${bal?.quantity_free_fbo ?? bal?.quantity ?? 0}`}
-                        >
-                          Свободный FBO {bal?.quantity_free_fbo ?? bal?.quantity ?? 0}
-                        </Typography>
-                      </Stack>
+                      <ProductStockLines
+                        totals={{
+                          onHand: bal?.quantity ?? 0,
+                          reserved: bal?.reserved ?? 0,
+                          available: bal?.available ?? 0,
+                        }}
+                        productId={row.id}
+                        testIdPrefix="seller-catalog-stock"
+                        fontSize="0.65rem"
+                      />
                     ) : null}
                   </TableCell>
                   <TableCell sx={{ minWidth: 0 }}>
@@ -1387,21 +1364,23 @@ export function SellerProductsStockScreen({
                   {reservesProduct.sku_code} · {reservesProduct.name}
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={2}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Резервы
-                  </Typography>
-                  <Typography variant="h6">{reservesStock?.quantity_reserved_directions ?? 0} шт</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Свободный FBO
-                  </Typography>
-                  <Typography variant="h6">
-                    {reservesStock?.quantity_free_fbo ?? reservesStock?.quantity ?? 0} шт
-                  </Typography>
-                </Box>
+              {/* Те же три числа, что в ячейке «Остаток» этой строки (WMS-532 R5):
+                  направления ниже — лишь часть резерва. */}
+              <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2, rowGap: 1 }}>
+                {[
+                  { key: 'on-hand', label: 'Остаток', value: reservesStock?.quantity ?? 0 },
+                  { key: 'reserved', label: 'Резерв', value: reservesStock?.reserved ?? 0 },
+                  { key: 'available', label: 'Доступно', value: reservesStock?.available ?? 0 },
+                ].map((item) => (
+                  <Box key={item.key} data-testid={`seller-reserves-${item.key}`}>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.label}
+                    </Typography>
+                    <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+                      {formatStockQty(item.value)} шт
+                    </Typography>
+                  </Box>
+                ))}
               </Stack>
               <Divider />
               <Stack spacing={1}>

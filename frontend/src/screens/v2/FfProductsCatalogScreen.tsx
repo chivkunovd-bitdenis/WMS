@@ -43,6 +43,8 @@ import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContai
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { ProductStockLines } from '../../components/ProductStockLines'
+import { formatStockQty } from '../../utils/formatStockQty'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
@@ -55,6 +57,7 @@ import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
 import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
 import { MarketplaceChip } from '../../ui-kit'
+import { ProductCardDialog } from './product-card/ProductCardDialog'
 
 type SellerRow = { id: string; name: string }
 type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
@@ -104,19 +107,16 @@ type FfCatalogPage = {
 }
 
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
-// запрос, которым раньше пользовался селлерский экран (см. CAT-11/CAT-12).
+// запрос, что у селлерского экрана (см. CAT-11/CAT-12). Показываются только
+// Остаток / Резерв / Доступно организации (WMS-530 R1–R3, WMS-532); прежние
+// поля ответа (в ячейках, свободный FBO) экран больше не читает.
 type StockSummaryRow = {
   product_id: string
   sku_code: string
   product_name: string
   quantity: number
-  quantity_in_sorting: number
-  quantity_in_storage: number
   reserved: number
   available: number
-  quantity_fbs: number
-  quantity_reserved_directions: number
-  quantity_free_fbo: number
 }
 
 type StockDirectionRow = {
@@ -162,6 +162,10 @@ type Props = {
   sellers: SellerRow[]
   warehouses: WarehouseRow[]
   canManageCatalog?: boolean; addressStorageEnabled?: boolean
+  /** Доступен отчёт «Остатки и движения» — решает, видна ли вкладка «Движения» в карточке товара (WMS-490, R3). */
+  canViewMovements?: boolean
+  /** Открыть документ приёмки из вкладки «Движения» карточки товара — как у отчёта. */
+  onOpenInbound?: (id: string) => void
 }
 
 function humanFfCatalogError(message: string): string {
@@ -214,6 +218,8 @@ export function FfProductsCatalogScreen({
   sellers,
   warehouses,
   canManageCatalog = false, addressStorageEnabled = true,
+  canViewMovements = false,
+  onOpenInbound,
 }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -223,7 +229,7 @@ export function FfProductsCatalogScreen({
   // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
   // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
   // действий липкая справа и из виду не уходит.
-  const tableMinWidth = 1488
+  const tableMinWidth = 1518
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -261,6 +267,9 @@ export function FfProductsCatalogScreen({
   // WMS-469: all three entries use one container; this screen owns selection only.
   const [fbsDialogRows, setFbsDialogRows] = useState<FfCatalogRow[] | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
+
+  // ── Карточка товара (WMS-490): строка каталога открывает окно поверх него ──
+  const [cardRow, setCardRow] = useState<FfCatalogRow | null>(null)
 
   // ── Ручное объединение двух карточек (WMS-349) ──────────────────────────
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -530,10 +539,8 @@ export function FfProductsCatalogScreen({
       return {
         ...p,
         stock_on_hand: bal?.quantity ?? 0,
-        stock_in_storage: bal?.quantity_in_storage ?? 0,
-        stock_fbs: bal?.quantity_fbs ?? 0,
-        stock_reserved_directions: bal?.quantity_reserved_directions ?? 0,
-        stock_free_fbo: bal?.quantity_free_fbo ?? bal?.quantity ?? 0,
+        stock_reserved: bal?.reserved ?? 0,
+        stock_available: bal?.available ?? 0,
       }
     })
   }, [catalog, stock])
@@ -1159,7 +1166,7 @@ export function FfProductsCatalogScreen({
               <col style={{ width: 130 }} />
               <col style={{ width: 64 }} />
               <col style={{ width: 110 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 160 }} />{/* «Остаток»: «Доступно −1 234 567» целиком в одну строку (WMS-532 R3); длиннее — число переносится под подпись */}
               <col style={{ width: 124 }} />{/* «В Wildberries»: на 70px заголовок резало до «В Wildberr», а значение до «не перед» */}
               <col style={{ width: 70 }} />
               <col style={{ width: 110 }} />
@@ -1204,12 +1211,19 @@ export function FfProductsCatalogScreen({
                 const barcode = resolveProductPrimaryBarcode(displayMeta)
                 const markingCount = p.marking_available_count ?? 0
                 return (
-                  <TableRow key={p.id} hover data-testid="ff-product-row">
+                  <TableRow
+                    key={p.id}
+                    hover
+                    data-testid="ff-product-row"
+                    onClick={() => setCardRow(p)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <TableCell padding="checkbox">
                       <Checkbox
                         checked={selectedIds.has(p.id)}
                         disabled={!canManageCatalog}
                         onChange={(e) => toggleRowSelected(p.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
                         data-testid={`ff-catalog-select-${p.id}`}
                       />
                     </TableCell>
@@ -1289,34 +1303,15 @@ export function FfProductsCatalogScreen({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                        {addressStorageEnabled ? <Typography
-                          variant="caption"
-                          data-testid={`ff-catalog-stock-in-storage-${p.id}`}
-                          title={`В ячейках ${p.stock_in_storage}`}
-                          noWrap
-                        >
-                          В ячейках {p.stock_in_storage}
-                        </Typography> : null}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          data-testid={`ff-catalog-stock-on-hand-${p.id}`}
-                          title={`На ФФ ${p.stock_on_hand}`}
-                          noWrap
-                        >
-                          На ФФ {p.stock_on_hand}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          data-testid={`ff-catalog-stock-free-fbo-${p.id}`}
-                          title={`Свободный FBO ${p.stock_free_fbo}`}
-                          noWrap
-                        >
-                          Свободный FBO {p.stock_free_fbo}
-                        </Typography>
-                      </Stack>
+                      <ProductStockLines
+                        totals={{
+                          onHand: p.stock_on_hand,
+                          reserved: p.stock_reserved,
+                          available: p.stock_available,
+                        }}
+                        productId={p.id}
+                        testIdPrefix="ff-catalog-stock"
+                      />
                     </TableCell>
                     {/* Сколько из свободного остатка уходит в Wildberries.
                         Владелец просил видеть это прямо в каталоге, рядом с
@@ -1368,7 +1363,10 @@ export function FfProductsCatalogScreen({
                         size="small"
                         variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
                         color={p.has_packaging_instructions ? 'primary' : 'inherit'}
-                        onClick={() => openPackagingEdit(p)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openPackagingEdit(p)
+                        }}
                         disabled={!canManageCatalog}
                         data-testid={`ff-packaging-edit-${p.id}`}
                         aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
@@ -1394,11 +1392,17 @@ export function FfProductsCatalogScreen({
                         />
                       ) : null}
                     </TableCell>
-                    <TableCell data-testid={`ff-catalog-reserves-cell-${p.id}`} sx={{ minWidth: 0 }}>
+                    <TableCell
+                      data-testid={`ff-catalog-reserves-cell-${p.id}`}
+                      sx={{ minWidth: 0 }}
+                    >
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => void openDirections(p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void openDirections(p.id)
+                        }}
                         data-testid={`ff-catalog-reserves-${p.id}`}
                       >
                         Резервы
@@ -1411,9 +1415,13 @@ export function FfProductsCatalogScreen({
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         {/* Настройка остатка FBS по одному товару — как на
                             согласованном макете: значок в строке открывает ту же
-                            модалку с ползунками, что и массовая кнопка сверху. */}
+                            модалку с ползунками, что и массовая кнопка сверху.
+                            stopPropagation — на span-обёртке Tooltip, а не на
+                            всей ячейке: пустое место рядом со значками должно
+                            открывать карточку (R1, ревью №1 F7); обёртка ловит
+                            клик и по выключенной кнопке. */}
                         <Tooltip title="Остаток для FBS">
-                          <span>
+                          <span onClick={(e) => e.stopPropagation()}>
                             <IconButton
                               size="small"
                               aria-label={`Остаток для FBS ${p.sku_code}`}
@@ -1428,7 +1436,7 @@ export function FfProductsCatalogScreen({
                         <Tooltip
                           title={`Коды маркировки: ${markingCount}`}
                         >
-                          <span>
+                          <span onClick={(e) => e.stopPropagation()}>
                             <IconButton
                               size="small"
                               aria-label={`Коды маркировки ${p.sku_code}: ${markingCount}`}
@@ -1450,13 +1458,15 @@ export function FfProductsCatalogScreen({
                             </IconButton>
                           </span>
                         </Tooltip>
-                        <ProductBarcodePrintButton
-                          meta={displayMeta}
-                          testId={`ff-catalog-print-${p.id}`}
-                          productId={p.id}
-                          requiresHonestSign={p.requires_honest_sign}
-                          markingAvailable={markingCount}
-                        />
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <ProductBarcodePrintButton
+                            meta={displayMeta}
+                            testId={`ff-catalog-print-${p.id}`}
+                            productId={p.id}
+                            requiresHonestSign={p.requires_honest_sign}
+                            markingAvailable={markingCount}
+                          />
+                        </span>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -1665,21 +1675,23 @@ export function FfProductsCatalogScreen({
                     {directionProduct.sku_code} · {directionProduct.name}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={2}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Резервы
-                    </Typography>
-                    <Typography variant="h6">
-                      {directionProduct.stock_reserved_directions} шт
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Свободный FBO
-                    </Typography>
-                    <Typography variant="h6">{directionProduct.stock_free_fbo} шт</Typography>
-                  </Box>
+                {/* Те же три числа, что в ячейке «Остаток» этой строки (WMS-532 R5):
+                    направления ниже — лишь часть резерва. */}
+                <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2, rowGap: 1 }}>
+                  {[
+                    { key: 'on-hand', label: 'Остаток', value: directionProduct.stock_on_hand },
+                    { key: 'reserved', label: 'Резерв', value: directionProduct.stock_reserved },
+                    { key: 'available', label: 'Доступно', value: directionProduct.stock_available },
+                  ].map((item) => (
+                    <Box key={item.key} data-testid={`ff-stock-directions-${item.key}`}>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.label}
+                      </Typography>
+                      <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+                        {formatStockQty(item.value)} шт
+                      </Typography>
+                    </Box>
+                  ))}
                 </Stack>
                 <Divider />
                 <Stack spacing={1}>
@@ -1835,9 +1847,7 @@ export function FfProductsCatalogScreen({
           <DialogContent>
             {deleteTarget ? (
               <Typography variant="body2" color="text.secondary">
-                {deleteTarget.direction.is_fbs
-                  ? `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено из FBS-пула.`
-                  : `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут свободным FBO-остатком, если не заняты другими операциями.`}
+                {`Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут доступными, если не заняты другими операциями.`}
               </Typography>
             ) : null}
           </DialogContent>
@@ -1924,6 +1934,23 @@ export function FfProductsCatalogScreen({
             onClose={() => setFbsDialogRows(null)}
             onChanged={() => void load()}
             onLoadError={setFbsDialogError}
+          />
+        ) : null}
+
+        {cardRow ? (
+          <ProductCardDialog
+            row={cardRow}
+            token={token}
+            authHeaders={authHeaders}
+            canManageCatalog={canManageCatalog}
+            canViewMovements={canViewMovements}
+            addressStorageEnabled={addressStorageEnabled}
+            warehouses={warehouses}
+            onOpenInbound={onOpenInbound}
+            onClose={(changed) => {
+              setCardRow(null)
+              if (changed) void load()
+            }}
           />
         ) : null}
       </Box>

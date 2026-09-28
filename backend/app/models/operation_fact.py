@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -48,6 +49,15 @@ class OperationFact(Base):
     __tablename__ = "operation_facts"
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_operation_facts_tenant_id_id"),
+        # Migration 20260826_0111 added this composite FK on the real schema; the
+        # WMS-516 repair schema check (physical_warehouse_repair_service._lock)
+        # compares deployed FKs against this metadata and needs it declared here,
+        # in addition to the plain warehouse_id -> warehouses.id FK below.
+        ForeignKeyConstraint(
+            ["tenant_id", "warehouse_id"],
+            ["warehouses.tenant_id", "warehouses.id"],
+            name="fk_operation_facts_tenant_warehouse",
+        ),
         Index(
             "uq_operation_facts_tenant_idempotency",
             "tenant_id",
@@ -118,7 +128,12 @@ class OperationFact(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller | None] = relationship("Seller")
-    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
+    # Two FK paths now reach warehouses.id: the plain warehouse_id column and
+    # the composite tenant-scoped one added below. Pin the relationship to the
+    # plain column, matching every other Warehouse relationship in the app.
+    warehouse: Mapped[Warehouse | None] = relationship(
+        "Warehouse", foreign_keys=[warehouse_id]
+    )
     actor: Mapped[User | None] = relationship("User")
     reversal_of: Mapped[OperationFact | None] = relationship("OperationFact", remote_side=[id])
     lines: Mapped[list[OperationFactLine]] = relationship(

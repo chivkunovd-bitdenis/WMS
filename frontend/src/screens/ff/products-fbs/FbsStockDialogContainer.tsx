@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FbsStockDialog, type SavedRule } from './FbsStockDialog'
+import { FbsStockDialog, FbsStockEmbeddedBody, type FbsStockBodyProps, type SavedRule } from './FbsStockDialog'
 import {
   toStockDialogProduct,
   type FbsStockDialogData,
@@ -49,6 +49,9 @@ export function FbsStockDialogContainer({
   onChanged,
   onLoadError,
   session: sessionOverride,
+  embedded = false,
+  footerSlotEl = null,
+  onBusyChange,
 }: {
   token: string
   sellerId: string
@@ -66,6 +69,17 @@ export function FbsStockDialogContainer({
   onLoadError: (message: string) => void
   /** Подмена сети в тестах. */
   session?: StockDialogSession
+  /**
+   * WMS-490 D6: тело встроено во вкладку «Задать остаток» карточки товара —
+   * без рамки диалога, а провал загрузки не закрывает карточку (`onClose` не
+   * вызывается, только `onLoadError`; хозяин вкладки сам показывает
+   * `ErrorNotice` и держит карточку открытой, R16).
+   */
+  embedded?: boolean
+  /** Куда порталить «Отмена»/«Сохранить» в embedded-режиме — нижняя панель карточки. */
+  footerSlotEl?: HTMLElement | null
+  /** Идёт ли запись — embedded-хозяин запрещает переключать вкладки, пока не завершится. */
+  onBusyChange?: (busy: boolean) => void
 }) {
   const [data, setData] = useState<FbsStockDialogData | null>(null)
   // Незавершённые запросы. Окно заперто, пока не завершены все: конец одного
@@ -104,18 +118,50 @@ export function FbsStockDialogContainer({
       .catch((e: unknown) => {
         if (!alive) return
         onLoadError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
-        onClose()
+        // Окно закрывается на неудачной загрузке (R16 из его собственной
+        // истории: нечего показывать, кроме сообщения снаружи). Встроенная
+        // вкладка карточки товара — наоборот: карточка не закрывается,
+        // сообщение остаётся во вкладке, повтор — переоткрытием вкладки или
+        // карточки (WMS-490 R16).
+        if (!embedded) onClose()
       })
     return () => {
       alive = false
     }
-    // onLoadError/onClose — обработчики родителя, на них загрузка не завязана.
+    // onLoadError/onClose/embedded — обработчики и режим родителя, на них
+    // загрузка не завязана.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, chosenKey])
+
+  // Пока идёт запись, хозяин встроенной вкладки не даёт переключиться на
+  // другую вкладку карточки — иначе контейнер размонтируется посреди запроса
+  // (R16, R17: «конец одного не должен разблокировать ввод, пока идёт другой»
+  // относится и к самому факту, что запрос ещё жив).
+  useEffect(() => {
+    if (embedded) onBusyChange?.(busy)
+  }, [embedded, busy, onBusyChange])
+  useEffect(() => {
+    if (!embedded) return undefined
+    return () => onBusyChange?.(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded])
 
   function close() {
     onClose()
     if (changedRef.current) onChanged?.()
+  }
+
+  // Немедленное действие и частичное/неудачное «Сохранить» помечают
+  // `changedRef`, но не закрывают окно — `onChanged` из close() выше сработает
+  // только когда окно всё-таки закроется через сам контейнер. У встроенной
+  // вкладки карточки товара есть и другой путь закрытия — общая «Закрыть»,
+  // Escape, фон, — который обходит close() контейнера целиком (ревью WMS-490,
+  // F4). Поэтому в embedded-режиме сообщаем наверх сразу в момент записи, не
+  // дожидаясь close(); обычное окно эту тонкость не получает — оно закрывается
+  // только через контейнер, и раннее сообщение ему не нужно.
+  function notifyChanged() {
+    changedRef.current = true
+    if (embedded) onChanged?.()
   }
 
   function begin() {
@@ -156,7 +202,7 @@ export function FbsStockDialogContainer({
       if (outcome.data) setData(outcome.data)
       else staleRef.current = true
       if (!outcome.ok) setActionError(outcome.message)
-      changedRef.current = true
+      notifyChanged()
     } finally {
       end()
     }
@@ -202,7 +248,7 @@ export function FbsStockDialogContainer({
             // Свободный остаток изменился между открытием и сохранением, и сервер
             // сохранил меньше запрошенного. Успех есть, но не тот, что на экране:
             // показываем фактически сохранённое и подпись с ограничившим товаром.
-            changedRef.current = true
+            notifyChanged()
             const savedById = new Map(outcome.items.map((one) => [one.product_id, one]))
             setData((current) =>
               current
@@ -233,7 +279,7 @@ export function FbsStockDialogContainer({
             // повтор того же запроса состояние не удвоит (R22).
             if (outcome.data) setData(outcome.data)
             setActionError(outcome.message)
-            changedRef.current = true
+            notifyChanged()
             return
         }
       } finally {
@@ -243,25 +289,29 @@ export function FbsStockDialogContainer({
   }
 
   if (!data) return null
-  return (
-    <FbsStockDialog
-      open
-      sellerName={sellerName}
-      products={data.products}
-      bindings={data.bindings}
-      cabinets={data.cabinets}
-      wmsWarehouses={selectableWmsWarehouses(warehouses)}
-      canEditBindings={canEditBindings}
-      busy={busy}
-      onClose={close}
-      onSave={save}
-      onAddBinding={canEditBindings ? addBinding : undefined}
-      onChangeWmsWarehouse={canEditBindings ? changeWmsWarehouse : undefined}
-      onServedChange={canEditBindings ? setServed : undefined}
-      actionError={actionError}
-      wbWarehousesError={data.wbWarehousesError}
-      ozonWarehousesError={data.ozonWarehousesError}
-      saved={saved}
-    />
-  )
+  // Оба режима собираются из одних и тех же данных и обработчиков — окно и
+  // встроенная вкладка карточки товара расходятся только рамкой (WMS-490 D6,
+  // R12: «в точности то же самое»).
+  const bodyProps: FbsStockBodyProps = {
+    sellerName,
+    products: data.products,
+    bindings: data.bindings,
+    cabinets: data.cabinets,
+    wmsWarehouses: selectableWmsWarehouses(warehouses),
+    canEditBindings,
+    busy,
+    onClose: close,
+    onSave: save,
+    onAddBinding: canEditBindings ? addBinding : undefined,
+    onChangeWmsWarehouse: canEditBindings ? changeWmsWarehouse : undefined,
+    onServedChange: canEditBindings ? setServed : undefined,
+    actionError,
+    wbWarehousesError: data.wbWarehousesError,
+    ozonWarehousesError: data.ozonWarehousesError,
+    saved,
+  }
+  if (embedded) {
+    return <FbsStockEmbeddedBody {...bodyProps} footerSlotEl={footerSlotEl} />
+  }
+  return <FbsStockDialog open {...bodyProps} />
 }

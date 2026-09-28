@@ -666,6 +666,7 @@ async def sync_binding_stocks(
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
     zero_refresh_only: bool = False,
+    product_ids: set[uuid.UUID] | None = None,
 ) -> FbsStockSyncResult:
     """Publish absolute FBS stock amounts for one seller WB warehouse binding."""
     limiter = rate_limiter or AsyncStockSyncRateLimiter()
@@ -711,6 +712,16 @@ async def sync_binding_stocks(
             products, publish_quantities, existing_items, product_block_errors,
             refresh_zero_product_ids=refresh_zero_product_ids,
         )
+
+        if product_ids is not None:
+            # Detect duplicate marketplace identifiers against the full catalogue
+            # first: selecting a subset must not hide an ambiguous WB chrt_id.
+            targets = [target for target in targets if target.product_id in product_ids]
+            blocked_targets = [target for target in blocked_targets
+                               if target.product_id in product_ids]
+            skipped_missing = [pid for pid in skipped_missing if pid in product_ids]
+            products = [product for product in products if product.id in product_ids]
+            conflict_chrts &= {int(p.wb_chrt_id) for p in products if p.wb_chrt_id is not None}
 
         if zero_refresh_only:
             targets = [target for target in targets if target.refresh_zero]

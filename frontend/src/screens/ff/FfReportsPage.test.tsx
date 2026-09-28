@@ -1,12 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { FfReportsPage, ReportNotices, reportCsvDisabledReason } from './FfReportsPage'
+import { FfReportsPage, ReportNotices, reportExcelDisabledReason } from './FfReportsPage'
 
 describe('FfReportsPage pagination actions', () => {
-  it('keeps CSV primary and renders pagination as outlined disabled navigation', () => {
+  it('keeps Excel primary and renders pagination as outlined disabled navigation', () => {
     const markup = renderToStaticMarkup(<FfReportsPage token="test-token" />)
 
-    expect(markup).toMatch(/<button[^>]*class="[^"]*MuiButton-contained[^"]*"[^>]*data-testid="ff-reports-download-csv"/)
+    expect(markup).toMatch(/<button[^>]*class="[^"]*MuiButton-contained[^"]*"[^>]*data-testid="ff-reports-download-excel"/)
+    expect(markup).not.toContain('ff-reports-download-csv')
+    expect(markup).not.toContain('ff-reports-warehouse')
     expect(markup).toMatch(/<button[^>]*class="[^"]*MuiButton-outlined[^"]*"[^>]*disabled=""[^>]*data-testid="ff-reports-previous-page"/)
     expect(markup).toMatch(/<button[^>]*class="[^"]*MuiButton-outlined[^"]*"[^>]*disabled=""[^>]*data-testid="ff-reports-next-page"/)
     expect(markup).toContain('aria-label="Это первая страница"')
@@ -23,17 +25,17 @@ describe('FfReportsPage pagination actions', () => {
 
 
 describe('report data guards after seller drill-down', () => {
-  it('allows CSV when the seller table loaded, without requiring an expanded product', () => {
-    expect(reportCsvDisabledReason({
-      periodError: '', csvLoading: false, tableError: false,
+  it('allows Excel when the seller table loaded, without requiring an expanded product', () => {
+    expect(reportExcelDisabledReason({
+      periodError: '', excelLoading: false, tableError: false,
       loading: false, loadedRowCount: 1,
     })).toBeUndefined()
-    expect(reportCsvDisabledReason({
-      periodError: '', csvLoading: false, tableError: false,
+    expect(reportExcelDisabledReason({
+      periodError: '', excelLoading: false, tableError: false,
       loading: false, loadedRowCount: 0,
     })).toContain('нечего выгружать')
-    expect(reportCsvDisabledReason({
-      periodError: '', csvLoading: false, tableError: true,
+    expect(reportExcelDisabledReason({
+      periodError: '', excelLoading: false, tableError: true,
       loading: false, loadedRowCount: 1,
     })).toContain('не загружены')
   })

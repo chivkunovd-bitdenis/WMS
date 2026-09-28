@@ -32,6 +32,7 @@ import {
   type ApiSummary,
   recordCountFound,
   fetchCount,
+  fetchPrintSheet,
   putCountLines,
   postCountOnly,
   markCountPlaceEmpty,
@@ -41,6 +42,7 @@ import {
   deleteCountContainer,
   InventoryHttpError,
 } from './inventoryCountApi'
+import { printInventorySheet } from './printInventorySheet'
 
 // Экран инвентаризации, подключённый к серверу.
 //
@@ -248,6 +250,47 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось провести')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // WMS-497: печать листа — отдельный от очереди операций документа запрос.
+  // Он ничего не сохраняет и не проводит, поэтому не идёт через ops.action.
+  //
+  // `printingSheet` (state) только красит кнопку — React обновляет state не
+  // синхронно, а следующим рендером, и два клика подряд (быстрее, чем успевает
+  // отрисоваться кнопка) оба застают его ещё «false» и оба уходят в сеть —
+  // проверено Playwright: без рефа второе окно печати всё-таки открывалось.
+  // `printingRef` — тот же флаг, но обычная переменная, меняется в момент
+  // присваивания, поэтому второй клик в тот же тик видит уже актуальное «true».
+  //
+  // Ревью Astra №1 (F1): флаг обязан держаться не только на время сетевого
+  // запроса, а до фактической попытки печати. printInventorySheet сама по
+  // себе синхронна (заводит iframe и назначает обработчик загрузки) и сразу
+  // возвращает управление — реальный `print()` браузер вызывает позже, после
+  // загрузки iframe и ещё 100 мс таймера. Раньше guard снимался сразу после
+  // этого синхронного возврата, то есть до print(), и повторное нажатие в
+  // этом промежутке успевало запустить второй запрос и второе окно печати.
+  // Теперь printInventorySheet возвращает Promise, который разрешается не
+  // раньше самой попытки печати, и guard ждёт именно его.
+  const [printingSheet, setPrintingSheet] = useState(false)
+  const printingRef = useRef(false)
+
+  async function printSheet() {
+    if (!count || printingRef.current) return
+    const id = count.id
+    printingRef.current = true
+    setPrintingSheet(true)
+    setError(null)
+    try {
+      const sheet = await fetchPrintSheet(tokenRef.current, id)
+      // Оператор мог уйти с документа, пока лист готовился, — тогда печатать
+      // уже нечего: окно печати документа, который он не смотрит, только мешает.
+      if (ops.currentId() === id) await printInventorySheet(sheet)
+    } catch (err) {
+      if (stillOpen(id, err)) setError(err instanceof Error ? err.message : 'Не удалось подготовить лист')
+    } finally {
+      printingRef.current = false
+      setPrintingSheet(false)
     }
   }
 
@@ -497,6 +540,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
+        onPrintSheet={() => void printSheet()}
+        printingSheet={printingSheet}
         pendingFound={view.pendingScans}
         onCreateContainer={(kind, cellId) => void createContainer(kind, cellId)}
         onMoveLine={(lineId, target) => void moveLine(lineId, target)}
