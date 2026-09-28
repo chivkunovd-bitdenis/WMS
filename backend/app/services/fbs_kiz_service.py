@@ -1445,6 +1445,7 @@ async def _commit_one_kiz_pair(
     session.add(marking)
     await session.flush()
     new_error: FbsKizError | None = None
+    new_write_accepted = False
     try:
         if current is not None:
             await _delete_sgtin_from_wb(order, http_client, token)
@@ -1460,13 +1461,18 @@ async def _commit_one_kiz_pair(
     except FbsKizError as exc:
         new_error = exc
     except marking_svc.FbsMarkingError as exc:
+        new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
     pending_error: FbsKizError | None = None
-    if new_error is not None and current is None:
+    # WMS-579: once WB answered the PUT of the new code, a replacement is no
+    # longer compensated: its unknown result is reconciled like a first binding.
+    # The old code is still restored when deleting it or writing the new one
+    # failed (WB refused the request or its answer was lost).
+    if new_error is not None and (current is None or new_write_accepted):
         # A lost PUT response or a failed read after PUT cannot undo the WB write.
-        ambiguous = (
+        ambiguous = new_write_accepted or (
             new_error.code == "wb_transport_error"
             or new_error.code == "wb_pending_confirmation"
             or new_error.code == "wb_upstream_error_408"
