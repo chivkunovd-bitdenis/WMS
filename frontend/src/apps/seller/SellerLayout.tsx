@@ -22,6 +22,38 @@ import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
 import { emptySellerPermissions, type SellerPermissions } from '../../utils/sellerPermissions'
 
+export type SellerNavItem = { key: string; label: string; to: string; testId: string }
+
+/**
+ * Пункты меню портала селлера в порядке отображения.
+ *
+ * Вынесено из JSX отдельной функцией, чтобы порядок и видимость по правам
+ * проверялись напрямую, без раскрытия постоянного Drawer (он рендерит
+ * содержимое только при `desktop`-медиазапросе).
+ */
+export function visibleSellerNavItems(base: string, permissions: SellerPermissions): SellerNavItem[] {
+  const items: SellerNavItem[] = []
+  if (permissions.documents) {
+    items.push({ key: 'documents', label: 'Документы', to: `${base}/documents`, testId: 'nav-seller-documents' })
+  }
+  if (permissions.products) {
+    items.push({ key: 'products', label: 'Товары', to: `${base}/products`, testId: 'nav-seller-products' })
+    items.push({ key: 'reports', label: 'Отчёты', to: `${base}/reports`, testId: 'nav-seller-reports' })
+  }
+  // WMS-549 R1: тот же гейт, что и у «Документы» — расчёты показывают стоимость
+  // тех же документов, а новое право владелец не просил.
+  if (permissions.documents) {
+    items.push({ key: 'billing', label: 'Расчёты', to: `${base}/billing`, testId: 'nav-seller-billing' })
+  }
+  if (permissions.honest_sign) {
+    items.push({ key: 'honest_sign', label: 'Честный знак', to: `${base}/honest-sign`, testId: 'nav-seller-honest-sign' })
+  }
+  if (permissions.settings || permissions.staff) {
+    items.push({ key: 'settings', label: 'Настройки', to: `${base}/settings`, testId: 'nav-seller-settings' })
+  }
+  return items
+}
+
 type Props = {
   children: ReactNode
   onLogout: () => void
@@ -136,31 +168,11 @@ export function SellerLayout({
         <Toolbar />
         <Box sx={{ p: 1 }}>
           <List dense aria-label="Разделы" onClick={() => setMenuOpen(false)}>
-            {permissions.documents ? (
-              <ListItemButton component={NavLink} to={`${base}/documents`} data-testid="nav-seller-documents">
-                <ListItemText primary="Документы" />
+            {visibleSellerNavItems(base, permissions).map((item) => (
+              <ListItemButton key={item.key} component={NavLink} to={item.to} data-testid={item.testId}>
+                <ListItemText primary={item.label} />
               </ListItemButton>
-            ) : null}
-            {permissions.products ? (
-              <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-seller-products">
-                <ListItemText primary="Товары" />
-              </ListItemButton>
-            ) : null}
-            {permissions.products ? (
-              <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-seller-reports">
-                <ListItemText primary="Отчёты" />
-              </ListItemButton>
-            ) : null}
-            {permissions.honest_sign ? (
-              <ListItemButton component={NavLink} to={`${base}/honest-sign`} data-testid="nav-seller-honest-sign">
-                <ListItemText primary="Честный знак" />
-              </ListItemButton>
-            ) : null}
-            {permissions.settings || permissions.staff ? (
-              <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-seller-settings">
-                <ListItemText primary="Настройки" />
-              </ListItemButton>
-            ) : null}
+            ))}
           </List>
           {onToggleShop && onSwitchShop ? (
             <SellerShopSidebar

@@ -49,6 +49,14 @@ async def test_products_import_all_pages_then_existing_order_maps_and_reserves_o
     assert created and order.product_id is None
     order.warehouse_id = warehouse.id
     await session.commit()
+
+    # WMS-548 R5: sync only ever touches cards already "on fulfilment" — mark
+    # card 205 selected by giving it a Product row before the full sync runs.
+    await products_sync.upsert_products_from_wb_cards(session, tenant.id, seller.id, [
+        {"nmID": 205, "vendorCode": "WMS277-205", "title": "Product 205",
+         "sizes": [{"chrtID": 205, "techSize": "0", "skus": ["BAR-205"]}]},
+    ])
+    await session.commit()
     cursors = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
@@ -72,8 +80,13 @@ async def test_products_import_all_pages_then_existing_order_maps_and_reserves_o
             session, tenant.id, seller.id, client,
         )
     assert cursors == [0, 100, 200]
-    assert result["cards_received"] == result["products_created"] == 205
-    assert await session.scalar(select(func.count(Product.id))) == 205
+    # Только карточка 205 была выбрана (уже был Product с её nmID) — все
+    # остальные 204 карточки этого прохода снимок обновляют, но товарами не
+    # становятся (WMS-548 R4/R5).
+    assert result["cards_received"] == 205
+    assert result["products_created"] == 0
+    assert result["products_updated"] == 1
+    assert await session.scalar(select(func.count(Product.id))) == 1
     assert await session.scalar(select(func.count(InventoryBalance.id))) == 0
     assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
     assert order.product_id is None  # Catalog import does not replay order history.

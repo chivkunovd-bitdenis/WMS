@@ -72,6 +72,13 @@ class Settings(BaseSettings):
             "real warehouse names while all mutating FBS calls remain on the emulator."
         ),
     )
+    wildberries_common_api_base: str = Field(
+        default="https://common-api.wildberries.ru",
+        description=(
+            "WB Common API host (seller-info and other account-level methods; "
+            "override in tests/mocks)."
+        ),
+    )
     ozon_seller_api_base: str = Field(
         default="https://api-seller.ozon.ru",
         validation_alias=AliasChoices("WMS_OZON_SELLER_API_BASE", "OZON_SELLER_API_BASE"),
@@ -147,6 +154,13 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Playwright/e2e: stub WB Marketplace order meta (marking) API "
+            "without calling the network."
+        ),
+    )
+    e2e_mock_wb_seller_info: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB GET /api/v1/seller-info (seller requisites lookup) "
             "without calling the network."
         ),
     )

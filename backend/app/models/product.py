@@ -38,6 +38,12 @@ class Product(Base):
         # Already present in migration 0111; required by tenant-safe billing FKs
         # when creating an isolated PostgreSQL schema from ORM metadata.
         UniqueConstraint("tenant_id", "id", name="uq_products_tenant_id_id"),
+        UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "id",
+            name="uq_products_tenant_seller_id",
+        ),
         # Артикул с размером уникален внутри продавца, а не на весь тенант: один и тот же
         # товар (например J308-24/36) может числиться и за Loviana, и за ООО «Фэшн» — это
         # разные юрлица и разные остатки. Тенантное ограничение молча резало импорт карточек
