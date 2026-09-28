@@ -53,6 +53,7 @@ DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
 # снимается в момент выставления и дальше не пересчитывается.
 SERVICE_LABELS = {
     "inbound": "Приёмка",
+    "return": "Возврат",
     "fbs_order": "FBS",
     "packing": "Упаковка",
     "marketplace_outbound": "Отгрузка",
