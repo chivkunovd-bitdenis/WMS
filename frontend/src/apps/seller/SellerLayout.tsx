@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link as RouterLink, NavLink } from 'react-router-dom'
 import {
   AppBar,
   Box,
@@ -20,7 +20,7 @@ import MenuIcon from '@mui/icons-material/Menu'
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
-import { emptySellerPermissions, type SellerPermissions } from '../../utils/sellerPermissions'
+import { emptySellerPermissions, firstAllowedSellerPath, type SellerPermissions } from '../../utils/sellerPermissions'
 
 export type SellerNavItem = { key: string; label: string; to: string; testId: string }
 
@@ -113,10 +113,19 @@ export function SellerLayout({
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: { xs: 0.5, md: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1.5 }, minWidth: 0 }}>
             {!desktop ? <IconButton aria-label="Открыть меню" onClick={() => setMenuOpen(true)} edge="start"><MenuIcon /></IconButton> : null}
-            <WmsBrandMark size={desktop ? 44 : 32} portal="seller" />
-            <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0, fontSize: { xs: 18, md: 28 } }}>
-              Короб ВМС
-            </Typography>
+            {/* WMS-567: логотип и «Короб ВМС» ведут на стартовую страницу — ту же, что
+                корень портала (firstAllowedSellerPath). «Бургер» и подпись в ссылку не входят. */}
+            <Box
+              component={RouterLink}
+              to={`${base}${firstAllowedSellerPath(permissions)}`}
+              data-testid="topbar-home-link"
+              sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1.5 }, minWidth: 0, color: 'inherit', textDecoration: 'none' }}
+            >
+              <WmsBrandMark size={desktop ? 44 : 32} portal="seller" />
+              <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0, fontSize: { xs: 18, md: 28 } }}>
+                Короб ВМС
+              </Typography>
+            </Box>
             <Typography
               variant="body2"
               color="text.secondary"
