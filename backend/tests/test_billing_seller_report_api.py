@@ -884,3 +884,31 @@ async def test_wms447_fbs_box_count_lands_in_totals_by_delivered_supply(
     details_b = await async_client.get(f"/billing/seller-report/sellers/{seller_b_id}/details?{params}", headers=headers)
     assert details_b.status_code == 200, details_b.text
     assert details_b.json()["totals"]["fbs_boxes"] == 1
+
+
+@pytest.mark.asyncio
+async def test_wms568_return_items_are_counted_apart_from_inbound(async_client) -> None:
+    """Возврат считается своей цифрой «Возвращено» и не попадает в «Принято»."""
+    headers, seller_id, email = await _admin(async_client)
+    occurred = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        for code, service, quantity in (("return_completed", "return", 5), ("inbound_completed", "inbound", 7)):
+            document_id = uuid.uuid4()
+            session.add(OperationFact(
+                tenant_id=user.tenant_id, seller_id=seller_id, marketplace=None,
+                operation_code=code, billable_service_code=service, source_kind="inbound_intake",
+                source_event_id=document_id, document_type="inbound_intake", document_id=document_id,
+                occurred_at=occurred, item_quantity=quantity, source="system",
+            ))
+        await session.commit()
+
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    details = await async_client.get(f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers)
+    assert summary.status_code == details.status_code == 200, (summary.text, details.text)
+    for totals in (summary.json()["totals"], summary.json()["rows"][0], details.json()["totals"]):
+        assert totals["return_items"] == 5
+        assert totals["inbound_items"] == 7
+    assert {row["service_code"] for row in details.json()["entries"]} == {"return", "inbound"}

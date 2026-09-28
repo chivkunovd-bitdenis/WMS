@@ -18,6 +18,7 @@ class SellerReportPhysicalTotals(BaseModel):
     fbs_items: int = 0
     # Коробов FBS, отгруженных (delivered_at заполнен) за период — WMS-447.
     fbs_boxes: int = 0
+    return_items: int = 0
 
 
 class SellerReportFinancialTotals(SellerReportPhysicalTotals):

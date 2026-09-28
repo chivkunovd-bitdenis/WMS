@@ -129,6 +129,9 @@ _NATURAL_GROUPS: dict[str, tuple[str, ...]] = {
     "packing_items": ("packing", "packaging"),
     "outbound_items": ("marketplace_outbound",),
     "fbs_items": ("fbs_order",),
+    # WMS-568: возврат — тот же документ приёмки, но своя услуга «return».
+    # В «Принято» он не входит, поэтому считается отдельной цифрой.
+    "return_items": ("return",),
 }
 
 

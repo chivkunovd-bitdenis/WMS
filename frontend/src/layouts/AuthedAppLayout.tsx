@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link as RouterLink, NavLink } from 'react-router-dom'
 import {
   AppBar,
   Box,
@@ -162,7 +162,15 @@ export function AuthedAppLayout({
         data-testid="app-topbar"
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+          {/* WMS-567: логотип и «Короб ВМС» ведут на главную — «Календарь отгрузок».
+              Ссылка роутера, как пункты меню: без перезагрузки и через защиту
+              несохранённых изменений. Вид шапки прежний, меняется только курсор. */}
+          <Box
+            component={RouterLink}
+            to={`${base}/dashboard`}
+            data-testid="topbar-home-link"
+            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, color: 'inherit', textDecoration: 'none' }}
+          >
             <WmsBrandMark size={48} />
             <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
               Короб ВМС

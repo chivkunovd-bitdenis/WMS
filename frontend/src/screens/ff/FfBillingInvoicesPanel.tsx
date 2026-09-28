@@ -86,6 +86,7 @@ const profileFieldLabels: Record<string, string> = {
 
 const serviceLabels: Record<string, string> = {
   inbound: 'Приёмка',
+  return: 'Возврат',
   marketplace_outbound: 'Отгрузка',
   storage_liter_day: 'Хранение',
 }

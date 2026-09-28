@@ -11,6 +11,13 @@ export type BarcodeScannerOptions = {
   minLength?: number
   /** Макс. межсимвольный интервал сканера, мс. Дефолт 50. */
   maxIntervalMs?: number
+  /**
+   * WMS-566: поле, куда руками вводят только короткое число (например «В коробе»).
+   * В нём темп не меряем: пачка от minLength символов с Enter — всегда скан.
+   */
+  isScanOnlyField?: (el: ActiveElementLike) => boolean
+  /** Мин. длина скана в таком поле: короче — это ручное число. Дефолт minLength. */
+  scanOnlyFieldMinLength?: number
 }
 
 // Внутреннее представление символа в буфере
@@ -102,10 +109,11 @@ type EventLike = {
   stopPropagation(): void
 }
 
-type ActiveElementLike = {
+export type ActiveElementLike = {
   tagName?: string
   value?: string
   isContentEditable?: boolean
+  dataset?: Record<string, string | undefined>
 } | null
 
 /** Место, куда человек может печатать руками. */
@@ -122,6 +130,8 @@ type ScannerListenerOptions = {
   getNow: () => number
   /** Инъекция activeElement — в реальном коде document.activeElement. */
   getActiveElement: () => ActiveElementLike
+  isScanOnlyField?: (el: ActiveElementLike) => boolean
+  scanOnlyFieldMinLength?: number
 }
 
 /**
@@ -205,12 +215,16 @@ export function createScannerListener(opts: ScannerListenerOptions) {
       //
       // Ровно на этом встала инвентаризация 02.09.2026: стоило фокусу уйти из
       // поля, код улетал в никуда, а оператор видел «пикнул — и ничего».
-      const typingHere = isTextEntry(el)
+      const scanOnlyField = isTextEntry(el) && (opts.isScanOnlyField?.(el) ?? false)
+      const typingHere = isTextEntry(el) && !scanOnlyField
+      const minLength = scanOnlyField
+        ? Math.max(opts.minLength, opts.scanOnlyFieldMinLength ?? opts.minLength)
+        : opts.minLength
       // Сканер это или человек, решаем по всей пачке, а не по одной заминке:
       // у сканера почти все интервалы короткие, у ручного ввода — все длинные.
       const allowedSlowGaps = Math.max(1, Math.floor(buffer.length * 0.2))
       const looksLikeScan =
-        buffer.length >= opts.minLength && (!typingHere || slowGaps <= allowedSlowGaps)
+        buffer.length >= minLength && (!typingHere || slowGaps <= allowedSlowGaps)
 
       if (looksLikeScan) {
         e.preventDefault()
@@ -277,13 +291,17 @@ export function useBarcodeScanner({
   enabled = true,
   minLength = 5,
   maxIntervalMs = 50,
+  isScanOnlyField,
+  scanOnlyFieldMinLength,
 }: BarcodeScannerOptions): void {
   // Храним onScan в ref, чтобы не переподписываться на каждый рендер.
   // Обновляем ref внутри useEffect (не во время рендера) — совместимо с react-hooks/refs.
   const onScanRef = useRef(onScan)
+  const isScanOnlyFieldRef = useRef(isScanOnlyField)
 
   useEffect(() => {
     onScanRef.current = onScan
+    isScanOnlyFieldRef.current = isScanOnlyField
   })
 
   useEffect(() => {
@@ -295,6 +313,8 @@ export function useBarcodeScanner({
       maxIntervalMs,
       getNow: () => performance.now(),
       getActiveElement: () => document.activeElement as ActiveElementLike,
+      isScanOnlyField: (el) => isScanOnlyFieldRef.current?.(el) ?? false,
+      scanOnlyFieldMinLength,
     })
 
     // Capture-фаза: перехватываем до обработчиков полей
@@ -302,5 +322,5 @@ export function useBarcodeScanner({
     return () => {
       document.removeEventListener('keydown', handler as unknown as (e: Event) => void, true)
     }
-  }, [enabled, minLength, maxIntervalMs])
+  }, [enabled, minLength, maxIntervalMs, scanOnlyFieldMinLength])
 }

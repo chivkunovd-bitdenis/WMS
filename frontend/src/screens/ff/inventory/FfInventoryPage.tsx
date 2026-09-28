@@ -353,8 +353,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       // Ручка документа, а не общая /warehouses/{id}/sorting-objects: она же
       // запоминает тару за документом, чтобы прунинг пустой тары не выбросил
       // её из дерева сразу после создания (см. inventoryCountApi). cellId —
-      // выделенная ячейка (задача 1 доработки 03.09.2026): без неё тара
-      // уезжает в зону сортировки, как и раньше.
+      // выделенная ячейка (задача 1 доработки 03.09.2026), а без выделения —
+      // открытая сканером (WMS-543); без них тара уезжает в зону сортировки.
       await runAction(() => createCountContainer(tokenRef.current, id, kind, cellId))
     } catch (err) {
       if (stillOpen(id, err)) setError(inventoryErrorMessage(err, 'Не удалось создать тару'))
