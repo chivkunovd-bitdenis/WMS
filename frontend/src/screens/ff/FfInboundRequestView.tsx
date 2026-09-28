@@ -528,6 +528,7 @@ export function FfInboundRequestView({
   const [cargoAddDialogPlaceId, setCargoAddDialogPlaceId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [clearBoxTarget, setClearBoxTarget] = useState<{ id: string; label: string } | null>(null)
+  const [clearBoxError, setClearBoxError] = useState<string | null>(null)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
   const [lastScannedLineId, setLastScannedLineId] = useState<string | null>(null)
@@ -618,6 +619,7 @@ export function FfInboundRequestView({
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null &&
+      clearBoxTarget == null &&
       !kizReprintOpen,
     onScan: (code) => {
       if (!shouldDispatchInboundScan(kizReprintOpen)) return
@@ -1972,22 +1974,25 @@ export function FfInboundRequestView({
   }
 
   // WMS-566: «Очистить» — все штуки короба уходят из приёмки одной операцией.
+  // Ошибка идёт в отдельное состояние (как у диалогов габаритов и грузомест):
+  // общий error рендерится на странице под затемнением модалки и оператор его
+  // не видит, пока диалог не закрыт (P3-3).
   const clearInboundBox = async (boxId: string) => {
     setBusy(true)
-    setError(null)
+    setClearBoxError(null)
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/clear`),
         { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
-        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        setClearBoxError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
       setClearBoxTarget(null)
       await loadDetail()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось очистить короб.')
+      setClearBoxError(e instanceof Error ? e.message : 'Не удалось очистить короб.')
     } finally {
       setBusy(false)
     }
@@ -3287,12 +3292,13 @@ export function FfInboundRequestView({
                                   size="small"
                                   variant="outlined"
                                   disabled={busy || !(receivingActive || ffDraft)}
-                                  onClick={() =>
+                                  onClick={() => {
+                                    setClearBoxError(null)
                                     setClearBoxTarget({
                                       id: box.id,
                                       label: inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels),
                                     })
-                                  }
+                                  }}
                                   data-testid={`ff-inbound-box-clear-${box.id}`}
                                 >
                                   Очистить
@@ -4205,7 +4211,10 @@ export function FfInboundRequestView({
       <Dialog
         open={clearBoxTarget !== null}
         onClose={() => {
-          if (!busy) setClearBoxTarget(null)
+          if (!busy) {
+            setClearBoxTarget(null)
+            setClearBoxError(null)
+          }
         }}
         maxWidth="xs"
         fullWidth
@@ -4213,12 +4222,25 @@ export function FfInboundRequestView({
       >
         <DialogTitle>Очистить короб {clearBoxTarget?.label}?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2">
-            Все товары из этого короба уйдут из приёмки, «Принято» уменьшится.
-          </Typography>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {clearBoxError ? (
+              <Alert severity="error" data-testid="ff-inbound-box-clear-error">
+                {clearBoxError}
+              </Alert>
+            ) : null}
+            <Typography variant="body2">
+              Все товары из этого короба уйдут из приёмки, «Принято» уменьшится.
+            </Typography>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setClearBoxTarget(null)}>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setClearBoxTarget(null)
+              setClearBoxError(null)
+            }}
+          >
             Отмена
           </Button>
           <Button
