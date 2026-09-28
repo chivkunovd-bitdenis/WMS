@@ -138,6 +138,9 @@ const certificateBinding = (certificate: CryptoProCertificate): WithdrawalCertif
 
 const createUuid = (): string => globalThis.crypto.randomUUID()
 
+// Тот же предел, что MAX_OPERATION_ROWS на сервере (WMS-563).
+const MAX_OPERATION_ROWS = 10_000
+
 const storageKeys = (sellerId: string) => ({
   operation: `wms517:withdrawal:operation:${sellerId}`,
   request: `wms517:withdrawal:request:${sellerId}`,
@@ -167,7 +170,7 @@ const safeStorageRemove = (key: string): void => {
   }
 }
 
-export function SellerHonestSignTabs({ active, routeBase = '/seller' }: { active: 'pools' | 'withdrawals'; routeBase?: string }) {
+export function SellerHonestSignTabs({ active, routeBase = '' }: { active: 'pools' | 'withdrawals'; routeBase?: string }) {
   const navigate = useNavigate()
   return (
     <Paper variant="outlined">
@@ -208,7 +211,9 @@ export function SellerKizWithdrawalScreen({
   api: apiOverride,
   signingAdapter: signingAdapterOverride,
   pluginLoader,
-  routeBase = '/seller',
+  // WMS-563: портал селлера смонтирован с basename /seller — второй /seller
+  // в адресе вёл на несуществующий раздел и выбрасывал в «Документы».
+  routeBase = '',
 }: Props) {
   const defaultApi = useMemo(() => new SameOriginSellerWithdrawalApi(token), [token])
   const defaultSigningAdapter = useMemo(() => new CryptoProCadesAdapter(), [])
@@ -234,7 +239,12 @@ export function SellerKizWithdrawalScreen({
   const [rows, setRows] = useState<WithdrawalRow[]>([])
   const [total, setTotal] = useState(0)
   const [products, setProducts] = useState<WithdrawalProductOption[]>([])
-  const [selected, setSelected] = useState<string[]>([])
+  // WMS-563: выбор живёт поверх страниц — строка с других страниц хранится целиком,
+  // чтобы операция и подпись кнопки видели её статус без повторной загрузки.
+  const [selected, setSelected] = useState<Map<string, WithdrawalRow>>(() => new Map())
+  const [allSelected, setAllSelected] = useState(false)
+  const [selectingAll, setSelectingAll] = useState(false)
+  const selectAllVersionRef = useRef(0)
   const [details, setDetails] = useState<WithdrawalRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState('')
@@ -247,14 +257,13 @@ export function SellerKizWithdrawalScreen({
   const [certificateError, setCertificateError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const selectedRows = useMemo(
-    () => rows.filter((row) => selected.includes(row.row_id) && isRowSelectable(row)),
-    [rows, selected],
-  )
-  const eligibleIds = useMemo(
-    () => rows.filter((row) => isRowSelectable(row)).map((row) => row.row_id),
-    [rows],
-  )
+  const selectedRows = useMemo(() => {
+    const fresh = new Map(rows.map((row) => [row.row_id, row] as const))
+    return [...selected.values()]
+      .map((row) => fresh.get(row.row_id) ?? row)
+      .filter(isRowSelectable)
+  }, [rows, selected])
+  const eligibleOnPage = useMemo(() => rows.some(isRowSelectable), [rows])
   const hasInFlightRows = useMemo(() => rows.some(isRowInFlight), [rows])
 
   // Button label mirrors the actual action the click will perform. It never opens
@@ -280,10 +289,8 @@ export function SellerKizWithdrawalScreen({
     }
     return `Вывести из оборота (${count})`
   }, [selectedRows])
-  const allVisibleSelected =
-    eligibleIds.length > 0 && eligibleIds.every((rowId) => selected.includes(rowId))
-  const someVisibleSelected =
-    eligibleIds.some((rowId) => selected.includes(rowId)) && !allVisibleSelected
+  const allChecked = allSelected && selectedRows.length > 0
+  const someChecked = !allChecked && selectedRows.length > 0
 
   // Monotonic version guards against out-of-order writes. Every filter change and
   // every optimistic post-signature update bumps it, so any response that started
@@ -359,10 +366,7 @@ export function SellerKizWithdrawalScreen({
 
   useEffect(() => {
     const maxPage = Math.max(0, Math.ceil(total / rowsPerPage) - 1)
-    if (page > maxPage) {
-      setPage(maxPage)
-      setSelected([])
-    }
+    if (page > maxPage) setPage(maxPage)
   }, [page, rowsPerPage, total])
 
   const applyTerminalOperation = useCallback((operation: WithdrawalOperation) => {
@@ -405,17 +409,69 @@ export function SellerKizWithdrawalScreen({
     }
   }, [hasInFlightRows, refreshRegistry])
 
+  const clearSelection = () => {
+    selectAllVersionRef.current += 1
+    setSelected(new Map())
+    setAllSelected(false)
+    setSelectingAll(false)
+  }
+
   const resetSelectionAndPage = () => {
-    setSelected([])
+    clearSelection()
     setPage(0)
   }
 
-  const toggleAllVisible = () => {
-    setSelected(allVisibleSelected ? [] : eligibleIds)
+  const toggleRow = (row: WithdrawalRow) => {
+    setAllSelected(false)
+    setSelected((current) => {
+      const next = new Map(current)
+      if (next.has(row.row_id)) next.delete(row.row_id)
+      else next.set(row.row_id, row)
+      return next
+    })
+  }
+
+  // WMS-563: «Выбрать все» берёт все доступные КИЗ по текущим фильтрам со всех
+  // страниц, а не только видимую страницу.
+  const toggleAll = async () => {
+    if (allChecked) {
+      clearSelection()
+      return
+    }
+    selectAllVersionRef.current += 1
+    const version = selectAllVersionRef.current
+    setSelectingAll(true)
+    try {
+      const all = new Map<string, WithdrawalRow>()
+      for (let offset = 0; ; offset += 250) {
+        const response = await api.list({
+          dateFrom,
+          dateTo,
+          search: debouncedQuery,
+          productId,
+          onlyNotWithdrawn,
+          limit: 250,
+          offset,
+        })
+        if (version !== selectAllVersionRef.current) return
+        for (const row of response.rows) if (isRowSelectable(row)) all.set(row.row_id, row)
+        if (response.rows.length < 250 || offset + 250 >= response.total) break
+      }
+      setSelected(all)
+      setAllSelected(all.size > 0)
+    } catch (error) {
+      if (version === selectAllVersionRef.current) setPageError(withdrawalApiErrorMessage(error))
+    } finally {
+      if (version === selectAllVersionRef.current) setSelectingAll(false)
+    }
   }
 
   const openCertificateDialog = async () => {
     // Only opened by an explicit user click; background polling never opens it.
+    if (selectedRows.length > MAX_OPERATION_ROWS) {
+      setPageError(withdrawalErrorMessage({ code: 'invalid_selection' }))
+      return
+    }
     setCertificateOpen(true)
     setCertificatesLoading(true)
     setCertificateError('')
@@ -560,7 +616,7 @@ export function SellerKizWithdrawalScreen({
               'Не удалось возобновить доступ к Честному знаку. Повторите позже.',
           )
         }
-        setSelected([])
+        clearSelection()
         setCertificateOpen(false)
         setSelectedCertificateThumbprint('')
         safeStorageRemove(keys.request)
@@ -611,7 +667,7 @@ export function SellerKizWithdrawalScreen({
         documents: signatures,
       })
       rememberOperation(operation)
-      setSelected([])
+      clearSelection()
       setCertificateOpen(false)
       setSelectedCertificateThumbprint('')
       safeStorageRemove(keys.request)
@@ -728,7 +784,6 @@ export function SellerKizWithdrawalScreen({
       <Paper variant="outlined" sx={{ minWidth: 0, overflow: 'hidden' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ px: 1.5, py: 1, justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
           <Typography variant="body2" sx={{ fontWeight: 700 }}>Найдено: {total}</Typography>
-          <Typography variant="caption" color="text.secondary">Выбор действует только на текущей странице</Typography>
         </Stack>
         <Divider />
         <TableContainer sx={{ maxWidth: '100%', maxHeight: { xs: '62vh', md: 560 }, overflow: 'auto' }}>
@@ -737,11 +792,11 @@ export function SellerKizWithdrawalScreen({
               <TableRow>
                 <TableCell padding="checkbox">
                   <Checkbox
-                    checked={allVisibleSelected}
-                    indeterminate={someVisibleSelected}
-                    disabled={eligibleIds.length === 0}
-                    onChange={toggleAllVisible}
-                    slotProps={{ input: { 'aria-label': 'Выбрать все доступные КИЗ на текущей странице' } }}
+                    checked={allChecked}
+                    indeterminate={someChecked}
+                    disabled={selectingAll || (!eligibleOnPage && selectedRows.length === 0)}
+                    onChange={() => void toggleAll()}
+                    slotProps={{ input: { 'aria-label': 'Выбрать все доступные КИЗ по фильтрам' } }}
                   />
                 </TableCell>
                 <TableCell sx={{ width: 112, whiteSpace: 'nowrap' }}>Передано WB</TableCell>
@@ -761,7 +816,7 @@ export function SellerKizWithdrawalScreen({
                 </TableCell></TableRow>
               ) : rows.map((row) => {
                 const eligible = isRowSelectable(row)
-                const checked = selected.includes(row.row_id)
+                const checked = selected.has(row.row_id)
                 const tooltip = eligible
                   ? row.resume_required
                     ? 'Возобновить операцию тем же сертификатом'
@@ -777,7 +832,7 @@ export function SellerKizWithdrawalScreen({
                           <Checkbox
                             checked={checked}
                             disabled={!eligible}
-                            onChange={() => setSelected((current) => checked ? current.filter((id) => id !== row.row_id) : [...current, row.row_id])}
+                            onChange={() => toggleRow(row)}
                             slotProps={{ input: { 'aria-label': `Выбрать КИЗ товара ${row.product_name}` } }}
                           />
                         </span>
@@ -807,9 +862,9 @@ export function SellerKizWithdrawalScreen({
           component="div"
           count={total}
           page={page}
-          onPageChange={(_, nextPage) => { setPage(nextPage); setSelected([]) }}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
           rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value) as 50 | 100 | 250); setPage(0); setSelected([]) }}
+          onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value) as 50 | 100 | 250); setPage(0) }}
           rowsPerPageOptions={[50, 100, 250]}
           labelRowsPerPage="На странице"
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count}`}
