@@ -11,6 +11,11 @@ export type BarcodeScannerOptions = {
   minLength?: number
   /** Макс. межсимвольный интервал сканера, мс. Дефолт 50. */
   maxIntervalMs?: number
+  /**
+   * WMS-566: поле, куда руками вводят только короткое число (например «В коробе»).
+   * В нём темп не меряем: пачка от minLength символов с Enter — всегда скан.
+   */
+  isScanOnlyField?: (el: ActiveElementLike) => boolean
 }
 
 // Внутреннее представление символа в буфере
@@ -102,10 +107,11 @@ type EventLike = {
   stopPropagation(): void
 }
 
-type ActiveElementLike = {
+export type ActiveElementLike = {
   tagName?: string
   value?: string
   isContentEditable?: boolean
+  dataset?: Record<string, string | undefined>
 } | null
 
 /** Место, куда человек может печатать руками. */
@@ -122,6 +128,7 @@ type ScannerListenerOptions = {
   getNow: () => number
   /** Инъекция activeElement — в реальном коде document.activeElement. */
   getActiveElement: () => ActiveElementLike
+  isScanOnlyField?: (el: ActiveElementLike) => boolean
 }
 
 /**
@@ -205,7 +212,7 @@ export function createScannerListener(opts: ScannerListenerOptions) {
       //
       // Ровно на этом встала инвентаризация 02.09.2026: стоило фокусу уйти из
       // поля, код улетал в никуда, а оператор видел «пикнул — и ничего».
-      const typingHere = isTextEntry(el)
+      const typingHere = isTextEntry(el) && !(opts.isScanOnlyField?.(el) ?? false)
       // Сканер это или человек, решаем по всей пачке, а не по одной заминке:
       // у сканера почти все интервалы короткие, у ручного ввода — все длинные.
       const allowedSlowGaps = Math.max(1, Math.floor(buffer.length * 0.2))
@@ -277,13 +284,16 @@ export function useBarcodeScanner({
   enabled = true,
   minLength = 5,
   maxIntervalMs = 50,
+  isScanOnlyField,
 }: BarcodeScannerOptions): void {
   // Храним onScan в ref, чтобы не переподписываться на каждый рендер.
   // Обновляем ref внутри useEffect (не во время рендера) — совместимо с react-hooks/refs.
   const onScanRef = useRef(onScan)
+  const isScanOnlyFieldRef = useRef(isScanOnlyField)
 
   useEffect(() => {
     onScanRef.current = onScan
+    isScanOnlyFieldRef.current = isScanOnlyField
   })
 
   useEffect(() => {
@@ -295,6 +305,7 @@ export function useBarcodeScanner({
       maxIntervalMs,
       getNow: () => performance.now(),
       getActiveElement: () => document.activeElement as ActiveElementLike,
+      isScanOnlyField: (el) => isScanOnlyFieldRef.current?.(el) ?? false,
     })
 
     // Capture-фаза: перехватываем до обработчиков полей
