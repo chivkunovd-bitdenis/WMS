@@ -7,7 +7,7 @@ import {
 } from '../types/wbProductCatalog'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 
-async function fetchMarketplaceProductCatalogRows(
+export async function fetchMarketplaceProductCatalogRows(
   authHeaders: Record<string, string>,
   sellerId?: string | null,
 ): Promise<MarketplaceProductCatalogRow[]> {

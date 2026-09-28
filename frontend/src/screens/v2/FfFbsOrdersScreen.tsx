@@ -43,6 +43,7 @@ import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsCancelledAfterPackDialog } from './FbsCancelledAfterPackDialog'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
+import { FbsSupplyGroupCreateDialog } from './FbsSupplyGroupCreateDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
@@ -51,6 +52,12 @@ import {
 } from '../ff/products-fbs/FbsMetricPanel'
 import { MarketplaceChip, type MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
+import {
+  FBS_ASSEMBLY_QUERY_PARAM,
+  fbsSelectionNeedsGroupCreate,
+  parseFbsAssemblySupplyIds,
+} from './fbsSupplyAssembly'
 import {
   buildFbsSyncTargets,
   fbsOrdersSyncErrorMessage,
@@ -590,6 +597,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncWarning, setSyncWarning] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // WMS-574: выбор WB, который делится на несколько поставок, и окно их сборки.
+  const [groupCreateOpen, setGroupCreateOpen] = useState(false)
+  const [assemblyOpen, setAssemblyOpen] = useState(false)
+  const [assemblyIds, setAssemblyIds] = useState<string[]>([])
   const [addExistingOpen, setAddExistingOpen] = useState(false)
   const [addExistingSupplyId, setAddExistingSupplyId] = useState('')
   const [addingExisting, setAddingExisting] = useState(false)
@@ -617,6 +628,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     )
   }, [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
+  const openedAssemblyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
@@ -903,6 +915,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     [selected, selectedCache],
   )
   const selectedOrderIds = useMemo(() => [...selected], [selected])
+  // WMS-574 Д2: новое окно — только когда выбор WB делится на 2+ поставки.
+  const selectionNeedsGroupCreate = useMemo(
+    () => fbsSelectionNeedsGroupCreate(selectedOrders),
+    [selectedOrders],
+  )
   const mixedMarketplaceMessage = useMemo(
     () => mixedMarketplaceSelectionMessage(selectedOrders.map((order) => order.marketplace)),
     [selectedOrders],
@@ -1062,6 +1079,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     }
   }, [location.pathname, location.search, navigate])
 
+  const openAssembly = useCallback((supplyIds: string[]) => {
+    setAssemblyIds(supplyIds)
+    setAssemblyOpen(true)
+    setError(null)
+    const params = new URLSearchParams(location.search)
+    const value = supplyIds.join(',')
+    if (params.get(FBS_ASSEMBLY_QUERY_PARAM) !== value) {
+      params.set(FBS_ASSEMBLY_QUERY_PARAM, value)
+      navigate({ pathname: location.pathname, search: params.toString() })
+    }
+  }, [location.pathname, location.search, navigate])
+
   const openSupplyQrPrint = useCallback(async (supply: FbsSupplyWorklistItem) => {
     const supplyId = supply.id
     const isOzon = supply.marketplace === 'ozon'
@@ -1188,6 +1217,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     setWorkspaceId(supplyId)
     setWorkspaceSeed((current) => current?.supply.id === supplyId ? current : null)
     setWorkspaceOpen(true)
+  }, [location.search])
+
+  // WMS-574 Д4: окно сборки восстанавливается по supply_ids так же, как карточка по supply_id.
+  useEffect(() => {
+    const supplyIds = parseFbsAssemblySupplyIds(
+      new URLSearchParams(location.search).get(FBS_ASSEMBLY_QUERY_PARAM),
+    )
+    const value = supplyIds.join(',')
+    if (!value) {
+      openedAssemblyFromQuery.current = null
+      setAssemblyOpen(false)
+      setAssemblyIds((current) => (current.length ? [] : current))
+      return
+    }
+    if (openedAssemblyFromQuery.current === value) return
+    openedAssemblyFromQuery.current = value
+    setStatusGroup('active')
+    setAssemblyIds(supplyIds)
+    setAssemblyOpen(true)
   }, [location.search])
 
   return (
@@ -1886,7 +1934,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               variant="contained"
               size="large"
               disabled={Boolean(mixedMarketplaceMessage) || selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
-              onClick={() => setCreateOpen(true)}
+              onClick={() => (selectionNeedsGroupCreate ? setGroupCreateOpen(true) : setCreateOpen(true))}
             >
               Сформировать поставку
             </Button>
@@ -2039,6 +2087,44 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           setCreateOpen(false)
           setSelected(new Set())
           openWorkspace(workspace.supply.id, workspace)
+          void load()
+        }}
+      /></ErrorBoundary>
+
+      <ErrorBoundary component="FbsSupplyGroupCreateDialog"><FbsSupplyGroupCreateDialog
+        token={token}
+        authHeaders={authHeaders}
+        orders={selectedOrders}
+        open={groupCreateOpen}
+        onClose={(createdOrderIds) => {
+          setGroupCreateOpen(false)
+          if (createdOrderIds.length === 0) return
+          // Заказы созданных поставок ушли с «Новых»; выбор остальных оставляем.
+          setSelected((current) => {
+            const next = new Set(current)
+            createdOrderIds.forEach((id) => next.delete(id))
+            return next
+          })
+          void load()
+        }}
+        onOpenAssembly={(created) => {
+          setGroupCreateOpen(false)
+          setSelected(new Set())
+          openAssembly(created.map((one) => one.supplyId))
+          void load()
+        }}
+      /></ErrorBoundary>
+
+      <ErrorBoundary component="FfFbsSupplyAssembly" resetKey={`${assemblyIds.join(',')}:${assemblyOpen}`}><FfFbsSupplyAssembly
+        token={token}
+        authHeaders={authHeaders}
+        supplyIds={assemblyIds}
+        open={assemblyOpen}
+        onClose={() => {
+          setAssemblyOpen(false)
+          const params = new URLSearchParams(location.search)
+          params.delete(FBS_ASSEMBLY_QUERY_PARAM)
+          navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
           void load()
         }}
       /></ErrorBoundary>
