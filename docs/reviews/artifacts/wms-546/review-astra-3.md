@@ -1,0 +1,1 @@
+ВЕРДИКТ: PASS — backend/app/services/fbs_marking_service.py:1024. P3 закрыт: при optional+пусто `pending_kiz_operation()` не вызывается. Поведение сохранено: required+пусто с открытой операцией → unknown, без операции → missing; optional+пусто → unknown (строки 1027–1031).

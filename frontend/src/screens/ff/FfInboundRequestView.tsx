@@ -447,6 +447,28 @@ function inboundStatusChipColor(
   return 'primary'
 }
 
+// WMS-564: у части арендаторов (например «Империя ФФ») internal_barcode —
+// это системный INB-код (backend/app/services/box_barcode_service.py), а на
+// физических коробах уже наклеены «Короб 1», «Короб 2»…; для таких кодов
+// подпись короба остаётся такой же, как до WMS-551. Внешний код клиента
+// (например WB_…, как у ArtMax) показываем как есть — поведение WMS-551.
+// Вторая форма — код старого генератора inbound_intake_box_service.py
+// (`INB-` + 12 hex-символов, до перехода на box_barcode_service.py), он всё
+// ещё живёт на проде — например у 113 из 408 коробов «Империя ФФ».
+const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
+const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
+
+function isGeneratedInboundBoxBarcode(barcode: string): boolean {
+  return (
+    GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode) ||
+    LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode)
+  )
+}
+
+function inboundBoxDisplayLabel(boxNumber: number, barcode: string): string {
+  return isGeneratedInboundBoxBarcode(barcode) ? `№ ${boxNumber}` : barcode
+}
+
 type Props = {
   token: string
   requestId: string
@@ -1622,7 +1644,9 @@ export function FfInboundRequestView({
       // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
       // диалог принтера для каждого короба и рвёт непрерывную ленту.
       printBarcodeLabels(targets.map((target) => ({
-        title: target.kind === 'box' ? `Короб ${target.barcode}` : `Грузоместо № ${target.number}`,
+        title: target.kind === 'box'
+          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode)}`
+          : `Грузоместо № ${target.number}`,
         barcode: target.barcode,
         barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
         labelSize,
@@ -3181,7 +3205,7 @@ export function FfInboundRequestView({
                           >
                             {!box.pallet_id ? (
                               <CheckboxInput
-                                label={`Выбрать короб ${box.internal_barcode}`}
+                                label={`Выбрать короб ${inboundBoxDisplayLabel(box.box_number, box.internal_barcode)}`}
                                 hideLabel
                                 checked={selectedPalletBoxIds.has(box.id)}
                                 onChange={(checked) => {
@@ -3198,6 +3222,9 @@ export function FfInboundRequestView({
                             ) : null}
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               Короб{' '}
+                              {isGeneratedInboundBoxBarcode(box.internal_barcode)
+                                ? `№ ${box.box_number} `
+                                : null}
                               <Typography component="code" variant="body2">
                                 {box.internal_barcode}
                               </Typography>
@@ -3816,7 +3843,7 @@ export function FfInboundRequestView({
           onClose={() => setBoxAddDialogBoxId(null)}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
-          boxLabel={`Короб ${boxAddDialogBox.internal_barcode}`}
+          boxLabel={`Короб ${inboundBoxDisplayLabel(boxAddDialogBox.box_number, boxAddDialogBox.internal_barcode)}`}
           readOnly={!receivingActive && !ffDraft}
           ffDraft={ffDraft}
           ffInbound={ffInbound}
@@ -3919,7 +3946,9 @@ export function FfInboundRequestView({
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography variant="body2">
             На палету встанут короба:{' '}
-            {selectedPalletBoxes.map((box) => box.internal_barcode).join(', ')}
+            {selectedPalletBoxes
+              .map((box) => inboundBoxDisplayLabel(box.box_number, box.internal_barcode))
+              .join(', ')}
           </Typography>
           <SelectInput
             label="Палета"

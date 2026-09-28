@@ -33,6 +33,7 @@ from app.services import (
     pallet_service,
     warehouse_box_service,
 )
+from app.services.box_barcode_service import is_generated_box_barcode
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
@@ -46,6 +47,17 @@ from app.services.wb_card_enrichment import first_photo_url_from_card, subject_n
 ObjectKind = Literal["product", "pallet", "box", "cargo_place"]
 DestinationKind = Literal["cell", "unassigned", "sorting", "pallet", "box", "cargo_place"]
 MOVEMENT_TYPE_WAREHOUSE_MAP = "warehouse_map_move"
+
+
+def _inbound_box_display_code(box: InboundIntakeBox) -> str:
+    """WMS-564: у части арендаторов (например «Империя ФФ») internal_barcode —
+    это системный INB-код, а на физических коробах уже наклеены «Короб 1»,
+    «Короб 2»… Для таких сгенерированных кодов подпись остаётся такой же, как
+    до WMS-551. Внешний код клиента (например WB_…, как у ArtMax) показываем
+    как есть, согласно WMS-551."""
+    if is_generated_box_barcode(box.internal_barcode, "INB"):
+        return f"КР-{box.box_number:06d}"
+    return box.internal_barcode
 
 
 @dataclass(frozen=True)
@@ -141,7 +153,7 @@ async def resolve_container_paths(
             parent_pallet_id = warehouse_box.pallet_id
         elif kind == "box" and container_id in inbound_box_by_id:
             inbound_box = inbound_box_by_id[container_id]
-            code = inbound_box.internal_barcode
+            code = _inbound_box_display_code(inbound_box)
             parent_pallet_id = inbound_box.pallet_id
         elif kind == "cargo_place" and container_id in cargo_place_by_id:
             cargo_place = cargo_place_by_id[container_id]
@@ -608,7 +620,7 @@ async def get_warehouse_map(
         nodes[key] = {
             "kind": "box",
             "id": str(inbound_box.id),
-            "code": inbound_box.internal_barcode,
+            "code": _inbound_box_display_code(inbound_box),
             "barcode": inbound_box.internal_barcode,
             "seller_name": None,
             "qty": 0,
@@ -1022,7 +1034,7 @@ async def _container_code(
             except ValueError:
                 pass
             else:
-                return inbound.internal_barcode
+                return _inbound_box_display_code(inbound)
     else:
         warehouse_cargo_place = await session.get(WarehouseBox, container_id)
         if (

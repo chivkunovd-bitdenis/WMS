@@ -24,6 +24,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.services import warehouse_map_service
+from app.services.box_barcode_service import generate_box_barcode
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -631,6 +632,131 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
     )
     assert blocked_cargo.status_code == 409, blocked_cargo.text
     assert blocked_cargo.json()["detail"] == "container_stock_missing"
+
+
+async def test_map_shows_legacy_label_for_system_generated_inbound_box_barcode(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-564: у «Империя ФФ» internal_barcode — системный INB-код
+
+    (`generate_box_barcode("INB")`), а на физических коробах уже наклеены
+    «Короб 1», «Короб 2»… Для такого сгенерированного кода подпись должна
+    остаться такой же, как до WMS-551 (`КР-000001`), а не показывать
+    оператору непонятный технический код. Внешний код клиента (`WB_…`, как у
+    ArtMax) по-прежнему показывается как есть — поведение WMS-551 не трогаем.
+
+    Живой прод (read-only, 28.09.2026) показал, что часть коробов «Империя ФФ»
+    (113 из 408) несёт код старого генератора `inbound_intake_box_service.py`
+    (`f"INB-{uuid.uuid4().hex[:12].upper()}"`, commit a9cebe6b) — 12
+    hex-символов вместо нынешних 14 Crockford base32. Этот код тоже
+    системный и должен вернуть тот же `КР-000001`.
+    """
+    headers, _user, tenant = await _register(async_client, "generated-box-code")
+    async with SessionLocal() as session:
+        suffix = uuid.uuid4().hex[:10]
+        warehouse = Warehouse(
+            tenant_id=tenant.id,
+            name="Склад Империи ФФ",
+            code=f"empire-{suffix}",
+            barcode=f"WH-EMPIRE-{suffix}",
+        )
+        session.add(warehouse)
+        await session.flush()
+        cell = StorageLocation(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            code="Г-01-01",
+            barcode=f"CELL-EMPIRE-{suffix}",
+        )
+        request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            seller_id=None,
+            status="receiving",
+            document_number="ПРИЕМ-ИМПЕРИЯ-1",
+        )
+        session.add_all([cell, request])
+        await session.flush()
+        generated_box = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=request.id,
+            box_number=1,
+            internal_barcode=generate_box_barcode("INB"),
+            storage_location_id=cell.id,
+        )
+        legacy_generated_box = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=request.id,
+            box_number=2,
+            internal_barcode=f"INB-{uuid.uuid4().hex[:12].upper()}",
+            storage_location_id=cell.id,
+        )
+        external_box = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=request.id,
+            box_number=3,
+            internal_barcode=f"WB_{suffix}",
+            storage_location_id=cell.id,
+        )
+        session.add_all([generated_box, legacy_generated_box, external_box])
+        await session.commit()
+        warehouse_id = warehouse.id
+        cell_id = cell.id
+        generated_box_id = generated_box.id
+        legacy_generated_box_id = legacy_generated_box.id
+        external_box_id = external_box.id
+        external_barcode = external_box.internal_barcode
+
+        paths = await warehouse_map_service.resolve_container_paths(
+            session,
+            tenant.id,
+            warehouse_id,
+            {
+                ("box", generated_box_id),
+                ("box", legacy_generated_box_id),
+                ("box", external_box_id),
+            },
+        )
+        assert paths[("box", generated_box_id)][-1].code == "КР-000001"
+        assert paths[("box", generated_box_id)][-1].label == "Короб КР-000001"
+        assert paths[("box", legacy_generated_box_id)][-1].code == "КР-000002"
+        assert paths[("box", legacy_generated_box_id)][-1].label == "Короб КР-000002"
+        assert paths[("box", external_box_id)][-1].code == external_barcode
+
+        assert (
+            await warehouse_map_service._container_code(
+                session, tenant.id, warehouse_id, "box", generated_box_id
+            )
+            == "КР-000001"
+        )
+        assert (
+            await warehouse_map_service._container_code(
+                session, tenant.id, warehouse_id, "box", legacy_generated_box_id
+            )
+            == "КР-000002"
+        )
+        assert (
+            await warehouse_map_service._container_code(
+                session, tenant.id, warehouse_id, "box", external_box_id
+            )
+            == external_barcode
+        )
+
+    response = await async_client.get(
+        f"/warehouses/{warehouse_id}/map",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    target_cell = next(row for row in response.json()["cells"] if row["id"] == str(cell_id))
+    by_id = {row["id"]: row for row in target_cell["children"]}
+    assert by_id[str(generated_box_id)]["code"] == "КР-000001"
+    assert by_id[str(generated_box_id)]["barcode"] == generated_box.internal_barcode
+    assert by_id[str(legacy_generated_box_id)]["code"] == "КР-000002"
+    assert (
+        by_id[str(legacy_generated_box_id)]["barcode"] == legacy_generated_box.internal_barcode
+    )
+    assert by_id[str(external_box_id)]["code"] == external_barcode
+    assert by_id[str(external_box_id)]["barcode"] == external_barcode
 
 
 async def test_empty_container_can_be_taken_off_a_cell(
