@@ -89,6 +89,7 @@ export default defineConfig({
         fbsPick: 'fbs-pick.html',
         packaging: 'packaging.html',
         honestSign: 'honest-sign.html',
+        kizWithdrawalDemo: 'kiz-withdrawal-demo.html',
         reception: 'reception.html',
       },
     },

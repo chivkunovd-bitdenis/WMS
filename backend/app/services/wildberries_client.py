@@ -285,7 +285,13 @@ async def fetch_cards_list(
                             )
                         }
                     ],
-                    "sizes": [{"techSize": "L", "skus": ["E2E-MOCK-BARCODE"]}],
+                    "sizes": [
+                        {
+                            "chrtID": 42424201,
+                            "techSize": "L",
+                            "skus": ["E2E-MOCK-BARCODE"],
+                        }
+                    ],
                     "characteristics": [
                         {"name": "Цвет", "value": ["коричневый"]},
                         {"name": "Состав", "value": ["хлопок 95%, эластан 5%"]},

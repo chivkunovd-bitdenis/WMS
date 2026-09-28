@@ -3,7 +3,7 @@ import { Slider, Stack, Typography } from '@mui/material'
 // Процентный ползунок с шагом — единственный способ задать долю в системе.
 //
 // Доля живёт рядом с числом, которое из неё получается: «50%» само по себе
-// оператору ничего не говорит, а «50% — это 120 шт из 240 свободных» говорит
+// оператору ничего не говорит, а «50% — это 120 шт из 240 доступных» говорит
 // всё. Поэтому число не подпись под ползунком, а его обязательная часть.
 export function PercentSlider({
   label,
@@ -11,7 +11,7 @@ export function PercentSlider({
   onChange,
   disabled = false,
   disabledReason,
-  /** Из чего считается доля — свободный остаток. */
+  /** Из чего считается доля — доступный остаток (WMS-530 R12). */
   base,
   step = 10,
   max = 100,
@@ -39,7 +39,7 @@ export function PercentSlider({
           {value}%
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          — это {result.toLocaleString('ru-RU')} шт из {base.toLocaleString('ru-RU')} свободных
+          — это {result.toLocaleString('ru-RU')} шт из {base.toLocaleString('ru-RU')} доступных
         </Typography>
       </Stack>
       <Slider

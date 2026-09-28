@@ -316,6 +316,54 @@ class MarkingCode(Base):
     )
 
 
+class MarkingPrintBatch(Base):
+    """One print run ('iteration') of marking codes; groups its events (WMS-516)."""
+
+    __tablename__ = "marking_print_batches"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    seller_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True
+    )
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    packaging_task_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_task_lines.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    requested_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    printed_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    layout_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    seller: Mapped[Seller] = relationship("Seller")
+    product: Mapped[Product | None] = relationship("Product")
+    packaging_task_line: Mapped[PackagingTaskLine | None] = relationship("PackagingTaskLine")
+    events: Mapped[list[MarkingCodeEvent]] = relationship(
+        "MarkingCodeEvent", back_populates="print_batch"
+    )
+
+
 class MarkingCodeEvent(Base):
     __tablename__ = "marking_code_events"
 
@@ -351,6 +399,13 @@ class MarkingCodeEvent(Base):
         ForeignKey("packaging_task_lines.id", ondelete="SET NULL"),
         nullable=True,
     )
+    print_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_print_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    position_in_batch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
@@ -368,6 +423,9 @@ class MarkingCodeEvent(Base):
     seller: Mapped[Seller] = relationship("Seller")
     code: Mapped[MarkingCode] = relationship("MarkingCode", back_populates="events")
     pool: Mapped[MarkingPool | None] = relationship("MarkingPool")
+    print_batch: Mapped[MarkingPrintBatch | None] = relationship(
+        "MarkingPrintBatch", back_populates="events"
+    )
 
 
 REPRINT_STATUS_PENDING = "pending"

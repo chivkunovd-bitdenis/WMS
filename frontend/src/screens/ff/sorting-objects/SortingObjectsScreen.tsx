@@ -1,12 +1,12 @@
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createSortingScanner, emptyScanContext, type ScanContext } from './sortingScan'
 import {
   ActionGroup,
   AppDialog,
   NumberInput,
   PrimaryAction,
-  PrintAction,
   ScannerField,
   ScreenHeader,
   SecondaryAction,
@@ -23,7 +23,6 @@ import {
   INITIAL_OBJECTS,
   PRODUCTS,
   KIND_TITLE,
-  cellQty,
   cellRef,
   productById,
   type Cell,
@@ -36,10 +35,9 @@ import {
 } from './objectsStub'
 import {
   canPut,
-  cellRows,
+  allRows,
   destinationsFor,
   objectTitle,
-  unplacedRows,
   type Carried,
   type ObjectRow,
 } from './objectsRows'
@@ -88,6 +86,10 @@ type SortingScreenProps = {
    * которая ничего не делает.
    */
   savedImmediately?: boolean
+  scanStorageKey?: string
+  onProductScan?: (barcode: string, context: ScanContext, operationId: string) => Promise<string | void>
+  onScanIdle?: () => void
+  remainingQty?: number
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
@@ -97,7 +99,8 @@ type SortingScreenProps = {
     qty: number
     /** Holder before the move; only loose stock may be replayed after a lost reply. */
     sourceHolder: Holder
-  }) => void
+    operationId?: string
+  }) => void | Promise<void>
 }
 
 export function SortingObjectsScreen({
@@ -114,6 +117,10 @@ export function SortingObjectsScreen({
   onClose,
   onCreateObject,
   savedImmediately,
+  scanStorageKey,
+  onProductScan,
+  onScanIdle,
+  remainingQty,
 }: SortingScreenProps) {
   const theme = useTheme()
   const products = productsProp ?? PRODUCTS
@@ -121,10 +128,24 @@ export function SortingObjectsScreen({
   const [lines, setLines] = useState<GoodsLine[]>(initialLines ?? INITIAL_LINES)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [carried, setCarried] = useState<Carried | null>(null)
-  const [activeCellId, setActiveCellId] = useState<string | null>(null)
-  const [scanValue, setScanValue] = useState('')
+  const [scanContext, setScanContext] = useState<ScanContext>(() => {
+    try {
+      const stored = scanStorageKey ? sessionStorage.getItem(scanStorageKey) : null
+      if (stored) {
+        const parsed = JSON.parse(stored) as ScanContext
+        if (initialCells?.some((one) => one.id === parsed.cellId)) {
+          return { cellId: parsed.cellId, objectId: initialObjects?.some((one) => one.id === parsed.objectId && whereIs(one.holder, initialObjects, initialCells).cell?.id === parsed.cellId) ? parsed.objectId : null }
+        }
+      }
+    } catch { /* Selection persistence is optional; stock writes are not. */ }
+    return emptyScanContext
+  })
+  const activeCellId = scanContext.cellId
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
+  const [pendingScans, setPendingScans] = useState({ count: 0, paused: false })
+  const mainList = useRef<HTMLDivElement>(null)
+  const activeCellTile = useRef<HTMLDivElement>(null)
   const [asking, setAsking] = useState<Carried | null>(null)
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
@@ -137,12 +158,63 @@ export function SortingObjectsScreen({
 
   const cells = [...(initialCells ?? CELLS), ...extraCells]
   const activeCell = cells.find((one) => one.id === activeCellId) ?? null
+  const activeObject = objects.find((one) => one.id === scanContext.objectId) ?? null
+  useEffect(() => { if (initialObjects) setObjects(initialObjects) }, [initialObjects])
+  useEffect(() => { if (initialLines) setLines(initialLines) }, [initialLines])
+  const scanDependencies = useRef({ cells, objects, onPlace, onProductScan, onScanIdle })
+  scanDependencies.current = { cells, objects, onPlace, onProductScan, onScanIdle }
+  const scannerRef = useRef<ReturnType<typeof createSortingScanner> | null>(null)
+  if (!scannerRef.current) {
+    scannerRef.current = createSortingScanner(scanContext, {
+      data: () => scanDependencies.current,
+      storage: scanStorageKey ? { storage: localStorage, key: `${scanStorageKey}:queue` } : undefined,
+      pending: (count, paused) => setPendingScans({ count, paused }),
+      idle: () => scanDependencies.current.onScanIdle?.(),
+      place: async (object, cellId, operationId) => {
+        if (scanDependencies.current.onPlace) {
+          await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null, operationId })
+        }
+        const placed = scanDependencies.current.objects.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one)
+        // The next queued scan can run before React renders the confirmed move.
+        scanDependencies.current.objects = placed
+        setObjects(placed)
+      },
+      product: async (barcode, context, operationId) => {
+        if (!scanDependencies.current.onProductScan) throw new Error('Скан товара доступен в документе приёмки')
+        return scanDependencies.current.onProductScan(barcode, context, operationId)
+      },
+      changed: (next) => {
+        setScanContext(next)
+        try { if (scanStorageKey) sessionStorage.setItem(scanStorageKey, JSON.stringify(next)) } catch { /* Optional UI context. */ }
+      },
+      notice: (message) => { setScanError(null); setScanNotice(message) },
+      error: (error) => { setScanNotice(null); setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.') },
+    })
+  }
+  useEffect(() => { void scannerRef.current?.resume() }, [])
+  useEffect(() => {
+    const row = scanContext.objectId ? mainList.current?.querySelector(`[data-row-key="o-${scanContext.objectId}"]`) : null
+    ;(row ?? activeCellTile.current)?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+  }, [scanContext.cellId, scanContext.objectId])
+  const visibleCollapsed = new Set(collapsed)
+  let openObject = activeObject
+  while (openObject) {
+    visibleCollapsed.delete(openObject.id)
+    const parentId: string | undefined = openObject.holder?.startsWith('obj:') ? openObject.holder.slice(4) : undefined
+    openObject = objects.find((one) => one.id === parentId) ?? null
+  }
+  const setActiveCellId = (id: string) => { void scannerRef.current?.selectCell(id) }
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
   const totalQty = lines.reduce((sum, line) => sum + line.qty, 0)
-  const leftQty = lines
+  const leftQty = remainingQty ?? lines
     .filter((line) => !whereIs(line.holder, objects, cells).cell)
     .reduce((sum, line) => sum + line.qty, 0)
+  const quantitiesByCell = new Map<string, number>()
+  for (const line of lines) {
+    const id = whereIs(line.holder, objects, cells).cell?.id
+    if (id) quantitiesByCell.set(id, (quantitiesByCell.get(id) ?? 0) + line.qty)
+  }
 
   function toggle(objectId: string) {
     setCollapsed((current) => {
@@ -171,7 +243,7 @@ export function SortingObjectsScreen({
     // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
     // `object_not_found`: экран откатывал перенос и перечитывал склад, а
     // оператор видел, что строка «сбрасывается».
-    onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })
+    void Promise.resolve(onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })).catch(() => undefined)
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
@@ -184,7 +256,7 @@ export function SortingObjectsScreen({
   }
 
   function moveObject(object: WarehouseObject, target: Holder, label: string) {
-    onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })
+    void Promise.resolve(onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })).catch(() => undefined)
     setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
     onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
   }
@@ -277,28 +349,7 @@ export function SortingObjectsScreen({
   }
 
   function handleScan(code: string) {
-    setScanValue('')
-    const cell = cells.find((one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase())
-    if (cell) {
-      setActiveCellId(cell.id)
-      setScanError(null)
-      setScanNotice(`Ячейка ${cell.code} — плюс у строки поставит сюда`)
-      return
-    }
-    const object = objects.find((one) => one.barcode === code)
-    if (object) {
-      if (!activeCell) {
-        setScanNotice(null)
-        setScanError('Сначала пикните ячейку — иначе непонятно, куда ставим')
-        return
-      }
-      moveObject(object, cellRef(activeCell.id), `ячейку ${activeCell.code}`)
-      setScanError(null)
-      setScanNotice(`${KIND_TITLE[object.kind]} ${object.code} → ячейка ${activeCell.code}`)
-      return
-    }
-    setScanNotice(null)
-    setScanError(`Штрихкод ${code} — ни ячейка, ни объект этой приёмки`)
+    void scannerRef.current?.scan(code)
   }
 
   const destinations = asking ? destinationsFor(asking, objects, cells) : []
@@ -316,22 +367,17 @@ export function SortingObjectsScreen({
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack spacing={1.5}>
           <ScannerField
-            value={scanValue}
-            onChange={(value) => {
-              setScanValue(value)
-              setScanError(null)
-            }}
             onScan={handleScan}
-            expects={activeCell ? 'объект, который ставим' : 'ячейку с полки'}
+            expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
             error={scanError}
-            notice={scanNotice}
+            notice={pendingScans.count && !pendingScans.paused ? `${scanNotice ?? ''} · Ожидают подтверждения: ${pendingScans.count}` : scanNotice}
             testId="objects-scan"
           />
         </Stack>
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Box sx={{
+        <Box ref={mainList} sx={{
             // Таблица занимает всю оставшуюся ширину, а не «по содержимому».
             // По содержимому она схлопывалась на коротких кодах коробов, и
             // полэкрана уходило в пустоту — а в согласованном макете таблица
@@ -379,10 +425,11 @@ export function SortingObjectsScreen({
             </SecondaryAction>
           </Stack>
           <ObjectsTree
-            rows={unplacedRows(objects, lines, products, collapsed)}
+            rows={allRows(objects, lines, products, cells, visibleCollapsed)}
             objects={objects}
             carried={carried}
             testId="objects-tree"
+            activeObjectId={scanContext.objectId}
             empty={{
               title: 'Всё расставлено по ячейкам',
               hint: 'Ни товара россыпью, ни собранных объектов не осталось.',
@@ -430,11 +477,12 @@ export function SortingObjectsScreen({
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {cells.map((cell) => {
                 const active = activeCellId === cell.id
-                const qty = cellQty(cell.id, objects, lines)
+                const qty = quantitiesByCell.get(cell.id) ?? 0
                 const target = Boolean(carried && canPut(carried, cellRef(cell.id), objects))
                 return (
                   <Box
                     key={cell.id}
+                    ref={active ? activeCellTile : undefined}
                     role="button"
                     tabIndex={0}
                     onClick={() => setActiveCellId(cell.id)}
@@ -456,7 +504,6 @@ export function SortingObjectsScreen({
                       cursor: 'pointer',
                       border: '1px solid',
                       borderColor: active ? 'primary.main' : 'divider',
-                      backgroundColor: active ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
                       outline: target && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
                       outlineOffset: '-3px',
                     }}
@@ -472,84 +519,6 @@ export function SortingObjectsScreen({
               })}
             </Stack>
           </Paper>
-          {activeCell ? (
-            <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            outline:
-              carried && canPut(carried, cellRef(activeCell.id), objects)
-                ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
-                : 'none',
-            outlineOffset: '-4px',
-          }}
-          onDragOver={(event) => {
-            if (carried && canPut(carried, cellRef(activeCell.id), objects)) event.preventDefault()
-          }}
-          onDrop={() => drop(cellRef(activeCell.id))}
-          data-testid="objects-active-cell"
-            >
-          <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-            {/* Код ячейки не переносится на вторую строку (канон R-36):
-                заголовок, разорванный пополам, перестаёт читаться как код. */}
-            <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
-              {activeCell.code}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            >
-              {cellQty(activeCell.id, objects, lines)} шт — по составу того, что стоит
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <PrintAction
-              what="ШК ячейки"
-              placement="row"
-              // В состояние кладём сам код ячейки, а не подпись: печать ищет
-              // объект по коду, и строка «ячейка А 1.1» не совпадала ни с чем —
-              // печать молча ничего не делала.
-              onClick={() => setPrinting({ title: activeCell.code, barcode: activeCell.barcode })}
-              testId="objects-print-cell"
-            />
-          </Stack>
-          <ObjectsTree
-            rows={cellRows(activeCell, objects, lines, products, collapsed)}
-            objects={objects}
-            carried={carried}
-            testId="objects-cell-tree"
-            compact
-            empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
-            onToggle={toggle}
-            onPlace={(row: ObjectRow) =>
-              openDialog(
-                row.kind === 'goods'
-                  ? { kind: 'goods', line: row.line }
-                  : { kind: 'object', object: row.object },
-              )
-            }
-            onDragStart={(row: ObjectRow) =>
-              setCarried(
-                row.kind === 'goods'
-                  ? { kind: 'goods', line: row.line }
-                  : { kind: 'object', object: row.object },
-              )
-            }
-            onDragEnd={() => setCarried(null)}
-            onDropOn={drop}
-            onTakeOut={takeOut}
-            onMinus={takeOffCell}
-            onPrint={(row) =>
-              setPrinting(
-                row.kind === 'object'
-                  ? { title: objectTitle(row.object), barcode: row.object.barcode }
-                  : { title: row.name, barcode: row.barcode },
-              )
-            }
-            onPickCell={setActiveCellId}
-          />
-            </Paper>
-          ) : null}
 
         </Stack>
       </Stack>

@@ -57,6 +57,8 @@ import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
+import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import {
   buildFbsPickingListPrintHtml,
   fbsPickSourceLabels,
@@ -67,6 +69,7 @@ import {
   fbsMarkingPresentation,
   fbsMarkingVerdictsSummary,
   fbsBoxEditingDisabled,
+  fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
@@ -491,6 +494,10 @@ export function FfFbsSupplyWorkspace({
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
+  const selectStage = (next: StageKey) => {
+    if (supplyId) saveFbsWorkspaceStage(supplyId, next)
+    setStage(next)
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -501,6 +508,8 @@ export function FfFbsSupplyWorkspace({
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [packingSelectedIds, setPackingSelectedIds] = useState<Set<string>>(() => new Set())
+  // WMS-562: перенос выбранных на упаковке заказов в другую поставку WB.
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [clearMarkingOrders, setClearMarkingOrders] = useState<FbsWorkspace['orders'] | null>(null)
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
@@ -645,7 +654,7 @@ export function FfFbsSupplyWorkspace({
         setWorkspace(next)
         onApplied?.(next)
         if (!silent) {
-          setStage((current) => fbsStageAfterWorkspaceRefresh(
+          setStage((current) => readFbsWorkspaceStage(supplyId) ?? fbsStageAfterWorkspaceRefresh(
             next.supply.marketplace,
             current,
             visualStage(next.stage),
@@ -670,11 +679,12 @@ export function FfFbsSupplyWorkspace({
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
-    setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
+    setStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition'))
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
     setPackingSelectedIds(new Set())
+    setTransferDialogOpen(false)
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
@@ -858,7 +868,7 @@ export function FfFbsSupplyWorkspace({
       const applied = write.isLatest()
       if (applied) {
         setWorkspace(next)
-        setStage((current) => fbsStageAfterWorkspaceRefresh(
+        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
           next.supply.marketplace,
           current,
           visualStage(next.stage),
@@ -938,7 +948,7 @@ export function FfFbsSupplyWorkspace({
         // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
         // setStage перекидывал человека с упаковки или коробов на подбор. Правило
         // проекта: серверные факты не управляют навигацией в рабочем месте WB.
-        setStage((current) => fbsStageAfterWorkspaceRefresh(
+        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
           next.supply.marketplace,
           current,
           visualStage(next.stage),
@@ -1819,7 +1829,7 @@ export function FfFbsSupplyWorkspace({
       setBoxProductQty({})
       setBoxSelectedPositionIds(new Set())
       setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
-      setStage('boxes')
+      selectStage('boxes')
     }
   }
 
@@ -1874,7 +1884,7 @@ export function FfFbsSupplyWorkspace({
       isOzonSupply ? () => refreshAfterLostRace() : undefined,
     )
     if (!next) return
-    setStage('boxes')
+    selectStage('boxes')
     const box = next.boxes.find((item) => item.id === boxId)
     if (box?.qr_asset?.status === 'ready' && box.qr_asset.preview_url) openAssetPreview([box.qr_asset])
     else if (isOzonSupply) setNotice(box?.qr_asset?.error?.message ?? 'Этикетка Ozon ещё не готова — повторите получение через минуту.')
@@ -1977,7 +1987,7 @@ export function FfFbsSupplyWorkspace({
       const nextKey = createFbsIdempotencyKey()
       deliveryKeyRef.current = nextKey
       setDeliverySubmitted(true)
-      setStage('boxes')
+      selectStage('boxes')
     }
   }
 
@@ -2492,6 +2502,7 @@ export function FfFbsSupplyWorkspace({
     deliveryConfirmed,
   )
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
+  const boxProductProgress = fbsBoxProductProgress(workspace?.orders ?? [], assignedBoxOrderIds, boxProductQty)
   const availableForBox = fbsOrdersAvailableForBox(workspace?.orders ?? [], assignedBoxOrderIds)
   const boxAssignBox = workspace?.boxes.find((box) => box.id === boxAssignTarget)
   const boxAssignName = boxAssignBox?.box_number
@@ -2608,7 +2619,7 @@ export function FfFbsSupplyWorkspace({
         size="large"
         disabled={!unlocked || busy}
         onClick={() => {
-          setStage(next.key)
+          selectStage(next.key)
           setError(null)
           setNotice(null)
         }}
@@ -2796,7 +2807,7 @@ export function FfFbsSupplyWorkspace({
       <Tabs
         value={stage}
         onChange={(_, value) => {
-          if (STAGES.findIndex((item) => item.key === value) <= accessibleStageIndex) setStage(value)
+          if (STAGES.findIndex((item) => item.key === value) <= accessibleStageIndex) selectStage(value)
           setError(null)
           setNotice(null)
         }}
@@ -2987,6 +2998,15 @@ export function FfFbsSupplyWorkspace({
                         {!isOzonSupply && selectedPackingOrders.length > 0 ? (
                           <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
                             Очистить ЧЗ
+                          </Button>
+                        ) : null}
+                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
+                          <Button
+                            disabled={!packagingEditable || busy}
+                            onClick={() => setTransferDialogOpen(true)}
+                            data-testid="fbs-packing-transfer-supply"
+                          >
+                            Перенести в другую поставку
                           </Button>
                         ) : null}
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
@@ -3692,6 +3712,30 @@ export function FfFbsSupplyWorkspace({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       /></ErrorBoundary>
+      {workspace ? (
+        <ErrorBoundary component="FbsTransferSupplyDialog">
+          <FbsTransferSupplyDialog
+            open={transferDialogOpen}
+            orderIds={selectedPackingOrders.map((order) => order.id)}
+            currentSupplyId={workspace.supply.id}
+            onClose={() => setTransferDialogOpen(false)}
+            onTransferred={(result) => {
+              if (shownSupplyId.current !== workspace.supply.id) return
+              if (result.state === 'confirmed') setTransferDialogOpen(false)
+              setPackingSelectedIds((current) => {
+                if (result.transferred_order_ids.length === 0) return current
+                const next = new Set(current)
+                for (const id of result.transferred_order_ids) next.delete(id)
+                return next
+              })
+              setNotice(result.message
+                ?? `Перенесено ${result.transferred_order_ids.length} ${ordersWord(result.transferred_order_ids.length)}.${result.pending_order_ids.length ? ` Ожидают подтверждения: ${result.pending_order_ids.length}.` : ''}${result.failed_order_ids.length ? ` Не перенесены: ${result.failed_order_ids.length}.` : ''}`)
+              void load(true)
+            }}
+            deps={makeFbsTransferSupplyDeps(token, authHeaders, workspace.supply.id)}
+          />
+        </ErrorBoundary>
+      ) : null}
       <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
@@ -4049,6 +4093,7 @@ export function FfFbsSupplyWorkspace({
                 )
               }) : boxAssignRows.map((row) => {
                 const value = boxProductQty[row.key] ?? ''
+                const progress = boxProductProgress.get(row.key)!
                 return (
                   <Stack key={row.key} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                     <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={44} />
@@ -4056,18 +4101,23 @@ export function FfFbsSupplyWorkspace({
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
                       <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography>
                     </Box>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={value}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const next = Math.min(row.orders.length, Math.max(0, Number(event.target.value) || 0))
-                        setBoxProductQty((current) => ({ ...current, [row.key]: next > 0 ? String(next) : '' }))
-                      }}
-                      slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
-                      sx={{ width: 96 }}
-                    />
+                    <Stack spacing={0.5} sx={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={value}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const next = Math.min(row.orders.length, Math.max(0, Number(event.target.value) || 0))
+                          setBoxProductQty((current) => ({ ...current, [row.key]: next > 0 ? String(next) : '' }))
+                        }}
+                        slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
+                        sx={{ width: 96 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }} data-testid={`fbs-box-product-progress-${row.key}`}>
+                        План: {progress.planned} · Осталось: {progress.remaining}
+                      </Typography>
+                    </Stack>
                   </Stack>
                 )
               })}

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
+from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.wildberries_client import WildberriesClientError
@@ -21,6 +22,64 @@ from app.services.wildberries_product_import_service import upsert_products_from
 from app.services.wildberries_sync_service import WildberriesSyncError, fetch_all_cards
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_card_nm_id(card: dict[str, Any]) -> int | None:
+    """Same parsing rule as ``upsert_products_from_wb_cards`` (duplicated by
+    convention: this module doesn't import that module's private helper, see
+    ``wildberries_import_cards_service._parse_nm_id`` for the same pattern)."""
+    raw = card.get("nmID") if "nmID" in card else card.get("nmId")
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    return None
+
+
+async def get_selected_wb_nm_ids(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+) -> set[int]:
+    """nmID of the WB cards already "on fulfilment" for this seller (WMS-548 А3).
+
+    There is no separate selection flag: a card counts as selected exactly when
+    this seller already has a Product row with its nmID. One flat query, no
+    ``.in_(...)`` list — it filters by tenant_id/seller_id (both indexed
+    equality conditions), so it never hits the IN-list size limit that WMS-538
+    ran into on large catalogues.
+    """
+    stmt = (
+        select(Product.wb_nm_id)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+            Product.wb_nm_id.isnot(None),
+        )
+        .distinct()
+    )
+    res = await session.execute(stmt)
+    return {int(nm) for (nm,) in res.all() if nm is not None}
+
+
+def filter_wb_cards_to_selected(
+    cards: list[Any], selected_nm_ids: set[int],
+) -> list[Any]:
+    """Keep only cards already selected (see ``get_selected_wb_nm_ids``).
+
+    WMS-548 R4/R5: saving a key or syncing must not create Product rows for a
+    card that hasn't been added to the fulfilment yet. Typed ``list[Any]`` (not
+    ``list[dict[str, Any]]``/``list[object]``) purely so this drops into both
+    callers unchanged — the API layer's ``total_cards: list[object]`` and the
+    sync service's ``list[dict[str, Any]]`` — ``list`` is invariant in mypy.
+    """
+    return [
+        card
+        for card in cards
+        if isinstance(card, dict) and _parse_card_nm_id(card) in selected_nm_ids
+    ]
 
 
 async def fetch_all_wb_cards(
@@ -58,12 +117,16 @@ async def _save_wb_cards(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
     cards: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    # Снимок обновляется по всем карточкам всегда; товары WMS — только по тем,
+    # что уже выбраны (см. get_selected_wb_nm_ids). WMS-548 R5: синхронизация не
+    # заводит новые карточки и не трогает те, что селлер не выбрал.
     saved = await upsert_imported_cards(session, tenant_id, seller_id, cards)
+    selected_nm_ids = await get_selected_wb_nm_ids(session, tenant_id, seller_id)
     prod_stats = await upsert_products_from_wb_cards(
         session,
         tenant_id,
         seller_id,
-        list(cards),
+        filter_wb_cards_to_selected(list(cards), selected_nm_ids),
     )
     return {
         "seller_id": str(seller_id),
@@ -176,12 +239,16 @@ async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
                 ok.append(result)
                 logger.info(
                     "wb products sync ok seller=%s cards=%s created=%s "
-                    "updated=%s legacy_old=%s",
+                    "updated=%s legacy_old=%s barcode_conflicts=%s "
+                    "duplicate_chrt_id=%s missing_chrt_id=%s",
                     seller_id,
                     result.get("cards_received"),
                     result.get("products_created"),
                     result.get("products_updated"),
                     result.get("legacy_marked_old"),
+                    result.get("barcode_conflicts"),
+                    result.get("duplicate_chrt_id"),
+                    result.get("sizes_missing_chrt_id"),
                 )
 
     summary = {

@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.settings import settings
+from app.db.physical_warehouse_guard import register_sqlite_defect_function
 
 engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=True)
+register_sqlite_defect_function(engine.sync_engine)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

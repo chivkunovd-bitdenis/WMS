@@ -54,11 +54,59 @@ const LOOKUP_ERRORS: Record<string, string> = {
   dadata_unavailable: 'DaData не ответила. Заполните реквизиты руками или повторите позже',
 }
 
+/** Коды `GET /billing/profiles/sellers/{id}/marketplace-requisites` (WMS-547 R11). */
+const MARKETPLACE_ERRORS: Record<string, string> = {
+  key_not_connected: 'Ключ площадки не подключён',
+  marketplace_rejected_key: 'Ключ не принят площадкой',
+  marketplace_rate_limited: 'Площадка ограничила частоту запросов — повторите позже',
+  marketplace_unavailable: 'Площадка не ответила',
+  ozon_account_blocked: 'Кабинет Ozon заблокирован',
+  inn_missing: 'Площадка не вернула ИНН',
+}
+
+type MarketplaceRequisites = { inn?: string; legal_name?: string | null; kpp?: string | null }
+
+/**
+ * Кнопки площадок видны только для конкретного селлера (не для «Расчётов»,
+ * где окно открывается без `sellerId`) и только для подключённой у него
+ * площадки (WMS-547 R9).
+ */
+export function marketplaceFillButtonsVisible(props: {
+  sellerId?: string
+  wbConnected?: boolean
+  ozonConnected?: boolean
+}): { wb: boolean; ozon: boolean } {
+  const hasSeller = Boolean(props.sellerId)
+  return {
+    wb: hasSeller && Boolean(props.wbConnected),
+    ozon: hasSeller && Boolean(props.ozonConnected),
+  }
+}
+
+/**
+ * Слить ответ «Заполнить из WB/Ozon» в форму: ИНН и наименование подставляются,
+ * КПП — только если площадка (или наложенная на неё DaData) его вернула, иначе
+ * уже введённое в форму КПП остаётся (WMS-547 R10). Банковские поля не трогает.
+ */
+export function mergeMarketplaceRequisitesIntoForm(
+  current: ProfileForm,
+  data: MarketplaceRequisites,
+): ProfileForm {
+  return {
+    ...current,
+    inn: data.inn ?? current.inn,
+    legal_name: data.legal_name ?? current.legal_name,
+    kpp: data.kpp ?? current.kpp,
+  }
+}
+
 export function FfBillingProfilesDialog({
   token,
   sellers = [],
   sellerId,
   sellerName,
+  wbConnected,
+  ozonConnected,
   onSaved,
 }: {
   token: string
@@ -66,6 +114,10 @@ export function FfBillingProfilesDialog({
   /** Реквизиты одного селлера: выбор «чьи» тогда не нужен. */
   sellerId?: string
   sellerName?: string
+  /** У селлера есть ключ WB / подключён Ozon — тогда рядом с «Заполнить по
+      ИНН» есть своя кнопка подтягивания реквизитов у этой площадки (WMS-547 R9). */
+  wbConnected?: boolean
+  ozonConnected?: boolean
   onSaved?: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -76,6 +128,7 @@ export function FfBillingProfilesDialog({
   const [notice, setNotice] = useState<string | null>(null)
 
   const path = scope === 'ff' ? '/api/billing/profiles/ff' : `/api/billing/profiles/sellers/${scope}`
+  const fillButtons = marketplaceFillButtonsVisible({ sellerId, wbConnected, ozonConnected })
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -128,6 +181,29 @@ export function FfBillingProfilesDialog({
       )
     } catch {
       setError('Подстановка по ИНН не сработала')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function fillFromMarketplace(marketplace: 'wb' | 'ozon') {
+    if (!sellerId) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const response = await fetch(
+        `/api/billing/profiles/sellers/${sellerId}/marketplace-requisites?marketplace=${marketplace}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const data = (await response.json()) as MarketplaceRequisites & { detail?: string }
+      if (!response.ok) {
+        setError(MARKETPLACE_ERRORS[String(data.detail)] ?? 'Не удалось заполнить реквизиты из площадки')
+        return
+      }
+      setForm((current) => mergeMarketplaceRequisitesIntoForm(current, data))
+    } catch {
+      setError('Не удалось заполнить реквизиты из площадки')
     } finally {
       setBusy(false)
     }
@@ -207,7 +283,7 @@ export function FfBillingProfilesDialog({
               testId="billing-profiles-scope"
             />
           )}
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end', flexWrap: 'wrap', rowGap: 1 }}>
             <Box sx={{ width: 220, flexShrink: 0 }}>
               <TextInput
                 label="ИНН"
@@ -225,6 +301,24 @@ export function FfBillingProfilesDialog({
             >
               Заполнить по ИНН
             </SecondaryAction>
+            {fillButtons.wb ? (
+              <SecondaryAction
+                onClick={() => void fillFromMarketplace('wb')}
+                disabledReason={busy ? 'Идёт запрос' : undefined}
+                data-testid="billing-profiles-fill-wb"
+              >
+                Заполнить из WB
+              </SecondaryAction>
+            ) : null}
+            {fillButtons.ozon ? (
+              <SecondaryAction
+                onClick={() => void fillFromMarketplace('ozon')}
+                disabledReason={busy ? 'Идёт запрос' : undefined}
+                data-testid="billing-profiles-fill-ozon"
+              >
+                Заполнить из Ozon
+              </SecondaryAction>
+            ) : null}
           </Stack>
           <TextInput
             label="Наименование"

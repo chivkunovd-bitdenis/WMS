@@ -77,7 +77,14 @@ async def test_optional_without_value_keeps_binding_and_recovers_exact_value(
         if entry == "tape":
             async with SessionLocal() as session:
                 result = await print_tape(session, async_client, seed)
-            return result.order_errors[0].code if result.order_errors else "ok"
+                if result.order_errors:
+                    return result.order_errors[0].code
+                # WMS-560: a write WB answered but has not echoed yet is printed;
+                # the pending operation still carries the confirmation state.
+                assert [row.order_id for row in result.orders] == [seed.order_ids[0]]
+                assert result.orders[0].codes
+                state = await session.scalar(select(FbsWbOperation.state))
+            return "wb_pending_confirmation" if state == "pending_confirmation" else "ok"
         response = await async_client.post(
             "/operations/fbs-orders/kiz/commit", headers=seed.headers,
             json={"idempotency_key": "same-attempt-key", "pairs": [{
@@ -149,7 +156,11 @@ async def test_initial_put_without_echo_keeps_pending_operation(
     monkeypatch.setattr(marking_svc, "fetch_marketplace_orders_meta_batch", get)
     async with SessionLocal() as session:
         result = await print_tape(session, async_client, seed)
-        assert result.order_errors[0].code == "wb_pending_confirmation"
+        # WMS-560: WB answered the write, so the bound code is printed; the
+        # missing echo is tracked by the pending operation, not a tape error.
+        assert not result.order_errors
+        assert [row.order_id for row in result.orders] == [seed.order_ids[0]]
+        assert result.orders[0].codes
         marking = (await session.scalars(select(FbsOrderMarking))).one()
         assert marking.meta_status == "unknown"
         assert await session.scalar(select(FbsWbOperation.state)) == "pending_confirmation"

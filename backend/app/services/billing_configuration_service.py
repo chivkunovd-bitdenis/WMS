@@ -120,23 +120,56 @@ async def save_profile(
         correspondent_account = _required_text(correspondent_account)
         if not all((bank_name, bik, settlement_account, correspondent_account)):
             raise BillingConfigurationError("Для реквизитов ФФ заполните банковские поля")
+    def _apply(target: BillingProfile) -> None:
+        target.legal_name = legal_name
+        target.inn = inn.strip()
+        target.kpp = kpp.strip() if kpp else None
+        target.bank_name = _required_text(bank_name)
+        target.bik = _required_text(bik)
+        target.settlement_account = _required_text(settlement_account)
+        target.correspondent_account = _required_text(correspondent_account)
+
     profile = await session.scalar(
         select(BillingProfile).where(
             BillingProfile.tenant_id == tenant_id, BillingProfile.seller_id == seller_id
         )
     )
     before = _profile_audit_fields(profile) if profile is not None else None
-    if profile is None:
-        profile = BillingProfile(tenant_id=tenant_id, seller_id=seller_id)
-        session.add(profile)
-    profile.legal_name = legal_name
-    profile.inn = inn.strip()
-    profile.kpp = kpp.strip() if kpp else None
-    profile.bank_name = _required_text(bank_name)
-    profile.bik = _required_text(bik)
-    profile.settlement_account = _required_text(settlement_account)
-    profile.correspondent_account = _required_text(correspondent_account)
-    await session.flush()
+    if profile is not None:
+        _apply(profile)
+        await session.flush()
+    else:
+        # Между чтением выше и вставкой кто-то другой (например, автозаполнение
+        # реквизитов по ключу площадки, WMS-547) мог создать запись первым.
+        # session.add() и flush должны идти ВНУТРИ savepoint: begin_nested()
+        # сам делает autoflush уже добавленных объектов, и если добавить
+        # profile раньше, вставка проскочит до начала savepoint — откатывать
+        # будет нечего, а IntegrityError вылетит наружу необработанным
+        # (независимое ревью WMS-547, F1). Savepoint откатывает только эту
+        # попытку вставки, не всю транзакцию запроса; после отката
+        # перечитываем конфликтную запись и переходим на путь обновления —
+        # ручное сохранение обязано победить, а не отдать вызывающему 500.
+        nested = await session.begin_nested()
+        try:
+            profile = BillingProfile(tenant_id=tenant_id, seller_id=seller_id)
+            session.add(profile)
+            _apply(profile)
+            await session.flush()
+        except IntegrityError:
+            await nested.rollback()
+            profile = await session.scalar(
+                select(BillingProfile).where(
+                    BillingProfile.tenant_id == tenant_id,
+                    BillingProfile.seller_id == seller_id,
+                )
+            )
+            if profile is None:
+                raise
+            before = _profile_audit_fields(profile)
+            _apply(profile)
+            await session.flush()
+        else:
+            await nested.commit()
     await record_document_mutation(
         session,
         tenant_id=tenant_id,

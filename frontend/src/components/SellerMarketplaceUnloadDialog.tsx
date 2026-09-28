@@ -29,7 +29,7 @@ import {
   type SellerWbCatalogRow,
 } from './SellerWbProductPickerDialog'
 import { WmsDateField } from './WmsDateField'
-import { readApiErrorMessage } from '../utils/readApiErrorMessage'
+import { insufficientAvailableMessage, readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { createLatestRequestSequence } from '../utils/latestRequestSequence'
 
 type StockRow = {
@@ -334,10 +334,19 @@ function SellerMarketplaceUnloadDialogContent({
         if (qty <= 0 || lineProductIds.has(productId)) {
           continue
         }
-        const available = stockByProductId.get(productId)?.available ?? 0
+        const stock = stockByProductId.get(productId)
+        const available = stock?.available ?? 0
         if (qty > available) {
+          const product = catalogById.get(productId)
           setModalError(
-            'Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.',
+            insufficientAvailableMessage(
+              {
+                name: stock?.product_name ?? product?.name ?? null,
+                sku: stock?.sku_code ?? product?.sku_code ?? null,
+              },
+              available,
+              qty,
+            ),
           )
           setModalBusy(false)
           return
@@ -579,7 +588,7 @@ function SellerMarketplaceUnloadDialogContent({
               <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
               <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
               <TableCell align="right" sx={{ width: 110 }}>
-                Доступно FBO
+                Доступно
               </TableCell>
               <TableCell align="right" sx={{ width: 120 }}>
                 К отгрузке
@@ -646,7 +655,11 @@ function SellerMarketplaceUnloadDialogContent({
                         }
                         if (v > available) {
                           setModalError(
-                            'Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.',
+                            insufficientAvailableMessage(
+                              { name: ln.product_name, sku: ln.sku_code },
+                              available,
+                              v,
+                            ),
                           )
                           return
                         }
@@ -817,10 +830,9 @@ function SellerMarketplaceUnloadDialogContent({
         testIdPrefix="seller-mp-picker"
         qtyColumnLabel="К отгрузке"
         showAvailableColumn
-        availableColumnLabel="Доступно FBO"
         getAvailable={pickerGetAvailable}
         filterRow={pickerFilterRow}
-        emptyMessage="Нет свободного FBO остатка для отгрузки."
+        emptyMessage="Нет доступного остатка по этому селлеру"
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
       />

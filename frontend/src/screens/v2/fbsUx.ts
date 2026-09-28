@@ -103,6 +103,28 @@ export function fbsOrdersAvailableForBox<T extends { id: string }>(
   return orders.filter((order) => !assignedOrderIds.has(order.id))
 }
 
+/** WB has one unit per order. This is display-only; assignment keeps its existing logic. */
+export function fbsBoxProductProgress(
+  orders: Array<{ id: string; product: { id: string | null } }>,
+  assignedOrderIds: Set<string>,
+  draftQuantities: Record<string, string>,
+): Map<string, { planned: number; remaining: number }> {
+  const progress = new Map<string, { planned: number; remaining: number }>()
+  for (const order of orders) {
+    const key = order.product.id ?? order.id
+    const current = progress.get(key) ?? { planned: 0, remaining: 0 }
+    current.planned += 1
+    if (!assignedOrderIds.has(order.id)) current.remaining += 1
+    progress.set(key, current)
+  }
+  for (const [key, current] of progress) {
+    // Match the existing order slice: only whole available units enter the box.
+    const selected = Math.min(current.remaining, Math.max(0, Number(draftQuantities[key]) || 0))
+    current.remaining -= Math.trunc(selected)
+  }
+  return progress
+}
+
 export function fbsDeliveryConfirmDisabled(
   marketplace: FbsMarketplace,
   loading: boolean,

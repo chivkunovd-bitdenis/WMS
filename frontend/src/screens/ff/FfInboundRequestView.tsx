@@ -1622,7 +1622,7 @@ export function FfInboundRequestView({
       // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
       // диалог принтера для каждого короба и рвёт непрерывную ленту.
       printBarcodeLabels(targets.map((target) => ({
-        title: target.kind === 'box' ? `Короб № ${target.number}` : `Грузоместо № ${target.number}`,
+        title: target.kind === 'box' ? `Короб ${target.barcode}` : `Грузоместо № ${target.number}`,
         barcode: target.barcode,
         barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
         labelSize,
@@ -3181,7 +3181,7 @@ export function FfInboundRequestView({
                           >
                             {!box.pallet_id ? (
                               <CheckboxInput
-                                label={`Выбрать короб № ${box.box_number}`}
+                                label={`Выбрать короб ${box.internal_barcode}`}
                                 hideLabel
                                 checked={selectedPalletBoxIds.has(box.id)}
                                 onChange={(checked) => {
@@ -3197,7 +3197,7 @@ export function FfInboundRequestView({
                               />
                             ) : null}
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              Короб № {box.box_number}{' '}
+                              Короб{' '}
                               <Typography component="code" variant="body2">
                                 {box.internal_barcode}
                               </Typography>
@@ -3365,7 +3365,7 @@ export function FfInboundRequestView({
                           ? hasNoCellPending
                             ? 'Распределение зафиксировано без ячеек — товар остаётся в зоне сортировки. Откройте заново и разложите принятое.'
                             : 'Всё принятое разложено по ячейкам хранения.'
-                          : 'Разложите принятое по ячейкам хранения. Можно частями: разложенное сразу доступно к резерву, пока не разложено всё — приёмка остаётся в этом разделе.'}
+                          : 'Разложите принятое по ячейкам хранения. Можно частями: пока не разложено всё, приёмка остаётся в этом разделе.'}
                       </Typography>
                       {requestWarehouse ? (
                         <Typography
@@ -3816,7 +3816,7 @@ export function FfInboundRequestView({
           onClose={() => setBoxAddDialogBoxId(null)}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
-          boxLabel={`Короб № ${boxAddDialogBox.box_number}`}
+          boxLabel={`Короб ${boxAddDialogBox.internal_barcode}`}
           readOnly={!receivingActive && !ffDraft}
           ffDraft={ffDraft}
           ffInbound={ffInbound}
@@ -3919,7 +3919,7 @@ export function FfInboundRequestView({
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography variant="body2">
             На палету встанут короба:{' '}
-            {selectedPalletBoxes.map((box) => `№ ${box.box_number}`).join(', ')}
+            {selectedPalletBoxes.map((box) => box.internal_barcode).join(', ')}
           </Typography>
           <SelectInput
             label="Палета"

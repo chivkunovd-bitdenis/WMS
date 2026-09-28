@@ -17,9 +17,11 @@ import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
+import { SellerKizWithdrawalScreen } from '../../screens/v2/SellerKizWithdrawalScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
+import { FfBillingScreen } from '../../screens/ff/FfBillingScreen'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -46,6 +48,81 @@ export const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
 
 type SellerAppProps = {
   navigationBasePath?: string
+}
+
+/**
+ * Читает claims JWT без проверки подписи — сервер и так проверяет токен на
+ * каждый запрос, здесь он нужен только как значение для ключа пересоздания,
+ * а не для авторизации.
+ */
+function decodeJwtClaims(token: string): { tenant_id?: string; sub?: string; seller_id?: string } | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+    const binary = atob(padded)
+    const json = decodeURIComponent(
+      Array.from(binary, (char) => '%' + char.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
+    )
+    return JSON.parse(json) as { tenant_id?: string; sub?: string; seller_id?: string }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Ключ пересоздания разделов кабинета селлера (WMS-549, ревью Astra F1, F6).
+ *
+ * Раньше ключ строился только по активному селлеру профиля. При переключении
+ * магазина applyToken() меняет токен сразу, а обновлённый /auth/me приходит
+ * отдельным, более медленным запросом — в этом окне экран уже получал новый
+ * токен, но со старым ключом и потому не пересоздавался: внутреннее состояние
+ * панелей с собственной дочиткой (например, страницы истории счетов, курсор,
+ * открытый счёт) успевало смешаться с ответом новой сессии, прежде чем профиль
+ * обновлялся и ключ менялся следом (F1).
+ *
+ * Первое исправление F1 включило в ключ всю строку токена — это остановило
+ * смешивание, но перевыпуск токена той же области (тот же пользователь,
+ * tenant и магазин — например, силовой /auth/switch-seller на тот же магазин
+ * или будущий silent-refresh) тоже стал менять ключ и пересоздавать все
+ * разделы, теряя вкладку, период, дочитанные страницы и открытый счёт без
+ * какой-либо смены данных (F6, найдено ревью Astra №2 как следствие F1).
+ *
+ * Ключ теперь строится из тех claims токена, которые и определяют область
+ * данных (tenant_id, sub, seller_id), а не из его полной строки. Эти claims
+ * приходят в самом токене и читаются синхронно в том же рендере, где меняется
+ * token — раньше /auth/me, поэтому F1 остаётся исправленным. Токен той же
+ * области (тот же tenant_id/sub/seller_id, другие iat/подпись) даёт тот же
+ * ключ — раздел не пересоздаётся, F6 исправлен. Если токен нечитаем как JWT
+ * (испорчен или в тесте подставлена не настоящая строка), используется вся
+ * строка токена как безопасный запасной вариант: он не может занизить
+ * пересоздание при смене области, только может пересоздать лишний раз.
+ *
+ * Остаток F6 (ревью Astra №3): сервер трактует токен без claim seller_id как
+ * основной магазин пользователя (`resolve_effective_seller_id` в deps.py) —
+ * это не «магазин без имени», а тот же самый основной магазин, что и явный ID
+ * в переизданном токене. Раньше отсутствие claim нормализовалось к отдельной
+ * метке 'no-seller', поэтому токен без claim и токен с явным ID того же
+ * основного магазина давали РАЗНЫЕ ключи и лишний раз пересоздавали раздел.
+ * Теперь отсутствующий claim нормализуется к home_seller_id профиля (тот же
+ * основной магазин, что получит и явный токен) — эта величина не меняется при
+ * переключении активного магазина, поэтому её безопасно брать из уже
+ * загруженного `me`, в отличие от active_seller_id (тот меняется только после
+ * /auth/me и подстановка его сюда вернула бы F1: см. выше). Когда claims
+ * присутствуют явно — они и есть источник истины, home_seller_id профиля
+ * здесь не участвует.
+ */
+export function sellerCatalogScopeKey(
+  token: string | null,
+  me: { active_seller_id?: string | null; seller_id?: string | null; home_seller_id?: string | null },
+): string {
+  const claims = token ? decodeJwtClaims(token) : null
+  if (claims) {
+    const sellerScope = claims.seller_id ?? me.home_seller_id ?? me.seller_id ?? 'home'
+    return `${claims.tenant_id ?? 'no-tenant'}:${claims.sub ?? 'no-user'}:${sellerScope}`
+  }
+  return `${token ?? 'anon'}:${me.active_seller_id ?? me.seller_id ?? 'none'}`
 }
 
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
@@ -325,8 +402,9 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     if (!me) {
       return null
     }
-    const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
+    const catalogScopeKey = sellerCatalogScopeKey(token, me)
     const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
+    const withdrawalEnabled = me.withdrawal_enabled === true && !shopsBusy
     const accessDenied = (
       <Alert severity="warning" data-testid="seller-access-denied">
         Нет доступа к этому разделу. Обратитесь к администратору селлера.
@@ -485,7 +563,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  addressStorageEnabled={me.address_storage_enabled !== false}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
                   sellerName={me.active_seller_name ?? me.seller_name ?? '—'}
                   warehouses={warehouses}
@@ -500,6 +577,21 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
             element={
               <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                  withdrawalEnabled={withdrawalEnabled}
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/honest-sign/withdrawals"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.honest_sign && withdrawalEnabled ? (
+                <SellerKizWithdrawalScreen
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
@@ -519,6 +611,21 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   sellers={[]}
                   warehouses={reportWarehouseOptions(warehouses)}
                   contentInset={288}
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.documents ? (
+                <FfBillingScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  onOpenInbound={() => {}}
+                  sellerScope
                 />
               ) : (
                 accessDenied

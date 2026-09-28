@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +43,15 @@ class Settings(BaseSettings):
         description="Redis URL for Celery (e.g. redis://redis:6379/0). "
         "Unset: API runs background jobs via FastAPI BackgroundTasks.",
     )
+    withdrawal_environment: Literal["sandbox", "production"] = "sandbox"
+    withdrawal_seller_allowlist: str = Field(
+        default="",
+        description="Server-only comma-separated seller UUIDs. Empty or invalid closes withdrawal.",
+    )
+    withdrawal_production_submit_enabled: bool = Field(
+        default=False,
+        description="Production create requires separate release authorization; default closed.",
+    )
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
         description="WB Content API host (override in tests/mocks).",
@@ -61,6 +70,13 @@ class Settings(BaseSettings):
             "Optional read-only WB Marketplace host for seller warehouse discovery. "
             "Unset: use wildberries_marketplace_api_base. This allows staging to read "
             "real warehouse names while all mutating FBS calls remain on the emulator."
+        ),
+    )
+    wildberries_common_api_base: str = Field(
+        default="https://common-api.wildberries.ru",
+        description=(
+            "WB Common API host (seller-info and other account-level methods; "
+            "override in tests/mocks)."
         ),
     )
     ozon_seller_api_base: str = Field(
@@ -138,6 +154,13 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Playwright/e2e: stub WB Marketplace order meta (marking) API "
+            "without calling the network."
+        ),
+    )
+    e2e_mock_wb_seller_info: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB GET /api/v1/seller-info (seller requisites lookup) "
             "without calling the network."
         ),
     )

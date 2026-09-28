@@ -141,7 +141,7 @@ async def resolve_container_paths(
             parent_pallet_id = warehouse_box.pallet_id
         elif kind == "box" and container_id in inbound_box_by_id:
             inbound_box = inbound_box_by_id[container_id]
-            code = f"КР-{inbound_box.box_number:06d}"
+            code = inbound_box.internal_barcode
             parent_pallet_id = inbound_box.pallet_id
         elif kind == "cargo_place" and container_id in cargo_place_by_id:
             cargo_place = cargo_place_by_id[container_id]
@@ -241,7 +241,11 @@ async def _load_boxes(
 
 
 async def _load_map_rows(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID | None = None,
 ) -> tuple[
     list[tuple[InventoryBalance, StorageLocation, Product, Seller | None]],
     list[StorageLocation],
@@ -253,6 +257,19 @@ async def _load_map_rows(
     dict[uuid.UUID, str | None],
     dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard],
 ]:
+    # WMS-490 D1: с ``product_id`` в дерево попадают только строки остатка и
+    # незавершённых приёмок этого товара — контейнеры и локации по-прежнему
+    # читаются целиком (их список не тяжелее без фильтра), а лишние продуктовые
+    # строки убираются пустыми контейнерами в ``get_warehouse_map``.
+    balance_filters = [
+        InventoryBalance.tenant_id == tenant_id,
+        InventoryBalance.quantity > 0,
+        StorageLocation.tenant_id == tenant_id,
+        StorageLocation.warehouse_id == warehouse_id,
+        Product.tenant_id == tenant_id,
+    ]
+    if product_id is not None:
+        balance_filters.append(InventoryBalance.product_id == product_id)
     rows = cast(
         list[tuple[InventoryBalance, StorageLocation, Product, Seller | None]],
         list(
@@ -264,13 +281,7 @@ async def _load_map_rows(
                     )
                     .join(Product, Product.id == InventoryBalance.product_id)
                     .outerjoin(Seller, Seller.id == Product.seller_id)
-                    .where(
-                        InventoryBalance.tenant_id == tenant_id,
-                        InventoryBalance.quantity > 0,
-                        StorageLocation.tenant_id == tenant_id,
-                        StorageLocation.warehouse_id == warehouse_id,
-                        Product.tenant_id == tenant_id,
-                    )
+                    .where(*balance_filters)
                 )
             ).all()
         ),
@@ -305,6 +316,28 @@ async def _load_map_rows(
         session, tenant_id, warehouse_id
     )
     pending_contents: list[PendingInboundContent] = []
+    box_line_filters = [
+        InboundIntakeBox.tenant_id == tenant_id,
+        InboundIntakeRequest.tenant_id == tenant_id,
+        or_(
+            StorageLocation.warehouse_id == warehouse_id,
+            and_(
+                InboundIntakeBox.storage_location_id.is_(None),
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            ),
+        ),
+        InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
+        ~exists(
+            select(InventoryBalance.id).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.container_kind == "box",
+                InventoryBalance.container_id == InboundIntakeBox.id,
+                InventoryBalance.product_id == InboundIntakeBoxLine.product_id,
+            )
+        ),
+    ]
+    if product_id is not None:
+        box_line_filters.append(InboundIntakeBoxLine.product_id == product_id)
     box_line_rows = await session.execute(
         select(InboundIntakeBoxLine, InboundIntakeBox, Product, Seller)
         .join(InboundIntakeBox, InboundIntakeBox.id == InboundIntakeBoxLine.box_id)
@@ -318,26 +351,7 @@ async def _load_map_rows(
         )
         .join(Product, Product.id == InboundIntakeBoxLine.product_id)
         .outerjoin(Seller, Seller.id == Product.seller_id)
-        .where(
-            InboundIntakeBox.tenant_id == tenant_id,
-            InboundIntakeRequest.tenant_id == tenant_id,
-            or_(
-                StorageLocation.warehouse_id == warehouse_id,
-                and_(
-                    InboundIntakeBox.storage_location_id.is_(None),
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
-                ),
-            ),
-            InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
-            ~exists(
-                select(InventoryBalance.id).where(
-                    InventoryBalance.tenant_id == tenant_id,
-                    InventoryBalance.container_kind == "box",
-                    InventoryBalance.container_id == InboundIntakeBox.id,
-                    InventoryBalance.product_id == InboundIntakeBoxLine.product_id,
-                )
-            ),
-        )
+        .where(*box_line_filters)
     )
     pending_contents.extend(
         PendingInboundContent(
@@ -350,6 +364,28 @@ async def _load_map_rows(
         )
         for line, box, product, seller in box_line_rows.all()
     )
+    cargo_line_filters = [
+        InboundIntakeCargoPlace.tenant_id == tenant_id,
+        InboundIntakeRequest.tenant_id == tenant_id,
+        or_(
+            StorageLocation.warehouse_id == warehouse_id,
+            and_(
+                InboundIntakeCargoPlace.storage_location_id.is_(None),
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            ),
+        ),
+        InboundIntakeCargoPlaceLine.quantity > InboundIntakeCargoPlaceLine.posted_qty,
+        ~exists(
+            select(InventoryBalance.id).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.container_kind == "cargo_place",
+                InventoryBalance.container_id == InboundIntakeCargoPlace.id,
+                InventoryBalance.product_id == InboundIntakeCargoPlaceLine.product_id,
+            )
+        ),
+    ]
+    if product_id is not None:
+        cargo_line_filters.append(InboundIntakeCargoPlaceLine.product_id == product_id)
     cargo_line_rows = await session.execute(
         select(
             InboundIntakeCargoPlaceLine,
@@ -372,28 +408,7 @@ async def _load_map_rows(
         )
         .join(Product, Product.id == InboundIntakeCargoPlaceLine.product_id)
         .outerjoin(Seller, Seller.id == Product.seller_id)
-        .where(
-            InboundIntakeCargoPlace.tenant_id == tenant_id,
-            InboundIntakeRequest.tenant_id == tenant_id,
-            or_(
-                StorageLocation.warehouse_id == warehouse_id,
-                and_(
-                    InboundIntakeCargoPlace.storage_location_id.is_(None),
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
-                ),
-            ),
-            InboundIntakeCargoPlaceLine.quantity
-            > InboundIntakeCargoPlaceLine.posted_qty,
-            ~exists(
-                select(InventoryBalance.id).where(
-                    InventoryBalance.tenant_id == tenant_id,
-                    InventoryBalance.container_kind == "cargo_place",
-                    InventoryBalance.container_id == InboundIntakeCargoPlace.id,
-                    InventoryBalance.product_id
-                    == InboundIntakeCargoPlaceLine.product_id,
-                )
-            ),
-        )
+        .where(*cargo_line_filters)
     )
     pending_contents.extend(
         PendingInboundContent(
@@ -496,8 +511,31 @@ def _normalize_container(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _drop_empty_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove containers left with no row of the filtered product (WMS-490 D1).
+
+    ``_load_map_rows`` with ``product_id`` never attaches any other товар as a
+    child, so a container's normalized ``qty`` is already 0 exactly when this
+    drops it — the kept siblings' quantities do not change.
+    """
+    kept: list[dict[str, Any]] = []
+    for node in nodes:
+        if node["kind"] == "product":
+            kept.append(node)
+            continue
+        children = _drop_empty_nodes(node["children"])
+        if not children:
+            continue
+        kept.append({**node, "children": children})
+    return kept
+
+
 async def get_warehouse_map(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     address_enabled = await is_address_storage_enabled(session, tenant_id)
@@ -511,7 +549,7 @@ async def get_warehouse_map(
         pending_contents,
         request_numbers,
         cards,
-    ) = await _load_map_rows(session, tenant_id, warehouse_id)
+    ) = await _load_map_rows(session, tenant_id, warehouse_id, product_id=product_id)
     # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
     ozon_photos = await load_ozon_primary_image_urls(
         session,
@@ -570,7 +608,7 @@ async def get_warehouse_map(
         nodes[key] = {
             "kind": "box",
             "id": str(inbound_box.id),
-            "code": f"КР-{inbound_box.box_number:06d}",
+            "code": inbound_box.internal_barcode,
             "barcode": inbound_box.internal_barcode,
             "seller_name": None,
             "qty": 0,
@@ -731,6 +769,18 @@ async def get_warehouse_map(
         _normalize_container(node) if node["kind"] != "product" else node for node in unassigned
     ]
 
+    # WMS-490 D1: без ``product_id`` ответ не меняется байт в байт — контейнеры
+    # и ячейки без строк отфильтрованного товара убираются только при фильтре.
+    if product_id is not None:
+        normalized_unassigned = _drop_empty_nodes(normalized_unassigned)
+        filtered_cells: list[dict[str, Any]] = []
+        for cell in cells:
+            cell_children = _drop_empty_nodes(cell["children"])
+            if not cell_children:
+                continue
+            filtered_cells.append({**cell, "children": cell_children})
+        cells = filtered_cells
+
     warehouses = list(
         (
             await session.scalars(
@@ -777,6 +827,40 @@ async def get_warehouse_map(
         "unassigned": normalized_unassigned,
         "journal": journal,
     }
+
+
+async def list_product_location_warehouses(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> list[dict[str, str]]:
+    """Operational warehouses where this product's filtered map is not empty.
+
+    WMS-490 D1: карточка товара («Расположение») переключает склады тем же
+    фильтром, что и сама карта — иначе список складов карточки разошёлся бы с
+    тем, что показывает дерево. Складов у тенанта обычно немного, поэтому
+    строим карту по каждому и смотрим, осталось ли в ней что-нибудь после
+    фильтра — отдельного лёгкого запроса ради этого не заводим (R17: не
+    считать то же самое вторым способом).
+    """
+    warehouses = list(
+        (
+            await session.scalars(
+                select(Warehouse)
+                .where(
+                    Warehouse.tenant_id == tenant_id,
+                    Warehouse.is_operational.is_(True),
+                )
+                .order_by(Warehouse.name)
+            )
+        ).all()
+    )
+    result: list[dict[str, str]] = []
+    for warehouse in warehouses:
+        data = await get_warehouse_map(session, tenant_id, warehouse.id, product_id=product_id)
+        if data["cells"] or data["unassigned"]:
+            result.append({"id": str(warehouse.id), "name": warehouse.name})
+    return result
 
 
 async def _container_location_id(
@@ -938,7 +1022,7 @@ async def _container_code(
             except ValueError:
                 pass
             else:
-                return f"КР-{inbound.box_number:06d}"
+                return inbound.internal_barcode
     else:
         warehouse_cargo_place = await session.get(WarehouseBox, container_id)
         if (

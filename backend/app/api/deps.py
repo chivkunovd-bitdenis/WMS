@@ -20,7 +20,11 @@ from app.services.seller_shop_service import (
     assert_can_act_as_seller,
     user_can_manage_seller_shops,
 )
-from app.services.seller_staff_permissions_service import PERM_PRODUCTS, get_seller_permissions
+from app.services.seller_staff_permissions_service import (
+    PERM_DOCUMENTS,
+    PERM_PRODUCTS,
+    get_seller_permissions,
+)
 from app.services.staff_permissions_service import (
     PERM_CELLS,
     PERM_INVENTORY,
@@ -341,6 +345,37 @@ async def assert_inventory_read_access(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="forbidden",
     )
+
+
+async def require_seller_billing_scope(
+    user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> uuid.UUID:
+    """Общая проверка доступа ко всем ручкам «Расчётов» кабинета селлера (WMS-549).
+
+    Раздел закрыт ролью продавца с правом «Документы» (владелец кабинета — всегда,
+    у него нет строки прав). Сотрудники ФФ и администратор ФФ сюда не проходят —
+    у них есть свой раздел «Расчёты» с ручками /billing/*. Селлера сервер всегда
+    определяет сам: активный магазин с проверкой делегирования, как и во всём
+    остальном кабинете селлера. В сигнатуре ручек раздела нет параметра seller_id,
+    поэтому подменить область через строку запроса нечем.
+    """
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    await assert_seller_permission(session, user, PERM_DOCUMENTS)
+    seller_id = await resolve_effective_seller_id(session, user, credentials)
+    if seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="seller_not_linked",
+        )
+    return seller_id
 
 
 async def seller_line_product_scope(

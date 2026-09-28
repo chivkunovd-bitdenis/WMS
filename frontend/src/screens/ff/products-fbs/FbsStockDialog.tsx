@@ -1,4 +1,5 @@
 import { ErrorBoundary } from '../../../components/errors/ErrorBoundary'
+import { formatStockQty } from '../../../utils/formatStockQty'
 import {
   Box,
   FormControlLabel,
@@ -15,7 +16,9 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ActionGroup,
   AppDialog,
@@ -40,7 +43,6 @@ import {
   capNoteText,
   clampUnits,
   draftFromState,
-  NUMBER_FORMAT,
   PERCENT_STEP,
   pluralRu,
   rowCalc,
@@ -120,6 +122,9 @@ export type SavedRule = {
   clamps: Record<string, { free: number; product: { name: string } }>
 }
 
+/** Тело окна без рамки диалога — всё, кроме `open`/чем оно открывается (WMS-490, D6). */
+export type FbsStockBodyProps = Omit<FbsStockDialogProps, 'open'>
+
 export function FbsStockDialog(props: FbsStockDialogProps) {
   if (!props.open) return null
   return (
@@ -129,9 +134,55 @@ export function FbsStockDialog(props: FbsStockDialogProps) {
   )
 }
 
+// Заголовок повторяется в обеих оболочках тела (окно и встроенная вкладка
+// карточки товара), а не выносится в возвращаемое значение хука — это
+// текстовая мелочь, а не состояние, дублировать две строки дешевле, чем
+// тащить название окна туда, где рамки диалога вообще нет (WMS-490 D6).
+function fbsStockDialogTitle(products: StockDialogProduct[]): string {
+  return products.length > 1
+    ? `Остаток для FBS · ${products.length} ${pluralRu(products.length, 'товар', 'товара', 'товаров')}`
+    : 'Остаток для FBS'
+}
+
+function FbsStockDialogBody(props: FbsStockDialogProps) {
+  const { content, actions } = useFbsStockBody(props)
+  return (
+    <AppDialog
+      open
+      // Пока идёт запись, Escape и клик по фону окно не закрывают: ответ
+      // должен подтвердить именно тот черновик, который отправлен.
+      onClose={props.busy ? () => undefined : props.onClose}
+      maxWidth="md"
+      testId="fbs-stock-dialog"
+      title={fbsStockDialogTitle(props.products)}
+      actions={actions}
+    >
+      {content}
+    </AppDialog>
+  )
+}
+
+/**
+ * Тело окна «Остаток для FBS», встроенное во вкладку «Задать остаток»
+ * карточки товара (WMS-490 D6): то же содержимое и те же кнопки, без рамки
+ * диалога. Кнопки «Отмена»/«Сохранить» порталятся в нижнюю панель карточки —
+ * `footerSlotEl` даёт `ProductCardDialog` (владеет им, пока активна эта
+ * вкладка); без цели — только тело, без кнопок (переходное состояние до
+ * первого рендера хоста).
+ */
+export function FbsStockEmbeddedBody(props: FbsStockBodyProps & { footerSlotEl: HTMLElement | null }) {
+  const { content, actions } = useFbsStockBody(props)
+  return (
+    <>
+      {content}
+      {props.footerSlotEl ? createPortal(actions, props.footerSlotEl) : null}
+    </>
+  )
+}
+
 type Picker = { warehouse: CabinetWarehouse | null; wmsWarehouseId: string | null }
 
-function FbsStockDialogBody({
+function useFbsStockBody({
   sellerName,
   products,
   bindings,
@@ -148,7 +199,7 @@ function FbsStockDialogBody({
   wbWarehousesError,
   ozonWarehousesError,
   saved,
-}: FbsStockDialogProps) {
+}: FbsStockBodyProps): { content: ReactNode; actions: ReactNode } {
   const many = products.length > 1
   const first = products[0]!
   const visible = visibleStockBindings(bindings, products)
@@ -273,109 +324,102 @@ function FbsStockDialogBody({
 
   const productsWord = pluralRu(products.length, 'товар', 'товара', 'товаров')
 
-  return (
-    <AppDialog
-      open
-      // Пока идёт запись, Escape и клик по фону окно не закрывают: ответ
-      // должен подтвердить именно тот черновик, который отправлен.
-      onClose={busy ? () => undefined : onClose}
-      maxWidth="md"
-      testId="fbs-stock-dialog"
-      title={many ? `Остаток для FBS · ${products.length} ${productsWord}` : 'Остаток для FBS'}
-      actions={
-        <ActionGroup>
-          <SecondaryAction onClick={onClose} data-testid="fbs-stock-cancel" disabled={busy}>
-            Отмена
-          </SecondaryAction>
-          <PrimaryAction
-            onClick={() => onSave(ruleBodyFromDrafts(
-              visible.filter((binding) => touched.has(binding.id)),
-              Object.fromEntries(visible.map((binding) => [binding.id, draftOf(binding)])),
-            ))}
-            data-testid="fbs-stock-save"
-            disabled={busy}
-          >
-            Сохранить
-          </PrimaryAction>
-        </ActionGroup>
-      }
-    >
-      <Stack spacing={2.5}>
-        {/* Отказ сервера показываем здесь, а не наверху страницы: оператор
-            смотрит в это окно и должен видеть, что именно не сошлось, не теряя
-            уже введённого. */}
-        {wbWarehousesError ? (
-          <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
-        ) : null}
-        {/* Причина, почему у сохранённого Ozon-блока номер вместо названия, —
-            здесь же, в окне: у селлера формы добавления нет, а чип без
-            причины ничего не объясняет (R19). */}
-        {ozonWarehousesError && visible.some((one) => one.marketplace === 'ozon' && one.nameIssue === 'list_unavailable') ? (
-          <ErrorNotice testId="fbs-stock-ozon-directory-error">{ozonWarehousesError}</ErrorNotice>
-        ) : null}
-        {actionError ? <ErrorNotice testId="fbs-stock-error">{actionError}</ErrorNotice> : null}
-
-        <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }} data-testid="fbs-stock-head">
-          {many
-            ? `${products.length} ${productsWord}, ${sellerName}`
-            : `${first.name}${first.size ? `, ${first.size}` : ''} · ${first.sku}`}
-        </Typography>
-
-        {visible.map((binding) => (
-          <BindingBlock
-            key={binding.id}
-            binding={binding}
-            products={products}
-            draft={draftOf(binding)}
-            capNote={capNotes[binding.id]}
-            wmsWarehouses={wmsWarehouses}
-            editable={canEditBindings && binding.editable}
-            busy={busy}
-            onDraft={(next) => patchDraft(binding, next)}
-            onCapNote={(note) => setNote(binding.id, note)}
-            onChangeWmsWarehouse={(id) => {
-              setReclamp({ bindingId: binding.id, wmsWarehouseId: id })
-              onChangeWmsWarehouse?.(binding, id)
-            }}
-            onServedChange={(served) => onServedChange?.(binding, served)}
-          />
+  const actions = (
+    <ActionGroup>
+      <SecondaryAction onClick={onClose} data-testid="fbs-stock-cancel" disabled={busy}>
+        Отмена
+      </SecondaryAction>
+      <PrimaryAction
+        onClick={() => onSave(ruleBodyFromDrafts(
+          visible.filter((binding) => touched.has(binding.id)),
+          Object.fromEntries(visible.map((binding) => [binding.id, draftOf(binding)])),
         ))}
-
-        {visible.length === 0 && !picker ? (
-          <Typography color="text.secondary" data-testid="fbs-stock-empty">
-            Склады селлера ещё не добавлены.
-          </Typography>
-        ) : null}
-
-        {picker ? (
-          <BindingPicker
-            picker={picker}
-            addable={addable}
-            wmsWarehouses={wmsWarehouses}
-            ozonWarehousesError={cabinets.ozon.received ? null : (ozonWarehousesError ?? null)}
-            busy={busy}
-            onChange={pickerChange}
-            onCancel={() => setPicker(null)}
-          />
-        ) : canEditBindings && onAddBinding ? (
-          <Box>
-            <Tooltip title={addDisabledReason ?? ''}>
-              <span style={{ display: 'inline-flex' }}>
-                <SecondaryAction
-                  onClick={openPicker}
-                  disabled={Boolean(addDisabledReason) || busy}
-                  startIcon={<AddIcon />}
-                  data-testid="fbs-stock-add"
-                >
-                  Добавить склад
-                </SecondaryAction>
-              </span>
-            </Tooltip>
-          </Box>
-        ) : null}
-      </Stack>
-    </AppDialog>
+        data-testid="fbs-stock-save"
+        disabled={busy}
+      >
+        Сохранить
+      </PrimaryAction>
+    </ActionGroup>
   )
+
+  const content = (
+    <Stack spacing={2.5}>
+      {/* Отказ сервера показываем здесь, а не наверху страницы: оператор
+          смотрит в это окно и должен видеть, что именно не сошлось, не теряя
+          уже введённого. */}
+      {wbWarehousesError ? (
+        <ErrorNotice testId="fbs-stock-wb-directory-error">{wbWarehousesError}</ErrorNotice>
+      ) : null}
+      {/* Причина, почему у сохранённого Ozon-блока номер вместо названия, —
+          здесь же, в окне: у селлера формы добавления нет, а чип без
+          причины ничего не объясняет (R19). */}
+      {ozonWarehousesError && visible.some((one) => one.marketplace === 'ozon' && one.nameIssue === 'list_unavailable') ? (
+        <ErrorNotice testId="fbs-stock-ozon-directory-error">{ozonWarehousesError}</ErrorNotice>
+      ) : null}
+      {actionError ? <ErrorNotice testId="fbs-stock-error">{actionError}</ErrorNotice> : null}
+
+      <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }} data-testid="fbs-stock-head">
+        {many
+          ? `${products.length} ${productsWord}, ${sellerName}`
+          : `${first.name}${first.size ? `, ${first.size}` : ''} · ${first.sku}`}
+      </Typography>
+
+      {visible.map((binding) => (
+        <BindingBlock
+          key={binding.id}
+          binding={binding}
+          products={products}
+          draft={draftOf(binding)}
+          capNote={capNotes[binding.id]}
+          wmsWarehouses={wmsWarehouses}
+          editable={canEditBindings && binding.editable}
+          busy={busy}
+          onDraft={(next) => patchDraft(binding, next)}
+          onCapNote={(note) => setNote(binding.id, note)}
+          onChangeWmsWarehouse={(id) => {
+            setReclamp({ bindingId: binding.id, wmsWarehouseId: id })
+            onChangeWmsWarehouse?.(binding, id)
+          }}
+          onServedChange={(served) => onServedChange?.(binding, served)}
+        />
+      ))}
+
+      {visible.length === 0 && !picker ? (
+        <Typography color="text.secondary" data-testid="fbs-stock-empty">
+          Склады селлера ещё не добавлены.
+        </Typography>
+      ) : null}
+
+      {picker ? (
+        <BindingPicker
+          picker={picker}
+          addable={addable}
+          wmsWarehouses={wmsWarehouses}
+          ozonWarehousesError={cabinets.ozon.received ? null : (ozonWarehousesError ?? null)}
+          busy={busy}
+          onChange={pickerChange}
+          onCancel={() => setPicker(null)}
+        />
+      ) : canEditBindings && onAddBinding ? (
+        <Box>
+          <Tooltip title={addDisabledReason ?? ''}>
+            <span style={{ display: 'inline-flex' }}>
+              <SecondaryAction
+                onClick={openPicker}
+                disabled={Boolean(addDisabledReason) || busy}
+                startIcon={<AddIcon />}
+                data-testid="fbs-stock-add"
+              >
+                Добавить склад
+              </SecondaryAction>
+            </span>
+          </Tooltip>
+        </Box>
+      ) : null}
+    </Stack>
+  )
+
+  return { content, actions }
 }
 
 function BindingBlock({
@@ -473,8 +517,8 @@ function BindingBlock({
           sx={{ ml: 'auto', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
           data-testid={`fbs-stock-totals-${binding.id}`}
         >
-          на складе {NUMBER_FORMAT(totals.onHand)} шт, занято {NUMBER_FORMAT(totals.reserved)} — свободно{' '}
-          <Box component="b" sx={{ color: 'text.primary' }}>{NUMBER_FORMAT(totals.free)}</Box>
+          остаток {formatStockQty(totals.onHand)} шт, резерв {formatStockQty(totals.reserved)} — доступно{' '}
+          <Box component="b" sx={{ color: 'text.primary' }}>{formatStockQty(totals.available)}</Box>
         </Typography>
       </Stack>
 
@@ -550,7 +594,7 @@ function BindingBlock({
                 if (!draft.byPercent) return
                 onDraft({ ...draft, percent: snapPercent(Array.isArray(next) ? next[0]! : next) })
               }}
-              aria-label={`Доля свободного остатка на ${label}`}
+              aria-label={`Доля доступного остатка на ${label}`}
               aria-readonly={!draft.byPercent}
               tabIndex={draft.byPercent ? 0 : -1}
               data-testid={`fbs-stock-percent-${binding.id}`}

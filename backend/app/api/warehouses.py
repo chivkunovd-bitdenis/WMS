@@ -180,6 +180,15 @@ class WarehouseMapMoveOut(BaseModel):
     moved_qty: int | None
 
 
+class SortingScanOut(WarehouseMapMoveOut):
+    reload: bool = True
+    remaining_qty: int | None = None
+    source_id: str | None = None
+    target_id: str | None = None
+    product_id: str | None = None
+    target_holder: str | None = None
+
+
 class WarehouseMapDisbandIn(BaseModel):
     id: uuid.UUID | None = None
     pallet_id: uuid.UUID | None = None
@@ -283,6 +292,14 @@ class SortingPlaceIn(BaseModel):
     qty: int | None = Field(default=None, gt=0)
 
 
+class SortingScanIn(BaseModel):
+    inbound_request_id: uuid.UUID
+    operation_id: uuid.UUID
+    barcode: str = Field(min_length=1, max_length=512)
+    cell_id: uuid.UUID
+    to_id: uuid.UUID | None = None
+
+
 def _map_error(exc: WarehouseMapError) -> HTTPException:
     if exc.code in {
         "warehouse_not_found",
@@ -302,6 +319,10 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "qty_exceeds_accepted",
         "insufficient_sorting_stock",
         "operation_conflict",
+        "ambiguous_product",
+        "ambiguous_source",
+        "container_cell_mismatch",
+        "already_in_target",
         "not_distributable",
         "nothing_to_move",
         "pallet_disbanded",
@@ -335,9 +356,14 @@ async def get_warehouse_map_route(
     warehouse_id: uuid.UUID,
     user: Annotated[User, Depends(require_catalog_cells_read_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    # WMS-490 D1: карточка товара («Расположение») грузит карту одного товара,
+    # а не всего склада — без параметра ответ не меняется байт в байт.
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> WarehouseMapOut:
     try:
-        data = await warehouse_map_service.get_warehouse_map(session, user.tenant_id, warehouse_id)
+        data = await warehouse_map_service.get_warehouse_map(
+            session, user.tenant_id, warehouse_id, product_id=product_id
+        )
     except WarehouseMapError as exc:
         raise _map_error(exc) from None
     return WarehouseMapOut.model_validate(data)
@@ -535,6 +561,28 @@ async def place_sorting_object_route(
     return WarehouseMapMoveOut.model_validate(result)
 
 
+@router.post("/{warehouse_id}/sorting-objects/scan", response_model=SortingScanOut)
+async def scan_sorting_product_route(
+    warehouse_id: uuid.UUID,
+    body: SortingScanIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SortingScanOut:
+    from app.services.sorting_scan_service import scan_product
+
+    try:
+        result = await scan_product(
+            session, tenant_id=user.tenant_id, warehouse_id=warehouse_id,
+            actor_user_id=user.id, inbound_request_id=body.inbound_request_id,
+            operation_id=body.operation_id, barcode=body.barcode,
+            cell_id=body.cell_id, to_id=body.to_id,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return SortingScanOut.model_validate(result)
+
+
 @router.get("", response_model=list[WarehouseOut])
 async def list_warehouses(
     user: Annotated[User, Depends(get_current_user)],
@@ -567,11 +615,11 @@ async def post_warehouse(
             code=body.code,
         )
     except CatalogError as exc:
-        if exc.code != "warehouse_code_taken":
+        if exc.code not in {"warehouse_code_taken", "warehouse_code_reserved"}:
             raise
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="warehouse_code_taken",
+            detail=exc.code,
         ) from None
     return WarehouseOut(
         id=str(w.id), name=w.name, code=w.code, barcode=w.barcode, is_operational=w.is_operational

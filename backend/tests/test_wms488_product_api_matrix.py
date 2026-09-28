@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import uuid
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from openpyxl import load_workbook
 from sqlalchemy import select
 from test_wms488_catalog_isolation import _headers, _seed
 
@@ -337,28 +339,48 @@ async def test_own_product_actions_remain_available(async_client: AsyncClient) -
     assert await _snapshot([products["b"].id, products["foreign"].id]) == foreign_before
 
 
+def _xlsx_text(content: bytes) -> str:
+    """Плоский текст всех ячеек — для проверок «есть/нет такой подстроки»,
+    аналогичных прежним по response.text для CSV (WMS-531: CSV убран, D6)."""
+    workbook = load_workbook(io.BytesIO(content))
+    sheet = workbook.active
+    assert sheet is not None
+    values = [cell.value for row in sheet.iter_rows() for cell in row if cell.value is not None]
+    return "\n".join(str(value) for value in values)
+
+
 @pytest.mark.parametrize("target", ["b", "foreign"])
-@pytest.mark.parametrize("path", ["/reports/inventory", "/reports/inventory/export.csv"])
+@pytest.mark.parametrize("path", ["/reports/inventory", "/reports/inventory/export.xlsx"])
 async def test_seller_export_and_report_ignore_foreign_seller_override(
     async_client: AsyncClient,
     target: str,
     path: str,
 ) -> None:
+    is_export = path.endswith(".xlsx")
     users, products, _ = await _catalog()
     params = {**PERIOD, "seller_id": str(products[target].seller_id), "group_by": "product"}
     response = await async_client.get(path, headers=_headers(users["a"]), params=params)
     assert response.status_code == 200, response.text
-    assert products["a"].sku_code in response.text
+    body_text = _xlsx_text(response.content) if is_export else response.text
+    # WMS-531 R12.5: Excel не показывает sku_code (внутренний идентификатор WMS),
+    # только имя/артикул продавца/ШК — тот же товар ищем по имени, JSON — по sku_code.
+    own_identifier = products["a"].name if is_export else products["a"].sku_code
+    assert own_identifier in body_text
     for key in ("b", "foreign"):
-        for value in (products[key].sku_code, products[key].name, str(products[key].id)):
-            assert value not in response.text
+        foreign_values = (
+            (products[key].name, str(products[key].id))
+            if is_export
+            else (products[key].sku_code, products[key].name, str(products[key].id))
+        )
+        for value in foreign_values:
+            assert value not in body_text
     hidden = await async_client.get(
         path,
         headers=_headers(users["a"]),
         params={**params, "search": products[target].sku_code},
     )
-    assert hidden.status_code == (422 if path.endswith(".csv") else 200), hidden.text
-    if path.endswith(".csv"):
+    assert hidden.status_code == (422 if is_export else 200), hidden.text
+    if is_export:
         assert hidden.json()["detail"] == "nothing to export for the selected period"
     else:
         assert hidden.json()["rows"] == []

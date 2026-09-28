@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material'
 import {
   DataTable,
@@ -21,9 +22,17 @@ import { FfBillingSellerDetails, type SellerReportDetails } from './FfBillingSel
 import { FfBillingProfilesDialog } from './FfBillingProfilesDialog'
 import { FbsSupplyHistoryDialog } from '../v2/FbsSupplyHistoryDialog'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
+import { resolveInitialSellerFilter } from '../../utils/urlSellerFilter'
+import { FfBillingSellerRates } from './FfBillingSellerRates'
 
 type Seller = { id: string; name: string }
-type Props = { sellers?: Seller[]; token: string; onOpenInbound: (id: string) => void }
+type Props = {
+  sellers?: Seller[]
+  token: string
+  onOpenInbound: (id: string) => void
+  /** Кабинет селлера: тот же экран, без выбора селлера и действий ФФ — сервер сам ограничивает данные его селлером. */
+  sellerScope?: boolean
+}
 type ApiDecimal = number | string
 type LedgerEntry = {
   id: string
@@ -79,6 +88,17 @@ export function sellerReportSearchParams(range: { start: string; end: string }, 
   return params
 }
 
+/** Кабинет селлера: сервер сам определяет селлера по токену — ни фильтра, ни поиска нет. */
+export function sellerBillingSearchParams(range: { start: string; end: string }): URLSearchParams {
+  return new URLSearchParams({ date_from: range.start, date_to: range.end })
+}
+
+/** Пустая сводка: у селлера нет фильтра «Селлер», поэтому и совета его менять быть не может. */
+export function sellerReportEmptyState(sellerScope: boolean): { title: string; hint?: string } {
+  const title = 'За выбранный период документов нет'
+  return sellerScope ? { title } : { title, hint: 'Измените период или фильтр селлера.' }
+}
+
 function moscowToday(): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: MOSCOW_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   return `${parts.find((part) => part.type === 'year')?.value}-${parts.find((part) => part.type === 'month')?.value}-${parts.find((part) => part.type === 'day')?.value}`
@@ -131,6 +151,9 @@ export function ledgerDocumentTarget(entry: Pick<LedgerEntry, 'source_type' | 's
 
 type BillingTab = 'charges' | 'invoices'
 type BillingTabPeriods = Record<BillingTab, string>
+// Вкладка «Ставки» (только в кабинете селлера, R7) не хранит период — у неё
+// нет фильтров, поэтому она не входит в BillingTab/BillingTabPeriods выше.
+type ScreenTab = BillingTab | 'rates'
 
 function formatMonth(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
@@ -214,8 +237,17 @@ export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; pe
   })}</Stack>
 }
 
-export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
-  const [tab, setTab] = useState<BillingTab>('charges')
+export function FfBillingScreen({ sellers = [], token, onOpenInbound, sellerScope = false }: Props) {
+  const [tab, setTab] = useState<ScreenTab>('charges')
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sellerIdAutoAppliedRef = useRef<string | null>(null)
+  // WMS-491 (правка F2 после ревью): следующая смена location.key — наша же
+  // чистка ?seller_id= (см. ниже), а не новый вход из меню — эффект сброса
+  // должен её пропустить.
+  const sellerFilterOwnCleanupRef = useRef(false)
+  // Текущее значение sellerId пришло из адреса и ещё не тронуто вручную.
+  const sellerFilterFromUrlRef = useRef(false)
   const [sellerId, setSellerId] = useState('all')
   const search = ''
   const [loading, setLoading] = useState(true)
@@ -254,6 +286,52 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     setDetailsError(false)
   }
 
+  // Ссылка ?seller_id=<id> ведёт сюда из карточки селлера (кнопка «Выставить
+  // счёт», WMS-491 D1): выставляет фильтр «Селлер» на этого селлера. Список
+  // sellers при прямом открытии адреса может прийти позже — ждём его загрузки,
+  // чтобы не потерять параметр раньше времени. Параметр убирается из адреса
+  // сразу после применения: обновление страницы после ручной смены фильтра не
+  // должно возвращать прежнего селлера.
+  useEffect(() => {
+    const sellerIdParam = searchParams.get('seller_id')
+    if (!sellerIdParam || sellers.length === 0) return
+    if (sellerIdAutoAppliedRef.current === sellerIdParam) return
+    sellerIdAutoAppliedRef.current = sellerIdParam
+    const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
+    if (resolved) {
+      setSellerId(resolved)
+      sellerFilterFromUrlRef.current = true
+    }
+    sellerFilterOwnCleanupRef.current = true
+    const next = new URLSearchParams(searchParams)
+    next.delete('seller_id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, sellers, setSearchParams])
+
+  // Правка F2 (ревью Astra): переход по адресу с ?seller_id= меняет только
+  // search — react-router не размонтирует экран при повторном клике по тому
+  // же пункту меню («Расчёты»), поэтому локальный фильтр из эффекта выше сам
+  // по себе не сбросится (R9/C9). location.key меняется при КАЖДОЙ навигации,
+  // в отличие от searchParams (переход на тот же пустой адрес его ссылку не
+  // меняет — react-router мемоизирует по строке location.search) — этим и
+  // ловим повторный вход из меню. Собственную чистку параметра эффектом выше
+  // пропускаем через sellerFilterOwnCleanupRef; если фильтр выставлен вручную
+  // (sellerFilterFromUrlRef уже false), эффект его не трогает.
+  useEffect(() => {
+    if (searchParams.get('seller_id')) return
+    if (sellerFilterOwnCleanupRef.current) {
+      sellerFilterOwnCleanupRef.current = false
+      return
+    }
+    if (sellerFilterFromUrlRef.current) {
+      sellerFilterFromUrlRef.current = false
+      setSellerId('all')
+    }
+    // Реагируем только на новую навигацию (location.key), не на любую смену
+    // searchParams/sellers — иначе ручной выбор фильтра можно случайно сбить.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
+
   useEffect(() => {
     if (tab !== 'charges') return
     const controller = new AbortController()
@@ -261,8 +339,9 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     let alive = true
     setLoading(true)
     setError(false)
-    const params = sellerReportSearchParams(reportRange, includeFinance, sellerId, search)
-    fetch(`/api/billing/seller-report/summary?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+    const params = sellerScope ? sellerBillingSearchParams(reportRange) : sellerReportSearchParams(reportRange, includeFinance, sellerId, search)
+    const url = sellerScope ? `/api/seller-billing/summary?${params}` : `/api/billing/seller-report/summary?${params}`
+    fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error('seller-report-summary')
         return response.json() as Promise<SellerReportSummary>
@@ -271,7 +350,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       .catch((reason: unknown) => { if (alive && requestId === summaryRequestId.current && (reason as Error).name !== 'AbortError') setError(true) })
       .finally(() => { if (alive && requestId === summaryRequestId.current) setLoading(false) })
     return () => { alive = false; controller.abort() }
-  }, [includeFinance, reportRange, search, sellerId, tab, token])
+  }, [includeFinance, reportRange, search, sellerId, sellerScope, tab, token])
 
   useEffect(() => {
     if (tab !== 'charges') return
@@ -279,28 +358,35 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     let alive = true
     setStorageLiterDays(null)
     const params = new URLSearchParams({ date_from: reportRange.start, date_to: reportRange.end })
-    if (sellerId !== 'all') params.set('seller_id', sellerId)
-    fetch(`/api/billing/seller-report/storage-total?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+    if (!sellerScope && sellerId !== 'all') params.set('seller_id', sellerId)
+    const url = sellerScope ? `/api/seller-billing/storage-total?${params}` : `/api/billing/seller-report/storage-total?${params}`
+    fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then((response) => { if (!response.ok) throw new Error('storage-total'); return response.json() as Promise<{ liter_days: number }> })
       .then((data) => { if (alive) setStorageLiterDays(Math.round(data.liter_days)) })
       .catch(() => undefined)
     return () => { alive = false; controller.abort() }
-  }, [reportRange, sellerId, tab, token])
+  }, [reportRange, sellerId, sellerScope, tab, token])
 
   useEffect(() => {
-    if (tab !== 'charges' || !selectedReportSeller) return
+    if (tab !== 'charges') return
+    // У селлера нет строки-выбора: раздел «Начисления» сразу показывает его
+    // документы без клика, поэтому здесь не ждём selectedReportSeller — сервер
+    // сам определяет селлера по токену (см. url ниже). У ФФ поведение прежнее:
+    // раскрытие грузится только после выбора конкретного селлера в таблице.
+    if (!sellerScope && !selectedReportSeller) return
     const controller = new AbortController()
     const requestId = ++detailsRequestId.current
     let alive = true
     setDetailsLoading(true); setDetailsError(false)
-    const params = sellerReportSearchParams(reportRange, includeFinance)
+    const params = sellerScope ? sellerBillingSearchParams(reportRange) : sellerReportSearchParams(reportRange, includeFinance)
     params.set('limit', '1000')
     if (detailsCursor) params.set('cursor', detailsCursor)
     // Complete the seller selection before enabling group checkboxes.
     const readAllPages = async () => {
       let combined: SellerReportDetails | null = null
       do {
-        const response = await fetch(`/api/billing/seller-report/sellers/${selectedReportSeller}/details?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+        const url = sellerScope ? `/api/seller-billing/details?${params}` : `/api/billing/seller-report/sellers/${selectedReportSeller}/details?${params}`
+        const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
         if (!response.ok) throw new Error('seller-report-details')
         const page = await response.json() as SellerReportDetails
         combined = combined ? { ...page, entries: [...combined.entries, ...page.entries], storage_row: combined.storage_row ?? page.storage_row } : page
@@ -322,7 +408,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       .catch((reason: unknown) => { if (alive && requestId === detailsRequestId.current && (reason as Error).name !== 'AbortError') setDetailsError(true) })
       .finally(() => { if (alive && requestId === detailsRequestId.current) setDetailsLoading(false) })
     return () => { alive = false; controller.abort() }
-  }, [detailsCursor, includeFinance, reportRange, selectedReportSeller, tab, token])
+  }, [detailsCursor, includeFinance, reportRange, sellerScope, selectedReportSeller, tab, token])
 
 
   const sellerColumns = [
@@ -339,15 +425,31 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const toggleRoot = (rootId: string, checked: boolean) => setSelectedRootIds((ids) => checked ? [...new Set([...ids, rootId])] : ids.filter((id) => id !== rootId))
 
   return <Box data-testid="ff-billing-screen" sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
-    <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и счета селлерам за выбранный период." />
-    <Tabs value={tab} onChange={(_, value: BillingTab) => setTab(value)} aria-label="Расчёты">
-      <Tab label="Селлеры" value="charges" data-testid="billing-tab-sellers" /><Tab label="Выставленные счета" value="invoices" data-testid="billing-tab-invoices" />
+    <ScreenHeader title="Расчёты" purpose={sellerScope ? undefined : 'Начисления за работу склада и счета селлерам за выбранный период.'} />
+    <Tabs value={tab} onChange={(_, value: ScreenTab) => setTab(value)} aria-label="Расчёты">
+      <Tab label={sellerScope ? 'Начисления' : 'Селлеры'} value="charges" data-testid="billing-tab-sellers" /><Tab label="Выставленные счета" value="invoices" data-testid="billing-tab-invoices" />
+      {sellerScope ? <Tab label="Ставки" value="rates" data-testid="billing-tab-rates" /> : null}
     </Tabs>
     {tab === 'charges' ? <FilterBar testId="billing-filter-bar">
       <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack></>
-      <SelectInput label="Селлер" value={sellerId} onChange={(value) => { clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
+      {sellerScope ? null : <SelectInput label="Селлер" value={sellerId} onChange={(value) => { sellerFilterFromUrlRef.current = false; clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />}
     </FilterBar> : null}
-    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'inbound', label: 'Принято', value: report.totals.inbound_items ?? 0 }, { key: 'packing', label: 'Упаковано', value: report.totals.packing_items ?? 0 }, { key: 'outbound', label: 'Отгружено ФБО', value: report.totals.outbound_items ?? 0 }, { key: 'fbs', label: 'Отгружено FBS', value: report.totals.fbs_items ?? 0 }, { key: 'storage', label: 'Хранение', value: storageLiterDays, unit: 'л·дн', nullValueLabel: 'Считается' }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup><FfBillingProfilesDialog token={token} sellers={sellers} />{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} includeStorage={storageSelected && Boolean(reportDetails?.storage_row)} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} onOpenFbsOrder={setHistorySupplyId} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
+    {tab === 'charges' ? (
+      sellerScope ? (
+        // Кабинет селлера: раздел называется «Начисления» и сразу показывает
+        // его услуги за период с суммами и раскрытием до документов — то же
+        // FfBillingSellerDetails, что у ФФ раскрывается под строкой селлера,
+        // но здесь без строки-выбора и без его же имени (решение владельца).
+        <>
+          {error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}
+          <ReportMetricStrip items={[{ key: 'inbound', label: 'Принято', value: report.totals.inbound_items ?? 0 }, { key: 'packing', label: 'Упаковано', value: report.totals.packing_items ?? 0 }, { key: 'outbound', label: 'Отгружено ФБО', value: report.totals.outbound_items ?? 0 }, { key: 'fbs', label: 'Отгружено FBS', value: report.totals.fbs_items ?? 0 }, { key: 'storage', label: 'Хранение', value: storageLiterDays, unit: 'л·дн', nullValueLabel: 'Считается' }, { key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }]} loading={loading} testId="billing-seller-metrics" />
+          <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} sellerScope selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} onOpenFbsOrder={setHistorySupplyId} />
+        </>
+      ) : (
+        // ФФ: экран не изменился — тот же рендер, что был до WMS-549.
+        <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'inbound', label: 'Принято', value: report.totals.inbound_items ?? 0 }, { key: 'packing', label: 'Упаковано', value: report.totals.packing_items ?? 0 }, { key: 'outbound', label: 'Отгружено ФБО', value: report.totals.outbound_items ?? 0 }, { key: 'fbs', label: 'Отгружено FBS', value: report.totals.fbs_items ?? 0 }, { key: 'storage', label: 'Хранение', value: storageLiterDays, unit: 'л·дн', nullValueLabel: 'Считается' }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup><FfBillingProfilesDialog token={token} sellers={sellers} />{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} includeStorage={storageSelected && Boolean(reportDetails?.storage_row)} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={sellerReportEmptyState(false)} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} onOpenFbsOrder={setHistorySupplyId} /> }} /></>
+      )
+    ) : tab === 'invoices' ? <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} sellerScope={sellerScope} /> : <FfBillingSellerRates token={token} />}
     <FbsSupplyHistoryDialog token={token} supplyId={historySupplyId} open={Boolean(historySupplyId)} onClose={() => setHistorySupplyId(null)} />
   </Box>
 }

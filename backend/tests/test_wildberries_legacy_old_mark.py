@@ -53,8 +53,8 @@ async def test_multi_size_sync_marks_legacy_product_old(async_client: AsyncClien
         "vendorCode": f"LEG-MERGE-{suffix}",
         "title": "Лосины",
         "sizes": [
-            {"techSize": "S", "skus": ["7110000000001"]},
-            {"techSize": "M", "skus": ["7110000000002"]},
+            {"chrtID": 80020001, "techSize": "S", "skus": ["7110000000001"]},
+            {"chrtID": 80020002, "techSize": "M", "skus": ["7110000000002"]},
         ],
     }
 

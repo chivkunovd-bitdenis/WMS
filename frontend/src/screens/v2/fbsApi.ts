@@ -1959,3 +1959,55 @@ export async function syncFbsSupplyMarkings(token: string, ah: AuthHeaders, supp
     method: 'POST', headers: ah(token),
   }))
 }
+
+// WMS-562: перенос заказов упаковки в другую поставку WB.
+// Сервер возвращает список новых, ещё не взятых в работу поставок того же
+// селлера/арендатора (исключая исходную), в которые можно перенести выбранные
+// заказы; выбор «Новая поставка» соответствует target_supply_id === null.
+export type FbsTransferTarget = {
+  id: string
+  name: string
+  wb_supply_id: string
+}
+
+export type FbsTransferOrdersRequest = {
+  order_ids: string[]
+  target_supply_id: string | null
+  idempotency_key: string
+}
+
+export type FbsTransferOrdersResult = {
+  target_supply_id: string | null
+  transferred_order_ids: string[]
+  pending_order_ids: string[]
+  failed_order_ids: string[]
+  state: 'confirmed' | 'partial' | 'failed' | 'pending_confirmation'
+  message: string | null
+}
+
+export async function fetchFbsTransferTargets(
+  token: string,
+  ah: AuthHeaders,
+  sourceSupplyId: string,
+): Promise<FbsTransferTarget[]> {
+  return jsonOrThrow<FbsTransferTarget[]>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${sourceSupplyId}/transfer-targets`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function transferFbsOrders(
+  token: string,
+  ah: AuthHeaders,
+  sourceSupplyId: string,
+  body: FbsTransferOrdersRequest,
+): Promise<FbsTransferOrdersResult> {
+  return jsonOrThrow<FbsTransferOrdersResult>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${sourceSupplyId}/transfer-orders`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}

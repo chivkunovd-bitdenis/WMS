@@ -69,7 +69,14 @@ from app.models.marking_code import (
     MarkingCodeImportFile,
     MarkingPool,
     MarkingPoolProduct,
+    MarkingPrintBatch,
     MarkingReprintRequest,
+)
+from app.models.marking_withdrawal import (
+    WithdrawalDocument,
+    WithdrawalItem,
+    WithdrawalObservation,
+    WithdrawalOperation,
 )
 from app.models.notification import Notification
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
@@ -80,11 +87,13 @@ from app.models.pallet import Pallet
 from app.models.print_connection import PrintConnection
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
+from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -102,6 +111,7 @@ from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_map_event import WarehouseMapEvent
 from app.models.warehouse_storage_rack import WarehouseStorageRack
+from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 __all__ = [
     "BackgroundJob",
@@ -171,6 +181,7 @@ __all__ = [
     "MarkingCodeImportFile",
     "MarkingPool",
     "MarkingPoolProduct",
+    "MarkingPrintBatch",
     "MarkingReprintRequest",
     "Notification",
     "OperationFact",
@@ -185,11 +196,13 @@ __all__ = [
     "PrintConnection",
     "PrintTemplate",
     "Product",
+    "ProductBarcode",
     "ProductDimensionEvent",
     "ProductMarketplaceLink",
     "ProductTzImport",
     "Seller",
     "SellerMarkingCredentials",
+    "SellerOzonImportedCard",
     "SellerShopDelegation",
     "SellerStaffPermissions",
     "SellerWildberriesCredentials",
@@ -208,4 +221,9 @@ __all__ = [
     "WarehouseBox",
     "WarehouseMapEvent",
     "WarehouseStorageRack",
+    "WbOrderPriceSnapshot",
+    "WithdrawalDocument",
+    "WithdrawalItem",
+    "WithdrawalObservation",
+    "WithdrawalOperation",
 ]

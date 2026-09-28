@@ -60,6 +60,18 @@ async def test_connected_sellers_isolated_and_http_has_no_open_read_session(
     second = await seller_with_token(db_session, tenants[1].id, "C success", "second")
     await seller_with_token(db_session, tenants[0].id, "Disconnected", None)
     await seller_with_token(db_session, tenants[0].id, "Empty", "")
+    # WMS-548 R5, R10: обе уже подключённые (до задачи) — их единственная
+    # карточка уже выбрана (есть Product с её nmID), поэтому проход обновляет
+    # её как раньше, а не пропускает как невыбранную.
+    await sync.upsert_products_from_wb_cards(db_session, first.tenant_id, first.id, [{
+        "nmID": 277, "vendorCode": "SAME-SKU", "title": "Synthetic (placeholder)",
+        "sizes": [{"chrtID": 277, "techSize": "0", "skus": ["SAME-BAR"]}],
+    }])
+    await sync.upsert_products_from_wb_cards(db_session, second.tenant_id, second.id, [{
+        "nmID": 277, "vendorCode": "SAME-SKU", "title": "Synthetic (placeholder)",
+        "sizes": [{"chrtID": 277, "techSize": "0", "skus": ["SAME-BAR"]}],
+    }])
+    await db_session.commit()
     opened = 0
 
     @asynccontextmanager

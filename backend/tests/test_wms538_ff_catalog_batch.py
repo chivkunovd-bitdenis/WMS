@@ -89,6 +89,12 @@ async def test_ff_catalog_batched_card_lookup_matches_single_query_wms538(
             wb_nm_id=nm_id,
             wb_vendor_code=f"VC-{i:05d}",
             wb_chrt_id=9_000_000 + i,
+            # WMS-535: единственный источник основного ШК — Product.wb_barcode
+            # (реальный импорт заполняет его из первого skus[] карточки; сами
+            # все ШК размера сверх этого хранятся в product_barcode). Раньше
+            # этот тест полагался на то, что каталог сам достанет primary из
+            # raw_json карточки — после WMS-535 он больше так не делает.
+            wb_barcode=str(2_000_000_000_000 + i),
         )
         products.append(product)
         cards.append(

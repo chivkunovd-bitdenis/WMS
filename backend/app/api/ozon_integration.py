@@ -30,6 +30,9 @@ from app.services.ozon_product_import_service import (
     import_ozon_product_cards,
 )
 from app.services.ozon_provider_factory import build_ozon_provider
+from app.services.seller_marketplace_requisites_service import (
+    autofill_requisites_after_key_saved,
+)
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 
@@ -161,6 +164,10 @@ async def put_self_account(
     # Wildberries при сохранении токена. Селлер вводит два поля и получает свои
     # товары, а не пустой каталог с отдельной кнопкой, о которой надо догадаться.
     await _import_catalog_after_save(session, tenant_id, seller_id)
+    # WMS-547 R5: ключи проверены (validate_ozon_credentials выше) и сохранены —
+    # пробуем один раз подтянуть реквизиты. Не трогает уже существующую запись
+    # (R6) и не поднимает исключение наружу (R7).
+    await autofill_requisites_after_key_saved(tenant_id, seller_id, marketplace="ozon")
     return OzonAccountStatusOut.model_validate(saved.status)
 
 

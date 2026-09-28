@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -98,6 +101,42 @@ async def _create_warehouse(
     )
     assert wh.status_code in (200, 201), wh.text
     return wh.json()["id"]
+
+
+@asynccontextmanager
+async def _historical_legacy_write(
+    session: AsyncSession, tenant_id: uuid.UUID,
+) -> AsyncIterator[None]:
+    """Bypass the WMS-516 guard while seeding data that predates it.
+
+    WMS-516 guards (installed on PostgreSQL when WMS_TEST_PHYSICAL_GUARDS=1)
+    forbid creating a new ``fbs-wb-*`` warehouse, or a binding pointing at one,
+    outright -- this simulates rows that already existed before the guard was
+    introduced, using the same bypass the repair CLI itself relies on (a
+    running physical_warehouse_repair background job), so the exclusion logic
+    under test still sees real legacy-coded data on PostgreSQL.
+    """
+    if session.get_bind().dialect.name != "postgresql":
+        yield
+        return
+    from app.models.background_job import BackgroundJob
+    from app.services.physical_warehouse_repair_service import JOB_TYPE
+
+    bypass = BackgroundJob(
+        id=uuid.uuid4(), tenant_id=tenant_id, job_type=JOB_TYPE, status="running",
+    )
+    session.add(bypass)
+    await session.flush()
+    await session.execute(
+        text("SELECT set_config('wms.warehouse_repair', :run, true)"),
+        {"run": str(bypass.id)},
+    )
+    try:
+        yield
+        await session.flush()
+    finally:
+        await session.delete(bypass)
+        await session.flush()
 
 
 def _bindings_url(seller_id: str, wb_warehouse_id: int | None = None) -> str:
@@ -687,18 +726,19 @@ async def test_fbs_stock_sync_ignores_auto_technical_warehouse(
             name="FBS WB 777888",
             code=f"fbs-wb-{suffix[-8:]}-777888",
         )
-        session.add(technical)
-        await session.flush()
-        session.add(
-            FbsWarehouseBinding(
-                tenant_id=seller.tenant_id,
-                seller_id=seller.id,
-                wb_warehouse_id=777888,
-                wms_warehouse_id=technical.id,
-                stock_sync_enabled=True,
-                is_active=True,
+        async with _historical_legacy_write(session, seller.tenant_id):
+            session.add(technical)
+            await session.flush()
+            session.add(
+                FbsWarehouseBinding(
+                    tenant_id=seller.tenant_id,
+                    seller_id=seller.id,
+                    wb_warehouse_id=777888,
+                    wms_warehouse_id=technical.id,
+                    stock_sync_enabled=True,
+                    is_active=True,
+                )
             )
-        )
         await session.commit()
 
     async with SessionLocal() as session:

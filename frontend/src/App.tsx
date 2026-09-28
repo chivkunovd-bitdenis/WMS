@@ -16,6 +16,7 @@ import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
+import { SellerCardScreen } from './screens/v2/SellerCardScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -939,19 +940,28 @@ export default function App() {
     setPostedInventoryRows([])
   }, [selectedInboundId])
 
+  // Открытый документ делает свой склад выбранным, только если это рабочий
+  // склад из списка. Старый документ на складе «FBS WB …» выбранный склад не
+  // меняет: иначе следующий новый документ создавался бы там же (WMS-530 R13).
   useEffect(() => {
     if (ffDocModal !== 'inbound' || !inboundDetail?.warehouse_id) {
       return
     }
+    if (!warehouses.some((w) => w.id === inboundDetail.warehouse_id)) {
+      return
+    }
     setSelectedWarehouseId(inboundDetail.warehouse_id)
-  }, [ffDocModal, inboundDetail?.warehouse_id])
+  }, [ffDocModal, inboundDetail?.warehouse_id, warehouses])
 
   useEffect(() => {
     if (ffDocModal !== 'outbound' || !outboundDetail?.warehouse_id) {
       return
     }
+    if (!warehouses.some((w) => w.id === outboundDetail.warehouse_id)) {
+      return
+    }
     setSelectedWarehouseId(outboundDetail.warehouse_id)
-  }, [ffDocModal, outboundDetail?.warehouse_id])
+  }, [ffDocModal, outboundDetail?.warehouse_id, warehouses])
 
   useEffect(() => {
     if (!token || !inboundDetail?.warehouse_id) {
@@ -3176,6 +3186,8 @@ export default function App() {
                   sellers={sellers}
                   warehouses={warehouses}
                   canManageCatalog={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
+                  canViewMovements={isFulfillmentAdmin || canInventoryOps}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
               ) : (
                 ffAccessDenied
@@ -3567,6 +3579,17 @@ export default function App() {
                   sellers={sellers}
                   onRefresh={() => void refreshSellers(token)}
                 />
+              ) : (
+                ffAccessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+
+          <Route
+            path="ff/sellers/:sellerId"
+            element={
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <SellerCardScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
