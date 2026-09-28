@@ -658,3 +658,65 @@ async def test_c12_wms440_r12_scenario_still_works(async_client: AsyncClient) ->
     done = await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h)
     assert done.status_code == 200, done.text
     assert done.json()["lines"][0]["actual_qty"] == 2
+
+
+@pytest.mark.asyncio
+async def test_rest01_p23_clear_box_ff_draft_drops_units_not_loose(
+    async_client: AsyncClient,
+) -> None:
+    """REST-01 (review-astra-rest.md) / P2-3 (review-opus-all.md), ревью 29.09.2026.
+
+    «Очистить» (WMS-566) обнуляет короб через тот же redistribute_ff_draft_container,
+    что и ручная правка «В коробе» (delta = -qty на каждую строку короба). До этого
+    исправления WMS-534 не попадало в сборку, поэтому «Очистить» в документе,
+    созданном фулфилментом, переносила снятые штуки в россыпь того же документа:
+    «Принято» не падало, а при завершении приёмки лишние штуки уходили на остаток.
+    С фиксом штуки должны уйти из документа совсем — «Принято» падает на
+    содержимое короба, приход при завершении приёмки равен 0.
+    """
+    h, wid, sid, pid = await _setup(async_client)
+    created = await async_client.post(BASE, headers=h, json={"warehouse_id": wid, "seller_id": sid})
+    rid = created.json()["id"]
+    box = await async_client.post(f"{BASE}/{rid}/boxes", headers=h)
+    bid = box.json()["id"]
+    for _ in range(2):
+        scan = await async_client.post(
+            f"{BASE}/{rid}/boxes/{bid}/scan",
+            headers=h,
+            json={
+                "barcode": "wms566-clear-ff",
+                "product_id": pid,
+                "mutation_id": str(uuid.uuid4()),
+            },
+        )
+        assert scan.status_code == 200, scan.text
+
+    read = await async_client.get(f"{BASE}/{rid}", headers=h)
+    line = read.json()["lines"][0]
+    assert line["effective_actual_qty"] == 2
+    assert line["actual_qty"] == 0
+
+    cleared = await async_client.post(f"{BASE}/{rid}/boxes/{bid}/clear", headers=h)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["lines"] == []
+
+    read2 = await async_client.get(f"{BASE}/{rid}", headers=h)
+    line2 = read2.json()["lines"][0]
+    # До фикса тут effective_actual_qty оставался 2 (штуки уходили в россыпь).
+    assert line2["effective_actual_qty"] == 0
+    assert line2["actual_qty"] == 0
+
+    done = await async_client.post(f"{BASE}/{rid}/complete-receiving", headers=h)
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "sorting"
+    done_line = next(ln for ln in done.json()["lines"] if ln["product_id"] == pid)
+    assert done_line["actual_qty"] == 0
+
+    async with SessionLocal() as db:
+        total = await db.scalar(
+            select(func.sum(InventoryMovement.quantity_delta)).where(
+                InventoryMovement.inbound_intake_line_id == uuid.UUID(done_line["id"])
+            )
+        )
+        # До фикса тут было 2 — снятые штуки уходили на остаток при завершении.
+        assert (total or 0) == 0
