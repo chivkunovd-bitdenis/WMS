@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import Select, and_, delete, func, or_, select
+from sqlalchemy import Row, Select, and_, delete, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -39,7 +39,7 @@ from app.services import (
     warehouse_map_service,
 )
 from app.services.catalog_service import list_ozon_product_links, load_ozon_primary_image_urls
-from app.services.defect_warehouse_service import DEFECT_LOCATION_CODE
+from app.services.defect_warehouse_service import DEFECT_LOCATION_CODE, defect_service_write
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -329,6 +329,49 @@ def _balance_query(
     return stmt
 
 
+@defect_service_write
+async def _add_count_lines(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    count_id: uuid.UUID,
+    balances: list[Row[tuple[InventoryBalance, Product, StorageLocation]]],
+    container_refs: list[tuple[ContainerKind, uuid.UUID]],
+) -> None:
+    """Write count lines, including any that fall on the tenant's __DEFECT__.
+
+    A whole-product or whole-warehouse count legitimately spans balances
+    resting in the tenant's defect location (WMS-530 R1/D2: it is counted
+    like any other location, not hidden). Writing that count line is not
+    itself a defect placement, but the WMS-516 guard does not distinguish an
+    audit-only reference from a stock-changing one, so this reuses the same
+    transaction-local grant `apply_return_defect_putaway` uses for its own
+    defect write instead of loosening the guard for every table.
+    """
+    session.add_all(
+        [
+            InventoryCountLine(
+                count_id=count_id,
+                product_id=balance.product_id,
+                storage_location_id=balance.storage_location_id,
+                container_kind=balance.container_kind,
+                container_id=balance.container_id,
+                expected_quantity=int(balance.quantity),
+                actual_quantity=None,
+                posted_delta=None,
+            )
+            for balance, _, _ in balances
+        ]
+    )
+    # Reuse the document-container relation to keep an explicitly selected empty
+    # object visible too; attachment is not a confirmation of zero stock.
+    session.add_all([
+        InventoryCountCreatedContainer(tenant_id=tenant_id, count_id=count_id,
+                                       container_kind=kind, container_id=cid)
+        for kind, cid in container_refs
+    ])
+
+
 async def create_count(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -452,28 +495,9 @@ async def create_count(
     )
     session.add(count)
     await session.flush()
-    session.add_all(
-        [
-            InventoryCountLine(
-                count_id=count.id,
-                product_id=balance.product_id,
-                storage_location_id=balance.storage_location_id,
-                container_kind=balance.container_kind,
-                container_id=balance.container_id,
-                expected_quantity=int(balance.quantity),
-                actual_quantity=None,
-                posted_delta=None,
-            )
-            for balance, _, _ in balances
-        ]
+    await _add_count_lines(
+        session, tenant_id, count_id=count.id, balances=balances, container_refs=container_refs,
     )
-    # Reuse the document-container relation to keep an explicitly selected empty
-    # object visible too; attachment is not a confirmation of zero stock.
-    session.add_all([
-        InventoryCountCreatedContainer(tenant_id=tenant_id, count_id=count.id,
-                                       container_kind=kind, container_id=cid)
-        for kind, cid in container_refs
-    ])
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None

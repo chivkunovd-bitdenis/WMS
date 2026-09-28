@@ -3,8 +3,8 @@
 Проверки C1-C3 и C15 из docs/requirements/WMS-530.md: одни и те же три числа
 у всех потребителей (каталог, окно «Остаток для FBS», бронь заказа FBS,
 отгрузка на МП, инвентаризация), расположение (склад/зона/тара, включая
-legacy-псевдосклад и склад брака) не исключает строку и не блокирует работу,
-и одновременная бронь последней единицы не создаёт вторую бронь.
+несколько реальных складов и склад брака) не исключает строку и не блокирует
+работу, и одновременная бронь последней единицы не создаёт вторую бронь.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -61,7 +61,16 @@ def _no_background_publish(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _base_seed(session: AsyncSession) -> dict[str, object]:
-    """Организация с двумя рабочими складами, старым псевдоскладом и складом брака."""
+    """Организация с тремя рабочими складами и складом брака.
+
+    WMS-516 закрывает старый marketplace-псевдосклад (`fbs-wb-*`) и вообще
+    любой неоперационный склад, кроме `__DEFECT__`, для новых физических
+    записей: держать там реальный остаток в фикстуре больше нельзя, это сама
+    по себе несовместимость с новыми guard-триггерами, а не продуктовый
+    регресс. Третий обычный склад сохраняет проверяемую суть R1/R4/R9/R11 —
+    остаток считается одинаково независимо от того, на каком реальном складе
+    лежит товар.
+    """
     tenant = Tenant(name="WMS-530", slug=f"wms530-{uuid.uuid4().hex[:8]}")
     session.add(tenant)
     await session.flush()
@@ -74,13 +83,8 @@ async def _base_seed(session: AsyncSession) -> dict[str, object]:
     seller = Seller(tenant_id=tenant.id, name="Seller S1")
     warehouse_a = Warehouse(tenant_id=tenant.id, name="Склад А", code=f"a-{uuid.uuid4().hex[:6]}")
     warehouse_b = Warehouse(tenant_id=tenant.id, name="Склад Б", code=f"b-{uuid.uuid4().hex[:6]}")
-    legacy = Warehouse(
-        tenant_id=tenant.id,
-        name="FBS WB 999",
-        code="fbs-wb-999",
-        is_operational=False,
-    )
-    session.add_all([user, seller, warehouse_a, warehouse_b, legacy])
+    warehouse_c = Warehouse(tenant_id=tenant.id, name="Склад В", code=f"c-{uuid.uuid4().hex[:6]}")
+    session.add_all([user, seller, warehouse_a, warehouse_b, warehouse_c])
     await session.flush()
     product = Product(
         tenant_id=tenant.id,
@@ -97,9 +101,40 @@ async def _base_seed(session: AsyncSession) -> dict[str, object]:
         "seller": seller,
         "warehouse_a": warehouse_a,
         "warehouse_b": warehouse_b,
-        "legacy": legacy,
+        "warehouse_c": warehouse_c,
         "product": product,
     }
+
+
+async def _seed_defect_balance(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    defect_location_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """Place a starting balance directly in the tenant's defect location.
+
+    The WMS-516 guard accepts a physical write to `__DEFECT__` only inside the
+    same transaction-local grant the real defect/return flow uses (see
+    `defect_warehouse_service.defect_service_write`); a plain `session.add`
+    after `get_or_create_defect_location` has already returned is exactly the
+    unprivileged write the guard is meant to reject. This mirrors that grant
+    for test setup instead of routing every fixture through the full
+    putaway/return service call.
+    """
+    postgres = session.get_bind().dialect.name == "postgresql"
+    async with session.begin_nested():
+        if postgres:
+            await session.execute(
+                text("SELECT set_config('wms.defect_tenant', :tenant, true)"),
+                {"tenant": str(tenant_id)},
+            )
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=product_id,
+            storage_location_id=defect_location_id, quantity=quantity,
+        ))
+        await session.flush()
 
 
 @pytest.mark.asyncio
@@ -110,10 +145,10 @@ async def test_c1_balance_spread_across_places_matches_everywhere(
     session = db_session
     seed = await _base_seed(session)
     tenant, product = seed["tenant"], seed["product"]
-    warehouse_a, warehouse_b, legacy = (
+    warehouse_a, warehouse_b, warehouse_c = (
         seed["warehouse_a"],
         seed["warehouse_b"],
-        seed["legacy"],
+        seed["warehouse_c"],
     )
 
     cell_a = StorageLocation(
@@ -134,13 +169,13 @@ async def test_c1_balance_spread_across_places_matches_everywhere(
         code="B-01",
         barcode=f"BC-{uuid.uuid4().hex[:8]}",
     )
-    legacy_loc = StorageLocation(
+    cell_c = StorageLocation(
         tenant_id=tenant.id,
-        warehouse_id=legacy.id,
+        warehouse_id=warehouse_c.id,
         code=SORTING_LOCATION_CODE,
         barcode=f"BC-{uuid.uuid4().hex[:8]}",
     )
-    session.add_all([cell_a, sorting_a, cell_b, legacy_loc])
+    session.add_all([cell_a, sorting_a, cell_b, cell_c])
     await session.flush()
     box = WarehouseBox(
         tenant_id=tenant.id,
@@ -177,17 +212,13 @@ async def test_c1_balance_spread_across_places_matches_everywhere(
             InventoryBalance(
                 tenant_id=tenant.id,
                 product_id=product.id,
-                storage_location_id=legacy_loc.id,
+                storage_location_id=cell_c.id,
                 quantity=2,
-            ),
-            InventoryBalance(
-                tenant_id=tenant.id,
-                product_id=product.id,
-                storage_location_id=defect_loc.id,
-                quantity=1,
             ),
         ]
     )
+    await session.flush()
+    await _seed_defect_balance(session, tenant.id, product.id, defect_loc.id, 1)
     await session.commit()
 
     # R1/R4: одно и то же Остаток = 21 из общего расчёта...
@@ -857,22 +888,16 @@ async def test_f4a_count_without_address_storage_includes_defect(
     session.add(sorting_a)
     await session.flush()
     defect_loc = await get_or_create_defect_location(session, tenant.id)
-    session.add_all(
-        [
-            InventoryBalance(
-                tenant_id=tenant.id,
-                product_id=product.id,
-                storage_location_id=sorting_a.id,
-                quantity=5,
-            ),
-            InventoryBalance(
-                tenant_id=tenant.id,
-                product_id=product.id,
-                storage_location_id=defect_loc.id,
-                quantity=1,
-            ),
-        ]
+    session.add(
+        InventoryBalance(
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=sorting_a.id,
+            quantity=5,
+        ),
     )
+    await session.flush()
+    await _seed_defect_balance(session, tenant.id, product.id, defect_loc.id, 1)
     await session.commit()
 
     totals = await organization_stock_totals_by_product(session, tenant.id, [product.id])
