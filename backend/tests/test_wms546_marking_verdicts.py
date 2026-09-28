@@ -555,6 +555,191 @@ async def test_c3_empty_unknown_readback_repeats_then_resolves(
 
 
 # --------------------------------------------------------------------------
+# P2 (ревью Astra, WMS-546) — `required` decision + пустой sgtin не должен
+# давать `missing`, пока WB ещё не подтвердил (эхо) уже отправленный PUT.
+#
+# `_sync_order_meta_from_wb` проверяла `decision == "required" and not value`
+# раньше ветки «SGTIN без значения → unknown», поэтому код с открытой
+# `pending_kiz_operation` (WMS-529: КИЗ уже отправлен PUT, ждём эха WB) на
+# пустой ответ с decision=required становился `missing` вместо `unknown`.
+# `missing` — не открытый статус ни для минутного, ни для 10-минутного
+# цикла (R1/R3/R4), поэтому код застревал: WB мог позже прислать точное
+# значение, но фон его больше не спрашивал. Исправление точечное: пустой
+# ответ с открытой pending_kiz_operation остаётся `unknown`, как и обычный
+# пустой `optional`; без открытой операции поведение не менялось.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_p2_required_empty_with_open_operation_stays_unknown_then_resolves(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _block_writes(monkeypatch)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_supply(
+        tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_DRAFT, marker="P2",
+    )
+    wb_order_id = 999201
+    order_id = await _raw_order(
+        tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+        supply_id=supply_id, wb_order_id=wb_order_id, meta_status=META_STATUS_UNKNOWN,
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+        )
+        assert order is not None and marking is not None
+        # Mirrors the production case: WMS already PUT this exact code and is
+        # waiting for WB to echo it back (WMS-529's uncertain-write path).
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code="wb_readback_empty",
+            actor_user_id=None, idempotency_key="wms546-p2-open",
+        )
+        await session.commit()
+        marking_id = marking.id
+
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+
+    async def required_empty_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        assert order_ids == [wb_order_id]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=None, decision="required"),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        required_empty_fetch,
+    )
+
+    async with SessionLocal() as session:
+        result = await autopoll.sync_marking_verdicts_for_seller(session, target, async_client)
+        await session.commit()
+    assert result.orders_checked == 1
+    # Not `missing` — that would be the P2 bug (order silently stops being
+    # asked by either background cycle, forever, with the PUT already sent).
+    assert await _marking_status(order_id) == META_STATUS_UNKNOWN
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.local_entity_id == marking_id)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION  # not confirmed/failed
+
+    # Still `unknown` → still an open status → the next cycle asks WB again.
+    async with SessionLocal() as session:
+        result2 = await autopoll.sync_marking_verdicts_for_seller(session, target, async_client)
+        await session.commit()
+    assert result2.orders_checked == 1
+    assert await _marking_status(order_id) == META_STATUS_UNKNOWN
+
+    async def echoed_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=f"01WMS546{wb_order_id}", decision="sgtinIntroduced"
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch", echoed_fetch
+    )
+    async with SessionLocal() as session:
+        result3 = await autopoll.sync_marking_verdicts_for_seller(session, target, async_client)
+        await session.commit()
+    assert result3.orders_updated == 1
+    assert await _marking_status(order_id) == META_STATUS_ACCEPTED
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.local_entity_id == marking_id)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_CONFIRMED
+        assert operation.confirmed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_p2_required_empty_without_open_operation_still_missing(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression guard for the P2 fix: without an open pending_kiz_operation,
+    `required` + empty value must still resolve to `missing` exactly as
+    before — WB genuinely has no code for this order, nothing to wait for.
+    """
+    _block_writes(monkeypatch)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid, warehouse_uuid = uuid.UUID(seller_id), uuid.UUID(warehouse_id)
+    supply_id = await _make_supply(
+        tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+        status=FBS_SUPPLY_STATUS_DRAFT, marker="P2NOOP",
+    )
+    wb_order_id = 999301
+    order_id = await _raw_order(
+        tenant_id=tenant_id, seller_id=seller_uuid, warehouse_id=warehouse_uuid,
+        supply_id=supply_id, wb_order_id=wb_order_id, meta_status=META_STATUS_PENDING,
+    )
+    # No record_pending_kiz_operation call here — no open operation at all.
+    target = autopoll.SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid)
+
+    async def required_empty_fetch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=None, decision="required"),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        required_empty_fetch,
+    )
+    async with SessionLocal() as session:
+        result = await autopoll.sync_marking_verdicts_for_seller(session, target, async_client)
+        await session.commit()
+    assert result.orders_checked == 1
+    assert await _marking_status(order_id) == META_STATUS_MISSING
+
+
+# --------------------------------------------------------------------------
 # C4 — WB пропускает unknown/pending заказ в пакетном ответе
 # --------------------------------------------------------------------------
 
@@ -676,43 +861,68 @@ async def test_c4_wb_omits_unknown_order_from_batch_then_next_cycle_applies(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "make_response",
+    ("make_response", "expected_status", "check_operation_failed", "unchanged"),
     [
-        pytest.param(lambda oid, value: [
-            MarketplaceOrderMetaRow(order_id=oid, meta_details=(
-                MarketplaceMetaDetail(key="sgtin", value=value, decision="sgtinIntroduced"),
-            )),
-        ], id="exact_success"),
-        pytest.param(lambda oid, value: [
-            MarketplaceOrderMetaRow(order_id=oid, meta_details=(
-                MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
-            )),
-        ], id="pending"),
-        pytest.param(lambda oid, value: [
-            MarketplaceOrderMetaRow(order_id=oid, meta_details=(
-                MarketplaceMetaDetail(key="sgtin", value=value, decision="sgtinNotFound"),
-            )),
-        ], id="exact_rejection"),
-        pytest.param(lambda oid, value: [
-            MarketplaceOrderMetaRow(order_id=oid, meta_details=(
-                MarketplaceMetaDetail(
-                    key="sgtin", value="01OTHERVALUE", decision="sgtinIntroduced"
-                ),
-            )),
-        ], id="other_value"),
-        pytest.param(lambda oid, value: [
-            MarketplaceOrderMetaRow(order_id=oid, meta_details=(
-                MarketplaceMetaDetail(key="sgtin", value=None, decision="optional"),
-            )),
-        ], id="empty_value"),
-        pytest.param(lambda oid, value: [], id="missing_row"),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=value, decision="sgtinIntroduced"),
+                )),
+            ],
+            META_STATUS_ACCEPTED, False, False, id="exact_success",
+        ),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=value, decision="pending"),
+                )),
+            ],
+            META_STATUS_PENDING, False, False, id="pending",
+        ),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=value, decision="sgtinNotFound"),
+                )),
+            ],
+            META_STATUS_REJECTED, True, False, id="exact_rejection",
+        ),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value="01OTHERVALUE", decision="sgtinIntroduced"
+                    ),
+                )),
+            ],
+            META_STATUS_REPLACEMENT_REQUIRED, False, False, id="other_value",
+        ),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(
+                    MarketplaceMetaDetail(key="sgtin", value=None, decision="optional"),
+                )),
+            ],
+            META_STATUS_UNKNOWN, False, False, id="empty_value",
+        ),
+        pytest.param(lambda oid, value: [], None, False, True, id="missing_row"),
     ],
 )
 async def test_c5_background_cycle_is_read_only_across_wb_answers(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     make_response,
+    expected_status: str | None,
+    check_operation_failed: bool,
+    unchanged: bool,
 ) -> None:
+    """P3 (ревью Astra) — у каждого сценария свой точный ожидаемый статус,
+    а не принадлежность общему множеству: exact_success → accepted,
+    pending → pending (без изменения), exact_rejection → rejected и связанная
+    pending_confirmation-операция → failed, other_value → replacement_required,
+    empty_value → unknown, missing_row → без изменений (`_sync_order_meta_from_wb`
+    для этого заказа вообще не вызывается — сосед по пакету не найден).
+    """
     _block_writes(monkeypatch)
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
@@ -736,6 +946,24 @@ async def test_c5_background_cycle_is_read_only_across_wb_answers(
         meta_status=META_STATUS_UNKNOWN,
     )
     value = f"01WMS546{wb_order_id}"
+    before_status = await _marking_status(order_id)
+
+    marking_id: uuid.UUID | None = None
+    if check_operation_failed:
+        # exact_rejection needs an open pending_kiz_operation to prove it
+        # becomes `failed`, not just left dangling.
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            marking = await session.scalar(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+            assert order is not None and marking is not None
+            await marking_svc.record_pending_kiz_operation(
+                session, order, marking, error_code="wb_readback_empty",
+                actor_user_id=None, idempotency_key="wms546-c5-rejection",
+            )
+            await session.commit()
+            marking_id = marking.id
 
     async def fake_fetch(
         client: object,
@@ -758,10 +986,21 @@ async def test_c5_background_cycle_is_read_only_across_wb_answers(
         await session.commit()
     # _block_writes already asserts no write call happened (it would raise);
     # reaching this point at all is the C5 read-only guarantee.
-    assert await _marking_status(order_id) in {
-        META_STATUS_UNKNOWN, META_STATUS_ACCEPTED, META_STATUS_PENDING,
-        META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED,
-    }
+    if unchanged:
+        assert await _marking_status(order_id) == before_status
+    else:
+        assert await _marking_status(order_id) == expected_status
+
+    if check_operation_failed:
+        assert marking_id is not None
+        async with SessionLocal() as session:
+            operation = await session.scalar(
+                select(FbsWbOperation).where(FbsWbOperation.local_entity_id == marking_id)
+            )
+            assert operation is not None
+            assert operation.state == marking_svc.WB_OPERATION_STATE_FAILED
+            assert operation.failed_at is not None
+            assert operation.error_code == "meta_validation_fail"
 
 
 @pytest.mark.asyncio

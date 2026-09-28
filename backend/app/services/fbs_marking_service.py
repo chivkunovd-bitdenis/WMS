@@ -1010,9 +1010,23 @@ async def _sync_order_meta_from_wb(
             # inferred local state.
             _apply_meta_detail_to_marking(marking, meta_detail)
             decision = meta_detail.decision.strip().lower()
-            if decision == "required" and not meta_detail.value:
+            empty_sgtin = marking.kind == MARKING_KIND_SGTIN and not meta_detail.value
+            # WMS-546 P2 (Astra review) — a SGTIN already sent to WB and awaiting
+            # its echo (an open `pending_kiz_operation`, WMS-529's uncertain-write
+            # path) must not turn `missing` on an empty answer just because WB's
+            # own decision says "required": WB asking for a value it hasn't
+            # echoed back yet is exactly the same "WB hasn't caught up" signal as
+            # an empty `optional` answer, not "this order was never given a
+            # code". `missing` drops the order out of both background cycles'
+            # open-status selection, so once WB *does* catch up the order would
+            # never resolve on its own again (R3/R4). Without an open operation,
+            # behaviour is unchanged — WB genuinely has no code for this order.
+            awaiting_wb_echo = empty_sgtin and (
+                await pending_kiz_operation(session, marking) is not None
+            )
+            if decision == "required" and not meta_detail.value and not awaiting_wb_echo:
                 marking.meta_status = META_STATUS_MISSING
-            elif marking.kind == MARKING_KIND_SGTIN and not meta_detail.value:
+            elif empty_sgtin:
                 # Optional metadata does not confirm the KIZ already bound locally.
                 marking.meta_status = META_STATUS_UNKNOWN
             elif meta_detail.value and not _same_marking_value(marking.value, meta_detail.value):
