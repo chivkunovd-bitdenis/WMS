@@ -24,6 +24,9 @@ from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_pro
 from app.services.withdrawal_provider_ki import provider_ki
 
 INTEGRATION_GATE = "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
+# WMS-563: «Выбрать все» отбирает КИЗ на всех страницах. Предел задаёт Postgres —
+# до 32767 параметров в запросе, а выбор попадает в IN-списки по два раза.
+MAX_OPERATION_ROWS = 10_000
 
 
 async def _new_items(
@@ -90,7 +93,7 @@ async def create_operation(
     client_request_id: uuid.UUID,
     environment: str = "sandbox",
 ) -> WithdrawalOperation:
-    if not row_ids or len(row_ids) > 250 or len(set(row_ids)) != len(row_ids):
+    if not row_ids or len(row_ids) > MAX_OPERATION_ROWS or len(set(row_ids)) != len(row_ids):
         raise WithdrawalError("invalid_selection", 422)
     row_ids = sorted(row_ids)
     selection_hash = hashlib.sha256("\n".join(map(str, row_ids)).encode()).hexdigest()

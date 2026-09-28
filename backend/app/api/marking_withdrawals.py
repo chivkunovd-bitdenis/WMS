@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import uuid
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
@@ -161,7 +161,9 @@ async def list_withdrawals(
     search: Annotated[str | None, Query(max_length=256)] = None,
     product_id: uuid.UUID | None = None,
     only_not_withdrawn: bool = False,
-    limit: Literal[50, 100, 250] = 50,
+    # WMS-563: Literal из query-строки не принимает "50" (приходит строкой) → 422.
+    # Допустимые размеры страницы проверяет registry().
+    limit: int = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> WithdrawalPage:
     try:

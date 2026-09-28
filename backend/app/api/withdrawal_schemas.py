@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 
+from app.services.withdrawal_service import MAX_OPERATION_ROWS
+
 
 class StrictInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -24,7 +26,7 @@ class ReauthWithdrawal(StrictInput):
 
 class CreateWithdrawal(StrictInput):
     client_request_id: uuid.UUID
-    row_ids: list[uuid.UUID] = Field(min_length=1, max_length=250)
+    row_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_OPERATION_ROWS)
     certificate: WithdrawalCertificate | None = None
 
 
