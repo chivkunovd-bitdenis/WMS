@@ -1426,6 +1426,24 @@ async def set_inbound_box_line_quantity(
 
 
 @router.post(
+    "/{request_id}/boxes/{box_id}/clear",
+    response_model=InboundIntakeBoxOut,
+)
+async def clear_inbound_box(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    """WMS-566: «Очистить» короб — все его штуки уходят из приёмки."""
+    try:
+        box = await inbound_box_svc.clear_box(session, user.tenant_id, request_id, box_id)
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    return _box_out(box)
+
+
+@router.post(
     "/{request_id}/boxes/{box_id}/close",
     response_model=InboundIntakeBoxOut,
 )

@@ -563,6 +563,60 @@ async def set_product_quantity_in_open_box(
     return await _load_box(session, box.id)
 
 
+async def clear_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> InboundIntakeBox:
+    """WMS-566: обнулить весь короб одной транзакцией — как ручная правка «В коробе»
+    до 0 по каждому товару: штуки уходят из «Принято», правки пишутся в историю."""
+    req = await intake_svc.get_request(session, tenant_id, request_id, for_update=True)
+    if req is None:
+        raise InboundIntakeBoxError("request_not_found")
+    if not _intake_editable(req):
+        raise InboundIntakeBoxError("bad_status")
+    box = await session.get(InboundIntakeBox, box_id)
+    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
+        raise InboundIntakeBoxError("box_not_found")
+    lines = list(
+        await session.scalars(
+            select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.box_id == box_id)
+        )
+    )
+    if any(int(ln.posted_qty) > 0 for ln in lines):
+        raise InboundIntakeBoxError("actual_below_posted")
+    edits: list[tuple[uuid.UUID, int]] = []
+    for line in lines:
+        qty = int(line.quantity)
+        try:
+            await intake_svc.redistribute_ff_draft_container(session, req, line.product_id, -qty)
+        except intake_svc.InboundIntakeError as exc:
+            raise InboundIntakeBoxError(exc.code) from exc
+        await session.delete(line)
+        if qty:
+            edits.append((line.product_id, qty))
+    await session.flush()
+    req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
+    if req_loaded is None:
+        raise InboundIntakeBoxError("request_not_found")
+    await _sync_line_actuals_from_box_totals(session, req_loaded)
+    for product_id, qty in edits:
+        await _record_tare_edit(
+            session,
+            tenant_id=tenant_id,
+            request_id=request_id,
+            container_kind="box",
+            container_id=box_id,
+            product_id=product_id,
+            qty_before=qty,
+            qty_after=0,
+        )
+    await session.commit()
+    session.expire_all()  # в ответе — короб без удалённых строк
+    return await _load_box(session, box_id)
+
+
 async def _record_tare_edit(
     session: AsyncSession,
     *,
