@@ -265,7 +265,16 @@ export function createScannerListener(opts: ScannerListenerOptions) {
       return
     }
 
-    // Модификаторные клавиши (Shift, Ctrl, Alt, CapsLock…) не записываем,
+    // Backspace/Delete сканер никогда не шлёт — это оператор правит руками уже
+    // введённое число. Пачку сбрасываем, иначе цифры до и после правки склеятся
+    // в буфере и уйдут на Enter как один «скан» (WMS-566 P3-2).
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      resetBurst()
+      lastTime = -Infinity
+      return
+    }
+
+    // Прочие модификаторные клавиши (Shift, Ctrl, Alt, CapsLock…) не записываем,
     // но и не сбрасываем буфер
     if (e.key.length > 1) return
 

@@ -292,7 +292,7 @@ function FfInboundBoxAddDialogContent({
       }
       const raw = rawOverride ?? draftQtyRef.current[productId] ?? '0'
       const qty = Number(raw)
-      if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(qty) || qty < 0 || qty > 100000) {
+      if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(qty) || qty < 0 || qty > 10 ** BOX_QTY_MAX_DIGITS - 1) {
         setError('Укажите целое количество ≥ 0.')
         return
       }

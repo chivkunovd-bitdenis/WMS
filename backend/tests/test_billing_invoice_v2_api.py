@@ -629,3 +629,82 @@ async def test_late_evening_utc_operation_belongs_to_the_moscow_day(
     preview = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
     assert preview.status_code == 200, preview.text
     assert preview.json()["total_amount_kopecks"] == 1000
+
+
+@pytest.mark.asyncio
+async def test_p36_return_service_line_labelled_vozvrat_not_raw_code(
+    async_client: AsyncClient,
+) -> None:
+    """P3-6 (review-opus-all.md), ревью 29.09.2026.
+
+    Строка счёта v2 за услугу возврата (service_code="return") должна печататься
+    «Возврат» — как и остальные услуги. До фикса SERVICE_LABELS не знал ключ
+    "return" и подпись падала на сырой код таблицы, "return", который
+    подхватывался в момент выставления и не пересчитывается дальше — WMS-568
+    добавила «Возврат» только во фронтовые словари (FfBillingInvoicesPanel.tsx,
+    FfBillingScreen.tsx), которые к строкам счёта v2 не применяются.
+    """
+    suffix = f"invoice-v2-return-label-{time.time_ns()}"
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Invoice Return Label",
+            "slug": suffix,
+            "admin_email": f"{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Селлер возврата"})
+    seller_id = uuid.UUID(seller.json()["id"])
+    root_id = uuid.uuid4()
+    occurred = datetime.now(MOSCOW) - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                id=root_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="return",
+                source="test",
+                source_type="inbound_intake",
+                source_id=uuid.uuid4(),
+                event_kind="charge",
+                unit="item",
+                quantity=Decimal("1"),
+                rate=1000,
+                amount=1000,
+                occurred_at=occurred,
+            )
+        )
+        await session.commit()
+
+    date_from = (occurred - timedelta(days=1)).date().isoformat()
+    date_to = datetime.now(MOSCOW).date().isoformat()
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": date_from,
+        "date_to": date_to,
+        "selected_root_ids": [str(root_id)],
+    }
+
+    preview = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["lines"][0]["description"] == "Возврат"
+
+    issued = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": f"{suffix}-1"},
+        json=body,
+    )
+    assert issued.status_code == 201, issued.text
+    # Подпись «замораживается» в момент выставления — проверяем именно сохранённую
+    # строку счёта, а не только предпросмотр.
+    assert issued.json()["lines"][0]["description"] == "Возврат"
+
+    fetched = await async_client.get(f"/billing/invoices-v2/{issued.json()['id']}", headers=headers)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["lines"][0]["description"] == "Возврат"

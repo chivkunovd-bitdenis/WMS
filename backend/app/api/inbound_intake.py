@@ -232,7 +232,8 @@ class InboundCargoPlaceCreate(BaseModel):
 
 class InboundBoxLineQuantityBody(BaseModel):
     mutation_id: uuid.UUID | None = None
-    quantity: int = Field(ge=0, le=100_000)
+    # WMS-566 R3: ручной ввод «В коробе»/«В грузоместе» — до 999 999 штук.
+    quantity: int = Field(ge=0, le=999_999)
 
 
 class InboundBoxPutawayLineIn(BaseModel):
