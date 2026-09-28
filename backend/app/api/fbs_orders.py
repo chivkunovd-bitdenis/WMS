@@ -304,6 +304,10 @@ class FbsWorklistInventoryOut(BaseModel):
 
 
 class FbsWorklistMetadataStateOut(BaseModel):
+    # WMS-575: id записи кода маркировки заказа. Сервисы его кладут, а схема не
+    # описывала, и pydantic выбрасывал поле — экран упаковки не показывал круговую
+    # стрелку «Перепечатать ЧЗ» (WMS-519), которой нужен id именно этого кода.
+    id: str | None = None
     kind: str
     status: str
     reason: str | None

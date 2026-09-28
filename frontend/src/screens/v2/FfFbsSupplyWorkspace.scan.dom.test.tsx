@@ -188,14 +188,14 @@ function scan(code: string) {
   return enter! as KeyboardEvent
 }
 
-async function openPackingTab() {
+async function openPackingTab(initial: FbsWorkspace = workspace()) {
   await act(async () => {
     root.render(
       <FfFbsSupplyWorkspace
         token="t-575"
         authHeaders={() => ({ Authorization: 'Bearer t-575' })}
         supplyId={SUPPLY_ID}
-        initialWorkspace={workspace()}
+        initialWorkspace={initial}
         open
         onClose={() => undefined}
       />,
@@ -293,5 +293,29 @@ describe('WMS-575 · «Упаковка и маркировка» принима
     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
     expect(activeRow()).toBe('order-a')
     expect(input.value).toBe('')
+  })
+})
+
+// R11: круговая стрелка «Перепечатать ЧЗ» (WMS-519) показывается у кода,
+// внесённого оператором, только когда сервер отдал id этого кода. До правки
+// схемы ответа id выбрасывался, и стрелки не было ни у одного заказа.
+describe('WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора', () => {
+  const reprintArrow = (orderId: string) =>
+    document.querySelector(`[data-order-id="${orderId}"] [data-testid="fbs-kiz-reprint-inline"]`)
+
+  it('сервер отдал id кода оператора — стрелка в строке этого заказа', async () => {
+    await openPackingTab(workspace({ 'order-a': 'AbCd1234' }))
+    expect(reprintArrow('order-a')).not.toBeNull()
+    // У заказа без кода стрелки нет.
+    expect(reprintArrow('order-b')).toBeNull()
+  })
+
+  it('без id — как отвечал сервер до правки — стрелки нет', async () => {
+    const withoutId = workspace({ 'order-a': 'AbCd1234' })
+    for (const current of withoutId.orders) {
+      for (const state of current.metadata.states) delete (state as { id?: string | null }).id
+    }
+    await openPackingTab(withoutId)
+    expect(reprintArrow('order-a')).toBeNull()
   })
 })
