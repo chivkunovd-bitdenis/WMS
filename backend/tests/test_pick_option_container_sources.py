@@ -23,7 +23,7 @@ from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
-from app.services import pick_option_location_service
+from app.services import box_barcode_service, pick_option_location_service
 from app.services.box_barcode_service import generate_box_barcode
 from app.services.sorting_location_service import get_or_create_sorting_location
 
@@ -50,8 +50,12 @@ async def _register_tenant(async_client: AsyncClient, label: str) -> uuid.UUID:
 # TC-NEW-PICK-CONTAINERS-001
 @pytest.mark.asyncio
 async def test_shared_pick_locations_keep_totals_and_expose_physical_paths(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # WMS-565: подпись «КР-00000N» у системного кода — режим «Империи ФФ».
+    monkeypatch.setattr(
+        box_barcode_service, "uses_numbered_inbound_box_labels", lambda _tenant_id: True
+    )
     tenant_id = await _register_tenant(async_client, "pick-container-sources")
     async with SessionLocal() as session:
         suffix = uuid.uuid4().hex[:8]

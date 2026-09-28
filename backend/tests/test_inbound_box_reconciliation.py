@@ -20,12 +20,13 @@ from app.models.inventory_movement import (
 )
 from app.models.user import User
 from app.services import (
-    inbound_box_reconciliation_service as reconciliation_service,
-)
-from app.services import (
+    box_barcode_service,
     inbound_package_catalog_service,
     pick_option_location_service,
     warehouse_map_service,
+)
+from app.services import (
+    inbound_box_reconciliation_service as reconciliation_service,
 )
 from app.services.catalog_service import create_product, create_warehouse
 from app.services.inventory_container_service import resolve_container_scan
@@ -53,8 +54,12 @@ async def _tenant_and_user(async_client: AsyncClient) -> tuple[uuid.UUID, uuid.U
 
 @pytest.mark.asyncio
 async def test_reconciliation_caps_by_current_stock_and_preserves_original_boxes(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # WMS-565: подпись «КР-00000N» у системного кода — режим «Империи ФФ».
+    monkeypatch.setattr(
+        box_barcode_service, "uses_numbered_inbound_box_labels", lambda _tenant_id: True
+    )
     tenant_id, actor_user_id = await _tenant_and_user(async_client)
     async with SessionLocal() as session:
         technical = await create_warehouse(

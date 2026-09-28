@@ -24,6 +24,7 @@ from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
+from app.services import box_barcode_service
 
 BASE = "/operations/marketplace-unload-requests"
 
@@ -175,6 +176,10 @@ async def test_collect_without_location_when_address_storage_off(
 async def test_collect_requires_location_when_address_storage_on(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # WMS-565: подпись «КР-00000N» у системного кода — режим «Империи ФФ».
+    monkeypatch.setattr(
+        box_barcode_service, "uses_numbered_inbound_box_labels", lambda _tenant_id: True
+    )
     h = await _register_headers(async_client, f"mu-as-on-{int(time.time())}")
     mid, box_id, pid, loc_id, wid = await _confirmed_unload_with_box(
         async_client, h, monkeypatch, address_storage_enabled=True

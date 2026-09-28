@@ -42,7 +42,7 @@ import {
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
   boxFillDialogContentSx,
-  boxFillDialogPaperSx,
+  inboundBoxFillDialogPaperSx,
   boxFillQtyCellSx,
   boxFillTableScrollSx,
 } from './boxFillDialogLayout'
@@ -475,7 +475,7 @@ function FfInboundBoxAddDialogContent({
       maxWidth={false}
       fullWidth
       data-testid="ff-inbound-box-add-dialog"
-      slotProps={{ paper: { sx: boxFillDialogPaperSx } }}
+      slotProps={{ paper: { sx: inboundBoxFillDialogPaperSx } }}
     >
       <DialogTitle component="div" sx={{ pr: 6, flexShrink: 0 }} data-testid="ff-inbound-box-add-title">
         <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>

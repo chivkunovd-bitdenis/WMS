@@ -3820,6 +3820,7 @@ export default function App() {
                   workspace={ffInboundWorkspace}
                   sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
+                  numberedInboundBoxLabels={me?.numbered_inbound_box_labels === true}
                   onDirtyChange={setFfDocDirty}
                   onClose={closeFfDocument}
                 />
