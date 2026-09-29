@@ -17,6 +17,10 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
+from app.services.client_movement_report_service import (
+    build_client_movement_workbook,
+    list_client_movements,
+)
 from app.services.reporting_service import (
     MOVEMENT_PAGE_LIMIT,
     build_inventory_report,
@@ -30,6 +34,80 @@ from app.services.reporting_service import (
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@router.get("/client-movements")
+async def get_client_movements(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    date_from: Annotated[datetime, Query()],
+    date_to: Annotated[datetime, Query()],
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    sku: Annotated[str | None, Query()] = None,
+    barcode: Annotated[str | None, Query()] = None,
+    marketplace: Annotated[str | None, Query()] = None,
+    operation: Annotated[str | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    cursor: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> dict[str, object]:
+    await assert_inventory_read_access(session, user)
+    try:
+        rows, next_cursor = await list_client_movements(
+            session,
+            user.tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            warehouse_id=warehouse_id,
+            sku=sku,
+            barcode=barcode,
+            marketplace=marketplace,
+            operation=operation,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"rows": rows, "next_cursor": next_cursor, "limit": limit}
+
+
+@router.get("/client-movements/export.xlsx")
+async def export_client_movements(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    date_from: Annotated[datetime, Query()],
+    date_to: Annotated[datetime, Query()],
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    sku: Annotated[str | None, Query()] = None,
+    barcode: Annotated[str | None, Query()] = None,
+    marketplace: Annotated[str | None, Query()] = None,
+    operation: Annotated[str | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> Response:
+    await assert_inventory_read_access(session, user)
+    try:
+        content = await build_client_movement_workbook(
+            session,
+            user.tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            warehouse_id=warehouse_id,
+            sku=sku,
+            barcode=barcode,
+            marketplace=marketplace,
+            operation=operation,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": _content_disposition("client-movements.xlsx")},
+    )
 
 
 def _content_disposition(filename: str) -> str:
