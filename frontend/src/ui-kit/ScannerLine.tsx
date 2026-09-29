@@ -85,6 +85,7 @@ export function ScannerField({
   error,
   notice,
   testId,
+  listening: listeningProp,
 }: {
   /**
    * Значение поля. Не передан — поле НЕуправляемое, и это правильный режим
@@ -108,6 +109,13 @@ export function ScannerField({
   /** Что нашлось прошлым пиком — на языке склада, без кодов. */
   notice?: string | null
   testId?: string
+  /**
+   * WMS-575: экран сам слушает клавиатуру целиком (useScanIntake) и знает,
+   * принимает ли он сканы, где бы ни стоял курсор. Тогда плашка говорит это,
+   * а не то, стоит ли курсор в поле. Не передан — плашка по фокусу поля, как
+   * было: так работают сортировка, инвентаризация и карта склада.
+   */
+  listening?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   // Держал ли фокус сам сканер. Только по этому признаку поле имеет право
@@ -198,7 +206,7 @@ export function ScannerField({
   return (
     <Stack>
       <ScannerLine
-        active={listening || busy}
+        active={listeningProp ?? (listening || busy)}
         expects={expects}
         onWake={() => {
           ownsFocusRef.current = true

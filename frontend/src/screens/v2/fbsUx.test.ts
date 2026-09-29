@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FbsOrderMetadata } from './fbsApi'
-import { fbsOzonAutoBoxesPlan, fbsOzonLabelFailuresText, fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
+import type { FbsOrderMetadata, FbsPickOptionLocation, FbsWorkspace } from './fbsApi'
+import { fbsBuildPickingRows, fbsPickSourceLabels, fbsOzonAutoBoxesPlan, fbsOzonLabelFailuresText, fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsMarkingVerdictsSummary, fbsOrderMarkingAccepted } from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -161,5 +161,180 @@ describe('WMS-394 repeated active sticker', () => {
     expect(fbsSameStickerScan('010460000000001821ABC', '*DU7aq2hE')).toBe(false)
     expect(fbsSameStickerScan('  ', '')).toBe(false)
     expect(fbsSameStickerScan('ABC/123', 'ABC?123')).toBe(false)
+  })
+})
+
+describe('fbsPickSourceLabels (WMS-528)', () => {
+  const box = (code: string, available: number) => ({
+    available,
+    is_loose: false,
+    source_label: `Короб ${code}`,
+    container_path: [{ kind: 'box', id: code, code, label: `Короб ${code}` }],
+  })
+  const loose = (available: number) => ({ available, is_loose: true, source_label: 'Россыпью', container_path: [] })
+  const place = (code: string, sources: FbsPickOptionLocation['sources']): FbsPickOptionLocation => ({
+    storage_location_id: code,
+    location_code: code,
+    available: sources.reduce((sum, source) => sum + source.available, 0),
+    sources,
+  })
+
+  it('shows only containers when stock is in sorting', () => {
+    const locations = [place('Без ячеек', [box('B-1', 2), box('B-2', 7), loose(1)])]
+    expect(fbsPickSourceLabels(locations, 3)).toEqual(['Короб B-2: 7'])
+    expect(fbsPickSourceLabels(locations, 10)).toEqual(['Короб B-2: 7', 'Короб B-1: 2', 'Россыпью: 1'])
+  })
+
+  it('shows the cell with its container, largest first, only enough to cover the pick', () => {
+    const locations = [
+      place('A-01', [box('B-1', 3), loose(2)]),
+      place('A-02', [box('B-9', 10)]),
+      place('A-03', [box('B-4', 5)]),
+    ]
+    expect(fbsPickSourceLabels(locations, 12)).toEqual(['A-02 · Короб B-9: 10', 'A-03 · Короб B-4: 5'])
+    expect(fbsPickSourceLabels(locations, 2)).toEqual(['A-02 · Короб B-9: 10'])
+    expect(fbsPickSourceLabels([place('A-01', [loose(4)])], 1)).toEqual(['A-01: 4'])
+  })
+
+  it('shows the full container path, skips empty sources and nothing when the pick is done', () => {
+    const nested = {
+      available: 4,
+      is_loose: false,
+      source_label: 'Короб B-1',
+      container_path: [
+        { kind: 'pallet', id: 'P', code: 'P-1', label: 'Палета P-1' },
+        { kind: 'box', id: 'B', code: 'B-1', label: 'Короб B-1' },
+      ],
+    }
+    expect(fbsPickSourceLabels([place('A-01', [nested, box('B-2', 0)])], 1))
+      .toEqual(['A-01 · Палета P-1 › Короб B-1: 4'])
+    expect(fbsPickSourceLabels([place('A-01', [box('B-2', 5)])], 0)).toEqual([])
+  })
+})
+
+describe('WMS-580: лист подбора и лента «Печать всего» в одном порядке', () => {
+  type WbOrderInput = {
+    id: string
+    wbOrderId: number
+    tapeOrderIndex: number
+    productId: string | null
+    productName?: string
+  }
+
+  function wbOrder(input: WbOrderInput): FbsWorkspace['orders'][number] {
+    return {
+      id: input.id,
+      wb_order_id: input.wbOrderId,
+      tape_order_index: input.tapeOrderIndex,
+      product: {
+        id: input.productId,
+        name: input.productName ?? `Товар ${input.productId ?? input.id}`,
+        image_url: null,
+        seller_article: 'ART',
+        wb_article: 1,
+        barcode: '468',
+        size: null,
+      },
+      positions: [],
+      metadata: { required: [] },
+      pick: { status: 'pending' },
+      sticker: { code: null },
+      inventory: { locations: [] },
+      deadline_at: '2026-09-30T10:00:00Z',
+    } as unknown as FbsWorkspace['orders'][number]
+  }
+
+  it('R1: заказы товара идут по tape_order_index, не по порядку создания в базе или в массиве', () => {
+    // Заказы одного товара (X) созданы и переданы НЕ по возрастанию номера —
+    // сервер уже расставил верный tape_order_index (picking_list_order_key),
+    // и группировка листа обязана довериться именно ему.
+    const orders = [
+      wbOrder({ id: 'x-300', wbOrderId: 300, tapeOrderIndex: 2, productId: 'x' }),
+      wbOrder({ id: 'y-150', wbOrderId: 150, tapeOrderIndex: 3, productId: 'y' }),
+      wbOrder({ id: 'x-100', wbOrderId: 100, tapeOrderIndex: 0, productId: 'x' }),
+      wbOrder({ id: 'x-200', wbOrderId: 200, tapeOrderIndex: 1, productId: 'x' }),
+    ]
+    const { sortedOrders, rows } = fbsBuildPickingRows(orders, false)
+
+    // Порядок ленты («Печать всего» берёт именно sortedOrders без изменений).
+    expect(sortedOrders.map((order) => order.wb_order_id)).toEqual([100, 200, 300, 150])
+
+    // Порядок листа: строка X раньше строки Y (X встретилась раньше в sortedOrders),
+    // а заказы внутри строки X идут в том же порядке, что и в ленте.
+    expect(rows.map((row) => [row.key, row.wbOrders])).toEqual([
+      ['x', [100, 200, 300]],
+      ['y', [150]],
+    ])
+  })
+
+  it('R4: заказ без сопоставленного товара получает свою строку и не пропадает из листа', () => {
+    const orders = [
+      wbOrder({ id: 'mapped', wbOrderId: 1, tapeOrderIndex: 0, productId: 'x' }),
+      wbOrder({ id: 'unmapped', wbOrderId: 2, tapeOrderIndex: 1, productId: null }),
+    ]
+    const { rows } = fbsBuildPickingRows(orders, false)
+    expect(rows.map((row) => row.key)).toEqual(['x', 'unmapped-unmapped'])
+    expect(rows[1]?.wbOrders).toEqual([2])
+  })
+
+  type OzonPositionInput = { id: string; productId: string; quantity: number }
+  type OzonOrderInput = {
+    id: string
+    wbOrderId: number
+    tapeOrderIndex: number
+    positions: OzonPositionInput[]
+  }
+
+  function ozonOrder(input: OzonOrderInput): FbsWorkspace['orders'][number] {
+    return {
+      id: input.id,
+      wb_order_id: input.wbOrderId,
+      tape_order_index: input.tapeOrderIndex,
+      product: { id: null, name: 'Ozon', image_url: null, seller_article: null, wb_article: null, barcode: null, size: null },
+      positions: input.positions.map((position) => ({
+        id: position.id,
+        product_id: position.productId,
+        name: `Товар ${position.productId}`,
+        image_url: null,
+        seller_article: 'ART',
+        sku: 'SKU',
+        barcode: null,
+        marketplace_bindings: [],
+        quantity: position.quantity,
+        reserved_quantity: position.quantity,
+        picked_quantity: 0,
+      })),
+      metadata: { required: [] },
+      pick: { status: 'pending' },
+      sticker: { code: null },
+      inventory: { locations: [] },
+      deadline_at: '2026-09-30T10:00:00Z',
+    } as unknown as FbsWorkspace['orders'][number]
+  }
+
+  it('R2: отправление Ozon с несколькими позициями — строки листа и порядок отправлений в ленте совпадают', () => {
+    // Второе отправление (2 позиции) должно печататься раньше первого (1 позиция) —
+    // управляет только tape_order_index, не порядок создания заказов.
+    const orders = [
+      ozonOrder({ id: 'posting-1', wbOrderId: 1, tapeOrderIndex: 1, positions: [{ id: 'p1', productId: 'x', quantity: 1 }] }),
+      ozonOrder({
+        id: 'posting-2',
+        wbOrderId: 2,
+        tapeOrderIndex: 0,
+        positions: [
+          { id: 'p2', productId: 'y', quantity: 2 },
+          { id: 'p3', productId: 'z', quantity: 1 },
+        ],
+      }),
+    ]
+    const { sortedOrders, rows } = fbsBuildPickingRows(orders, true)
+    expect(sortedOrders.map((order) => order.id)).toEqual(['posting-2', 'posting-1'])
+    // Обе позиции второго отправления идут раньше позиции первого — тем же
+    // порядком, что и в ленте (posting-2, затем posting-1).
+    expect(rows.map((row) => [row.key, row.wbOrders])).toEqual([
+      ['y', [2]],
+      ['z', [2]],
+      ['x', [1]],
+    ])
   })
 })

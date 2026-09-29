@@ -10,6 +10,17 @@ export const boxFillDialogPaperSx: SxProps<Theme> = {
   flexDirection: 'column',
 }
 
+// WMS-565: окно короба приёмки — на 960 правые колонки «Всего принято» /
+// «В коробе» уезжали за край. Окно короба отгрузки не меняется.
+export const inboundBoxFillDialogPaperSx: SxProps<Theme> = {
+  width: '100%',
+  maxWidth: { xs: '100%', sm: 720, md: 960, lg: 1200 },
+  height: { xs: 'calc(100vh - 32px)', sm: 'min(88vh, 820px)' },
+  maxHeight: 'calc(100vh - 32px)',
+  display: 'flex',
+  flexDirection: 'column',
+}
+
 export const boxFillDialogContentSx: SxProps<Theme> = {
   display: 'flex',
   flexDirection: 'column',

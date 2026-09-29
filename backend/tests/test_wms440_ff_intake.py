@@ -399,8 +399,11 @@ async def test_ff_container_allocation_and_explicit_correction(
         corrected = await async_client.put(f"{path}/lines/{pid}", headers=h, json=quantity)
         assert corrected.status_code == 200, corrected.text
     read = await async_client.get(f"{BASE}/{rid}", headers=h)
-    assert read.json()["lines"][0]["effective_actual_qty"] == 4
-    assert read.json()["lines"][0]["actual_qty"] == 2
+    # WMS-534: lowering the container quantity (4 -> 2) now drops the removed units
+    # from the document instead of turning them into loose stock (that reversed part
+    # of WMS-440 D5). The accepted total falls to 2 and loose stays at 0.
+    assert read.json()["lines"][0]["effective_actual_qty"] == 2
+    assert read.json()["lines"][0]["actual_qty"] == 0
     applied = await async_client.patch(f"{BASE}/{rid}/lines/{lid}/expected", headers=h, json=patch)
     assert applied.status_code == 200, applied.text
     assert applied.json()["effective_actual_qty"] == 2

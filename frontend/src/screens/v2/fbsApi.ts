@@ -1362,6 +1362,40 @@ export async function getFbsPickingList(
   return data.items
 }
 
+// Физические источники подбора: ячейки и тара на них со свободным количеством.
+// GET /operations/fbs-supplies/{id}/pick-options — тот же расчёт, что у выбора источника.
+export type FbsPickOptionSource = {
+  available: number
+  is_loose: boolean
+  source_label: string
+  container_path: Array<{ kind: string; id: string; code: string; label: string }>
+}
+
+export type FbsPickOptionLocation = {
+  storage_location_id: string
+  location_code: string
+  available: number
+  sources: FbsPickOptionSource[]
+}
+
+export type FbsPickOptionProduct = {
+  product_id: string
+  planned_qty: number
+  picked_qty: number
+  locations: FbsPickOptionLocation[]
+}
+
+export async function getFbsPickOptions(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  id: string,
+): Promise<FbsPickOptionProduct[]> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick-options`), {
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<FbsPickOptionProduct[]>(res)
+}
+
 // ── Legacy trbx compatibility (deprecated) ───────────────────────────────────
 // Канонический контракт ПВЗ — count-only cargo-places выше (preflightFbsCargoPlaces,
 // createFbsCargoPlaces, fetchFbsCargoPlaces). Без order→trbx allocation.
@@ -1924,4 +1958,64 @@ export async function syncFbsSupplyMarkings(token: string, ah: AuthHeaders, supp
   return jsonOrThrow<FbsWorkspace>(await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/markings/sync`), {
     method: 'POST', headers: ah(token),
   }))
+}
+
+// WMS-562/WMS-581: перенос заказов упаковки в другую поставку WB.
+// Сервер возвращает открытые поставки того же селлера (исключая исходную) в любом
+// рабочем состоянии, куда WB примет выбранные заказы; created_at — дата создания
+// поставки. Выбор «Новая поставка» соответствует target_supply_id === null,
+// её название — name (пусто — «Новая поставка № …» на сервере).
+export type FbsTransferTarget = {
+  id: string
+  name: string
+  wb_supply_id: string
+  created_at: string
+}
+
+export type FbsTransferOrdersRequest = {
+  order_ids: string[]
+  target_supply_id: string | null
+  idempotency_key: string
+  name?: string
+}
+
+export type FbsTransferOrdersResult = {
+  target_supply_id: string | null
+  target_supply_name?: string | null
+  target_wb_supply_id?: string | null
+  target_created?: boolean
+  transferred_order_ids: string[]
+  pending_order_ids: string[]
+  failed_order_ids: string[]
+  state: 'confirmed' | 'partial' | 'failed' | 'pending_confirmation'
+  message: string | null
+}
+
+export async function fetchFbsTransferTargets(
+  token: string,
+  ah: AuthHeaders,
+  sourceSupplyId: string,
+  orderIds: string[] = [],
+): Promise<FbsTransferTarget[]> {
+  const query = new URLSearchParams(orderIds.map((id) => ['order_ids', id])).toString()
+  return jsonOrThrow<FbsTransferTarget[]>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${sourceSupplyId}/transfer-targets${query ? `?${query}` : ''}`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function transferFbsOrders(
+  token: string,
+  ah: AuthHeaders,
+  sourceSupplyId: string,
+  body: FbsTransferOrdersRequest,
+): Promise<FbsTransferOrdersResult> {
+  return jsonOrThrow<FbsTransferOrdersResult>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${sourceSupplyId}/transfer-orders`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
 }

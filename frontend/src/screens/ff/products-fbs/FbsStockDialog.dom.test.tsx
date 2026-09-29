@@ -183,6 +183,29 @@ describe('WMS-469 F2: открытие окна не меняет сохранё
   })
 })
 
+describe('WMS-577 review P2-2: отрицательное «Доступно» (free=-3) не ломает сохранение', () => {
+  it('ввод 5 при free=-3 даёт в поле 0, а не -3, и сохраняет 0', async () => {
+    const onSave = vi.fn()
+    await mount(<FbsStockDialog open sellerName="ИП Тест" products={[product({ 'b-wb': { free: -3, value: 0 } })]}
+      bindings={[wb]} cabinets={data([wb], []).cabinets} wmsWarehouses={WMS} canEditBindings onClose={() => {}} onSave={onSave} />)
+    await type('fbs-stock-units-b-wb', '5')
+    expect(input('fbs-stock-units-b-wb').value).toBe('0')
+    expect($('fbs-stock-cap-note-b-wb').textContent).toBe('товара «Товар p» всего 0 штук')
+    await click('fbs-stock-save')
+    expect(onSave).toHaveBeenCalledWith({ 'b-wb': { publish: true, mode: 'units', value: 0, units_configured: true } })
+  })
+
+  it('явный ноль при free=-3 тоже даёт 0, а не -3 (раньше падал и явный ноль)', async () => {
+    const onSave = vi.fn()
+    await mount(<FbsStockDialog open sellerName="ИП Тест" products={[product({ 'b-wb': { free: -3, value: 5 } })]}
+      bindings={[wb]} cabinets={data([wb], []).cabinets} wmsWarehouses={WMS} canEditBindings onClose={() => {}} onSave={onSave} />)
+    await type('fbs-stock-units-b-wb', '0')
+    expect(input('fbs-stock-units-b-wb').value).toBe('0')
+    await click('fbs-stock-save')
+    expect(onSave).toHaveBeenCalledWith({ 'b-wb': { publish: true, mode: 'units', value: 0, units_configured: true } })
+  })
+})
+
 describe('WMS-469 F6: время записи', () => {
   it('открытая форма добавления заперта, Escape не закрывает, второй PUT не начинается; ответ закрывает окно', async () => {
     const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })], true))
@@ -360,5 +383,130 @@ describe('WMS-469 F10: отметки после частичной обрезк
     await tick()
     expect(fake.saveCalls[1]).toEqual({ 'b-ozon': { publish: true, mode: 'units', value: 40, units_configured: true } })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('WMS-490 D6: встроенный режим (вкладка «Задать остаток» карточки товара)', () => {
+  it('то же тело и те же кнопки, без рамки диалога; кнопки порталятся в заданный узел', async () => {
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const { element } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost })
+    await mount(element)
+    // Тело — то же, что у окна: заголовок товара и блок склада есть, а рамки
+    // диалога (AppDialog) нет вовсе.
+    expect(maybe('fbs-stock-dialog')).toBeNull()
+    expect($('fbs-stock-head').textContent).toBe('Товар p · P')
+    expect(maybe('fbs-stock-block-b-wb')).not.toBeNull()
+    // Кнопки — не в теле, а в заданном узле нижней панели карточки.
+    expect(host!.querySelector('[data-testid="fbs-stock-save"]')).toBeNull()
+    expect(footerHost.querySelector('[data-testid="fbs-stock-save"]')).not.toBeNull()
+    expect(footerHost.querySelector('[data-testid="fbs-stock-cancel"]')).not.toBeNull()
+    footerHost.remove()
+  })
+
+  it('«Сохранить» зовёт тот же saveRule и закрывает так же, как окно', async () => {
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const { element, onClose } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost })
+    await mount(element)
+    const saveButton = footerHost.querySelector<HTMLButtonElement>('[data-testid="fbs-stock-save"]')!
+    await act(async () => { saveButton.click() })
+    expect(fake.saveCalls).toEqual([{}])
+    expect(onClose).toHaveBeenCalledTimes(1)
+    footerHost.remove()
+  })
+
+  it('«Отмена» закрывает без сохранения, как в окне', async () => {
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const { element, onClose } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost })
+    await mount(element)
+    const cancelButton = footerHost.querySelector<HTMLButtonElement>('[data-testid="fbs-stock-cancel"]')!
+    await act(async () => { cancelButton.click() })
+    expect(fake.saveCalls).toHaveLength(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    footerHost.remove()
+  })
+
+  it('провал загрузки не закрывает встроенный контейнер (R16) — в отличие от окна', async () => {
+    const failingSession: StockDialogSession = {
+      load: async () => { throw new Error('Сеть недоступна') },
+      reread: async () => null,
+      putBinding: async () => ({ ok: false, message: 'unused', data: null }),
+      saveRule: async () => ({ kind: 'saved' }),
+    }
+    const onClose = vi.fn()
+    const onLoadError = vi.fn()
+    await mount(
+      <FbsStockDialogContainer
+        token="t" sellerId="s" sellerName="ИП Тест" chosen={[{ id: 'p', name: 'Товар p', sku_code: 'P' }]}
+        warehouses={WMS} canEditBindings onClose={onClose} onLoadError={onLoadError}
+        session={failingSession} embedded footerSlotEl={null}
+      />,
+    )
+    await tick()
+    expect(onLoadError).toHaveBeenCalledWith('Сеть недоступна')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('окно (не embedded) на том же провале закрывается, как раньше', async () => {
+    const failingSession: StockDialogSession = {
+      load: async () => { throw new Error('Сеть недоступна') },
+      reread: async () => null,
+      putBinding: async () => ({ ok: false, message: 'unused', data: null }),
+      saveRule: async () => ({ kind: 'saved' }),
+    }
+    const onClose = vi.fn()
+    const onLoadError = vi.fn()
+    await mount(
+      <FbsStockDialogContainer
+        token="t" sellerId="s" sellerName="ИП Тест" chosen={[{ id: 'p', name: 'Товар p', sku_code: 'P' }]}
+        warehouses={WMS} canEditBindings onClose={onClose} onLoadError={onLoadError}
+        session={failingSession}
+      />,
+    )
+    await tick()
+    expect(onLoadError).toHaveBeenCalledWith('Сеть недоступна')
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('onBusyChange сообщает карточке о записи и её завершении', async () => {
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const save = deferred<SaveOutcome>()
+    fake.onSave(() => save.promise)
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const onBusyChange = vi.fn()
+    const { element } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost, onBusyChange })
+    await mount(element)
+    onBusyChange.mockClear()
+    const saveButton = footerHost.querySelector<HTMLButtonElement>('[data-testid="fbs-stock-save"]')!
+    await act(async () => { saveButton.click() })
+    expect(onBusyChange).toHaveBeenCalledWith(true)
+    await act(async () => { save.resolve({ kind: 'saved' }) })
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
+    footerHost.remove()
+  })
+
+  it('ревью №1 F4: немедленная запись (без «Сохранить»/«Отмена») сообщает onChanged сразу, а не только при закрытии', async () => {
+    // Карточка товара закрывается своей общей «Закрыть»/Escape/фоном, которые
+    // не проходят через close() контейнера (см. ProductCardDialog.tsx) — если
+    // бы onChanged срабатывал только внутри close(), запись «приём заказов»
+    // без последующего «Сохранить»/«Отмена» терялась бы для перечитывания
+    // каталога. embedded-режим обязан сообщить о ней сразу же.
+    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
+    const footerHost = document.createElement('div')
+    document.body.appendChild(footerHost)
+    const onChanged = vi.fn()
+    const { element, onClose } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost, onChanged })
+    await mount(element)
+    expect(onChanged).not.toHaveBeenCalled()
+    await click('fbs-stock-served-b-wb')
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    footerHost.remove()
   })
 })

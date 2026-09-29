@@ -31,6 +31,7 @@ from app.services.auth_service import (
     send_auth_link,
     set_password_by_link,
 )
+from app.services.box_barcode_service import uses_numbered_inbound_box_labels
 from app.services.login_rate_limit import (
     check_login_rate_limit,
     register_login_success,
@@ -46,6 +47,7 @@ from app.services.seller_shop_service import (
 from app.services.seller_staff_permissions_service import get_seller_permissions
 from app.services.staff_permissions_service import get_staff_permissions
 from app.services.tokens import create_access_token
+from app.services.withdrawal_access import withdrawal_allowed
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -121,7 +123,9 @@ class UserMeResponse(BaseModel):
     delegatable_shops: list[SellerShopOut] = Field(default_factory=list)
     permissions: StaffPermissionsOut | None = None
     seller_permissions: SellerPermissionsOut | None = None
+    withdrawal_enabled: bool = False
     address_storage_enabled: bool = True
+    numbered_inbound_box_labels: bool = False
     separate_marking_print_enabled: bool = False
     fbs_shipment_cutoff_time: str | None = None
     # WMS-433/R23 (уточнение владельца 17.09 «включать плавно»): признак
@@ -476,7 +480,13 @@ async def me(
         delegatable_shops=delegatable_out,
         permissions=permissions,
         seller_permissions=seller_permissions,
+        withdrawal_enabled=(
+            user.role == FULFILLMENT_SELLER
+            and seller_perms_dict["honest_sign"]
+            and withdrawal_allowed(active_seller_id)
+        ),
         address_storage_enabled=tenant.address_storage_enabled,
+        numbered_inbound_box_labels=uses_numbered_inbound_box_labels(tenant.id),
         separate_marking_print_enabled=tenant.separate_marking_print_enabled,
         fbs_shipment_cutoff_time=(
             tenant.fbs_shipment_cutoff_time.strftime("%H:%M")

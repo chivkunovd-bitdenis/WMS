@@ -101,6 +101,67 @@ describe('inventory product scan', () => {
     expect(second.message).toContain('2 из 3')
   })
 
+  it('WMS-542: скан уже числящейся строки в открытой таре тоже несёт found — сервер сам сделает +1', () => {
+    // Локальный прирост — только мгновенная подсказка на экране; настоящая
+    // запись идёт на сервер тем же полем, что и у находки, идемпотентно по
+    // scan_id и под блокировкой документа (record_found).
+    const count = countWithBox(product())
+    const scanned = applyScan(count, '4601234567890', { containerId: 'box-1', cellId: null })
+
+    expect(actualOf(scanned.count)).toBe(1)
+    expect(scanned.found).toEqual({
+      barcodes: ['4601234567890'],
+      cellId: null,
+      containerKind: 'box',
+      containerId: 'box-1',
+      // WMS-542 (F4): строка уже известна на экране — её id снимает
+      // неоднозначность штрихкода на сервере (двух продавцов с одним кодом).
+      lineId: 'line-1',
+    })
+  })
+
+  it('WMS-542: скан уже числящейся строки россыпью в ячейке тоже несёт found', () => {
+    // Товар лежит прямо в ячейке, без тары — та же ячейка, что и у короба
+    // выше, но продукт не завёрнут в children короба.
+    const looseItem = product({ id: 'line-loose', barcode: '9990000000001', wbBarcode: '9990000000001' })
+    const count: InventoryCount = {
+      ...countWithBox(product()),
+      cells: [
+        {
+          id: 'cell-1',
+          label: 'A-01',
+          barcode: 'CELL-BARCODE-1',
+          children: [looseItem],
+        },
+      ],
+    }
+    const opened = applyScan(count, 'CELL-BARCODE-1', NOTHING_OPEN)
+    const scanned = applyScan(opened.count, '9990000000001', opened.open)
+
+    const item = scanned.count.cells[0].children[0]
+    if (item.kind !== 'product') throw new Error('expected product')
+    expect(item.actual).toBe(1)
+    expect(scanned.found).toEqual({
+      barcodes: ['9990000000001'],
+      cellId: 'cell-1',
+      containerKind: null,
+      containerId: null,
+      lineId: 'line-loose',
+    })
+  })
+
+  it('экран без доступа к серверу находок не шлёт found и для уже числящейся строки', () => {
+    // Тот же allowFound=false, что и у компактного диалога с карты склада
+    // (InventoryCountDialog): без доступа к документу сервер не подтвердит
+    // ни находку, ни обычный скан — компактный диалог остаётся полностью
+    // локальным до «Сохранить», как и раньше.
+    const count = countWithBox(product())
+    const scanned = applyScan(count, '4601234567890', { containerId: 'box-1', cellId: null }, false)
+
+    expect(actualOf(scanned.count)).toBe(1)
+    expect(scanned.found).toBeUndefined()
+  })
+
   it('processes repeated scans with 1000 product rows still expanded', () => {
     const boxes = Array.from({ length: 100 }, (_, boxIndex) => ({
       kind: 'box' as const,

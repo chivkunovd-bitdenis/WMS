@@ -16,6 +16,8 @@ import {
 } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
+import { useScanIntake } from '../../../hooks/useScanIntake'
+import { playScanError, playScanSuccess } from '../../../utils/scanFeedback'
 import { PickPlacesTree } from './PickPlacesTree'
 import {
   DOCUMENT,
@@ -60,7 +62,19 @@ import type {
 // больше нет: то же самое поле количества, что и раньше открывалось окном,
 // теперь стоит прямо в строке места.
 
-type PickOp = { productId: string; placeKey: string; qty: number }
+// edit — номер ручной правки поля «Снять», которая ещё не ушла на сервер
+// (WMS-575): если она оказалась символами сканера, её снятие убирается и отсюда.
+type PickOp = { productId: string; placeKey: string; qty: number; edit?: number }
+
+/** Поле «Снять» в строке места — его testId задаёт PickPlacesTree. */
+const PLACE_QTY_TEST_ID = 'pick-place-qty-'
+
+/**
+ * Сколько клавиатура должна молчать, чтобы ручную правку «Снять» можно было
+ * отправить (WMS-575). Сканер шлёт символы чаще, чем раз в 50 мс; пока идёт
+ * пачка, правка ждёт — это может быть скан, попавший в поле.
+ */
+const SCAN_QUIET_MS = 150
 
 export type UnloadPickScanResult =
   | {
@@ -171,13 +185,30 @@ export function UnloadPickScreen({
   // каждую цифру — иначе сканер, стреляющий «12» одним залпом, довозил бы
   // только первую цифру.
   const pendingSetPicked = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // WMS-575: ручная правка «Снять», ещё не отправленная на сервер, — значение
+  // до неё и её номер. Если курсор стоял в этом поле, а пикнули сканером,
+  // первые цифры штрихкода успевают попасть в поле и поменять число; такую
+  // правку откатываем, когда скан распознан.
+  const pendingManualEdits = useRef<Map<string, { before: number; edit: number }>>(new Map())
+  const manualEditSeq = useRef(0)
+  const lastPrintableKeyAt = useRef(-Infinity)
 
   useEffect(() => {
     const timers = pendingSetPicked.current
+    const edits = pendingManualEdits.current
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
       timers.clear()
+      edits.clear()
     }
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.length === 1) lastPrintableKeyAt.current = performance.now()
+    }
+    window.document.addEventListener('keydown', onKey, true)
+    return () => window.document.removeEventListener('keydown', onKey, true)
   }, [])
 
   const rows = rowsOf(plan, stock, objects, cells, picked, products)
@@ -226,6 +257,7 @@ export function UnloadPickScreen({
     const key = pickKey(row.product.id, place.key)
     const nextQuantity = Math.max(0, place.picked + delta)
     setPicked((current) => ({ ...current, [key]: nextQuantity }))
+    let edit: number | undefined
     if (fromScan) {
       // Скан — одно движение, один запрос: отправляем сразу же, как и раньше.
       void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
@@ -236,17 +268,31 @@ export function UnloadPickScreen({
       const timers = pendingSetPicked.current
       const existing = timers.get(key)
       if (existing) clearTimeout(existing)
-      const timer = setTimeout(() => {
+      let pending = pendingManualEdits.current.get(key)
+      if (!pending) {
+        manualEditSeq.current += 1
+        pending = { before: place.picked, edit: manualEditSeq.current }
+        pendingManualEdits.current.set(key, pending)
+      }
+      edit = pending.edit
+      const send = () => {
+        // Пока клавиши идут пачкой, это может быть скан, попавший в поле:
+        // дожидаемся тишины, иначе цифры штрихкода ушли бы на сервер числом.
+        if (performance.now() - lastPrintableKeyAt.current < SCAN_QUIET_MS) {
+          timers.set(key, setTimeout(send, 400))
+          return
+        }
         timers.delete(key)
+        pendingManualEdits.current.delete(key)
         void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
-      }, 400)
-      timers.set(key, timer)
+      }
+      timers.set(key, setTimeout(send, 400))
     }
     setScanError(null)
     if (delta > 0) {
       // Только снятие ложится в историю отмены: ручное уменьшение — это уже
       // сама по себе поправка оператора, отменять поправку поправкой незачем.
-      setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty: delta }])
+      setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty: delta, edit }])
       if (fromScan) setScanNotice(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
       onNote(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
     } else {
@@ -283,6 +329,32 @@ export function UnloadPickScreen({
     onNote(`Возврат ${operation.qty} шт — ${place.label}`)
   }
 
+  /**
+   * WMS-575: курсор стоял в поле «Снять», а пикнули сканером. Первые цифры
+   * штрихкода попали в поле раньше, чем стало ясно, что это скан, и поменяли
+   * число. Сам скан обработан отдельно, а эта «правка» — не решение
+   * оператора: возвращаем число, каким оно было, и не отправляем его.
+   */
+  function revertScannerDigitsInPlaceQty() {
+    const focused = window.document.activeElement
+    const testId = focused instanceof HTMLElement ? focused.dataset.testid ?? '' : ''
+    if (!testId.startsWith(PLACE_QTY_TEST_ID)) return
+    const edits = pendingManualEdits.current
+    if (edits.size === 0) return
+    const restored: PickedMap = {}
+    const revertedEdits = new Set<number>()
+    edits.forEach(({ before, edit }, key) => {
+      const timer = pendingSetPicked.current.get(key)
+      if (timer) clearTimeout(timer)
+      pendingSetPicked.current.delete(key)
+      restored[key] = before
+      revertedEdits.add(edit)
+    })
+    edits.clear()
+    setPicked((current) => ({ ...current, ...restored }))
+    setHistory((current) => current.filter((operation) => operation.edit === undefined || !revertedEdits.has(operation.edit)))
+  }
+
   async function handleServerScan(code: string) {
     if (!onScan) return false
     try {
@@ -294,6 +366,7 @@ export function UnloadPickScreen({
         setScanError(null)
         setScanNotice(`Ячейка ${result.locationCode} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        playScanSuccess()
         return true
       }
 
@@ -308,6 +381,7 @@ export function UnloadPickScreen({
         setScanError(null)
         setScanNotice(`${label} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        playScanSuccess()
         return true
       }
 
@@ -315,6 +389,7 @@ export function UnloadPickScreen({
       if (!row) {
         setScanNotice(null)
         setScanError(`${result.sku} нет в плане этой отгрузки`)
+        playScanError()
         return true
       }
       // Сужение по свойству не доживает до колбэка: держим ячейку отдельной
@@ -335,6 +410,7 @@ export function UnloadPickScreen({
       if (!place) {
         setScanNotice(null)
         setScanError(`${result.sku} — сервер не вернул место снятия`)
+        playScanError()
         return true
       }
       const previous = place.picked
@@ -351,6 +427,7 @@ export function UnloadPickScreen({
       setScanError(null)
       setScanNotice(`${result.sku}: снято ${added || 1} шт — ${place.label}`)
       onNote(`${result.sku}: снято ${added || 1} шт — ${place.label}`)
+      playScanSuccess()
       return true
     } catch (err) {
       if (err instanceof PickScanSourceError) {
@@ -359,9 +436,18 @@ export function UnloadPickScreen({
       }
       setScanNotice(null)
       setScanError(err instanceof Error ? err.message : 'Не удалось выполнить скан')
+      playScanError()
       return true
     }
   }
+
+  // Скан со сканера — где бы ни стоял курсор (WMS-575). Код из поля скана,
+  // набранный руками, идёт в ту же очередь.
+  const { bindRoot: bindScanRoot, listening: scannerListening, submit: submitScan } = useScanIntake({
+    enabled: true,
+    onReceived: revertScannerDigitsInPlaceQty,
+    onScan: handleScan,
+  })
 
   async function handleScan(code: string) {
     setScanValue('')
@@ -548,7 +634,7 @@ export function UnloadPickScreen({
   ]
 
   return (
-    <Box data-testid="unload-pick-screen">
+    <Box data-testid="unload-pick-screen" ref={bindScanRoot}>
       {!hideHeader ? (
         <ScreenHeader
           title="Подбор на отгрузку"
@@ -564,12 +650,13 @@ export function UnloadPickScreen({
               setScanValue(value)
               setScanError(null)
             }}
-            onScan={handleScan}
+            onScan={submitScan}
             expects={source ? 'товар, который снимаете' : 'место или товар'}
             busy={busy}
             error={scanError}
             notice={scanNotice}
             testId="pick-scan"
+            listening={scannerListening}
           />
           {sourceText ? (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>

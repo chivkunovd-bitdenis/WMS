@@ -2045,10 +2045,13 @@ async def add_orders_to_existing_supply(
         await _sync_existing_packaging_task_for_added_orders(
             session, tenant_id, supply, linked_orders
         )
-        if supply.status != FBS_SUPPLY_STATUS_DRAFT:
-            await _request_order_stickers_for_picking(
-                session, tenant_id, supply, http_client, orders=linked_orders
-            )
+        # WMS-537: a draft supply behaves the same as a supply already being
+        # worked on — the sticker of a just-confirmed added order is
+        # requested right away, regardless of supply status. Drafts do not
+        # gain a packaging task or move out of ``draft`` because of this.
+        await _request_order_stickers_for_picking(
+            session, tenant_id, supply, http_client, orders=linked_orders
+        )
     partial_summary = None
     if len(accepted_orders) != len(orders):
         partial_summary = _partial_from_orders_summary(

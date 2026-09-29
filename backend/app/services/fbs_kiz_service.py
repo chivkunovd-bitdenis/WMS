@@ -896,7 +896,7 @@ async def _ensure_kiz_not_occupied_in_pool(
                 FbsOrderMarking.meta_status != META_STATUS_REJECTED,
             )
         )
-        # UI validation must let an uncertain own binding reach GET-only reconciliation.
+        # UI validation must let an uncertain own binding reach WB reconciliation.
         if marking is not None and (
             code.status in {STATUS_RESERVED, STATUS_PRINTED}
             or await marking_svc.pending_kiz_operation(session, marking)
@@ -1361,9 +1361,14 @@ async def _commit_one_kiz_pair(
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
-                await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
-            except WildberriesClientError as exc:
-                raise FbsKizError("wb_pending_confirmation") from exc
+                await marking_svc.reconcile_pending_kiz_operation(
+                    session, order, current, operation, http_client, token,
+                    actor_user_id=actor_user_id,
+                )
+            except (WildberriesClientError, marking_svc.FbsMarkingError) as exc:
+                if operation.state == WB_OPERATION_STATE_FAILED:
+                    raise FbsKizError("meta_validation_fail", persist_failure_state=True) from exc
+                raise FbsKizError("wb_pending_confirmation", persist_failure_state=True) from exc
             if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
                 raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
             if operation.state == WB_OPERATION_STATE_FAILED:
@@ -1440,6 +1445,7 @@ async def _commit_one_kiz_pair(
     session.add(marking)
     await session.flush()
     new_error: FbsKizError | None = None
+    new_write_accepted = False
     try:
         if current is not None:
             await _delete_sgtin_from_wb(order, http_client, token)
@@ -1455,14 +1461,20 @@ async def _commit_one_kiz_pair(
     except FbsKizError as exc:
         new_error = exc
     except marking_svc.FbsMarkingError as exc:
+        new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
     pending_error: FbsKizError | None = None
-    if new_error is not None and current is None:
+    # WMS-579: once WB answered the PUT of the new code, a replacement is no
+    # longer compensated: its unknown result is reconciled like a first binding.
+    # The old code is still restored when deleting it or writing the new one
+    # failed (WB refused the request or its answer was lost).
+    if new_error is not None and (current is None or new_write_accepted):
         # A lost PUT response or a failed read after PUT cannot undo the WB write.
-        ambiguous = (
+        ambiguous = new_write_accepted or (
             new_error.code == "wb_transport_error"
+            or new_error.code == "wb_pending_confirmation"
             or new_error.code == "wb_upstream_error_408"
             or new_error.code.startswith("wb_upstream_error_5")
             or marking.meta_status == META_STATUS_SENDING

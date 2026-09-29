@@ -101,6 +101,21 @@ export function selectionPlacement(row: InvRow | null): ManualAddPlacement {
 }
 
 /**
+ * WMS-543: в какую ячейку ставить новую тару («Создать короб / палету /
+ * грузоместо»).
+ *
+ * Выделенная строка важнее: для любой выделенной строки результат прежний —
+ * ячейка из selectionPlacement (у тары, товара и «Без ячеек» это null).
+ * Выделения нет — берём ячейку, открытую сканером; открыта тара — ячейку, в
+ * которой она стоит. «Без ячеек» — не адрес склада, как и в selectionPlacement.
+ * Ничего не открыто — null: тара уезжает в зону сортировки, как и раньше.
+ */
+export function containerTargetCell(row: InvRow | null, open: ScanOpenPlace): string | null {
+  if (row) return selectionPlacement(row).cellId
+  return open.cellId && UUID_RE.test(open.cellId) ? open.cellId : null
+}
+
+/**
  * Тара, на которой стоит выделение, — для двух новых действий (задачи 2 и 3
  * доработки от 03.09.2026, WMS-153): «Переложить сюда» и «Удалить тару».
  * Обе умеют работать только с тарой, а не с ячейкой — переносить умеем
@@ -133,9 +148,27 @@ type Props = {
     touchedLineId?: string,
     commentChanged?: boolean,
   ) => void
+  /**
+   * WMS-542: ручная правка числа строки — отдельный от скана путь. Страница
+   * держит её черновиком до «Сохранить»; скан той же строки ставит в очередь
+   * сначала это число, потом свою штуку. Экран, у которого нет такого
+   * обработчика (демо-превью без сервера), правит документ по-старому —
+   * через onChange.
+   */
+  onManualEdit?: (lineId: string, value: number | null) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  /**
+   * WMS-497: напечатать лист документа на A4 (шапка + таблица с зеброй, факт
+   * пуст). Не отключается статусом документа, несохранёнными правками или
+   * незаконченным пересчётом — экран не меняется, ничего не сохраняется.
+   * Экран без такого обработчика (демо-превью без сервера) прячет причину
+   * недоступности, а не саму кнопку.
+   */
+  onPrintSheet?: () => void
+  /** Пока сервер готовит лист — второе нажатие не открывает второе окно печати. */
+  printingSheet?: boolean
   /**
    * Сколько сканов находок ещё не доставлено на сервер.
    *
@@ -146,8 +179,9 @@ type Props = {
   pendingFound?: number
   /**
    * Создать тару. Второй аргумент — ячейка, на которой стоит выделение
-   * (задача 1 доработки от 03.09.2026, WMS-153); null — тара уезжает в зону
-   * сортировки, как и раньше.
+   * (задача 1 доработки от 03.09.2026, WMS-153), а без выделения — ячейка,
+   * открытая сканером (WMS-543); null — тара уезжает в зону сортировки,
+   * как и раньше.
    */
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place', cellId: string | null) => void
   /**
@@ -171,6 +205,8 @@ type Props = {
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
     scanId: string
+    /** WMS-542 (F4): id строки, если скан пришёлся на уже известную строку. */
+    lineId?: string
   }) => void
   /**
    * Каталог товаров для модалки «Добавить товар». null — ещё грузится или не
@@ -211,9 +247,12 @@ export function FfInventoryCountScreen({
   error,
   note,
   onChange,
+  onManualEdit,
   onSave,
   onPost,
   onCancelDocument,
+  onPrintSheet,
+  printingSheet = false,
   pendingFound = 0,
   onCreateContainer,
   onMoveLine,
@@ -277,13 +316,17 @@ export function FfInventoryCountScreen({
       // Идентификатор скана рождается здесь, на одном пике. Если ответ не
       // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
       // повтор этого же запроса сервер узнает и не посчитает дважды.
+      //
+      // WMS-542: на странице скан — операция единой очереди документа
+      // (countOpsQueue.ts), она же сама рисует +1 до ответа сервера.
       onFound?.({ ...result.found, scanId: randomId() })
     }
     if (result.count !== count) {
-      const touched = result.focusRowKey?.startsWith('product:')
-        ? result.focusRowKey.slice('product:'.length)
-        : undefined
-      onChange(result.count, touched)
+      // WMS-542: скан никогда не помечает строку «тронутой». Страница с
+      // сервером этот локальный прирост не берёт — у неё скан уже стоит в
+      // очереди операций (onFound выше); прирост нужен экрану без сервера
+      // (демо-превью). Второй аргумент onChange здесь всегда пуст.
+      onChange(result.count, undefined)
     }
   }
 
@@ -334,7 +377,12 @@ export function FfInventoryCountScreen({
   const selectedRow = rows.find((row) => row.key === selectedKey) ?? null
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value), row.id)
+    // WMS-542: ручная правка идёт отдельным от скана путём (onManualEdit —
+    // черновик на странице), а не общим «тронуто».
+    // Экран без такого обработчика (демо-превью без сервера) правит документ
+    // по-старому — через onChange.
+    if (onManualEdit) onManualEdit(row.id, value)
+    else onChange(setActual(count, row.id, value), row.id)
   }
 
   // Опись печатается из документа, каким он на экране сейчас: кладовщик клеит
@@ -429,21 +477,21 @@ export function FfInventoryCountScreen({
       <Box sx={{ mb: 2 }}>
         <ActionGroup>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('box', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('box', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-box"
           >
             Создать короб
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('pallet', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('pallet', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-pallet"
           >
             Создать палету
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('cargo_place', selectionPlacement(selectedRow).cellId)}
+            onClick={() => onCreateContainer?.('cargo_place', containerTargetCell(selectedRow, openPlace))}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-cargo-place"
           >
@@ -665,6 +713,15 @@ export function FfInventoryCountScreen({
             Отменить документ
           </DangerAction>
         ) : null}
+        <SecondaryAction
+          onClick={onPrintSheet}
+          disabledReason={
+            printingSheet ? 'Лист готовится' : onPrintSheet ? undefined : 'Печать листа недоступна'
+          }
+          data-testid="inv-print-sheet"
+        >
+          Печать листа
+        </SecondaryAction>
         <SecondaryAction
           onClick={onSave}
           disabledReason={readOnly ? 'Документ уже проведён' : loading ? 'Дождитесь сохранения' : undefined}

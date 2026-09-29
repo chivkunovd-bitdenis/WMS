@@ -20,12 +20,14 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import (
     META_STATUS_PENDING,
     META_STATUS_SENDING,
+    META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
 )
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
@@ -207,7 +209,9 @@ async def list_active_stock_sync_bindings(
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id)
     rows = list((await session.execute(stmt)).all())
-    return [binding for binding, warehouse in rows if not is_auto_fbs_wms_warehouse(warehouse)]
+    return [binding for binding, warehouse in rows
+            if warehouse.is_operational and warehouse.code.lower() != "__defect__"
+            and not is_auto_fbs_wms_warehouse(warehouse)]
 
 
 async def sync_seller_stocks(
@@ -988,10 +992,18 @@ async def sync_marking_verdicts_for_seller(
     target: SellerPollTarget,
     http_client: httpx.AsyncClient,
 ) -> MarkingVerdictsSyncResult:
-    """WMS-477 R5 — только WB-заказы с кодом ещё в pending/sending.
+    """WMS-546 R1 — WB-заказы активной поставки с кодом ещё без итога WB.
+
+    «Активная» поставка — существующая в проекте группа `draft`/`assembling`/
+    `packed` (см. `fbs_supply_service.list_supply_worklist`, status_group
+    `active`); `in_delivery`/`done` сюда не входят — у них свои сверки.
+    Код «ещё без итога» — `pending`/`sending` (WMS-477) и `unknown`
+    (WMS-546): `unknown` уже означает, что предыдущий ответ WB не дал
+    точного значения, поэтому его не нужно ограничивать наличием
+    `pending_confirmation`-операции отдельно.
 
     Отличие от `sync_marking_statuses_for_assembling_supplies` (общий цикл,
-    R7, не трогается): здесь узкий фильтр по статусу кода — задача существует
+    R6, не трогается): здесь узкий фильтр по статусу кода — задача существует
     ради «опять не зеленеют», то есть ради кодов, которые WB ещё не подтвердил,
     а не ради полной пересверки всех кодов поставки.
     """
@@ -1009,11 +1021,15 @@ async def sync_marking_verdicts_for_seller(
             FbsOrder.seller_id == target.seller_id,
             FbsOrder.marketplace == "wb",
             FbsSupply.marketplace == "wb",
-            FbsSupply.status.in_({FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}),
+            FbsSupply.status.in_(
+                {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
+            ),
             exists(
                 select(FbsOrderMarking.id).where(
                     FbsOrderMarking.order_id == FbsOrder.id,
-                    FbsOrderMarking.meta_status.in_({META_STATUS_PENDING, META_STATUS_SENDING}),
+                    FbsOrderMarking.meta_status.in_(
+                        {META_STATUS_PENDING, META_STATUS_SENDING, META_STATUS_UNKNOWN}
+                    ),
                 )
             ),
         )

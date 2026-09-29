@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.tokens import decode_access_token
+from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
 
 @pytest.mark.asyncio
@@ -32,10 +33,12 @@ async def test_self_sync_creates_product_per_size(
         },
     )
     assert reg.status_code == 200
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
     ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
     sid = (await async_client.post("/sellers", headers=ah, json={"name": "Leggings IP"})).json()[
         "id"
     ]
+    seller_id = uuid.UUID(sid)
 
     acc = await async_client.post(
         "/auth/seller-accounts",
@@ -59,7 +62,11 @@ async def test_self_sync_creates_product_per_size(
         "title": "Лосины",
         "sizes": [
             {"chrtID": 1, "techSize": "S", "skus": ["1110000000001"]},
-            {"chrtID": 2, "techSize": "M", "skus": ["1110000000002"]},
+            {
+                "chrtID": 2,
+                "techSize": "M",
+                "skus": ["1110000000002", "1110000000202", "1110000000203"],
+            },
             {"chrtID": 3, "techSize": "L", "skus": ["1110000000003"]},
         ],
     }
@@ -85,10 +92,21 @@ async def test_self_sync_creates_product_per_size(
         json={"content_api_token": "wb-content-test"},
     )
 
+    # WMS-548 R5: синхронизация обновляет только уже выбранные карточки. Карточка
+    # nm 900100 выбрана заранее — размер S уже заведён товаром WMS с тем же ШК,
+    # что и в реальной карточке, поэтому синк его обновит, а не задвоит.
+    async with SessionLocal() as session:
+        await upsert_products_from_wb_cards(session, tenant_id, seller_id, [{
+            "nmID": 900100, "vendorCode": "LEG-STRIP", "title": "Лосины (черновик)",
+            "sizes": [{"chrtID": 1, "techSize": "S", "skus": ["1110000000001"]}],
+        }])
+
     sync = await async_client.post("/integrations/wildberries/self/sync-products", headers=sh)
     assert sync.status_code == 200, sync.text
     body = sync.json()
-    assert body["products_created"] == 3
+    # Размеры M и L карточки заведены заново, S — обновлён (уже существовал).
+    assert body["products_created"] == 2
+    assert body["products_updated"] == 1
     assert body["cards_received"] == 101
     assert cursors == [None, 100]
 
@@ -99,7 +117,11 @@ async def test_self_sync_creates_product_per_size(
     by_size = {r["wb_size"]: r for r in rows}
     assert set(by_size) == {"S", "M", "L"}
     assert by_size["S"]["wb_primary_barcode"] == "1110000000001"
-    assert by_size["M"]["wb_barcodes"] == ["1110000000002"]
+    assert by_size["M"]["wb_barcodes"] == [
+        "1110000000002",
+        "1110000000202",
+        "1110000000203",
+    ]
     assert by_size["L"]["sku_code"] == "LEG-STRIP/L"
     assert {r["name"] for r in rows} == {"Лосины"}
 
@@ -272,8 +294,12 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         "cards_received": 1,
         "cards_saved": 1,
         "products_created": 0,
-        "products_updated": 0 if swap_sizes else 1,
-        "products_skipped": 2 if swap_sizes else 1,
+        "products_updated": 0,
+        "products_skipped": 1,
+        "sizes_missing_chrt_id": 0,
+        "duplicate_chrt_id": 1,
+        "barcode_conflicts": 0,
+        "barcode_conflict_details": [],
     }
     assert first.json() == expected
     assert second.json() == expected
@@ -292,7 +318,10 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         )) is None
         updated_product = next(p for p in products if p.wb_barcode == barcode_second)
         assert (updated_product.length_mm, updated_product.width_mm,
-                updated_product.height_mm) == ((10, 10, 10) if swap_sizes else (310, 230, 70))
+                updated_product.height_mm) == (10, 10, 10)
+        assert await session.scalar(select(ProductDimensionEvent.id).where(
+            ProductDimensionEvent.product_id == updated_product.id,
+        )) is None
 
     imported = await async_client.get(
         f"/integrations/wildberries/sellers/{seller_id}/imported-cards",

@@ -5,17 +5,19 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
+from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
 from app.api.client_errors import router as client_errors_router
 from app.api.client_openapi import client_openapi
 from app.api.discrepancy_acts import router as discrepancy_acts_router
@@ -38,6 +40,7 @@ from app.api.kiz_reprints import router as kiz_reprints_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
 from app.api.marking_credentials import router as marking_credentials_router
+from app.api.marking_withdrawals import router as marking_withdrawals_router
 from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.ozon_integration import router as ozon_integration_router
@@ -46,6 +49,8 @@ from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
 from app.api.reports import router as reports_router
 from app.api.scan_resolver import router as scan_resolver_router
+from app.api.seller_billing import router as seller_billing_router
+from app.api.seller_catalog import router as seller_catalog_router
 from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
@@ -123,6 +128,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     install_document_event_tracking()
     app = FastAPI(title="WMS API", lifespan=lifespan)
+
+    @app.exception_handler(IntegrityError)
+    async def physical_warehouse_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        if "physical_warehouse_required" not in str(exc.orig):
+            raise exc
+        return JSONResponse(status_code=409, content={"detail": {
+            "code": "physical_warehouse_required",
+            "message": "Выберите физический склад фулфилмента. Склад маркетплейса "
+                       "не может хранить товар; старые документы требуют переноса на склад ФФ.",
+        }})
     app.add_middleware(DocumentEventActorMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -141,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(sellers_router)
     app.include_router(warehouses_router)
     app.include_router(products_router)
+    app.include_router(seller_catalog_router)
     app.include_router(inbound_intake_router)
     app.include_router(inbound_marking_router)
     app.include_router(kiz_reprints_router)
@@ -155,6 +171,7 @@ def create_app() -> FastAPI:
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
+    app.include_router(marking_withdrawals_router)
     app.include_router(marking_credentials_router)
     app.include_router(notifications_router)
     app.include_router(wb_mp_warehouses_router)
@@ -164,6 +181,8 @@ def create_app() -> FastAPI:
     app.include_router(assistant_router)
     app.include_router(billing_router)
     app.include_router(billing_invoices_v2_router)
+    app.include_router(billing_profile_marketplace_router)
+    app.include_router(seller_billing_router)
     app.include_router(storage_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)

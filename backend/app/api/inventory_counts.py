@@ -93,6 +93,15 @@ class InventoryCountFoundIn(BaseModel):
     # Идентификатор скана: экран генерирует его один раз на пик. Повтор того же
     # скана (оборвался вайфай, оператор пикнул ещё раз) ничего не прибавляет.
     scan_id: str | None = Field(default=None, max_length=64)
+    # WMS-542 (F4): строка, которую экран уже показывает в открытом месте —
+    # оператор сканирует то, что и так видит в дереве. Без него сервер ищет
+    # товар штрихкодом по всему арендатору, а `wb_barcode`/`sku_code`
+    # уникальны только внутри продавца: одинаковый код у другого продавца
+    # превращал однозначный скан уже выбранной строки в отказ
+    # barcode_is_ambiguous. С line_id сервер проверяет её адрес и товар и
+    # прибавляет штуку без поиска по чужим карточкам. Для настоящей находки
+    # (строки ещё нет на экране) поле не шлют — тогда поведение прежнее.
+    line_id: uuid.UUID | None = None
 
 
 class CountFillOut(BaseModel):
@@ -250,6 +259,33 @@ class InventoryCountPostOut(BaseModel):
     changed_balance_count: int
     changed_balances: list[ChangedBalanceOut]
     stock_write_off: list[InventoryStockWriteOffOut] = Field(default_factory=list)
+
+
+class InventoryCountPrintSheetFiltersOut(BaseModel):
+    """WMS-497 R4: незаданный параметр — null, фронт такую строку не печатает."""
+
+    object: bool
+    warehouse_name: str | None = None
+    seller_name: str | None = None
+    category: str | None = None
+    product_articles: list[str] = Field(default_factory=list)
+
+
+class InventoryCountPrintSheetRowOut(BaseModel):
+    product_id: str
+    barcode: str | None = None
+    article: str
+    name: str
+    total: int
+    reserved: int
+
+
+class InventoryCountPrintSheetOut(BaseModel):
+    number: str
+    created_at: str
+    created_by: str
+    filters: InventoryCountPrintSheetFiltersOut
+    rows: list[InventoryCountPrintSheetRowOut]
 
 
 def _number(count: InventoryCount) -> str:
@@ -742,6 +778,50 @@ async def get_inventory_count(
     return await _detail_out(session, count)
 
 
+@router.get("/{count_id}/print-sheet", response_model=InventoryCountPrintSheetOut)
+async def get_inventory_count_print_sheet(
+    count_id: uuid.UUID,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountPrintSheetOut:
+    """WMS-497 R1, R13: данные для листа — тот же документ, только на чтение.
+
+    Ничего не сохраняет и не проводит: ``get_count`` и
+    ``service.print_sheet_data`` — чистые запросы, доступные тому же кругу
+    пользователей, что и сам документ (``require_inventory_access`` — та же
+    зависимость, что у ``get_inventory_count``, поэтому границы арендатора и
+    права идентичны обычному открытию документа).
+    """
+
+    count = await service.get_count(session, user.tenant_id, count_id)
+    if count is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    data = await service.print_sheet_data(session, user.tenant_id, count)
+    return InventoryCountPrintSheetOut(
+        number=_number(count),
+        created_at=count.created_at.isoformat(),
+        created_by=count.created_by.display_name,
+        filters=InventoryCountPrintSheetFiltersOut(
+            object=data.filters.object,
+            warehouse_name=data.filters.warehouse_name,
+            seller_name=data.filters.seller_name,
+            category=data.filters.category,
+            product_articles=data.filters.product_articles,
+        ),
+        rows=[
+            InventoryCountPrintSheetRowOut(
+                product_id=str(row.product_id),
+                barcode=row.barcode,
+                article=row.article,
+                name=row.name,
+                total=row.total,
+                reserved=row.reserved,
+            )
+            for row in data.rows
+        ],
+    )
+
+
 @router.put("/{count_id}/lines", response_model=InventoryCountDetailOut)
 async def save_inventory_count_lines(
     count_id: uuid.UUID,
@@ -861,6 +941,7 @@ async def record_inventory_count_found(
             container_kind=body.container_kind,
             container_id=body.container_id,
             scan_id=body.scan_id,
+            line_id=body.line_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None

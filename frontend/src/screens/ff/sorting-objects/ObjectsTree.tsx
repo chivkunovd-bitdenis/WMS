@@ -61,6 +61,7 @@ export function ObjectsTree({
   onPrint,
   onPickCell,
   compact = false,
+  activeObjectId,
 }: {
   rows: ObjectRow[]
   objects: WarehouseObject[]
@@ -81,6 +82,7 @@ export function ObjectsTree({
    * там» — не подсказка, а шум, и она же съедала всю ширину у названия.
    */
   compact?: boolean
+  activeObjectId?: string | null
   testId: string
   empty: { title: string; hint?: string }
 }) {
@@ -356,6 +358,7 @@ export function ObjectsTree({
       columns={columns}
       rows={rows}
       getRowKey={(row) => row.key}
+      highlightedKey={activeObjectId ? `o-${activeObjectId}` : null}
       fixedLayout={compact}
       drag={{
         active: carried !== null,

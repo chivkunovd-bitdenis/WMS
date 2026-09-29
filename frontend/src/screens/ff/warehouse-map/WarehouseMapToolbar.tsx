@@ -1,4 +1,4 @@
-import { Box, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import { Box, Stack, Typography } from '@mui/material'
 import AddOutlined from '@mui/icons-material/AddOutlined'
 import { useMemo, useState } from 'react'
 import {
@@ -19,6 +19,7 @@ import {
   normalizeRackName,
   suggestNextLocationForRack,
 } from '../../../utils/formatLocationCode'
+import { WarehouseMapWarehouseSwitch } from './WarehouseMapWarehouseSwitch'
 import type { WarehouseOption } from './WarehouseMapTypes'
 
 // Склады занимали полэкрана под список, который меняется раз в квартал. Здесь они
@@ -138,28 +139,11 @@ export function WarehouseMapToolbar({
         />
       </Box>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={warehouseId}
-          onChange={(_event, value: string | null) => {
-            if (value) onWarehouseChange(value)
-          }}
-          aria-label="Склад"
-          data-testid="warehouse-map-warehouses"
-          sx={{ flexWrap: 'wrap' }}
-        >
-          {warehouses.map((warehouse) => (
-            <ToggleButton
-              key={warehouse.id}
-              value={warehouse.id}
-              data-testid={`warehouse-map-warehouse-${warehouse.id}`}
-              sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
-            >
-              {warehouse.name}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+        <WarehouseMapWarehouseSwitch
+          warehouses={warehouses}
+          warehouseId={warehouseId}
+          onWarehouseChange={onWarehouseChange}
+        />
         <IconAction
           title="Создать склад"
           onClick={onCreateWarehouse}

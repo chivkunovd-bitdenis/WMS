@@ -1,4 +1,5 @@
-import type { FbsOrderMetadata } from './fbsApi'
+import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
+import type { FbsOrderMetadata, FbsPickOptionLocation, FbsWorkspace } from './fbsApi'
 
 export type FbsMarketplace = 'wb' | 'ozon'
 
@@ -101,6 +102,28 @@ export function fbsOrdersAvailableForBox<T extends { id: string }>(
   // Для WB упаковка — отметка, а не ворота. Backend уже разрешает положить в
   // короб неупакованный заказ, поэтому frontend не должен прятать его из списка.
   return orders.filter((order) => !assignedOrderIds.has(order.id))
+}
+
+/** WB has one unit per order. This is display-only; assignment keeps its existing logic. */
+export function fbsBoxProductProgress(
+  orders: Array<{ id: string; product: { id: string | null } }>,
+  assignedOrderIds: Set<string>,
+  draftQuantities: Record<string, string>,
+): Map<string, { planned: number; remaining: number }> {
+  const progress = new Map<string, { planned: number; remaining: number }>()
+  for (const order of orders) {
+    const key = order.product.id ?? order.id
+    const current = progress.get(key) ?? { planned: 0, remaining: 0 }
+    current.planned += 1
+    if (!assignedOrderIds.has(order.id)) current.remaining += 1
+    progress.set(key, current)
+  }
+  for (const [key, current] of progress) {
+    // Match the existing order slice: only whole available units enter the box.
+    const selected = Math.min(current.remaining, Math.max(0, Number(draftQuantities[key]) || 0))
+    current.remaining -= Math.trunc(selected)
+  }
+  return progress
 }
 
 export function fbsDeliveryConfirmDisabled(
@@ -289,8 +312,140 @@ export type FbsPickingListPrintInput = {
   routeLabel: string
   deadlineLabel: string
   printedAtLabel: string
-  addressStorageEnabled?: boolean
   rows: FbsPickingListPrintRow[]
+}
+
+/**
+ * WB отдаёт баркод позиции Ozon-отправления и её привязки к площадкам — то же
+ * правило, что и для баркода целого заказа (см. productBarcodeOptionsForOrder
+ * в FfFbsSupplyWorkspace.tsx): баркод WB никогда не подставляется вместо
+ * отсутствующего баркода Ozon.
+ */
+export function productBarcodeOptionsForPosition(
+  position: FbsWorkspace['orders'][number]['positions'][number],
+  marketplace: 'wb' | 'ozon',
+) {
+  const options = resolveProductBarcodeOptions({
+    wb_primary_barcode: position.barcode,
+    marketplace_bindings: position.marketplace_bindings,
+  })
+  return marketplace === 'ozon'
+    ? options.filter((option) => option.marketplace === 'ozon')
+    : options
+}
+
+export type FbsPickingRow = FbsPickingListPrintRow & {
+  key: string
+  nearestDeadline: string
+}
+
+/**
+ * WMS-580: лист подбора и лента «Печать всего»/«Печать выбранного» карточки
+ * поставки должны идти в одной последовательности. Единственный источник
+ * порядка — tape_order_index (тот же ключ picking_list_order_key, что и на
+ * сервере, см. backend/app/services/fbs_picking_order_service.py). Здесь
+ * строится и отсортированный по нему список заказов (его же карточка берёт
+ * для «Печать всего»/«Печать выбранного»), и строки листа подбора — группировкой
+ * ПО ЭТОМУ ЖЕ списку, поэтому оба потребителя физически не могут разойтись
+ * в порядке. Раньше (443638a1 → 30237f3b → 5fb9a6fc, 23.08.2026) их считали
+ * порознь, и порядок расходился трижды за один день.
+ */
+export function fbsBuildPickingRows(
+  orders: FbsWorkspace['orders'],
+  isOzonSupply: boolean,
+): { sortedOrders: FbsWorkspace['orders']; rows: FbsPickingRow[] } {
+  const sortedOrders = [...orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
+  const grouped = new Map<string, FbsPickingRow>()
+  for (const order of sortedOrders) {
+    const rows = isOzonSupply
+      ? order.positions.map((position) => ({
+        key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
+        name: position.name,
+        size: null,
+        imageUrl: position.image_url ?? null,
+        identifiers: [
+          position.seller_article,
+          position.sku ? `SKU ${position.sku}` : null,
+          productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode,
+        ].filter((value): value is string => Boolean(value)),
+        required: position.quantity,
+        picked: position.picked_quantity,
+      }))
+      : [{
+        key: order.product.id ?? `unmapped-${order.id}`,
+        name: order.product.name,
+        size: order.product.size,
+        imageUrl: order.product.image_url,
+        identifiers: [
+          order.product.seller_article,
+          order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+          order.product.barcode,
+        ].filter((value): value is string => Boolean(value)),
+        required: 1,
+        picked: order.pick.status === 'picked' ? 1 : 0,
+      }]
+    for (const row of rows) {
+      const current = grouped.get(row.key) ?? {
+        ...row,
+        locations: [],
+        required: 0,
+        picked: 0,
+        wbOrders: [],
+        stickerCodes: [],
+        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+        nearestDeadline: order.deadline_at,
+      }
+      current.required += row.required
+      current.picked += row.picked
+      current.wbOrders.push(order.wb_order_id)
+      current.stickerCodes.push(order.sticker.code)
+      const locations = order.inventory.locations
+        .filter((location) => location.available_unpacked > 0)
+        .map((location) => `${location.code}: ${location.available_unpacked}`)
+      current.locations = [...new Set([...current.locations, ...locations])]
+      if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
+      grouped.set(row.key, current)
+    }
+  }
+  return { sortedOrders, rows: [...grouped.values()] }
+}
+
+// Так сервер подписывает служебную зону сортировки (UNASSIGNED_LABEL).
+const SORTING_LOCATION_LABEL = 'Без ячеек'
+
+/**
+ * WMS-528: откуда брать товар по листу подбора. В сортировке называется только
+ * тара, в настоящей ячейке — ячейка и тара на ней. Источники идут по убыванию
+ * свободного количества и берутся, пока не покроют оставшееся к подбору.
+ */
+export function fbsPickSourceLabels(locations: FbsPickOptionLocation[], need: number): string[] {
+  if (need <= 0) return []
+  const candidates: Array<{ label: string; available: number }> = []
+  for (const location of locations) {
+    const isSorting = location.location_code === SORTING_LOCATION_LABEL
+    const sources = location.sources.length
+      ? location.sources
+      : [{ available: location.available, is_loose: true, source_label: '', container_path: [] }]
+    for (const source of sources) {
+      if (source.available <= 0) continue
+      const container = source.is_loose || !source.container_path.length
+        ? null
+        : source.container_path.map((item) => item.label).join(' › ')
+      const label = isSorting
+        ? container ?? 'Россыпью'
+        : container ? `${location.location_code} · ${container}` : location.location_code
+      candidates.push({ label, available: source.available })
+    }
+  }
+  candidates.sort((a, b) => b.available - a.available)
+  const picked: string[] = []
+  let covered = 0
+  for (const candidate of candidates) {
+    if (covered >= need) break
+    picked.push(`${candidate.label}: ${candidate.available}`)
+    covered += candidate.available
+  }
+  return picked
 }
 
 function escapePrintHtml(value: string | number) {
@@ -337,7 +492,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
         <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
-        ${input.addressStorageEnabled === false ? '' : `<td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>`}
+        <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
         <td class="quantity">${escapePrintHtml(row.required)}</td>
@@ -386,8 +541,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th>${input.addressStorageEnabled === false ? '' : '<th>Ячейка</th>'}<th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="${input.addressStorageEnabled === false ? 9 : 10}">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>

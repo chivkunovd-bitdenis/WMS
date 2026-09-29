@@ -128,6 +128,35 @@ describe('WMS-469 R12 обрезка ручного числа без блоки
   })
 })
 
+describe('WMS-577 review P2-2: отрицательное «Доступно» после F2 (WMS-530)', () => {
+  // Сервер после F2 отдаёт free_stock как есть, в том числе отрицательным
+  // (перебронирование). Потолок ручного числа не может уйти в минус — иначе
+  // поле принимает отрицательное значение и сохранение падает 422 у сервера,
+  // который требует value >= 0 (даже при вводе явного нуля).
+  const overreserved = product('pneg', 'Перебронированный', { 'b-wb': -3 })
+
+  it('потолок обрезается нулём, а не остаётся отрицательным', () => {
+    expect(unitsCap(wb, [overreserved])).toEqual({ free: 0, product: overreserved })
+  })
+
+  it('ввод больше нуля (5) обрезается до 0, а не до -3', () => {
+    expect(clampUnits(wb, 5, [overreserved])).toEqual({
+      units: 0, limitedBy: { free: 0, product: overreserved },
+    })
+  })
+
+  it('явный ноль тоже даёт 0 без блокировки (раньше и он превращался в -3)', () => {
+    // 0 уже совпадает с потолком (0), поэтому это «в пределах», без подписи —
+    // как и у обычного free >= 0, где введённое совпало с потолком.
+    expect(clampUnits(wb, 0, [overreserved])).toEqual({ units: 0, limitedBy: null })
+  })
+
+  it('при free >= 0 поведение прежнее', () => {
+    expect(clampUnits(wb, 50, [thirty])).toEqual({ units: 30, limitedBy: { free: 30, product: thirty } })
+    expect(clampUnits(wb, 25, [thirty])).toEqual({ units: 25, limitedBy: null })
+  })
+})
+
 describe('WMS-469 R9 галка «процентом» — одно значение в двух представлениях', () => {
   it('число → процент: берёт текущую долю и ставит на шаг ползунка', () => {
     const draft: BlockDraft = { publish: true, byPercent: false, percent: 0, units: 30 }
@@ -163,9 +192,16 @@ describe('WMS-469 черновики и суммы блока', () => {
   })
 
   it('суммы блока складываются только по выбранным товарам на этом складе ФФ', () => {
-    expect(blockTotals(wb, [fifty, thirty])).toEqual({ onHand: 84, reserved: 4, free: 80 })
+    expect(blockTotals(wb, [fifty, thirty])).toEqual({ onHand: 84, reserved: 4, available: 80 })
     // Про эту привязку у товара записи нет — в суммы он не входит.
-    expect(blockTotals(ozon, [fifty])).toEqual({ onHand: 0, reserved: 0, free: 0 })
+    expect(blockTotals(ozon, [fifty])).toEqual({ onHand: 0, reserved: 0, available: 0 })
+  })
+
+  it('WMS-530 R6: доступно в строке блока — остаток минус резерв, в том числе меньше нуля', () => {
+    // Резерв больше остатка: сервер отдаёт free_stock 0 для расчётов, а строка
+    // показывает ту же разность, что каталог (R3, D3).
+    const over = product('over', 'Перебор', { 'b-wb': 0 }, { on_hand: 5, reserved: 7, free_stock: 0 })
+    expect(blockTotals(wb, [over])).toEqual({ onHand: 5, reserved: 7, available: -2 })
   })
 })
 

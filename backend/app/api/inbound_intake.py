@@ -232,7 +232,8 @@ class InboundCargoPlaceCreate(BaseModel):
 
 class InboundBoxLineQuantityBody(BaseModel):
     mutation_id: uuid.UUID | None = None
-    quantity: int = Field(ge=0, le=100_000)
+    # WMS-566 R3: ручной ввод «В коробе»/«В грузоместе» — до 999 999 штук.
+    quantity: int = Field(ge=0, le=999_999)
 
 
 class InboundBoxPutawayLineIn(BaseModel):
@@ -1422,6 +1423,24 @@ async def set_inbound_box_line_quantity(
     )
     res = await session.execute(stmt)
     box = res.scalar_one()
+    return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/clear",
+    response_model=InboundIntakeBoxOut,
+)
+async def clear_inbound_box(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    """WMS-566: «Очистить» короб — все его штуки уходят из приёмки."""
+    try:
+        box = await inbound_box_svc.clear_box(session, user.tenant_id, request_id, box_id)
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
     return _box_out(box)
 
 

@@ -34,6 +34,12 @@ import {
   SELLER_PERMISSION_BLOCKS,
   type SellerPermissions,
 } from '../../utils/sellerPermissions'
+import {
+  hasAnySellerCatalogCards,
+  shouldOpenCatalogSelectionAfterKeySave,
+  SellerCatalogSelectionDialog,
+  type SellerCatalogMarketplace,
+} from './SellerCatalogSelectionDialog'
 
 type Props = {
   token: string
@@ -178,6 +184,10 @@ export function SellerSettingsScreen({
   const [editingStaffEmail, setEditingStaffEmail] = useState('')
   const [editingStaffBusy, setEditingStaffBusy] = useState(false)
 
+  // WMS-548 R1: окно выбора товаров после первого ключа площадки — не при замене.
+  const [catalogSelectionMarketplace, setCatalogSelectionMarketplace] =
+    useState<SellerCatalogMarketplace | null>(null)
+
   useEffect(() => {
     setProfileFullName(me?.full_name ?? '')
     setProfileJobTitle(me?.job_title ?? '')
@@ -255,6 +265,7 @@ export function SellerSettingsScreen({
       setOzonError(`${!clientId ? 'Введите Client-Id.' : ''}${!clientId && !apiKey ? ' ' : ''}${!apiKey ? 'Введите Api-Key.' : ''}`)
       return
     }
+    const hadOzonBefore = ozonStatus?.connected === true
     setOzonBusy(true)
     try {
       const res = await fetch(apiUrl('/integrations/ozon/self/account'), {
@@ -266,10 +277,20 @@ export function SellerSettingsScreen({
         setOzonError(ozonErrorText(await readApiErrorMessage(res)))
         return
       }
-      setOzonStatus((await res.json()) as OzonAccountStatus)
+      const status = (await res.json()) as OzonAccountStatus
+      setOzonStatus(status)
       setOzonClientId('')
       setOzonApiKey('')
       setOzonEditing(false)
+      if (
+        shouldOpenCatalogSelectionAfterKeySave({
+          hadKeyBefore: hadOzonBefore,
+          validationOk: status.validation_status === 'valid',
+          canManageProducts: permissions.products,
+        })
+      ) {
+        await maybeOpenCatalogSelection('ozon')
+      }
     } catch {
       setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
     } finally {
@@ -386,6 +407,28 @@ export function SellerSettingsScreen({
     }
   }
 
+  // WMS-548 R1: сама проверка «первый ли это ключ, прошла ли проверка, есть ли
+  // право «Товары»» — в shouldOpenCatalogSelectionAfterKeySave (чистая функция,
+  // вызывается на местах сохранения ключа WB и Ozon). Здесь — только сетевой
+  // гейт «нашлась ли хоть одна карточка» (А9), которым нельзя пренебречь: без
+  // него окно открылось бы пустым, если карточек в кабинете вообще нет.
+  async function maybeOpenCatalogSelection(marketplaceToOpen: SellerCatalogMarketplace): Promise<void> {
+    const params = new URLSearchParams({
+      marketplace: marketplaceToOpen,
+      on_fulfillment: 'all',
+      limit: '1',
+      offset: '0',
+    })
+    const has = await hasAnySellerCatalogCards(
+      fetch,
+      apiUrl(`/seller-catalog/page?${params.toString()}`),
+      { ...authHeaders(token) },
+    )
+    if (has) {
+      setCatalogSelectionMarketplace(marketplaceToOpen)
+    }
+  }
+
   async function onSave() {
     setError(null)
     setOkMsg(null)
@@ -394,6 +437,7 @@ export function SellerSettingsScreen({
       setError('Введите API ключ.')
       return
     }
+    const hadKeyBefore = hasContentKey === true
     setBusy(true)
     try {
       const res = await fetch(apiUrl('/integrations/wildberries/self/content-token'), {
@@ -437,6 +481,15 @@ export function SellerSettingsScreen({
         setOkMsg(
           `Ключ сохранён. Проверка WB прошла (карточек получено: ${j.cards_received ?? 0}, сохранено: ${j.cards_saved ?? 0}).`,
         )
+      }
+      if (
+        shouldOpenCatalogSelectionAfterKeySave({
+          hadKeyBefore,
+          validationOk: j.validation_ok,
+          canManageProducts: permissions.products,
+        })
+      ) {
+        await maybeOpenCatalogSelection('wildberries')
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ключ.')
@@ -1265,6 +1318,15 @@ export function SellerSettingsScreen({
         </Stack></DialogContent>
         <DialogActions><Button onClick={() => setEditingStaff(null)} disabled={editingStaffBusy}>Отмена</Button><Button variant="contained" onClick={() => void saveStaffProfile()} disabled={editingStaffBusy}>Сохранить</Button></DialogActions>
       </Dialog>
+      {catalogSelectionMarketplace ? (
+        <SellerCatalogSelectionDialog
+          marketplace={catalogSelectionMarketplace}
+          token={token}
+          authHeaders={authHeaders}
+          onClose={() => setCatalogSelectionMarketplace(null)}
+          onAdded={() => refreshWbCardsCount()}
+        />
+      ) : null}
     </Box>
   )
 }

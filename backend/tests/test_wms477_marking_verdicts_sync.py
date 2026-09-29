@@ -38,6 +38,7 @@ from app.models.fbs_order import (
     META_STATUS_PENDING,
     META_STATUS_REJECTED,
     META_STATUS_SENDING,
+    META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
 )
@@ -636,10 +637,13 @@ async def test_markings_sync_endpoint_no_codes_is_a_noop(
 
 
 @pytest.mark.asyncio
-async def test_sync_marking_verdicts_for_seller_filters_pending_sending_only(
+async def test_sync_marking_verdicts_for_seller_filters_active_supply_and_open_codes(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """WMS-546 R1 updates this WMS-477 filter test: `draft` and `unknown` now
+    qualify alongside the original `assembling`/`packed` + `pending`/`sending`.
+    """
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
@@ -706,7 +710,13 @@ async def test_sync_marking_verdicts_for_seller_filters_pending_sending_only(
     qualifies_pending = await make_order(FBS_SUPPLY_STATUS_ASSEMBLING, 981001, META_STATUS_PENDING)
     qualifies_sending = await make_order(FBS_SUPPLY_STATUS_PACKED, 981002, META_STATUS_SENDING)
     excluded_accepted = await make_order(FBS_SUPPLY_STATUS_ASSEMBLING, 981003, META_STATUS_ACCEPTED)
-    excluded_draft = await make_order(FBS_SUPPLY_STATUS_DRAFT, 981004, META_STATUS_PENDING)
+    # WMS-546 R1 widens the active-supply group to include `draft`, and the
+    # open-code group to include `unknown` — both previously excluded here.
+    qualifies_draft_pending = await make_order(FBS_SUPPLY_STATUS_DRAFT, 981004, META_STATUS_PENDING)
+    qualifies_draft_unknown = await make_order(FBS_SUPPLY_STATUS_DRAFT, 981007, META_STATUS_UNKNOWN)
+    excluded_draft_accepted = await make_order(
+        FBS_SUPPLY_STATUS_DRAFT, 981008, META_STATUS_ACCEPTED
+    )
     excluded_in_delivery = await make_order(
         FBS_SUPPLY_STATUS_IN_DELIVERY, 981005, META_STATUS_PENDING
     )
@@ -749,14 +759,16 @@ async def test_sync_marking_verdicts_for_seller_filters_pending_sending_only(
         )
         await session.commit()
 
-    assert set(requested) == {981001, 981002}
-    assert result.orders_checked == 2
-    assert result.orders_updated == 2
+    assert set(requested) == {981001, 981002, 981004, 981007}
+    assert result.orders_checked == 4
+    assert result.orders_updated == 4
 
     assert await _marking_status(qualifies_pending) == META_STATUS_ACCEPTED
     assert await _marking_status(qualifies_sending) == META_STATUS_ACCEPTED
+    assert await _marking_status(qualifies_draft_pending) == META_STATUS_ACCEPTED
+    assert await _marking_status(qualifies_draft_unknown) == META_STATUS_ACCEPTED
     assert await _marking_status(excluded_accepted) == META_STATUS_ACCEPTED
-    assert await _marking_status(excluded_draft) == META_STATUS_PENDING
+    assert await _marking_status(excluded_draft_accepted) == META_STATUS_ACCEPTED
     assert await _marking_status(excluded_in_delivery) == META_STATUS_PENDING
     assert await _marking_status(excluded_ozon) == META_STATUS_PENDING
 

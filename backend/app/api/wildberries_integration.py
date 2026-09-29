@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -23,6 +23,9 @@ from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.services.seller_marketplace_requisites_service import (
+    autofill_requisites_after_key_saved,
+)
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -45,6 +48,10 @@ from app.services.wildberries_product_import_service import upsert_products_from
 from app.services.wildberries_product_link_service import (
     WildberriesLinkError,
     link_product_to_wb_card,
+)
+from app.services.wildberries_product_sync_service import (
+    filter_wb_cards_to_selected,
+    get_selected_wb_nm_ids,
 )
 from app.services.wildberries_sync_service import fetch_all_cards
 
@@ -104,6 +111,7 @@ class LinkProductWbOut(BaseModel):
     wb_vendor_code: str | None
     wb_barcode: str | None = None
     wb_size: str | None = None
+    removed_wb_barcodes: list[str] | None = None
 
 
 class WildberriesSelfTokenSaveBody(BaseModel):
@@ -119,6 +127,10 @@ class WildberriesSelfTokenSaveOut(BaseModel):
     products_created: int = 0
     products_updated: int = 0
     products_skipped: int = 0
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 class WildberriesSelfTokenSaveErrorOut(BaseModel):
@@ -134,6 +146,10 @@ class WildberriesSelfSyncOut(BaseModel):
     products_created: int
     products_updated: int
     products_skipped: int
+    sizes_missing_chrt_id: int = 0
+    duplicate_chrt_id: int = 0
+    barcode_conflicts: int = 0
+    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 def _self_token_save_error_response(
@@ -291,7 +307,7 @@ async def link_product_to_wildberries(
 ) -> LinkProductWbOut:
     """Привязать SKU к импортированной карточке WB (nm_id) для селлера."""
     try:
-        p = await link_product_to_wb_card(
+        p, removed_barcodes = await link_product_to_wb_card(
             session,
             user.tenant_id,
             seller_id,
@@ -314,6 +330,7 @@ async def link_product_to_wildberries(
         if exc.code in (
             "wb_nm_already_linked",
             "wb_barcode_already_linked",
+            "wb_chrt_already_linked",
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -325,6 +342,7 @@ async def link_product_to_wildberries(
             "wb_size_required",
             "wb_barcode_not_found",
             "wb_chrt_not_found",
+            "wb_chrt_missing",
             "wb_card_no_sizes",
         ):
             raise HTTPException(
@@ -340,6 +358,7 @@ async def link_product_to_wildberries(
         wb_vendor_code=p.wb_vendor_code,
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
+        removed_wb_barcodes=removed_barcodes,
     )
 
 
@@ -433,6 +452,16 @@ async def patch_seller_wildberries_tokens(
         from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
         background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, seller_id)
+    # WMS-547 R5: админ ФФ сохранил непустой токен WB селлера — попробовать
+    # один раз подтянуть реквизиты (не трогает уже существующую запись, R6).
+    if any(
+        isinstance(value, str) and value.strip()
+        for value in (content, supplies, marketplace)
+        if value is not SKIP
+    ):
+        background_tasks.add_task(
+            autofill_requisites_after_key_saved, user.tenant_id, seller_id, marketplace="wb"
+        )
     return WildberriesSellerTokensOut(
         seller_id=str(seller_id),
         has_content_token=has_c,
@@ -503,10 +532,14 @@ async def save_and_validate_self_content_token(
 
     n = len(total_cards)
     saved = 0
-    prod_stats = {
+    prod_stats: dict[str, Any] = {
         "products_created": 0,
         "products_updated": 0,
         "products_skipped": 0,
+        "sizes_missing_chrt_id": 0,
+        "duplicate_chrt_id": 0,
+        "barcode_conflicts": 0,
+        "barcode_conflict_details": [],
     }
 
     try:
@@ -519,12 +552,24 @@ async def save_and_validate_self_content_token(
             marketplace_api_token=token if marketplace_validation_ok else SKIP,
             marketplace_scope_ok=marketplace_validation_ok,
         )
+        # WMS-547 R5: ключ сохранён — метод сведений о продавце принимает
+        # токен любой категории, поэтому пробуем и когда нет прав "Маркетплейс"
+        # (validation_error != None). Не трогает уже существующую запись (R6).
+        background_tasks.add_task(
+            autofill_requisites_after_key_saved, tenant_id, seller_id, marketplace="wb"
+        )
         if validation_error is None:
             saved = await upsert_imported_cards(
                 session, tenant_id, seller_id, total_cards
             )
+            # WMS-548 R4: сохранение ключа обновляет снимок карточек, но не заводит
+            # товары WMS для карточек, которых ещё нет на фулфилменте.
+            selected_nm_ids = await get_selected_wb_nm_ids(session, tenant_id, seller_id)
             prod_stats = await upsert_products_from_wb_cards(
-                session, tenant_id, seller_id, total_cards
+                session,
+                tenant_id,
+                seller_id,
+                filter_wb_cards_to_selected(total_cards, selected_nm_ids),
             )
             from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
@@ -572,6 +617,10 @@ async def save_and_validate_self_content_token(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )
 
 
@@ -608,11 +657,14 @@ async def sync_products_now(
 
     n = len(total_cards)
     saved = await upsert_imported_cards(session, user.tenant_id, effective_seller_id, total_cards)
+    # WMS-548 R5: ручная синхронизация обновляет только уже выбранные карточки,
+    # новые и невыбранные товарами WMS не становятся.
+    selected_nm_ids = await get_selected_wb_nm_ids(session, user.tenant_id, effective_seller_id)
     prod_stats = await upsert_products_from_wb_cards(
         session,
         user.tenant_id,
         effective_seller_id,
-        total_cards,
+        filter_wb_cards_to_selected(total_cards, selected_nm_ids),
     )
     return WildberriesSelfSyncOut(
         cards_received=n,
@@ -620,4 +672,8 @@ async def sync_products_now(
         products_created=prod_stats["products_created"],
         products_updated=prod_stats["products_updated"],
         products_skipped=prod_stats["products_skipped"],
+        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
+        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
+        barcode_conflicts=prod_stats["barcode_conflicts"],
+        barcode_conflict_details=prod_stats["barcode_conflict_details"],
     )

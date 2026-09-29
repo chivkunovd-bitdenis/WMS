@@ -25,7 +25,7 @@ export const INVENTORY_BASE = '/operations/inventory-counts'
  * машинный формат сервера они не знают. Переводим на границе, иначе оператор
  * видит «2026-08-28T20:39:37.982702+00:00».
  */
-function humanMoment(iso: string | null): string {
+export function humanMoment(iso: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (!Number.isFinite(d.getTime())) return iso
@@ -411,6 +411,8 @@ export async function recordCountFound(
     containerId: string | null
     /** Один идентификатор на пик: повтор того же скана не прибавит вторую штуку. */
     scanId: string
+    /** WMS-542 (F4): id уже известной строки — снимает неоднозначность штрихкода. */
+    lineId?: string
   },
 ): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
@@ -422,6 +424,7 @@ export async function recordCountFound(
       container_kind: place.containerKind,
       container_id: place.containerId,
       scan_id: place.scanId,
+      line_id: place.lineId ?? null,
     }),
   })
   if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
@@ -486,6 +489,106 @@ export async function saveCountActuals(
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * WMS-542: перечитать документ. Отказ сервера — InventoryHttpError, обрыв
+ * связи — обычная ошибка fetch: очередь операций различает их для повтора.
+ */
+export async function fetchCount(token: string, countId: string): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}`), { headers: { ...inventoryAuthHeaders(token) } })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * Данные печатного листа инвентаризации (WMS-497): шапка документа, его отбор
+ * и строки с остатком/резервом на момент печати. Контракт зафиксирован в
+ * `docs/requirements/WMS-497.md` (кусок 1, сервер) — поля здесь не переименовываем
+ * и не досочиняем, только читаем то, что отдаёт сервер.
+ */
+export type ApiPrintSheetFilters = {
+  /** Документ заведён со строки карты склада — печатаем «По объекту», остальные поля ниже игнорируем. */
+  object: boolean
+  warehouse_name: string | null
+  seller_name: string | null
+  category: string | null
+  /** Сервер шлёт пустой список, если отбора по товарам не было (не null). */
+  product_articles: string[]
+}
+
+export type ApiPrintSheetRow = {
+  product_id: string
+  barcode: string | null
+  /** R7: сервер всегда подставляет WB/Ozon-артикул или SKU — пустой строки не бывает. */
+  article: string
+  name: string
+  total: number
+  reserved: number
+}
+
+export type ApiPrintSheet = {
+  number: string
+  created_at: string
+  created_by: string
+  filters: ApiPrintSheetFilters
+  rows: ApiPrintSheetRow[]
+}
+
+/**
+ * WMS-497: данные для печати листа берутся у сервера в момент нажатия «Печать
+ * листа» — «Всего»/«В резерве» должны быть теми же числами, что сейчас
+ * показывает каталог (единый расчёт WMS-530), а не устаревшим срезом из уже
+ * открытого документа. Запрос ничего не пишет и не меняет документ на экране.
+ */
+export async function fetchPrintSheet(token: string, countId: string): Promise<ApiPrintSheet> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/print-sheet`), {
+    headers: { ...inventoryAuthHeaders(token) },
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return (await res.json()) as ApiPrintSheet
+}
+
+/**
+ * WMS-542: положить ручные числа ровно этих строк и/или комментарий — одна
+ * операция очереди. В отличие от saveCountActuals, строки передаются явно, а
+ * не выбираются из документа на экране: так в запрос не попадёт ничего, кроме
+ * самой правки (ни оптимистичные сканы, ни чужие строки).
+ */
+export async function putCountLines(
+  token: string,
+  countId: string,
+  lines: Array<{ lineId: string; value: number | null }>,
+  comment?: { value: string; expected: string },
+): Promise<InventoryCount> {
+  const body: {
+    lines: Array<{ line_id: string; actual_quantity: number | null }>
+    update_comment?: boolean
+    comment?: string | null
+    expected_comment?: string | null
+  } = { lines: lines.map((line) => ({ line_id: line.lineId, actual_quantity: line.value })) }
+  if (comment) {
+    body.update_comment = true
+    body.comment = comment.value
+    body.expected_comment = comment.expected
+  }
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/lines`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/** WMS-542: только проведение — ручные числа к этому моменту уже ушли очередью. */
+export async function postCountOnly(token: string, countId: string): Promise<PostResult> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/post`), {
+    method: 'POST',
+    headers: { ...inventoryAuthHeaders(token) },
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return (await res.json()) as PostResult
 }
 
 /**

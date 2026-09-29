@@ -88,6 +88,14 @@ async def apply_loose_putaway(
     try:
         for target, qty in destinations:
             group_id = operation_id
+            if target != storage_location_id:
+                await inventory.apply_return_defect_putaway(
+                    session, tenant_id, from_storage_location_id=source.id,
+                    to_storage_location_id=target, product_id=product_id, quantity=qty,
+                    inbound_intake_line_id=line.id, actor_user_id=performer_id,
+                    transfer_group_id=group_id,
+                )
+                continue
             await inventory.record_movement_and_adjust_balance(
                 session,
                 tenant_id=tenant_id,

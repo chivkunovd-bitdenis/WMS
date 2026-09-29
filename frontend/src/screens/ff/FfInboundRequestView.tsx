@@ -447,6 +447,30 @@ function inboundStatusChipColor(
   return 'primary'
 }
 
+// WMS-564: у части арендаторов (например «Империя ФФ») internal_barcode —
+// это системный INB-код (backend/app/services/box_barcode_service.py), а на
+// физических коробах уже наклеены «Короб 1», «Короб 2»…; для таких кодов
+// подпись короба остаётся такой же, как до WMS-551. Внешний код клиента
+// (например WB_…, как у ArtMax) показываем как есть — поведение WMS-551.
+// Вторая форма — код старого генератора inbound_intake_box_service.py
+// (`INB-` + 12 hex-символов, до перехода на box_barcode_service.py), он всё
+// ещё живёт на проде — например у 113 из 408 коробов «Империя ФФ».
+const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
+const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
+
+function isGeneratedInboundBoxBarcode(barcode: string): boolean {
+  return (
+    GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode) ||
+    LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode)
+  )
+}
+
+// WMS-565: «№ N» — только у «Империи ФФ» (признак из профиля); остальные
+// видят сам код короба, как на своей этикетке.
+function inboundBoxDisplayLabel(boxNumber: number, barcode: string, numbered: boolean): string {
+  return numbered && isGeneratedInboundBoxBarcode(barcode) ? `№ ${boxNumber}` : barcode
+}
+
 type Props = {
   token: string
   requestId: string
@@ -456,6 +480,7 @@ type Props = {
   onClose: () => void
   onDirtyChange?: (dirty: boolean) => void
   addressStorageEnabled?: boolean
+  numberedInboundBoxLabels?: boolean
 }
 
 export function FfInboundRequestView({
@@ -466,6 +491,7 @@ export function FfInboundRequestView({
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
+  numberedInboundBoxLabels = false,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
@@ -501,6 +527,8 @@ export function FfInboundRequestView({
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [cargoAddDialogPlaceId, setCargoAddDialogPlaceId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
+  const [clearBoxTarget, setClearBoxTarget] = useState<{ id: string; label: string } | null>(null)
+  const [clearBoxError, setClearBoxError] = useState<string | null>(null)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
   const [lastScannedLineId, setLastScannedLineId] = useState<string | null>(null)
@@ -573,6 +601,7 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
+      clearBoxTarget == null &&
       !distOpen &&
       !kizReprintOpen,
     onScan: (code) => {
@@ -590,6 +619,7 @@ export function FfInboundRequestView({
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null &&
+      clearBoxTarget == null &&
       !kizReprintOpen,
     onScan: (code) => {
       if (!shouldDispatchInboundScan(kizReprintOpen)) return
@@ -1622,7 +1652,9 @@ export function FfInboundRequestView({
       // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
       // диалог принтера для каждого короба и рвёт непрерывную ленту.
       printBarcodeLabels(targets.map((target) => ({
-        title: target.kind === 'box' ? `Короб № ${target.number}` : `Грузоместо № ${target.number}`,
+        title: target.kind === 'box'
+          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
+          : `Грузоместо № ${target.number}`,
         barcode: target.barcode,
         barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
         labelSize,
@@ -1938,6 +1970,31 @@ export function FfInboundRequestView({
       }
     } finally {
       if (scanDocument.current === requestId) setBusy(false)
+    }
+  }
+
+  // WMS-566: «Очистить» — все штуки короба уходят из приёмки одной операцией.
+  // Ошибка идёт в отдельное состояние (как у диалогов габаритов и грузомест):
+  // общий error рендерится на странице под затемнением модалки и оператор его
+  // не видит, пока диалог не закрыт (P3-3).
+  const clearInboundBox = async (boxId: string) => {
+    setBusy(true)
+    setClearBoxError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/clear`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setClearBoxError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        return
+      }
+      setClearBoxTarget(null)
+      await loadDetail()
+    } catch (e) {
+      setClearBoxError(e instanceof Error ? e.message : 'Не удалось очистить короб.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -3181,7 +3238,7 @@ export function FfInboundRequestView({
                           >
                             {!box.pallet_id ? (
                               <CheckboxInput
-                                label={`Выбрать короб № ${box.box_number}`}
+                                label={`Выбрать короб ${inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels)}`}
                                 hideLabel
                                 checked={selectedPalletBoxIds.has(box.id)}
                                 onChange={(checked) => {
@@ -3197,7 +3254,10 @@ export function FfInboundRequestView({
                               />
                             ) : null}
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              Короб № {box.box_number}{' '}
+                              Короб{' '}
+                              {numberedInboundBoxLabels && isGeneratedInboundBoxBarcode(box.internal_barcode)
+                                ? `№ ${box.box_number} `
+                                : null}
                               <Typography component="code" variant="body2">
                                 {box.internal_barcode}
                               </Typography>
@@ -3227,15 +3287,33 @@ export function FfInboundRequestView({
                               >
                                 Наполнить
                               </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={busy || !(receivingActive || ffDraft) || visibleLines.length > 0}
-                                onClick={() => void deleteInboundBox(box.id)}
-                                data-testid={`ff-inbound-box-delete-${box.id}`}
-                              >
-                                Удалить
-                              </Button>
+                              {visibleLines.length > 0 ? (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={busy || !(receivingActive || ffDraft)}
+                                  onClick={() => {
+                                    setClearBoxError(null)
+                                    setClearBoxTarget({
+                                      id: box.id,
+                                      label: inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels),
+                                    })
+                                  }}
+                                  data-testid={`ff-inbound-box-clear-${box.id}`}
+                                >
+                                  Очистить
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={busy || !(receivingActive || ffDraft)}
+                                  onClick={() => void deleteInboundBox(box.id)}
+                                  data-testid={`ff-inbound-box-delete-${box.id}`}
+                                >
+                                  Удалить
+                                </Button>
+                              )}
                               <Button
                                 size="small"
                                 variant="outlined"
@@ -3365,7 +3443,7 @@ export function FfInboundRequestView({
                           ? hasNoCellPending
                             ? 'Распределение зафиксировано без ячеек — товар остаётся в зоне сортировки. Откройте заново и разложите принятое.'
                             : 'Всё принятое разложено по ячейкам хранения.'
-                          : 'Разложите принятое по ячейкам хранения. Можно частями: разложенное сразу доступно к резерву, пока не разложено всё — приёмка остаётся в этом разделе.'}
+                          : 'Разложите принятое по ячейкам хранения. Можно частями: пока не разложено всё, приёмка остаётся в этом разделе.'}
                       </Typography>
                       {requestWarehouse ? (
                         <Typography
@@ -3816,7 +3894,7 @@ export function FfInboundRequestView({
           onClose={() => setBoxAddDialogBoxId(null)}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
-          boxLabel={`Короб № ${boxAddDialogBox.box_number}`}
+          boxLabel={`Короб ${inboundBoxDisplayLabel(boxAddDialogBox.box_number, boxAddDialogBox.internal_barcode, numberedInboundBoxLabels)}`}
           readOnly={!receivingActive && !ffDraft}
           ffDraft={ffDraft}
           ffInbound={ffInbound}
@@ -3919,7 +3997,9 @@ export function FfInboundRequestView({
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography variant="body2">
             На палету встанут короба:{' '}
-            {selectedPalletBoxes.map((box) => `№ ${box.box_number}`).join(', ')}
+            {selectedPalletBoxes
+              .map((box) => inboundBoxDisplayLabel(box.box_number, box.internal_barcode, numberedInboundBoxLabels))
+              .join(', ')}
           </Typography>
           <SelectInput
             label="Палета"
@@ -4125,6 +4205,52 @@ export function FfInboundRequestView({
             data-testid="ff-inbound-discrepancy-confirm"
           >
             Завершить приёмку
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={clearBoxTarget !== null}
+        onClose={() => {
+          if (!busy) {
+            setClearBoxTarget(null)
+            setClearBoxError(null)
+          }
+        }}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-box-clear-dialog"
+      >
+        <DialogTitle>Очистить короб {clearBoxTarget?.label}?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {clearBoxError ? (
+              <Alert severity="error" data-testid="ff-inbound-box-clear-error">
+                {clearBoxError}
+              </Alert>
+            ) : null}
+            <Typography variant="body2">
+              Все товары из этого короба уйдут из приёмки, «Принято» уменьшится.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setClearBoxTarget(null)
+              setClearBoxError(null)
+            }}
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={busy}
+            onClick={() => clearBoxTarget && void clearInboundBox(clearBoxTarget.id)}
+            data-testid="ff-inbound-box-clear-confirm"
+          >
+            Очистить
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,3 +1,8 @@
+x-withdrawal-environment: &withdrawal-environment
+  WITHDRAWAL_SELLER_ALLOWLIST: ${WITHDRAWAL_SELLER_ALLOWLIST:-}
+  WITHDRAWAL_ENVIRONMENT: ${WITHDRAWAL_ENVIRONMENT:-production}
+  WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: ${WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED:-false}
+
 services:
   db:
     image: postgres:16
@@ -26,7 +31,14 @@ services:
   api:
     build:
       context: ./backend
+    # WMS-538 (авария 26.09.2026): один процесс uvicorn вставал целиком, пока считал
+    # список товаров крупного ФФ (ArtMaks 55 тыс. — ~9 с CPU), и у всех клиентов
+    # висели вход и профиль. Второй процесс не даёт одному тяжёлому запросу
+    # остановить остальных. Всё состояние в памяти процесса — только ограничители
+    # частоты (вход, спаривание принтера, отчёты об ошибках клиента).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
@@ -102,6 +114,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
@@ -123,6 +136,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     environment:
+      <<: *withdrawal-environment
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}

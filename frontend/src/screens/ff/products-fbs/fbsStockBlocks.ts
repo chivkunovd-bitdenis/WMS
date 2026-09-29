@@ -213,22 +213,29 @@ function freeAt(product: StockDialogProduct, bindingId: string): number {
   return product.byBinding[bindingId]?.freeStock ?? 0
 }
 
-/** Суммы блока по выбранным товарам на связанном складе ФФ. */
+/**
+ * Строка чисел блока — Остаток, Резерв и Доступно организации суммой по
+ * выбранным товарам (WMS-530 R6). Доступно показывается как есть, в том числе
+ * меньше нуля, как в каталоге (R3, D3): это разность остатка и резерва.
+ *
+ * WMS-577 review (P2-2): после F2 (WMS-530) сервер отдаёт в `free_stock`
+ * такое же не обрезанное число (нулём обрезана только отдельная база
+ * публикации, `available_for_checks`, сюда не попадающая) — обрезать его
+ * нулём для показа здесь не нужно и не нужно было раньше.
+ */
 export function blockTotals(
   binding: StockBinding,
   products: StockDialogProduct[],
-): { onHand: number; reserved: number; free: number } {
+): { onHand: number; reserved: number; available: number } {
   let onHand = 0
   let reserved = 0
-  let free = 0
   for (const product of products) {
     const state = product.byBinding[binding.id]
     if (!state) continue
     onHand += state.onHand
     reserved += state.reserved
-    free += state.freeStock
   }
-  return { onHand, reserved, free }
+  return { onHand, reserved, available: onHand - reserved }
 }
 
 /**
@@ -236,6 +243,15 @@ export function blockTotals(
  * на этом складе ФФ (ответ владельца: «одного товара 50, второго 30 — общий
  * остаток 30»). При равенстве называется первый товар в порядке выбранных
  * строк (решение D3).
+ *
+ * WMS-577 review (P2-2): сервер после F2 (WMS-530) отдаёт «Доступно» как
+ * есть, в том числе отрицательным при перебронировании. Потолок ручного
+ * числа не может быть отрицательным — иначе поле принимает отрицательное
+ * значение и сохранение падает у сервера (value >= 0), даже если ввести явный
+ * ноль. Самый ограничивающий товар по-прежнему ищется по настоящему (не
+ * обрезанному) остатку — обрезается только то число, что возвращается наружу.
+ * Отрицательное «Доступно» само по себе никуда не пропадает: его показывает
+ * строка трёх чисел (см. `blockTotals`), этой обрезки она не касается.
  */
 export function unitsCap(
   binding: StockBinding,
@@ -246,7 +262,8 @@ export function unitsCap(
     const free = freeAt(product, binding.id)
     if (best === null || free < best.free) best = { free, product }
   }
-  return best ?? { free: 0, product: products[0]! }
+  const picked = best ?? { free: 0, product: products[0]! }
+  return { free: Math.max(0, picked.free), product: picked.product }
 }
 
 /**

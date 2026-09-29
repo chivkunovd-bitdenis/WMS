@@ -16,6 +16,7 @@ import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
+import { SellerCardScreen } from './screens/v2/SellerCardScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -199,6 +200,19 @@ function SellerPortalDocumentRedirect() {
   }, [location.hash, location.pathname, location.search])
 
   return <ProfileLoadingScreen loading onLogout={() => window.location.replace('/')} />
+}
+
+/**
+ * WMS-538: полный список товаров арендатора (GET /products) больше не грузится
+ * при открытии сайта — у крупных ФФ это десятки тысяч строк и секунды ожидания.
+ * Экран, которому этот список действительно нужен, просит его при открытии;
+ * App загружает список один раз и дальше отдаёт из памяти.
+ */
+function FullProductListLoader({ load }: { load: () => void }) {
+  useEffect(() => {
+    load()
+  }, [load])
+  return null
 }
 
 type OutboundSummaryRow = {
@@ -512,8 +526,8 @@ export default function App() {
     [authHeaders],
   )
 
-  const refreshProducts = useCallback(
-    async (t: string) => {
+  const fetchProductRows = useCallback(
+    async (t: string): Promise<ProductRow[]> => {
       const headers = authHeaders(t)
       const [productsRes, catalogRes] = await Promise.all([
         fetch(apiUrl('/products'), { headers }),
@@ -524,8 +538,7 @@ export default function App() {
       }
       const base = (await productsRes.json()) as ProductRow[]
       if (!catalogRes.ok) {
-        setProducts(base)
-        return
+        return base
       }
       const catalog = (await catalogRes.json()) as {
         id: string
@@ -535,15 +548,56 @@ export default function App() {
       const barcodesById = new Map(
         catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
       )
-      setProducts(
-        base.map((p) => {
-          const wb = barcodesById.get(p.id)
-          return wb ? { ...p, ...wb } : p
-        }),
-      )
+      return base.map((p) => {
+        const wb = barcodesById.get(p.id)
+        return wb ? { ...p, ...wb } : p
+      })
     },
     [authHeaders],
   )
+
+  const refreshProducts = useCallback(
+    async (t: string) => {
+      setProducts(await fetchProductRows(t))
+    },
+    [fetchProductRows],
+  )
+
+  // WMS-538: одна загрузка полного списка товаров на вход (token).
+  // Повторное открытие экрана берёт список из памяти; после выхода или
+  // ошибки загрузка начнётся заново при следующем открытии экрана.
+  const productListLoadRef = useRef<{ token: string } | null>(null)
+  const ensureProductListLoaded = useCallback(
+    (t: string) => {
+      const current = productListLoadRef.current
+      if (current && current.token === t) {
+        return
+      }
+      const entry = { token: t }
+      productListLoadRef.current = entry
+      void (async () => {
+        try {
+          const rows = await fetchProductRows(t)
+          if (productListLoadRef.current === entry) {
+            setProducts(rows)
+          }
+        } catch (e) {
+          if (productListLoadRef.current === entry) {
+            productListLoadRef.current = null
+            setCatalogError(
+              e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
+            )
+          }
+        }
+      })()
+    },
+    [fetchProductRows],
+  )
+  const loadFullProductList = useCallback(() => {
+    if (token) {
+      ensureProductListLoaded(token)
+    }
+  }, [token, ensureProductListLoaded])
 
   const refreshSellers = useCallback(
     async (t: string) => {
@@ -692,6 +746,7 @@ export default function App() {
     if (!token || !me) {
       setWarehouses([])
       setLocations([])
+      productListLoadRef.current = null
       setProducts([])
       setSellers([])
       setSelectedWarehouseId(null)
@@ -731,21 +786,21 @@ export default function App() {
     }
     setCatalogError(null)
     setOpsError(null)
+    const canLoadCatalogReception = canAccessFfBlock(me.role, me.permissions, 'reception')
+    const canLoadCatalogMpShipments = canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
+    const canLoadPackaging = canAccessFfBlock(me.role, me.permissions, 'packaging')
+    const canLoadCells =
+      canAccessFfBlock(me.role, me.permissions, 'cells') ||
+      canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canLoadWarehouseCatalog =
+      me.role === 'fulfillment_admin' ||
+      canLoadCatalogReception ||
+      canLoadCatalogMpShipments ||
+      canLoadPackaging ||
+      canLoadCells
+    const canLoadProductCatalog = canLoadWarehouseCatalog
     void (async () => {
       try {
-        const canLoadReception = canAccessFfBlock(me.role, me.permissions, 'reception')
-        const canLoadMpShipments = canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
-        const canLoadPackaging = canAccessFfBlock(me.role, me.permissions, 'packaging')
-        const canLoadCells =
-          canAccessFfBlock(me.role, me.permissions, 'cells') ||
-          canAccessFfBlock(me.role, me.permissions, 'inventory')
-        const canLoadWarehouseCatalog =
-          me.role === 'fulfillment_admin' ||
-          canLoadReception ||
-          canLoadMpShipments ||
-          canLoadPackaging ||
-          canLoadCells
-        const canLoadProductCatalog = canLoadWarehouseCatalog
         if (canLoadWarehouseCatalog) {
           await refreshWarehouses(token)
         } else {
@@ -756,19 +811,30 @@ export default function App() {
           setLocations([])
           setSelectedWarehouseId(null)
         }
-        if (canLoadProductCatalog) {
-          await refreshProducts(token)
-          await refreshSellers(token)
-        } else {
-          setProducts([])
-          setSellers([])
-        }
       } catch (e) {
         setCatalogError(
           e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
         )
       }
     })()
+    // WMS-538: селлеры грузятся сразу и не ждут ни складов, ни товаров.
+    // Полный список товаров здесь не грузится вовсе — его просит экран,
+    // которому он нужен (FullProductListLoader), один раз за вход.
+    if (canLoadProductCatalog) {
+      void (async () => {
+        try {
+          await refreshSellers(token)
+        } catch (e) {
+          setCatalogError(
+            e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
+          )
+        }
+      })()
+    } else {
+      productListLoadRef.current = null
+      setProducts([])
+      setSellers([])
+    }
     void (async () => {
       try {
         const canLoadReception = canAccessFfBlock(me.role, me.permissions, 'reception')
@@ -802,7 +868,6 @@ export default function App() {
     token,
     me,
     refreshWarehouses,
-    refreshProducts,
     refreshSellers,
     refreshInboundList,
     refreshOutboundList,
@@ -875,19 +940,28 @@ export default function App() {
     setPostedInventoryRows([])
   }, [selectedInboundId])
 
+  // Открытый документ делает свой склад выбранным, только если это рабочий
+  // склад из списка. Старый документ на складе «FBS WB …» выбранный склад не
+  // меняет: иначе следующий новый документ создавался бы там же (WMS-530 R13).
   useEffect(() => {
     if (ffDocModal !== 'inbound' || !inboundDetail?.warehouse_id) {
       return
     }
+    if (!warehouses.some((w) => w.id === inboundDetail.warehouse_id)) {
+      return
+    }
     setSelectedWarehouseId(inboundDetail.warehouse_id)
-  }, [ffDocModal, inboundDetail?.warehouse_id])
+  }, [ffDocModal, inboundDetail?.warehouse_id, warehouses])
 
   useEffect(() => {
     if (ffDocModal !== 'outbound' || !outboundDetail?.warehouse_id) {
       return
     }
+    if (!warehouses.some((w) => w.id === outboundDetail.warehouse_id)) {
+      return
+    }
     setSelectedWarehouseId(outboundDetail.warehouse_id)
-  }, [ffDocModal, outboundDetail?.warehouse_id])
+  }, [ffDocModal, outboundDetail?.warehouse_id, warehouses])
 
   useEffect(() => {
     if (!token || !inboundDetail?.warehouse_id) {
@@ -3113,6 +3187,8 @@ export default function App() {
                   sellers={sellers}
                   warehouses={warehouses}
                   canManageCatalog={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
+                  canViewMovements={isFulfillmentAdmin || canInventoryOps}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
               ) : (
                 ffAccessDenied
@@ -3511,9 +3587,22 @@ export default function App() {
           />
 
           <Route
+            path="ff/sellers/:sellerId"
+            element={
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <SellerCardScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+              ) : (
+                ffAccessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+
+          <Route
             path="catalog/products"
             element={
               <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <>
+                <FullProductListLoader load={loadFullProductList} />
                 <ProductsScreen
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   catalogBusy={catalogBusy}
@@ -3522,6 +3611,7 @@ export default function App() {
                   products={products}
                   onCreateProduct={(e) => void onCreateProduct(e)}
                 />
+                </>
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
@@ -3537,6 +3627,8 @@ export default function App() {
             path="ops/inbound"
             element={
               <SectionErrorBoundary component="route">{token && canReceptionOps ? (
+                <>
+                <FullProductListLoader load={loadFullProductList} />
                 <InboundScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3566,6 +3658,7 @@ export default function App() {
                   onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
                   onPostInboundRequest={() => void onPostInboundRequest()}
                 />
+                </>
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
@@ -3576,6 +3669,10 @@ export default function App() {
             path="ops/outbound"
             element={
               <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <>
+                {outboundDetail?.status === 'draft' ? (
+                  <FullProductListLoader load={loadFullProductList} />
+                ) : null}
                 <OutboundScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3599,6 +3696,7 @@ export default function App() {
                   onShipOutboundLine={(e) => void onShipOutboundLine(e)}
                   onPostOutboundRequest={() => void onPostOutboundRequest()}
                 />
+                </>
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
@@ -3631,6 +3729,8 @@ export default function App() {
               // без ячеек перемещать нечего между чем. Внутри флаг уже заведомо
               // не false — повторная проверка ничего не решает, и типы это видят.
               <SectionErrorBoundary component="route">{token && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
+                <>
+                <FullProductListLoader load={loadFullProductList} />
                 <TransfersScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
@@ -3639,6 +3739,7 @@ export default function App() {
                   products={products}
                   onStockTransfer={(e) => void onStockTransfer(e)}
                 />
+                </>
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
@@ -3649,6 +3750,8 @@ export default function App() {
             path="integrations/wb"
             element={
               <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
+                <>
+                <FullProductListLoader load={loadFullProductList} />
                 <WildberriesScreen
                   sellers={sellers}
                   products={products}
@@ -3675,6 +3778,7 @@ export default function App() {
                   onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
                   onLinkProductToWb={(e) => void onLinkProductToWb(e)}
                 />
+                </>
               ) : (
                 ffAccessDenied
               )}</SectionErrorBoundary>
@@ -3721,6 +3825,7 @@ export default function App() {
                   workspace={ffInboundWorkspace}
                   sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
+                  numberedInboundBoxLabels={me?.numbered_inbound_box_labels === true}
                   onDirtyChange={setFfDocDirty}
                   onClose={closeFfDocument}
                 />
@@ -3730,6 +3835,10 @@ export default function App() {
                 </MuiTypography>
               )
             ) : ffDocModal === 'outbound' ? (
+              <>
+              {isFulfillmentAdmin && outboundDetail?.status === 'draft' ? (
+                <FullProductListLoader load={loadFullProductList} />
+              ) : null}
               <OutboundScreen
                 opsError={opsError}
                 opsBusy={opsBusy}
@@ -3753,6 +3862,7 @@ export default function App() {
                 onShipOutboundLine={(e) => void onShipOutboundLine(e)}
                 onPostOutboundRequest={() => void onPostOutboundRequest()}
               />
+              </>
             ) : null}
             </ErrorBoundary>
           </MuiBox>

@@ -110,6 +110,18 @@ class FbsMarkingError(Exception):
         super().__init__(code)
 
 
+class FbsMarkingWriteAcceptedError(FbsMarkingError):
+    """WB answered this call's metadata PUT; only the readback after it is unconfirmed.
+
+    WMS-579: callers must not infer an accepted write from the error code alone.
+    ``wb_pending_confirmation`` is also raised by a reconciling read that found
+    no order row, when no PUT happened in that call at all. ``code`` is
+    ``wb_pending_confirmation`` when the readback answered without the value (or
+    without the order row), or the readback's own WB error code when the read
+    itself failed.
+    """
+
+
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
@@ -405,6 +417,9 @@ def compute_delivery_allowed(
         if isinstance(reason, str) and reason.strip():
             return False
         remote_value = details.get("value")
+        if (kind == MARKING_KIND_SGTIN
+                and mark.meta_status == META_STATUS_UNKNOWN and not remote_value):
+            return False
         if isinstance(remote_value, str) and not _same_marking_value(mark.value, remote_value):
             return False
         decision = details.get("decision")
@@ -1007,8 +1022,25 @@ async def _sync_order_meta_from_wb(
             # inferred local state.
             _apply_meta_detail_to_marking(marking, meta_detail)
             decision = meta_detail.decision.strip().lower()
-            if decision == "required" and not meta_detail.value:
+            empty_sgtin = marking.kind == MARKING_KIND_SGTIN and not meta_detail.value
+            # WMS-546 P2 (Astra review) — a SGTIN already sent to WB and awaiting
+            # its echo (an open `pending_kiz_operation`, WMS-529's uncertain-write
+            # path) must not turn `missing` on an empty answer just because WB's
+            # own decision says "required": WB asking for a value it hasn't
+            # echoed back yet is exactly the same "WB hasn't caught up" signal as
+            # an empty `optional` answer, not "this order was never given a
+            # code". `missing` drops the order out of both background cycles'
+            # open-status selection, so once WB *does* catch up the order would
+            # never resolve on its own again (R3/R4). Without an open operation,
+            # behaviour is unchanged — WB genuinely has no code for this order.
+            awaiting_wb_echo = empty_sgtin and decision == "required" and (
+                await pending_kiz_operation(session, marking) is not None
+            )
+            if decision == "required" and not meta_detail.value and not awaiting_wb_echo:
                 marking.meta_status = META_STATUS_MISSING
+            elif empty_sgtin:
+                # Optional metadata does not confirm the KIZ already bound locally.
+                marking.meta_status = META_STATUS_UNKNOWN
             elif meta_detail.value and not _same_marking_value(marking.value, meta_detail.value):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
@@ -1142,12 +1174,61 @@ async def attach_order_meta_to_wb_and_sync(
         marking.meta_status = META_STATUS_ASSIGNED
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
-    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    # WMS-579: from here on WB has answered the PUT, so every failure below is
+    # an unknown result of an accepted write, not a refusal of it.
+    try:
+        markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    except WildberriesClientError as exc:
+        raise FbsMarkingWriteAcceptedError(_wb_error_code(exc)) from exc
+    remote_detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN) or {}
+    if marking.kind == MARKING_KIND_SGTIN and (
+        not markings.applied
+        or not remote_detail.get("value")
+    ):
+        raise FbsMarkingWriteAcceptedError("wb_pending_confirmation")
     if notify_supply:
         await _notify_supply_marking_update(
             session, tenant_id, order.id, actor_user_id=actor_user_id,
         )
     return markings
+
+
+async def reconcile_pending_kiz_operation(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    operation: FbsWbOperation,
+    http_client: httpx.AsyncClient,
+    token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Retry only after a fresh WB row establishes that its KIZ is empty.
+
+    Callers hold the order/packaging locks for this binding. Missing orders,
+    stale answers and a different remote KIZ cannot authorize an overwrite.
+    An exact value, even with a pending verdict, needs no second PUT.
+    """
+    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    if not markings.applied:
+        raise FbsMarkingError("wb_pending_confirmation")
+    detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN)
+    if detail is None or (isinstance(detail, dict) and not detail.get("value")):
+        try:
+            await attach_order_meta_to_wb_and_sync(
+                session, order.tenant_id, order, marking, http_client,
+                actor_user_id=actor_user_id, api_token=token, notify_supply=False,
+            )
+        except (WildberriesClientError, FbsMarkingError) as exc:
+            if isinstance(exc, FbsMarkingError) and exc.code == "meta_validation_fail":
+                operation.state = WB_OPERATION_STATE_FAILED
+                operation.failed_at = datetime.now(tz=UTC)
+                operation.error_code = exc.code
+            else:
+                marking.meta_status = META_STATUS_UNKNOWN
+                marking.check_status = CHECK_STATUS_ERROR
+                marking.reason = "Wildberries не подтвердил результат; нужна сверка."
+            raise
 
 
 async def list_order_markings(

@@ -13053,6 +13053,17 @@
       },
       "FbsWorklistMetadataStateOut": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "kind": {
             "type": "string",
             "title": "Kind"

@@ -301,3 +301,67 @@ async def test_inbound_unknown_inb_barcode(async_client: AsyncClient) -> None:
     )
     assert open_res.status_code == 404
     assert open_res.json()["detail"] == "box_not_found"
+
+
+@pytest.mark.asyncio
+async def test_inbound_box_line_quantity_accepts_up_to_999999(async_client: AsyncClient) -> None:
+    """P3-5 (review-opus-all.md), ревью 29.09.2026.
+
+    WMS-566 R3 обещает ручной ввод «В коробе»/«В грузоместе» до 999 999 штук —
+    фронт (BOX_QTY_MAX_DIGITS = 6) это позволял, но серверная схема
+    InboundBoxLineQuantityBody держала le=100_000: запрос честного максимума
+    уже с 100 001 падал 422. Проверяем и границу (999 999 принимается), и
+    что дальше неё (1 000 000) сервер по-прежнему отказывает.
+    """
+    suffix = str(int(time.time() * 1000) + 999)
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
+        async_client, suffix=suffix, expected_qty=1, box_count=1
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+    box = boxes[0]
+
+    too_much = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}", headers=ah, json={"quantity": 1_000_000}
+    )
+    assert too_much.status_code == 422, too_much.text
+
+    at_limit = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}", headers=ah, json={"quantity": 999_999}
+    )
+    assert at_limit.status_code == 200, at_limit.text
+
+    got = await async_client.get(base, headers=ah)
+    assert got.status_code == 200, got.text
+    box_after = next(b for b in got.json()["boxes"] if b["id"] == box["id"])
+    line = next(ln for ln in box_after["lines"] if ln["product_id"] == pid)
+    assert line["quantity"] == 999_999
+
+
+@pytest.mark.asyncio
+async def test_inbound_box_clear_removes_units_and_allows_delete(async_client: AsyncClient) -> None:
+    """WMS-566: «Очистить» обнуляет короб одной операцией, штуки уходят из приёмки,
+    план селлера не меняется; после этого пустой короб удаляется."""
+    suffix = str(int(time.time() * 1000) + 566)
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
+        async_client, suffix=suffix, expected_qty=5, box_count=1
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+    box = boxes[0]
+    put = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}", headers=ah, json={"quantity": 4}
+    )
+    assert put.status_code == 200, put.text
+    blocked = await async_client.delete(f"{base}/boxes/{box['id']}", headers=ah)
+    assert blocked.status_code == 409, blocked.text
+
+    cleared = await async_client.post(f"{base}/boxes/{box['id']}/clear", headers=ah)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["lines"] == []
+    got = (await async_client.get(base, headers=ah)).json()
+    line = got["lines"][0]
+    assert line["expected_qty"] == 5
+    assert line["effective_actual_qty"] == 0
+    assert all(not b["lines"] for b in got["boxes"] if b["id"] == box["id"])
+
+    deleted = await async_client.delete(f"{base}/boxes/{box['id']}", headers=ah)
+    assert deleted.status_code == 204, deleted.text

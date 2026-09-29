@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
@@ -22,6 +23,13 @@ _TEST_RUN_ID = "_".join(
 )
 _TEST_DB_PATH = Path(__file__).resolve().parent / f"wms_pytest_{_TEST_RUN_ID}.sqlite"
 _TEST_DATA_DIR = Path(__file__).resolve().parent / f"wms_pytest_data_{_TEST_RUN_ID}"
+if explicit_test_url := os.environ.get("WMS_TEST_DATABASE_URL"):
+    test_url = make_url(explicit_test_url)
+    if test_url.get_backend_name() == "postgresql" and (
+        test_url.host not in {"localhost", "127.0.0.1", "::1", "postgres"}
+        or not (test_url.database or "").startswith("wms_test")
+    ):
+        raise RuntimeError("PostgreSQL tests require an isolated loopback/CI wms_test database")
 os.environ["DATABASE_URL"] = os.environ.get(
     "WMS_TEST_DATABASE_URL",
     f"sqlite+aiosqlite:///{_TEST_DB_PATH}",
@@ -41,6 +49,10 @@ async def _rebuild_schema() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        if os.environ.get("WMS_TEST_PHYSICAL_GUARDS") == "1":
+            from app.db.physical_warehouse_guard import install_guards
+
+            await conn.run_sync(install_guards)
 
 
 async def _reset_database() -> None:
@@ -101,14 +113,49 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture(autouse=True)
+def isolated_withdrawal_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.settings import settings
+
+    # Tests opt in only their own generated fixture sellers, never a production identity.
+    monkeypatch.setattr(settings, "withdrawal_seller_allowlist", "")
+
+
+@pytest.fixture(autouse=True)
 def isolated_login_rate_limit():
     from app.services.login_rate_limit import (
         configure_for_tests,
         get_config,
         reset_rate_limit_state,
     )
+
     original = get_config()
     reset_rate_limit_state()
     yield
     reset_rate_limit_state()
     configure_for_tests(max_attempts=original[0], window_seconds=original[1])
+
+
+@pytest_asyncio.fixture
+async def db_session_with_foreign_keys(db_session: AsyncSession) -> AsyncIterator[AsyncSession]:
+    """Pin SQLite FK enforcement across commits without changing other pooled connections.
+
+    PRAGMA foreign_keys is connection-local, not session-local. A session bound to
+    an engine releases its connection on commit, so setting PRAGMA once on that
+    session is insufficient when another test has grown the connection pool.
+    PostgreSQL always enforces these constraints and needs no special connection.
+    """
+    if engine.dialect.name != "sqlite":
+        yield db_session
+        return
+    async with engine.connect() as connection:
+        original = (await connection.exec_driver_sql("PRAGMA foreign_keys")).scalar_one()
+        await connection.commit()
+        await connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        await connection.commit()
+        try:
+            async with AsyncSession(bind=connection, expire_on_commit=False) as guarded:
+                yield guarded
+        finally:
+            await connection.rollback()
+            await connection.exec_driver_sql(f"PRAGMA foreign_keys={int(original)}")
+            await connection.commit()

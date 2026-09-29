@@ -80,6 +80,13 @@ class InventoryCount(Base):
     empty_places: Mapped[list[dict[str, str]]] = mapped_column(
         JSON, default=list, nullable=False,
     )
+    # WMS-497: товары, выбранные в окне «Новая инвентаризация» (поле «Товары»
+    # источника "planned"). Хранится только при непустом выборе — иначе NULL,
+    # чтобы печатный лист не путал «выбраны все товары фильтра» с «выбор не
+    # задавался» у документов, созданных до этой задачи. Список строк (UUID в
+    # виде текста), а не Uuid[], потому что JSON-колонка не сериализует UUID
+    # напрямую; преобразование — на стороне сервиса.
+    selected_product_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     warehouse: Mapped[Warehouse | None] = relationship("Warehouse")

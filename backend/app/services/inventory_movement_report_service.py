@@ -20,6 +20,7 @@ from app.models.inventory_movement import (
     MOVEMENT_TYPE_DISCREPANCY_ACT,
     MOVEMENT_TYPE_FBS_SHIPMENT,
     MOVEMENT_TYPE_INBOUND_INTAKE,
+    MOVEMENT_TYPE_INVENTORY_COUNT,
     MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
     MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
@@ -32,6 +33,11 @@ from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.services.catalog_service import load_ozon_primary_image_urls
+from app.services.ownership_transfer_service import (
+    MOVEMENT_TYPE_OWNERSHIP_IN,
+    MOVEMENT_TYPE_OWNERSHIP_OUT,
+    MOVEMENT_TYPE_OWNERSHIP_RECEIPT,
+)
 from app.services.wb_card_enrichment import first_photo_url_from_card
 
 # Технические raw-строки movement_type, которые не заведены как модульные константы
@@ -39,11 +45,21 @@ from app.services.wb_card_enrichment import first_photo_url_from_card
 # FBS-заказа физически перекладывает товар в ячейку сортировки под упаковку.
 _FBS_ORDER_PICK = "fbs_order_pick"
 _FBS_ORDER_PICK_UNDO = "fbs_order_pick_undo"
+# WMS-531. Историческая ручная правка остатка без документа (разбор старых
+# данных, живого писателя в коде нет). Раз тип встречается в проде — отчёт
+# обязан его показать, а не молча свалить в «Прочее».
+_CORRECTION_PHANTOM_RETURN = "correction_phantom_return"
 
 # Группировка технических movement_type в человеко-понятные категории отчёта.
 # Один и тот же тип может давать и приход, и расход (например сторно приёмки) —
 # это осознанно остаётся в одной группе, чтобы отчёт показывал реальную картину,
 # не скрывал отмены и реверсы.
+#
+# Это ГРУППА для второго уровня «По операциям» — не подпись конкретной строки
+# движения. У приёмки/возврата, акта расхождений, FBS-сторно и передачи между
+# селлерами подпись строки отличается от группы (см. WMS-531 R2 и
+# reporting_service.row_operation_label); группа только распределяет виды по
+# разделам таблицы.
 _GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("intake", "Приёмка", (MOVEMENT_TYPE_INBOUND_INTAKE,)),
     (
@@ -59,10 +75,20 @@ _GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (MOVEMENT_TYPE_FBS_SHIPMENT, _FBS_ORDER_PICK, _FBS_ORDER_PICK_UNDO),
     ),
     ("outbound_shipment", "Отгрузка", (MOVEMENT_TYPE_OUTBOUND_SHIPMENT,)),
+    ("inventory_count", "Инвентаризация", (MOVEMENT_TYPE_INVENTORY_COUNT,)),
     (
-        "discrepancy",
-        "Корректировка по акту расхождений",
-        (MOVEMENT_TYPE_DISCREPANCY_ACT,),
+        "ownership_transfer",
+        "Передача между селлерами",
+        (
+            MOVEMENT_TYPE_OWNERSHIP_OUT,
+            MOVEMENT_TYPE_OWNERSHIP_IN,
+            MOVEMENT_TYPE_OWNERSHIP_RECEIPT,
+        ),
+    ),
+    (
+        "correction",
+        "Корректировка",
+        (MOVEMENT_TYPE_DISCREPANCY_ACT, _CORRECTION_PHANTOM_RETURN),
     ),
 )
 _OTHER_GROUP_KEY = "other"
