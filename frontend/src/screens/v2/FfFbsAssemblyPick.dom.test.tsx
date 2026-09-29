@@ -38,6 +38,7 @@ let scanCalls: Array<{ supply: string; productId: unknown }>
 let setCalls: Array<{ supply: string; body: Record<string, unknown>; key: string | null }>
 let emptySourceSupply: string | null
 let failFirstSet: boolean
+let commitFirstSetBeforeReply: boolean
 let conflictSet: boolean
 const originalFetch = globalThis.fetch
 
@@ -104,6 +105,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
     setCalls.push({ supply: set[1], body, key: new Headers(init?.headers).get('Idempotency-Key') })
     if (failFirstSet) {
       failFirstSet = false
+      if (commitFirstSetBeforeReply) picked[set[1]] = Number(body.quantity)
       throw new TypeError('lost set reply')
     }
     if (conflictSet) return json({ detail: { code: 'pick_quantity_changed', message: 'Количество изменилось.' } }, 409)
@@ -123,6 +125,7 @@ beforeEach(() => {
   setCalls = []
   emptySourceSupply = null
   failFirstSet = false
+  commitFirstSetBeforeReply = false
   conflictSet = false
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
@@ -206,6 +209,57 @@ describe('WMS-574 Д5 · общий подбор при одном ШК у то�
       { product_id: 'p-a', storage_location_id: 'loc-s1', quantity: 1, expected_quantity: 0, container_kind: null, container_id: null },
     ])
     expect(setCalls[0].key).toBeTruthy()
+    expect(setCalls[1].key).toBe(setCalls[0].key)
+  })
+
+  it('reconciles a committed-but-lost target 2 before accepting a new target 3', async () => {
+    await act(async () => {
+      root.render(<FfFbsAssemblyPick token="t" supplies={[{ id: 's1', sellerId: 'seller-a' }]} />)
+    })
+    await settle(80)
+    failFirstSet = true
+    commitFirstSetBeforeReply = true
+
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 2 })
+    })
+    await settle()
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 3 })
+    })
+    await settle()
+
+    // The second action settles the unknown target 2 and deliberately does
+    // not pretend that its success saved the later target 3.
+    expect(setCalls.map((call) => call.body.quantity)).toEqual([2, 2])
+    expect(setCalls[1].key).toBe(setCalls[0].key)
+    expect(picked.s1).toBe(2)
+
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 3 })
+    })
+    expect(setCalls[2].body).toMatchObject({ quantity: 3, expected_quantity: 2 })
+    expect(setCalls[2].key).not.toBe(setCalls[0].key)
+  })
+
+  it('settles a lost committed target 2 even when the operator submits the same current number', async () => {
+    await act(async () => {
+      root.render(<FfFbsAssemblyPick token="t" supplies={[{ id: 's1', sellerId: 'seller-a' }]} />)
+    })
+    await settle(80)
+    failFirstSet = true
+    commitFirstSetBeforeReply = true
+
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 2 })
+    })
+    await settle()
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 2 })
+    })
+
+    // A plan would be empty at 2; reconciliation still replays the old key.
+    expect(setCalls.map((call) => call.body.quantity)).toEqual([2, 2])
     expect(setCalls[1].key).toBe(setCalls[0].key)
   })
 

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fbsPendingAssemblyTaskStorageKey,
   readPendingFbsAssemblyTask,
   resumePendingFbsAssemblyTask,
   savePendingFbsAssemblyTask,
+  submitSavedFbsAssemblyTask,
 } from './fbsPendingAssemblyTask'
 
 const token = (tenant = 'ff-a', user = 'operator-a') =>
@@ -72,5 +73,21 @@ describe('WMS-588: durable assembly-task replay', () => {
     expect(keys).toEqual([task.idempotencyKey, task.idempotencyKey])
     expect(readPendingFbsAssemblyTask(token())).toBeNull()
     expect(fbsPendingAssemblyTaskStorageKey(token())).not.toBe(fbsPendingAssemblyTaskStorageKey(token('ff-b', 'operator-a')))
+  })
+
+  it('does not POST a new task when local persistence is unavailable', async () => {
+    const storage = window.localStorage
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: { ...storage, setItem: () => { throw new Error('storage denied') } },
+    })
+    const fetchMock = vi.fn()
+    globalThis.fetch = fetchMock as typeof fetch
+
+    expect(savePendingFbsAssemblyTask(token(), task)).toBe(false)
+    await expect(submitSavedFbsAssemblyTask(token(), authHeaders, task)).rejects.toThrow('Не удалось сохранить попытку')
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: storage })
   })
 })

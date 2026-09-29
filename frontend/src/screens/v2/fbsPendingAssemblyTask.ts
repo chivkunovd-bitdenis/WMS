@@ -43,11 +43,12 @@ export function readPendingFbsAssemblyTask(token: string): PendingFbsAssemblyTas
 }
 
 /** Save before the POST: an interrupted reply must replay the identical payload. */
-export function savePendingFbsAssemblyTask(token: string, task: PendingFbsAssemblyTask): void {
+export function savePendingFbsAssemblyTask(token: string, task: PendingFbsAssemblyTask): boolean {
   try {
     window.localStorage.setItem(fbsPendingAssemblyTaskStorageKey(token), JSON.stringify(task))
+    return true
   } catch {
-    // The server idempotency key still protects a retry in the currently open dialog.
+    return false
   }
 }
 
@@ -79,4 +80,16 @@ export async function resumePendingFbsAssemblyTask(
   })
   clearPendingFbsAssemblyTask(token, task)
   return true
+}
+
+/** A new task must be durable before its first POST; otherwise a reload loses recovery. */
+export async function submitSavedFbsAssemblyTask(
+  token: string,
+  authHeaders: (token: string) => Record<string, string>,
+  task: PendingFbsAssemblyTask,
+): Promise<void> {
+  if (!savePendingFbsAssemblyTask(token, task)) {
+    throw new Error('Не удалось сохранить попытку создания задания на этом устройстве. Не закрывайте окно и повторите сохранение.')
+  }
+  await resumePendingFbsAssemblyTask(token, authHeaders, task)
 }

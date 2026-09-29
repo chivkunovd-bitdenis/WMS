@@ -97,6 +97,13 @@ type PickSetBody = {
   container_id: string | null
 }
 
+type PendingPickSetRequest = {
+  scopeKey: string
+  supplyId: string
+  idempotencyKey: string
+  body: PickSetBody
+}
+
 class PickQuantityChangedError extends Error {
   readonly index: number
 
@@ -186,7 +193,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
   const logsRef = useRef(new Map<string, GroupPickLogEntry[]>())
   // A transport failure has an unknown server outcome. The exact body and key
   // remain paired until this physical source receives a definitive response.
-  const pendingSetRequestsRef = useRef(new Map<string, { idempotencyKey: string; body: PickSetBody }>())
+  const pendingSetRequestsRef = useRef(new Map<string, PendingPickSetRequest>())
   const scannedContainers = useRef(new Map<string, PlaceSource>())
   // Снятия группы идут строго по одному: раздача считается по числам,
   // которые предыдущее снятие уже поменяло.
@@ -404,6 +411,47 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         await load()
         return
       }
+      // Do not calculate a new absolute target while a prior save of this
+      // product/source has an unknown outcome. Replaying its exact request is
+      // the only safe way to reconcile it; a confirmed old target is never
+      // presented as if it had saved the newly requested number.
+      const scopeKey = `${payload.productId}\u0000${payload.place.key}`
+      const previousRequests = [...pendingSetRequestsRef.current.entries()]
+        .filter(([, request]) => request.scopeKey === scopeKey)
+      if (previousRequests.length > 0) {
+        setBusy(true)
+        setError(null)
+        let outcomeUnknown = false
+        try {
+          for (const [attemptKey, request] of previousRequests) {
+            try {
+              const res = await fetch(apiUrl(`${FBS_BASE}/${request.supplyId}/pick/set`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
+                body: JSON.stringify(request.body),
+              })
+              if (res.ok) {
+                pendingSetRequestsRef.current.delete(attemptKey)
+                continue
+              }
+              // Any received 4xx, including a changed source quantity, is a
+              // definitive non-commit for this exact payload. A 5xx remains
+              // unknown and stays available for another exact replay.
+              if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
+              else outcomeUnknown = true
+            } catch {
+              outcomeUnknown = true
+            }
+          }
+          await load()
+          setError(outcomeUnknown
+            ? 'Не удалось уточнить предыдущую операцию. Проверьте количество после обновления и повторите сохранение.'
+            : 'Предыдущая операция сверена. Проверьте количество и сохраните его снова.')
+        } finally {
+          setBusy(false)
+        }
+        return
+      }
       const logKey = pickKey(payload.productId, payload.place.key)
       const plan = planGroupPickSet(
         statesFor(payload.productId, payload.place.key),
@@ -420,8 +468,9 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
           ].join(':')
           const state = statesRef.current[change.index]
           const expectedQuantity = state?.pickedHere.get(pickKey(payload.productId, payload.place.key)) ?? 0
-          const pending = pendingSetRequestsRef.current.get(attemptKey)
-          const request = pending ?? {
+          const request: PendingPickSetRequest = {
+            scopeKey,
+            supplyId: supplyIds[change.index],
             idempotencyKey: createFbsIdempotencyKey(),
             body: {
               product_id: payload.productId,
@@ -432,7 +481,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
               container_id: source?.containerId ?? null,
             },
           }
-          if (!pending) pendingSetRequestsRef.current.set(attemptKey, request)
+          pendingSetRequestsRef.current.set(attemptKey, request)
           const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[change.index]}/pick/set`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },

@@ -41,7 +41,7 @@ import {
 import {
   readPendingFbsAssemblyTask,
   resumePendingFbsAssemblyTask,
-  savePendingFbsAssemblyTask,
+  submitSavedFbsAssemblyTask,
   type PendingFbsAssemblyTask,
 } from './fbsPendingAssemblyTask'
 
@@ -226,8 +226,7 @@ export function FbsSupplyGroupCreateDialog({
             }
             pendingAssemblyTaskRef.current = request
             setPendingAssemblyTask(request)
-            savePendingFbsAssemblyTask(token, request)
-            await resumePendingFbsAssemblyTask(token, authHeaders, request)
+            await submitSavedFbsAssemblyTask(token, authHeaders, request)
             pendingAssemblyTaskRef.current = null
             setPendingAssemblyTask(null)
           },
