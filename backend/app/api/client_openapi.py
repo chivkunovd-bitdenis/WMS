@@ -55,8 +55,8 @@ def _client_page_schema() -> dict[str, Any]:
             "operation": {
                 "type": "string",
                 "description": (
-                    "Тип движения; return для inbound_intake со связанной возвратной "
-                    "заявкой, иначе сохранённый movement_type. Это поле ответа, не фильтр."
+                    "Тип оприходования или списания; return для inbound_intake со связанной "
+                    "возвратной заявкой. Внутренние перемещения и подбор не включаются."
                 ),
             },
             "warehouse_id": {"type": "string", "format": "uuid"},
@@ -85,8 +85,8 @@ def _client_page_schema() -> dict[str, Any]:
                                 "type": ["string", "null"],
                                 "format": "date-time",
                                 "description": (
-                                    "Сохранённое время завершения отгрузки FBO; null до отгрузки. "
-                                    "Доступно только для связанной заявки marketplace_unload."
+                                    "Время завершённой отгрузки FBO; незавершённые заявки "
+                                    "не попадают в отчёт."
                                 ),
                             },
                         },
@@ -128,12 +128,12 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     movement = paths["/reports/client-movements"]["get"]
     movement["summary"] = "Отчёт движений JSON"
     movement["description"] = (
-        "Движения за период [date_from, date_to). Укажите sku или shk, но не оба: "
+        "Оприходования и списания за период [date_from, date_to). Укажите sku или shk, но не оба: "
         "вместе они дают HTTP 422. Без них возвращается весь доступный отчёт за период. "
         "Пройдите страницы с next_cursor до null. FBS: одна штука в строке; "
         "operation в ответе — тип движения; подтверждённая возвратная приёмка имеет return. "
-        "Для связанного FBO document.status показывает состояние заявки, "
-        "document.shipped_at — время отгрузки; occurred_at — время движения товара."
+        "FBO включается только после завершения отгрузки; occurred_at равен "
+        "document.shipped_at и используется для периода и курсора."
     )
     movement["responses"]["200"]["content"] = {
         "application/json": {
@@ -171,7 +171,7 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     export["description"] = (
         "Все подходящие строки на листах WB, Ozon и Общие. Укажите sku или shk, "
         "но не оба; без них выгружается весь доступный отчёт за период. "
-        "Колонки document_status и document_shipped_at описывают связанную заявку FBO."
+        "В файле русские названия колонок и только оприходования и списания."
     )
     export["responses"]["200"]["content"] = {
         _XLSX: {"schema": {"type": "string", "format": "binary"}}

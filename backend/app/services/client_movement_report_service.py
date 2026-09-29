@@ -12,7 +12,9 @@ from typing import Any
 
 from openpyxl import Workbook  # type: ignore[import-untyped]
 from openpyxl.cell import WriteOnlyCell  # type: ignore[import-untyped]
-from sqlalchemy import and_, bindparam, or_, select, text
+from openpyxl.styles import Font, PatternFill  # type: ignore[import-untyped]
+from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+from sqlalchemy import and_, bindparam, case, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
@@ -25,9 +27,32 @@ from app.models.marking_code import MarkingCode
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
+from app.models.warehouse import Warehouse
 
 MAX_LIMIT = 1000
 _BATCH = 500
+_STOCK_EVENTS = (
+    "inbound_intake",
+    "outbound_shipment",
+    "fbs_shipment",
+    "marketplace_unload",
+    "product_tz_import",
+    "inventory_count",
+    "discrepancy_act",
+    "correction_phantom_return",
+)
+
+_EVENT_NAMES = {
+    "inbound_intake": "Приёмка",
+    "return": "Возврат товара",
+    "outbound_shipment": "Отгрузка",
+    "fbs_shipment": "Отгрузка FBS",
+    "marketplace_unload": "Отгрузка FBO",
+    "product_tz_import": "Оприходование по ТЗ",
+    "inventory_count": "Инвентаризация",
+    "discrepancy_act": "Акт расхождений",
+    "correction_phantom_return": "Корректировка остатка",
+}
 
 
 def _period(date_from: datetime, date_to: datetime) -> tuple[datetime, datetime]:
@@ -406,26 +431,49 @@ async def list_client_movements(
     scan_id = after[1] if after else None
     resume_unit = after is not None
     while True:
+        event_at = case(
+            (
+                InventoryMovement.movement_type == "marketplace_unload",
+                MarketplaceUnloadRequest.shipped_at,
+            ),
+            else_=InventoryMovement.created_at,
+        )
         stmt = (
-            select(InventoryMovement, Product)
+            select(InventoryMovement, Product, event_at)
             .join(
                 Product,
                 and_(Product.id == InventoryMovement.product_id, Product.tenant_id == tenant_id),
             )
+            .outerjoin(
+                MarketplaceUnloadRequest,
+                and_(
+                    MarketplaceUnloadRequest.id == InventoryMovement.marketplace_unload_request_id,
+                    MarketplaceUnloadRequest.tenant_id == tenant_id,
+                ),
+            )
             .where(
                 InventoryMovement.tenant_id == tenant_id,
-                InventoryMovement.created_at >= start,
-                InventoryMovement.created_at < end,
+                InventoryMovement.movement_type.in_(_STOCK_EVENTS),
+                InventoryMovement.quantity_delta != 0,
+                event_at >= start,
+                event_at < end,
+                or_(
+                    InventoryMovement.movement_type != "marketplace_unload",
+                    and_(
+                        MarketplaceUnloadRequest.status.in_(("shipped", "done")),
+                        MarketplaceUnloadRequest.shipped_at.is_not(None),
+                    ),
+                ),
             )
-            .order_by(InventoryMovement.created_at, InventoryMovement.id)
+            .order_by(event_at, InventoryMovement.id)
             .limit(_BATCH)
         )
         if scan_id is not None:
             stmt = stmt.where(
                 or_(
-                    InventoryMovement.created_at > scan_at,
+                    event_at > scan_at,
                     and_(
-                        InventoryMovement.created_at == scan_at,
+                        event_at == scan_at,
                         InventoryMovement.id >= scan_id
                         if resume_unit
                         else InventoryMovement.id > scan_id,
@@ -453,9 +501,9 @@ async def list_client_movements(
         batch = (await session.execute(stmt)).all()
         if not batch:
             break
-        movements = [movement for movement, _ in batch]
+        movements = [movement for movement, _, _ in batch]
         ledger_index = await _fbs_index(session, tenant_id, seller_id, movements)
-        product_ids = {product.id for _, product in batch}
+        product_ids = {product.id for _, product, _ in batch}
         alternate_barcodes: dict[uuid.UUID, str] = {}
         if product_ids:
             barcode_rows = await session.execute(
@@ -491,13 +539,13 @@ async def list_client_movements(
             if unload_ids
             else {}
         )
-        for movement, product in batch:
+        for movement, product, effective_at in batch:
             movement_at = (
-                movement.created_at.replace(tzinfo=UTC)
-                if movement.created_at.tzinfo is None
-                else movement.created_at.astimezone(UTC)
+                effective_at.replace(tzinfo=UTC)
+                if effective_at.tzinfo is None
+                else effective_at.astimezone(UTC)
             )
-            scan_at, scan_id = movement.created_at, movement.id
+            scan_at, scan_id = effective_at, movement.id
             linked = (
                 ledger_index.get(movement.id) if movement.movement_type == "fbs_shipment" else None
             )
@@ -581,54 +629,66 @@ async def build_client_movement_workbook(
         raise ValueError("sku and shk cannot be used together")
     workbook = Workbook(write_only=True)
     headers = [
-        "id",
-        "movement_id",
-        "occurred_at",
-        "operation",
-        "warehouse_id",
-        "product_id",
-        "sku",
-        "product_name",
-        "shk",
-        "size",
-        "marketplace",
-        "document_id",
-        "document_type",
-        "document_number",
-        "document_status",
-        "document_shipped_at",
-        "quantity_delta",
-        "kiz",
+        "Дата и время (UTC)",
+        "Движение",
+        "Причина",
+        "Документ / заказ",
+        "Код товара",
+        "Товар",
+        "Размер",
+        "Штрихкод",
+        "Приход, шт.",
+        "Расход, шт.",
+        "Склад",
+        "КИЗ",
     ]
     sheets = {name: workbook.create_sheet(name) for name in ("WB", "Ozon", "Общие")}
     for sheet in sheets.values():
-        sheet.append(headers)
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = "A1:L1"
+        for index, width in enumerate((23, 19, 27, 28, 22, 42, 12, 22, 14, 14, 24, 45), 1):
+            sheet.column_dimensions[get_column_letter(index)].width = width
+        heading = []
+        for name in headers:
+            cell = WriteOnlyCell(sheet, value=name)
+            cell.font = Font(bold=True, color="000000")
+            cell.fill = PatternFill("solid", fgColor="D9D9D9")
+            heading.append(cell)
+        sheet.append(heading)
     cursor: str | None = None
     while True:
         rows, next_cursor = await list_client_movements(
             session, tenant_id, **filters, cursor=cursor, limit=MAX_LIMIT
         )
+        warehouse_ids = {uuid.UUID(row["warehouse_id"]) for row in rows}
+        warehouses: dict[uuid.UUID, str] = {}
+        if warehouse_ids:
+            warehouse_rows = await session.execute(
+                select(Warehouse.id, Warehouse.name).where(
+                    Warehouse.tenant_id == tenant_id, Warehouse.id.in_(warehouse_ids)
+                )
+            )
+            warehouses = {warehouse_id: name for warehouse_id, name in warehouse_rows}
         for row in rows:
             sheet = sheets[{"wb": "WB", "ozon": "Ozon"}.get(row["marketplace"], "Общие")]
             document = row["document"] or {}
+            delta = row["quantity_delta"]
             values = [
-                row["id"],
-                row["movement_id"],
-                row["occurred_at"],
-                row["operation"],
-                row["warehouse_id"],
-                row["product_id"],
+                datetime.fromisoformat(row["occurred_at"]).strftime("%d.%m.%Y %H:%M:%S"),
+                "Оприходование" if delta > 0 else "Списание",
+                "Отмена отгрузки FBS"
+                if row["operation"] == "fbs_shipment" and delta > 0
+                else "Отмена приёмки"
+                if row["operation"] == "inbound_intake" and delta < 0
+                else _EVENT_NAMES[row["operation"]],
+                document.get("number"),
                 row["sku"],
                 row["product_name"],
-                row["shk"],
                 row["size"],
-                row["marketplace"],
-                document.get("id"),
-                document.get("type"),
-                document.get("number"),
-                document.get("status"),
-                document.get("shipped_at"),
-                row["quantity_delta"],
+                row["shk"],
+                delta if delta > 0 else None,
+                -delta if delta < 0 else None,
+                warehouses.get(uuid.UUID(row["warehouse_id"])),
                 row["kiz"],
             ]
             cells = []

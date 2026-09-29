@@ -166,6 +166,20 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
         oz_move2 = movement("0008", -1, "fbs_shipment")
         reversal = movement("0007", 1, "fbs_shipment")
         move_internal = movement("0007", -4, "stock_transfer_out")
+        excluded = [
+            movement("0007", qty, kind)
+            for kind, qty in (
+                ("stock_transfer_in", 4),
+                ("warehouse_map_move", -2),
+                ("container_reattach", 2),
+                ("transfer", -1),
+                ("fbs_order_pick", -1),
+                ("fbs_order_pick_undo", 1),
+                ("ownership_transfer_out", -1),
+                ("ownership_transfer_in", 1),
+                ("ownership_transfer_receipt", 1),
+            )
+        ]
         move_other = movement("0007", 9, "inbound_intake", wh=other_warehouse, loc=other_location)
         unload = MarketplaceUnloadRequest(
             tenant_id=tenant_id,
@@ -173,6 +187,7 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
             seller_id=seller_id,
             marketplace="ozon",
             status="shipped",
+            shipped_at=AT,
         )
         session.add(unload)
         await session.flush()
@@ -245,8 +260,8 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
         and len(parameters) < 1000
         for statement, parameters in ledger_queries
     )
-    assert len(rows) == 7
-    assert len({row["id"] for row in rows}) == 7
+    assert len(rows) == 6
+    assert len({row["id"] for row in rows}) == 6
     assert move_other.id.hex not in {row["movement_id"].replace("-", "") for row in rows}
     assert sorted(
         row["kiz"] for row in rows if row["movement_id"] in {str(oz_move1.id), str(oz_split.id)}
@@ -254,10 +269,8 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     assert next(row for row in rows if row["movement_id"] == str(oz_move2.id))["kiz"] == "OZ-3"
     assert next(row for row in rows if row["movement_id"] == str(fbo.id))["marketplace"] == "ozon"
     assert next(row for row in rows if row["movement_id"] == str(fbo.id))["kiz"] is None
-    assert (
-        next(row for row in rows if row["movement_id"] == str(move_internal.id))["marketplace"]
-        is None
-    )
+    assert str(move_internal.id) not in {row["movement_id"] for row in rows}
+    assert not {str(item.id) for item in excluded} & {row["movement_id"] for row in rows}
     assert (
         next(row for row in rows if row["movement_id"] == str(reversal.id))["quantity_delta"] == 1
     )
@@ -317,13 +330,18 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     wb_rows = list(book["WB"].values)[1:]
     oz_rows = list(book["Ozon"].values)[1:]
     general_rows = list(book["Общие"].values)[1:]
-    assert len(wb_rows) == 2 and len(oz_rows) == 4 and len(general_rows) == 1
+    assert len(wb_rows) == 2 and len(oz_rows) == 4 and not general_rows
     assert all(
         cells[0].value == "=1+1" and cells[0].data_type == "s"
-        for cells in book["WB"].iter_rows(min_row=2, min_col=8, max_col=8)
+        for cells in book["WB"].iter_rows(min_row=2, min_col=6, max_col=6)
     )
-    assert any(row[6] == "0007" and "\\u001d" in row[-1] for row in oz_rows)
-    assert all(row[6] in {"0007", "0008"} for row in oz_rows)
+    assert any(row[4] == "0007" and "\\u001d" in row[-1] for row in oz_rows)
+    assert all(row[4] in {"0007", "0008"} for row in oz_rows)
+    assert book["WB"]["A1"].value == "Дата и время (UTC)"
+    assert book["WB"]["A1"].fill.fgColor.rgb == "00D9D9D9"
+    assert book["WB"]["A1"].font.color.rgb == "00000000"
+    assert book["WB"]["A2"].fill.patternType is None
+    assert all(not any("00000000-" in str(value) for value in row) for row in oz_rows)
 
 
 @pytest.mark.asyncio
@@ -345,6 +363,7 @@ async def test_client_report_fbo_document_lifecycle_and_excel(async_client: Asyn
         for status, completion in (
             ("collecting", None),
             ("shipped", shipped_at),
+            ("done", shipped_at),
             ("cancelled", None),
         ):
             request = MarketplaceUnloadRequest(
@@ -389,15 +408,53 @@ async def test_client_report_fbo_document_lifecycle_and_excel(async_client: Asyn
     response = await async_client.get("/reports/client-movements", headers=headers, params=PERIOD)
     assert response.status_code == 200, response.text
     rows = {row["movement_id"]: row for row in response.json()["rows"]}
-    for status in ("collecting", "shipped", "cancelled"):
-        row = rows[str(movement_ids[status])]
-        assert row["operation"] == "marketplace_unload"
-        assert row["occurred_at"] == AT.isoformat()
-        assert row["document"]["status"] == status
-        assert row["document"]["shipped_at"] == (
-            shipped_at.isoformat() if status == "shipped" else None
-        )
-    assert rows[str(movement_ids["unlinked"])]["document"] is None
+    assert set(rows) == {str(movement_ids["shipped"]), str(movement_ids["done"])}
+    row = rows[str(movement_ids["shipped"])]
+    assert row["operation"] == "marketplace_unload"
+    assert row["occurred_at"] == shipped_at.isoformat()
+    assert row["document"]["status"] == "shipped"
+    assert row["document"]["shipped_at"] == shipped_at.isoformat()
+    assert rows[str(movement_ids["done"])]["document"]["status"] == "done"
+    before_shipment = await async_client.get(
+        "/reports/client-movements",
+        headers=headers,
+        params={"date_from": "2026-09-12T00:00:00Z", "date_to": "2026-09-13T00:00:00Z"},
+    )
+    assert before_shipment.status_code == 200
+    assert before_shipment.json()["rows"] == []
+    at_shipment = await async_client.get(
+        "/reports/client-movements",
+        headers=headers,
+        params={"date_from": shipped_at.isoformat(), "date_to": "2026-09-14T00:00:00Z"},
+    )
+    assert at_shipment.status_code == 200
+    assert {item["movement_id"] for item in at_shipment.json()["rows"]} == {
+        str(movement_ids["shipped"]), str(movement_ids["done"])
+    }
+    first_page = await async_client.get(
+        "/reports/client-movements",
+        headers=headers,
+        params={**PERIOD, "limit": 1},
+    )
+    assert first_page.status_code == 200
+    assert first_page.json()["next_cursor"] is not None
+    second_page = await async_client.get(
+        "/reports/client-movements",
+        headers=headers,
+        params={**PERIOD, "limit": 1, "cursor": first_page.json()["next_cursor"]},
+    )
+    assert second_page.status_code == 200
+    paged = first_page.json()["rows"] + second_page.json()["rows"]
+    assert {item["movement_id"] for item in paged} == {
+        str(movement_ids["shipped"]), str(movement_ids["done"])
+    }
+    after_shipment = await async_client.get(
+        "/reports/client-movements",
+        headers=headers,
+        params={"date_from": "2026-09-14T00:00:00Z", "date_to": "2026-09-15T00:00:00Z"},
+    )
+    assert after_shipment.status_code == 200
+    assert after_shipment.json()["rows"] == []
 
     exported = await async_client.get(
         "/reports/client-movements/export.xlsx", headers=headers, params=PERIOD
@@ -406,18 +463,12 @@ async def test_client_report_fbo_document_lifecycle_and_excel(async_client: Asyn
     book = load_workbook(io.BytesIO(exported.content), read_only=True)
     values = list(book["WB"].values)
     headers_by_name = {name: index for index, name in enumerate(values[0])}
-    assert "document_status" in headers_by_name
-    assert "document_shipped_at" in headers_by_name
-    excel_rows = {row[headers_by_name["movement_id"]]: row for row in values[1:]}
-    for status in ("collecting", "shipped", "cancelled"):
-        row = excel_rows[str(movement_ids[status])]
-        assert row[headers_by_name["document_status"]] == status
-        assert row[headers_by_name["document_shipped_at"]] == (
-            shipped_at.isoformat() if status == "shipped" else None
-        )
+    assert headers_by_name["Движение"] == 1
+    assert len(values) == 3
+    assert all(value[0] == "13.09.2026 14:30:00" for value in values[1:])
+    assert all(value[1:3] == ("Списание", "Отгрузка FBO") for value in values[1:])
     general_rows = list(book["Общие"].values)
-    assert len(general_rows) == 2
-    assert general_rows[1][headers_by_name["movement_id"]] == str(movement_ids["unlinked"])
+    assert len(general_rows) == 1
 
 
 @pytest.mark.asyncio
@@ -535,13 +586,13 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
     )
     assert exported.status_code == 200
     book = load_workbook(io.BytesIO(exported.content), read_only=True)
-    assert [row[3] for row in list(book["WB"].values)[1:]] == ["return"]
-    assert [row[3] for row in list(book["Ozon"].values)[1:]] == ["return"]
-    assert sorted(row[3] for row in list(book["Общие"].values)[1:]) == [
-        "discrepancy_act",
-        "inbound_intake",
-        "inbound_intake",
-        "return",
+    assert [row[2] for row in list(book["WB"].values)[1:]] == ["Возврат товара"]
+    assert [row[2] for row in list(book["Ozon"].values)[1:]] == ["Возврат товара"]
+    assert sorted(row[2] for row in list(book["Общие"].values)[1:]) == [
+        "Акт расхождений",
+        "Возврат товара",
+        "Приёмка",
+        "Приёмка",
     ]
     wb_only = await async_client.get(
         "/reports/client-movements/export.xlsx",
@@ -550,7 +601,7 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
     )
     assert wb_only.status_code == 200
     filtered = load_workbook(io.BytesIO(wb_only.content), read_only=True)
-    assert [row[3] for row in list(filtered["WB"].values)[1:]] == ["return"]
+    assert [row[2] for row in list(filtered["WB"].values)[1:]] == ["Возврат товара"]
     assert all(len(list(filtered[name].values)) == 1 for name in ("Ozon", "Общие"))
 
 
@@ -653,8 +704,8 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
     book = load_workbook(io.BytesIO(export.content), read_only=True)
     general_rows = list(book["Общие"].values)
     assert len(general_rows) - 1 == 205
-    assert general_rows[0][8:10] == ("shk", "size")
-    assert general_rows[1][8:10] == ("00009876", "XL")
+    assert general_rows[0][6:8] == ("Размер", "Штрихкод")
+    assert general_rows[1][6:8] == ("XL", "00009876")
 
     email = f"client-report-{uuid.uuid4().hex[:10]}@example.com"
     created = await async_client.post(
