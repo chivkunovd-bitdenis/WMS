@@ -119,6 +119,14 @@ from app.services.wildberries_fbs_client import split_marketplace_order_id_batch
 
 logger = logging.getLogger(__name__)
 
+FBS_SUPPLY_ACTIVE_STATUSES = frozenset(
+    {
+        FBS_SUPPLY_STATUS_DRAFT,
+        FBS_SUPPLY_STATUS_ASSEMBLING,
+        FBS_SUPPLY_STATUS_PACKED,
+    }
+)
+
 # L1 (21.08.2026): действие оператора важнее фонового опроса WB. Фоновый цикл держит
 # блокировку селлера дольше полуминуты (замер на бою — около пятидесяти секунд).
 # Создание поставки ждало всего пятнадцать секунд и отдавало 503 «синхронизация ещё
@@ -1368,11 +1376,7 @@ async def list_supply_worklist(
     search: str | None = None,
 ) -> dict[str, Any]:
     status_map = {
-        "active": {
-            FBS_SUPPLY_STATUS_DRAFT,
-            FBS_SUPPLY_STATUS_ASSEMBLING,
-            FBS_SUPPLY_STATUS_PACKED,
-        },
+        "active": FBS_SUPPLY_ACTIVE_STATUSES,
         "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
         "done": {FBS_SUPPLY_STATUS_DONE},
     }

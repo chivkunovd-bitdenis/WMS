@@ -350,6 +350,29 @@ export type FbsSupplyWorklistPage = {
   server_now: string
 }
 
+export type FbsAssemblyTaskSupply = {
+  id: string
+  marketplace: 'wb' | 'ozon'
+  name: string
+  seller: { id: string; name: string }
+  status: string
+  orders_count: number
+  picked_count: number
+  packed_count: number
+}
+
+export type FbsAssemblyTask = {
+  id: string
+  number: string
+  created_at: string
+  created_by: { id: string | null; name: string }
+  supplies: FbsAssemblyTaskSupply[]
+}
+
+export type FbsAssemblyTaskList = {
+  items: FbsAssemblyTask[]
+}
+
 export type FbsPickLocation = {
   id: string
   code: string
@@ -702,6 +725,35 @@ export async function fetchFbsSupplyWorklist(
   if (params.search) qs.set('search', params.search)
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function createFbsAssemblyTask(
+  token: string,
+  ah: AuthHeaders,
+  body: { supply_ids: string[]; idempotency_key: string },
+): Promise<FbsAssemblyTask> {
+  return jsonOrThrow<FbsAssemblyTask>(
+    await fetch(apiUrl('/operations/fbs-assembly-tasks'), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function fetchFbsAssemblyTasks(
+  token: string,
+  ah: AuthHeaders,
+  params: { marketplace?: 'wb' | 'ozon' | null } = {},
+): Promise<FbsAssemblyTaskList> {
+  const qs = new URLSearchParams()
+  if (params.marketplace) qs.set('marketplace', params.marketplace)
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : ''
+  return jsonOrThrow<FbsAssemblyTaskList>(
+    await fetch(apiUrl(`/operations/fbs-assembly-tasks${suffix}`), {
       headers: { ...ah(token) },
     }),
   )

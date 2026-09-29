@@ -220,6 +220,9 @@ function stubResponse(url: string, method: string): unknown {
     // честно показывают пустое состояние, а не рисуют то, что не открывается.
     return { items: [], server_now: new Date(NOW).toISOString() }
   }
+  if (path.endsWith('/operations/fbs-assembly-tasks')) {
+    return { items: [] }
+  }
   if (path.endsWith('/fbs/assembly-time')) {
     return { hours: 6.4, orders: 318, within_12_hours_percent: 92, within_24_hours_percent: 99 }
   }

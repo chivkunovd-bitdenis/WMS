@@ -21,6 +21,7 @@ DOC_TYPE_MARKING_IMPORT = "marking_import"
 DOC_TYPE_REMARK = "remark"
 DOC_TYPE_INVOICE = "invoice"
 DOC_TYPE_PALLET = "pallet"
+DOC_TYPE_FBS_ASSEMBLY = "fbs_assembly"
 
 PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_INBOUND: "ПРИЕМ",
@@ -30,6 +31,7 @@ PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_REMARK: "ПЕРЕМАРК",
     DOC_TYPE_INVOICE: "СЧЕТ",
     DOC_TYPE_PALLET: "П",
+    DOC_TYPE_FBS_ASSEMBLY: "СБОР",
 }
 
 DISPLAY_NUMBER_PREFIX = "№"
