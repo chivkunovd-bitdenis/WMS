@@ -1,0 +1,9 @@
+{
+  "versionCode": 19,
+  "versionName": "0.2.0",
+  "apk_sha256": "e622612aff0129e5e02f63f811155d302fb8bcc7d708c3802caf9159fbb0a1d5",
+  "size_bytes": 37543774,
+  "source_commit": "81659534e76c46ebb07ccc02eb501b94404a8088",
+  "backend_commit": "ac1aa840c3ea8c1af6df2985ca62e1dcfa00aa5c",
+  "public_download_verified": true
+}

@@ -1,0 +1,48 @@
+{
+  "production_sha": "ac1aa840c3ea8c1af6df2985ca62e1dcfa00aa5c",
+  "services": {
+    "api": {
+      "checked_files": 518,
+      "runtime_differences": [],
+      "started_at": "2026-09-29T22:55:45.280558928Z"
+    },
+    "celery_worker": {
+      "checked_files": 518,
+      "runtime_differences": [],
+      "started_at": "2026-09-29T22:55:45.285286718Z"
+    },
+    "celery_beat": {
+      "checked_files": 518,
+      "runtime_differences": [],
+      "started_at": "2026-09-29T22:55:45.617548946Z"
+    }
+  },
+  "web": {
+    "index_sha256": "530f034b2e09fe4ab165b0ee3aefcaa785865df6590f6bdc93d721b88feccf9f",
+    "asset_path": "/assets/ff-de2eInFt.js",
+    "asset_sha256": "db9749fd17cb81141976afd1dc0e4d540f8243ebc60944291a3bb83f86909651"
+  },
+  "alembic_head": "20260929_0565",
+  "public_http": [
+    {
+      "path": "/",
+      "status": 200,
+      "sha256": "530f034b2e09fe4ab165b0ee3aefcaa785865df6590f6bdc93d721b88feccf9f"
+    },
+    {
+      "path": "/seller/",
+      "status": 200,
+      "sha256": "6c3d5116c91592fb4ae6d0997eaa590b40d33afdde201675d36222417ba2e2ee"
+    },
+    {
+      "path": "/api/health",
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288"
+    },
+    {
+      "path": "/assets/ff-de2eInFt.js",
+      "status": 200,
+      "sha256": "db9749fd17cb81141976afd1dc0e4d540f8243ebc60944291a3bb83f86909651"
+    }
+  ]
+}
