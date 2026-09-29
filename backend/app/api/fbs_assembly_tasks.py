@@ -39,6 +39,8 @@ class FbsAssemblyTaskSupplyOut(BaseModel):
     status: str
     orders_count: int
     picked_count: int
+    units_count: int
+    picked_units_count: int
     packed_count: int
 
 

@@ -52,6 +52,19 @@ function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 
   return 'default'
 }
 
+function PickedChip({ picked, total, testId }: { picked: number; total: number; testId: string }) {
+  if (total <= 0 || picked !== total) return null
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      color="success"
+      label="Подобрано"
+      data-testid={testId}
+    />
+  )
+}
+
 function SupplyRow({
   supply,
   nested = false,
@@ -123,13 +136,20 @@ function SupplyRow({
       <TableCell>{supply.orders_count} / {supply.units_count}</TableCell>
       <TableCell>{supply.boxes_count}</TableCell>
       <TableCell>
-        <Chip
-          size="small"
-          variant="outlined"
-          color={supplyStatusColor(supply.status)}
-          label={supplyStatusLabel(supply.status)}
-          data-testid="fbs-18-supply-status"
-        />
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Chip
+            size="small"
+            variant="outlined"
+            color={supplyStatusColor(supply.status)}
+            label={supplyStatusLabel(supply.status)}
+            data-testid="fbs-18-supply-status"
+          />
+          <PickedChip
+            picked={supply.picked_units_count}
+            total={supply.units_count}
+            testId={`fbs-supply-picked-${supply.id}`}
+          />
+        </Stack>
       </TableCell>
       <TableCell>{supply.planned_shipment_date ? formatDateTime(supply.planned_shipment_date) : '—'}</TableCell>
       <TableCell align="right" onClick={(event) => event.stopPropagation()}>
@@ -163,8 +183,9 @@ export function FbsAssemblyTaskRows({
   return (
     <>
       {grouped.groups.map(({ task, supplies: taskSupplies }) => {
-        const total = task.supplies.reduce((sum, supply) => sum + supply.orders_count, 0)
-        const picked = task.supplies.reduce((sum, supply) => sum + supply.picked_count, 0)
+        const totalOrders = task.supplies.reduce((sum, supply) => sum + supply.orders_count, 0)
+        const totalUnits = task.supplies.reduce((sum, supply) => sum + supply.units_count, 0)
+        const pickedUnits = task.supplies.reduce((sum, supply) => sum + supply.picked_units_count, 0)
         const packed = task.supplies.reduce((sum, supply) => sum + supply.packed_count, 0)
         const sellers = [...new Set(task.supplies.map((supply) => supply.seller.name))]
         return (
@@ -199,9 +220,16 @@ export function FbsAssemblyTaskRows({
                   sx={{ alignItems: { xs: 'flex-start', md: 'center' } }}
                 >
                   <Box sx={{ minWidth: 210 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                      Сборочное задание {task.number}
-                    </Typography>
+                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                        Сборочное задание {task.number}
+                      </Typography>
+                      <PickedChip
+                        picked={pickedUnits}
+                        total={totalUnits}
+                        testId={`fbs-assembly-task-picked-${task.id}`}
+                      />
+                    </Stack>
                     <Typography variant="caption" color="text.secondary">
                       {formatDateTime(task.created_at)}
                     </Typography>
@@ -213,7 +241,7 @@ export function FbsAssemblyTaskRows({
                     {sellers.join(', ')}
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                    Подбор {picked} / {total} · Упаковка {packed} / {total}
+                    Подбор {pickedUnits} / {totalUnits} · Упаковка {packed} / {totalOrders}
                   </Typography>
                 </Stack>
               </TableCell>

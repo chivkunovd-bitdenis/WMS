@@ -23,6 +23,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    PICK_STATUS_PICKED,
     FbsOrder,
 )
 from app.models.fbs_packing_box import FbsPackingBox
@@ -1467,6 +1468,15 @@ async def list_supply_worklist(
             if supply.marketplace == "ozon"
             else len(orders)
         )
+        picked_units_count = (
+            sum(
+                position.picked_quantity
+                for order in orders
+                for position in order.product_positions
+            )
+            if supply.marketplace == "ozon"
+            else sum(order.pick_status == PICK_STATUS_PICKED for order in orders)
+        )
         items.append(
             {
                 "id": str(supply.id),
@@ -1490,6 +1500,7 @@ async def list_supply_worklist(
                 },
                 "orders_count": len(orders),
                 "units_count": units_count,
+                "picked_units_count": picked_units_count,
                 # A PVZ cargo place may already exist in WB before WMS has a
                 # local physical packing box. Show the greater count without
                 # double-counting linked representations of the same boxes.
