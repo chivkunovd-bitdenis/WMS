@@ -71,7 +71,25 @@ def _client_page_schema() -> dict[str, Any]:
                     {
                         "type": "object",
                         "required": ["id", "type", "number"],
-                        "properties": {"id": string, "type": string, "number": string},
+                        "properties": {
+                            "id": string,
+                            "type": string,
+                            "number": string,
+                            "status": {
+                                "type": "string",
+                                "description": (
+                                    "Текущий статус связанной заявки FBO marketplace_unload."
+                                ),
+                            },
+                            "shipped_at": {
+                                "type": ["string", "null"],
+                                "format": "date-time",
+                                "description": (
+                                    "Сохранённое время завершения отгрузки FBO; null до отгрузки. "
+                                    "Доступно только для связанной заявки marketplace_unload."
+                                ),
+                            },
+                        },
                     },
                     {"type": "null"},
                 ],
@@ -113,7 +131,9 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
         "Движения за период [date_from, date_to). Укажите sku или shk, но не оба: "
         "вместе они дают HTTP 422. Без них возвращается весь доступный отчёт за период. "
         "Пройдите страницы с next_cursor до null. FBS: одна штука в строке; "
-        "operation в ответе — тип движения; подтверждённая возвратная приёмка имеет return."
+        "operation в ответе — тип движения; подтверждённая возвратная приёмка имеет return. "
+        "Для связанного FBO document.status показывает состояние заявки, "
+        "document.shipped_at — время отгрузки; occurred_at — время движения товара."
     )
     movement["responses"]["200"]["content"] = {
         "application/json": {
@@ -150,7 +170,8 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     export["summary"] = "Отчёт движений Excel"
     export["description"] = (
         "Все подходящие строки на листах WB, Ozon и Общие. Укажите sku или shk, "
-        "но не оба; без них выгружается весь доступный отчёт за период."
+        "но не оба; без них выгружается весь доступный отчёт за период. "
+        "Колонки document_status и document_shipped_at описывают связанную заявку FBO."
     )
     export["responses"]["200"]["content"] = {
         _XLSX: {"schema": {"type": "string", "format": "binary"}}

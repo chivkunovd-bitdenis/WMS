@@ -61,6 +61,10 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
         assert {"rows", "next_cursor", "limit"} <= set(properties)
         row_properties = properties["rows"]["items"]["properties"]
         assert {"kiz", "shk", "size", "operation"} <= set(row_properties)
+        document = row_properties["document"]["anyOf"][0]
+        assert {"id", "type", "number"} <= set(document["required"])
+        assert {"status", "shipped_at"} <= set(document["properties"])
+        assert document["properties"]["shipped_at"]["format"] == "date-time"
         assert "barcode" not in row_properties
         export = schema["paths"]["/reports/client-movements/export.xlsx"]["get"]
         assert {item["name"] for item in export["parameters"]} == {
