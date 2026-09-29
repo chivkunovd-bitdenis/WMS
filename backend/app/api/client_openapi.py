@@ -54,7 +54,10 @@ def _client_page_schema() -> dict[str, Any]:
             "occurred_at": {"type": "string", "format": "date-time"},
             "operation": {
                 "type": "string",
-                "description": "Сохранённый тип движения; поле ответа, не фильтр запроса",
+                "description": (
+                    "Тип движения; return для inbound_intake со связанной возвратной "
+                    "заявкой, иначе сохранённый movement_type. Это поле ответа, не фильтр."
+                ),
             },
             "warehouse_id": {"type": "string", "format": "uuid"},
             "product_id": {"type": "string", "format": "uuid"},
@@ -110,7 +113,7 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
         "Движения за период [date_from, date_to). Укажите sku или shk, но не оба: "
         "вместе они дают HTTP 422. Без них возвращается весь доступный отчёт за период. "
         "Пройдите страницы с next_cursor до null. FBS: одна штука в строке; "
-        "operation в ответе — сохранённый тип движения."
+        "operation в ответе — тип движения; подтверждённая возвратная приёмка имеет return."
     )
     movement["responses"]["200"]["content"] = {
         "application/json": {

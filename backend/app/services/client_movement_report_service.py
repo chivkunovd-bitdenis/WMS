@@ -257,8 +257,10 @@ async def _marking_index(
 
 async def _documents(
     session: AsyncSession, tenant_id: uuid.UUID, movements: list[InventoryMovement]
-) -> dict[uuid.UUID, dict[str, str]]:
+) -> tuple[dict[uuid.UUID, dict[str, str]], dict[uuid.UUID, str | None]]:
     docs: dict[uuid.UUID, dict[str, str]] = {}
+    return_docs: dict[uuid.UUID, dict[str, str]] = {}
+    return_marketplaces: dict[uuid.UUID, str | None] = {}
     inbound_ids = {m.inbound_intake_line_id for m in movements if m.inbound_intake_line_id}
     if inbound_ids:
         data = {
@@ -280,11 +282,17 @@ async def _documents(
         for m in movements:
             if m.inbound_intake_line_id in data:
                 doc = data[m.inbound_intake_line_id]
+                is_return = m.movement_type == "inbound_intake" and doc.operation_type == "return"
                 docs[m.id] = {
                     "id": str(doc.id),
-                    "type": "inbound",
+                    "type": "return" if is_return else "inbound",
                     "number": doc.display_number or doc.document_number or "",
                 }
+                if is_return:
+                    return_docs[m.id] = docs[m.id]
+                    return_marketplaces[m.id] = (
+                        doc.marketplace if doc.marketplace in {"wb", "ozon"} else None
+                    )
     unload_ids = {
         m.marketplace_unload_request_id for m in movements if m.marketplace_unload_request_id
     }
@@ -355,7 +363,8 @@ async def _documents(
                     "type": "inventory_count",
                     "number": f"ИНВ-{str(count_id).split('-')[0].upper()}",
                 }
-    return docs
+    docs.update(return_docs)
+    return docs, return_marketplaces
 
 
 async def list_client_movements(
@@ -427,7 +436,7 @@ async def list_client_movements(
             break
         movements = [movement for movement, _ in batch]
         ledger_index = await _fbs_index(session, tenant_id, seller_id, movements)
-        docs = await _documents(session, tenant_id, movements)
+        docs, return_marketplaces = await _documents(session, tenant_id, movements)
         related_orders = {ledger_index[m.id][0].id for m in movements if m.id in ledger_index}
         marks = await _marking_index(session, tenant_id, related_orders)
         unload_ids = {
@@ -464,7 +473,9 @@ async def list_client_movements(
             row_marketplace = (
                 order.marketplace
                 if order is not None
-                else unload_markets.get(movement.marketplace_unload_request_id)
+                else return_marketplaces.get(
+                    movement.id, unload_markets.get(movement.marketplace_unload_request_id)
+                )
             )
             if marketplace is not None and row_marketplace != marketplace:
                 continue
@@ -479,7 +490,7 @@ async def list_client_movements(
             sign = 1 if movement.quantity_delta >= 0 else -1
             values = (
                 marks.get((order.id, product.id), [])
-                if order is not None and offset is not None
+                if order is not None and offset is not None and movement.quantity_delta < 0
                 else []
             )
             for unit in range(count):
@@ -498,7 +509,9 @@ async def list_client_movements(
                         "id": f"{movement.id}:{unit}" if order is not None else str(movement.id),
                         "movement_id": str(movement.id),
                         "occurred_at": movement_at.isoformat(),
-                        "operation": movement.movement_type,
+                        "operation": "return"
+                        if movement.id in return_marketplaces
+                        else movement.movement_type,
                         "warehouse_id": str(movement.warehouse_id),
                         "product_id": str(product.id),
                         "sku": product.sku_code,
