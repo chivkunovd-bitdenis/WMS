@@ -270,10 +270,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     const earliestDeadline = ordered
       .map((one) => one.supply.nearest_deadline_at)
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+    const marketplace = ordered.every((one) => one.supply.marketplace === 'wb')
+      ? 'wb'
+      : ordered.every((one) => one.supply.marketplace === 'ozon')
+        ? 'ozon'
+        : 'mixed'
     printWindow.document.open()
     printWindow.document.write(buildFbsPickingListPrintHtml({
       supplyName: `Сборка · ${ordered.length} ${plural(ordered.length, ['поставка', 'поставки', 'поставок'])}`,
       wbSupplyId: ordered.map((one) => one.supply.wb_supply_id).filter(Boolean).join(', ') || null,
+      marketplace,
       sellerName: distinct(ordered.map((one) => one.supply.seller.name)),
       wmsWarehouseName: distinct(ordered.map((one) => one.supply.wms_warehouse.name)),
       routeLabel: distinct(ordered.map(fbsSupplyRouteLabel)),

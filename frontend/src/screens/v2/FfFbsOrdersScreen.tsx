@@ -53,6 +53,7 @@ import {
 import { MarketplaceChip, type MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
+import { resumePendingFbsAssemblyTask } from './fbsPendingAssemblyTask'
 import {
   FBS_ASSEMBLY_QUERY_PARAM,
   fbsSelectionNeedsGroupCreate,
@@ -611,6 +612,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   }, [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const openedAssemblyFromQuery = useRef<string | null>(null)
+  const resumedPendingAssemblyTaskFor = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
@@ -620,6 +622,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
+
+  // A successful server commit whose reply was lost is safe to replay under
+  // its saved key. Leave a failed recovery on disk for the dialog retry.
+  useEffect(() => {
+    if (!token || resumedPendingAssemblyTaskFor.current === token) return
+    resumedPendingAssemblyTaskFor.current = token
+    void resumePendingFbsAssemblyTask(token, authHeaders).catch(() => undefined)
+  }, [token, authHeaders])
 
   const load = useCallback(async () => {
     // Новые фильтры загружаются сразу; опоздавший ответ прежнего запроса

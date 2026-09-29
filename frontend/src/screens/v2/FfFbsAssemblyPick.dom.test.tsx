@@ -9,11 +9,13 @@ import type { UnloadPickScanResult } from '../ff/unload-pick/UnloadPickScreen'
 // скана, что и экран. Сервер подменён через fetch.
 
 type ScanHandler = (payload: { barcode: string; sourceKey: string | null }) => Promise<UnloadPickScanResult>
-const captured = vi.hoisted(() => ({ onScan: null as ScanHandler | null }))
+type SetPickedHandler = (payload: { productId: string; place: { key: string }; quantity: number }) => Promise<void>
+const captured = vi.hoisted(() => ({ onScan: null as ScanHandler | null, onSetPicked: null as SetPickedHandler | null }))
 
 vi.mock('../ff/unload-pick/UnloadPickScreen', () => ({
-  UnloadPickScreen: (props: { onScan?: ScanHandler }) => {
+  UnloadPickScreen: (props: { onScan?: ScanHandler; onSetPicked?: SetPickedHandler }) => {
     captured.onScan = props.onScan ?? null
+    captured.onSetPicked = props.onSetPicked ?? null
     return null
   },
 }))
@@ -33,6 +35,10 @@ const SUPPLIES = [
 
 let picked: Record<string, number>
 let scanCalls: Array<{ supply: string; productId: unknown }>
+let setCalls: Array<{ supply: string; body: Record<string, unknown>; key: string | null }>
+let emptySourceSupply: string | null
+let failFirstSet: boolean
+let conflictSet: boolean
 const originalFetch = globalThis.fetch
 
 function json(body: unknown, status = 200) {
@@ -41,6 +47,7 @@ function json(body: unknown, status = 200) {
 
 function pickOptions(supply: (typeof SUPPLIES)[number]) {
   const taken = picked[supply.id] ?? 0
+  const available = emptySourceSupply === supply.id ? 0 : 5 - taken
   return [{
     product_id: supply.productId,
     sku_code: `SKU-${supply.productId}`,
@@ -54,9 +61,9 @@ function pickOptions(supply: (typeof SUPPLIES)[number]) {
       location_code: `А-${supply.id}`,
       quantity: 5,
       reserved: 0,
-      available: 5 - taken,
+      available,
       picked: taken,
-      sources: [{ quantity: 5, available: 5 - taken, is_loose: true, source_label: 'Россыпью', container_path: [], picked: taken }],
+      sources: [{ quantity: 5, available, is_loose: true, source_label: 'Россыпью', container_path: [], picked: taken }],
     }],
   }]
 }
@@ -91,6 +98,17 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       allocation_quantity: 1, container_kind: null, container_id: null, container_code: null,
     })
   }
+  const set = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/pick\/set$/)
+  if (set) {
+    const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+    setCalls.push({ supply: set[1], body, key: new Headers(init?.headers).get('Idempotency-Key') })
+    if (failFirstSet) {
+      failFirstSet = false
+      throw new TypeError('lost set reply')
+    }
+    if (conflictSet) return json({ detail: { code: 'pick_quantity_changed', message: 'Количество изменилось.' } }, 409)
+    return json({ quantity: body.quantity })
+  }
   return json(null)
 }
 
@@ -101,6 +119,11 @@ beforeEach(() => {
   picked = {}
   scanCalls = []
   captured.onScan = null
+  captured.onSetPicked = null
+  setCalls = []
+  emptySourceSupply = null
+  failFirstSet = false
+  conflictSet = false
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -145,5 +168,60 @@ describe('WMS-574 Д5 · общий подбор при одном ШК у то�
       { supply: 's1', productId: 'p-a' },
       { supply: 's2', productId: 'p-b' },
     ])
+  })
+
+  it('skips only a no-stock candidate and sends one scan to the later seller with stock', async () => {
+    emptySourceSupply = 's1'
+    await act(async () => {
+      root.render(<FfFbsAssemblyPick token="t" supplies={SUPPLIES.map(({ id, sellerId }) => ({ id, sellerId }))} />)
+    })
+    await settle(80)
+
+    await act(async () => {
+      await captured.onScan!({ barcode: SAME_BARCODE, sourceKey: null })
+    })
+
+    expect(scanCalls).toEqual([{ supply: 's2', productId: 'p-b' }])
+    expect(picked).toEqual({ s2: 1 })
+  })
+
+  it('retries a manual group save with its original expected quantity and idempotency key', async () => {
+    await act(async () => {
+      root.render(<FfFbsAssemblyPick token="t" supplies={[{ id: 's1', sellerId: 'seller-a' }]} />)
+    })
+    await settle(80)
+    failFirstSet = true
+
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 1 })
+    })
+    await settle()
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 1 })
+    })
+
+    expect(setCalls).toHaveLength(2)
+    expect(setCalls.map((call) => call.body)).toEqual([
+      { product_id: 'p-a', storage_location_id: 'loc-s1', quantity: 1, expected_quantity: 0, container_kind: null, container_id: null },
+      { product_id: 'p-a', storage_location_id: 'loc-s1', quantity: 1, expected_quantity: 0, container_kind: null, container_id: null },
+    ])
+    expect(setCalls[0].key).toBeTruthy()
+    expect(setCalls[1].key).toBe(setCalls[0].key)
+  })
+
+  it('on pick_quantity_changed refreshes the source and does not overwrite it with the requested number', async () => {
+    await act(async () => {
+      root.render(<FfFbsAssemblyPick token="t" supplies={[{ id: 's1', sellerId: 'seller-a' }]} />)
+    })
+    await settle(80)
+    conflictSet = true
+
+    await act(async () => {
+      await captured.onSetPicked!({ productId: 'p-a', place: { key: 'cell:loc-s1' }, quantity: 1 })
+    })
+    await settle()
+
+    expect(setCalls).toHaveLength(1)
+    expect(setCalls[0].body).toMatchObject({ quantity: 1, expected_quantity: 0 })
   })
 })

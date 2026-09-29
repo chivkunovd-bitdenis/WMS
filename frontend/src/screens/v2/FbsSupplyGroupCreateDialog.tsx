@@ -25,7 +25,6 @@ import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { plural } from '../../utils/plural'
 import {
   FbsApiError,
-  createFbsAssemblyTask,
   createFbsIdempotencyKey,
   createFbsSupplyFromOrders,
   preflightFbsSupply,
@@ -39,6 +38,12 @@ import {
   type FbsGroupCreateResult,
   type FbsSupplyGroupDraft,
 } from './fbsSupplyAssembly'
+import {
+  readPendingFbsAssemblyTask,
+  resumePendingFbsAssemblyTask,
+  savePendingFbsAssemblyTask,
+  type PendingFbsAssemblyTask,
+} from './fbsPendingAssemblyTask'
 
 // WMS-574 R1–R4: окно «Новые поставки FBS» — выбор делится на несколько
 // поставок WB (Д1), для каждой идёт тот же preflight и тот же POST from-orders,
@@ -80,7 +85,8 @@ export function FbsSupplyGroupCreateDialog({
   const [attempted, setAttempted] = useState(false)
   const [assemblyTaskError, setAssemblyTaskError] = useState<string | null>(null)
   const keysRef = useRef(new Map<string, string>())
-  const pendingAssemblyTaskRef = useRef<{ supplyIds: string[]; idempotencyKey: string } | null>(null)
+  const pendingAssemblyTaskRef = useRef<PendingFbsAssemblyTask | null>(null)
+  const [pendingAssemblyTask, setPendingAssemblyTask] = useState<PendingFbsAssemblyTask | null>(null)
   const creatingRef = useRef(false)
 
   const groups = useMemo(() => groupFbsOrdersForSupplies(orders), [orders])
@@ -101,8 +107,10 @@ export function FbsSupplyGroupCreateDialog({
     setAttempted(false)
     setAssemblyTaskError(null)
     keysRef.current = new Map()
-    pendingAssemblyTaskRef.current = null
-  }, [open, groupsSignature])
+    const pendingTask = readPendingFbsAssemblyTask(token)
+    pendingAssemblyTaskRef.current = pendingTask
+    setPendingAssemblyTask(pendingTask)
+  }, [open, groupsSignature, token])
 
   // Сервер считает отпечаток запроса вместе со способом сдачи (I6 окна одной
   // поставки): при смене способа ключи несозданных групп обновляются.
@@ -173,11 +181,9 @@ export function FbsSupplyGroupCreateDialog({
     try {
       const pendingTask = pendingAssemblyTaskRef.current
       if (pendingTask) {
-        await createFbsAssemblyTask(token, authHeaders, {
-          supply_ids: pendingTask.supplyIds,
-          idempotency_key: pendingTask.idempotencyKey,
-        })
+        await resumePendingFbsAssemblyTask(token, authHeaders, pendingTask)
         pendingAssemblyTaskRef.current = null
+        setPendingAssemblyTask(null)
       }
 
       if (pendingGroups.length === 0) {
@@ -219,11 +225,11 @@ export function FbsSupplyGroupCreateDialog({
               idempotencyKey: assemblyTaskKey,
             }
             pendingAssemblyTaskRef.current = request
-            await createFbsAssemblyTask(token, authHeaders, {
-              supply_ids: request.supplyIds,
-              idempotency_key: request.idempotencyKey,
-            })
+            setPendingAssemblyTask(request)
+            savePendingFbsAssemblyTask(token, request)
+            await resumePendingFbsAssemblyTask(token, authHeaders, request)
             pendingAssemblyTaskRef.current = null
+            setPendingAssemblyTask(null)
           },
         },
       )
@@ -408,11 +414,11 @@ export function FbsSupplyGroupCreateDialog({
           variant="contained"
           size="large"
           onClick={() => void create()}
-          disabled={(pendingGroups.length === 0 && !pendingAssemblyTaskRef.current) || preflightBusy || creating}
+          disabled={(pendingGroups.length === 0 && !pendingAssemblyTask) || preflightBusy || creating}
           startIcon={creating ? <CircularProgress size={18} color="inherit" /> : undefined}
           data-testid="fbs-group-create-submit"
         >
-          {pendingAssemblyTaskRef.current && pendingGroups.length === 0 ? 'Повторить создание задания' : submitLabel}
+          {pendingAssemblyTask && pendingGroups.length === 0 ? 'Повторить создание задания' : submitLabel}
         </Button>
       </DialogActions>
     </Dialog>

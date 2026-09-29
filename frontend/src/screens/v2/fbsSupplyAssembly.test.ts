@@ -258,6 +258,7 @@ describe('WMS-574 окно сборки', () => {
       wb_supply_id: `WB-GI-${id}`,
       seller: { id: 's', name: 'ИП Горячкина' },
       wb_warehouse: { id: 507, name: 'Коледино' },
+      wms_warehouse: { id: 'wms-1', name: 'Основной склад' },
     },
     progress,
     orders,
@@ -306,6 +307,35 @@ describe('WMS-574 окно сборки', () => {
       ['x', 3, 1, [1, 2, 3]],
       ['y', 1, 0, [4]],
     ])
+  })
+
+  it('WMS-588: чистая группа Ozon берёт позиции и их план/частичный подбор, а не товар заказа по одной штуке', () => {
+    const ozonOrder = {
+      id: 'posting-01',
+      marketplace: 'ozon',
+      external_order_id: 'OZ-1001',
+      wb_order_id: 0,
+      tape_order_index: 0,
+      product: { id: 'legacy', name: 'Не использовать', size: null, image_url: null, seller_article: null, wb_article: null, barcode: null },
+      positions: [
+        { id: 'pos-a', product_id: 'product-a', name: 'Ozon A', image_url: null, barcode: '111', seller_article: 'A', sku: 'SKU-A', quantity: 3, reserved_quantity: 3, picked_quantity: 1 },
+        { id: 'pos-b', product_id: 'product-b', name: 'Ozon B', image_url: null, barcode: '222', seller_article: 'B', sku: 'SKU-B', quantity: 2, reserved_quantity: 2, picked_quantity: 2 },
+      ],
+      metadata: { required: [] },
+      pick: { status: 'pending' },
+      sticker: { code: null },
+      inventory: { locations: [] },
+    }
+    const rows = fbsAssemblyPickingRows([workspace('ozon', 'ozon', { picked: 0, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 5 }, [ozonOrder])])
+    expect(rows.map((row) => [row.key, row.name, row.required, row.picked, row.wbOrders])).toEqual([
+      ['product-a', 'Ozon A', 3, 1, ['OZ-1001']],
+      ['product-b', 'Ozon B', 2, 2, ['OZ-1001']],
+    ])
+  })
+
+  it('WMS-588: подпись рамки Ozon не называет поставку и склад WB', () => {
+    expect(fbsAssemblySupplyTitle(workspace('ozon', 'ozon', { picked: 0, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 0 })))
+      .toBe('Поставка FBS 29.09.2026 · Ozon · ИП Горячкина · Склад WMS Основной склад')
   })
 
   it('WMS-580 R5/R6: порядок строк листа группы для одной поставки совпадает с её собственной лентой/листом', () => {

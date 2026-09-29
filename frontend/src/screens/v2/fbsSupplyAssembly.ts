@@ -128,11 +128,15 @@ export function fbsSupplyWbWarehouseName(workspace: FbsWorkspace): string {
   return workspace.supply.wb_warehouse.name || `WB ${workspace.supply.wb_warehouse.id}`
 }
 
-/** «Поставка {номер} · WB № {номер WB} · {селлер} · Склад WB {склад}» — подзаголовок «Состава» (R7). */
+/** Подзаголовок «Состава» называет именно ту площадку, к которой относится поставка. */
 export function fbsAssemblySupplyTitle(workspace: FbsWorkspace): string {
   const parts = [`Поставка ${workspace.supply.name}`]
-  if (workspace.supply.wb_supply_id) parts.push(`WB № ${workspace.supply.wb_supply_id}`)
-  parts.push(workspace.supply.seller.name, `Склад WB ${fbsSupplyWbWarehouseName(workspace)}`)
+  if (workspace.supply.marketplace === 'wb') {
+    if (workspace.supply.wb_supply_id) parts.push(`WB № ${workspace.supply.wb_supply_id}`)
+    parts.push(workspace.supply.seller.name, `Склад WB ${fbsSupplyWbWarehouseName(workspace)}`)
+  } else {
+    parts.push('Ozon', workspace.supply.seller.name, `Склад WMS ${workspace.supply.wms_warehouse.name}`)
+  }
   return parts.join(' · ')
 }
 
@@ -317,39 +321,62 @@ export function planGroupPickSet(
 
 // ── Лист подбора группы (Д14) ──────────────────────────────────────────────
 
-/** Строки листа по всем поставкам группы — тем же правилом, что строки листа карточки (WB). */
+/** Строки листа по всем поставкам группы — тем же правилом, что строки листа карточки. */
 export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPickingListPrintRow & { key: string }> {
   const grouped = new Map<string, FbsPickingListPrintRow & { key: string }>()
   for (const workspace of workspaces) {
     const orders = [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
     for (const order of orders) {
-      const key = order.product.id ?? `unmapped-${order.id}`
-      const current = grouped.get(key) ?? {
-        key,
-        name: order.product.name,
-        size: order.product.size,
-        imageUrl: order.product.image_url,
-        identifiers: [
-          order.product.seller_article,
-          order.product.wb_article ? `WB ${order.product.wb_article}` : null,
-          order.product.barcode,
-        ].filter((value): value is string => Boolean(value)),
-        locations: [],
-        required: 0,
-        picked: 0,
-        wbOrders: [],
-        stickerCodes: [],
-        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+      const rows = order.marketplace === 'ozon' && order.positions.length > 0
+        ? order.positions.map((position, positionIndex) => ({
+            key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
+            name: position.name,
+            size: position.size ?? null,
+            imageUrl: position.image_url ?? null,
+            identifiers: [
+              position.seller_article,
+              position.sku ? `SKU ${position.sku}` : null,
+              position.barcode,
+            ].filter((value): value is string => Boolean(value)),
+            required: position.quantity,
+            picked: position.picked_quantity,
+          }))
+        : [{
+            key: order.product.id ?? `unmapped-${order.id}`,
+            name: order.product.name,
+            size: order.product.size,
+            imageUrl: order.product.image_url,
+            identifiers: [
+              order.product.seller_article,
+              order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+              order.product.barcode,
+            ].filter((value): value is string => Boolean(value)),
+            required: 1,
+            picked: order.pick.status === 'picked' ? 1 : 0,
+          }]
+      for (const row of rows) {
+        const current = grouped.get(row.key) ?? {
+          ...row,
+          locations: [],
+          required: 0,
+          picked: 0,
+          wbOrders: [],
+          stickerCodes: [],
+          marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+        }
+        current.required += row.required
+        current.picked += row.picked
+        // Field name is historical; for Ozon it contains the posting number.
+        current.wbOrders.push(order.marketplace === 'ozon'
+          ? (order.external_order_id ?? String(order.wb_order_id))
+          : order.wb_order_id)
+        current.stickerCodes.push(order.sticker.code)
+        const locations = order.inventory.locations
+          .filter((location) => location.available_unpacked > 0)
+          .map((location) => `${location.code}: ${location.available_unpacked}`)
+        current.locations = [...new Set([...current.locations, ...locations])]
+        grouped.set(row.key, current)
       }
-      current.required += 1
-      current.picked += order.pick.status === 'picked' ? 1 : 0
-      current.wbOrders.push(order.wb_order_id)
-      current.stickerCodes.push(order.sticker.code)
-      const locations = order.inventory.locations
-        .filter((location) => location.available_unpacked > 0)
-        .map((location) => `${location.code}: ${location.available_unpacked}`)
-      current.locations = [...new Set([...current.locations, ...locations])]
-      grouped.set(key, current)
     }
   }
   return [...grouped.values()]
