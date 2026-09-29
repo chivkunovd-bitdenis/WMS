@@ -24,7 +24,6 @@ from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.marking_code import MarkingCode
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
-from app.models.product_barcode import ProductBarcode
 
 MAX_LIMIT = 1000
 _BATCH = 500
@@ -421,16 +420,7 @@ async def list_client_movements(
         if sku is not None:
             stmt = stmt.where(Product.sku_code == sku)
         if barcode is not None:
-            extra_barcode = (
-                select(ProductBarcode.id)
-                .where(
-                    ProductBarcode.tenant_id == tenant_id,
-                    ProductBarcode.product_id == Product.id,
-                    ProductBarcode.barcode == barcode,
-                )
-                .exists()
-            )
-            stmt = stmt.where(or_(Product.wb_barcode == barcode, extra_barcode))
+            stmt = stmt.where(Product.wb_barcode == barcode)
         if operation is not None:
             stmt = stmt.where(InventoryMovement.movement_type == operation)
         batch = (await session.execute(stmt)).all()
@@ -438,19 +428,6 @@ async def list_client_movements(
             break
         movements = [movement for movement, _ in batch]
         ledger_index = await _fbs_index(session, tenant_id, seller_id, movements)
-        product_ids = {product.id for _, product in batch}
-        alternate_barcodes: dict[uuid.UUID, str] = {}
-        if product_ids:
-            barcode_rows = await session.execute(
-                select(ProductBarcode.product_id, ProductBarcode.barcode)
-                .where(
-                    ProductBarcode.tenant_id == tenant_id,
-                    ProductBarcode.product_id.in_(product_ids),
-                )
-                .order_by(ProductBarcode.barcode)
-            )
-            for product_id, alternate in barcode_rows:
-                alternate_barcodes.setdefault(product_id, alternate)
         docs = await _documents(session, tenant_id, movements)
         related_orders = {ledger_index[m.id][0].id for m in movements if m.id in ledger_index}
         marks = await _marking_index(session, tenant_id, related_orders)
@@ -527,9 +504,7 @@ async def list_client_movements(
                         "product_id": str(product.id),
                         "sku": product.sku_code,
                         "product_name": product.name,
-                        "barcode": barcode
-                        if barcode is not None
-                        else (product.wb_barcode or alternate_barcodes.get(product.id)),
+                        "barcode": product.wb_barcode,
                         "marketplace": row_marketplace,
                         "document": document,
                         "quantity_delta": sign
