@@ -2779,31 +2779,10 @@ export function FfFbsSupplyWorkspace({
   // Всё ниже работает только при assemblyFrame. Запросы — те же функции, что
   // у кнопок карточки: start-work, создание короба, назначение в короб, QR.
 
-  const assemblyBoxQrReady = (box: FbsWorkspace['boxes'][number]) =>
-    box.qr_asset?.status === 'ready' && Boolean(box.qr_asset.preview_url)
-
-  // Д12: QR грузоместа нового короба уходит в печать сразу, без окна
-  // предпросмотра — тем же способом, каким «Печатать QR» печатает стикер заказа.
-  const printAssemblyBoxQr = async (box: FbsWorkspace['boxes'][number], supplyIdForBox: string) => {
-    let target = box
-    if (!assemblyBoxQrReady(target)) {
-      const next = await run(() => retryFbsPackingBoxQr(token, authHeaders, supplyIdForBox, box.id), '')
-      target = next?.boxes.find((item) => item.id === box.id) ?? target
-    }
-    if (!assemblyBoxQrReady(target) || !target.qr_asset) {
-      setError('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
-      return
-    }
-    try {
-      await printFbsOrderQrAsset(token, target.qr_asset)
-      setNotice(`Отправлено на печать: QR грузоместа WB · Короб ${target.box_number}`)
-    } catch (cause) {
-      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'QR короба не отправлен в печать.')
-    }
-  }
-
   // R17, R19: новый короб — тот же запрос, что «Добавить короба» при числе 1,
-  // с тем же сохраняемым ключом повтора; он становится открытым.
+  // с тем же сохраняемым ключом повтора; он становится открытым. WMS-589:
+  // создание короба само не запрашивает и не печатает QR — печать запускают
+  // только явные кнопки QR/«Печать всех QR» либо правила авто-печати скана.
   const createAssemblyBox = async (snapshot?: FbsWorkspace) => {
     const current = snapshot ?? workspace
     if (!current || boxOperationsDisabled || assemblyBoxCreatingRef.current) return
@@ -2829,7 +2808,6 @@ export function FfFbsSupplyWorkspace({
       if (!created) return
       setAssemblyOpenBoxId(created.id)
       setAssemblyBoxHint(null)
-      await printAssemblyBoxQr(created, next.supply.id)
     } finally {
       assemblyBoxCreatingRef.current = false
       setAssemblyBoxCreating(false)
