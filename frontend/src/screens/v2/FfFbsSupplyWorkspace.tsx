@@ -584,6 +584,9 @@ export function FfFbsSupplyWorkspace({
   const assemblyOpenBoxIdRef = useRef<string | null>(null)
   const assemblyScanBoxesRef = useRef<Array<{ code: string; boxId: string | null; at: number }>>([])
   const assemblyTakeScanBoxRef = useRef<((raw: string) => string | null) | null>(null)
+  // Идёт ли сейчас скан и какой заказ ждёт ЧЗ — чтобы не запоминать короб для
+  // повторного скана того же стикера: он только снимает выбор.
+  const assemblyScanStateRef = useRef<{ active: boolean; busy: boolean }>({ active: false, busy: false })
   const assemblyAfterPackAllRef = useRef<((snapshot: FbsWorkspace | null) => Promise<void>) | null>(null)
   const assemblyEscapeRef = useRef<() => boolean>(() => false)
   const assemblyBoxCreatingRef = useRef(false)
@@ -2584,11 +2587,15 @@ export function FfFbsSupplyWorkspace({
   // WMS-575: вкладка «Упаковка и маркировка» принимает скан, где бы ни стоял
   // курсор, — ровно тогда, когда на ней есть рабочее поле скана.
   // WMS-574 R22: код со сканера пришёл — запоминаем, какой короб рамки был открыт.
+  // Записи идут по порядку прихода: у каждого принятого скана свой короб, даже
+  // если коды одинаковые (три одинаковые вещи подряд). Старые записи — по возрасту.
   const rememberAssemblyScanBox = useCallback((code: string) => {
     const raw = code.replace(/[ \t\r\n\v\f]+$/, '')
     const now = Date.now()
+    const state = assemblyScanStateRef.current
+    if (state.active && !state.busy && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) return
     assemblyScanBoxesRef.current = [
-      ...assemblyScanBoxesRef.current.filter((entry) => entry.code !== raw && now - entry.at < 120_000),
+      ...assemblyScanBoxesRef.current.filter((entry) => now - entry.at < 60_000),
       { code: raw, boxId: assemblyOpenBoxIdRef.current, at: now },
     ]
   }, [])
@@ -2885,12 +2892,15 @@ export function FfFbsSupplyWorkspace({
     assemblyOpenBoxIdRef.current = openBoxId
     // Короб этого скана: запомненный при приёме кода, а для кода, набранного
     // в поле руками, — открытый сейчас, в начале обработки.
+    assemblyScanStateRef.current = { active: Boolean(kizScanActive), busy: kizScanBusy }
     assemblyTakeScanBoxRef.current = (raw) => {
       const code = raw.replace(/[ \t\r\n\v\f]+$/, '')
       const entries = assemblyScanBoxesRef.current
-      const found = [...entries].reverse().find((entry) => entry.code === code)
-      assemblyScanBoxesRef.current = entries.filter((entry) => entry.code !== code)
-      return found ? found.boxId : openBoxId
+      // Самая ранняя запись этого кода — скан, пришедший первым; удаляется только она.
+      const position = entries.findIndex((entry) => entry.code === code)
+      if (position < 0) return openBoxId
+      assemblyScanBoxesRef.current = entries.filter((_, index) => index !== position)
+      return entries[position].boxId
     }
     // Д8, Д9, R22–R24: заказ, найденный сканом, — в короб, открытый в момент
     // скана, если ещё ни в каком коробе не лежит; заказу без обязательного ЧЗ
