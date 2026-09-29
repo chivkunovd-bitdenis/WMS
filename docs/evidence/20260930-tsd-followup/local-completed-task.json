@@ -1,0 +1,37 @@
+{
+  "id": "8cd821f3-14d9-4034-97e5-d599fbbe0ff3",
+  "number": "№000002",
+  "created_at": "2026-09-30T00:08:52.662324+03:00",
+  "created_by": {
+    "id": "7e5de4a8-ef8c-4d5e-8fb6-b0221a617a33",
+    "name": "Кузнецов Дмитрий Олегович"
+  },
+  "supplies": [
+    {
+      "id": "c9f5f3e3-4000-4e75-8612-eaf242aff0e2",
+      "marketplace": "wb",
+      "name": "Текстиль — ПВЗ, в работе",
+      "seller": {
+        "id": "38571666-130a-4d8c-af21-a765e8aed9f2",
+        "name": "ООО «Текстиль Плюс»"
+      },
+      "status": "assembling",
+      "orders_count": 3,
+      "picked_count": 3,
+      "packed_count": 0
+    },
+    {
+      "id": "05bf6e8d-b4d4-4ce0-a364-7bc0b8ebf255",
+      "marketplace": "wb",
+      "name": "Уютный дом — склад/СЦ, в работе",
+      "seller": {
+        "id": "3d7556d6-872c-49b3-8769-78b1696622c9",
+        "name": "ИП Лаврова «Уютный дом»"
+      },
+      "status": "assembling",
+      "orders_count": 5,
+      "picked_count": 5,
+      "packed_count": 0
+    }
+  ]
+}
