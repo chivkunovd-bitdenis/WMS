@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 
 from app.api.assistant import router as assistant_router
@@ -15,6 +17,7 @@ from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
 from app.api.client_errors import router as client_errors_router
+from app.api.client_openapi import client_openapi
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
 from app.api.fbs_kiz import router as fbs_kiz_router
@@ -173,6 +176,18 @@ def create_app() -> FastAPI:
     app.include_router(wildberries_integration_router)
     app.include_router(ozon_integration_router)
     app.include_router(ozon_returns_router)
+
+    @app.get("/openapi-client.json", include_in_schema=False)
+    async def client_openapi_route() -> JSONResponse:
+        return JSONResponse(client_openapi(app.openapi()))
+
+    @app.get("/docs/client", include_in_schema=False)
+    async def client_docs() -> HTMLResponse:
+        # Relative URL also resolves under Caddy's /api/ prefix.
+        return get_swagger_ui_html(
+            openapi_url="../openapi-client.json", title="WMS Client Reports API"
+        )
+
     return app
 
 
