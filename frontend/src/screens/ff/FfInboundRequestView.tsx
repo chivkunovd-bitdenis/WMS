@@ -1,7 +1,6 @@
 import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
 import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
-import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
 import {
   Fragment,
   memo,
@@ -181,47 +180,6 @@ type InboundLine = {
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
-}
-
-type DiscrepancyActLine = {
-  id: string
-  product_id: string
-  sku_code: string
-  product_name: string
-  quantity: number
-  inbound_intake_line_id: string | null
-}
-
-type DiscrepancyActDetail = {
-  id: string
-  status: string
-  inbound_intake_request_id: string | null
-  created_at: string
-  lines: DiscrepancyActLine[]
-}
-
-function discrepancyActStatusRu(status: string): string {
-  if (status === 'draft') return 'Черновик'
-  if (status === 'confirmed') return 'Передан на FF'
-  if (status === 'approved') return 'Утверждено'
-  if (status === 'rejected') return 'Отклонено'
-  return status
-}
-
-function discrepancyActTitle(createdAt: string): string {
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) return 'Акт расхождения'
-  return `Акт от ${new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)}`
-}
-
-function signedQty(value: number): string {
-  return value > 0 ? `+${value}` : String(value)
 }
 
 type InboundProductLineCellProps = {
@@ -548,9 +506,6 @@ export function FfInboundRequestView({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
-  const [linkedDiscrepancyActs, setLinkedDiscrepancyActs] = useState<DiscrepancyActDetail[]>([])
-  const [discrepancyActsBusy, setDiscrepancyActsBusy] = useState(false)
-  const [discrepancyActsError, setDiscrepancyActsError] = useState<string | null>(null)
   const loadDetailSeq = useRef(0)
   const receivingScanQueue = useRef(createSerialScanQueue()).current
   const lastProductScan = useRef<string | null>(null)
@@ -693,48 +648,6 @@ export function FfInboundRequestView({
     [receivingScanReconciler],
   )
 
-  const loadLinkedDiscrepancyActs = useCallback(async (): Promise<void> => {
-    if (!isFulfillmentAdmin) {
-      setLinkedDiscrepancyActs([])
-      setDiscrepancyActsError(null)
-      return
-    }
-    setDiscrepancyActsBusy(true)
-    setDiscrepancyActsError(null)
-    try {
-      const listRes = await fetch(apiUrl('/operations/discrepancy-acts'), {
-        headers: authHeaders,
-      })
-      if (!listRes.ok) {
-        setDiscrepancyActsError(await readApiErrorMessage(listRes))
-        setLinkedDiscrepancyActs([])
-        return
-      }
-      const summaries = (await listRes.json()) as {
-        id: string
-        inbound_intake_request_id: string | null
-      }[]
-      const linked = summaries.filter((row) => row.inbound_intake_request_id === requestId)
-      const details = await Promise.all(
-        linked.map(async (row) => {
-          const detailRes = await fetch(apiUrl(`/operations/discrepancy-acts/${row.id}`), {
-            headers: authHeaders,
-          })
-          if (!detailRes.ok) {
-            throw new Error(await readApiErrorMessage(detailRes))
-          }
-          return (await detailRes.json()) as DiscrepancyActDetail
-        }),
-      )
-      setLinkedDiscrepancyActs(details)
-    } catch (e) {
-      setDiscrepancyActsError(e instanceof Error ? e.message : 'Не удалось загрузить акты расхождения.')
-      setLinkedDiscrepancyActs([])
-    } finally {
-      setDiscrepancyActsBusy(false)
-    }
-  }, [authHeaders, isFulfillmentAdmin, requestId])
-
   const fetchCatalogRows = useCallback(async (): Promise<WbCatalogRow[]> => {
     const query = detail?.seller_id ? `?seller_id=${detail.seller_id}` : ''
     const res = await fetch(apiUrl(`/products/linked-wb-catalog${query}`), { headers: authHeaders })
@@ -873,10 +786,6 @@ export function FfInboundRequestView({
       cancelled = true
     }
   }, [loadDetail])
-
-  useEffect(() => {
-    void loadLinkedDiscrepancyActs()
-  }, [loadLinkedDiscrepancyActs])
 
   const catalogDetailLoaded = detail !== null
   const catalogSellerId = detail?.seller_id
@@ -1828,27 +1737,6 @@ export function FfInboundRequestView({
     }
   }
 
-  const resolveDiscrepancyAct = async (actId: string, action: 'approve' | 'reject') => {
-    setDiscrepancyActsBusy(true)
-    setDiscrepancyActsError(null)
-    try {
-      const res = await fetch(apiUrl(`/operations/discrepancy-acts/${actId}/${action}`), {
-        method: 'POST',
-        headers: authHeaders,
-      })
-      if (!res.ok) {
-        setDiscrepancyActsError(await readApiErrorMessage(res))
-        return
-      }
-      await loadLinkedDiscrepancyActs()
-      await loadDetail()
-    } catch (e) {
-      setDiscrepancyActsError(e instanceof Error ? e.message : 'Не удалось обработать акт.')
-    } finally {
-      setDiscrepancyActsBusy(false)
-    }
-  }
-
   const openCargoAddDialog = (placeId: string) => {
     setCargoAddDialogPlaceId(placeId)
   }
@@ -2587,7 +2475,19 @@ export function FfInboundRequestView({
                   data-testid="ff-inbound-print-waybill"
                   onClick={() => {
                     const wh = requestWarehouse
+                    // WMS-586: «Приёмка №… от …»; факт и расхождение — только когда
+                    // приёмка завершена, иначе «Факт» остаётся пустым под ручной пересчёт.
+                    const createdAt = detail.created_at ? new Date(detail.created_at) : null
+                    const documentDate = createdAt && !Number.isNaN(createdAt.getTime())
+                      ? new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow' }).format(createdAt)
+                      : null
+                    const title = [
+                      inboundOperationTypeReceptionLabel(detail.operation_type),
+                      displayDocumentNumber,
+                      documentDate ? `от ${documentDate}` : null,
+                    ].filter(Boolean).join(' ')
                     printInboundReceivingSheet({
+                      title,
                       documentNumber: displayDocumentNumber,
                       sellerName: detail.seller_name ?? null,
                       warehouseName: wh ? `${wh.name} (${wh.code})` : '—',
@@ -2602,6 +2502,9 @@ export function FfInboundRequestView({
                           wb_nm_id: meta.wb_nm_id,
                           photo_url: meta.wb_primary_image_url,
                           expected_qty: ln.expected_qty,
+                          actual_qty: receptionClosed
+                            ? effectiveActualQty(ln, detail.boxes, detail.status)
+                            : null,
                         }
                       }),
                     })
@@ -3006,117 +2909,6 @@ export function FfInboundRequestView({
             <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
               Сначала завершите приёмку в разделе <strong>Приёмка</strong>.
             </Alert>
-          ) : null}
-
-          {isFulfillmentAdmin ? (
-            <Paper
-              variant="outlined"
-              sx={{ mt: 2, p: 1.5 }}
-              data-testid="ff-inbound-discrepancy-acts"
-            >
-              <Stack spacing={1.25}>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-                >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                    Акты расхождения
-                  </Typography>
-                  <InboundDiscrepancyActEditor key={requestId} token={token} requestId={requestId}
-                    products={detail.lines} onChanged={loadLinkedDiscrepancyActs} />
-                  {discrepancyActsBusy ? (
-                    <CircularProgress size={18} data-testid="ff-inbound-discrepancy-acts-loading" />
-                  ) : null}
-                </Stack>
-                {discrepancyActsError ? (
-                  <Alert severity="error" data-testid="ff-inbound-discrepancy-acts-error">
-                    {discrepancyActsError}
-                  </Alert>
-                ) : null}
-                {linkedDiscrepancyActs.map((act) => (
-                  <Box
-                    key={act.id}
-                    sx={{ borderTop: 1, borderColor: 'divider', pt: 1 }}
-                    data-testid="ff-inbound-discrepancy-act"
-                  >
-                    <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      spacing={1}
-                      sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 1 }}
-                    >
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {discrepancyActTitle(act.created_at)}
-                        </Typography>
-                        <Chip
-                          size="small"
-                          label={discrepancyActStatusRu(act.status)}
-                          color={
-                            act.status === 'approved'
-                              ? 'success'
-                              : act.status === 'rejected'
-                                ? 'error'
-                                : 'default'
-                          }
-                          data-testid="ff-inbound-discrepancy-act-status"
-                        />
-                      </Stack>
-                      {act.status === 'draft' ? (
-                        <InboundDiscrepancyActEditor token={token} requestId={requestId}
-                          existingActId={act.id} products={detail.lines} onChanged={loadLinkedDiscrepancyActs} />
-                      ) : null}
-                      {act.status === 'confirmed' ? (
-                        <Stack direction="row" spacing={1}>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={discrepancyActsBusy}
-                            onClick={() => void resolveDiscrepancyAct(act.id, 'approve')}
-                            data-testid="ff-inbound-discrepancy-act-approve"
-                          >
-                            Утвердить
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            disabled={discrepancyActsBusy}
-                            onClick={() => void resolveDiscrepancyAct(act.id, 'reject')}
-                            data-testid="ff-inbound-discrepancy-act-reject"
-                          >
-                            Отклонить
-                          </Button>
-                        </Stack>
-                      ) : null}
-                    </Stack>
-                    <Table size="small" data-testid="ff-inbound-discrepancy-act-lines">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Товар</TableCell>
-                          <TableCell align="right">Расхождение</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {act.lines.map((line) => (
-                          <TableRow key={line.id} data-testid="ff-inbound-discrepancy-act-line">
-                            <TableCell>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                {line.sku_code}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {line.product_name}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">{signedQty(line.quantity)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </Box>
-                ))}
-              </Stack>
-            </Paper>
           ) : null}
 
           {isFulfillmentAdmin && !sortingView ? (

@@ -12,9 +12,16 @@ export type InboundReceivingSheetItem = {
   photo_url: string | null
   /** Сколько заявил селлер. */
   expected_qty: number
+  /**
+   * WMS-586: сколько фактически принято. null — приёмка ещё не завершена:
+   * колонка «Факт» остаётся пустой под ручной пересчёт.
+   */
+  actual_qty?: number | null
 }
 
 export type InboundReceivingSheetData = {
+  /** WMS-586: заголовок документа, например «Приёмка №000088 от 25.09.2026». */
+  title?: string | null
   documentNumber: string | null
   sellerName: string | null
   warehouseName: string
@@ -39,6 +46,11 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
     .map((part) => `<span>${escapeLabelHtml(part)}</span>`)
     .join(' · ')
   const barcode = item.barcode?.trim() || '—'
+  const actual = item.actual_qty
+  const factCell = actual == null ? '' : String(actual)
+  const diff = actual == null ? null : actual - item.expected_qty
+  // Минус — типографский, чтобы «−3» не терялся на печати рядом с «+2».
+  const diffCell = diff == null ? '' : diff > 0 ? `+${diff}` : diff < 0 ? `\u2212${-diff}` : '0'
 
   return `<tr data-testid="rs-sheet-card" data-row-index="${index}">
   <td class="rs-photo-cell">${photoBlock}</td>
@@ -48,7 +60,8 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
   </td>
   <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">${escapeLabelHtml(barcode)}</td>
   <td class="rs-expected-cell" data-testid="receiving-sheet-expected">${item.expected_qty}</td>
-  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact">${factCell}</td>
+  <td class="rs-diff-cell${diff ? ' rs-diff-nonzero' : ''}" data-testid="receiving-sheet-diff">${diffCell}</td>
 </tr>`
 }
 
@@ -64,7 +77,7 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Лист приёмки — ${escapeLabelHtml(documentNumberLabel)}</title>
+    <title>${escapeLabelHtml(data.title?.trim() || `Лист приёмки — ${documentNumberLabel}`)}</title>
     <style>
       /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
          (иначе при Portrait в диалоге карточки уезжают за область печати). */
@@ -102,9 +115,14 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
         padding: 4px 5px;
         vertical-align: top;
       }
-      th {
+      th,
+      th.rs-expected-cell,
+      th.rs-fact-cell,
+      th.rs-diff-cell {
         background: #ececec;
         font-size: 9px;
+        font-weight: 700;
+        color: #444;
         text-align: left;
         text-transform: uppercase;
         color: #444;
@@ -117,7 +135,9 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
       .rs-product-cell { width: auto; }
       .rs-barcode-cell { width: 30mm; word-break: break-word; font-weight: 700; }
       .rs-expected-cell { width: 20mm; text-align: right; font-weight: 700; font-size: 13px; }
-      .rs-fact-cell { width: 20mm; min-height: 24mm; }
+      .rs-fact-cell { width: 20mm; min-height: 24mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .rs-diff-cell { width: 24mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .rs-diff-nonzero { color: #b00020; }
       .rs-photo {
         width: 21mm;
         height: 21mm;
@@ -140,7 +160,7 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
     </style>
   </head>
   <body>
-    <h1>Лист приёмки</h1>
+    <h1>${escapeLabelHtml(data.title?.trim() || 'Лист приёмки')}</h1>
     <dl class="rs-head">
       <div><dt>Номер</dt><dd>${escapeLabelHtml(documentNumberLabel)}</dd></div>
       <div><dt>Селлер</dt><dd>${escapeLabelHtml(data.sellerName ?? '—')}</dd></div>
@@ -152,11 +172,12 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
         ? `<table data-testid="receiving-sheet-table">
       <thead>
         <tr>
-          <th>Фото</th>
-          <th>Товар</th>
-          <th>ШК</th>
-          <th>Заявлено</th>
-          <th>Факт</th>
+          <th class="rs-photo-cell">Фото</th>
+          <th class="rs-product-cell">Товар</th>
+          <th class="rs-barcode-cell">ШК</th>
+          <th class="rs-expected-cell">Заявлено</th>
+          <th class="rs-fact-cell">Факт</th>
+          <th class="rs-diff-cell">Расхождение</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
