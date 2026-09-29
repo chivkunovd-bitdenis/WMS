@@ -82,6 +82,9 @@ let boxes: Box[]
 let delays: Record<string, number>
 // Поставка передана в WB и какой QR всей поставки вернул сервер (F4 итогового ревью).
 let transferred: { assetReady: boolean } | null
+// Три одинаковые вещи без ЧЗ (очередь одинаковых кодов) и какой заказ сервер выбирает на каждый скан ШК.
+let sameProductOrders: boolean
+let autoPrintOrders: string[]
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -103,7 +106,9 @@ function workspace(): FbsWorkspace {
     stage: transferred ? 'tracking' : 'packing',
     progress: { picked: 2, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 2 },
     blockers: [],
-    orders: [order('order-a', 5001, 0, 'prod-kiz', true), order('order-c', 5003, 1, 'prod-plain', false)],
+    orders: sameProductOrders
+      ? [order('order-a', 5001, 0, 'prod-plain', false), order('order-c', 5003, 1, 'prod-plain', false), order('order-d', 5004, 2, 'prod-plain', false)]
+      : [order('order-a', 5001, 0, 'prod-kiz', true), order('order-c', 5003, 1, 'prod-plain', false)],
     cargo_places: [],
     boxes: boxes.map((one) => ({ ...one, assigned_order_ids: [...one.assigned_order_ids] })),
     delivery_preflight: null,
@@ -135,6 +140,14 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
   const path = url.pathname.replace(/^\/api/, '')
   calls.push({ method, path: `${path}${url.search}`, body })
+  if (path.endsWith('/scan-auto-print')) {
+    const number = calls.filter((call) => call.path.endsWith('/scan-auto-print')).length
+    await wait(delays.autoPrint ?? 0)
+    return json({
+      scan_id: `scan-${number}`, order_id: autoPrintOrders[number - 1], wb_order_id: 5000 + number,
+      requires_honest_sign: false, qr_asset: null, printed_codes: [], order_errors: [], shortage: 0,
+    })
+  }
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === '/operations/fbs-orders/kiz/lookup') {
     await wait(delays.lookup ?? 0)
@@ -170,6 +183,8 @@ beforeEach(() => {
   boxes = []
   delays = {}
   transferred = null
+  sameProductOrders = false
+  autoPrintOrders = []
   window.sessionStorage.clear()
   window.localStorage.clear()
   globalThis.fetch = server as typeof fetch
@@ -348,6 +363,34 @@ describe('WMS-574 · итоговое ревью', () => {
 
     expect(assignCalls().map((call) => [call.path, call.body])).toEqual([
       [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-1/orders`, { order_ids: ['order-c'] }],
+    ])
+  })
+
+  it('R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода', async () => {
+    // «Печатать ЧЗ» включена: ШК товара выбирает заказ (scan-auto-print).
+    window.localStorage.setItem('wms:fbs:scan-auto-print:unknown-tenant:unknown-user', JSON.stringify({ printQr: false, printChz: true, reprintChz: false }))
+    sameProductOrders = true
+    autoPrintOrders = ['order-c', 'order-a', 'order-d']
+    boxes = [box('box-1', 1, [], true), box('box-2', 2, [], true)]
+    delays = { lookup: 150, autoPrint: 150 }
+    await startFrame()
+    expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+
+    scan('4600000000017')
+    await settle(20)
+    scan('4600000000017')
+    await settle(20)
+    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')!
+    await act(async () => openFirst.click())
+    scan('4600000000017')
+    await settle(1200)
+
+    const productRequests = calls.filter((call) => call.path.endsWith('/scan-auto-print'))
+    expect(productRequests).toHaveLength(3)
+    expect(assignCalls().map((call) => [call.path, call.body])).toEqual([
+      [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-2/orders`, { order_ids: ['order-c'] }],
+      [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-2/orders`, { order_ids: ['order-a'] }],
+      [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-1/orders`, { order_ids: ['order-d'] }],
     ])
   })
 
