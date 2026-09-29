@@ -107,6 +107,22 @@ describe('WMS-588: сборочное задание во «В работе»', 
     expect(document.querySelector('[data-testid="fbs-18-supply-supply-3"]')?.textContent)
       .toContain('Поставка без задания')
 
+    const groupedRows = document.querySelectorAll('[data-assembly-task-id="task-1"]')
+    expect(groupedRows).toHaveLength(2)
+    expect(groupedRows[0]?.getAttribute('data-testid')).toBe('fbs-18-supply-supply-1')
+    expect(groupedRows[1]?.getAttribute('data-testid')).toBe('fbs-18-supply-supply-2')
+    expect(document.querySelector('[data-testid="fbs-18-supply-supply-3"]')
+      ?.getAttribute('data-assembly-task-id')).toBeNull()
+
+    const taskCell = taskRow?.querySelector('td')
+    const firstGroupedCell = groupedRows[0]?.querySelector('td')
+    const lastGroupedCell = groupedRows[1]?.querySelector('td')
+    expect(getComputedStyle(taskCell!).borderTopWidth).toBe('2px')
+    expect(getComputedStyle(firstGroupedCell!).borderLeftWidth).toBe('2px')
+    expect(getComputedStyle(lastGroupedCell!).borderBottomWidth).toBe('2px')
+    expect(getComputedStyle(taskCell!).backgroundColor)
+      .not.toBe(getComputedStyle(firstGroupedCell!).backgroundColor)
+
     await act(async () => { taskRow!.click() })
     expect(openAssembly).toHaveBeenCalledWith(['supply-1', 'supply-2'])
 
