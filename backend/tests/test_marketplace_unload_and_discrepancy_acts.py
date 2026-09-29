@@ -2608,7 +2608,7 @@ async def test_marketplace_unload_attach_allow_over_plan(
 async def test_marketplace_unload_box_remove_copy_delete(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F15: collecting line remove is blocked; delete only empty; copy within plan."""
+    """F15/WMS-585: correct a collected box, delete only empty, copy within plan."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -2710,8 +2710,8 @@ async def test_marketplace_unload_box_remove_copy_delete(
         headers=ah,
         json={"quantity": 2},
     )
-    assert remove.status_code == 409, remove.text
-    assert remove.json()["detail"] == "not_draft"
+    assert remove.status_code == 200, remove.text
+    assert remove.json()["quantity"] == 2
 
     detail_after_remove = await async_client.get(
         f"/operations/marketplace-unload-requests/{mid}", headers=ah
@@ -2719,7 +2719,8 @@ async def test_marketplace_unload_box_remove_copy_delete(
     assert detail_after_remove.status_code == 200, detail_after_remove.text
     after_box = next(b for b in detail_after_remove.json()["boxes"] if b["id"] == box_id)
     assert after_box["lines"][0]["id"] == line_id
-    assert after_box["lines"][0]["quantity"] == 4
+    assert after_box["lines"][0]["quantity"] == 2
+    assert detail_after_remove.json()["lines"][0]["picked_qty"] == 2
 
     bal_after_remove = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -2727,7 +2728,16 @@ async def test_marketplace_unload_box_remove_copy_delete(
         params={"warehouse_id": wid},
     )
     row_removed = next(x for x in bal_after_remove.json() if x["product_id"] == pid)
-    assert row_removed["quantity"] == row_after["quantity"]
+    assert row_removed["quantity"] == row_after["quantity"] + 2
+
+    # Restore the two units to preserve the copy/plan-limit checks below.
+    restored = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=ah,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 2},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["quantity"] == 4
 
     close_box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/close",
@@ -2789,6 +2799,51 @@ async def test_marketplace_unload_box_remove_copy_delete(
     )
     assert copy_blocked.status_code == 422
     assert copy_blocked.json()["detail"] == "plan_limit_exceeded"
+
+    # Closed boxes remain correctable. A repeated full-line command cannot
+    # return the same physical units to their source twice.
+    from test_marketplace_unload_pick_from_container import _balances_by_container
+
+    source_before = await _balances_by_container(loc_id, pid)
+    closed_remove = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/lines/{line_id}/remove",
+        headers=ah,
+    )
+    assert closed_remove.status_code == 200, closed_remove.text
+    assert closed_remove.json() is None
+    source_after = await _balances_by_container(loc_id, pid)
+    assert source_after[None] == source_before[None] + 4
+    corrected = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert next(b for b in corrected.json()["boxes"] if b["id"] == box_id)["lines"] == []
+    assert corrected.json()["lines"][0]["picked_qty"] == 4
+
+    repeated = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/lines/{line_id}/remove",
+        headers=ah,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json() is None
+    assert await _balances_by_container(loc_id, pid) == source_after
+
+    # A completed document is still immutable even if a box line remains.
+    from app.db.session import SessionLocal
+    from app.models.marketplace_unload import MarketplaceUnloadRequest
+
+    async with SessionLocal() as session:
+        request_row = await session.get(MarketplaceUnloadRequest, uuid.UUID(mid))
+        assert request_row is not None
+        request_row.status = "shipped"
+        await session.commit()
+    terminal_remove = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box2_id}/lines/{add_box2.json()['id']}/remove",
+        headers=ah,
+    )
+    assert terminal_remove.status_code == 409, terminal_remove.text
+    assert terminal_remove.json()["detail"] == "not_draft"
+    assert await _balances_by_container(loc_id, pid) == source_after
 
 
 @pytest.mark.asyncio

@@ -44,7 +44,7 @@ from app.services.marketplace_unload_pick_service import (
     MarketplaceUnloadPickError,
     find_location_by_barcode,
 )
-from app.services.marketplace_unload_status import DELETE_EDITABLE_STATUSES
+from app.services.marketplace_unload_status import DELETE_EDITABLE_STATUSES, STATUS_COLLECTING
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
@@ -990,11 +990,28 @@ async def remove_box_line(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-    req = await mu_svc.get_request(session, tenant_id, box.request_id)
-    if req is None:
+    # Lock before reading the line: two terminals correcting the same closed box
+    # must not both reverse the same pick against a stale line quantity.
+    status_stmt = (
+        select(MarketplaceUnloadRequest.status)
+        .where(
+            MarketplaceUnloadRequest.id == box.request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    request_status = (await session.execute(status_stmt)).scalar_one_or_none()
+    if request_status is None:
         raise MarketplaceUnloadBoxError("not_found")
-    if req.status not in DELETE_EDITABLE_STATUSES:
+    if request_status not in (*DELETE_EDITABLE_STATUSES, STATUS_COLLECTING):
         raise MarketplaceUnloadBoxError("not_draft")
+    line = await session.get(MarketplaceUnloadBoxLine, line_id)
+    if line is None and quantity is None:
+        # The mobile client can retry a full-line correction after losing the
+        # first response. There is no stock left to reverse for this line id.
+        return None
+    if line is None or line.box_id != box_id:
+        raise MarketplaceUnloadBoxError("line_not_found")
     try:
         return await collect_svc.remove_from_box(
             session,
