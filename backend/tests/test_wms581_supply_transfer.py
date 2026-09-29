@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
@@ -21,7 +22,9 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_supply_transfer_service as svc
+from app.services.fbs_supply_service import start_supply_work
 from app.services.fbs_workspace_service import get_supply_workspace
+from app.services.packaging_task_service import pack_all_and_complete_fbs_task
 from app.services.wildberries_errors import WildberriesClientError
 from app.services.wildberries_fbs_client import MarketplaceSuppliesPage, _parse_supplies_page
 from tests.test_fbs_supply_transfer import seed
@@ -250,6 +253,7 @@ async def test_c3_new_supply_gets_typed_name_or_short_number(db_session, monkeyp
     monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
     create = AsyncMock(side_effect=[{"id": "WB-GI-N1"}, {"id": "WB-GI-N2"}])
     monkeypatch.setattr(svc, "create_marketplace_supply", create)
+    monkeypatch.setattr(svc, "fetch_marketplace_supplies_page", AsyncMock(return_value=_page()))
     monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", AsyncMock())
     monkeypatch.setattr(
         svc, "fetch_marketplace_supply_order_ids", AsyncMock(side_effect=[[1], [2]])
@@ -285,9 +289,13 @@ def _page(*rows: tuple[str, str, datetime]) -> MarketplaceSuppliesPage:
     )
 
 
-async def _lost_create(db_session, monkeypatch, name):
+async def _lost_create(db_session, monkeypatch, name, existing=()):
+    """Create request is lost; `existing` — WB supplies already there before it."""
     tenant, source, _, orders, _ = await seed(db_session)
     monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
+    monkeypatch.setattr(
+        svc, "fetch_marketplace_supplies_page", AsyncMock(return_value=_page(*existing))
+    )
     create = AsyncMock(side_effect=WildberriesClientError("transport_error"))
     monkeypatch.setattr(svc, "create_marketplace_supply", create)
     patch = AsyncMock()
@@ -362,3 +370,231 @@ async def test_c5_ambiguous_or_foreign_same_name_stays_unknown_without_second_cr
     assert await db_session.scalar(select(func.count()).select_from(FbsSupply)) == supplies_before
     operation = await db_session.scalar(select(FbsWbOperation))
     assert operation is not None and operation.wb_object_id is None
+
+
+# --- Ревью Astra 29.09.2026 (P1, P2): тесты перенесены из временного файла ревьюера. ---
+
+
+@pytest.mark.asyncio
+async def test_lost_create_must_not_adopt_a_single_recent_foreign_supply(db_session, monkeypatch):
+    # Connection fails before WB creates ours; another operator already created
+    # an identically named supply 30 seconds earlier, not yet imported to WMS.
+    tenant, source, orders, _create, patch = await _lost_create(
+        db_session, monkeypatch, "Коледино 29.09"
+    )
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(
+            return_value=_page(
+                ("WB-GI-FOREIGN", "Коледино 29.09", datetime.now(UTC) - timedelta(seconds=30)),
+            )
+        ),
+    )
+    result = await _transfer(db_session, tenant, source, orders, name="Коледино 29.09")
+    assert result["state"] == "pending_confirmation", (
+        "A recent matching name is not proof this create succeeded"
+    )
+    patch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fulfilled_order_round_trip_does_not_grow_plan(db_session, monkeypatch):
+    tenant, source, target, orders, _marking, product, target_task = await _in_work_pair(
+        db_session
+    )
+    moved = orders[0]
+    moved.product_id = product.id
+    orders[1].product_id = product.id
+    location = await db_session.scalar(
+        select(StorageLocation).where(StorageLocation.code == "WMS581")
+    )
+    task = PackagingTask(tenant_id=tenant.id, warehouse_id=source.warehouse_id, status="draft")
+    db_session.add(task)
+    await db_session.flush()
+    line = PackagingTaskLine(
+        task_id=task.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        qty_total=2,
+        qty_confirmed_packed=0,
+        qty_packed_in_task=1,
+    )
+    db_session.add(line)
+    await db_session.flush()
+    source.packaging_task_id = task.id
+    fulfillment = FbsPackagingFulfillment(
+        tenant_id=tenant.id,
+        fbs_order_id=moved.id,
+        packaging_task_id=task.id,
+        packaging_task_line_id=line.id,
+        fulfilled_at=datetime.now(UTC),
+        pack_idempotency_key="original",
+    )
+    db_session.add(fulfillment)
+    await db_session.commit()
+    monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
+    patch = AsyncMock()
+    monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", patch)
+    monkeypatch.setattr(
+        svc, "fetch_marketplace_supply_order_ids", AsyncMock(side_effect=[[1, 50], [1, 2]])
+    )
+    first = await _transfer(db_session, tenant, source, [moved], target=target, key="there")
+    assert first["state"] == "confirmed"
+    second = await _transfer(db_session, tenant, target, [moved], target=source, key="back")
+    assert second["state"] == "confirmed"
+    await db_session.refresh(line)
+    target_line = await db_session.scalar(
+        select(PackagingTaskLine).where(PackagingTaskLine.task_id == target_task.id)
+    )
+    assert moved.supply_id == source.id and moved.pack_status == "packed"
+    assert line.qty_total == 2, "Returning the same packed order must not add a new planned unit"
+    assert target_line.qty_total == 1, "Departed order must leave the target plan"
+
+
+# --- WMS-581: снимок WB перед созданием и «Всё упаковано» после переноса упакованного. ---
+
+
+@pytest.mark.asyncio
+async def test_c5_same_name_supply_from_snapshot_is_never_ours(db_session, monkeypatch):
+    """Коллега создал «Коледино 29.09» за секунду до нас — он в снимке, и он не наш."""
+    before = datetime.now(UTC) - timedelta(seconds=1)
+    tenant, source, orders, create, patch = await _lost_create(
+        db_session, monkeypatch, "Коледино 29.09", [("WB-GI-COLLEAGUE", "Коледино 29.09", before)]
+    )
+    operation = await db_session.scalar(select(FbsWbOperation))
+    assert operation.request_summary_json["preexisting_wb_supply_ids"] == ["WB-GI-COLLEAGUE"]
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(return_value=_page(("WB-GI-COLLEAGUE", "Коледино 29.09", before))),
+    )
+    result = await _transfer(db_session, tenant, source, orders, name="Коледино 29.09")
+    assert result["state"] == "pending_confirmation"
+    patch.assert_not_awaited()
+    # Наша поставка появилась в WB — теперь она единственный кандидат вне снимка.
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(
+            return_value=_page(
+                ("WB-GI-COLLEAGUE", "Коледино 29.09", before),
+                ("WB-GI-OURS", "Коледино 29.09", datetime.now(UTC)),
+            )
+        ),
+    )
+    result = await _transfer(db_session, tenant, source, orders, name="Коледино 29.09")
+    assert result["state"] == "confirmed" and result["target_wb_supply_id"] == "WB-GI-OURS"
+    assert create.await_count == 1 and patch.call_args.kwargs["supply_id"] == "WB-GI-OURS"
+
+
+@pytest.mark.asyncio
+async def test_c5_no_snapshot_no_create(db_session, monkeypatch):
+    tenant, source, _, orders, _ = await seed(db_session)
+    monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(side_effect=WildberriesClientError("transport_error")),
+    )
+    create = AsyncMock()
+    monkeypatch.setattr(svc, "create_marketplace_supply", create)
+    with pytest.raises(svc.FbsSupplyError, match="wb_supplies_unavailable") as caught:
+        await _transfer(db_session, tenant, source, orders, name="Коледино 29.09")
+    assert caught.value.retryable and caught.value.http_status == 503
+    create.assert_not_awaited()
+    assert await db_session.scalar(select(func.count()).select_from(FbsWbOperation)) == 0
+    assert all(order.supply_id == source.id for order in orders)
+
+
+async def _packed_in_source(db_session, tenant, source, moved, product):
+    location = await db_session.scalar(
+        select(StorageLocation).where(StorageLocation.code == "WMS581")
+    )
+    task = PackagingTask(tenant_id=tenant.id, warehouse_id=source.warehouse_id, status="draft")
+    db_session.add(task)
+    await db_session.flush()
+    line = PackagingTaskLine(
+        task_id=task.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        qty_total=2,
+        qty_confirmed_packed=0,
+        qty_packed_in_task=1,
+    )
+    db_session.add(line)
+    await db_session.flush()
+    source.packaging_task_id = task.id
+    db_session.add(
+        FbsPackagingFulfillment(
+            tenant_id=tenant.id,
+            fbs_order_id=moved.id,
+            packaging_task_id=task.id,
+            packaging_task_line_id=line.id,
+            fulfilled_at=datetime.now(UTC),
+            pack_idempotency_key="original",
+        )
+    )
+    await db_session.commit()
+    return line
+
+
+@pytest.mark.asyncio
+async def test_c2_pack_all_in_target_after_packed_order_arrives(db_session, monkeypatch):
+    """Упакованный в A заказ пришёл в B «в работе»: «Всё упаковано» в B проходит."""
+    tenant, source, target, orders, _, product, target_task = await _in_work_pair(db_session)
+    moved = orders[0]
+    moved.product_id = product.id
+    orders[1].product_id = product.id
+    source_line = await _packed_in_source(db_session, tenant, source, moved, product)
+    monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
+    monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", AsyncMock())
+    monkeypatch.setattr(svc, "fetch_marketplace_supply_order_ids", AsyncMock(return_value=[1, 50]))
+    assert (await _transfer(db_session, tenant, source, [moved], target=target))["state"] == (
+        "confirmed"
+    )
+    await db_session.refresh(source_line)
+    # A: упаковка переносимого заказа остаётся её историей, в работе — оставшийся заказ.
+    assert (source_line.qty_total, source_line.qty_packed_in_task) == (2, 1)
+    done = await pack_all_and_complete_fbs_task(
+        db_session, tenant.id, target_task.id, acting_user_id=None
+    )
+    assert done.task.status == "done"
+    resident = await db_session.scalar(select(FbsOrder).where(FbsOrder.wb_order_id == 50))
+    assert resident.pack_status == "packed"
+    assert (
+        await db_session.scalar(
+            select(func.count())
+            .select_from(FbsPackagingFulfillment)
+            .where(FbsPackagingFulfillment.fbs_order_id == moved.id)
+        )
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_c2_started_draft_does_not_plan_order_packed_elsewhere(db_session, monkeypatch):
+    tenant, source, _, orders, _, product, _ = await _in_work_pair(db_session)
+    draft = await db_session.scalar(select(FbsSupply).where(FbsSupply.name == "Target"))
+    moved = orders[0]
+    moved.product_id = product.id
+    orders[1].product_id = product.id
+    await _packed_in_source(db_session, tenant, source, moved, product)
+    monkeypatch.setattr(svc, "_require_marketplace_token", AsyncMock(return_value="test"))
+    monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", AsyncMock())
+    monkeypatch.setattr(svc, "fetch_marketplace_supply_order_ids", AsyncMock(return_value=[1, 2]))
+    assert (await _transfer(db_session, tenant, source, orders, target=draft))["state"] == (
+        "confirmed"
+    )
+    await start_supply_work(db_session, tenant.id, draft.id, actor_user_id=None)
+    await db_session.refresh(draft)
+    lines = list(
+        await db_session.scalars(
+            select(PackagingTaskLine).where(PackagingTaskLine.task_id == draft.packaging_task_id)
+        )
+    )
+    assert [(line.product_id, line.qty_total) for line in lines] == [(product.id, 1)]
+    done = await pack_all_and_complete_fbs_task(
+        db_session, tenant.id, draft.packaging_task_id, acting_user_id=None
+    )
+    assert done.task.status == "done" and orders[1].pack_status == "packed"

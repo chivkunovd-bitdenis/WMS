@@ -45,8 +45,9 @@ _KIND = "supply_transfer_orders"
 # в доставку и не закрыли. Тот же набор, что у привязки заказа к поставке WB.
 _OPEN_TARGET_STATUSES = ("draft", "assembling", "packed")
 # Поиск созданной поставки после потерянного ответа WB: только поставки с тем же
-# названием, созданные в окне вокруг нашей попытки и ещё никому не принадлежащие.
-_CREATE_CLOCK_SKEW = timedelta(minutes=2)
+# названием, которых не было в снимке WB перед созданием, созданные не раньше
+# начала попытки (с допуском на часы) и ещё никому не принадлежащие.
+_CREATE_CLOCK_SKEW = timedelta(seconds=5)
 _CREATE_WINDOW = timedelta(minutes=10)
 
 
@@ -181,6 +182,27 @@ def _create_requested_at(operation: FbsWbOperation) -> datetime:
     return started if started.tzinfo is not None else started.replace(tzinfo=UTC)
 
 
+async def _wb_supplies_named(
+    client: httpx.AsyncClient,
+    token: str,
+    name: str,
+) -> dict[str, tuple[bool, datetime | None]]:
+    """All WB supplies of the cabinet with this exact name: {id: (done, createdAt)}."""
+    cursor = None
+    seen: set[int] = set()
+    found: dict[str, tuple[bool, datetime | None]] = {}
+    while True:
+        page = await fetch_marketplace_supplies_page(client, api_token=token, next_cursor=cursor)
+        for sid, (sname, done) in page.supplies.items():
+            if sname == name:
+                found[sid] = (done, page.created_at.get(sid))
+        cursor = page.next_cursor
+        if not page.supplies or cursor is None or cursor == 0 or cursor in seen:
+            break
+        seen.add(cursor)
+    return found
+
+
 async def _find_created_supply(
     session: AsyncSession,
     client: httpx.AsyncClient,
@@ -190,12 +212,16 @@ async def _find_created_supply(
     """Find the WB supply our lost create produced, or None when not certain.
 
     The operator may type a name another supply already has. A candidate must
-    have that name, be open, be created by WB within the window of our attempt
-    and belong to no local supply or other operation. Anything but exactly one
+    have that name, be absent from the snapshot taken right before our create,
+    be open, be created by WB not before our attempt (clock tolerance) and
+    belong to no local supply or other operation. Anything but exactly one
     candidate stays unknown: no second create and no transfer to a guess.
+    Operations without a snapshot are WMS-562 ones with a unique technical name.
     """
-    name = str((operation.request_summary_json or {})["name"])
+    request = operation.request_summary_json or {}
+    name = str(request["name"])
     started = _create_requested_at(operation)
+    preexisting = set(request.get("preexisting_wb_supply_ids") or [])
     known = set(
         await session.scalars(
             select(FbsSupply.wb_supply_id).where(
@@ -213,25 +239,15 @@ async def _find_created_supply(
             )
         )
     )
-    cursor = None
-    seen: set[int] = set()
-    matches: set[str] = set()
-    while True:
-        page = await fetch_marketplace_supplies_page(client, api_token=token, next_cursor=cursor)
-        for sid, (sname, done) in page.supplies.items():
-            created = page.created_at.get(sid)
-            if (
-                sname == name
-                and not done
-                and sid not in known
-                and created is not None
-                and started - _CREATE_CLOCK_SKEW <= created <= started + _CREATE_WINDOW
-            ):
-                matches.add(sid)
-        cursor = page.next_cursor
-        if not page.supplies or cursor is None or cursor == 0 or cursor in seen:
-            break
-        seen.add(cursor)
+    matches = {
+        sid
+        for sid, (done, created) in (await _wb_supplies_named(client, token, name)).items()
+        if not done
+        and sid not in preexisting
+        and sid not in known
+        and created is not None
+        and started - _CREATE_CLOCK_SKEW <= created <= started + _CREATE_WINDOW
+    }
     return next(iter(matches)) if len(matches) == 1 else None
 
 
@@ -293,9 +309,12 @@ async def _apply_confirmed(
             )
         )
     )
+    # WMS-581 R2: a task plans only units it still has to pack, plus the history
+    # of what it packed itself. A packed order keeps its unit (and its packing
+    # record, used by billing) in the task that packed it; it is neither taken
+    # out of that task on leaving nor planned again in any task it moves to —
+    # it cannot be packed twice, and returning to its task is already counted.
     for order in orders:
-        # Completed work stays on its historical task for billing/undo. Removing
-        # its planned unit would consume capacity needed by remaining orders.
         if order.id in ids and order.id not in fulfilled_ids and order.product_id is not None:
             await _decrement_packaging_line_for_product(
                 session,
@@ -312,7 +331,7 @@ async def _apply_confirmed(
             session,
             source.tenant_id,
             target,
-            [order for order in orders if order.id in ids],
+            [order for order in orders if order.id in ids and order.id not in fulfilled_ids],
         )
     await session.flush()
 
@@ -423,6 +442,26 @@ async def transfer_orders(
                         message="Заказ нельзя добавить в выбранную поставку.",
                         http_status=409,
                     )
+            supply_name = typed_name or f"Новая поставка № {secrets.randbelow(90000) + 10000}"
+            create_requested_at = datetime.now(UTC)
+            preexisting: list[str] = []
+            if target is None:
+                # WMS-581 R7: remember the same-named WB supplies that already exist.
+                # After a lost create response only a supply absent here can be ours.
+                # Without this snapshot a later check could not tell ours from a
+                # colleague's, so the create is not attempted at all.
+                try:
+                    preexisting = sorted(await _wb_supplies_named(http_client, token, supply_name))
+                except WildberriesClientError as exc:
+                    raise FbsSupplyError(
+                        "wb_supplies_unavailable",
+                        message=(
+                            "WB не ответил на проверку поставок — новая поставка не создана. "
+                            "Повторите перенос позже."
+                        ),
+                        retryable=True,
+                        http_status=503,
+                    ) from exc
             operation = FbsWbOperation(
                 tenant_id=tenant_id,
                 seller_id=source.seller_id,
@@ -431,9 +470,9 @@ async def transfer_orders(
                 request_hash=digest,
                 request_summary_json={
                     **request,
-                    "name": typed_name
-                    or f"Новая поставка № {secrets.randbelow(90000) + 10000}",
-                    "create_requested_at": datetime.now(UTC).isoformat(),
+                    "name": supply_name,
+                    "create_requested_at": create_requested_at.isoformat(),
+                    "preexisting_wb_supply_ids": preexisting,
                 },
                 response_summary_json={"target_supply_id": str(target.id) if target else None},
                 local_entity_type="fbs_supply",

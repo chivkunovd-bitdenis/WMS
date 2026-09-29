@@ -139,6 +139,12 @@ async def test_unknown_create_recovers_named_supply_without_second_post(db_sessi
     patch = AsyncMock()
     monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", patch)
     monkeypatch.setattr(svc, "fetch_marketplace_supply_order_ids", AsyncMock(return_value=[1, 2]))
+    # WMS-581 R7: перед созданием WMS снимает список поставок WB (здесь пустой).
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(return_value=MarketplaceSuppliesPage(supplies={}, next_cursor=None)),
+    )
     assert (await invoke(db_session, tenant, source, None, orders))[
         "state"
     ] == "pending_confirmation"
