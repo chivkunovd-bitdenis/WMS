@@ -18,11 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
-from app.models.inventory_count import InventoryCountLine
+from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.marking_code import MarkingCode
-from app.models.outbound_shipment import OutboundShipmentLine
+from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
 
@@ -315,8 +315,14 @@ async def _documents(
             line_id: request_id
             for line_id, request_id in (
                 await session.execute(
-                    select(OutboundShipmentLine.id, OutboundShipmentLine.request_id).where(
-                        OutboundShipmentLine.id.in_(outbound_ids)
+                    select(OutboundShipmentLine.id, OutboundShipmentLine.request_id)
+                    .join(
+                        OutboundShipmentRequest,
+                        OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
+                    )
+                    .where(
+                        OutboundShipmentLine.id.in_(outbound_ids),
+                        OutboundShipmentRequest.tenant_id == tenant_id,
                     )
                 )
             ).all()
@@ -334,8 +340,10 @@ async def _documents(
             line_id: count_id
             for line_id, count_id in (
                 await session.execute(
-                    select(InventoryCountLine.id, InventoryCountLine.count_id).where(
-                        InventoryCountLine.id.in_(count_ids)
+                    select(InventoryCountLine.id, InventoryCountLine.count_id)
+                    .join(InventoryCount, InventoryCount.id == InventoryCountLine.count_id)
+                    .where(
+                        InventoryCountLine.id.in_(count_ids), InventoryCount.tenant_id == tenant_id
                     )
                 )
             ).all()
