@@ -2,12 +2,16 @@ import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
+import CloseIcon from '@mui/icons-material/Close'
 import {
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Paper,
   Stack,
@@ -201,6 +205,10 @@ export function SellerInboundDraftScreen({
   const [localError, setLocalError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [excelOpen, setExcelOpen] = useState(false)
+  const [excelBusy, setExcelBusy] = useState(false)
+  const [excelError, setExcelError] = useState<string | null>(null)
+  const excelInputRef = useRef<HTMLInputElement | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   /**
    * Каталог грузится страницами. У продавца может быть девять тысяч товаров: тянуть
@@ -406,6 +414,61 @@ export function SellerInboundDraftScreen({
     const ok = await loadCatalogPage('')
     if (!ok) {
       setPickerOpen(false)
+    }
+  }
+
+  const downloadExcelTemplate = async () => {
+    setExcelBusy(true)
+    setExcelError(null)
+    try {
+      const res = await fetch(apiUrl('/operations/inbound-intake-requests/excel-template'), {
+        headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const url = URL.createObjectURL(await res.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'Шаблон товаров для приёмки.xlsx'
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      setExcelError(error instanceof Error ? error.message : 'Не удалось скачать шаблон.')
+    } finally {
+      setExcelBusy(false)
+    }
+  }
+
+  const uploadExcel = async (file: File) => {
+    if (!requestId) return
+    setExcelBusy(true)
+    setExcelError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/lines/import-excel`),
+        { method: 'POST', headers: { ...authHeaders(token) }, body: form },
+      )
+      if (!res.ok) {
+        const response = await res.json().catch(() => null) as {
+          detail?: string | { message?: string; issues?: { row: number; article: string; message: string }[] }
+        } | null
+        const detail = response?.detail
+        if (typeof detail === 'object' && detail !== null) {
+          const issues = detail.issues?.map((issue) =>
+            `${issue.row ? `Строка ${issue.row}` : 'Артикул'}${issue.article ? ` (${issue.article})` : ''}: ${issue.message}`,
+          ) ?? []
+          throw new Error([detail.message, ...issues].filter(Boolean).join('\n'))
+        }
+        throw new Error(typeof detail === 'string' ? detail : 'Не удалось загрузить Excel.')
+      }
+      await loadDetail(requestId)
+      setExcelOpen(false)
+    } catch (error) {
+      setExcelError(error instanceof Error ? error.message : 'Не удалось загрузить Excel.')
+    } finally {
+      setExcelBusy(false)
+      if (excelInputRef.current) excelInputRef.current.value = ''
     }
   }
 
@@ -847,6 +910,17 @@ export function SellerInboundDraftScreen({
                 Добавить товары
               </Button>
             ) : null}
+            {sellerCanEdit && detail.operation_type === 'inbound' ? (
+              <Button
+                variant="outlined"
+                disabled={busy}
+                onClick={() => { setExcelError(null); setExcelOpen(true) }}
+                data-testid="seller-inbound-open-excel"
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                Загрузить из Excel
+              </Button>
+            ) : null}
             {sellerCanEdit ? (
               <Button
                 variant="outlined"
@@ -1163,6 +1237,41 @@ export function SellerInboundDraftScreen({
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
       />
+      <Dialog open={excelOpen} onClose={() => { if (!excelBusy) setExcelOpen(false) }} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ pr: 6 }}>
+          Загрузить товары из Excel
+          <IconButton
+            aria-label="Закрыть"
+            onClick={() => setExcelOpen(false)}
+            disabled={excelBusy}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {excelError ? <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{excelError}</Alert> : null}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ pt: 1 }}>
+            <Button variant="outlined" disabled={excelBusy} onClick={() => void downloadExcelTemplate()}>
+              Скачать шаблон
+            </Button>
+            <Button variant="contained" disabled={excelBusy} onClick={() => excelInputRef.current?.click()}>
+              Загрузить из Excel
+            </Button>
+          </Stack>
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void uploadExcel(file)
+            }}
+            data-testid="seller-inbound-excel-file"
+          />
+        </DialogContent>
+      </Dialog>
       <ProductBarcodePrintDialog
         open={printMeta !== null}
         meta={printMeta}

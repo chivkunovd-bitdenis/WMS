@@ -54,6 +54,7 @@ from app.models.user import User
 from app.services import box_import_service as box_import_svc
 from app.services import inbound_cargo_place_service as inbound_cargo_place_svc
 from app.services import inbound_intake_box_service as inbound_box_svc
+from app.services import inbound_intake_excel_service as excel_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -69,6 +70,54 @@ router = APIRouter(
     prefix="/operations/inbound-intake-requests",
     tags=["operations"],
 )
+
+
+@router.get("/excel-template")
+async def download_intake_excel_template(
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
+) -> Response:
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(status_code=403, detail="seller_only")
+    return Response(
+        content=excel_svc.template_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="inbound-intake-template.xlsx"'},
+    )
+
+
+@router.post("/{request_id}/lines/import-excel", response_model=dict[str, int])
+async def import_intake_excel(
+    request_id: uuid.UUID,
+    file: Annotated[UploadFile, File(...)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> dict[str, int]:
+    if user.role != FULFILLMENT_SELLER or seller_scope is None:
+        raise HTTPException(status_code=403, detail="seller_only")
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Excel не в том формате. Заполните шаблон ещё раз.", "issues": []},
+        )
+    try:
+        count = await excel_svc.import_xlsx(
+            session, user.tenant_id, request_id, seller_scope, await file.read()
+        )
+    except excel_svc.IntakeExcelError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": exc.message,
+                "issues": [
+                    {"row": issue.row, "article": issue.article, "message": issue.message}
+                    for issue in exc.issues
+                ],
+            },
+        ) from None
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    return {"imported": count}
 
 
 def _local_ozon_return_provider() -> OzonMarketplaceProvider:
