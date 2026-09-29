@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
 
 import httpx
@@ -3262,16 +3262,22 @@ class FbsSupplyTransferBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(min_length=1)
     target_supply_id: uuid.UUID | None = None
     idempotency_key: str = Field(min_length=1, max_length=128)
+    # WMS-581: название новой поставки; для существующей не используется.
+    name: str | None = Field(default=None, max_length=255)
 
 
 class FbsSupplyTransferTargetOut(BaseModel):
     id: uuid.UUID
     name: str
     wb_supply_id: str
+    created_at: datetime
 
 
 class FbsSupplyTransferOut(BaseModel):
     target_supply_id: uuid.UUID | None
+    target_supply_name: str | None = None
+    target_wb_supply_id: str | None = None
+    target_created: bool = False
     transferred_order_ids: list[uuid.UUID]
     failed_order_ids: list[uuid.UUID]
     pending_order_ids: list[uuid.UUID]
@@ -3284,9 +3290,12 @@ async def get_transfer_targets(
     supply_id: uuid.UUID,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    order_ids: Annotated[list[uuid.UUID] | None, Query()] = None,
 ) -> list[FbsSupplyTransferTargetOut]:
     try:
-        rows = await transfer_svc.list_transfer_targets(session, user.tenant_id, supply_id)
+        rows = await transfer_svc.list_transfer_targets(
+            session, user.tenant_id, supply_id, order_ids
+        )
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
     return [FbsSupplyTransferTargetOut.model_validate(row) for row in rows]
@@ -3304,7 +3313,7 @@ async def transfer_supply_orders(
             result = await transfer_svc.transfer_orders(
                 session, user.tenant_id, supply_id, order_ids=body.order_ids,
                 target_supply_id=body.target_supply_id, idempotency_key=body.idempotency_key,
-                actor_user_id=user.id, http_client=client,
+                actor_user_id=user.id, http_client=client, name=body.name,
             )
         except supply_svc.FbsSupplyError as exc:
             _raise_from_service(exc)

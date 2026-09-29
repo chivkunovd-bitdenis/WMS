@@ -6,7 +6,7 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from math import isfinite
@@ -62,6 +62,9 @@ class MarketplaceSupplyDetails:
 class MarketplaceSuppliesPage:
     supplies: dict[str, tuple[str | None, bool]]  # {id: (name, done)}
     next_cursor: int | None
+    # WMS-581: createdAt каждой поставки — по нему перенос отличает свою только что
+    # созданную поставку от старой с тем же названием после потерянного ответа WB.
+    created_at: dict[str, datetime | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -462,6 +465,7 @@ def _parse_supplies_page(data: Any) -> MarketplaceSuppliesPage:
         raise WildberriesClientError("invalid_response")
 
     supplies: dict[str, tuple[str | None, bool]] = {}
+    created_at: dict[str, datetime | None] = {}
     for item in supplies_raw:
         if not isinstance(item, dict):
             continue
@@ -474,13 +478,26 @@ def _parse_supplies_page(data: Any) -> MarketplaceSuppliesPage:
         done_raw = item.get("done")
         done = bool(done_raw) if isinstance(done_raw, bool) else False
         supplies[supply_id] = (name, done)
+        created_at[supply_id] = _parse_supply_created_at(item.get("createdAt"))
 
     next_cursor_raw = data.get("next")
     next_cursor: int | None = None
     if isinstance(next_cursor_raw, int):
         next_cursor = next_cursor_raw
 
-    return MarketplaceSuppliesPage(supplies=supplies, next_cursor=next_cursor)
+    return MarketplaceSuppliesPage(
+        supplies=supplies, next_cursor=next_cursor, created_at=created_at
+    )
+
+
+def _parse_supply_created_at(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _parse_order_ids_response(data: Any) -> list[int]:
