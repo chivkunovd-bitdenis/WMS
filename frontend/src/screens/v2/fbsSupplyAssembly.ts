@@ -400,3 +400,65 @@ export async function runFbsSupplyGroupCreation(
   }
   return results
 }
+
+// ── Чей это код (Д19) ─────────────────────────────────────────────────────
+
+function sameGtin(a: string, b: string): boolean {
+  const digitsA = a.trim().replace(/^0+/, '')
+  const digitsB = b.trim().replace(/^0+/, '')
+  return Boolean(digitsA) && digitsA === digitsB
+}
+
+/** GTIN из кода Честного знака: «01» + 14 цифр в начале или после разделителя GS. */
+function gtinFromKiz(code: string): string | null {
+  const cleaned = code.trim().replace(/^\][A-Za-z]\d/, '')
+  // GS — разделитель групп GS1 (код 29).
+  const match = cleaned.match(new RegExp(`(?:^|${String.fromCharCode(29)})01(\\d{14})`))
+  return match ? match[1] : null
+}
+
+/**
+ * Д19: код относится к поставке, если это ШК товара её заказа (товар заказа,
+ * позиции, штрихкоды привязок маркетплейса) или ЧЗ, чей GTIN совпадает с ШК
+ * товара её заказа. Стикеры заказов распознаёт сервер (lookup).
+ */
+export function fbsCodeBelongsToSupply(code: string, workspace: Pick<FbsWorkspace, 'orders'>): boolean {
+  const value = code.trim()
+  if (!value) return false
+  const barcodes = new Set<string>()
+  const addBindings = (bindings: Array<{ external_barcodes?: string[] }> | undefined) => {
+    for (const binding of bindings ?? []) {
+      for (const barcode of binding.external_barcodes ?? []) if (barcode) barcodes.add(barcode.trim())
+    }
+  }
+  for (const order of workspace.orders) {
+    if (order.product.barcode) barcodes.add(order.product.barcode.trim())
+    addBindings(order.product.marketplace_bindings)
+    for (const position of order.positions) {
+      if (position.barcode) barcodes.add(position.barcode.trim())
+      addBindings(position.marketplace_bindings)
+    }
+  }
+  if (barcodes.has(value)) return true
+  const gtin = gtinFromKiz(value)
+  if (!gtin) return false
+  return [...barcodes].some((barcode) => sameGtin(gtin, barcode))
+}
+
+/** Поставка группы и её товар, совпавший со сканом. */
+export type GroupPickCandidate = { index: number; productId: string; planned: number; pickedTotal: number }
+
+/**
+ * Д5 при одном штрихкоде у разных товаров (разные селлеры группы): штука идёт
+ * в первую по порядку поставку, которой ещё нужен именно её товар с этим ШК.
+ * Если не нужен никому — первая пара, чтобы сервер ответил прежним отказом.
+ */
+export function pickScanCandidates(candidates: GroupPickCandidate[]): GroupPickCandidate[] {
+  const ordered = candidates
+    .map((candidate, position) => ({ candidate, position }))
+    .sort((a, b) => a.candidate.index - b.candidate.index || a.position - b.position)
+    .map(({ candidate }) => candidate)
+  const needing = ordered.filter((one) => one.planned - one.pickedTotal > 0)
+  if (needing.length > 0) return needing
+  return ordered.slice(0, 1)
+}

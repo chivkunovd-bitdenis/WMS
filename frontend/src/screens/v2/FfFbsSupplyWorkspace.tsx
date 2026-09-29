@@ -61,7 +61,7 @@ import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
-import { fbsAssemblySupplyTitle } from './fbsSupplyAssembly'
+import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
 import {
@@ -577,8 +577,13 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScanRef = useRef<(raw: string) => void>(() => undefined)
   // WMS-574: действия рамки окна сборки внутри приёма скана. В обычной карточке
   // они пустые, и приём скана идёт ровно как раньше.
-  const assemblyPlaceOrderRef = useRef<((orderId: string, releaseKizWait: boolean) => Promise<void>) | null>(null)
-  const assemblyScanErrorTextRef = useRef<((cause: unknown) => string | null) | null>(null)
+  const assemblyPlaceOrderRef = useRef<((orderId: string, releaseKizWait: boolean, boxId: string | null) => Promise<void>) | null>(null)
+  const assemblyScanErrorTextRef = useRef<((cause: unknown, raw: string) => string | null) | null>(null)
+  // Короб, открытый в момент скана: код несёт его с собой до назначения, даже
+  // если оператор тем временем переключил короб или завершил работу (R22).
+  const assemblyOpenBoxIdRef = useRef<string | null>(null)
+  const assemblyScanBoxesRef = useRef<Array<{ code: string; boxId: string | null; at: number }>>([])
+  const assemblyTakeScanBoxRef = useRef<((raw: string) => string | null) | null>(null)
   const assemblyAfterPackAllRef = useRef<((snapshot: FbsWorkspace | null) => Promise<void>) | null>(null)
   const assemblyEscapeRef = useRef<() => boolean>(() => false)
   const assemblyBoxCreatingRef = useRef(false)
@@ -1049,6 +1054,8 @@ export function FfFbsSupplyWorkspace({
   const scanIdleCode = useCallback(
     async (raw: string, preferences: FbsScanPrintPreferences) => {
       if (!workspace) return
+      // WMS-574 R22: в рамке окна сборки — короб, открытый в момент этого скана.
+      const assemblyBoxAtScan = assemblyTakeScanBoxRef.current?.(raw) ?? null
       busyHardwareCaptureEnabledRef.current = (
         !isOzonSupply
         && (preferences.printQr || preferences.printChz || preferences.reprintChz)
@@ -1077,7 +1084,7 @@ export function FfFbsSupplyWorkspace({
           // WMS-575: строка заказа ожила — звук сразу, по ответу lookup.
           playScanSuccess()
           // WMS-574 Д8, Д9: в рамке окна сборки найденный заказ ложится в открытый короб.
-          if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(found.order_id, !found.needs_confirmation)
+          if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(found.order_id, !found.needs_confirmation, assemblyBoxAtScan)
           return
         } catch (cause) {
           if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
@@ -1186,7 +1193,7 @@ export function FfFbsSupplyWorkspace({
         // Печать идёт своей очередью ниже; её сбой даст сигнал ошибки отдельно.
         playScanSuccess()
         // WMS-574 Д8: в рамке окна сборки выбранный заказ ложится в открытый короб.
-        if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(result.order_id, false)
+        if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(result.order_id, false, assemblyBoxAtScan)
 
         const qrStartedBefore = attempt.qrStarted
         const chzStartedBefore = attempt.chzStarted
@@ -1446,7 +1453,7 @@ export function FfFbsSupplyWorkspace({
       } catch (cause) {
         setKizScanError({
           // WMS-574 R16: код не из активной поставки окна сборки называет её номер WB.
-          text: assemblyScanErrorTextRef.current?.(cause) ?? kizErrorText(cause, providerName),
+          text: assemblyScanErrorTextRef.current?.(cause, raw) ?? kizErrorText(cause, providerName),
           debug: kizScannerDebug(cause),
         })
         playScanError()
@@ -2576,6 +2583,15 @@ export function FfFbsSupplyWorkspace({
   const packagingEditable = !deliveryConfirmed
   // WMS-575: вкладка «Упаковка и маркировка» принимает скан, где бы ни стоял
   // курсор, — ровно тогда, когда на ней есть рабочее поле скана.
+  // WMS-574 R22: код со сканера пришёл — запоминаем, какой короб рамки был открыт.
+  const rememberAssemblyScanBox = useCallback((code: string) => {
+    const raw = code.replace(/[ \t\r\n\v\f]+$/, '')
+    const now = Date.now()
+    assemblyScanBoxesRef.current = [
+      ...assemblyScanBoxesRef.current.filter((entry) => entry.code !== raw && now - entry.at < 120_000),
+      { code: raw, boxId: assemblyOpenBoxIdRef.current, at: now },
+    ]
+  }, [])
   const packingScanIntake = useScanIntake({
     enabled: open
       && stage === 'packing'
@@ -2589,6 +2605,8 @@ export function FfFbsSupplyWorkspace({
     // На сервер — те же символы, что легли бы в поле скана, с разделителем GS:
     // раскладку ЧЗ и стикера чинит сервер полной таблицей, как до WMS-575.
     emitRaw: true,
+    // WMS-574 R22: в рамке запоминаем открытый короб в момент, когда код пришёл.
+    onReceived: assemblyFrame ? rememberAssemblyScanBox : undefined,
   })
   useLayoutEffect(() => {
     packingScanListeningRef.current = packingScanIntake.listening
@@ -2857,24 +2875,37 @@ export function FfFbsSupplyWorkspace({
       assemblyPlaceOrderRef.current = null
       assemblyScanErrorTextRef.current = null
       assemblyAfterPackAllRef.current = null
+      assemblyTakeScanBoxRef.current = null
+      assemblyOpenBoxIdRef.current = null
       assemblyEscapeRef.current = () => false
       return
     }
     const current = workspace
     const openBoxId = current?.boxes.some((box) => box.id === assemblyOpenBoxId) ? assemblyOpenBoxId : null
-    // Д8, Д9, R22–R24: заказ, найденный сканом, — в открытый короб, если ещё
-    // ни в каком коробе не лежит; заказу без обязательного ЧЗ ждать ЧЗ незачем.
-    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait) => {
+    assemblyOpenBoxIdRef.current = openBoxId
+    // Короб этого скана: запомненный при приёме кода, а для кода, набранного
+    // в поле руками, — открытый сейчас, в начале обработки.
+    assemblyTakeScanBoxRef.current = (raw) => {
+      const code = raw.replace(/[ \t\r\n\v\f]+$/, '')
+      const entries = assemblyScanBoxesRef.current
+      const found = [...entries].reverse().find((entry) => entry.code === code)
+      assemblyScanBoxesRef.current = entries.filter((entry) => entry.code !== code)
+      return found ? found.boxId : openBoxId
+    }
+    // Д8, Д9, R22–R24: заказ, найденный сканом, — в короб, открытый в момент
+    // скана, если ещё ни в каком коробе не лежит; заказу без обязательного ЧЗ
+    // ждать ЧЗ незачем.
+    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId) => {
       if (!current) return
       let orders = current.orders
       const alreadyBoxed = current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
       if (!alreadyBoxed) {
-        if (!openBoxId) {
+        if (!boxId || !current.boxes.some((box) => box.id === boxId)) {
           setAssemblyBoxHint('Откройте или создайте короб.')
           return
         }
         try {
-          const next = await assignToAssemblyBox(current, openBoxId, [orderId])
+          const next = await assignToAssemblyBox(current, boxId, [orderId])
           if (next) orders = next.orders
         } catch (cause) {
           setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Заказ не положен в короб.', debug: null })
@@ -2887,11 +2918,13 @@ export function FfFbsSupplyWorkspace({
       const order = orders.find((one) => one.id === orderId)
       if (order && !requiresOrderHonestSign(order)) dropKizScanActive()
     }
-    // R16: код не из этой поставки — ответ сервера «стикер не найден в этой
-    // поставке» или «штрихкод товара не найден в текущей WB-поставке».
-    assemblyScanErrorTextRef.current = (cause) => {
+    // R16, Д19: «Этого товара нет в поставке» — только если сервер не нашёл
+    // код в поставке и это не ШК товара её заказа и не ЧЗ такого товара;
+    // иначе — прежний текст карточки.
+    assemblyScanErrorTextRef.current = (cause, raw) => {
       if (!current || !(cause instanceof FbsApiError)) return null
       if (cause.code !== 'sticker_not_found' && cause.code !== 'scan_product_not_found') return null
+      if (fbsCodeBelongsToSupply(raw, current)) return null
       return `Этого товара нет в поставке ${current.supply.wb_supply_id ?? current.supply.name}`
     }
     // R24: после «Всё упаковано» заказы без короба — в открытый короб, если он есть.
@@ -3630,6 +3663,57 @@ export function FfFbsSupplyWorkspace({
                     )
   }
 
+  // QR всей переданной поставки — вкладка «Короба» и рамка окна сборки (WMS-574).
+  const supplyQrAfterDelivery = workspace ? (
+    <>
+              {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
+                <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                    <Box>
+                      <Typography variant="h6">QR поставки {providerName}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        Распечатайте QR для сдачи всей поставки.
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      startIcon={<PrintOutlinedIcon />}
+                      onClick={() => openAssetPreview([supplyQrAsset])}
+                      data-task-id="FBS-09"
+                    >
+                      Печать QR поставки
+                    </Button>
+                  </Stack>
+                </Paper>
+              ) : null}
+              {deliveryConfirmed && needsSupplyQr && !supplyQrAsset?.preview_url ? (
+                <Alert
+                  severity="warning"
+                  action={(
+                    <Button
+                      color="inherit"
+                      size="small"
+                      disabled={busy}
+                      data-testid="fbs-supply-qr-retry"
+                      onClick={() => void run(() => retryFbsSupplyQr(token, authHeaders, workspace.supply.id), 'QR поставки получен.')}
+                    >
+                      Получить QR повторно
+                    </Button>
+                  )}
+                >
+                  Поставка передана, QR получить не удалось
+                </Alert>
+              ) : null}
+              {deliveryConfirmed && hasCargoPlaceBoxes ? (
+                <Alert severity="info" data-testid="fbs-supply-qr-pvz" data-task-id="FBS-09">
+                  На каждый короб клеится свой QR грузоместа — кнопка «QR» есть в строке каждого короба выше.
+                  QR поставки печатается отдельно (см. блок выше) и едет вместе с грузом.
+                </Alert>
+              ) : null}
+    </>
+  ) : null
+
   const workspaceDialogs = (
     <>
       <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
@@ -4119,6 +4203,7 @@ export function FfFbsSupplyWorkspace({
         packing={workspace
           ? packagingTask || deliveryConfirmed ? packingPanel : <Box sx={{ p: 2 }}>{packingPanel}</Box>
           : null}
+        afterBoxes={deliveryConfirmed && (needsSupplyQr || hasCargoPlaceBoxes) ? supplyQrAfterDelivery : null}
         boxes={workspace
           ? {
             routeLabel: boxRouteLabel,
@@ -4477,51 +4562,7 @@ export function FfFbsSupplyWorkspace({
                   </Button>
                 </Stack>
               ) : null}
-              {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
-                <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                    <Box>
-                      <Typography variant="h6">QR поставки {providerName}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        Распечатайте QR для сдачи всей поставки.
-                      </Typography>
-                    </Box>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      startIcon={<PrintOutlinedIcon />}
-                      onClick={() => openAssetPreview([supplyQrAsset])}
-                      data-task-id="FBS-09"
-                    >
-                      Печать QR поставки
-                    </Button>
-                  </Stack>
-                </Paper>
-              ) : null}
-              {deliveryConfirmed && needsSupplyQr && !supplyQrAsset?.preview_url ? (
-                <Alert
-                  severity="warning"
-                  action={(
-                    <Button
-                      color="inherit"
-                      size="small"
-                      disabled={busy}
-                      data-testid="fbs-supply-qr-retry"
-                      onClick={() => void run(() => retryFbsSupplyQr(token, authHeaders, workspace.supply.id), 'QR поставки получен.')}
-                    >
-                      Получить QR повторно
-                    </Button>
-                  )}
-                >
-                  Поставка передана, QR получить не удалось
-                </Alert>
-              ) : null}
-              {deliveryConfirmed && hasCargoPlaceBoxes ? (
-                <Alert severity="info" data-testid="fbs-supply-qr-pvz" data-task-id="FBS-09">
-                  На каждый короб клеится свой QR грузоместа — кнопка «QR» есть в строке каждого короба выше.
-                  QR поставки печатается отдельно (см. блок выше) и едет вместе с грузом.
-                </Alert>
-              ) : null}
+              {supplyQrAfterDelivery}
             </Stack>
           ) : null}
         </Box>

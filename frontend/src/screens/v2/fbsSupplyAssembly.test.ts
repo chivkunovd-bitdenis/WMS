@@ -5,9 +5,11 @@ import {
   fbsAssemblyPickingRows,
   fbsAssemblyReadiness,
   fbsAssemblySupplyTitle,
+  fbsCodeBelongsToSupply,
   fbsSelectionNeedsGroupCreate,
   groupFbsOrdersForSupplies,
   parseFbsAssemblySupplyIds,
+  pickScanCandidates,
   pickScanTargets,
   planGroupPickSet,
   readFbsAssemblyStage,
@@ -316,5 +318,36 @@ describe('WMS-574 окно сборки', () => {
       ['x', [100, 200, 300]],
       ['y', [150]],
     ])
+  })
+})
+
+describe('WMS-574 итоговое ревью', () => {
+  it('Д5 при одном ШК у товаров разных селлеров: первая поставка, которой нужен именно её товар', () => {
+    const candidates = [
+      { index: 0, productId: 'p-a', planned: 1, pickedTotal: 1 },
+      { index: 1, productId: 'p-b', planned: 1, pickedTotal: 0 },
+    ]
+    expect(pickScanCandidates(candidates).map((one) => [one.index, one.productId])).toEqual([[1, 'p-b']])
+    expect(pickScanCandidates([
+      { index: 1, productId: 'p-b', planned: 1, pickedTotal: 1 },
+      { index: 0, productId: 'p-a', planned: 1, pickedTotal: 1 },
+    ]).map((one) => [one.index, one.productId])).toEqual([[0, 'p-a']])
+  })
+
+  it('Д19: ШК товара заказа, ШК привязки и ЧЗ с тем же GTIN относятся к поставке, чужой код — нет', () => {
+    const supply = {
+      orders: [{
+        product: { barcode: '4600000000017', marketplace_bindings: [{ marketplace: 'wb', external_barcodes: ['2040000000011'] }] },
+        positions: [{ barcode: '4600000000024', marketplace_bindings: [] }],
+      }],
+    } as unknown as Pick<FbsWorkspace, 'orders'>
+    expect(fbsCodeBelongsToSupply('4600000000017', supply)).toBe(true)
+    expect(fbsCodeBelongsToSupply('2040000000011', supply)).toBe(true)
+    expect(fbsCodeBelongsToSupply('4600000000024', supply)).toBe(true)
+    expect(fbsCodeBelongsToSupply('0104600000000017215AbCdEfGh1234', supply)).toBe(true)
+    expect(fbsCodeBelongsToSupply(']d20104600000000017215AbCdEfGh1234', supply)).toBe(true)
+    expect(fbsCodeBelongsToSupply('0104600000099999215AbCdEfGh1234', supply)).toBe(false)
+    expect(fbsCodeBelongsToSupply('4600000099999', supply)).toBe(false)
+    expect(fbsCodeBelongsToSupply('*STICKER', supply)).toBe(false)
   })
 })

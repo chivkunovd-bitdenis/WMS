@@ -79,18 +79,28 @@ function box(id: string, number: number, orderIds: string[], qrReady: boolean): 
 }
 
 let boxes: Box[]
+let delays: Record<string, number>
+// Поставка передана в WB и какой QR всей поставки вернул сервер (F4 итогового ревью).
+let transferred: { assetReady: boolean } | null
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function workspace(): FbsWorkspace {
   return {
     supply: {
       id: SUPPLY_ID, marketplace: 'wb', wb_supply_id: 'WB-GI-574', source: 'wms', name: 'FBS 29.09.2026',
-      status: 'assembling', delivery_type: 'warehouse_sc', seller: { id: 'seller-1', name: 'ИП Тестовый' },
+      status: transferred ? 'in_delivery' : 'assembling', delivery_type: 'warehouse_sc', seller: { id: 'seller-1', name: 'ИП Тестовый' },
       wb_warehouse: { id: 507, name: 'Коледино' }, wms_warehouse: { id: 'wh-1', name: 'Основной склад' },
       planned_destination: null, planned_shipment_date: null,
       nearest_deadline_at: new Date(Date.now() + 86_400_000).toISOString(), packaging_task_id: 'pt-574',
-      barcode_asset: null,
+      barcode_asset: transferred?.assetReady
+        ? {
+          id: 'supply-qr', kind: 'supply_qr', status: 'ready', content_type: 'image/png', width_mm: 58, height_mm: 40,
+          preview_url: '/qr/supply.png', download_url: null, checksum: null, applied_at: null, error: null,
+        }
+        : null,
     },
-    stage: 'packing',
+    stage: transferred ? 'tracking' : 'packing',
     progress: { picked: 2, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 2 },
     blockers: [],
     orders: [order('order-a', 5001, 0, 'prod-kiz', true), order('order-c', 5003, 1, 'prod-plain', false)],
@@ -127,6 +137,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   calls.push({ method, path: `${path}${url.search}`, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === '/operations/fbs-orders/kiz/lookup') {
+    await wait(delays.lookup ?? 0)
     const sticker = url.searchParams.get('sticker')
     const orderId = sticker === STICKER_KIZ ? 'order-a' : sticker === STICKER_PLAIN ? 'order-c' : null
     if (!orderId) return json({ detail: { code: 'sticker_not_found', message: 'Стикер не найден в этой поставке.' } }, 404)
@@ -157,6 +168,8 @@ let root: Root
 beforeEach(() => {
   calls = []
   boxes = []
+  delays = {}
+  transferred = null
   window.sessionStorage.clear()
   window.localStorage.clear()
   globalThis.fetch = server as typeof fetch
@@ -191,7 +204,7 @@ function scan(code: string) {
   })
 }
 
-function Frame() {
+function Frame({ alwaysExpanded = false }: { alwaysExpanded?: boolean }) {
   const [active, setActive] = useState(false)
   return (
     <FfFbsSupplyWorkspace
@@ -203,7 +216,7 @@ function Frame() {
       onClose={() => undefined}
       assemblyFrame={{
         active,
-        expanded: active,
+        expanded: alwaysExpanded || active,
         visible: true,
         onToggleExpanded: () => undefined,
         onActivate: () => setActive(true),
@@ -302,6 +315,81 @@ describe('WMS-574 · скан в активной рамке окна сборк
     expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(1)
     expect(boxLine(1)).toContain('открыт — сканы идут сюда')
     expect(document.body.textContent).toContain('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
+  })
+})
+
+describe('WMS-574 · итоговое ревью', () => {
+  it('R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане', async () => {
+    boxes = [box('box-1', 1, [], true), box('box-2', 2, [], true)]
+    delays = { lookup: 160 }
+    await startFrame()
+    expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+
+    scan(STICKER_PLAIN)
+    await settle(30)
+    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')!
+    await act(async () => openFirst.click())
+    expect(boxLine(1)).toContain('открыт — сканы идут сюда')
+    await settle(250)
+
+    expect(assignCalls().map((call) => call.path)).toEqual([`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-2/orders`])
+  })
+
+  it('R22 (F1): оператор завершил работу с поставкой, пока шёл поиск стикера, — заказ всё равно ложится в короб, открытый при скане', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    delays = { lookup: 160 }
+    await startFrame()
+
+    scan(STICKER_PLAIN)
+    await settle(30)
+    const finish = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)!
+    await act(async () => finish.click())
+    await settle(250)
+
+    expect(assignCalls().map((call) => [call.path, call.body])).toEqual([
+      [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-1/orders`, { order_ids: ['order-c'] }],
+    ])
+  })
+
+  it('Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    await startFrame()
+    const errorText = () => document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent
+
+    scan('4600000000017')
+    await settle(80)
+    expect(errorText()).toBe('Номер или стикер заказа не найден в этой поставке')
+
+    // ЧЗ товара этой поставки: GTIN 04600000000017 совпадает с ШК товара заказа.
+    scan('0104600000000017215AbCdEfGh1234')
+    await settle(80)
+    expect(errorText()).toBe('Номер или стикер заказа не найден в этой поставке')
+
+    scan('4600000099999')
+    await settle(80)
+    expect(errorText()).toBe('Этого товара нет в поставке WB-GI-574')
+  })
+
+  it('F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки', async () => {
+    transferred = { assetReady: true }
+    boxes = [box('box-1', 1, ['order-a'], true)]
+    await act(async () => {
+      root.render(<Frame alwaysExpanded />)
+    })
+    await settle(50)
+    expect(document.querySelector('[data-testid="fbs-supply-qr"]')).not.toBeNull()
+    expect(document.body.textContent).toContain('Печать QR поставки')
+  })
+
+  it('F4: после передачи без полученного QR — «Получить QR повторно», как в карточке', async () => {
+    transferred = { assetReady: false }
+    boxes = [box('box-1', 1, ['order-a'], true)]
+    await act(async () => {
+      root.render(<Frame alwaysExpanded />)
+    })
+    await settle(50)
+    expect(document.querySelector('[data-testid="fbs-supply-qr-retry"]')).not.toBeNull()
+    expect(document.body.textContent).toContain('Поставка передана, QR получить не удалось')
   })
 })
 
