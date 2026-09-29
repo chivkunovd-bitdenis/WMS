@@ -7,10 +7,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
+import sqlalchemy as sa
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+    EVENT_DATA_CHANGED,
+    SOURCE_SYSTEM,
+    SOURCE_USER,
+    DocumentEvent,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -25,6 +33,7 @@ from app.services import marketplace_unload_service as mu_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services import warehouse_box_service as wh_box_svc
 from app.services import warehouse_map_service
+from app.services.document_event_service import record_document_event
 from app.services.inventory_container_service import (
     ContainerKind,
     InventoryContainerScanError,
@@ -62,6 +71,121 @@ class BoxScanResult:
     picked_qty: int | None = None
     lines_added: int | None = None
     total_qty: int | None = None
+    # Product snapshots let a durable mutation receipt replay the response even
+    # after the ORM line has changed in a later scan.
+    line_id: uuid.UUID | None = None
+    product_id: uuid.UUID | None = None
+    sku_code: str | None = None
+    product_name: str | None = None
+    quantity: int | None = None
+
+
+def _scan_receipt_key(mutation_id: uuid.UUID) -> str:
+    return f"marketplace-unload:box-scan:{mutation_id}"
+
+
+def _scan_request_payload(
+    *,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    barcode: str,
+    product_id_hint: uuid.UUID | None,
+    storage_location_id: uuid.UUID | None,
+    quantity: int,
+    allow_over_plan: bool,
+    container_kind: ContainerKind | None,
+    container_id: uuid.UUID | None,
+) -> dict[str, object]:
+    return {
+        "request_id": str(request_id),
+        "box_id": str(box_id),
+        "barcode": barcode,
+        "product_id": str(product_id_hint) if product_id_hint is not None else None,
+        "storage_location_id": (
+            str(storage_location_id) if storage_location_id is not None else None
+        ),
+        "quantity": quantity,
+        "allow_over_plan": allow_over_plan,
+        "container_kind": container_kind,
+        "container_id": str(container_id) if container_id is not None else None,
+    }
+
+
+async def _scan_replay(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    request_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    mutation_id: uuid.UUID,
+    request_payload: dict[str, object],
+) -> BoxScanResult | None:
+    event = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == _scan_receipt_key(mutation_id),
+        )
+    )
+    if event is None:
+        return None
+    payload = event.payload_json or {}
+    if (
+        event.document_type != DOCUMENT_TYPE_MARKETPLACE_UNLOAD
+        or event.document_id != request_id
+        or event.actor_user_id != actor_user_id
+        or payload.get("kind") != "marketplace_unload_box_scan_receipt_v1"
+        or payload.get("request") != request_payload
+    ):
+        raise MarketplaceUnloadBoxError("mutation_payload_mismatch")
+    saved = payload.get("result")
+    if isinstance(saved, dict):
+        return BoxScanResult(
+            kind="product",
+            storage_location_id=(
+                uuid.UUID(str(saved["storage_location_id"]))
+                if saved.get("storage_location_id") is not None
+                else None
+            ),
+            picked_qty=int(saved["picked_qty"]),
+            line_id=uuid.UUID(str(saved["line_id"])),
+            product_id=uuid.UUID(str(saved["product_id"])),
+            sku_code=(str(saved["sku_code"]) if saved.get("sku_code") is not None else None),
+            product_name=str(saved["product_name"]),
+            quantity=int(saved["quantity"]),
+        )
+
+    # Compatibility for the tiny crash window after the warehouse commit but
+    # before the response snapshot update: the receipt still proves the
+    # increment happened, so reconstruct a success without applying it again.
+    product_id_raw = request_payload.get("product_id") or event.product_id
+    if product_id_raw is None:
+        raise MarketplaceUnloadBoxError("mutation_result_missing")
+    product_id = uuid.UUID(str(product_id_raw))
+    box_id = uuid.UUID(str(request_payload["box_id"]))
+    line = await session.scalar(
+        select(MarketplaceUnloadBoxLine)
+        .where(
+            MarketplaceUnloadBoxLine.box_id == box_id,
+            MarketplaceUnloadBoxLine.product_id == product_id,
+        )
+        .options(selectinload(MarketplaceUnloadBoxLine.product))
+    )
+    if line is None:
+        raise MarketplaceUnloadBoxError("mutation_result_missing")
+    return BoxScanResult(
+        kind="product",
+        storage_location_id=(
+            uuid.UUID(str(request_payload["storage_location_id"]))
+            if request_payload.get("storage_location_id") is not None
+            else None
+        ),
+        picked_qty=await collect_svc.picked_qty_for_product(session, request_id, product_id),
+        line_id=line.id,
+        product_id=line.product_id,
+        sku_code=line.product.sku_code,
+        product_name=line.product.name,
+        quantity=int(line.quantity),
+    )
 
 
 def _map_collect_err(exc: MarketplaceUnloadPickError) -> MarketplaceUnloadBoxError:
@@ -360,6 +484,7 @@ async def scan_barcode_into_box(
     quantity: int = 1,
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
+    mutation_id: uuid.UUID | None = None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> BoxScanResult:
@@ -374,7 +499,31 @@ async def scan_barcode_into_box(
     if box is None or (request_id is not None and box.request_id != request_id):
         raise MarketplaceUnloadBoxError("box_not_found")
 
-    req = await _request_for_picking(session, tenant_id, box.request_id)
+    effective_request_id = box.request_id
+    request_payload = _scan_request_payload(
+        request_id=effective_request_id,
+        box_id=box_id,
+        barcode=raw,
+        product_id_hint=product_id_hint,
+        storage_location_id=storage_location_id,
+        quantity=quantity,
+        allow_over_plan=allow_over_plan,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+    if mutation_id is not None:
+        replay = await _scan_replay(
+            session,
+            tenant_id,
+            request_id=effective_request_id,
+            actor_user_id=actor_user_id,
+            mutation_id=mutation_id,
+            request_payload=request_payload,
+        )
+        if replay is not None:
+            return replay
+
+    req = await _request_for_picking(session, tenant_id, effective_request_id)
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
 
@@ -420,6 +569,39 @@ async def scan_barcode_into_box(
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
 
+    if mutation_id is not None:
+        if session.bind is not None and session.bind.dialect.name == "sqlite":
+            await session.execute(
+                sa.update(DocumentEvent).where(sa.false()).values(idempotency_key=None)
+            )
+        inserted = await record_document_event(
+            session,
+            tenant_id=tenant_id,
+            document_type=DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+            document_id=effective_request_id,
+            event_type=EVENT_DATA_CHANGED,
+            source=SOURCE_USER if actor_user_id is not None else SOURCE_SYSTEM,
+            actor_user_id=actor_user_id,
+            product_id=product_id,
+            payload_json={
+                "kind": "marketplace_unload_box_scan_receipt_v1",
+                "request": request_payload,
+                "result": None,
+            },
+            idempotency_key=_scan_receipt_key(mutation_id),
+        )
+        if not inserted:
+            replay = await _scan_replay(
+                session,
+                tenant_id,
+                request_id=effective_request_id,
+                actor_user_id=actor_user_id,
+                mutation_id=mutation_id,
+                request_payload=request_payload,
+            )
+            assert replay is not None
+            return replay
+
     line = await add_manual_qty_to_box(
         session,
         tenant_id,
@@ -432,12 +614,44 @@ async def scan_barcode_into_box(
         container_kind=container_kind,
         container_id=container_id,
     )
-    return BoxScanResult(
+    result = BoxScanResult(
         kind="product",
         storage_location_id=storage_location_id,
         box_line=line,
         picked_qty=await collect_svc.picked_qty_for_product(session, box.request_id, product_id),
+        line_id=line.id,
+        product_id=line.product_id,
+        sku_code=line.product.sku_code,
+        product_name=line.product.name,
+        quantity=int(line.quantity),
     )
+    if mutation_id is not None:
+        receipt = await session.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.idempotency_key == _scan_receipt_key(mutation_id),
+            )
+        )
+        assert receipt is not None
+        receipt.payload_json = {
+            "kind": "marketplace_unload_box_scan_receipt_v1",
+            "request": request_payload,
+            "result": {
+                "line_id": str(result.line_id),
+                "product_id": str(result.product_id),
+                "sku_code": result.sku_code,
+                "product_name": result.product_name,
+                "quantity": result.quantity,
+                "picked_qty": result.picked_qty,
+                "storage_location_id": (
+                    str(result.storage_location_id)
+                    if result.storage_location_id is not None
+                    else None
+                ),
+            },
+        }
+        await session.commit()
+    return result
 
 
 async def boxed_qty_for_product(

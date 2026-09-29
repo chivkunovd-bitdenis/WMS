@@ -275,6 +275,7 @@ class FbsPickSetBody(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID
     quantity: int = Field(ge=0, le=1_000_000_000)
+    expected_quantity: int | None = Field(default=None, ge=0, le=1_000_000_000)
     # Из какой тары сняли. Пусто — сняли россыпью прямо с ячейки; так работают
     # старые клиенты, поэтому поля необязательные.
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
@@ -1634,6 +1635,7 @@ async def set_fbs_supply_pick_quantity(
             product_id=body.product_id,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
+            expected_quantity=body.expected_quantity,
             idempotency_key=idempotency_key or str(uuid.uuid4()),
             actor=user,
             container_kind=body.container_kind,

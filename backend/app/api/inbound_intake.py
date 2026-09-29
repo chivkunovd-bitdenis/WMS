@@ -265,6 +265,7 @@ class InboundBoxScanBody(BaseModel):
 
 
 class InboundReceivingScanBody(BaseModel):
+    mutation_id: uuid.UUID | None = None
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
 
@@ -1264,6 +1265,7 @@ async def scan_barcode_to_loose_intake(
             request_id,
             barcode=body.barcode,
             product_id_hint=body.product_id,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None

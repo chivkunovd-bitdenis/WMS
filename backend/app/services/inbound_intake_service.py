@@ -484,7 +484,10 @@ async def _claim_intake_mutation(
         )
     )
     assert event is not None
-    if event.payload_json != payload:
+    actor = current_document_event_actor()
+    if event.actor_user_id != actor.actor_user_id or event.source != actor.source:
+        raise InboundIntakeError("mutation_payload_mismatch")
+    if event.document_id != request_id or event.payload_json != payload:
         raise InboundIntakeError("mutation_payload_mismatch")
     return event
 
@@ -1529,11 +1532,33 @@ async def scan_barcode_to_loose_intake(
     *,
     barcode: str,
     product_id_hint: uuid.UUID | None = None,
+    mutation_id: uuid.UUID | None = None,
 ) -> InboundIntakeLine:
     """Scan product barcode into general (non-box) intake: +1 to loose actual_qty."""
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
+    receipt_payload: dict[str, object] = {
+        "request_id": str(request_id),
+        "barcode": raw,
+        "product_id": str(product_id_hint) if product_id_hint is not None else None,
+    }
+    replay = await _claim_intake_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="receiving_scan",
+        payload=receipt_payload,
+    )
+    if replay is not None:
+        req = await get_request(session, tenant_id, request_id)
+        if req is None or replay.product_id is None:
+            raise InboundIntakeError("mutation_result_deleted")
+        line = next((item for item in req.lines if item.product_id == replay.product_id), None)
+        if line is None:
+            raise InboundIntakeError("mutation_result_deleted")
+        return line
     req = await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -1550,6 +1575,15 @@ async def scan_barcode_to_loose_intake(
     line = await ensure_request_line(
         session, tenant_id, req, product_id, create_missing=scan_creates_lines(req)
     )
+    if mutation_id is not None:
+        receipt = await session.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.idempotency_key == f"inbound:receiving_scan:{mutation_id}",
+            )
+        )
+        assert receipt is not None
+        receipt.product_id = line.product_id
     return await add_or_increment_received_product(
         session,
         tenant_id,

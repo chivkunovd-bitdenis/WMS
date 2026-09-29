@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import timedelta
@@ -24,7 +25,7 @@ from app.api.marketplace_unload_requests import (
     MarketplaceUnloadPickScanOut,
     MarketplaceUnloadPickSetBody,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.fbs_order import PICK_STATUS_PENDING, PICK_STATUS_PICKED, FbsOrder
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.inventory_balance import InventoryBalance
@@ -65,6 +66,10 @@ def test_fbs_pick_write_models_match_marketplace_unload() -> None:
             assert order_schema["default"] is None
             assert "order_id" not in fbs_schema.get("required", [])
             assert FbsPickScanBody(barcode="123").order_id is None
+        if fbs_model is FbsPickSetBody:
+            expected_schema = fbs_schema["properties"].pop("expected_quantity")
+            assert expected_schema["default"] is None
+            assert "expected_quantity" not in fbs_schema.get("required", [])
         assert fbs_schema == _schema_without_title(unload_model)
 
 
@@ -182,6 +187,109 @@ async def test_fbs_pick_set_assigns_two_orders_then_removes_one(
             )
         )
         assert sorted(statuses) == sorted([PICK_STATUS_PENDING, PICK_STATUS_PICKED])
+
+
+@pytest.mark.asyncio
+async def test_fbs_pick_set_cas_and_stable_receipt_survive_intervening_change(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, _order_ids, _ = (
+        await _seed_two_order_supply(async_client)
+    )
+    url = f"{BASE}/{supply_id}/pick/set"
+    first_body = {
+        "product_id": str(product_id),
+        "storage_location_id": str(location_id),
+        "quantity": 1,
+        "expected_quantity": 0,
+    }
+    first = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-first"},
+        json=first_body,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["quantity"] == 1
+
+    increased = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-second"},
+        json={**first_body, "quantity": 2, "expected_quantity": 1},
+    )
+    assert increased.status_code == 200, increased.text
+    assert increased.json()["quantity"] == 2
+
+    replay = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-first"},
+        json=first_body,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
+    assert await _active_pick_count(supply_id) == 2
+
+    reused = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-first"},
+        json={**first_body, "quantity": 0},
+    )
+    assert reused.status_code == 409, reused.text
+    assert reused.json()["detail"]["code"] == "idempotency_key_reused"
+
+    stale = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-stale"},
+        json={**first_body, "quantity": 0, "expected_quantity": 1},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"]["code"] == "pick_quantity_changed"
+    assert stale.json()["detail"]["context"]["current_quantity"] == 2
+
+    decreased = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-set-decrease"},
+        json={**first_body, "quantity": 1, "expected_quantity": 2},
+    )
+    assert decreased.status_code == 200, decreased.text
+    assert decreased.json()["quantity"] == 1
+    assert await _active_pick_count(supply_id) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="row-lock CAS concurrency is PostgreSQL-specific",
+)
+async def test_fbs_pick_set_concurrent_cas_allows_one_writer(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, _order_ids, _ = (
+        await _seed_two_order_supply(async_client)
+    )
+    url = f"{BASE}/{supply_id}/pick/set"
+    body = {
+        "product_id": str(product_id),
+        "storage_location_id": str(location_id),
+        "quantity": 1,
+        "expected_quantity": 0,
+    }
+
+    first, second = await asyncio.gather(
+        async_client.post(
+            url,
+            headers={**headers, "Idempotency-Key": "concurrent-cas-a"},
+            json=body,
+        ),
+        async_client.post(
+            url,
+            headers={**headers, "Idempotency-Key": "concurrent-cas-b"},
+            json=body,
+        ),
+    )
+    assert sorted([first.status_code, second.status_code]) == [200, 409]
+    conflict = first if first.status_code == 409 else second
+    assert conflict.json()["detail"]["code"] == "pick_quantity_changed"
+    assert await _active_pick_count(supply_id) == 1
 
 
 @pytest.mark.asyncio
@@ -580,6 +688,7 @@ async def test_fbs_pick_scan_switches_source_and_keeps_it_on_product_alias(
         assert stored_pick.source_container_kind == "box"
         assert stored_pick.source_container_id == box_id
 
+    after_pick = await snapshot()
     replay = await async_client.post(
         f"{BASE}/{supply_id}/pick/scan",
         headers={**headers, "Idempotency-Key": "fbs-container-product"},
@@ -588,4 +697,4 @@ async def test_fbs_pick_scan_switches_source_and_keeps_it_on_product_alias(
     )
     assert replay.status_code == 200, replay.text
     assert await _active_pick_count(supply_id) == 1
-    assert await snapshot() == before
+    assert await snapshot() == after_pick

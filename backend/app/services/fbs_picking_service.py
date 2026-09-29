@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
+import sqlalchemy as sa
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_DATA_CHANGED,
+    SOURCE_USER,
+    DocumentEvent,
+)
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     PICK_STATUS_PENDING,
@@ -45,6 +53,7 @@ from app.models.user import User
 from app.services import inventory_service, warehouse_map_service
 from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.document_event_service import record_document_event
 from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
@@ -413,6 +422,105 @@ def _derived_idempotency_key(
     )
 
 
+_PICK_SET_RECEIPT_KIND = "fbs_pick_set_receipt_v1"
+
+
+def _pick_set_receipt_key(idempotency_key: str) -> str:
+    digest = hashlib.sha256(idempotency_key.encode()).hexdigest()
+    return f"fbs-pick-set:{digest}"
+
+
+def _pick_set_request_payload(
+    *,
+    supply_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    expected_quantity: int | None,
+    container_kind: ContainerKind | None,
+    container_id: uuid.UUID | None,
+) -> dict[str, object]:
+    return {
+        "supply_id": str(supply_id),
+        "product_id": str(product_id),
+        "storage_location_id": str(storage_location_id),
+        "quantity": quantity,
+        "expected_quantity": expected_quantity,
+        "container_kind": container_kind,
+        "container_id": str(container_id) if container_id is not None else None,
+    }
+
+
+def _validate_pick_set_receipt(
+    event: DocumentEvent,
+    *,
+    supply_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    request_payload: dict[str, object],
+    idempotency_key: str,
+) -> dict[str, object]:
+    payload = event.payload_json or {}
+    if (
+        event.document_type != DOCUMENT_TYPE_FBS_SUPPLY
+        or event.document_id != supply_id
+        or event.actor_user_id != actor_user_id
+        or payload.get("kind") != _PICK_SET_RECEIPT_KIND
+        or payload.get("request") != request_payload
+    ):
+        raise FbsPickingError(
+            "idempotency_key_reused",
+            "Ключ идемпотентности уже использован для другого изменения подбора.",
+            context={"idempotency_key": idempotency_key},
+        )
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        raise FbsPickingError(
+            "idempotency_result_missing",
+            "Не удалось восстановить результат изменения подбора.",
+        )
+    return result
+
+
+async def _pick_set_replay(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    supply_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    idempotency_key: str,
+    request_payload: dict[str, object],
+) -> PickAllocationResult | None:
+    event = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == _pick_set_receipt_key(idempotency_key),
+        )
+    )
+    if event is None:
+        return None
+    saved = _validate_pick_set_receipt(
+        event,
+        supply_id=supply_id,
+        actor_user_id=actor_user_id,
+        request_payload=request_payload,
+        idempotency_key=idempotency_key,
+    )
+    product = await session.get(Product, uuid.UUID(str(request_payload["product_id"])))
+    if product is None or product.tenant_id != tenant_id:
+        raise FbsPickingError(
+            "idempotency_result_missing",
+            "Товар из сохранённого результата больше не найден.",
+        )
+    return PickAllocationResult(
+        id=uuid.UUID(str(saved["id"])),
+        product=product,
+        storage_location_id=uuid.UUID(str(saved["storage_location_id"])),
+        location_code=str(saved["location_code"]),
+        quantity=int(str(saved["quantity"])),
+        picked_qty=int(str(saved["picked_qty"])),
+    )
+
+
 async def _active_assignments_for_product_location(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -501,6 +609,7 @@ async def set_pick_quantity(
     quantity: int,
     idempotency_key: str,
     actor: User,
+    expected_quantity: int | None = None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> PickAllocationResult:
@@ -511,8 +620,47 @@ async def set_pick_quantity(
             "Количество подбора не может быть отрицательным.",
             http_status=422,
         )
+    if expected_quantity is not None and expected_quantity < 0:
+        raise FbsPickingError(
+            "invalid_qty",
+            "Ожидаемое количество подбора не может быть отрицательным.",
+            http_status=422,
+        )
+
+    request_payload = _pick_set_request_payload(
+        supply_id=supply_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity=quantity,
+        expected_quantity=expected_quantity,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+    replay = await _pick_set_replay(
+        session,
+        tenant_id,
+        supply_id=supply_id,
+        actor_user_id=actor.id,
+        idempotency_key=idempotency_key,
+        request_payload=request_payload,
+    )
+    if replay is not None:
+        return replay
 
     supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
+    # The initial lookup is intentionally before the compare-and-set check.  A
+    # concurrent first attempt may have been waiting on the same supply lock,
+    # so repeat the receipt lookup after acquiring it and still before CAS.
+    replay = await _pick_set_replay(
+        session,
+        tenant_id,
+        supply_id=supply_id,
+        actor_user_id=actor.id,
+        idempotency_key=idempotency_key,
+        request_payload=request_payload,
+    )
+    if replay is not None:
+        return replay
     await _ensure_ozon_pick_editable(session, supply)
 
     product = await session.get(Product, product_id)
@@ -564,6 +712,50 @@ async def set_pick_quantity(
         )
 
     current_quantity = len(active)
+    if expected_quantity is not None and expected_quantity != current_quantity:
+        raise FbsPickingError(
+            "pick_quantity_changed",
+            "Количество подбора изменилось. Обновите данные и повторите действие.",
+            context={
+                "product_id": str(product_id),
+                "storage_location_id": str(storage_location_id),
+                "expected_quantity": expected_quantity,
+                "current_quantity": current_quantity,
+            },
+        )
+
+    if session.bind is not None and session.bind.dialect.name == "sqlite":
+        await session.execute(
+            sa.update(DocumentEvent).where(sa.false()).values(idempotency_key=None)
+        )
+    inserted = await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor.id,
+        product_id=product_id,
+        payload_json={
+            "kind": _PICK_SET_RECEIPT_KIND,
+            "request": request_payload,
+            "result": None,
+        },
+        idempotency_key=_pick_set_receipt_key(idempotency_key),
+    )
+    if not inserted:
+        replay = await _pick_set_replay(
+            session,
+            tenant_id,
+            supply_id=supply_id,
+            actor_user_id=actor.id,
+            idempotency_key=idempotency_key,
+            request_payload=request_payload,
+        )
+        assert replay is not None
+        return replay
+
     if quantity > current_quantity:
         for ordinal, order_id in enumerate(
             pending_order_ids[: quantity - current_quantity],
@@ -613,7 +805,7 @@ async def set_pick_quantity(
         if picked_product_id == product_id
     )
     picked_by_source = await _picked_qty_by_product_source(session, tenant_id, supply_id)
-    return PickAllocationResult(
+    result = PickAllocationResult(
         id=_allocation_id(supply_id, product_id, storage_location_id),
         product=product,
         storage_location_id=storage_location_id,
@@ -623,6 +815,26 @@ async def set_pick_quantity(
         ),
         picked_qty=picked_by_product,
     )
+    receipt = await session.scalar(
+        select(DocumentEvent).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == _pick_set_receipt_key(idempotency_key),
+        )
+    )
+    assert receipt is not None
+    receipt.payload_json = {
+        "kind": _PICK_SET_RECEIPT_KIND,
+        "request": request_payload,
+        "result": {
+            "id": str(result.id),
+            "storage_location_id": str(result.storage_location_id),
+            "location_code": result.location_code,
+            "quantity": result.quantity,
+            "picked_qty": result.picked_qty,
+        },
+    }
+    await session.flush()
+    return result
 
 
 async def _implicit_pick_location(
@@ -1136,7 +1348,7 @@ async def scan_pick_product(
         container_id,
     )
     movement_id: uuid.UUID | None = None
-    if supply.marketplace != "wb" and available >= 1 and location.id != sorting_location.id:
+    if available >= 1 and location.id != sorting_location.id:
         try:
             transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
                 session,

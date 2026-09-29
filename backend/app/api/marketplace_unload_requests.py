@@ -170,6 +170,7 @@ class MarketplaceUnloadBoxBatchCreate(BaseModel):
 
 
 class MarketplaceUnloadScanBody(BaseModel):
+    mutation_id: uuid.UUID | None = None
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
@@ -393,6 +394,20 @@ def _box_scan_out(
             kind="ready_box",
             lines_added=result.lines_added,
             total_qty=result.total_qty,
+        )
+    if result.line_id is not None:
+        assert result.product_id is not None
+        return MarketplaceUnloadBoxScanOut(
+            kind="product",
+            storage_location_id=str(result.storage_location_id)
+            if reveal_storage and result.storage_location_id is not None
+            else None,
+            id=str(result.line_id),
+            product_id=str(result.product_id),
+            sku_code=result.sku_code,
+            product_name=result.product_name,
+            quantity=result.quantity,
+            picked_qty=result.picked_qty,
         )
     ln = result.box_line
     assert ln is not None
@@ -735,6 +750,8 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
         "box_already_attached",
         "warehouse_mismatch",
         "box_not_empty",
+        "mutation_payload_mismatch",
+        "mutation_result_missing",
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
@@ -1761,6 +1778,7 @@ async def scan_marketplace_unload_box(
             quantity=body.quantity,
             allow_over_plan=body.allow_over_plan,
             actor_user_id=user.id,
+            mutation_id=body.mutation_id,
             container_kind=body.container_kind,
             container_id=body.container_id,
         )
