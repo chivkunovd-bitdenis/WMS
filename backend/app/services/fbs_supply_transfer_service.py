@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import uuid
+from collections.abc import Iterable
 from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderProductPick
 from app.models.fbs_order_pick import FbsOrderPick
@@ -37,6 +41,14 @@ from app.services.wildberries_fbs_client import (
 )
 
 _KIND = "supply_transfer_orders"
+# WMS-581: переносить можно в любую открытую поставку WB — пока её не передали
+# в доставку и не закрыли. Тот же набор, что у привязки заказа к поставке WB.
+_OPEN_TARGET_STATUSES = ("draft", "assembling", "packed")
+# Поиск созданной поставки после потерянного ответа WB: только поставки с тем же
+# названием, которых не было в снимке WB перед созданием, созданные не раньше
+# начала попытки (с допуском на часы) и ещё никому не принадлежащие.
+_CREATE_CLOCK_SKEW = timedelta(seconds=5)
+_CREATE_WINDOW = timedelta(minutes=10)
 
 
 async def _source(session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID) -> FbsSupply:
@@ -55,34 +67,84 @@ async def _source(session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.U
     return supply
 
 
+def _target_mismatch(
+    target: FbsSupply,
+    target_orders: Iterable[FbsOrder],
+    orders: Iterable[FbsOrder],
+) -> str | None:
+    """Why WB would not take these orders into the target supply.
+
+    The same attributes the supply validator compares when a supply is created
+    from orders: marketplace, seller, WMS warehouse, WB warehouse, B2C/B2B and
+    cargo type. The target's own orders are the reference for the last three.
+    """
+    existing = [order for order in target_orders if order.supply_id == target.id]
+    wb_warehouses = {o.wb_warehouse_id for o in existing if o.wb_warehouse_id is not None}
+    buyer_types = {bool(o.is_legal) for o in existing}
+    cargo_types = {o.cargo_type or "unknown" for o in existing}
+    for order in orders:
+        if target.marketplace != "wb" or order.marketplace != "wb":
+            return "different_marketplace"
+        if order.seller_id != target.seller_id:
+            return "different_seller"
+        if order.warehouse_id != target.warehouse_id:
+            return "order_warehouse_mismatch"
+        if wb_warehouses and order.wb_warehouse_id not in wb_warehouses:
+            return "different_wb_warehouse"
+        if buyer_types and bool(order.is_legal) not in buyer_types:
+            return "legal_type_mismatch"
+        if cargo_types and (order.cargo_type or "unknown") not in cargo_types:
+            return "different_cargo_type"
+    return None
+
+
 async def list_transfer_targets(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     source_id: uuid.UUID,
+    order_ids: list[uuid.UUID] | None = None,
 ) -> list[dict[str, str]]:
     source = await _source(session, tenant_id, source_id)
+    order_filter = (
+        FbsOrder.id.in_(order_ids) if order_ids else FbsOrder.supply_id == source.id
+    )
+    orders = list(
+        await session.scalars(
+            select(FbsOrder).where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == source.seller_id,
+                order_filter,
+            )
+        )
+    )
     rows = await session.scalars(
         select(FbsSupply)
+        .options(selectinload(FbsSupply.orders))
         .where(
             FbsSupply.tenant_id == tenant_id,
             FbsSupply.seller_id == source.seller_id,
             FbsSupply.warehouse_id == source.warehouse_id,
             FbsSupply.marketplace == "wb",
-            FbsSupply.status == "draft",
-            FbsSupply.packaging_task_id.is_(None),
+            FbsSupply.status.in_(_OPEN_TARGET_STATUSES),
             FbsSupply.id != source_id,
         )
         .order_by(FbsSupply.created_at.desc(), FbsSupply.id)
     )
     return [
-        {"id": str(row.id), "name": row.name, "wb_supply_id": row.wb_supply_id}
+        {
+            "id": str(row.id),
+            "name": row.name,
+            "wb_supply_id": row.wb_supply_id,
+            "created_at": (row.created_at_wb or row.created_at).isoformat(),
+        }
         for row in rows
-        if row.wb_supply_id
+        if row.wb_supply_id and _target_mismatch(row, row.orders, orders) is None
     ]
 
 
 def _result(operation: FbsWbOperation, orders: list[FbsOrder]) -> dict[str, Any]:
     summary = operation.response_summary_json or {}
+    request = operation.request_summary_json or {}
     moved = set(summary.get("transferred_order_ids", []))
     failed = set(summary.get("failed_order_ids", [])) - moved
     pending = {str(order.id) for order in orders} - moved - failed
@@ -97,6 +159,9 @@ def _result(operation: FbsWbOperation, orders: list[FbsOrder]) -> dict[str, Any]
     )
     return {
         "target_supply_id": summary.get("target_supply_id"),
+        "target_supply_name": summary.get("target_supply_name"),
+        "target_wb_supply_id": summary.get("target_wb_supply_id"),
+        "target_created": request.get("target_supply_id") is None,
         "transferred_order_ids": sorted(moved),
         "failed_order_ids": sorted(failed),
         "pending_order_ids": sorted(pending),
@@ -111,17 +176,78 @@ def _result(operation: FbsWbOperation, orders: list[FbsOrder]) -> dict[str, Any]
     }
 
 
-async def _find_created_supply(client: httpx.AsyncClient, token: str, name: str) -> str | None:
+def _create_requested_at(operation: FbsWbOperation) -> datetime:
+    raw = (operation.request_summary_json or {}).get("create_requested_at")
+    started = datetime.fromisoformat(raw) if isinstance(raw, str) else operation.created_at
+    return started if started.tzinfo is not None else started.replace(tzinfo=UTC)
+
+
+async def _wb_supplies_named(
+    client: httpx.AsyncClient,
+    token: str,
+    name: str,
+) -> dict[str, tuple[bool, datetime | None]]:
+    """All WB supplies of the cabinet with this exact name: {id: (done, createdAt)}."""
     cursor = None
     seen: set[int] = set()
-    matches: set[str] = set()
+    found: dict[str, tuple[bool, datetime | None]] = {}
     while True:
         page = await fetch_marketplace_supplies_page(client, api_token=token, next_cursor=cursor)
-        matches.update(sid for sid, (sname, _) in page.supplies.items() if sname == name)
+        for sid, (sname, done) in page.supplies.items():
+            if sname == name:
+                found[sid] = (done, page.created_at.get(sid))
         cursor = page.next_cursor
-        if cursor is None or cursor == 0 or cursor in seen:
+        if not page.supplies or cursor is None or cursor == 0 or cursor in seen:
             break
         seen.add(cursor)
+    return found
+
+
+async def _find_created_supply(
+    session: AsyncSession,
+    client: httpx.AsyncClient,
+    token: str,
+    operation: FbsWbOperation,
+) -> str | None:
+    """Find the WB supply our lost create produced, or None when not certain.
+
+    The operator may type a name another supply already has. A candidate must
+    have that name, be absent from the snapshot taken right before our create,
+    be open, be created by WB not before our attempt (clock tolerance) and
+    belong to no local supply or other operation. Anything but exactly one
+    candidate stays unknown: no second create and no transfer to a guess.
+    Operations without a snapshot are WMS-562 ones with a unique technical name.
+    """
+    request = operation.request_summary_json or {}
+    name = str(request["name"])
+    started = _create_requested_at(operation)
+    preexisting = set(request.get("preexisting_wb_supply_ids") or [])
+    known = set(
+        await session.scalars(
+            select(FbsSupply.wb_supply_id).where(
+                FbsSupply.seller_id == operation.seller_id,
+                FbsSupply.marketplace == "wb",
+                FbsSupply.wb_supply_id.is_not(None),
+            )
+        )
+    ) | set(
+        await session.scalars(
+            select(FbsWbOperation.wb_object_id).where(
+                FbsWbOperation.seller_id == operation.seller_id,
+                FbsWbOperation.id != operation.id,
+                FbsWbOperation.wb_object_id.is_not(None),
+            )
+        )
+    )
+    matches = {
+        sid
+        for sid, (done, created) in (await _wb_supplies_named(client, token, name)).items()
+        if not done
+        and sid not in preexisting
+        and sid not in known
+        and created is not None
+        and started - _CREATE_CLOCK_SKEW <= created <= started + _CREATE_WINDOW
+    }
     return next(iter(matches)) if len(matches) == 1 else None
 
 
@@ -183,9 +309,12 @@ async def _apply_confirmed(
             )
         )
     )
+    # WMS-581 R2: a task plans only units it still has to pack, plus the history
+    # of what it packed itself. A packed order keeps its unit (and its packing
+    # record, used by billing) in the task that packed it; it is neither taken
+    # out of that task on leaving nor planned again in any task it moves to —
+    # it cannot be packed twice, and returning to its task is already counted.
     for order in orders:
-        # Completed work stays on its historical task for billing/undo. Removing
-        # its planned unit would consume capacity needed by remaining orders.
         if order.id in ids and order.id not in fulfilled_ids and order.product_id is not None:
             await _decrement_packaging_line_for_product(
                 session,
@@ -202,7 +331,7 @@ async def _apply_confirmed(
             session,
             source.tenant_id,
             target,
-            [order for order in orders if order.id in ids],
+            [order for order in orders if order.id in ids and order.id not in fulfilled_ids],
         )
     await session.flush()
 
@@ -217,16 +346,22 @@ async def transfer_orders(
     idempotency_key: str,
     actor_user_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    name: str | None = None,
 ) -> dict[str, Any]:
     source = await _source(session, tenant_id, source_id)
     if not order_ids or not idempotency_key.strip() or len(idempotency_key) > 128:
         raise FbsSupplyError("invalid_transfer_request", http_status=422)
     requested = sorted(set(order_ids), key=str)
-    request = {
+    request: dict[str, Any] = {
         "source_id": str(source_id),
         "order_ids": list(map(str, requested)),
         "target_supply_id": str(target_supply_id) if target_supply_id else None,
     }
+    # WMS-581: the operator's name belongs to the request only for a new supply.
+    # An existing target keeps its name in WMS and WB.
+    typed_name = (name or "").strip()
+    if target_supply_id is None and typed_name:
+        request["name"] = typed_name
     digest = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
     async with wb_seller_lock(session, source.seller_id, wait_timeout_sec=90) as acquired:
         if not acquired:
@@ -292,19 +427,53 @@ async def transfer_orders(
                 if (
                     target.seller_id != source.seller_id
                     or target.id == source.id
-                    or target.status != "draft"
-                    or target.packaging_task_id is not None
+                    or target.status not in _OPEN_TARGET_STATUSES
+                    or not target.wb_supply_id
                 ):
                     raise FbsSupplyError("invalid_transfer_target", http_status=409)
                 if target.warehouse_id != source.warehouse_id:
                     raise FbsSupplyError("order_warehouse_mismatch", http_status=409)
+                target_orders = await session.scalars(
+                    select(FbsOrder).where(FbsOrder.supply_id == target.id)
+                )
+                if _target_mismatch(target, target_orders, orders) is not None:
+                    raise FbsSupplyError(
+                        "order_incompatible",
+                        message="Заказ нельзя добавить в выбранную поставку.",
+                        http_status=409,
+                    )
+            supply_name = typed_name or f"Новая поставка № {secrets.randbelow(90000) + 10000}"
+            create_requested_at = datetime.now(UTC)
+            preexisting: list[str] = []
+            if target is None:
+                # WMS-581 R7: remember the same-named WB supplies that already exist.
+                # After a lost create response only a supply absent here can be ours.
+                # Without this snapshot a later check could not tell ours from a
+                # colleague's, so the create is not attempted at all.
+                try:
+                    preexisting = sorted(await _wb_supplies_named(http_client, token, supply_name))
+                except WildberriesClientError as exc:
+                    raise FbsSupplyError(
+                        "wb_supplies_unavailable",
+                        message=(
+                            "WB не ответил на проверку поставок — новая поставка не создана. "
+                            "Повторите перенос позже."
+                        ),
+                        retryable=True,
+                        http_status=503,
+                    ) from exc
             operation = FbsWbOperation(
                 tenant_id=tenant_id,
                 seller_id=source.seller_id,
                 operation_kind=_KIND,
                 idempotency_key=idempotency_key,
                 request_hash=digest,
-                request_summary_json={**request, "name": f"Перенос {uuid.uuid4().hex}"},
+                request_summary_json={
+                    **request,
+                    "name": supply_name,
+                    "create_requested_at": create_requested_at.isoformat(),
+                    "preexisting_wb_supply_ids": preexisting,
+                },
                 response_summary_json={"target_supply_id": str(target.id) if target else None},
                 local_entity_type="fbs_supply",
                 local_entity_id=source_id,
@@ -317,15 +486,18 @@ async def transfer_orders(
         assert operation is not None
         summary = dict(operation.response_summary_json or {})
         if not operation.wb_object_id:
-            name = str((operation.request_summary_json or {})["name"])
             try:
                 if is_new:
                     created = await create_marketplace_supply(
-                        http_client, api_token=token, name=name
+                        http_client,
+                        api_token=token,
+                        name=str((operation.request_summary_json or {})["name"]),
                     )
                     operation.wb_object_id = str(created.get("id") or "") or None
                 else:
-                    operation.wb_object_id = await _find_created_supply(http_client, token, name)
+                    operation.wb_object_id = await _find_created_supply(
+                        session, http_client, token, operation
+                    )
             except WildberriesClientError as exc:
                 if (
                     is_new
@@ -375,6 +547,8 @@ async def transfer_orders(
             session.add(target)
             await session.flush()
         summary["target_supply_id"] = str(target.id)
+        summary["target_supply_name"] = target.name
+        summary["target_wb_supply_id"] = target.wb_supply_id
         operation.response_summary_json = summary
         await session.commit()
         # Each batch has its own durable dispatch marker: recovery can send

@@ -3749,7 +3749,8 @@ export function FfFbsSupplyWorkspace({
             onClose={() => setTransferDialogOpen(false)}
             onTransferred={(result) => {
               if (shownSupplyId.current !== workspace.supply.id) return
-              if (result.state === 'confirmed') setTransferDialogOpen(false)
+              // WMS-581 R5: после переноса в новую поставку окно показывает ссылку и закрывается по «ОК».
+              if (result.state === 'confirmed' && !result.target_created) setTransferDialogOpen(false)
               setPackingSelectedIds((current) => {
                 if (result.transferred_order_ids.length === 0) return current
                 const next = new Set(current)
@@ -3870,7 +3871,7 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Очистить ЧЗ у выбранных заказов?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Привязки снимутся у нас и в WB. Коды останутся в истории и не вернутся в свободный пул. Затем можно внести правильные коды. Упаковка и остаток товара не изменятся.
+            Привязки снимутся у нас и в WB. Коды из пула вернутся в свободные — этикетки с ними нужно уничтожить. Внешние и уже введённые в оборот коды в пул не вернутся. Затем можно внести правильные коды. Упаковка и остаток товара не изменятся.
           </Typography>
           <Stack spacing={1} data-testid="fbs-packing-clear-preview">
             {clearMarkingOrders?.map((order) => (

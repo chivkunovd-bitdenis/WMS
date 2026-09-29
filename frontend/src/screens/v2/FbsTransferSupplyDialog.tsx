@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import {
   Alert,
   Button,
@@ -7,10 +8,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
+  IconButton,
+  InputAdornment,
+  Link,
+  Menu,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material'
 import {
@@ -24,20 +28,18 @@ import {
 } from './fbsApi'
 import { fbsErrorText, ordersWord } from './fbsUx'
 
-// WMS-562: перенос выбранных заказов упаковки в другую поставку WB.
-// Первая строка — «Новая поставка» (target_supply_id = null); остальные —
-// доступные новые поставки того же селлера, которые ещё не взяты в работу.
-// Один и тот же ключ идемпотентности переиспользуется при повторе после ошибки
-// или pending — до тех пор, пока не сменился выбор заказов либо назначения.
+// WMS-562/WMS-581: перенос выбранных заказов упаковки в другую поставку WB.
+// Одно поле с выпадающим списком: первая строка — «Новая поставка»
+// (target_supply_id = null), дальше открытые поставки того же селлера в любом
+// рабочем состоянии, куда WB примет заказы: «номер WB · от даты создания».
+// При «Новой поставке» это же поле — строка ввода её названия. Один и тот же
+// ключ идемпотентности переиспользуется при повторе после ошибки или pending —
+// до тех пор, пока не сменился выбор заказов, назначения или названия.
 
 // Загрузчики выносятся в проп, чтобы тесты могли подставить контракт без сети.
 export type FbsTransferSupplyDialogDeps = {
-  loadTargets: () => Promise<FbsTransferTarget[]>
-  submit: (body: {
-    order_ids: string[]
-    target_supply_id: string | null
-    idempotency_key: string
-  }) => Promise<FbsTransferOrdersResult>
+  loadTargets: (orderIds: string[]) => Promise<FbsTransferTarget[]>
+  submit: (body: FbsTransferOrdersRequest) => Promise<FbsTransferOrdersResult>
   createIdempotencyKey?: () => string
 }
 
@@ -52,6 +54,16 @@ type Props = {
 
 const NEW_SUPPLY_VALUE = '__wms562_new_supply__'
 
+function transferTargetLabel(target: FbsTransferTarget) {
+  const date = new Date(target.created_at)
+  return `${target.wb_supply_id} · от ${Number.isNaN(date.getTime()) ? target.created_at : date.toLocaleDateString('ru-RU')}`
+}
+
+// Карточка поставки открывается тем же адресом, что и из списка FBS: ?supply_id=.
+function supplyCardHref(supplyId: string) {
+  return `${window.location.pathname}?${new URLSearchParams({ supply_id: supplyId }).toString()}`
+}
+
 export function FbsTransferSupplyDialog({
   open,
   orderIds,
@@ -64,10 +76,17 @@ export function FbsTransferSupplyDialog({
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedTarget, setSelectedTarget] = useState<string>(NEW_SUPPLY_VALUE)
+  const [newName, setNewName] = useState('')
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
+  const [created, setCreated] = useState<FbsTransferOrdersResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [partial, setPartial] = useState<FbsTransferOrdersResult | null>(null)
+  const fieldRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const orderIdsRef = useRef(orderIds)
+  orderIdsRef.current = orderIds
 
   const createKey = deps.createIdempotencyKey ?? createFbsIdempotencyKey
   const orderKey = useMemo(() => [...orderIds].sort().join(','), [orderIds])
@@ -95,6 +114,8 @@ export function FbsTransferSupplyDialog({
     setError(null)
     setPending(null)
     setPartial(null)
+    setCreated(null)
+    setMenuAnchor(null)
     pendingRequestRef.current = null
     try {
       const saved = JSON.parse(window.sessionStorage.getItem(storageKey) ?? 'null') as FbsTransferOrdersRequest | null
@@ -102,13 +123,14 @@ export function FbsTransferSupplyDialog({
     } catch { /* A missing or unavailable saved request is not an operation. */ }
     const previous = pendingRequestRef.current
     setSelectedTarget(previous?.target_supply_id ?? NEW_SUPPLY_VALUE)
+    setNewName(previous?.name ?? '')
     if (previous) setPending('Результат предыдущего переноса ещё не подтверждён. Повторите проверку.')
     let active = true
     setLoading(true)
     setLoadError(null)
     setTargets(null)
     void depsRef.current
-      .loadTargets()
+      .loadTargets(previous?.order_ids ?? orderIdsRef.current)
       .then((list) => {
         if (!active) return
         setTargets(list)
@@ -128,7 +150,8 @@ export function FbsTransferSupplyDialog({
   }, [open, currentSupplyId, storageKey])
 
   const targetSupplyId = selectedTarget === NEW_SUPPLY_VALUE ? null : selectedTarget
-  const fingerprint = `${currentSupplyId}|${orderKey}|${targetSupplyId ?? '__new__'}`
+  const typedName = targetSupplyId === null ? newName.trim() : ''
+  const fingerprint = `${currentSupplyId}|${orderKey}|${targetSupplyId ?? `__new__|${typedName}`}`
 
   const ensureIdempotencyKey = () => {
     if (idempotencyRef.current && idempotencyFingerprintRef.current === fingerprint) {
@@ -148,10 +171,11 @@ export function FbsTransferSupplyDialog({
     setError(null)
     setPending(null)
     setPartial(null)
-    const request = pendingRequestRef.current ?? {
+    const request: FbsTransferOrdersRequest = pendingRequestRef.current ?? {
       order_ids: [...orderIds],
       target_supply_id: targetSupplyId,
       idempotency_key: ensureIdempotencyKey(),
+      ...(typedName ? { name: typedName } : {}),
     }
     const generation = generationRef.current
     savePendingRequest(request)
@@ -169,6 +193,9 @@ export function FbsTransferSupplyDialog({
         if (result.state !== 'confirmed') {
           setError(result.message ?? `Не перенесены: ${result.failed_order_ids.length}.`)
           setPartial(result)
+        } else if (request.target_supply_id === null && result.target_supply_id) {
+          // WMS-581 R5: после переноса в новую поставку — окно со ссылкой на неё.
+          setCreated(result)
         }
       }
       if (result.transferred_order_ids.length > 0 || result.state === 'confirmed') onTransferred(result)
@@ -190,6 +217,42 @@ export function FbsTransferSupplyDialog({
 
   const filteredTargets = (targets ?? []).filter((target) => target.id !== currentSupplyId)
   const targetsEmpty = !loading && filteredTargets.length === 0
+  const selectedTargetRow = filteredTargets.find((target) => target.id === selectedTarget)
+  const isNewTarget = targetSupplyId === null
+  const fieldDisabled = busy || Boolean(pending)
+  const openTargets = () => {
+    if (!fieldDisabled) setMenuAnchor(fieldRef.current)
+  }
+  const chooseTarget = (value: string) => {
+    setSelectedTarget(value)
+    setMenuAnchor(null)
+    if (value === NEW_SUPPLY_VALUE) window.setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  if (created?.target_supply_id) {
+    return (
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" data-testid="fbs-transfer-supply-dialog">
+        <DialogContent>
+          <Typography variant="body1" data-testid="fbs-transfer-created">
+            Создана поставка{' '}
+            <Link
+              href={supplyCardHref(created.target_supply_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="fbs-transfer-created-link"
+            >
+              {created.target_supply_name ?? 'Новая поставка'} · WB {created.target_wb_supply_id ?? '—'}
+            </Link>
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button variant="contained" onClick={onClose} data-testid="fbs-transfer-created-ok">
+            ОК
+          </Button>
+        </DialogActions>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog
@@ -228,50 +291,82 @@ export function FbsTransferSupplyDialog({
               <Typography variant="body2">Загружаем доступные поставки…</Typography>
             </Stack>
           ) : (
-            <RadioGroup
-              value={selectedTarget}
-              onChange={(event) => setSelectedTarget(event.target.value)}
-              data-testid="fbs-transfer-targets"
-            >
-              <FormControlLabel
-                value={NEW_SUPPLY_VALUE}
-                control={<Radio disabled={busy || Boolean(pending)} />}
-                label={
-                  <Stack spacing={0}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      Новая поставка
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      WMS создаст новую поставку в WB и перенесёт выбранные заказы туда.
-                    </Typography>
-                  </Stack>
-                }
-                data-testid="fbs-transfer-target-new"
+            <Stack spacing={1} data-testid="fbs-transfer-targets">
+              <TextField
+                ref={fieldRef}
+                inputRef={inputRef}
+                fullWidth
+                label="Поставка"
+                placeholder="Новая поставка"
+                value={isNewTarget ? newName : selectedTargetRow ? transferTargetLabel(selectedTargetRow) : ''}
+                onChange={(event) => {
+                  if (isNewTarget) setNewName(event.target.value)
+                }}
+                onClick={() => {
+                  if (!isNewTarget) openTargets()
+                }}
+                disabled={fieldDisabled}
+                data-testid="fbs-transfer-target-field"
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: {
+                    readOnly: !isNewTarget,
+                    maxLength: 255,
+                    'data-testid': 'fbs-transfer-target-input',
+                    style: isNewTarget ? undefined : { cursor: 'pointer' },
+                  },
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          aria-label="Выбрать поставку"
+                          disabled={fieldDisabled}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openTargets()
+                          }}
+                          data-testid="fbs-transfer-target-open"
+                        >
+                          <ArrowDropDownIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
-              {filteredTargets.map((target) => (
-                <FormControlLabel
-                  key={target.id}
-                  value={target.id}
-                  control={<Radio disabled={busy || Boolean(pending)} />}
-                  label={
-                    <Stack spacing={0}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {target.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        WB {target.wb_supply_id}
-                      </Typography>
-                    </Stack>
-                  }
-                  data-testid={`fbs-transfer-target-${target.id}`}
-                />
-              ))}
+              <Menu
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+                disableRestoreFocus
+                slotProps={{ paper: { sx: { width: menuAnchor?.clientWidth, maxHeight: 360 } } }}
+              >
+                <MenuItem
+                  selected={isNewTarget}
+                  onClick={() => chooseTarget(NEW_SUPPLY_VALUE)}
+                  data-testid="fbs-transfer-target-new"
+                >
+                  Новая поставка
+                </MenuItem>
+                {filteredTargets.map((target) => (
+                  <MenuItem
+                    key={target.id}
+                    selected={target.id === selectedTarget}
+                    onClick={() => chooseTarget(target.id)}
+                    data-testid={`fbs-transfer-target-${target.id}`}
+                  >
+                    {transferTargetLabel(target)}
+                  </MenuItem>
+                ))}
+              </Menu>
               {targetsEmpty ? (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                  Других новых поставок нет — доступна только «Новая поставка».
+                <Typography variant="caption" color="text.secondary">
+                  Других подходящих поставок нет — доступна только «Новая поставка».
                 </Typography>
               ) : null}
-            </RadioGroup>
+            </Stack>
           )}
         </Stack>
       </DialogContent>
@@ -300,7 +395,7 @@ export function makeFbsTransferSupplyDeps(
   sourceSupplyId: string,
 ): FbsTransferSupplyDialogDeps {
   return {
-    loadTargets: () => fetchFbsTransferTargets(token, authHeaders, sourceSupplyId),
+    loadTargets: (orderIds) => fetchFbsTransferTargets(token, authHeaders, sourceSupplyId, orderIds),
     submit: (body) => transferFbsOrders(token, authHeaders, sourceSupplyId, body),
   }
 }

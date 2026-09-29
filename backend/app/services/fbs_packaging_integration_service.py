@@ -352,9 +352,21 @@ async def create_packaging_task_for_supply(
     await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
     await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
 
+    # WMS-581: a WB order moved here already packed in another task cannot be
+    # packed again; planning it would leave a unit nobody can pack.
+    packed_elsewhere = set(
+        await session.scalars(
+            select(FbsPackagingFulfillment.fbs_order_id).where(
+                FbsPackagingFulfillment.fbs_order_id.in_(
+                    [order.id for order in supply.orders if order.marketplace == "wb"]
+                ),
+                FbsPackagingFulfillment.undone_at.is_(None),
+            )
+        )
+    )
     qty_by_product: dict[uuid.UUID, int] = defaultdict(int)
     for order in supply.orders:
-        if order.status == FBS_ORDER_STATUS_CANCELLED:
+        if order.status == FBS_ORDER_STATUS_CANCELLED or order.id in packed_elsewhere:
             continue
         if order.marketplace == "ozon" and order.product_positions:
             for position in order.product_positions:

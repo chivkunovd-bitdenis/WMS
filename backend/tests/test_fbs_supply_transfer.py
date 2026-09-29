@@ -139,6 +139,12 @@ async def test_unknown_create_recovers_named_supply_without_second_post(db_sessi
     patch = AsyncMock()
     monkeypatch.setattr(svc, "add_orders_to_marketplace_supply", patch)
     monkeypatch.setattr(svc, "fetch_marketplace_supply_order_ids", AsyncMock(return_value=[1, 2]))
+    # WMS-581 R7: перед созданием WMS снимает список поставок WB (здесь пустой).
+    monkeypatch.setattr(
+        svc,
+        "fetch_marketplace_supplies_page",
+        AsyncMock(return_value=MarketplaceSuppliesPage(supplies={}, next_cursor=None)),
+    )
     assert (await invoke(db_session, tenant, source, None, orders))[
         "state"
     ] == "pending_confirmation"
@@ -149,7 +155,10 @@ async def test_unknown_create_recovers_named_supply_without_second_post(db_sessi
         "fetch_marketplace_supplies_page",
         AsyncMock(
             return_value=MarketplaceSuppliesPage(
-                supplies={"WB-created": (name, False)}, next_cursor=None
+                supplies={"WB-created": (name, False)},
+                next_cursor=None,
+                # WMS-581 R7: WB отдаёт createdAt; по нему отличается своя поставка.
+                created_at={"WB-created": datetime.now(UTC)},
             )
         ),
     )
@@ -183,7 +192,8 @@ async def test_targets_and_mutations_enforce_scope_and_draft(db_session, monkeyp
     assert [
         row["id"] for row in await svc.list_transfer_targets(db_session, tenant.id, source.id)
     ] == [str(target.id)]
-    target.status = "assembling"
+    # WMS-581 R1: «в работе» теперь допустимая цель; закрытой остаётся переданная.
+    target.status = "in_delivery"
     await db_session.commit()
     assert await svc.list_transfer_targets(db_session, tenant.id, source.id) == []
     with pytest.raises(svc.FbsSupplyError, match="invalid_transfer_target"):
