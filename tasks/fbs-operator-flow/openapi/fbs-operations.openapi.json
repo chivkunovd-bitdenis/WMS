@@ -5273,6 +5273,136 @@
           }
         }
       }
+    },
+    "/operations/fbs-supplies/{supply_id}/transfer-orders": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Transfer Supply Orders",
+        "operationId": "transfer_supply_orders_operations_fbs_supplies__supply_id__transfer_orders_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsSupplyTransferBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsSupplyTransferOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/transfer-targets": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Transfer Targets",
+        "operationId": "get_transfer_targets_operations_fbs_supplies__supply_id__transfer_targets_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "order_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order Ids"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FbsSupplyTransferTargetOut"
+                  },
+                  "title": "Response Get Transfer Targets Operations Fbs Supplies  Supply Id  Transfer Targets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -32296,6 +32426,183 @@
           "valid_from"
         ],
         "title": "TariffCreateBody"
+      },
+      "FbsSupplyTransferTargetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "wb_supply_id": {
+            "type": "string",
+            "title": "Wb Supply Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "wb_supply_id",
+          "created_at"
+        ],
+        "title": "FbsSupplyTransferTargetOut"
+      },
+      "FbsSupplyTransferOut": {
+        "properties": {
+          "target_supply_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Supply Id"
+          },
+          "target_supply_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Supply Name"
+          },
+          "target_wb_supply_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Wb Supply Id"
+          },
+          "target_created": {
+            "type": "boolean",
+            "title": "Target Created",
+            "default": false
+          },
+          "transferred_order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Transferred Order Ids"
+          },
+          "failed_order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Failed Order Ids"
+          },
+          "pending_order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Pending Order Ids"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "partial",
+              "failed",
+              "pending_confirmation"
+            ],
+            "title": "State"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_supply_id",
+          "transferred_order_ids",
+          "failed_order_ids",
+          "pending_order_ids",
+          "state",
+          "message"
+        ],
+        "title": "FbsSupplyTransferOut"
+      },
+      "FbsSupplyTransferBody": {
+        "properties": {
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Order Ids"
+          },
+          "target_supply_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Supply Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_ids",
+          "idempotency_key"
+        ],
+        "title": "FbsSupplyTransferBody"
       }
     },
     "securitySchemes": {
