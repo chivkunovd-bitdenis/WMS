@@ -14,6 +14,7 @@ from sqlalchemy import event, select
 from app.db.session import SessionLocal, engine
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.product import Product
@@ -260,6 +261,10 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     assert (
         next(row for row in rows if row["movement_id"] == str(reversal.id))["quantity_delta"] == 1
     )
+    reversal_row = next(row for row in rows if row["movement_id"] == str(reversal.id))
+    assert reversal_row["document"]["id"] == str(wb_order.id)
+    assert reversal_row["kiz"] is None
+    assert next(row for row in rows if row["movement_id"] == str(wb_move.id))["kiz"] == "WB-KIZ"
     assert all(
         row["quantity_delta"] == -1
         for row in rows
@@ -278,7 +283,8 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     )
     assert response.status_code == 200
     assert {row["movement_id"] for row in response.json()["rows"]} == {
-        str(oz_move2.id), str(fbo.id)
+        str(oz_move2.id),
+        str(fbo.id),
     }
     assert {row["shk"] for row in response.json()["rows"]} == {"000008"}
     assert {row["size"] for row in response.json()["rows"]} == {"44"}
@@ -318,6 +324,140 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     )
     assert any(row[6] == "0007" and "\\u001d" in row[-1] for row in oz_rows)
     assert all(row[6] in {"0007", "0008"} for row in oz_rows)
+
+
+@pytest.mark.asyncio
+async def test_client_report_return_type_marketplace_and_excel(async_client: AsyncClient) -> None:
+    headers, tenant_id, _ = await _org(async_client, name="ClientReturns")
+    seller_id = await _seller(async_client, headers, "Returns Seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="ReturnsWH")
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Returns Product",
+            sku_code="RET-1",
+            wb_barcode="00077",
+        )
+        session.add(product)
+        await session.flush()
+        movements: dict[str, uuid.UUID] = {}
+        requests: dict[str, uuid.UUID] = {}
+        lines: dict[str, uuid.UUID] = {}
+        for label, kind, marketplace in (
+            ("wb", "return", "wb"),
+            ("ozon", "return", "ozon"),
+            ("unknown", "return", None),
+            ("inbound", "inbound", "wb"),
+        ):
+            request = InboundIntakeRequest(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                status="done",
+                operation_type=kind,
+                marketplace=marketplace,
+                document_number=f"DOC-{label}",
+            )
+            session.add(request)
+            await session.flush()
+            line = InboundIntakeLine(request_id=request.id, product_id=product.id, expected_qty=2)
+            session.add(line)
+            await session.flush()
+            movement = InventoryMovement(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                storage_location_id=location_id,
+                quantity_delta=2,
+                movement_type="inbound_intake",
+                inbound_intake_line_id=line.id,
+                created_at=AT,
+            )
+            session.add(movement)
+            await session.flush()
+            movements[label], requests[label] = movement.id, request.id
+            lines[label] = line.id
+        other_kind = InventoryMovement(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=1,
+            movement_type="discrepancy_act",
+            inbound_intake_line_id=lines["wb"],
+            created_at=AT,
+        )
+        session.add(other_kind)
+        unrelated = InventoryMovement(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            created_at=AT,
+        )
+        session.add(unrelated)
+        await session.commit()
+    response = await async_client.get("/reports/client-movements", headers=headers, params=PERIOD)
+    assert response.status_code == 200, response.text
+    rows = {row["movement_id"]: row for row in response.json()["rows"]}
+    assert len(rows) == 6
+    for label in ("wb", "ozon", "unknown"):
+        row = rows[str(movements[label])]
+        assert row["operation"] == "return"
+        assert row["document"] == {
+            "id": str(requests[label]),
+            "type": "return",
+            "number": f"DOC-{label}",
+        }
+        assert row["marketplace"] == (label if label != "unknown" else None)
+        assert row["quantity_delta"] == 2 and row["kiz"] is None
+    inbound_row = rows[str(movements["inbound"])]
+    assert inbound_row["operation"] == "inbound_intake"
+    assert inbound_row["document"]["type"] == "inbound"
+    assert inbound_row["marketplace"] is None
+    assert rows[str(unrelated.id)]["operation"] == "inbound_intake"
+    assert rows[str(unrelated.id)]["document"] is None
+    assert rows[str(other_kind.id)]["operation"] == "discrepancy_act"
+    assert rows[str(other_kind.id)]["document"]["type"] == "inbound"
+    assert rows[str(other_kind.id)]["marketplace"] is None
+    for marketplace in ("wb", "ozon"):
+        selected = await async_client.get(
+            "/reports/client-movements",
+            headers=headers,
+            params={**PERIOD, "marketplace": marketplace},
+        )
+        assert selected.status_code == 200
+        assert [row["movement_id"] for row in selected.json()["rows"]] == [
+            str(movements[marketplace])
+        ]
+    exported = await async_client.get(
+        "/reports/client-movements/export.xlsx", headers=headers, params=PERIOD
+    )
+    assert exported.status_code == 200
+    book = load_workbook(io.BytesIO(exported.content), read_only=True)
+    assert [row[3] for row in list(book["WB"].values)[1:]] == ["return"]
+    assert [row[3] for row in list(book["Ozon"].values)[1:]] == ["return"]
+    assert sorted(row[3] for row in list(book["Общие"].values)[1:]) == [
+        "discrepancy_act",
+        "inbound_intake",
+        "inbound_intake",
+        "return",
+    ]
+    wb_only = await async_client.get(
+        "/reports/client-movements/export.xlsx",
+        headers=headers,
+        params={**PERIOD, "marketplace": "wb"},
+    )
+    assert wb_only.status_code == 200
+    filtered = load_workbook(io.BytesIO(wb_only.content), read_only=True)
+    assert [row[3] for row in list(filtered["WB"].values)[1:]] == ["return"]
+    assert all(len(list(filtered[name].values)) == 1 for name in ("Ozon", "Общие"))
 
 
 @pytest.mark.asyncio
