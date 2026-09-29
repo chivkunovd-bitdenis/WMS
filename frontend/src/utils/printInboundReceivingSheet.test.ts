@@ -39,7 +39,7 @@ describe('buildInboundReceivingSheetHtml', () => {
 
   it('renders columns in order: Фото, Товар, ШК, Заявлено, Факт', () => {
     const html = buildInboundReceivingSheetHtml(base)
-    const headOrder = ['>Фото</th>', '>Товар</th>', '>ШК</th>', '>Заявлено</th>', '>Факт</th>']
+    const headOrder = ['<th>Фото</th>', '<th>Товар</th>', '<th>ШК</th>', '<th>Заявлено</th>', '<th>Факт</th>']
     let lastIndex = -1
     for (const marker of headOrder) {
       const idx = html.indexOf(marker)
@@ -117,40 +117,5 @@ describe('buildInboundReceivingSheetHtml', () => {
     })
     expect(html).toContain('&lt;b&gt;xss&lt;/b&gt; &amp; &quot;q&quot;')
     expect(html).not.toContain('<b>xss</b>')
-  })
-})
-
-describe('WMS-586: накладная с фактом и расхождением', () => {
-  it('title replaces the generic heading', () => {
-    const html = buildInboundReceivingSheetHtml({ ...base, title: 'Приёмка №000088 от 25.09.2026' })
-    expect(html).toContain('<h1>Приёмка №000088 от 25.09.2026</h1>')
-    expect(html).not.toContain('<h1>Лист приёмки</h1>')
-  })
-
-  it('has the Расхождение column right after Факт', () => {
-    const html = buildInboundReceivingSheetHtml(base)
-    expect(html.indexOf('>Расхождение</th>')).toBeGreaterThan(html.indexOf('>Факт</th>'))
-  })
-
-  it('prints fact and signed difference per line when the fact is known', () => {
-    const html = buildInboundReceivingSheetHtml({
-      ...base,
-      items: [
-        makeItem({ expected_qty: 10, actual_qty: 8 }),
-        makeItem({ expected_qty: 5, actual_qty: 7 }),
-        makeItem({ expected_qty: 4, actual_qty: 4 }),
-      ],
-    })
-    const facts = [...html.matchAll(/data-testid="receiving-sheet-fact">([^<]*)</g)].map((m) => m[1])
-    const diffs = [...html.matchAll(/data-testid="receiving-sheet-diff">([^<]*)</g)].map((m) => m[1])
-    expect(facts).toEqual(['8', '7', '4'])
-    expect(diffs).toEqual(['−2', '+2', '0'])
-    expect(html.match(/rs-diff-cell rs-diff-nonzero/g)?.length).toBe(2)
-  })
-
-  it('leaves fact and difference empty before reception is closed', () => {
-    const html = buildInboundReceivingSheetHtml({ ...base, items: [makeItem({ actual_qty: null })] })
-    expect(html).toContain('data-testid="receiving-sheet-fact"></td>')
-    expect(html).toContain('data-testid="receiving-sheet-diff"></td>')
   })
 })

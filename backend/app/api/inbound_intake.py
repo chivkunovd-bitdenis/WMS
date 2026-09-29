@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import urllib.parse
 import uuid
 from datetime import date
 from typing import Annotated, Literal, cast
@@ -58,6 +59,10 @@ from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import volume_liters_from_mm
+from app.services.inbound_acceptance_act_service import (
+    acceptance_act_filename,
+    build_acceptance_act_workbook,
+)
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
 from app.services.marketplace_provider import OzonMarketplaceProvider
@@ -868,6 +873,41 @@ async def get_inbound_request(
     )
     boxes_out = [_box_out(b) for b in boxes]
     return _request_out(r, lines=lines_out, boxes=boxes_out)
+
+
+@router.get("/{request_id}/acceptance-act.xlsx")
+async def download_inbound_acceptance_act(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    """WMS-586: «Акт приёмки» — Excel завершённой приёмки: план, факт, расхождение."""
+    try:
+        req, content = await build_acceptance_act_workbook(
+            session, user.tenant_id, request_id, seller_product_owner_id=seller_scope
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="request_not_found"
+            ) from None
+        if exc.code == "reception_not_closed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="reception_not_closed"
+            ) from None
+        raise
+    filename = acceptance_act_filename(req)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="acceptance-act.xlsx"; '
+                f"filename*=UTF-8''{urllib.parse.quote(filename)}"
+            )
+        },
+    )
 
 
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)

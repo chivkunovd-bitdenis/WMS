@@ -20,6 +20,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
+import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import StraightenOutlined from '@mui/icons-material/StraightenOutlined'
 import {
   Accordion,
@@ -452,6 +453,37 @@ export function FfInboundRequestView({
   numberedInboundBoxLabels = false,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
+  const [acceptanceActLoading, setAcceptanceActLoading] = useState(false)
+  // WMS-586: «Акт приёмки» — Excel завершённой приёмки (план, факт, расхождение).
+  // Имя файла приходит от сервера в Content-Disposition.
+  const downloadAcceptanceAct = async () => {
+    if (acceptanceActLoading) return
+    setAcceptanceActLoading(true)
+    try {
+      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/acceptance-act.xlsx`), {
+        headers: authHeaders,
+      })
+      if (!response.ok) {
+        setError(await readApiErrorMessage(response))
+        return
+      }
+      const blob = await response.blob()
+      const header = response.headers.get('content-disposition') ?? ''
+      const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+      let filename = 'acceptance-act.xlsx'
+      try { if (encoded) filename = decodeURIComponent(encoded) } catch { /* keep fallback name */ }
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось скачать акт приёмки.')
+    } finally {
+      setAcceptanceActLoading(false)
+    }
+  }
 
   const [detail, setDetail] = useState<InboundDetail | null>(null)
   const [catalog, setCatalog] = useState<WbCatalogRow[] | null>(null)
@@ -2475,19 +2507,7 @@ export function FfInboundRequestView({
                   data-testid="ff-inbound-print-waybill"
                   onClick={() => {
                     const wh = requestWarehouse
-                    // WMS-586: «Приёмка №… от …»; факт и расхождение — только когда
-                    // приёмка завершена, иначе «Факт» остаётся пустым под ручной пересчёт.
-                    const createdAt = detail.created_at ? new Date(detail.created_at) : null
-                    const documentDate = createdAt && !Number.isNaN(createdAt.getTime())
-                      ? new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow' }).format(createdAt)
-                      : null
-                    const title = [
-                      inboundOperationTypeReceptionLabel(detail.operation_type),
-                      displayDocumentNumber,
-                      documentDate ? `от ${documentDate}` : null,
-                    ].filter(Boolean).join(' ')
                     printInboundReceivingSheet({
-                      title,
                       documentNumber: displayDocumentNumber,
                       sellerName: detail.seller_name ?? null,
                       warehouseName: wh ? `${wh.name} (${wh.code})` : '—',
@@ -2502,15 +2522,24 @@ export function FfInboundRequestView({
                           wb_nm_id: meta.wb_nm_id,
                           photo_url: meta.wb_primary_image_url,
                           expected_qty: ln.expected_qty,
-                          actual_qty: receptionClosed
-                            ? effectiveActualQty(ln, detail.boxes, detail.status)
-                            : null,
                         }
                       }),
                     })
                   }}
                 >
                   Печать накладной
+                </Button>
+              ) : null}
+
+              {receptionClosed && detail.lines.length > 0 ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadOutlined />}
+                  disabled={busy || acceptanceActLoading}
+                  data-testid="ff-inbound-acceptance-act"
+                  onClick={() => void downloadAcceptanceAct()}
+                >
+                  Акт приёмки
                 </Button>
               ) : null}
 

@@ -30,6 +30,7 @@ const staticTestIds = [...inboundSourceWithoutComments.matchAll(/data-testid\s*=
   .sort()
 
 const baselineStaticTestIds = [
+  'ff-inbound-acceptance-act',
   'ff-inbound-add-products',
   'ff-inbound-add-to-box',
   'ff-inbound-admin-distribution',
