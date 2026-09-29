@@ -334,7 +334,7 @@ async def test_fbs_pick_options_reports_active_pick_for_source_location(
         for location in product["locations"]
         if location["storage_location_id"] == str(location_id)
     )
-    assert source["quantity"] == 2
+    assert source["quantity"] == 1
     assert source["available"] == 1
     assert source["picked"] == 1
 
@@ -387,13 +387,13 @@ async def test_fbs_pick_options_keeps_physical_balance_after_pick(
         for location in product["locations"]
         if location["storage_location_id"] == str(location_id)
     )
-    assert source["quantity"] == 1
+    assert source["quantity"] == 0
     assert source["reserved"] == 0
     assert source["available"] == 0
     assert source["picked"] == 1
     assert source["sources"] == [
         {
-            "quantity": 1,
+            "quantity": 0,
             "available": 0,
             "picked": 1,
             "is_loose": True,
@@ -581,4 +581,4 @@ async def test_product_scan_finds_packed_only_container_without_address_storage(
         assert picked is not None and balance is not None
         assert picked.source_container_kind == "box"
         assert picked.source_container_id == box_id
-        assert (balance.quantity, balance.quantity_unpacked, balance.quantity_packed) == (2, 0, 2)
+        assert (balance.quantity, balance.quantity_unpacked, balance.quantity_packed) == (1, 0, 1)

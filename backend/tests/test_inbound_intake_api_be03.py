@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -129,6 +130,43 @@ async def test_loose_scan_increments_actual(async_client: AsyncClient) -> None:
     assert body["lines"][0]["actual_qty"] == 3
     last_box = next(b for b in body["boxes"] if b["id"] == second_box.json()["id"])
     assert last_box["lines"] == []
+
+
+@pytest.mark.asyncio
+async def test_loose_scan_mutation_id_replays_without_duplicate_increment(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=3)
+    url = f"/operations/inbound-intake-requests/{rid}/receiving/scan"
+    first_id = str(uuid.uuid4())
+    first_body = {"barcode": sku, "mutation_id": first_id}
+
+    first = await async_client.post(url, headers=ah, json=first_body)
+    second = await async_client.post(
+        url,
+        headers=ah,
+        json={"barcode": sku, "mutation_id": str(uuid.uuid4())},
+    )
+    replay = await async_client.post(url, headers=ah, json=first_body)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert replay.status_code == 200, replay.text
+    got = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}", headers=ah
+    )
+    assert got.status_code == 200, got.text
+    assert got.json()["lines"][0]["actual_qty"] == 2
+
+    mismatch = await async_client.post(
+        url,
+        headers=ah,
+        json={"barcode": f"{sku}-different", "mutation_id": first_id},
+    )
+    assert mismatch.status_code == 409, mismatch.text
+    assert mismatch.json()["detail"] == "mutation_payload_mismatch"
 
 
 @pytest.mark.asyncio

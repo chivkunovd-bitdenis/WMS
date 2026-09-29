@@ -299,7 +299,8 @@ export type FbsPickingListPrintRow = {
   locations: string[]
   required: number
   picked: number
-  wbOrders: number[]
+  /** Historical field name; Ozon rows store the posting identifier here. */
+  wbOrders: Array<string | number>
   stickerCodes: Array<string | null>
   marking: string
 }
@@ -307,6 +308,8 @@ export type FbsPickingListPrintRow = {
 export type FbsPickingListPrintInput = {
   supplyName: string
   wbSupplyId: string | null
+  /** Older callers are WB; group Ozon sheets must not present their postings as WB orders. */
+  marketplace?: 'wb' | 'ozon' | 'mixed'
   sellerName: string
   wmsWarehouseName: string
   routeLabel: string
@@ -472,6 +475,15 @@ function renderStickerCode(value: string | null) {
 }
 
 export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
+  const marketplace = input.marketplace ?? 'wb'
+  const marketplaceLabel = marketplace === 'ozon' ? 'Ozon' : marketplace === 'mixed' ? 'маркетплейса' : 'WB'
+  const supplyReference = input.wbSupplyId
+    ? marketplace === 'ozon'
+      ? ` · № Ozon ${escapePrintHtml(input.wbSupplyId)}`
+      : marketplace === 'mixed'
+        ? ` · № ${escapePrintHtml(input.wbSupplyId)}`
+        : ` · № WB ${escapePrintHtml(input.wbSupplyId)}`
+    : ''
   let position = 1
   const rows = input.rows.map((row) => {
     const positionFrom = position
@@ -533,7 +545,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
   </head>
   <body>
     <h1>Лист подбора FBS</h1>
-    <div class="subtitle">${escapePrintHtml(input.supplyName)}${input.wbSupplyId ? ` · № WB ${escapePrintHtml(input.wbSupplyId)}` : ''}</div>
+    <div class="subtitle">${escapePrintHtml(input.supplyName)}${supplyReference}</div>
     <div class="meta">
       <div><span>Селлер</span><strong>${escapePrintHtml(input.sellerName)}</strong></div>
       <div><span>Склад WMS</span><strong>${escapePrintHtml(input.wmsWarehouseName)}</strong></div>
@@ -541,7 +553,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>

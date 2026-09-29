@@ -321,15 +321,51 @@ describe('WMS-574 · скан в активной рамке окна сборк
     expect(scanMessage()).toContain('активен')
   })
 
-  it('R17, Д12: у поставки нет коробов — один короб тем же запросом (count 1), QR не готов — retry-qr и сообщение продукта', async () => {
+  it('WMS-589: «Начать работу» без коробов создаёт и открывает один короб, но не запрашивает и не печатает QR', async () => {
     boxes = []
     await startFrame()
     const created = calls.filter((call) => call.method === 'POST' && call.path === `/operations/fbs-supplies/${SUPPLY_ID}/boxes`)
     expect(created).toHaveLength(1)
     expect(created[0]!.body).toMatchObject({ count: 1, without_distribution: false })
-    expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(1)
+    expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
     expect(boxLine(1)).toContain('открыт — сканы идут сюда')
-    expect(document.body.textContent).toContain('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
+  })
+
+  it('WMS-589: «Создать короб» создаёт и открывает короб без печати QR', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    await startFrame()
+    const create = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-create-box-${SUPPLY_ID}"]`)!
+    await act(async () => create.click())
+    await settle(80)
+
+    expect(calls.filter((call) => call.method === 'POST' && call.path === `/operations/fbs-supplies/${SUPPLY_ID}/boxes`)).toHaveLength(1)
+    expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
+    expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+  })
+
+  it('WMS-589: завершение работы и переключатель рамки не открывают печать', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    await startFrame()
+    calls = []
+
+    const finish = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)!
+    await act(async () => finish.click())
+    const toggle = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-toggle-${SUPPLY_ID}"]`)!
+    await act(async () => toggle.click())
+    await settle(20)
+
+    expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
+    expect(document.body.textContent).not.toContain('Проверка перед печатью')
+  })
+
+  it('WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    await startFrame()
+    const boxesRoot = document.querySelector(`[data-testid="fbs-assembly-boxes-${SUPPLY_ID}"]`)!
+    const qr = Array.from(boxesRoot.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
+    await act(async () => qr.click())
+
+    expect(document.body.textContent).toContain('Проверка перед печатью')
   })
 })
 
@@ -460,6 +496,30 @@ describe('WMS-574 · обычная карточка поставки не ме�
     expect(scanMessage()).toContain('активен')
     expect(document.body.textContent).not.toContain('Создать короб')
     expect(document.body.textContent).toContain('Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером')
+  })
+
+  it('WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр', async () => {
+    transferred = { assetReady: true }
+    boxes = [box('box-1', 1, ['order-c'], true)]
+    window.sessionStorage.setItem(`wms:fbs:${SUPPLY_ID}:stage`, 'boxes')
+    await act(async () => {
+      root.render(
+        <FfFbsSupplyWorkspace
+          token="t-574"
+          authHeaders={() => ({ Authorization: 'Bearer t-574' })}
+          supplyId={SUPPLY_ID}
+          initialWorkspace={workspace()}
+          open
+          onClose={() => undefined}
+        />,
+      )
+    })
+    await settle(50)
+    const boxesRoot = document.querySelector('[data-testid="fbs-boxes"]')!
+    const qr = Array.from(boxesRoot.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
+    await act(async () => qr.click())
+
+    expect(document.body.textContent).toContain('Проверка перед печатью')
   })
 })
 

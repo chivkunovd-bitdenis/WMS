@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -155,6 +156,47 @@ async def test_tsd_box_scan_location_then_product_sequence(
     assert prod_body["kind"] == "product"
     assert prod_body["quantity"] == 1
     assert prod_body["picked_qty"] == 1
+
+
+@pytest.mark.asyncio
+async def test_tsd_box_scan_mutation_id_replays_original_result_without_second_debit(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = await _register_headers(async_client, f"tsd-retry-{int(time.time())}")
+    mid, box_id, pid, loc_id, _wid = await _confirmed_unload_with_open_box(
+        async_client, h, monkeypatch, plan_qty=3, address_storage_enabled=True
+    )
+    url = f"{BASE}/{mid}/boxes/{box_id}/scan"
+    mutation_id = str(uuid.uuid4())
+    body = {
+        "barcode": E2E_BARCODE,
+        "product_id": pid,
+        "storage_location_id": loc_id,
+        "mutation_id": mutation_id,
+    }
+    first = await async_client.post(url, headers=h, json=body)
+    intervening = await async_client.post(
+        url,
+        headers=h,
+        json={**body, "mutation_id": str(uuid.uuid4())},
+    )
+    replay = await async_client.post(url, headers=h, json=body)
+
+    assert first.status_code == 200, first.text
+    assert intervening.status_code == 200, intervening.text
+    assert replay.status_code == 200, replay.text
+    assert first.json()["quantity"] == replay.json()["quantity"] == 1
+    detail = await async_client.get(f"{BASE}/{mid}", headers=h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["lines"][0]["picked_qty"] == 2
+
+    mismatch = await async_client.post(
+        url,
+        headers=h,
+        json={**body, "quantity": 2},
+    )
+    assert mismatch.status_code == 409, mismatch.text
+    assert mismatch.json()["detail"] == "mutation_payload_mismatch"
 
 
 @pytest.mark.asyncio

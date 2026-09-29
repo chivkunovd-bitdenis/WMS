@@ -36,7 +36,6 @@ import {
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
-import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
@@ -44,6 +43,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsCancelledAfterPackDialog } from './FbsCancelledAfterPackDialog'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FbsSupplyGroupCreateDialog } from './FbsSupplyGroupCreateDialog'
+import { FbsAssemblyTaskRows } from './FbsAssemblyTaskRows'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
@@ -53,6 +53,7 @@ import {
 import { MarketplaceChip, type MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
+import { resumePendingFbsAssemblyTask } from './fbsPendingAssemblyTask'
 import {
   FBS_ASSEMBLY_QUERY_PARAM,
   fbsSelectionNeedsGroupCreate,
@@ -69,6 +70,7 @@ import {
 import { plural } from '../../utils/plural'
 import {
   fetchFbsSellerWarehouses,
+  fetchFbsAssemblyTasks,
   fetchFbsSupplyWorklist,
   fetchFbsWorklist,
   fetchFbsCargoPlaces,
@@ -80,6 +82,7 @@ import {
   runFbsOrdersSync,
   syncFbsOrderStatuses,
   syncFbsSupplyTracking,
+  type FbsAssemblyTask,
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsSupplyWorklistItem,
@@ -463,20 +466,6 @@ function warehouseOptionLabel(
   return sellerWarehouseNames[option.id] || option.name || option.wb_warehouse.name || `WB ${option.wb_warehouse.id}`
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatNullableDateTime(value: string | null): string {
-  return value ? formatDateTime(value) : '—'
-}
-
 function supplyStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     // «Состав» — это название первой вкладки внутри карточки поставки, а не статус
@@ -488,13 +477,6 @@ function supplyStatusLabel(status: string): string {
     done: 'Завершена',
   }
   return labels[status] ?? 'Статус уточняется'
-}
-
-function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 'warning' {
-  if (status === 'done') return 'success'
-  if (status === 'in_delivery') return 'primary'
-  if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
-  return 'default'
 }
 
 // Задача 9 пула (HANDOFF-POLISH.md): отметка свежести данных — сколько прошло с последней
@@ -581,6 +563,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const [searchTotal, setSearchTotal] = useState<number | null>(null)
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
+  const [assemblyTasks, setAssemblyTasks] = useState<FbsAssemblyTask[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
@@ -629,6 +612,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   }, [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const openedAssemblyFromQuery = useRef<string | null>(null)
+  const resumedPendingAssemblyTaskFor = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
@@ -638,6 +622,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
+
+  // A successful server commit whose reply was lost is safe to replay under
+  // its saved key. Leave a failed recovery on disk for the dialog retry.
+  useEffect(() => {
+    if (!token || resumedPendingAssemblyTaskFor.current === token) return
+    resumedPendingAssemblyTaskFor.current = token
+    void resumePendingFbsAssemblyTask(token, authHeaders).catch(() => undefined)
+  }, [token, authHeaders])
 
   const load = useCallback(async () => {
     // Новые фильтры загружаются сразу; опоздавший ответ прежнего запроса
@@ -658,13 +650,21 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           search: activeSearch,
           limit: 500,
         }
-        const [suppliesPage, ordersPage] = await Promise.all([
+        const [suppliesPage, ordersPage, assemblyTasksPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
           fetchFbsWorklist(token, authHeaders, params),
+          statusGroup === 'active'
+            ? fetchFbsAssemblyTasks(token, authHeaders, {
+              marketplace: marketplace === '__all__' ? null : marketplace,
+            })
+            : Promise.resolve({ items: [] }),
         ])
         if (sequence !== loadSequence.current) return
         setSearchTotal(suppliesPage.total ?? suppliesPage.items.length)
         setActiveSupplies(suppliesPage.items)
+        setAssemblyTasks(assemblyTasksPage.items.filter((task) => (
+          sellerId === '__all__' || task.supplies.some((supply) => supply.seller.id === sellerId)
+        )))
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
         setOrders([])
         setWarehouseOptions([])
@@ -684,6 +684,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       setSearchTotal(page.total ?? page.items.length)
       setOrders(page.items)
       setActiveSupplies([])
+      setAssemblyTasks([])
       setExternalActiveOrders([])
       setSelectedCache((current) => {
         const next = new Map(current)
@@ -1530,63 +1531,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               </TableRow>
             </TableHead>
             <TableBody>
-              {activeSupplies.map((supply) => (
-                <TableRow
-                  key={supply.id}
-                  hover
-                  onClick={() => openWorkspace(supply.id)}
-                  sx={{ cursor: 'pointer', '& > td': { py: 1 } }}
-                  data-testid={`fbs-18-supply-${supply.id}`}
-                >
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 750 }}>
-                      {supply.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {supply.marketplace === 'ozon' ? 'Ozon' : `WB №${supply.wb_supply_id}`}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{supply.seller.name}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                      {supply.wb_warehouse.name || (
-                        supply.marketplace === 'ozon'
-                          ? 'Склад Ozon'
-                          : `WB ${supply.wb_warehouse.id}`
-                      )}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      WMS: {supply.wms_warehouse.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{supply.orders_count} / {supply.units_count}</TableCell>
-                  <TableCell>{supply.boxes_count}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      color={supplyStatusColor(supply.status)}
-                      label={supplyStatusLabel(supply.status)}
-                      data-testid="fbs-18-supply-status"
-                    />
-                  </TableCell>
-                  <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
-                  <TableCell align="right" onClick={(event) => event.stopPropagation()}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={printingSupplyId === supply.id
-                        ? <CircularProgress size={14} />
-                        : <PrintOutlinedIcon />}
-                      disabled={Boolean(printingSupplyId)}
-                      onClick={() => void openSupplyQrPrint(supply)}
-                      data-testid={`fbs-supply-qr-print-${supply.id}`}
-                    >
-                      {supply.marketplace === 'ozon' ? 'Этикетки коробов' : 'QR'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              <FbsAssemblyTaskRows
+                tasks={statusGroup === 'active' ? assemblyTasks : []}
+                supplies={activeSupplies}
+                printingSupplyId={printingSupplyId}
+                onOpenAssembly={openAssembly}
+                onOpenSupply={(supplyId) => openWorkspace(supplyId)}
+                onPrintSupply={(supply) => { void openSupplyQrPrint(supply) }}
+              />
               {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
                 <TableRow>
                   <TableCell colSpan={8}>

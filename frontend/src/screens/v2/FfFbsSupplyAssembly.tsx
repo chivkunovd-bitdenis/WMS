@@ -91,10 +91,12 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const [noActiveSupply, setNoActiveSupply] = useState(false)
   const escapeHandlerRef = useRef<(() => boolean) | null>(null)
   const openGeneration = useRef(0)
+  const initialStageGeneration = useRef<number | null>(null)
   const writeSeq = useRef(new Map<string, number>())
   const silentRefreshInFlight = useRef(false)
 
   const selectStage = (next: FbsAssemblyStageKey) => {
+    initialStageGeneration.current = null
     if (supplyIds.length) saveFbsAssemblyStage(supplyIds, next)
     setStage(next)
     setError(null)
@@ -109,6 +111,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
     if (generation !== openGeneration.current || writeSeq.current.get(supplyId) !== seq) return
     setWorkspaces((current) => ({ ...current, [supplyId]: next }))
+    return next
   }, [token, authHeaders])
 
   const loadAll = useCallback(async (silent = false) => {
@@ -117,7 +120,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     const generation = openGeneration.current
     if (!silent) setBusy(true)
     try {
-      await Promise.all(ids.map((id) => loadOne(id)))
+      const loaded = await Promise.all(ids.map((id) => loadOne(id)))
+      if (!silent && initialStageGeneration.current === generation) {
+        initialStageGeneration.current = null
+        // The default for a completed task applies only when opening it. A refresh
+        // must not move the operator away from the tab they chose while working.
+        if (loaded.every((one) => one && one.progress.total > 0 && one.progress.picked === one.progress.total)) {
+          setStage('packing')
+          setFramesMounted(true)
+        }
+      }
     } catch (cause) {
       if (generation === openGeneration.current && !silent) {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставки.')
@@ -130,7 +142,9 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   useEffect(() => {
     openGeneration.current += 1
     writeSeq.current = new Map()
+    initialStageGeneration.current = null
     if (!open || !idsKey) return
+    initialStageGeneration.current = openGeneration.current
     const ids = idsKey.split(',')
     setWorkspaces({})
     setError(null)
@@ -256,10 +270,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     const earliestDeadline = ordered
       .map((one) => one.supply.nearest_deadline_at)
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+    const marketplace = ordered.every((one) => one.supply.marketplace === 'wb')
+      ? 'wb'
+      : ordered.every((one) => one.supply.marketplace === 'ozon')
+        ? 'ozon'
+        : 'mixed'
     printWindow.document.open()
     printWindow.document.write(buildFbsPickingListPrintHtml({
       supplyName: `Сборка · ${ordered.length} ${plural(ordered.length, ['поставка', 'поставки', 'поставок'])}`,
       wbSupplyId: ordered.map((one) => one.supply.wb_supply_id).filter(Boolean).join(', ') || null,
+      marketplace,
       sellerName: distinct(ordered.map((one) => one.supply.seller.name)),
       wmsWarehouseName: distinct(ordered.map((one) => one.supply.wms_warehouse.name)),
       routeLabel: distinct(ordered.map(fbsSupplyRouteLabel)),

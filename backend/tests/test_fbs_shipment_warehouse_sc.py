@@ -25,6 +25,7 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     FbsOrderReservation,
 )
+from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -42,7 +43,9 @@ from app.models.fbs_wb_operation import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.services import inventory_service
+from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_errors import WildberriesBusinessError
@@ -425,6 +428,122 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
 
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
     assert bad.status_code == 200, bad.text
+
+
+@pytest.mark.asyncio
+async def test_wb_pick_moves_to_sorting_undo_returns_and_deliver_debits_sorting(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[950011],
+        supply_name="Pick movement delivery",
+    )
+    order_id = order_ids[0]
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None and order.product_id is not None
+        product_id = order.product_id
+        source = StorageLocation(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(warehouse_id),
+            code=f"PICK-{suffix[-8:]}",
+            barcode=f"PICK-BAR-{suffix[-8:]}",
+        )
+        session.add(source)
+        await session.flush()
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source.id,
+                quantity=1,
+                quantity_unpacked=1,
+                quantity_packed=0,
+            )
+        )
+        await session.commit()
+        source_id = source.id
+
+    pick_url = f"/operations/fbs-supplies/{supply['id']}/pick/set"
+    pick_body = {
+        "product_id": str(product_id),
+        "storage_location_id": str(source_id),
+        "quantity": 1,
+        "expected_quantity": 0,
+    }
+    picked = await async_client.post(
+        pick_url,
+        headers={**headers, "Idempotency-Key": "wb-move-pick"},
+        json=pick_body,
+    )
+    assert picked.status_code == 200, picked.text
+
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(warehouse_id)
+        )
+        source_balance = await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, source_id, None, None
+        )
+        sorting_balance = await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, sorting.id, None, None
+        )
+        assert (source_balance, sorting_balance) == (0, 1)
+        pick = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_id)
+        )
+        assert pick is not None and pick.inventory_movement_id is not None
+        sorting_id = sorting.id
+
+    undone = await async_client.post(
+        pick_url,
+        headers={**headers, "Idempotency-Key": "wb-move-undo"},
+        json={**pick_body, "quantity": 0, "expected_quantity": 1},
+    )
+    assert undone.status_code == 200, undone.text
+    async with SessionLocal() as session:
+        assert await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, source_id, None, None
+        ) == 1
+        assert await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, sorting_id, None, None
+        ) == 0
+
+    repicked = await async_client.post(
+        pick_url,
+        headers={**headers, "Idempotency-Key": "wb-move-repick"},
+        json=pick_body,
+    )
+    assert repicked.status_code == 200, repicked.text
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    delivered = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert delivered.status_code == 200, delivered.text
+
+    async with SessionLocal() as session:
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_id
+            )
+        )
+        assert ledger is not None
+        assert ledger.storage_location_id == sorting_id
+        assert ledger.source_mode == "legacy_sorting"
+        assert await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, sorting_id, None, None
+        ) == 0
+        assert await inventory_service.physical_on_hand_in_container(
+            session, tenant_id, product_id, source_id, None, None
+        ) == 0
 
 
 # TC-NEW-FBS-SHIP-STOCK-002, TC-NEW-FBS-SHIP-STOCK-003

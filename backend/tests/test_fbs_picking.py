@@ -601,9 +601,11 @@ async def test_fbs_pick_refresh_keeps_progress(async_client: AsyncClient) -> Non
     assert after["picked"] == 1
 
 
-# TC-09 — WB pick and undo are allocation facts, not inventory movements.
+# TC-09 — WB pick moves the unit to the picking area; undo returns it.
 @pytest.mark.asyncio
-async def test_fbs_pick_and_undo_do_not_move_stock(async_client: AsyncClient) -> None:
+async def test_fbs_pick_and_undo_move_stock_between_source_and_picking_area(
+    async_client: AsyncClient,
+) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
@@ -656,9 +658,9 @@ async def test_fbs_pick_and_undo_do_not_move_stock(async_client: AsyncClient) ->
         )
         assert stored_pick is not None
         assert stored_pick.source_storage_location_id == location_id
-        assert stored_pick.inventory_movement_id is None
-        assert int(source_bal or 0) == 1
-        assert int(sorting_bal or 0) == 0
+        assert stored_pick.inventory_movement_id is not None
+        assert int(source_bal or 0) == 0
+        assert int(sorting_bal or 0) == 1
 
     undo = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/pick/{order_ids[0]}/undo",
@@ -827,7 +829,7 @@ async def test_fbs_pick_undo_allowed_after_pack(async_client: AsyncClient) -> No
         assert order.pack_status == PACK_STATUS_PACKED
         assert pick is not None
         assert pick.undone_at is not None
-        assert pick.inventory_movement_id is None
+        assert pick.inventory_movement_id is not None
 
 
 # TC-01 / cross-seller stock isolation

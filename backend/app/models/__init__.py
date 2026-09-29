@@ -20,6 +20,7 @@ from app.models.billing import (
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
+from app.models.fbs_assembly_task import FbsAssemblyTask, FbsAssemblyTaskSupply
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FbsOrder,
@@ -134,6 +135,8 @@ __all__ = [
     "DocumentDisplaySequence",
     "DocumentEvent",
     "DocumentSequence",
+    "FbsAssemblyTask",
+    "FbsAssemblyTaskSupply",
     "FbsBindingStockPool",
     "FbsOrder",
     "FbsOrderMarking",

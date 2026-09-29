@@ -5,7 +5,7 @@ import { fetchMarketplaceProductCatalogRows } from '../../hooks/useWbProductCata
 import type { MarketplaceProductCatalogRow } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../ui-kit'
-import { resolveProductScanSource, scanSourceKey } from '../ff/unload-pick/pickScanSource'
+import { PickScanSourceError, resolveProductScanSource, scanSourceKey } from '../ff/unload-pick/pickScanSource'
 import { UnloadPickScreen, type UnloadPickScanResult } from '../ff/unload-pick/UnloadPickScreen'
 import {
   cellRef,
@@ -25,6 +25,7 @@ import {
   type GroupPickLogEntry,
   type GroupPickSupplyState,
 } from './fbsSupplyAssembly'
+import { createFbsIdempotencyKey } from './fbsApi'
 
 // WMS-574 R8–R10: «Подбор» окна сборки — тот же экран подбора
 // (UnloadPickScreen), что во вкладке «Подбор» карточки поставки, только план
@@ -86,6 +87,40 @@ type ApiScanResult = {
 }
 
 type PlaceSource = { locationId: string; containerKind: ObjKind | null; containerId: string | null }
+
+type PickSetBody = {
+  product_id: string
+  storage_location_id: string
+  quantity: number
+  expected_quantity: number
+  container_kind: ObjKind | null
+  container_id: string | null
+}
+
+type PendingPickSetRequest = {
+  scopeKey: string
+  supplyId: string
+  idempotencyKey: string
+  body: PickSetBody
+}
+
+class PickQuantityChangedError extends Error {
+  readonly index: number
+
+  constructor(index: number) {
+    super('Количество товара в источнике изменилось. Список подбора обновлён; проверьте число и сохраните его снова.')
+    this.index = index
+  }
+}
+
+async function pickErrorCode(res: Response): Promise<string | null> {
+  try {
+    const payload = await res.clone().json() as { detail?: { code?: unknown } }
+    return typeof payload.detail?.code === 'string' ? payload.detail.code : null
+  } catch {
+    return null
+  }
+}
 
 /** Что знает контейнер об одной поставке группы: план и подборы по местам. */
 type SupplyPickState = {
@@ -156,6 +191,9 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
   // снятие, сделанное после его старта.
   const mutationRef = useRef<number[]>([])
   const logsRef = useRef(new Map<string, GroupPickLogEntry[]>())
+  // A transport failure has an unknown server outcome. The exact body and key
+  // remain paired until this physical source receives a definitive response.
+  const pendingSetRequestsRef = useRef(new Map<string, PendingPickSetRequest>())
   const scannedContainers = useRef(new Map<string, PlaceSource>())
   // Снятия группы идут строго по одному: раздача считается по числам,
   // которые предыдущее снятие уже поменяло.
@@ -373,6 +411,47 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         await load()
         return
       }
+      // Do not calculate a new absolute target while a prior save of this
+      // product/source has an unknown outcome. Replaying its exact request is
+      // the only safe way to reconcile it; a confirmed old target is never
+      // presented as if it had saved the newly requested number.
+      const scopeKey = `${payload.productId}\u0000${payload.place.key}`
+      const previousRequests = [...pendingSetRequestsRef.current.entries()]
+        .filter(([, request]) => request.scopeKey === scopeKey)
+      if (previousRequests.length > 0) {
+        setBusy(true)
+        setError(null)
+        let outcomeUnknown = false
+        try {
+          for (const [attemptKey, request] of previousRequests) {
+            try {
+              const res = await fetch(apiUrl(`${FBS_BASE}/${request.supplyId}/pick/set`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
+                body: JSON.stringify(request.body),
+              })
+              if (res.ok) {
+                pendingSetRequestsRef.current.delete(attemptKey)
+                continue
+              }
+              // Any received 4xx, including a changed source quantity, is a
+              // definitive non-commit for this exact payload. A 5xx remains
+              // unknown and stays available for another exact replay.
+              if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
+              else outcomeUnknown = true
+            } catch {
+              outcomeUnknown = true
+            }
+          }
+          await load()
+          setError(outcomeUnknown
+            ? 'Не удалось уточнить предыдущую операцию. Проверьте количество после обновления и повторите сохранение.'
+            : 'Предыдущая операция сверена. Проверьте количество и сохраните его снова.')
+        } finally {
+          setBusy(false)
+        }
+        return
+      }
       const logKey = pickKey(payload.productId, payload.place.key)
       const plan = planGroupPickSet(
         statesFor(payload.productId, payload.place.key),
@@ -383,24 +462,54 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
       setError(null)
       try {
         for (const change of plan.changes) {
-          const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[change.index]}/pick/set`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...headers(token) },
-            body: JSON.stringify({
+          const attemptKey = [
+            supplyIds[change.index], payload.productId, locationId,
+            source?.containerKind ?? '', source?.containerId ?? '',
+          ].join(':')
+          const state = statesRef.current[change.index]
+          const expectedQuantity = state?.pickedHere.get(pickKey(payload.productId, payload.place.key)) ?? 0
+          const request: PendingPickSetRequest = {
+            scopeKey,
+            supplyId: supplyIds[change.index],
+            idempotencyKey: createFbsIdempotencyKey(),
+            body: {
               product_id: payload.productId,
               storage_location_id: locationId,
               quantity: change.quantity,
+              expected_quantity: expectedQuantity,
               container_kind: source?.containerKind ?? null,
               container_id: source?.containerId ?? null,
-            }),
+            },
+          }
+          pendingSetRequestsRef.current.set(attemptKey, request)
+          const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[change.index]}/pick/set`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
+            body: JSON.stringify(request.body),
           })
-          if (!res.ok) throw new Error(await readApiErrorMessage(res))
+          if (!res.ok) {
+            const code = await pickErrorCode(res)
+            if (res.status === 409 && code === 'pick_quantity_changed') {
+              pendingSetRequestsRef.current.delete(attemptKey)
+              throw new PickQuantityChangedError(change.index)
+            }
+            // A received 4xx is definitive. Keep the exact request after a
+            // 5xx, because its server-side outcome is still unknown.
+            if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
+            throw new Error(await readApiErrorMessage(res))
+          }
           const out = (await res.json()) as { quantity: number }
+          pendingSetRequestsRef.current.delete(attemptKey)
           applyPicked(change.index, payload.productId, payload.place.key, out.quantity)
         }
         logsRef.current.set(logKey, plan.log)
         await Promise.all(plan.changes.map((change) => refreshSupply(change.index)))
       } catch (err) {
+        if (err instanceof PickQuantityChangedError) {
+          setError(err.message)
+          await refreshSupply(err.index)
+          return
+        }
         const message = err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
         setError(message)
         await load()
@@ -479,11 +588,22 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
             const refreshing = refreshingRef.current.get(index)
             if (!selectedSource && !selectedLocationId && refreshing) supplyOptions = (await refreshing) ?? supplyOptions
             const option = supplyOptions.find((one) => one.product_id === product.id)
-            containerSource = resolveProductScanSource(
-              product,
-              option?.locations ?? [],
-              selectedSource ?? (selectedLocationId ? { locationId: selectedLocationId, containerKind: null, containerId: null } : null),
-            )
+            try {
+              containerSource = resolveProductScanSource(
+                product,
+                option?.locations ?? [],
+                selectedSource ?? (selectedLocationId ? { locationId: selectedLocationId, containerKind: null, containerId: null } : null),
+              )
+            } catch (cause) {
+              // Only an automatically selected source with no stock permits
+              // another seller's candidate to be considered. Ambiguity and an
+              // explicit source remain operator-facing errors.
+              if (cause instanceof PickScanSourceError && cause.reason === 'no_stock') {
+                firstRejection ??= cause
+                continue
+              }
+              throw cause
+            }
             locationId = containerSource.locationId
           }
           const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[index]}/pick/scan`), {

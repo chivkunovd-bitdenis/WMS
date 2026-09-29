@@ -1,5 +1,10 @@
 import type { FbsPickingListPrintRow } from './fbsUx'
-import type { FbsWorklistOrder, FbsWorkspace } from './fbsApi'
+import type {
+  FbsAssemblyTask,
+  FbsSupplyWorklistItem,
+  FbsWorklistOrder,
+  FbsWorkspace,
+} from './fbsApi'
 
 // WMS-574: групповая сборка нескольких поставок WB FBS.
 //
@@ -123,11 +128,15 @@ export function fbsSupplyWbWarehouseName(workspace: FbsWorkspace): string {
   return workspace.supply.wb_warehouse.name || `WB ${workspace.supply.wb_warehouse.id}`
 }
 
-/** «Поставка {номер} · WB № {номер WB} · {селлер} · Склад WB {склад}» — подзаголовок «Состава» (R7). */
+/** Подзаголовок «Состава» называет именно ту площадку, к которой относится поставка. */
 export function fbsAssemblySupplyTitle(workspace: FbsWorkspace): string {
   const parts = [`Поставка ${workspace.supply.name}`]
-  if (workspace.supply.wb_supply_id) parts.push(`WB № ${workspace.supply.wb_supply_id}`)
-  parts.push(workspace.supply.seller.name, `Склад WB ${fbsSupplyWbWarehouseName(workspace)}`)
+  if (workspace.supply.marketplace === 'wb') {
+    if (workspace.supply.wb_supply_id) parts.push(`WB № ${workspace.supply.wb_supply_id}`)
+    parts.push(workspace.supply.seller.name, `Склад WB ${fbsSupplyWbWarehouseName(workspace)}`)
+  } else {
+    parts.push('Ozon', workspace.supply.seller.name, `Склад WMS ${workspace.supply.wms_warehouse.name}`)
+  }
   return parts.join(' · ')
 }
 
@@ -168,6 +177,44 @@ export function saveFbsAssemblyStage(supplyIds: string[], stage: FbsAssemblyStag
     (storage ?? window.sessionStorage).setItem(assemblyStageKey(supplyIds), stage)
   } catch {
     // Хранилище может быть недоступно — вкладка работает в пределах открытия.
+  }
+}
+
+// ── «В работе»: задания и поставки (WMS-588 R3) ───────────────────────────
+
+export type FbsAssemblyTaskSupplyGroup = {
+  task: FbsAssemblyTask
+  supplies: FbsSupplyWorklistItem[]
+}
+
+/**
+ * Собирает существующие строки поставок под строками заданий, не меняя сами
+ * данные строки. Задания идут в порядке ответа API, поставки внутри — в порядке
+ * состава задания. Поставки без задания остаются самостоятельными и сохраняют
+ * прежний порядок worklist.
+ */
+export function groupFbsAssemblyTaskSupplies(
+  tasks: FbsAssemblyTask[],
+  supplies: FbsSupplyWorklistItem[],
+): { groups: FbsAssemblyTaskSupplyGroup[]; standalone: FbsSupplyWorklistItem[] } {
+  const supplyById = new Map(supplies.map((supply) => [supply.id, supply]))
+  const assigned = new Set<string>()
+  const groups: FbsAssemblyTaskSupplyGroup[] = []
+
+  for (const task of tasks) {
+    const visible = task.supplies
+      .map((supply) => supplyById.get(supply.id))
+      .filter((supply): supply is FbsSupplyWorklistItem => (
+        supply !== undefined && !assigned.has(supply.id)
+      ))
+    if (visible.length === 0) continue
+    visible.forEach((supply) => assigned.add(supply.id))
+    groups.push({ task, supplies: visible })
+  }
+
+  return {
+    groups,
+    standalone: supplies.filter((supply) => !assigned.has(supply.id)),
   }
 }
 
@@ -274,39 +321,62 @@ export function planGroupPickSet(
 
 // ── Лист подбора группы (Д14) ──────────────────────────────────────────────
 
-/** Строки листа по всем поставкам группы — тем же правилом, что строки листа карточки (WB). */
+/** Строки листа по всем поставкам группы — тем же правилом, что строки листа карточки. */
 export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPickingListPrintRow & { key: string }> {
   const grouped = new Map<string, FbsPickingListPrintRow & { key: string }>()
   for (const workspace of workspaces) {
     const orders = [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
     for (const order of orders) {
-      const key = order.product.id ?? `unmapped-${order.id}`
-      const current = grouped.get(key) ?? {
-        key,
-        name: order.product.name,
-        size: order.product.size,
-        imageUrl: order.product.image_url,
-        identifiers: [
-          order.product.seller_article,
-          order.product.wb_article ? `WB ${order.product.wb_article}` : null,
-          order.product.barcode,
-        ].filter((value): value is string => Boolean(value)),
-        locations: [],
-        required: 0,
-        picked: 0,
-        wbOrders: [],
-        stickerCodes: [],
-        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+      const rows = order.marketplace === 'ozon' && order.positions.length > 0
+        ? order.positions.map((position, positionIndex) => ({
+            key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
+            name: position.name,
+            size: position.size ?? null,
+            imageUrl: position.image_url ?? null,
+            identifiers: [
+              position.seller_article,
+              position.sku ? `SKU ${position.sku}` : null,
+              position.barcode,
+            ].filter((value): value is string => Boolean(value)),
+            required: position.quantity,
+            picked: position.picked_quantity,
+          }))
+        : [{
+            key: order.product.id ?? `unmapped-${order.id}`,
+            name: order.product.name,
+            size: order.product.size,
+            imageUrl: order.product.image_url,
+            identifiers: [
+              order.product.seller_article,
+              order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+              order.product.barcode,
+            ].filter((value): value is string => Boolean(value)),
+            required: 1,
+            picked: order.pick.status === 'picked' ? 1 : 0,
+          }]
+      for (const row of rows) {
+        const current = grouped.get(row.key) ?? {
+          ...row,
+          locations: [],
+          required: 0,
+          picked: 0,
+          wbOrders: [],
+          stickerCodes: [],
+          marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+        }
+        current.required += row.required
+        current.picked += row.picked
+        // Field name is historical; for Ozon it contains the posting number.
+        current.wbOrders.push(order.marketplace === 'ozon'
+          ? (order.external_order_id ?? String(order.wb_order_id))
+          : order.wb_order_id)
+        current.stickerCodes.push(order.sticker.code)
+        const locations = order.inventory.locations
+          .filter((location) => location.available_unpacked > 0)
+          .map((location) => `${location.code}: ${location.available_unpacked}`)
+        current.locations = [...new Set([...current.locations, ...locations])]
+        grouped.set(row.key, current)
       }
-      current.required += 1
-      current.picked += order.pick.status === 'picked' ? 1 : 0
-      current.wbOrders.push(order.wb_order_id)
-      current.stickerCodes.push(order.sticker.code)
-      const locations = order.inventory.locations
-        .filter((location) => location.available_unpacked > 0)
-        .map((location) => `${location.code}: ${location.available_unpacked}`)
-      current.locations = [...new Set([...current.locations, ...locations])]
-      grouped.set(key, current)
     }
   }
   return [...grouped.values()]
@@ -318,6 +388,11 @@ export type FbsGroupCreateResult =
   | { status: 'created'; supplyId: string; name: string; wbSupplyId: string | null }
   | { status: 'pending'; message: string }
   | { status: 'failed'; message: string }
+
+export type FbsGroupCreatedSupply = {
+  groupKey: string
+  supplyId: string
+}
 
 type CreateErrorLike = {
   message?: unknown
@@ -359,7 +434,9 @@ export function fbsGroupCreateFailure(cause: unknown, isApiError: boolean): {
 /**
  * По очереди создаёт поставки групп, у которых ещё нет созданной поставки.
  * Каждая группа уходит своим прежним ключом; неудача одной группы не
- * останавливает остальные (R4).
+ * останавливает остальные (R4). После прохода одним вызовом передаёт все
+ * поставки, созданные именно в этой попытке, для создания сборочного задания:
+ * при частичном успехе задание всё равно сохраняет успешную часть (WMS-588 R2).
  */
 export async function runFbsSupplyGroupCreation(
   groups: FbsSupplyGroupDraft[],
@@ -370,9 +447,11 @@ export async function runFbsSupplyGroupCreation(
     newKey: () => string
     isApiError: (cause: unknown) => boolean
     onProgress?: (groupKey: string, result: FbsGroupCreateResult | 'creating') => void
+    afterCreated?: (created: FbsGroupCreatedSupply[]) => Promise<void>
   },
 ): Promise<Map<string, FbsGroupCreateResult>> {
   const results = new Map(previous)
+  const created: FbsGroupCreatedSupply[] = []
   for (const group of groups) {
     if (results.get(group.key)?.status === 'created') continue
     let idempotencyKey = keys.get(group.key)
@@ -390,6 +469,7 @@ export async function runFbsSupplyGroupCreation(
         wbSupplyId: workspace.supply.wb_supply_id,
       }
       results.set(group.key, result)
+      created.push({ groupKey: group.key, supplyId: result.supplyId })
       options.onProgress?.(group.key, result)
     } catch (cause) {
       const failure = fbsGroupCreateFailure(cause, options.isApiError(cause))
@@ -398,6 +478,7 @@ export async function runFbsSupplyGroupCreation(
       options.onProgress?.(group.key, failure.result)
     }
   }
+  if (created.length > 0) await options.afterCreated?.(created)
   return results
 }
 

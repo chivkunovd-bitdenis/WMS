@@ -171,6 +171,7 @@ class FbsSupplyWorklistItemOut(BaseModel):
     wms_warehouse: dict[str, str]
     orders_count: int
     units_count: int
+    picked_units_count: int
     boxes_count: int
     planned_shipment_date: str | None
     can_add_orders: bool
@@ -265,6 +266,7 @@ class FbsPickScanOut(BaseModel):
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    source_picked_qty: int | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: str | None = None
     container_code: str | None = None
@@ -274,6 +276,7 @@ class FbsPickSetBody(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID
     quantity: int = Field(ge=0, le=1_000_000_000)
+    expected_quantity: int | None = Field(default=None, ge=0, le=1_000_000_000)
     # Из какой тары сняли. Пусто — сняли россыпью прямо с ячейки; так работают
     # старые клиенты, поэтому поля необязательные.
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
@@ -1608,6 +1611,7 @@ async def scan_fbs_supply_pick(
         product_name=result.product_name,
         picked_qty=result.picked_qty,
         allocation_quantity=result.allocation_quantity,
+        source_picked_qty=result.source_picked_qty,
         container_kind=result.container_kind,
         container_id=(str(result.container_id) if result.container_id is not None else None),
         container_code=result.container_code,
@@ -1633,6 +1637,7 @@ async def set_fbs_supply_pick_quantity(
             product_id=body.product_id,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
+            expected_quantity=body.expected_quantity,
             idempotency_key=idempotency_key or str(uuid.uuid4()),
             actor=user,
             container_kind=body.container_kind,

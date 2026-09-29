@@ -161,10 +161,9 @@ async def test_two_wb_supplies_cannot_assign_same_physical_unit(
     )
     await s.commit()
     options = await picking.get_pick_options(s, tenant.id, other.id)
-    row = next(row for row in options[0].locations if row.storage_location_id == location.id)
-    assert row.available == 0
-    assert row.sources[0].quantity == 1
-    assert row.sources[0].available == 0
+    assert sum((await balances(s, product)).values()) == sum(before.values())
+    assert options[0].locations
+    assert all(row.available == 0 for row in options[0].locations)
     with pytest.raises(picking.FbsPickingError, match="insufficient_unpacked"):
         await picking.manual_pick_product(
             s, tenant.id, other.id, order_id=second.id, idempotency_key="second", **args
@@ -173,11 +172,12 @@ async def test_two_wb_supplies_cannot_assign_same_physical_unit(
         s, tenant.id, supply.id, order.id, idempotency_key="undo-first", actor=actor
     )
     await s.commit()
+    assert await balances(s, product) == before
     await picking.manual_pick_product(
         s, tenant.id, other.id, order_id=second.id, idempotency_key="second-retry", **args
     )
     await s.commit()
-    assert await balances(s, product) == before
+    assert sum((await balances(s, product)).values()) == sum(before.values())
 
 
 @pytest.mark.asyncio

@@ -19,11 +19,14 @@ export type ScanSource = {
 /** Existing row disclosure needs the product identity even for an alternate barcode. */
 export class PickScanSourceError extends Error {
   readonly productId: string
+  /** Only this case may make a group scan try the next supply. */
+  readonly reason: 'ambiguous' | 'no_stock'
 
-  constructor(productId: string, message: string) {
+  constructor(productId: string, message: string, reason: 'ambiguous' | 'no_stock' = 'ambiguous') {
     super(message)
     this.name = 'PickScanSourceError'
     this.productId = productId
+    this.reason = reason
   }
 }
 
@@ -56,6 +59,7 @@ export function resolveProductScanSource(
     candidates.length > 1
       ? `${product.sku} лежит в ${candidates.length} местах — уточните место или укажите число руками`
       : `${product.sku} — в выбранном месте нет доступного товара`,
+    candidates.length > 1 ? 'ambiguous' : 'no_stock',
   )
 }
 

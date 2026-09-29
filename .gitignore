@@ -29,6 +29,8 @@ backend/e2e-*.db
 backend/live-*.db
 backend/wms_pytest.sqlite
 backend/tests/wms_pytest.sqlite
+backend/tests/wms587_browser.sqlite
+backend/tests/manual/wms587_generated/
 backend/tests/wms_pytest_*.sqlite
 backend/tests/wms_pytest_*.sqlite-*
 backend/tests/wms_pytest_data/
