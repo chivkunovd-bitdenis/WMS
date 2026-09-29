@@ -331,3 +331,42 @@ describe('WMS-574 · обычная карточка поставки не ме�
     expect(document.body.textContent).toContain('Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером')
   })
 })
+
+// WMS-575, P1 ревью ночного кандидата: при русской раскладке ЧЗ со знаками
+// «/», «?», «&» уходил на сервер искажённым — клиент переводил только буквы,
+// и серверный ремонт раскладки не включался. Теперь рамка, как и карточка,
+// отдаёт серверу сырую пачку — ровно то, что легло бы в поле скана.
+describe('WMS-575 · ЧЗ в русской раскладке в активной рамке', () => {
+  const LAT = "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+  const RUS = 'йцукенгшщзхъфывапролджэячсмитьбю.'
+  const ruKey = (ch: string): { key: string; code: string; shiftKey: boolean } => {
+    if (/[0-9]/.test(ch)) return { key: ch, code: `Digit${ch}`, shiftKey: false }
+    if (ch === '/') return { key: '.', code: 'Slash', shiftKey: false }
+    if (ch === '?') return { key: ',', code: 'Slash', shiftKey: true }
+    if (ch === '&') return { key: '?', code: 'Digit7', shiftKey: true }
+    const lower = ch.toLowerCase()
+    const ru = RUS[LAT.indexOf(lower)]
+    return { key: ch === lower ? ru : ru.toUpperCase(), code: `Key${lower.toUpperCase()}`, shiftKey: ch !== lower }
+  }
+  const scanRu = (code: string) => {
+    const target = document.activeElement ?? document.body
+    act(() => {
+      for (const ch of code) {
+        const k = ruKey(ch)
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: k.key, code: k.code, shiftKey: k.shiftKey, bubbles: true, cancelable: true }))
+      }
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }))
+    })
+  }
+
+  it('«/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер', async () => {
+    boxes = [box('box-1', 1, [], true)]
+    await startFrame()
+    scan(STICKER_KIZ)
+    await settle(80)
+    scanRu('0104600000000017215Ab/c?d&Ef9GhJ')
+    await settle(80)
+    const validate = calls.find((call) => call.path.includes('/kiz/validate'))
+    expect(validate?.body).toMatchObject({ order_id: 'order-a', value: '0104600000000017215Фи.с,в?Уа9ПрО' })
+  })
+})
