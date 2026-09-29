@@ -215,5 +215,13 @@ async def test_manual_pick_rejects_wrong_cell_product_and_allows_packed_order(
         )
         assert stored_pick is not None
         assert stored_pick.source_storage_location_id == location_id
-        assert stored_pick.inventory_movement_id is None
-        assert int(source_balance or 0) == 1
+        assert stored_pick.inventory_movement_id is not None
+        assert int(source_balance or 0) == 0
+        sorting_balance = await session.scalar(
+            select(InventoryBalance.quantity_unpacked).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == stored_pick.sorting_storage_location_id,
+            )
+        )
+        assert int(sorting_balance or 0) == 1

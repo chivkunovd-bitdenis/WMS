@@ -487,7 +487,11 @@ async def _claim_intake_mutation(
     actor = current_document_event_actor()
     if event.actor_user_id != actor.actor_user_id or event.source != actor.source:
         raise InboundIntakeError("mutation_payload_mismatch")
-    if event.document_id != request_id or event.payload_json != payload:
+    # Create retries generate a fresh candidate UUID before reaching this claim;
+    # the receipt's document_id is the result to load, not part of the input.
+    if event.payload_json != payload or (
+        action != "create" and event.document_id != request_id
+    ):
         raise InboundIntakeError("mutation_payload_mismatch")
     return event
 
