@@ -327,6 +327,100 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
 
 
 @pytest.mark.asyncio
+async def test_client_report_fbo_document_lifecycle_and_excel(async_client: AsyncClient) -> None:
+    headers, tenant_id, _ = await _org(async_client, name="ClientFboLifecycle")
+    seller_id = await _seller(async_client, headers, "FBO Seller")
+    warehouse_id, location_id = await _warehouse_location(async_client, headers, name="FboWH")
+    shipped_at = datetime(2026, 9, 13, 14, 30, tzinfo=UTC)
+    movement_ids: dict[str, uuid.UUID] = {}
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="FBO Product",
+            sku_code="FBO-1",
+        )
+        session.add(product)
+        await session.flush()
+        for status, completion in (
+            ("collecting", None),
+            ("shipped", shipped_at),
+            ("cancelled", None),
+        ):
+            request = MarketplaceUnloadRequest(
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                seller_id=seller_id,
+                marketplace="wb",
+                status=status,
+                shipped_at=completion,
+            )
+            session.add(request)
+            await session.flush()
+            movement = InventoryMovement(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                storage_location_id=location_id,
+                quantity_delta=-1,
+                movement_type="marketplace_unload",
+                marketplace_unload_request_id=request.id,
+                created_at=AT,
+            )
+            session.add(movement)
+            await session.flush()
+            movement_ids[status] = movement.id
+        unlinked = InventoryMovement(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=-1,
+            movement_type="marketplace_unload",
+            created_at=AT,
+        )
+        session.add(unlinked)
+        await session.flush()
+        movement_ids["unlinked"] = unlinked.id
+        await session.commit()
+
+    response = await async_client.get("/reports/client-movements", headers=headers, params=PERIOD)
+    assert response.status_code == 200, response.text
+    rows = {row["movement_id"]: row for row in response.json()["rows"]}
+    for status in ("collecting", "shipped", "cancelled"):
+        row = rows[str(movement_ids[status])]
+        assert row["operation"] == "marketplace_unload"
+        assert row["occurred_at"] == AT.isoformat()
+        assert row["document"]["status"] == status
+        assert row["document"]["shipped_at"] == (
+            shipped_at.isoformat() if status == "shipped" else None
+        )
+    assert rows[str(movement_ids["unlinked"])]["document"] is None
+
+    exported = await async_client.get(
+        "/reports/client-movements/export.xlsx", headers=headers, params=PERIOD
+    )
+    assert exported.status_code == 200, exported.text[:100]
+    book = load_workbook(io.BytesIO(exported.content), read_only=True)
+    values = list(book["WB"].values)
+    headers_by_name = {name: index for index, name in enumerate(values[0])}
+    assert "document_status" in headers_by_name
+    assert "document_shipped_at" in headers_by_name
+    excel_rows = {row[headers_by_name["movement_id"]]: row for row in values[1:]}
+    for status in ("collecting", "shipped", "cancelled"):
+        row = excel_rows[str(movement_ids[status])]
+        assert row[headers_by_name["document_status"]] == status
+        assert row[headers_by_name["document_shipped_at"]] == (
+            shipped_at.isoformat() if status == "shipped" else None
+        )
+    general_rows = list(book["Общие"].values)
+    assert len(general_rows) == 2
+    assert general_rows[1][headers_by_name["movement_id"]] == str(movement_ids["unlinked"])
+
+
+@pytest.mark.asyncio
 async def test_client_report_return_type_marketplace_and_excel(async_client: AsyncClient) -> None:
     headers, tenant_id, _ = await _org(async_client, name="ClientReturns")
     seller_id = await _seller(async_client, headers, "Returns Seller")

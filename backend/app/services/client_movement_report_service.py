@@ -258,9 +258,9 @@ async def _marking_index(
 
 async def _documents(
     session: AsyncSession, tenant_id: uuid.UUID, movements: list[InventoryMovement]
-) -> tuple[dict[uuid.UUID, dict[str, str]], dict[uuid.UUID, str | None]]:
-    docs: dict[uuid.UUID, dict[str, str]] = {}
-    return_docs: dict[uuid.UUID, dict[str, str]] = {}
+) -> tuple[dict[uuid.UUID, dict[str, str | None]], dict[uuid.UUID, str | None]]:
+    docs: dict[uuid.UUID, dict[str, str | None]] = {}
+    return_docs: dict[uuid.UUID, dict[str, str | None]] = {}
     return_marketplaces: dict[uuid.UUID, str | None] = {}
     inbound_ids = {m.inbound_intake_line_id for m in movements if m.inbound_intake_line_id}
     if inbound_ids:
@@ -316,6 +316,14 @@ async def _documents(
                     "id": str(doc.id),
                     "type": "marketplace_unload",
                     "number": doc.display_number or doc.document_number or "",
+                    "status": doc.status,
+                    "shipped_at": (
+                        doc.shipped_at.replace(tzinfo=UTC).isoformat()
+                        if doc.shipped_at is not None and doc.shipped_at.tzinfo is None
+                        else doc.shipped_at.astimezone(UTC).isoformat()
+                        if doc.shipped_at is not None
+                        else None
+                    ),
                 }
     outbound_ids = {m.outbound_shipment_line_id for m in movements if m.outbound_shipment_line_id}
     if outbound_ids:
@@ -587,6 +595,8 @@ async def build_client_movement_workbook(
         "document_id",
         "document_type",
         "document_number",
+        "document_status",
+        "document_shipped_at",
         "quantity_delta",
         "kiz",
     ]
@@ -616,6 +626,8 @@ async def build_client_movement_workbook(
                 document.get("id"),
                 document.get("type"),
                 document.get("number"),
+                document.get("status"),
+                document.get("shipped_at"),
                 row["quantity_delta"],
                 row["kiz"],
             ]
