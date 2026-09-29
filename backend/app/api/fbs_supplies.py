@@ -266,6 +266,7 @@ class FbsPickScanOut(BaseModel):
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    source_picked_qty: int | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: str | None = None
     container_code: str | None = None
@@ -1610,6 +1611,7 @@ async def scan_fbs_supply_pick(
         product_name=result.product_name,
         picked_qty=result.picked_qty,
         allocation_quantity=result.allocation_quantity,
+        source_picked_qty=result.source_picked_qty,
         container_kind=result.container_kind,
         container_id=(str(result.container_id) if result.container_id is not None else None),
         container_code=result.container_code,

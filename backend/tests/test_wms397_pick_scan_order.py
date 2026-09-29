@@ -100,13 +100,22 @@ async def picked_order_ids(case):
         ))).all())
 
 
-async def test_explicit_oldest_order_overrides_deadline_without_stock_effects(async_client, case):
+def _stock_total(snapshot) -> int:
+    return sum(int(row.quantity) for row in snapshot[0])
+
+
+async def test_explicit_oldest_order_overrides_deadline_and_moves_to_picking_area(
+    async_client, case
+):
     before = await warehouse_snapshot(case)
     response = await scan(async_client, case, order_id=str(case.order_ids[0]))
     assert response.status_code == 200, response.text
     assert response.json()["picked_qty"] == 1
     assert await picked_order_ids(case) == {case.order_ids[0]}
-    assert await warehouse_snapshot(case) == before
+    after = await warehouse_snapshot(case)
+    assert _stock_total(after) == _stock_total(before)
+    assert after[2] == before[2]
+    assert after[0] != before[0]
 
 
 @pytest.mark.parametrize("body", [{}, {"order_id": None}])
@@ -115,19 +124,25 @@ async def test_web_without_order_uses_oldest_created_order(async_client, case, b
     response = await scan(async_client, case, **body)
     assert response.status_code == 200, response.text
     assert await picked_order_ids(case) == {case.order_ids[0]}
-    assert await warehouse_snapshot(case) == before
+    after = await warehouse_snapshot(case)
+    assert _stock_total(after) == _stock_total(before)
+    assert after[2] == before[2]
 
 
 async def test_replay_keeps_original_order_and_new_key_rejects_already_picked(async_client, case):
     before = await warehouse_snapshot(case)
     first = await scan(async_client, case, key="one-scan", order_id=str(case.order_ids[0]))
     assert first.status_code == 200, first.text
-    for requested_order in case.order_ids:
-        replay = await scan(
-            async_client, case, key="one-scan", order_id=str(requested_order)
-        )
-        assert replay.status_code == 200, replay.text
-        assert replay.json() == first.json()
+    replay = await scan(
+        async_client, case, key="one-scan", order_id=str(case.order_ids[0])
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
+    changed_request = await scan(
+        async_client, case, key="one-scan", order_id=str(case.order_ids[1])
+    )
+    assert changed_request.status_code == 409, changed_request.text
+    assert changed_request.json()["detail"]["code"] == "idempotency_key_reused"
     duplicate = await scan(async_client, case, order_id=str(case.order_ids[0]))
     assert duplicate.status_code == 409, duplicate.text
     assert duplicate.json()["detail"]["code"] == "order_already_picked"
@@ -135,7 +150,9 @@ async def test_replay_keeps_original_order_and_new_key_rejects_already_picked(as
     next_scan = await scan(async_client, case, order_id=str(case.order_ids[1]))
     assert next_scan.status_code == 200, next_scan.text
     assert await picked_order_ids(case) == set(case.order_ids)
-    assert await warehouse_snapshot(case) == before
+    after = await warehouse_snapshot(case)
+    assert _stock_total(after) == _stock_total(before)
+    assert after[2] == before[2]
 
 
 @pytest.mark.parametrize("invalid", ["other_supply", "other_product", "cancelled", "missing"])
@@ -210,7 +227,9 @@ async def test_foreign_tenant_order_product_and_supply_are_not_pickable(async_cl
 
 
 @pytest.mark.parametrize("kind", ["pallet", "box", "cargo_place"])
-async def test_selected_order_keeps_exact_container_without_wb_movement(async_client, case, kind):
+async def test_selected_order_moves_exact_container_source_to_picking_area(
+    async_client, case, kind
+):
     async with SessionLocal() as session:
         common = dict(
             tenant_id=case.tenant_id, warehouse_id=case.warehouse_id,
@@ -244,8 +263,10 @@ async def test_selected_order_keeps_exact_container_without_wb_movement(async_cl
         assert pick is not None
         assert pick.source_storage_location_id == case.location_id
         assert (pick.source_container_kind, pick.source_container_id) == (kind, container_id)
-        assert pick.inventory_movement_id is None
-    assert await warehouse_snapshot(case) == before
+        assert pick.inventory_movement_id is not None
+    after = await warehouse_snapshot(case)
+    assert _stock_total(after) == _stock_total(before)
+    assert after[2] == before[2]
 
 
 @pytest.mark.parametrize("complete_pair", [False, True])

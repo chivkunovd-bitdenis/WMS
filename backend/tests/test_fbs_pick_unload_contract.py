@@ -30,8 +30,11 @@ from app.models.fbs_order import PICK_STATUS_PENDING, PICK_STATUS_PICKED, FbsOrd
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.storage_location import StorageLocation
+from app.models.user import User
 from app.models.warehouse_box import WarehouseBox
+from app.services import fbs_picking_service as picking_svc
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.test_fbs_picking import (
     _create_product,
@@ -66,6 +69,10 @@ def test_fbs_pick_write_models_match_marketplace_unload() -> None:
             assert order_schema["default"] is None
             assert "order_id" not in fbs_schema.get("required", [])
             assert FbsPickScanBody(barcode="123").order_id is None
+        if fbs_model is FbsPickScanOut:
+            source_qty_schema = fbs_schema["properties"].pop("source_picked_qty")
+            assert source_qty_schema["default"] is None
+            assert "source_picked_qty" not in fbs_schema.get("required", [])
         if fbs_model is FbsPickSetBody:
             expected_schema = fbs_schema["properties"].pop("expected_quantity")
             assert expected_schema["default"] is None
@@ -315,6 +322,7 @@ async def test_fbs_pick_scan_location_then_product_is_idempotent(
         "product_name": None,
         "picked_qty": None,
         "allocation_quantity": None,
+        "source_picked_qty": None,
         "container_kind": None,
         "container_id": None,
         "container_code": None,
@@ -351,7 +359,152 @@ async def test_fbs_pick_scan_location_then_product_is_idempotent(
     assert first.json()["picked_qty"] == 1
     assert replay.json()["picked_qty"] == 1
     assert replay.json()["allocation_quantity"] == 1
+    assert replay.json()["source_picked_qty"] == 1
     assert await _active_pick_count(supply_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_pick_scan_receipt_keeps_original_source_quantity_for_safe_undo(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, _order_ids, _ = (
+        await _seed_two_order_supply(async_client)
+    )
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        barcode = f"ADDITIONAL-{uuid.uuid4().hex[:16]}"
+        assert product.seller_id is not None
+        session.add(
+            ProductBarcode(
+                tenant_id=product.tenant_id,
+                seller_id=product.seller_id,
+                product_id=product.id,
+                barcode=barcode,
+                source="wb",
+            )
+        )
+        await session.commit()
+        tenant_id = product.tenant_id
+
+    url = f"{BASE}/{supply_id}/pick/scan"
+    body = {"barcode": barcode, "storage_location_id": str(location_id)}
+    first = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-scan-a"},
+        json=body,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["product_id"] == str(product_id)
+    assert first.json()["source_picked_qty"] == 1
+    assert first.json()["storage_location_id"] == str(location_id)
+
+    second = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-scan-b"},
+        json=body,
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["source_picked_qty"] == 2
+
+    replay = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-scan-a"},
+        json=body,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
+
+    stale_undo = await async_client.post(
+        f"{BASE}/{supply_id}/pick/set",
+        headers={**headers, "Idempotency-Key": "stable-scan-a-undo"},
+        json={
+            "product_id": first.json()["product_id"],
+            "storage_location_id": first.json()["storage_location_id"],
+            "quantity": first.json()["source_picked_qty"] - 1,
+            "expected_quantity": first.json()["source_picked_qty"],
+        },
+    )
+    assert stale_undo.status_code == 409, stale_undo.text
+    assert stale_undo.json()["detail"]["code"] == "pick_quantity_changed"
+    assert stale_undo.json()["detail"]["context"]["current_quantity"] == 2
+    assert await _active_pick_count(supply_id) == 2
+
+    changed_payload = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "stable-scan-a"},
+        json={**body, "product_id": str(product_id)},
+    )
+    assert changed_payload.status_code == 409, changed_payload.text
+    assert changed_payload.json()["detail"]["code"] == "idempotency_key_reused"
+
+    async with SessionLocal() as session:
+        other_actor = User(
+            tenant_id=tenant_id,
+            email=f"scan-replay-{uuid.uuid4().hex}@example.com",
+            password_hash="test-only",
+            role="fulfillment_admin",
+        )
+        session.add(other_actor)
+        await session.commit()
+        with pytest.raises(picking_svc.FbsPickingError) as actor_error:
+            await picking_svc.pick_scan(
+                session,
+                tenant_id,
+                supply_id,
+                barcode=barcode,
+                product_id_hint=None,
+                storage_location_id=location_id,
+                idempotency_key="stable-scan-a",
+                actor=other_actor,
+            )
+        assert actor_error.value.code == "idempotency_key_reused"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="scan serialization is PostgreSQL row-lock specific",
+)
+async def test_fbs_pick_scan_concurrent_writers_return_atomic_source_quantities(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, _order_ids, _ = (
+        await _seed_two_order_supply(async_client)
+    )
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        barcode = product.wb_barcode
+        assert barcode is not None
+
+    url = f"{BASE}/{supply_id}/pick/scan"
+    body = {"barcode": barcode, "storage_location_id": str(location_id)}
+    first, second = await asyncio.gather(
+        async_client.post(
+            url,
+            headers={**headers, "Idempotency-Key": "concurrent-scan-a"},
+            json=body,
+        ),
+        async_client.post(
+            url,
+            headers={**headers, "Idempotency-Key": "concurrent-scan-b"},
+            json=body,
+        ),
+    )
+    assert first.status_code == second.status_code == 200
+    assert sorted(
+        [first.json()["source_picked_qty"], second.json()["source_picked_qty"]]
+    ) == [1, 2]
+    assert await _active_pick_count(supply_id) == 2
+
+    replay = await async_client.post(
+        url,
+        headers={**headers, "Idempotency-Key": "concurrent-scan-a"},
+        json=body,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
 
 
 @pytest.mark.asyncio
@@ -414,6 +567,10 @@ async def test_fbs_pick_scan_selects_container_and_keeps_it_on_product_pick(
     )
     assert picked.status_code == 200, picked.text
     assert picked.json()["kind"] == "product"
+    assert picked.json()["source_picked_qty"] == 1
+    assert picked.json()["container_kind"] == "box"
+    assert picked.json()["container_id"] == str(box_id)
+    assert picked.json()["storage_location_id"] == str(location_id)
     async with SessionLocal() as session:
         stored_pick = await session.scalar(
             select(FbsOrderPick).where(
@@ -480,7 +637,7 @@ async def test_fbs_pick_write_hides_foreign_tenant_supply(
 async def test_fbs_pick_scan_works_without_visible_address(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-FBS-PICK-006: address-off scan selects stock and hides the cell."""
+    """TC-NEW-FBS-PICK-006: address-off scan returns its immutable source."""
     headers, supply_id, product_id, _location_id, _order_ids, _ = (
         await _seed_two_order_supply(async_client)
     )
@@ -504,9 +661,10 @@ async def test_fbs_pick_scan_works_without_visible_address(
     )
     assert response.status_code == 200, response.text
     assert response.json()["kind"] == "product"
-    assert response.json()["storage_location_id"] is None
-    assert response.json()["location_code"] is None
+    assert response.json()["storage_location_id"] is not None
+    assert response.json()["location_code"] is not None
     assert response.json()["picked_qty"] == 1
+    assert response.json()["source_picked_qty"] == 1
 
 
 @pytest.mark.asyncio
@@ -540,6 +698,7 @@ async def test_fbs_pick_scan_works_for_container_in_sorting_without_cell(
     )
     async with SessionLocal() as session:
         sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        sorting_id = sorting.id
         session.add(
             InventoryBalance(
                 tenant_id=tenant_id,
@@ -561,9 +720,10 @@ async def test_fbs_pick_scan_works_for_container_in_sorting_without_cell(
     )
     assert response.status_code == 200, response.text
     assert response.json()["kind"] == "product"
-    assert response.json()["storage_location_id"] is None
-    assert response.json()["location_code"] is None
+    assert response.json()["storage_location_id"] == str(sorting_id)
+    assert response.json()["location_code"] is not None
     assert response.json()["picked_qty"] == 1
+    assert response.json()["source_picked_qty"] == 1
     assert await _active_pick_count(supply_id) == 1
 
 
