@@ -66,6 +66,8 @@ import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStag
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
 import {
   buildFbsPickingListPrintHtml,
+  fbsBuildPickingRows,
+  productBarcodeOptionsForPosition,
   fbsPickSourceLabels,
   fbsAccessibleStageIndex,
   fbsErrorText,
@@ -399,19 +401,6 @@ function productBarcodeOptionsForOrder(
   // An Ozon label must never silently fall back to a WB barcode.  An absent
   // Ozon barcode stays absent and the established dialog explains that it
   // cannot print one; the operator can correct the product binding first.
-  return marketplace === 'ozon'
-    ? options.filter((option) => option.marketplace === 'ozon')
-    : options
-}
-
-function productBarcodeOptionsForPosition(
-  position: FbsWorkspace['orders'][number]['positions'][number],
-  marketplace: 'wb' | 'ozon',
-) {
-  const options = resolveProductBarcodeOptions({
-    wb_primary_barcode: position.barcode,
-    marketplace_bindings: position.marketplace_bindings,
-  })
   return marketplace === 'ozon'
     ? options.filter((option) => option.marketplace === 'ozon')
     : options
@@ -2445,79 +2434,16 @@ export function FfFbsSupplyWorkspace({
       )
     : 0
   const percent = total ? Math.round((ready / total) * 100) : 0
-  const fullTapeOrders = useMemo(() => {
-    if (!workspace) return []
-    return [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
-  }, [workspace])
-  const pickingRows = useMemo(() => {
-    if (!workspace) return []
-    const grouped = new Map<string, {
-      key: string
-      name: string
-      size: string | null
-      imageUrl: string | null
-      identifiers: string[]
-      locations: string[]
-      required: number
-      picked: number
-      wbOrders: number[]
-      stickerCodes: Array<string | null>
-      marking: string
-      nearestDeadline: string
-    }>()
-    for (const order of fullTapeOrders) {
-      const rows = isOzonSupply
-        ? order.positions.map((position) => ({
-          key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
-          name: position.name,
-          size: null,
-          imageUrl: position.image_url ?? null,
-          identifiers: [
-            position.seller_article,
-            position.sku ? `SKU ${position.sku}` : null,
-            productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode,
-          ].filter((value): value is string => Boolean(value)),
-          required: position.quantity,
-          picked: position.picked_quantity,
-        }))
-        : [{
-          key: order.product.id ?? `unmapped-${order.id}`,
-          name: order.product.name,
-          size: order.product.size,
-          imageUrl: order.product.image_url,
-          identifiers: [
-            order.product.seller_article,
-            order.product.wb_article ? `WB ${order.product.wb_article}` : null,
-            order.product.barcode,
-          ].filter((value): value is string => Boolean(value)),
-          required: 1,
-          picked: order.pick.status === 'picked' ? 1 : 0,
-        }]
-      for (const row of rows) {
-        const current = grouped.get(row.key) ?? {
-          ...row,
-          locations: [],
-          required: 0,
-          picked: 0,
-          wbOrders: [],
-          stickerCodes: [],
-          marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
-          nearestDeadline: order.deadline_at,
-        }
-        current.required += row.required
-        current.picked += row.picked
-        current.wbOrders.push(order.wb_order_id)
-        current.stickerCodes.push(order.sticker.code)
-        const locations = order.inventory.locations
-          .filter((location) => location.available_unpacked > 0)
-          .map((location) => `${location.code}: ${location.available_unpacked}`)
-        current.locations = [...new Set([...current.locations, ...locations])]
-        if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
-        grouped.set(row.key, current)
-      }
-    }
-    return [...grouped.values()]
-  }, [fullTapeOrders, workspace])
+  // WMS-580: лист подбора и лента «Печать всего»/«Печать выбранного» должны идти
+  // в одной последовательности — общая сборка fbsBuildPickingRows (fbsUx.ts)
+  // отдаёт и отсортированный по tape_order_index список (для ленты), и строки
+  // листа, построенные группировкой по этому же списку, так что расхождение
+  // между ними структурно невозможно (регрессия чинилась трижды за один день
+  // 23.08.2026 — см. docs/requirements/WMS-580.md).
+  const { sortedOrders: fullTapeOrders, rows: pickingRows } = useMemo(() => {
+    if (!workspace) return { sortedOrders: [], rows: [] }
+    return fbsBuildPickingRows(workspace.orders, isOzonSupply)
+  }, [workspace, isOzonSupply])
   const printPickingList = async () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')

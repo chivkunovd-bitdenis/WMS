@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FbsWorklistOrder, FbsWorkspace } from './fbsApi'
+import { fbsBuildPickingRows } from './fbsUx'
 import {
   fbsAssemblyPickingRows,
   fbsAssemblyReadiness,
@@ -278,6 +279,42 @@ describe('WMS-574 окно сборки', () => {
     expect(rows.map((row) => [row.key, row.required, row.picked, row.wbOrders])).toEqual([
       ['x', 3, 1, [1, 2, 3]],
       ['y', 1, 0, [4]],
+    ])
+  })
+
+  it('WMS-580 R5/R6: порядок строк листа группы для одной поставки совпадает с её собственной лентой/листом', () => {
+    // Заказы одной поставки не по возрастанию номера WB — только tape_order_index
+    // задаёт порядок. fbsAssemblyPickingRows (лист подбора группы, Д14) и
+    // fbsBuildPickingRows (лист/лента карточки этой же поставки, FfFbsSupplyWorkspace
+    // в режиме рамки сборки — WMS-574 R14/R21) — разные функции, но обязаны
+    // выстраивать заказы одной поставки в одном и том же порядке.
+    const line = (id: string, productId: string, wbOrderId: number, tape: number) => ({
+      id,
+      wb_order_id: wbOrderId,
+      tape_order_index: tape,
+      deadline_at: '2026-09-30T10:00:00Z',
+      product: { id: productId, name: `Товар ${productId}`, size: 'M', image_url: null, seller_article: 'ART', wb_article: 1, barcode: '468' },
+      positions: [],
+      metadata: { required: [] },
+      pick: { status: 'pending' },
+      sticker: { code: null },
+      inventory: { locations: [] },
+    })
+    const progress = { picked: 0, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 0 }
+    const orders = [
+      line('o-300', 'x', 300, 2),
+      line('o-150', 'y', 150, 3),
+      line('o-100', 'x', 100, 0),
+      line('o-200', 'x', 200, 1),
+    ]
+    const groupRows = fbsAssemblyPickingRows([workspace('a', 'wb', progress, orders)])
+    const cardRows = fbsBuildPickingRows(orders as unknown as FbsWorkspace['orders'], false).rows
+    expect(groupRows.map((row) => [row.key, row.wbOrders])).toEqual(
+      cardRows.map((row) => [row.key, row.wbOrders]),
+    )
+    expect(groupRows.map((row) => [row.key, row.wbOrders])).toEqual([
+      ['x', [100, 200, 300]],
+      ['y', [150]],
     ])
   })
 })
