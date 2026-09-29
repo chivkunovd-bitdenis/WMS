@@ -319,3 +319,81 @@ describe('WMS-575 · R11 стрелка «Перепечатать ЧЗ» у к�
     expect(reprintArrow('order-a')).toBeNull()
   })
 })
+
+// Ночное ревью кандидата 29.09 (P1-1 Opus, F3 Astra).
+describe('WMS-575 · исправления по ревью ночного кандидата', () => {
+  const LAT = "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+  const RUS = 'йцукенгшщзхъфывапролджэячсмитьбю.'
+  const ruKey = (ch: string): { key: string; code: string; shiftKey: boolean } => {
+    if (/[0-9]/.test(ch)) return { key: ch, code: `Digit${ch}`, shiftKey: false }
+    if (ch === '/') return { key: '.', code: 'Slash', shiftKey: false }
+    if (ch === '?') return { key: ',', code: 'Slash', shiftKey: true }
+    if (ch === '&') return { key: '?', code: 'Digit7', shiftKey: true }
+    const lower = ch.toLowerCase()
+    const ru = RUS[LAT.indexOf(lower)]
+    return { key: ch === lower ? ru : ru.toUpperCase(), code: `Key${lower.toUpperCase()}`, shiftKey: ch !== lower }
+  }
+  const scanRu = (code: string) => {
+    const target = document.activeElement ?? document.body
+    act(() => {
+      for (const ch of code) {
+        const k = ruKey(ch)
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: k.key, code: k.code, shiftKey: k.shiftKey, bubbles: true, cancelable: true }))
+      }
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }))
+    })
+  }
+  const KIZ_SYMBOLS = '0104600000000017215Ab/c?d&Ef9GhJ'
+  const bodyOf = (path: string) => kizCalls().find((call) => call.path === path)?.body as
+    | { order_id?: string; value?: string; pairs?: Array<{ order_id: string; value: string }> }
+    | undefined
+
+  it('P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана', async () => {
+    await openPackingTab()
+    const input = document.querySelector<HTMLElement>('[data-testid="fbs-kiz-scan-input"]')!.querySelector('input')!
+    act(() => input.focus())
+    scan(STICKER_A)
+    await settle(60)
+    scanRu(KIZ_SYMBOLS)
+    await settle(80)
+    // Сервер восстанавливает эту строку в исходный код полной таблицей
+    // раскладки (backend/tests/test_fbs_kiz_ru_layout_symbols.py).
+    const raw = '0104600000000017215Фи.с,в?Уа9ПрО'
+    expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: raw })
+    expect(bodyOf('/operations/fbs-orders/kiz/commit')?.pairs?.[0]).toMatchObject({ order_id: 'order-a', value: raw })
+  })
+
+  it('P1: латинская раскладка — тот же ЧЗ уходит без изменений', async () => {
+    await openPackingTab()
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    scan(STICKER_A)
+    await settle(60)
+    scan(KIZ_SYMBOLS)
+    await settle(80)
+    expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: KIZ_SYMBOLS })
+    expect(bodyOf('/operations/fbs-orders/kiz/commit')?.pairs?.[0]).toMatchObject({ order_id: 'order-a', value: KIZ_SYMBOLS })
+  })
+
+  it('P2: сканер дважды прочитал стикер, пока шёл поиск, — второй снимает выбор, а не уходит как ЧЗ', async () => {
+    delays = { lookup: 150 }
+    await openPackingTab()
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    scan(STICKER_A)
+    scan(STICKER_A)
+    await settle(400)
+
+    expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
+    expect(activeRow()).toBeNull()
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).toBeNull()
+  })
+
+  it('P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {
+    delays = { lookup: 150 }
+    await openPackingTab()
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    scan(STICKER_A)
+    scan(KIZ_A)
+    await settle(400)
+    expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: KIZ_A })
+  })
+})

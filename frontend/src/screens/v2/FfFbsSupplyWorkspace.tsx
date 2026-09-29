@@ -1789,9 +1789,17 @@ export function FfFbsSupplyWorkspace({
     const next = queuedPackingScansRef.current.shift()
     if (!next) return
     setQueuedPackingScanVersion((current) => current + 1)
+    // WMS-575: код из очереди разбирается по состоянию на момент обработки,
+    // как обычный скан. Сканер дважды прочитал стикер, пока шёл поиск: первый
+    // выбрал заказ, второй — тот же стикер — снимает выбор, а не уходит как ЧЗ.
+    if (kizScanActive && fbsSameStickerScan(next.raw, kizSelectedStickerRef.current)) {
+      dropKizScanActive()
+      playScanSuccess()
+      return
+    }
     if (kizScanActive) void scanKizCode(next.raw, false, next.preferences)
     else void scanIdleCode(next.raw, next.preferences)
-  }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode])
+  }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode, dropKizScanActive])
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
@@ -2296,6 +2304,11 @@ export function FfFbsSupplyWorkspace({
         : null)
     if (!workspace || !productId) return
     const ozonPosition = workspace.supply.marketplace === 'ozon' ? order.positions[0] : undefined
+    // WMS-575: явная перепечатка конкретного уже внесённого кода («Перепечатать ЧЗ»,
+    // «Перепечатать» у кода оператора) печатает именно этот ЧЗ, даже если товару
+    // маркировка не обязательна: иначе окно печати выключало перепечатку и брало
+    // шаблон без ЧЗ. Обычная печать (без id кода) решает по обязательности, как раньше.
+    const printsHonestSign = requiresOrderHonestSign(order) || Boolean(reprintMarkingId)
     openPrint(
       {
         token,
@@ -2303,10 +2316,10 @@ export function FfFbsSupplyWorkspace({
         productId,
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
-        qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
-        markingAvailable: requiresOrderHonestSign(order) ? (line?.marking_available_count ?? 0) : 0,
+        qtyNeedPack: printsHonestSign ? 1 : 0,
+        markingAvailable: printsHonestSign ? (line?.marking_available_count ?? 0) : 0,
         qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
-        requiresHonestSign: requiresOrderHonestSign(order),
+        requiresHonestSign: printsHonestSign,
         skuCode: ozonPosition?.sku ?? ozonPosition?.seller_article ?? line?.sku_code ?? order.product.sku ?? order.product.seller_article
           ?? (workspace.supply.marketplace === 'ozon' ? `Ozon-${order.external_order_id ?? order.id}` : `WB-${order.wb_order_id}`),
         productName: ozonPosition?.name ?? line?.product_name ?? order.product.name,
@@ -2320,7 +2333,7 @@ export function FfFbsSupplyWorkspace({
             orderId: order.id,
             wbOrderId: order.wb_order_id,
             marketplace: workspace.supply.marketplace,
-            requiresHonestSign: requiresOrderHonestSign(order),
+            requiresHonestSign: printsHonestSign,
             productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
             productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
           }],
@@ -2647,6 +2660,9 @@ export function FfFbsSupplyWorkspace({
       // WMS-574: в окне сборки сканер слушает только активная рамка на открытой вкладке.
       && (!assemblyFrame || (assemblyFrame.active && assemblyFrame.visible)),
     onScan: acceptHardwarePackingScan,
+    // На сервер — те же символы, что легли бы в поле скана, с разделителем GS:
+    // раскладку ЧЗ и стикера чинит сервер полной таблицей, как до WMS-575.
+    emitRaw: true,
   })
   useLayoutEffect(() => {
     packingScanListeningRef.current = packingScanIntake.listening

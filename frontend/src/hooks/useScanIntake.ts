@@ -35,6 +35,8 @@ export type ScanIntakeOptions = {
   onReceived?: (code: string) => void
   isScanOnlyField?: BarcodeScannerOptions['isScanOnlyField']
   scanOnlyFieldMinLength?: number
+  /** Отдавать обработчику сырую пачку клавиатуры (см. useBarcodeScanner). Дефолт false. */
+  emitRaw?: boolean
 }
 
 export type ScanIntake = {
@@ -71,6 +73,7 @@ export function useScanIntake({
   onReceived,
   isScanOnlyField,
   scanOnlyFieldMinLength,
+  emitRaw = false,
 }: ScanIntakeOptions): ScanIntake {
   const [node, setNode] = useState<HTMLElement | null>(null)
   const bindRoot = useCallback((next: HTMLElement | null) => setNode(next), [])
@@ -143,6 +146,7 @@ export function useScanIntake({
     onScan: submit,
     isScanOnlyField,
     scanOnlyFieldMinLength,
+    emitRaw,
   })
 
   return { bindRoot, listening, submit }

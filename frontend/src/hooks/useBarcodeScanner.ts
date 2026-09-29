@@ -18,6 +18,15 @@ export type BarcodeScannerOptions = {
   isScanOnlyField?: (el: ActiveElementLike) => boolean
   /** Мин. длина скана в таком поле: короче — это ручное число. Дефолт minLength. */
   scanOnlyFieldMinLength?: number
+  /**
+   * WMS-575: отдать пачку так, как её напечатала клавиатура, — те же символы,
+   * что легли бы в текстовое поле, плюс разделитель GS, — без перевода раскладки.
+   * Нужно там, где раскладку чинит сервер своей полной таблицей (упаковка FBS:
+   * normalize_scanned_cis и поиск стикера). Перевод здесь знает только буквы,
+   * и знаки «/», «?», «&» русской раскладки остались бы искажёнными уже без
+   * кириллицы, по которой сервер включает ремонт. Дефолт false — как было.
+   */
+  emitRaw?: boolean
 }
 
 // Внутреннее представление символа в буфере
@@ -132,6 +141,7 @@ type ScannerListenerOptions = {
   getActiveElement: () => ActiveElementLike
   isScanOnlyField?: (el: ActiveElementLike) => boolean
   scanOnlyFieldMinLength?: number
+  emitRaw?: boolean
 }
 
 /**
@@ -230,9 +240,11 @@ export function createScannerListener(opts: ScannerListenerOptions) {
         e.preventDefault()
         e.stopPropagation()
 
-        const normalized = buffer
-          .map(({ raw, code, shift }) => normalizeScanChar(raw, code, shift))
-          .join('')
+        const normalized = opts.emitRaw
+          ? buffer.map(({ raw }) => raw).join('')
+          : buffer
+            .map(({ raw, code, shift }) => normalizeScanChar(raw, code, shift))
+            .join('')
 
         // Вычищаем просочившиеся символы из сфокусированного поля
         if (
@@ -302,6 +314,7 @@ export function useBarcodeScanner({
   maxIntervalMs = 50,
   isScanOnlyField,
   scanOnlyFieldMinLength,
+  emitRaw = false,
 }: BarcodeScannerOptions): void {
   // Храним onScan в ref, чтобы не переподписываться на каждый рендер.
   // Обновляем ref внутри useEffect (не во время рендера) — совместимо с react-hooks/refs.
@@ -324,6 +337,7 @@ export function useBarcodeScanner({
       getActiveElement: () => document.activeElement as ActiveElementLike,
       isScanOnlyField: (el) => isScanOnlyFieldRef.current?.(el) ?? false,
       scanOnlyFieldMinLength,
+      emitRaw,
     })
 
     // Capture-фаза: перехватываем до обработчиков полей
@@ -331,5 +345,5 @@ export function useBarcodeScanner({
     return () => {
       document.removeEventListener('keydown', handler as unknown as (e: Event) => void, true)
     }
-  }, [enabled, minLength, maxIntervalMs, scanOnlyFieldMinLength])
+  }, [enabled, minLength, maxIntervalMs, scanOnlyFieldMinLength, emitRaw])
 }
