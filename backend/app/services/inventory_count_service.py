@@ -1317,6 +1317,54 @@ def _found_notice(expected_quantity: int) -> str:
     )
 
 
+@defect_service_write
+async def _apply_found_increment(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    line: InventoryCountLine,
+    count_id: uuid.UUID,
+    scan_id: str | None,
+    amount: int = 1,
+) -> int:
+    """Increment a found/expected line's actual quantity and remember the scan.
+
+    WMS-576 review (REST-N01): every scan of a defect-only recount writes both
+    the line's ``actual_quantity`` UPDATE and an
+    ``inventory_count_found_scans`` INSERT that references it. Once the line
+    (and, transitively, the document header) carries the tenant's
+    ``__DEFECT__`` location, WMS-516's guard checks both writes, not only the
+    original line INSERT that WMS-576's first pass already granted. No
+    commit/rollback here -- callers commit, exactly like
+    ``apply_return_defect_putaway``.
+    """
+    line.actual_quantity = int(line.actual_quantity or 0) + amount
+    expected = int(line.expected_quantity)
+    _remember_scan(session, tenant_id, count_id, line.id, scan_id, expected)
+    return expected
+
+
+@defect_service_write
+async def _add_found_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    line: InventoryCountLine,
+    scan_id: str | None,
+    expected: int,
+) -> None:
+    """Write a brand-new found line plus its scan receipt under one grant.
+
+    WMS-576 review (REST-N01): a scan that lands on the tenant's
+    ``__DEFECT__`` location and has no existing line yet needs the same grant
+    ``_add_count_lines`` already uses for a whole-product recount -- the line
+    INSERT and the found-scan INSERT that references it both hit the guard.
+    """
+    session.add(line)
+    await session.flush()
+    _remember_scan(session, tenant_id, line.count_id, line.id, scan_id, expected)
+
+
 async def record_found(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1504,9 +1552,9 @@ async def record_found(
         )
 
     if existing is not None:
-        existing.actual_quantity = int(existing.actual_quantity or 0) + 1
-        expected = int(existing.expected_quantity)
-        _remember_scan(session, tenant_id, count_id, existing.id, scan_id, expected)
+        expected = await _apply_found_increment(
+            session, tenant_id, line=existing, count_id=count_id, scan_id=scan_id,
+        )
         await session.commit()
         loaded = await get_count(session, tenant_id, count_id)
         assert loaded is not None
@@ -1533,10 +1581,8 @@ async def record_found(
         session, tenant_id=tenant_id, line=line, lock=False
     )
     expected = int(line.expected_quantity)
-    session.add(line)
-    await session.flush()
-    _remember_scan(session, tenant_id, count_id, line.id, scan_id, expected)
     try:
+        await _add_found_line(session, tenant_id, line=line, scan_id=scan_id, expected=expected)
         await session.commit()
     except IntegrityError:
         # Гонку с параллельным сканом того же товара разбираем как инкремент:
@@ -1809,8 +1855,13 @@ async def _increment_existing_found_line(
     )
     if line is None:
         raise InventoryCountError("count_not_found")
-    line.actual_quantity = int(line.actual_quantity or 0) + amount
-    expected = int(line.expected_quantity)
+    # WMS-576 review (REST-N01): reuses the same grant record_found's direct
+    # increment uses -- this is its race-fallback (and add_manual_line's own
+    # race-fallback), same write, same defect-location exposure. scan_id is
+    # None here: neither caller tracks a scan receipt for this path.
+    expected = await _apply_found_increment(
+        session, tenant_id, line=line, count_id=count_id, scan_id=None, amount=amount,
+    )
     await session.commit()
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
@@ -2130,6 +2181,20 @@ async def _post_count(
     )
 
 
+@defect_service_write
+async def _apply_cancel_status(
+    session: AsyncSession, tenant_id: uuid.UUID, *, count: InventoryCount,
+) -> None:
+    """Flip the header to cancelled under the same grant it was created with.
+
+    WMS-576 review (REST-N02): a header referencing the tenant's __DEFECT__
+    warehouse re-triggers WMS-516's guard on *any* UPDATE, status change
+    included -- cancelling changes no stock and shouldn't need a physical
+    warehouse any more than creating or posting the same document did.
+    """
+    count.status = STATUS_CANCELLED
+
+
 async def cancel_count(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -2148,7 +2213,7 @@ async def cancel_count(
         raise InventoryCountError("not_found")
     if count.status != STATUS_DRAFT:
         raise InventoryCountError("not_cancellable")
-    count.status = STATUS_CANCELLED
+    await _apply_cancel_status(session, tenant_id, count=count)
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
