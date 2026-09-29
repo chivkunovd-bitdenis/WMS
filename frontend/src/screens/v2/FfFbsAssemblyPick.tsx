@@ -19,8 +19,9 @@ import {
 } from '../ff/unload-pick/pickStub'
 import { pickKey, placesOf, type PickedMap } from '../ff/unload-pick/pickRows'
 import {
-  pickScanTargets,
+  pickScanCandidates,
   planGroupPickSet,
+  type GroupPickCandidate,
   type GroupPickLogEntry,
   type GroupPickSupplyState,
 } from './fbsSupplyAssembly'
@@ -415,7 +416,8 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
     ({ barcode, sourceKey }: { barcode: string; sourceKey: string | null }) => enqueue(async (): Promise<UnloadPickScanResult> => {
       if (!screenData) throw new Error('Подбор ещё загружается')
       const normalized = barcode.trim().toLowerCase()
-      const matchedProduct = screenData.products.find((product) => {
+      // Один штрихкод бывает у товаров разных селлеров группы: берём все совпавшие.
+      const matchedProducts = screenData.products.filter((product) => {
         const catalog = catalogById.get(product.id)
         return (
           product.sku.toLowerCase() === normalized ||
@@ -423,42 +425,73 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
           catalog?.wb_barcodes.some((one) => one === barcode)
         )
       })
-      let containerSource: PlaceSource | null | undefined = sourceKey
+      const selectedSource: PlaceSource | null | undefined = sourceKey
         ? (screenData.placeSource.get(sourceKey) ?? scannedContainers.current.get(sourceKey))
         : null
-      let locationId = containerSource?.locationId ?? sourceLocationId(sourceKey)
-      // Д5: товар уходит первой по порядку поставке, которой он ещё нужен.
-      // Незнакомый экрану код (ячейка, тара, другой ШК) сервер распознаёт сам —
-      // спрашиваем поставки по порядку, пока одна из них его не примет.
-      let targets = supplyIds.map((_, index) => index)
-      if (matchedProduct) {
-        const productTargets = pickScanTargets(statesFor(matchedProduct.id, null))
-        if (productTargets.length > 0) targets = productTargets
-        // Место не выбрано — источник ищется по доступному остатку; сразу после
-        // прошлого снятия берём свежий ответ мест, как экран одной поставки.
-        let supplyOptions = options[targets[0]] ?? []
-        const refreshing = refreshingRef.current.get(targets[0])
-        if (!containerSource && !locationId && refreshing) supplyOptions = (await refreshing) ?? supplyOptions
-        const option = supplyOptions.find((one) => one.product_id === matchedProduct.id)
-        containerSource = resolveProductScanSource(
-          matchedProduct,
-          option?.locations ?? [],
-          containerSource ?? (locationId ? { locationId, containerKind: null, containerId: null } : null),
-        )
-        locationId = containerSource.locationId
+      const selectedLocationId = selectedSource?.locationId ?? sourceLocationId(sourceKey)
+      // Д5: штука уходит первой по порядку поставке, которой нужен именно этот
+      // товар. Незнакомый экрану код (ячейка, тара, другой ШК) сервер
+      // распознаёт сам — спрашиваем поставки по порядку, пока одна его не примет.
+      let attempts: Array<{ index: number; product: PickProduct | null }> = supplyIds.map((_, index) => ({ index, product: null }))
+      if (matchedProducts.length > 0) {
+        let products = matchedProducts
+        if (sourceKey || selectedLocationId) {
+          // Выбрано место — сначала товары, которые в нём лежат.
+          const atSource = products.filter((product) => screenData.stock.some((line) => (
+            line.productId === product.id
+            && (line.holder === sourceKey
+              || (selectedLocationId !== null && screenData.placeSource.get(line.holder ?? '')?.locationId === selectedLocationId))
+          )))
+          if (atSource.length > 0) products = atSource
+        }
+        const candidates: GroupPickCandidate[] = []
+        statesRef.current.forEach((state, index) => {
+          for (const product of products) {
+            if (!state.planned.has(product.id)) continue
+            candidates.push({
+              index,
+              productId: product.id,
+              planned: state.planned.get(product.id) ?? 0,
+              pickedTotal: state.pickedTotal.get(product.id) ?? 0,
+            })
+          }
+        })
+        const chosen = pickScanCandidates(candidates)
+        if (chosen.length > 0) {
+          attempts = chosen.map((candidate) => ({
+            index: candidate.index,
+            product: products.find((product) => product.id === candidate.productId) ?? null,
+          }))
+        }
       }
 
       setBusy(true)
       setError(null)
       try {
         let firstRejection: Error | null = null
-        for (const index of targets) {
+        for (const { index, product } of attempts) {
+          let containerSource = selectedSource
+          let locationId = selectedLocationId
+          if (product) {
+            // Место не выбрано — источник ищется по доступному остатку; сразу после
+            // прошлого снятия берём свежий ответ мест, как экран одной поставки.
+            let supplyOptions = options[index] ?? []
+            const refreshing = refreshingRef.current.get(index)
+            if (!selectedSource && !selectedLocationId && refreshing) supplyOptions = (await refreshing) ?? supplyOptions
+            const option = supplyOptions.find((one) => one.product_id === product.id)
+            containerSource = resolveProductScanSource(
+              product,
+              option?.locations ?? [],
+              selectedSource ?? (selectedLocationId ? { locationId: selectedLocationId, containerKind: null, containerId: null } : null),
+            )
+            locationId = containerSource.locationId
+          }
           const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[index]}/pick/scan`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...headers(token) },
             body: JSON.stringify({
               barcode,
-              ...(matchedProduct ? { product_id: matchedProduct.id } : {}),
+              ...(product ? { product_id: product.id } : {}),
               storage_location_id: locationId,
               container_kind: containerSource?.containerKind ?? null,
               container_id: containerSource?.containerId ?? null,
@@ -541,7 +574,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         setBusy(false)
       }
     }),
-    [applyPicked, catalogById, enqueue, groupPickedAt, options, refreshSupply, screenData, statesFor, supplyIds, token],
+    [applyPicked, catalogById, enqueue, groupPickedAt, options, refreshSupply, screenData, supplyIds, token],
   )
 
   if (loading && !screenData) {

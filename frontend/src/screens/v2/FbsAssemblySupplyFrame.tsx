@@ -72,6 +72,8 @@ type Props = {
   messages: ReactNode
   packing: ReactNode
   boxes: FbsAssemblyFrameBoxes | null
+  /** После передачи — QR всей поставки, как на вкладке «Короба» карточки. */
+  afterBoxes?: ReactNode
   children?: ReactNode
 }
 
@@ -93,6 +95,7 @@ export function FbsAssemblySupplyFrame({
   messages,
   packing,
   boxes,
+  afterBoxes,
   children,
 }: Props) {
   return (
@@ -204,6 +207,11 @@ export function FbsAssemblySupplyFrame({
               </Stack>
             )}
           </Box>
+        ) : null}
+        {afterBoxes ? (
+          <Stack spacing={2} sx={{ px: 2, pb: 2, pt: 1 }} data-testid={`fbs-assembly-supply-qr-${supplyId}`}>
+            {afterBoxes}
+          </Stack>
         ) : null}
       </Collapse>
       {children}
