@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelFbsOrder,
   assignFbsPackingBoxOrders,
+  createFbsAssemblyTask,
   removeFbsPackingBoxOrder,
   deleteFbsCargoPlaces,
   deliverFbsSupply,
   FbsApiError,
+  fetchFbsAssemblyTasks,
   fetchFbsWorklist,
   retryFbsSupplyQr,
   runFbsOrdersSync,
@@ -21,6 +23,50 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('creates and lists a WMS-588 assembly task with the exact attempt key', async () => {
+    const task = {
+      id: 'task-1',
+      number: '№000001',
+      created_at: '2026-09-29T12:30:00Z',
+      created_by: { id: 'user-1', name: 'Иван Петров' },
+      supplies: [],
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(task), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [task] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createFbsAssemblyTask('token', authHeaders, {
+      supply_ids: ['supply-1', 'supply-2'],
+      idempotency_key: 'stable-attempt-key',
+    })).resolves.toEqual(task)
+    await expect(fetchFbsAssemblyTasks('token', authHeaders, { marketplace: 'wb' }))
+      .resolves.toEqual({ items: [task] })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/operations/fbs-assembly-tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        supply_ids: ['supply-1', 'supply-2'],
+        idempotency_key: 'stable-attempt-key',
+      }),
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/operations/fbs-assembly-tasks?marketplace=wb',
+      { headers: { Authorization: 'Bearer token' } },
+    )
+  })
+
   it('keeps the original unknown Ozon status in the existing status chip', () => {
     expect(
       orderStatusForChip({
