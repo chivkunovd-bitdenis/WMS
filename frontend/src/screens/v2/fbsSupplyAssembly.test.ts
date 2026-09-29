@@ -171,6 +171,30 @@ describe('WMS-574 R3/R4: создание поставок групп без д�
     supply: { id: `supply-${key}`, name: 'FBS 29.09.2026', wb_supply_id: `WB-GI-${key}` },
   }) as unknown as FbsWorkspace
 
+  it('WMS-588: после частичного успеха создаёт задание только из созданных в этой попытке поставок', async () => {
+    const createdBatches: Array<Array<{ groupKey: string; supplyId: string }>> = []
+    const result = await runFbsSupplyGroupCreation(
+      groups,
+      new Map(),
+      new Map(),
+      async (group) => {
+        if (group.key === 'B') throw new TypeError('Failed to fetch')
+        return workspaceFor(group.key)
+      },
+      {
+        newKey: () => 'supply-key',
+        isApiError: () => false,
+        afterCreated: async (created) => { createdBatches.push(created) },
+      },
+    )
+
+    expect(createdBatches).toEqual([[
+      { groupKey: 'A', supplyId: 'supply-A' },
+      { groupKey: 'C', supplyId: 'supply-C' },
+    ]])
+    expect(result.get('B')).toEqual({ status: 'failed', message: 'Failed to fetch' })
+  })
+
   it('после сбоя повтор отправляет только несозданные группы с прежними ключами', async () => {
     let counter = 0
     const newKey = () => `key-${++counter}`
