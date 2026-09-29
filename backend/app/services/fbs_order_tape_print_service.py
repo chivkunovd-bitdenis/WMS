@@ -17,6 +17,8 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
+    META_STATUS_REJECTED,
+    META_STATUS_REPLACEMENT_REQUIRED,
     META_STATUS_SENDING,
     FbsOrder,
     FbsOrderMarking,
@@ -50,6 +52,18 @@ class FbsOrderTapePrintError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+class _WbVerdictBlocksPrint(marking_svc.FbsMarkingError):
+    """WB's readback in this call refused the printed code or holds another one.
+
+    WMS-579: the verdict and WB's reason stay on the marking as they were read;
+    only this order leaves the tape, with the reason for the operator.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code)
+        self.message = message
 
 
 @dataclass(frozen=True)
@@ -254,6 +268,9 @@ async def print_fbs_order_tape(
         )
     result_orders: list[FbsOrderTapeOrder] = []
     bindings_to_send: dict[uuid.UUID, uuid.UUID] = {}
+    # WMS-579: orders whose code goes out as an ordinary print, not as a
+    # deliberate reprint of an already printed label.
+    ordinary_print_orders: set[uuid.UUID] = set()
     shortage_total = 0
     for order in ordered:
         qr_asset_id = qr_asset_by_order.get(order.id)
@@ -479,6 +496,8 @@ async def print_fbs_order_tape(
         # resent merely because an operator needs a replacement sticker.
         if printed.codes and marking is not None and not explicit_operator_reprint:
             bindings_to_send[order.id] = marking.id
+            if not printed.is_reprint:
+                ordinary_print_orders.add(order.id)
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -532,6 +551,7 @@ async def print_fbs_order_tape(
                 raise marking_svc.FbsMarkingError("order_cancelled")
             await _send_or_reconcile_printed_marking(
                 session, tenant_id, order, marking, http_client, actor_user_id,
+                ordinary_print=order_id in ordinary_print_orders,
             )
         except marking_svc.FbsMarkingError as exc:
             if _wb_accepted_code_without_echo(exc):
@@ -541,13 +561,16 @@ async def print_fbs_order_tape(
                 # stays in the tape instead of failing the whole order.
                 await session.commit()
                 continue
+            # A WB verdict read in this call is kept as read (WMS-579).
+            wb_verdict = exc if isinstance(exc, _WbVerdictBlocksPrint) else None
             if (marking is not None and marking.id == marking_id
-                    and exc.code != "wb_pending_confirmation"):
+                    and exc.code != "wb_pending_confirmation" and wb_verdict is None):
                 await _mark_printed_sgtin_not_sent(session, order)
             failed_ids.add(order.id)
             errors.append(FbsOrderTapeError(
                 order_id=order.id, wb_order_id=int(order.wb_order_id),
-                code=exc.code, message=exc.code,
+                code=exc.code,
+                message=wb_verdict.message if wb_verdict is not None else exc.code,
             ))
         await session.commit()
     result_orders = [row for row in result_orders if row.order_id not in failed_ids]
@@ -573,6 +596,8 @@ async def _send_or_reconcile_printed_marking(
     marking: FbsOrderMarking,
     http_client: httpx.AsyncClient,
     actor_user_id: uuid.UUID,
+    *,
+    ordinary_print: bool,
 ) -> None:
     operation = await marking_svc.pending_kiz_operation(session, marking)
     if (order.marketplace == "wb" and operation is None
@@ -588,7 +613,14 @@ async def _send_or_reconcile_printed_marking(
                 actor_user_id=actor_user_id,
             )
             if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
-                raise marking_svc.FbsMarkingError("wb_pending_confirmation")
+                # WMS-579: a reconcile that returned normally has read a value
+                # from WB. Another code is a mismatch, never a printable label;
+                # this exact code with a still pending verdict is printable.
+                verdict = _wb_verdict_blocking_print(marking)
+                if verdict is not None:
+                    raise verdict
+                if not _wb_returned_exact_code(order, marking):
+                    raise marking_svc.FbsMarkingError("wb_pending_confirmation")
             if operation.state == WB_OPERATION_STATE_FAILED:
                 raise marking_svc.FbsMarkingError("meta_validation_fail")
         else:
@@ -596,6 +628,14 @@ async def _send_or_reconcile_printed_marking(
                 session, tenant_id, order, marking, http_client,
                 actor_user_id=actor_user_id, notify_supply=False,
             )
+            # WMS-579: the readback right after an accepted PUT may already
+            # refuse the code. An ordinary print does not hand out such a
+            # label; a deliberate reprint of a printed label is not blocked.
+            verdict = _wb_verdict_blocking_print(marking) if ordinary_print else None
+            if verdict is not None:
+                raise verdict
+    except _WbVerdictBlocksPrint:
+        raise
     except marking_svc.FbsMarkingError as exc:
         error = exc
     except WildberriesClientError as exc:
@@ -621,21 +661,53 @@ async def _send_or_reconcile_printed_marking(
 
 
 def _wb_accepted_code_without_echo(exc: marking_svc.FbsMarkingError) -> bool:
-    """True when WB answered the KIZ write but has not echoed the value yet.
+    """True when WB answered this call's KIZ write but has not echoed the value yet.
 
     ``_send_or_reconcile_printed_marking`` raises ``wb_pending_confirmation``
-    for this case and also after a lost WB answer (transport, 408, 5xx). Only
-    the former is chained from ``wb_pending_confirmation`` itself. A lost answer
-    is chained from its own WB error code and still keeps the order out of the
-    tape, so the next print reconciles the write and resends the same code.
+    for this case, after a lost WB answer (transport, 408, 5xx) and after a
+    reconciling read that returned no row for the order. Only the first one is
+    chained from ``FbsMarkingWriteAcceptedError``, which the write raises
+    itself once WB has answered its PUT (WMS-579). A readback that failed after
+    that PUT carries its own WB error code and is not printed either (WMS-560
+    R2): the next print reconciles and, on an empty value, resends the code.
     """
     if exc.code != "wb_pending_confirmation":
         return False
     cause = exc.__cause__
     return (
-        isinstance(cause, marking_svc.FbsMarkingError)
+        isinstance(cause, marking_svc.FbsMarkingWriteAcceptedError)
         and cause.code == "wb_pending_confirmation"
     )
+
+
+def _wb_verdict_blocking_print(marking: FbsOrderMarking) -> _WbVerdictBlocksPrint | None:
+    """A final WB answer that keeps this code out of the tape (WMS-579)."""
+    if marking.meta_status == META_STATUS_REJECTED:
+        reason = (marking.reason or "").strip()
+        return _WbVerdictBlocksPrint(
+            "meta_validation_fail",
+            f"WB не принял маркировку: {reason}" if reason else "WB не принял маркировку.",
+        )
+    if marking.meta_status == META_STATUS_REPLACEMENT_REQUIRED:
+        details = marking.meta_details_json if isinstance(marking.meta_details_json, dict) else {}
+        remote_value = details.get("value")
+        if isinstance(remote_value, str) and marking_svc._same_marking_value(
+            marking.value, remote_value
+        ):
+            return _WbVerdictBlocksPrint(
+                "replacement_required", "WB требует заменить код маркировки."
+            )
+        return _WbVerdictBlocksPrint(
+            "replacement_required", "WB подтвердил другой код маркировки."
+        )
+    return None
+
+
+def _wb_returned_exact_code(order: FbsOrder, marking: FbsOrderMarking) -> bool:
+    """WB's latest snapshot of the order holds exactly this KIZ (WMS-529 R1)."""
+    detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN)
+    remote_value = detail.get("value") if isinstance(detail, dict) else None
+    return bool(remote_value) and marking_svc._same_marking_value(marking.value, remote_value)
 
 
 async def _load_supply(
@@ -785,7 +857,12 @@ async def _print_or_reprint_order_code(
                 ),
             ),
         )
-    if reprint:
+    # WMS-487: a reprint request with no bound code is only "nothing to
+    # reprint" when the order does not actually need a sgtin (e.g. WB marks
+    # it optional but the product itself is not marked). When the order does
+    # require sgtin, treat this the same as a first print and issue one from
+    # the pool instead of failing the whole tape with nothing_to_reprint.
+    if reprint and not _order_requires_sgtin(order):
         raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
 
     result = await mc_svc.print_codes_for_packaging_line(

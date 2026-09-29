@@ -1,4 +1,5 @@
-import type { FbsOrderMetadata, FbsPickOptionLocation } from './fbsApi'
+import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
+import type { FbsOrderMetadata, FbsPickOptionLocation, FbsWorkspace } from './fbsApi'
 
 export type FbsMarketplace = 'wb' | 'ozon'
 
@@ -312,6 +313,101 @@ export type FbsPickingListPrintInput = {
   deadlineLabel: string
   printedAtLabel: string
   rows: FbsPickingListPrintRow[]
+}
+
+/**
+ * WB отдаёт баркод позиции Ozon-отправления и её привязки к площадкам — то же
+ * правило, что и для баркода целого заказа (см. productBarcodeOptionsForOrder
+ * в FfFbsSupplyWorkspace.tsx): баркод WB никогда не подставляется вместо
+ * отсутствующего баркода Ozon.
+ */
+export function productBarcodeOptionsForPosition(
+  position: FbsWorkspace['orders'][number]['positions'][number],
+  marketplace: 'wb' | 'ozon',
+) {
+  const options = resolveProductBarcodeOptions({
+    wb_primary_barcode: position.barcode,
+    marketplace_bindings: position.marketplace_bindings,
+  })
+  return marketplace === 'ozon'
+    ? options.filter((option) => option.marketplace === 'ozon')
+    : options
+}
+
+export type FbsPickingRow = FbsPickingListPrintRow & {
+  key: string
+  nearestDeadline: string
+}
+
+/**
+ * WMS-580: лист подбора и лента «Печать всего»/«Печать выбранного» карточки
+ * поставки должны идти в одной последовательности. Единственный источник
+ * порядка — tape_order_index (тот же ключ picking_list_order_key, что и на
+ * сервере, см. backend/app/services/fbs_picking_order_service.py). Здесь
+ * строится и отсортированный по нему список заказов (его же карточка берёт
+ * для «Печать всего»/«Печать выбранного»), и строки листа подбора — группировкой
+ * ПО ЭТОМУ ЖЕ списку, поэтому оба потребителя физически не могут разойтись
+ * в порядке. Раньше (443638a1 → 30237f3b → 5fb9a6fc, 23.08.2026) их считали
+ * порознь, и порядок расходился трижды за один день.
+ */
+export function fbsBuildPickingRows(
+  orders: FbsWorkspace['orders'],
+  isOzonSupply: boolean,
+): { sortedOrders: FbsWorkspace['orders']; rows: FbsPickingRow[] } {
+  const sortedOrders = [...orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
+  const grouped = new Map<string, FbsPickingRow>()
+  for (const order of sortedOrders) {
+    const rows = isOzonSupply
+      ? order.positions.map((position) => ({
+        key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
+        name: position.name,
+        size: null,
+        imageUrl: position.image_url ?? null,
+        identifiers: [
+          position.seller_article,
+          position.sku ? `SKU ${position.sku}` : null,
+          productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode,
+        ].filter((value): value is string => Boolean(value)),
+        required: position.quantity,
+        picked: position.picked_quantity,
+      }))
+      : [{
+        key: order.product.id ?? `unmapped-${order.id}`,
+        name: order.product.name,
+        size: order.product.size,
+        imageUrl: order.product.image_url,
+        identifiers: [
+          order.product.seller_article,
+          order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+          order.product.barcode,
+        ].filter((value): value is string => Boolean(value)),
+        required: 1,
+        picked: order.pick.status === 'picked' ? 1 : 0,
+      }]
+    for (const row of rows) {
+      const current = grouped.get(row.key) ?? {
+        ...row,
+        locations: [],
+        required: 0,
+        picked: 0,
+        wbOrders: [],
+        stickerCodes: [],
+        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+        nearestDeadline: order.deadline_at,
+      }
+      current.required += row.required
+      current.picked += row.picked
+      current.wbOrders.push(order.wb_order_id)
+      current.stickerCodes.push(order.sticker.code)
+      const locations = order.inventory.locations
+        .filter((location) => location.available_unpacked > 0)
+        .map((location) => `${location.code}: ${location.available_unpacked}`)
+      current.locations = [...new Set([...current.locations, ...locations])]
+      if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
+      grouped.set(row.key, current)
+    }
+  }
+  return { sortedOrders, rows: [...grouped.values()] }
 }
 
 // Так сервер подписывает служебную зону сортировки (UNASSIGNED_LABEL).

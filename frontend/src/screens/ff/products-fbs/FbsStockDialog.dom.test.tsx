@@ -183,6 +183,29 @@ describe('WMS-469 F2: открытие окна не меняет сохранё
   })
 })
 
+describe('WMS-577 review P2-2: отрицательное «Доступно» (free=-3) не ломает сохранение', () => {
+  it('ввод 5 при free=-3 даёт в поле 0, а не -3, и сохраняет 0', async () => {
+    const onSave = vi.fn()
+    await mount(<FbsStockDialog open sellerName="ИП Тест" products={[product({ 'b-wb': { free: -3, value: 0 } })]}
+      bindings={[wb]} cabinets={data([wb], []).cabinets} wmsWarehouses={WMS} canEditBindings onClose={() => {}} onSave={onSave} />)
+    await type('fbs-stock-units-b-wb', '5')
+    expect(input('fbs-stock-units-b-wb').value).toBe('0')
+    expect($('fbs-stock-cap-note-b-wb').textContent).toBe('товара «Товар p» всего 0 штук')
+    await click('fbs-stock-save')
+    expect(onSave).toHaveBeenCalledWith({ 'b-wb': { publish: true, mode: 'units', value: 0, units_configured: true } })
+  })
+
+  it('явный ноль при free=-3 тоже даёт 0, а не -3 (раньше падал и явный ноль)', async () => {
+    const onSave = vi.fn()
+    await mount(<FbsStockDialog open sellerName="ИП Тест" products={[product({ 'b-wb': { free: -3, value: 5 } })]}
+      bindings={[wb]} cabinets={data([wb], []).cabinets} wmsWarehouses={WMS} canEditBindings onClose={() => {}} onSave={onSave} />)
+    await type('fbs-stock-units-b-wb', '0')
+    expect(input('fbs-stock-units-b-wb').value).toBe('0')
+    await click('fbs-stock-save')
+    expect(onSave).toHaveBeenCalledWith({ 'b-wb': { publish: true, mode: 'units', value: 0, units_configured: true } })
+  })
+})
+
 describe('WMS-469 F6: время записи', () => {
   it('открытая форма добавления заперта, Escape не закрывает, второй PUT не начинается; ответ закрывает окно', async () => {
     const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })], true))

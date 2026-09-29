@@ -128,6 +128,35 @@ describe('WMS-469 R12 обрезка ручного числа без блоки
   })
 })
 
+describe('WMS-577 review P2-2: отрицательное «Доступно» после F2 (WMS-530)', () => {
+  // Сервер после F2 отдаёт free_stock как есть, в том числе отрицательным
+  // (перебронирование). Потолок ручного числа не может уйти в минус — иначе
+  // поле принимает отрицательное значение и сохранение падает 422 у сервера,
+  // который требует value >= 0 (даже при вводе явного нуля).
+  const overreserved = product('pneg', 'Перебронированный', { 'b-wb': -3 })
+
+  it('потолок обрезается нулём, а не остаётся отрицательным', () => {
+    expect(unitsCap(wb, [overreserved])).toEqual({ free: 0, product: overreserved })
+  })
+
+  it('ввод больше нуля (5) обрезается до 0, а не до -3', () => {
+    expect(clampUnits(wb, 5, [overreserved])).toEqual({
+      units: 0, limitedBy: { free: 0, product: overreserved },
+    })
+  })
+
+  it('явный ноль тоже даёт 0 без блокировки (раньше и он превращался в -3)', () => {
+    // 0 уже совпадает с потолком (0), поэтому это «в пределах», без подписи —
+    // как и у обычного free >= 0, где введённое совпало с потолком.
+    expect(clampUnits(wb, 0, [overreserved])).toEqual({ units: 0, limitedBy: null })
+  })
+
+  it('при free >= 0 поведение прежнее', () => {
+    expect(clampUnits(wb, 50, [thirty])).toEqual({ units: 30, limitedBy: { free: 30, product: thirty } })
+    expect(clampUnits(wb, 25, [thirty])).toEqual({ units: 25, limitedBy: null })
+  })
+})
+
 describe('WMS-469 R9 галка «процентом» — одно значение в двух представлениях', () => {
   it('число → процент: берёт текущую долю и ставит на шаг ползунка', () => {
     const draft: BlockDraft = { publish: true, byPercent: false, percent: 0, units: 30 }

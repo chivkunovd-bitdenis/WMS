@@ -30,15 +30,24 @@ from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import get_or_create_sorting_location
 
 
-async def matching_scan_lines(
+async def _wb_card_variant_scan_lines(
     session: AsyncSession, req: InboundIntakeRequest, barcode: str,
 ) -> list[InboundIntakeLine]:
-    """Resolve saved WB alternatives only within the intake's exact variants."""
-    matches = [row for row in req.lines if barcode and row.product.wb_barcode == barcode]
-    if matches or not barcode:
-        return matches
+    """Legacy fallback: the WB card's declared per-size ``skus``, matched by chrtId.
+
+    A card can declare an alternative barcode for one specific size (chrtId)
+    of a multi-size nm_id before that alternative is persisted into
+    ``product_barcodes`` (WMS-535's backfill/import is what does that
+    normally) -- ``matching_scan_lines``'s document-scoped index below finds
+    it once it is. Until then, this is the only place that still knows about
+    it, so it stays as a fallback and keeps its original chrtId scoping: a
+    size sibling of the same nm_id that is *not* the document's own chrtId
+    must keep failing (a different size was never accepted onto this line).
+    """
     keys = {(row.product.seller_id, row.product.wb_nm_id) for row in req.lines
             if row.product.seller_id is not None and row.product.wb_nm_id is not None}
+    if not keys:
+        return []
     card_type = SellerWildberriesImportedCard
     variants: set[tuple[uuid.UUID, int, str]] = set()
     for batch in chunked(list(keys), min(ID_IN_BATCH_SIZE, 500)):
@@ -56,6 +65,65 @@ async def matching_scan_lines(
     return [row for row in req.lines if (
         row.product.seller_id, row.product.wb_nm_id, str(row.product.wb_chrt_id)
     ) in variants]
+
+
+async def matching_scan_lines(
+    session: AsyncSession, req: InboundIntakeRequest, barcode: str,
+) -> list[InboundIntakeLine]:
+    """Resolve a scan the same way receiving does, scoped to this document's lines.
+
+    WMS-578 review (P2-4): sorting used to check only ``product.wb_barcode``
+    (exact case) and the WB card's declared per-size ``skus``. It missed
+    everything else receiving's own barcode index already accepts for the
+    same document -- extra WB barcodes from ``product_barcodes`` (WMS-535),
+    Ozon barcodes, the WMS article, all case-insensitively -- and a product
+    sold only on Ozon (no ``wb_barcode``/``wb_nm_id``) could never match at
+    all, since the old check compared exclusively against a WB-only field.
+
+    Two tiers, same as receiving:
+
+    1. A direct, unconditional check against each line's own
+       ``wb_barcode``/``sku_code`` (case-insensitive) -- this does not depend
+       on the document having a resolved ``seller_id`` yet, unlike the index
+       below, so it keeps working exactly like the old code did for a
+       just-created line whose product only got its seller assigned later.
+    2. ``inbound_intake_service._request_barcode_index``/``_index_lookup`` --
+       the exact index receiving's own ``resolve_scanned_product_id`` uses,
+       scoped to this document's lines (``include_seller_catalog=False``),
+       covering everything tier 1 does not: extra WB barcodes, Ozon barcodes.
+
+    The same barcode aliasing two different products of this document is
+    ambiguous, exactly as receiving's own equivalent case raises
+    ``barcode_ambiguous`` -- here as ``ambiguous_product``, scan_product's own
+    established code for it.
+
+    Only when neither tier resolves anything does this fall back to the
+    legacy WB-card-variant match below, for a card-declared alternative not
+    yet persisted into ``product_barcodes``.
+    """
+    if not barcode:
+        return []
+    upper = barcode.upper()
+    direct_ids = {
+        row.product_id for row in req.lines
+        for alias in ((row.product.wb_barcode or "").upper(), (row.product.sku_code or "").upper())
+        if alias and alias == upper
+    }
+    idx = await intake._request_barcode_index(
+        session, req.tenant_id, req, include_seller_catalog=False,
+    )
+    indexed_id, known = intake._index_lookup(idx, barcode)
+    if known and indexed_id is None:
+        raise warehouse_map.WarehouseMapError("ambiguous_product")
+    matched_ids = set(direct_ids)
+    if indexed_id is not None:
+        matched_ids.add(indexed_id)
+    if len(matched_ids) > 1:
+        raise warehouse_map.WarehouseMapError("ambiguous_product")
+    if matched_ids:
+        product_id = next(iter(matched_ids))
+        return [row for row in req.lines if row.product_id == product_id]
+    return await _wb_card_variant_scan_lines(session, req, barcode)
 
 
 async def scan_product(

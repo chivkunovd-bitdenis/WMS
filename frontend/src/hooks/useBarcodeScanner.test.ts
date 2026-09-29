@@ -479,4 +479,108 @@ describe('WMS-566: поле «только для скана» (количест
     type('2009989396966', 120)
     expect(onScan).toHaveBeenCalledWith('2009989396966')
   })
+
+  it('P3-2 (ревью 29.09.2026): Backspace при правке числа рвёт пачку — «150» → стереть → «1500» не считается сканом', () => {
+    // До фикса Backspace не записывался в буфер, но и не сбрасывал его: «150»
+    // (3 символа) + 3×Backspace (пропущены) + «1500» (4 символа) давали буфер
+    // «1501500» — 7 символов, >= scanOnlyFieldMinLength(7), и уходили как скан.
+    const field = { tagName: 'INPUT', value: '', dataset: { testid: 'qty' } }
+    const onScan = vi.fn()
+    let now = 0
+    const listener = createScannerListener({
+      onScan,
+      minLength: 5,
+      maxIntervalMs: 50,
+      scanOnlyFieldMinLength: 7,
+      isScanOnlyField: (el) => el?.dataset?.testid === 'qty',
+      getNow: () => now,
+      getActiveElement: () => field,
+    })
+    const press = (key: string, code: string) => {
+      now += 5
+      listener(makeEvent(key, { code }))
+    }
+    for (const ch of '150') press(ch, `Digit${ch}`)
+    for (let i = 0; i < 3; i += 1) press('Backspace', 'Backspace')
+    for (const ch of '1500') press(ch, `Digit${ch}`)
+    now += 5
+    listener(makeEvent('Enter', { code: 'Enter' }))
+    expect(onScan).not.toHaveBeenCalled()
+  })
+})
+
+// ─── WMS-575: сырая пачка для упаковки FBS ───────────────────────────────────
+//
+// Упаковка FBS отдаёт серверу то, что легло бы в поле скана, — раскладку ЧЗ и
+// стикера чинит сервер своей полной таблицей (normalize_scanned_cis). Перевод
+// здесь знает только буквы: «/», «?», «&» русской раскладки он оставил бы
+// «.», «,», «?», и сервер без кириллицы в строке ремонт не включил бы.
+
+/** Что отдаёт клавиатура в русской раскладке ЙЦУКЕН за символ латинского кода. */
+function ruLayoutKey(ch: string): { key: string; code: string; shift?: boolean } {
+  const LAT = "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+  const RUS = 'йцукенгшщзхъфывапролджэячсмитьбю.'
+  if (/[0-9]/.test(ch)) return { key: ch, code: `Digit${ch}` }
+  if (ch === '/') return { key: '.', code: 'Slash' }
+  if (ch === '?') return { key: ',', code: 'Slash', shift: true }
+  if (ch === '&') return { key: '?', code: 'Digit7', shift: true }
+  const lower = ch.toLowerCase()
+  const index = LAT.indexOf(lower)
+  const ru = RUS[index]
+  return {
+    key: ch === lower ? ru : ru.toUpperCase(),
+    code: `Key${lower.toUpperCase()}`,
+    shift: ch !== lower,
+  }
+}
+
+function rawListener(onScan: (code: string) => void, emitRaw: boolean) {
+  return createScannerListener({
+    onScan,
+    minLength: 5,
+    maxIntervalMs: 50,
+    getNow: () => 0,
+    getActiveElement: () => null,
+    emitRaw,
+  })
+}
+
+function typeCode(listener: ReturnType<typeof createScannerListener>, keys: Array<{ key: string; code: string; shift?: boolean; ctrl?: boolean }>) {
+  for (const k of keys) listener(makeEvent(k.key, { code: k.code, shiftKey: k.shift ?? false, ctrlKey: k.ctrl ?? false }))
+  listener(makeEvent('Enter', { code: 'Enter' }))
+}
+
+describe('WMS-575 · emitRaw: сырая пачка для упаковки FBS', () => {
+  const KIZ = '0104600000000017215Ab/c?d&Ef9GhJ'
+  // Ровно то, что при русской раскладке легло бы в поле скана.
+  const KIZ_RU_RAW = '0104600000000017215Фи.с,в?Уа9ПрО'
+
+  it('русская раскладка: «/», «?», «&» уходят сырыми, как из поля, — их чинит сервер', () => {
+    const onScan = vi.fn()
+    typeCode(rawListener(onScan, true), [...KIZ].map(ruLayoutKey))
+    expect(onScan).toHaveBeenCalledWith(KIZ_RU_RAW)
+  })
+
+  it('латинская раскладка: код уходит как есть', () => {
+    const onScan = vi.fn()
+    typeCode(rawListener(onScan, true), [...KIZ].map((ch) => ({ key: ch, code: 'KeyA' })))
+    expect(onScan).toHaveBeenCalledWith(KIZ)
+  })
+
+  it('разделитель GS (Ctrl+]) остаётся в сырой пачке — без него длинный ЧЗ сервер не восстановит', () => {
+    const onScan = vi.fn()
+    const keys = [
+      ...[...'0104600000000017215Ab/c?d'].map(ruLayoutKey),
+      { key: 'ъ', code: 'BracketRight', ctrl: true },
+      ...[...'93Ef9G'].map(ruLayoutKey),
+    ]
+    typeCode(rawListener(onScan, true), keys)
+    expect(onScan).toHaveBeenCalledWith('0104600000000017215Фи.с,в\x1D93Уа9П')
+  })
+
+  it('без emitRaw — прежнее поведение: буквы переводятся в латиницу, знаки остаются', () => {
+    const onScan = vi.fn()
+    typeCode(rawListener(onScan, false), [...KIZ].map(ruLayoutKey))
+    expect(onScan).toHaveBeenCalledWith('0104600000000017215Ab.c,d?Ef9GhJ')
+  })
 })
