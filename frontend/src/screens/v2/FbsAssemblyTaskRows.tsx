@@ -10,6 +10,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { plural } from '../../utils/plural'
 import { groupFbsAssemblyTaskSupplies } from './fbsSupplyAssembly'
 import type { FbsAssemblyTask, FbsSupplyWorklistItem } from './fbsApi'
@@ -54,12 +55,16 @@ function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 
 function SupplyRow({
   supply,
   nested = false,
+  lastNested = false,
+  assemblyTaskId,
   printingSupplyId,
   onOpenSupply,
   onPrintSupply,
 }: {
   supply: FbsSupplyWorklistItem
   nested?: boolean
+  lastNested?: boolean
+  assemblyTaskId?: string
   printingSupplyId: string | null
   onOpenSupply: (supplyId: string) => void
   onPrintSupply: (supply: FbsSupplyWorklistItem) => void
@@ -68,8 +73,31 @@ function SupplyRow({
     <TableRow
       hover
       onClick={() => onOpenSupply(supply.id)}
-      sx={{ cursor: 'pointer', '& > td': { py: 1 } }}
+      sx={(theme) => ({
+        cursor: 'pointer',
+        '& > td': {
+          py: 1,
+          ...(nested ? {
+            bgcolor: alpha(theme.palette.primary.main, 0.035),
+            '&:first-of-type': {
+              borderLeft: `2px solid ${theme.palette.primary.main}`,
+            },
+            '&:last-of-type': {
+              borderRight: `2px solid ${theme.palette.primary.main}`,
+            },
+            ...(lastNested ? {
+              borderBottom: `2px solid ${theme.palette.primary.main}`,
+            } : {}),
+          } : {}),
+        },
+        ...(nested ? {
+          '&:hover > td': {
+            bgcolor: alpha(theme.palette.primary.main, 0.075),
+          },
+        } : {}),
+      })}
       data-testid={`fbs-18-supply-${supply.id}`}
+      data-assembly-task-id={assemblyTaskId}
     >
       <TableCell sx={nested ? { pl: 4 } : undefined}>
         <Typography variant="body2" sx={{ fontWeight: 750 }}>
@@ -144,7 +172,24 @@ export function FbsAssemblyTaskRows({
             <TableRow
               hover
               onClick={() => onOpenAssembly(task.supplies.map((supply) => supply.id))}
-              sx={{ cursor: 'pointer', bgcolor: 'action.hover', '& > td': { py: 1.25 } }}
+              sx={(theme) => ({
+                cursor: 'pointer',
+                '& > td': {
+                  py: 1.25,
+                  bgcolor: alpha(theme.palette.primary.main, 0.12),
+                  borderTop: `2px solid ${theme.palette.primary.main}`,
+                  borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                  '&:first-of-type': {
+                    borderLeft: `2px solid ${theme.palette.primary.main}`,
+                  },
+                  '&:last-of-type': {
+                    borderRight: `2px solid ${theme.palette.primary.main}`,
+                  },
+                },
+                '&:hover > td': {
+                  bgcolor: alpha(theme.palette.primary.main, 0.18),
+                },
+              })}
               data-testid={`fbs-assembly-task-${task.id}`}
             >
               <TableCell colSpan={8}>
@@ -173,11 +218,13 @@ export function FbsAssemblyTaskRows({
                 </Stack>
               </TableCell>
             </TableRow>
-            {taskSupplies.map((supply) => (
+            {taskSupplies.map((supply, index) => (
               <SupplyRow
                 key={supply.id}
                 supply={supply}
                 nested
+                lastNested={index === taskSupplies.length - 1}
+                assemblyTaskId={task.id}
                 printingSupplyId={printingSupplyId}
                 onOpenSupply={onOpenSupply}
                 onPrintSupply={onPrintSupply}
