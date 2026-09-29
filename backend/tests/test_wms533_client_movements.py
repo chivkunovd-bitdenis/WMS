@@ -41,6 +41,7 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
                 name="=1+1" if sku == "0007" else f"Item {sku}",
                 sku_code=sku,
                 wb_barcode=f"00{sku}",
+                wb_size="42" if sku == "0007" else "44",
             )
             session.add(product)
             await session.flush()
@@ -270,15 +271,27 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
         headers=headers,
         params={
             **PERIOD,
-            "sku": "0008",
-            "barcode": "000008",
+            "shk": "000008",
             "warehouse_id": str(warehouse_id),
             "marketplace": "ozon",
-            "operation": "fbs_shipment",
         },
     )
     assert response.status_code == 200
-    assert [row["movement_id"] for row in response.json()["rows"]] == [str(oz_move2.id)]
+    assert {row["movement_id"] for row in response.json()["rows"]} == {
+        str(oz_move2.id), str(fbo.id)
+    }
+    assert {row["shk"] for row in response.json()["rows"]} == {"000008"}
+    assert {row["size"] for row in response.json()["rows"]} == {"44"}
+    sku_response = await async_client.get(
+        "/reports/client-movements", headers=headers, params={**PERIOD, "sku": "0008"}
+    )
+    assert sku_response.status_code == 200
+    assert {row["sku"] for row in sku_response.json()["rows"]} == {"0008"}
+    for path in ("/reports/client-movements", "/reports/client-movements/export.xlsx"):
+        conflict = await async_client.get(
+            path, headers=headers, params={**PERIOD, "sku": "0008", "shk": "000008"}
+        )
+        assert conflict.status_code == 422
     assert (
         await async_client.get(
             "/reports/client-movements",
@@ -319,7 +332,12 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
     at_end = datetime(2026, 10, 1, tzinfo=UTC)
     async with SessionLocal() as session:
         product = Product(
-            tenant_id=tenant_id, seller_id=seller_id, name="Many", sku_code="001", wb_barcode=None
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Many",
+            sku_code="001",
+            wb_barcode=None,
+            wb_size="XL",
         )
         other = Product(
             tenant_id=tenant_id,
@@ -375,7 +393,7 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
         await session.commit()
     assert (await async_client.get("/reports/client-movements", params=PERIOD)).status_code == 401
     response = await async_client.get(
-        "/reports/client-movements", headers=headers, params={**PERIOD, "barcode": "00009876"}
+        "/reports/client-movements", headers=headers, params={**PERIOD, "shk": "00009876"}
     )
     assert response.status_code == 200, response.text
     assert len(response.json()["rows"]) == 200
@@ -383,22 +401,26 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
     second = await async_client.get(
         "/reports/client-movements",
         headers=headers,
-        params={**PERIOD, "barcode": "00009876", "cursor": response.json()["next_cursor"]},
+        params={**PERIOD, "shk": "00009876", "cursor": response.json()["next_cursor"]},
     )
     assert second.status_code == 200, second.text
     assert len(second.json()["rows"]) == 5
     assert second.json()["next_cursor"] is None
     assert all(
-        row["barcode"] == "00009876" for row in response.json()["rows"] + second.json()["rows"]
+        row["shk"] == "00009876" and row["size"] == "XL"
+        for row in response.json()["rows"] + second.json()["rows"]
     )
     export = await async_client.get(
         "/reports/client-movements/export.xlsx",
         headers=headers,
-        params={**PERIOD, "barcode": "00009876"},
+        params={**PERIOD, "shk": "00009876"},
     )
     assert export.status_code == 200
     book = load_workbook(io.BytesIO(export.content), read_only=True)
-    assert len(list(book["Общие"].values)) - 1 == 205
+    general_rows = list(book["Общие"].values)
+    assert len(general_rows) - 1 == 205
+    assert general_rows[0][8:10] == ("shk", "size")
+    assert general_rows[1][8:10] == ("00009876", "XL")
 
     email = f"client-report-{uuid.uuid4().hex[:10]}@example.com"
     created = await async_client.post(
@@ -412,7 +434,7 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
     scoped = await async_client.get(
         "/reports/client-movements",
         headers=seller_headers,
-        params={**PERIOD, "seller_id": str(second_seller), "limit": 1},
+        params={**PERIOD, "limit": 1},
     )
     assert scoped.status_code == 200, scoped.text
     assert scoped.json()["rows"][0]["sku"] == "001"

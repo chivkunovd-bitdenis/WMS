@@ -44,11 +44,9 @@ async def get_client_movements(
     date_from: Annotated[datetime, Query()],
     date_to: Annotated[datetime, Query()],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
-    sku: Annotated[str | None, Query()] = None,
-    barcode: Annotated[str | None, Query()] = None,
+    sku: Annotated[str | None, Query(description="Точный артикул товара; не вместе с shk")] = None,
+    shk: Annotated[str | None, Query(description="Точный штрихкод товара; не вместе с sku")] = None,
     marketplace: Annotated[str | None, Query()] = None,
-    operation: Annotated[str | None, Query()] = None,
-    seller_id: Annotated[uuid.UUID | None, Query()] = None,
     cursor: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> dict[str, object]:
@@ -61,10 +59,9 @@ async def get_client_movements(
             date_to=date_to,
             warehouse_id=warehouse_id,
             sku=sku,
-            barcode=barcode,
+            shk=shk,
             marketplace=marketplace,
-            operation=operation,
-            seller_id=seller_scope if seller_scope is not None else seller_id,
+            seller_id=seller_scope,
             cursor=cursor,
             limit=limit,
         )
@@ -81,11 +78,9 @@ async def export_client_movements(
     date_from: Annotated[datetime, Query()],
     date_to: Annotated[datetime, Query()],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
-    sku: Annotated[str | None, Query()] = None,
-    barcode: Annotated[str | None, Query()] = None,
+    sku: Annotated[str | None, Query(description="Точный артикул товара; не вместе с shk")] = None,
+    shk: Annotated[str | None, Query(description="Точный штрихкод товара; не вместе с sku")] = None,
     marketplace: Annotated[str | None, Query()] = None,
-    operation: Annotated[str | None, Query()] = None,
-    seller_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> Response:
     await assert_inventory_read_access(session, user)
     try:
@@ -96,10 +91,9 @@ async def export_client_movements(
             date_to=date_to,
             warehouse_id=warehouse_id,
             sku=sku,
-            barcode=barcode,
+            shk=shk,
             marketplace=marketplace,
-            operation=operation,
-            seller_id=seller_scope if seller_scope is not None else seller_id,
+            seller_id=seller_scope,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

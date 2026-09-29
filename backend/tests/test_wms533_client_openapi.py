@@ -46,22 +46,31 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
         portal = schema["components"]["schemas"]["LoginBody"]["properties"]["portal"]
         assert "seller" in str(portal) and "fulfillment" in str(portal)
         rows = schema["paths"]["/reports/client-movements"]["get"]
-        assert {item["name"] for item in rows["parameters"]} >= {
+        assert {item["name"] for item in rows["parameters"]} == {
             "date_from",
             "date_to",
             "sku",
-            "barcode",
+            "shk",
             "warehouse_id",
             "marketplace",
-            "operation",
             "cursor",
             "limit",
         }
         assert rows["security"] == [{"HTTPBearer": []}]
         properties = rows["responses"]["200"]["content"]["application/json"]["schema"]["properties"]
         assert {"rows", "next_cursor", "limit"} <= set(properties)
-        assert "kiz" in properties["rows"]["items"]["properties"]
+        row_properties = properties["rows"]["items"]["properties"]
+        assert {"kiz", "shk", "size", "operation"} <= set(row_properties)
+        assert "barcode" not in row_properties
         export = schema["paths"]["/reports/client-movements/export.xlsx"]["get"]
+        assert {item["name"] for item in export["parameters"]} == {
+            "date_from",
+            "date_to",
+            "warehouse_id",
+            "sku",
+            "shk",
+            "marketplace",
+        }
         assert export["security"] == [{"HTTPBearer": []}]
         assert (
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -367,14 +367,15 @@ async def list_client_movements(
     date_to: datetime,
     warehouse_id: uuid.UUID | None = None,
     sku: str | None = None,
-    barcode: str | None = None,
+    shk: str | None = None,
     marketplace: str | None = None,
-    operation: str | None = None,
     seller_id: uuid.UUID | None = None,
     cursor: str | None = None,
     limit: int = 200,
 ) -> tuple[list[dict[str, Any]], str | None]:
     start, end = _period(date_from, date_to)
+    if sku is not None and shk is not None:
+        raise ValueError("sku and shk cannot be used together")
     if not 1 <= limit <= MAX_LIMIT:
         raise ValueError("limit must be between 1 and 1000")
     if marketplace not in (None, "wb", "ozon"):
@@ -420,19 +421,18 @@ async def list_client_movements(
             stmt = stmt.where(Product.seller_id == seller_id)
         if sku is not None:
             stmt = stmt.where(Product.sku_code == sku)
-        if barcode is not None:
+        if shk is not None:
             extra_barcode = (
                 select(ProductBarcode.id)
                 .where(
                     ProductBarcode.tenant_id == tenant_id,
+                    ProductBarcode.seller_id == Product.seller_id,
                     ProductBarcode.product_id == Product.id,
-                    ProductBarcode.barcode == barcode,
+                    ProductBarcode.barcode == shk,
                 )
                 .exists()
             )
-            stmt = stmt.where(or_(Product.wb_barcode == barcode, extra_barcode))
-        if operation is not None:
-            stmt = stmt.where(InventoryMovement.movement_type == operation)
+            stmt = stmt.where(or_(Product.wb_barcode == shk, extra_barcode))
         batch = (await session.execute(stmt)).all()
         if not batch:
             break
@@ -527,9 +527,10 @@ async def list_client_movements(
                         "product_id": str(product.id),
                         "sku": product.sku_code,
                         "product_name": product.name,
-                        "barcode": barcode
-                        if barcode is not None
+                        "shk": shk
+                        if shk is not None
                         else (product.wb_barcode or alternate_barcodes.get(product.id)),
+                        "size": product.wb_size,
                         "marketplace": row_marketplace,
                         "document": document,
                         "quantity_delta": sign
@@ -555,6 +556,8 @@ async def build_client_movement_workbook(
     session: AsyncSession, tenant_id: uuid.UUID, **filters: Any
 ) -> bytes:
     _period(filters["date_from"], filters["date_to"])
+    if filters.get("sku") is not None and filters.get("shk") is not None:
+        raise ValueError("sku and shk cannot be used together")
     workbook = Workbook(write_only=True)
     headers = [
         "id",
@@ -565,7 +568,8 @@ async def build_client_movement_workbook(
         "product_id",
         "sku",
         "product_name",
-        "barcode",
+        "shk",
+        "size",
         "marketplace",
         "document_id",
         "document_type",
@@ -593,7 +597,8 @@ async def build_client_movement_workbook(
                 row["product_id"],
                 row["sku"],
                 row["product_name"],
-                row["barcode"],
+                row["shk"],
+                row["size"],
                 row["marketplace"],
                 document.get("id"),
                 document.get("type"),

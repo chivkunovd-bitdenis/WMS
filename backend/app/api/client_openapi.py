@@ -41,7 +41,8 @@ def _client_page_schema() -> dict[str, Any]:
             "product_id",
             "sku",
             "product_name",
-            "barcode",
+            "shk",
+            "size",
             "marketplace",
             "document",
             "quantity_delta",
@@ -51,12 +52,16 @@ def _client_page_schema() -> dict[str, Any]:
             "id": string,
             "movement_id": {"type": "string", "format": "uuid"},
             "occurred_at": {"type": "string", "format": "date-time"},
-            "operation": {"type": "string", "description": "Saved movement_type"},
+            "operation": {
+                "type": "string",
+                "description": "Сохранённый тип движения; поле ответа, не фильтр запроса",
+            },
             "warehouse_id": {"type": "string", "format": "uuid"},
             "product_id": {"type": "string", "format": "uuid"},
             "sku": string,
             "product_name": string,
-            "barcode": nullable_string,
+            "shk": nullable_string,
+            "size": nullable_string,
             "marketplace": {"type": ["string", "null"], "enum": ["wb", "ozon", None]},
             "document": {
                 "anyOf": [
@@ -102,8 +107,10 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     movement = paths["/reports/client-movements"]["get"]
     movement["summary"] = "Отчёт движений JSON"
     movement["description"] = (
-        "Movements in [date_from, date_to), ordered by occurred_at, movement ID and unit. "
-        "Pass next_cursor with the same filters until it is null. FBS is one unit per row."
+        "Движения за период [date_from, date_to). Укажите sku или shk, но не оба: "
+        "вместе они дают HTTP 422. Без них возвращается весь доступный отчёт за период. "
+        "Пройдите страницы с next_cursor до null. FBS: одна штука в строке; "
+        "operation в ответе — сохранённый тип движения."
     )
     movement["responses"]["200"]["content"] = {
         "application/json": {
@@ -119,7 +126,8 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
                         "product_id": "00000000-0000-0000-0000-000000000002",
                         "sku": "0007",
                         "product_name": "Товар",
-                        "barcode": "0000123456789",
+                        "shk": "0000123456789",
+                        "size": "42",
                         "marketplace": "ozon",
                         "document": {
                             "id": "00000000-0000-0000-0000-000000000003",
@@ -137,7 +145,10 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     }
     export = paths["/reports/client-movements/export.xlsx"]["get"]
     export["summary"] = "Отчёт движений Excel"
-    export["description"] = "All matching rows as Excel sheets WB, Ozon and Общие."
+    export["description"] = (
+        "Все подходящие строки на листах WB, Ozon и Общие. Укажите sku или shk, "
+        "но не оба; без них выгружается весь доступный отчёт за период."
+    )
     export["responses"]["200"]["content"] = {
         _XLSX: {"schema": {"type": "string", "format": "binary"}}
     }
