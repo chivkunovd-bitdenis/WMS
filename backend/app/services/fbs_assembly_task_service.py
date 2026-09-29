@@ -190,6 +190,18 @@ async def _map_tasks(
                 for order in supply.orders
                 if str(order.id) in worklist_by_order_id
             ]
+            units_count = sum(
+                sum(int(position["quantity"]) for position in item["positions"])
+                if item["positions"]
+                else 1
+                for item in order_items
+            )
+            picked_units_count = sum(
+                sum(int(position["picked_quantity"]) for position in item["positions"])
+                if item["positions"]
+                else int(item["pick"]["status"] == PICK_STATUS_PICKED)
+                for item in order_items
+            )
             supplies_payload.append(
                 {
                     "id": str(supply.id),
@@ -207,6 +219,8 @@ async def _map_tasks(
                         item["pick"]["status"] == PICK_STATUS_PICKED
                         for item in order_items
                     ),
+                    "units_count": units_count,
+                    "picked_units_count": picked_units_count,
                     "packed_count": sum(
                         item["pack"]["status"] == PACK_STATUS_PACKED
                         for item in order_items

@@ -171,6 +171,7 @@ class FbsSupplyWorklistItemOut(BaseModel):
     wms_warehouse: dict[str, str]
     orders_count: int
     units_count: int
+    picked_units_count: int
     boxes_count: int
     planned_shipment_date: str | None
     can_add_orders: bool

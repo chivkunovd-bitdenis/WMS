@@ -339,6 +339,7 @@ export type FbsSupplyWorklistItem = {
   wms_warehouse: { id: string; name: string }
   orders_count: number
   units_count: number
+  picked_units_count: number
   boxes_count: number
   planned_shipment_date: string | null
   can_add_orders: boolean
@@ -358,6 +359,8 @@ export type FbsAssemblyTaskSupply = {
   status: string
   orders_count: number
   picked_count: number
+  units_count: number
+  picked_units_count: number
   packed_count: number
 }
 

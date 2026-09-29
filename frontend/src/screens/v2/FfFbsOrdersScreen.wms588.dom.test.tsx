@@ -21,6 +21,7 @@ const supply = (id: string, name: string, seller: string): FbsSupplyWorklistItem
   wms_warehouse: { id: 'warehouse-1', name: 'Основной склад' },
   orders_count: 2,
   units_count: 2,
+  picked_units_count: id === 'supply-2' ? 1 : 2,
   boxes_count: 1,
   planned_shipment_date: '2026-09-30T09:00:00Z',
   can_add_orders: false,
@@ -41,12 +42,12 @@ const task: FbsAssemblyTask = {
     {
       id: 'supply-1', marketplace: 'wb', name: 'Поставка 1',
       seller: { id: 'seller-Селлер А', name: 'Селлер А' }, status: 'assembling',
-      orders_count: 3, picked_count: 2, packed_count: 1,
+      orders_count: 3, picked_count: 2, units_count: 3, picked_units_count: 2, packed_count: 1,
     },
     {
       id: 'supply-2', marketplace: 'wb', name: 'Поставка 2',
       seller: { id: 'seller-Селлер Б', name: 'Селлер Б' }, status: 'assembling',
-      orders_count: 2, picked_count: 1, packed_count: 0,
+      orders_count: 2, picked_count: 1, units_count: 2, picked_units_count: 1, packed_count: 0,
     },
   ],
 }
@@ -93,6 +94,7 @@ describe('WMS-588: сборочное задание во «В работе»', 
     expect(taskRow?.textContent).toContain('2 поставки')
     expect(taskRow?.textContent).toContain('Селлер А, Селлер Б')
     expect(taskRow?.textContent).toContain('Подбор 3 / 5 · Упаковка 1 / 5')
+    expect(taskRow?.textContent).not.toContain('Подобрано')
 
     const rowIds = [...document.querySelectorAll('tbody > tr')]
       .map((row) => row.getAttribute('data-testid'))
@@ -106,6 +108,11 @@ describe('WMS-588: сборочное задание во «В работе»', 
       .toContain('Поставка 1')
     expect(document.querySelector('[data-testid="fbs-18-supply-supply-3"]')?.textContent)
       .toContain('Поставка без задания')
+    expect(document.querySelector('[data-testid="fbs-supply-picked-supply-1"]')?.textContent)
+      .toBe('Подобрано')
+    expect(document.querySelector('[data-testid="fbs-supply-picked-supply-2"]')).toBeNull()
+    expect(document.querySelector('[data-testid="fbs-supply-picked-supply-3"]')?.textContent)
+      .toBe('Подобрано')
 
     const groupedRows = document.querySelectorAll('[data-assembly-task-id="task-1"]')
     expect(groupedRows).toHaveLength(2)
@@ -129,5 +136,39 @@ describe('WMS-588: сборочное задание во «В работе»', 
     const supplyRow = document.querySelector<HTMLElement>('[data-testid="fbs-18-supply-supply-1"]')
     await act(async () => { supplyRow!.click() })
     expect(openSupply).toHaveBeenCalledWith('supply-1')
+  })
+
+  it('показывает «Подобрано» в шапке, когда подобраны все единицы всех поставок', async () => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    const completedTask: FbsAssemblyTask = {
+      ...task,
+      supplies: task.supplies.map((one) => ({
+        ...one,
+        picked_count: one.orders_count,
+        picked_units_count: one.units_count,
+      })),
+    }
+
+    await act(async () => {
+      root!.render(
+        <Table>
+          <TableBody>
+            <FbsAssemblyTaskRows
+              tasks={[completedTask]}
+              supplies={supplies}
+              printingSupplyId={null}
+              onOpenAssembly={() => undefined}
+              onOpenSupply={() => undefined}
+              onPrintSupply={() => undefined}
+            />
+          </TableBody>
+        </Table>,
+      )
+    })
+
+    expect(document.querySelector('[data-testid="fbs-assembly-task-picked-task-1"]')?.textContent)
+      .toBe('Подобрано')
   })
 })

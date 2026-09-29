@@ -20,6 +20,7 @@ from app.models.fbs_order import (
     PICK_STATUS_PICKED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderProduct,
 )
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -80,6 +81,7 @@ async def _seed_supply(
     status: str = FBS_SUPPLY_STATUS_ASSEMBLING,
     marketplace: str = "wb",
     order_states: list[tuple[str, str]] | None = None,
+    position_progress: list[list[tuple[int, int]]] | None = None,
 ) -> uuid.UUID:
     async with SessionLocal() as session:
         supply = FbsSupply(
@@ -95,24 +97,38 @@ async def _seed_supply(
         await session.flush()
         now = datetime.now(tz=UTC)
         for index, (pick_status, pack_status) in enumerate(order_states or []):
-            session.add(
-                FbsOrder(
-                    tenant_id=tenant_id,
-                    seller_id=seller_id,
-                    warehouse_id=warehouse_id,
-                    supply_id=supply.id,
-                    marketplace=marketplace,
-                    wb_order_id=int(time.time_ns()) + index,
-                    status=FBS_ORDER_STATUS_ASSEMBLING,
-                    supplier_status="confirm",
-                    created_at_wb=now,
-                    deadline_at=now + timedelta(days=1),
-                    mapping_status=MAPPING_STATUS_MAPPED,
-                    reserve_status=RESERVE_STATUS_RESERVED,
-                    pick_status=pick_status,
-                    pack_status=pack_status,
-                )
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                supply_id=supply.id,
+                marketplace=marketplace,
+                wb_order_id=int(time.time_ns()) + index,
+                status=FBS_ORDER_STATUS_ASSEMBLING,
+                supplier_status="confirm",
+                created_at_wb=now,
+                deadline_at=now + timedelta(days=1),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                pick_status=pick_status,
+                pack_status=pack_status,
             )
+            session.add(order)
+            await session.flush()
+            for position_index, (quantity, picked_quantity) in enumerate(
+                position_progress[index] if position_progress else []
+            ):
+                session.add(
+                    FbsOrderProduct(
+                        order_id=order.id,
+                        ozon_sku=1000 + position_index,
+                        offer_id=f"offer-{position_index}",
+                        name=f"Position {position_index}",
+                        quantity=quantity,
+                        picked_quantity=picked_quantity,
+                        position_index=position_index,
+                    )
+                )
         await session.commit()
         return supply.id
 
@@ -152,6 +168,8 @@ async def test_create_detail_and_idempotent_replay(async_client: AsyncClient) ->
         warehouse_id=warehouse_id,
         name="Ozon supply",
         marketplace="ozon",
+        order_states=[(PICK_STATUS_PICKED, PACK_STATUS_PENDING)],
+        position_progress=[[(2, 2), (1, 1)]],
     )
 
     created = await _create_task(
@@ -173,9 +191,23 @@ async def test_create_detail_and_idempotent_replay(async_client: AsyncClient) ->
         "status": FBS_SUPPLY_STATUS_ASSEMBLING,
         "orders_count": 3,
         "picked_count": 2,
+        "units_count": 3,
+        "picked_units_count": 2,
         "packed_count": 1,
     }
     assert by_id[str(ozon_supply_id)]["marketplace"] == "ozon"
+    assert by_id[str(ozon_supply_id)]["orders_count"] == 1
+    assert by_id[str(ozon_supply_id)]["picked_count"] == 1
+    assert by_id[str(ozon_supply_id)]["units_count"] == 3
+    assert by_id[str(ozon_supply_id)]["picked_units_count"] == 3
+
+    supply_worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=active&marketplace=ozon",
+        headers=headers,
+    )
+    assert supply_worklist.status_code == 200, supply_worklist.text
+    assert supply_worklist.json()["items"][0]["units_count"] == 3
+    assert supply_worklist.json()["items"][0]["picked_units_count"] == 3
 
     detail = await async_client.get(f"{BASE}/{body['id']}", headers=headers)
     assert detail.status_code == 200, detail.text
