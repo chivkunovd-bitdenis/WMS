@@ -54,9 +54,16 @@ def _client_page_schema() -> dict[str, Any]:
             "occurred_at": {"type": "string", "format": "date-time"},
             "operation": {
                 "type": "string",
+                "enum": [
+                    "inbound_intake",
+                    "return",
+                    "fbs_shipment",
+                    "marketplace_unload",
+                    "inventory_count",
+                ],
                 "description": (
-                    "Тип оприходования или списания; return для inbound_intake со связанной "
-                    "возвратной заявкой. Внутренние перемещения и подбор не включаются."
+                    "Только приёмка, возврат, отгрузка FBS/FBO или инвентаризация. "
+                    "Резервы и отмены FBS не включаются."
                 ),
             },
             "warehouse_id": {"type": "string", "format": "uuid"},

@@ -178,6 +178,12 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
                 ("ownership_transfer_out", -1),
                 ("ownership_transfer_in", 1),
                 ("ownership_transfer_receipt", 1),
+                ("outbound_shipment", -1),
+                ("product_tz_import", 1),
+                ("discrepancy_act", 1),
+                ("correction_phantom_return", 1),
+                ("inbound_intake", -1),
+                ("inventory_count", 0),
             )
         ]
         move_other = movement("0007", 9, "inbound_intake", wh=other_warehouse, loc=other_location)
@@ -193,6 +199,8 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
         await session.flush()
         fbo = movement("0008", -3, "marketplace_unload")
         fbo.marketplace_unload_request_id = unload.id
+        fbo_reversal = movement("0008", 3, "marketplace_unload")
+        fbo_reversal.marketplace_unload_request_id = unload.id
         await session.flush()
         session.add_all(
             [
@@ -260,8 +268,8 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
         and len(parameters) < 1000
         for statement, parameters in ledger_queries
     )
-    assert len(rows) == 6
-    assert len({row["id"] for row in rows}) == 6
+    assert len(rows) == 5
+    assert len({row["id"] for row in rows}) == 5
     assert move_other.id.hex not in {row["movement_id"].replace("-", "") for row in rows}
     assert sorted(
         row["kiz"] for row in rows if row["movement_id"] in {str(oz_move1.id), str(oz_split.id)}
@@ -269,14 +277,10 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     assert next(row for row in rows if row["movement_id"] == str(oz_move2.id))["kiz"] == "OZ-3"
     assert next(row for row in rows if row["movement_id"] == str(fbo.id))["marketplace"] == "ozon"
     assert next(row for row in rows if row["movement_id"] == str(fbo.id))["kiz"] is None
+    assert str(fbo_reversal.id) not in {row["movement_id"] for row in rows}
     assert str(move_internal.id) not in {row["movement_id"] for row in rows}
     assert not {str(item.id) for item in excluded} & {row["movement_id"] for row in rows}
-    assert (
-        next(row for row in rows if row["movement_id"] == str(reversal.id))["quantity_delta"] == 1
-    )
-    reversal_row = next(row for row in rows if row["movement_id"] == str(reversal.id))
-    assert reversal_row["document"]["id"] == str(wb_order.id)
-    assert reversal_row["kiz"] is None
+    assert str(reversal.id) not in {row["movement_id"] for row in rows}
     assert next(row for row in rows if row["movement_id"] == str(wb_move.id))["kiz"] == "WB-KIZ"
     assert all(
         row["quantity_delta"] == -1
@@ -330,7 +334,7 @@ async def test_client_report_units_filters_cursor_and_excel(async_client: AsyncC
     wb_rows = list(book["WB"].values)[1:]
     oz_rows = list(book["Ozon"].values)[1:]
     general_rows = list(book["Общие"].values)[1:]
-    assert len(wb_rows) == 2 and len(oz_rows) == 4 and not general_rows
+    assert len(wb_rows) == 1 and len(oz_rows) == 4 and not general_rows
     assert all(
         cells[0].value == "=1+1" and cells[0].data_type == "s"
         for cells in book["WB"].iter_rows(min_row=2, min_col=6, max_col=6)
@@ -429,7 +433,8 @@ async def test_client_report_fbo_document_lifecycle_and_excel(async_client: Asyn
     )
     assert at_shipment.status_code == 200
     assert {item["movement_id"] for item in at_shipment.json()["rows"]} == {
-        str(movement_ids["shipped"]), str(movement_ids["done"])
+        str(movement_ids["shipped"]),
+        str(movement_ids["done"]),
     }
     first_page = await async_client.get(
         "/reports/client-movements",
@@ -446,7 +451,8 @@ async def test_client_report_fbo_document_lifecycle_and_excel(async_client: Asyn
     assert second_page.status_code == 200
     paged = first_page.json()["rows"] + second_page.json()["rows"]
     assert {item["movement_id"] for item in paged} == {
-        str(movement_ids["shipped"]), str(movement_ids["done"])
+        str(movement_ids["shipped"]),
+        str(movement_ids["done"]),
     }
     after_shipment = await async_client.get(
         "/reports/client-movements",
@@ -536,6 +542,27 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
             created_at=AT,
         )
         session.add(other_kind)
+        inventory_receipt = InventoryMovement(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=3,
+            movement_type="inventory_count",
+            created_at=AT,
+        )
+        inventory_expense = InventoryMovement(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=-1,
+            movement_type="inventory_count",
+            created_at=AT,
+        )
+        session.add_all([inventory_receipt, inventory_expense])
         unrelated = InventoryMovement(
             tenant_id=tenant_id,
             product_id=product.id,
@@ -551,7 +578,7 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
     response = await async_client.get("/reports/client-movements", headers=headers, params=PERIOD)
     assert response.status_code == 200, response.text
     rows = {row["movement_id"]: row for row in response.json()["rows"]}
-    assert len(rows) == 6
+    assert len(rows) == 7
     for label in ("wb", "ozon", "unknown"):
         row = rows[str(movements[label])]
         assert row["operation"] == "return"
@@ -568,9 +595,11 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
     assert inbound_row["marketplace"] is None
     assert rows[str(unrelated.id)]["operation"] == "inbound_intake"
     assert rows[str(unrelated.id)]["document"] is None
-    assert rows[str(other_kind.id)]["operation"] == "discrepancy_act"
-    assert rows[str(other_kind.id)]["document"]["type"] == "inbound"
-    assert rows[str(other_kind.id)]["marketplace"] is None
+    assert str(other_kind.id) not in rows
+    assert rows[str(inventory_receipt.id)]["operation"] == "inventory_count"
+    assert rows[str(inventory_receipt.id)]["quantity_delta"] == 3
+    assert rows[str(inventory_expense.id)]["operation"] == "inventory_count"
+    assert rows[str(inventory_expense.id)]["quantity_delta"] == -1
     for marketplace in ("wb", "ozon"):
         selected = await async_client.get(
             "/reports/client-movements",
@@ -589,8 +618,9 @@ async def test_client_report_return_type_marketplace_and_excel(async_client: Asy
     assert [row[2] for row in list(book["WB"].values)[1:]] == ["Возврат товара"]
     assert [row[2] for row in list(book["Ozon"].values)[1:]] == ["Возврат товара"]
     assert sorted(row[2] for row in list(book["Общие"].values)[1:]) == [
-        "Акт расхождений",
         "Возврат товара",
+        "Инвентаризация",
+        "Инвентаризация",
         "Приёмка",
         "Приёмка",
     ]
