@@ -17,6 +17,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FbsOrder,
 )
@@ -108,6 +109,7 @@ def supply_order_link_discrepancy(
     order: FbsOrder,
     *,
     existing_orders: Iterable[FbsOrder],
+    allow_closed_wb_membership: bool = False,
 ) -> SupplyCompositionDiscrepancy | None:
     """Return the structural reason why an unlinked order cannot join this WB supply."""
     if order.tenant_id != supply.tenant_id:
@@ -120,9 +122,17 @@ def supply_order_link_discrepancy(
         return None
     if order.supply_id is not None:
         return _discrepancy("order_in_other_supply", order)
-    if supply.status in _TERMINAL_SUPPLY_STATUSES:
+    if supply.status in _TERMINAL_SUPPLY_STATUSES and not (
+        allow_closed_wb_membership and supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        and order.supplier_status == "complete"
+        and order.wb_supply_id == supply.wb_supply_id
+    ):
         return _discrepancy("terminal_supply", order, detail=supply.status)
-    if supply.status not in _LINKABLE_SUPPLY_STATUSES:
+    if supply.status not in _LINKABLE_SUPPLY_STATUSES and not (
+        allow_closed_wb_membership and supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        and order.supplier_status == "complete"
+        and order.wb_supply_id == supply.wb_supply_id
+    ):
         return _discrepancy("supply_not_editable", order, detail=supply.status)
     if order.status in _TERMINAL_ORDER_STATUSES:
         return _discrepancy("terminal_order", order, detail=order.status)
@@ -156,12 +166,14 @@ async def link_order_to_wb_supply_if_compatible(
     order: FbsOrder,
     *,
     existing_orders: list[FbsOrder],
+    allow_closed_wb_membership: bool = False,
 ) -> SupplyOrderLinkResult:
     """Bind one already imported order without moving it from another local supply."""
     discrepancy = supply_order_link_discrepancy(
         supply,
         order,
         existing_orders=existing_orders,
+        allow_closed_wb_membership=allow_closed_wb_membership,
     )
     if discrepancy is not None:
         return SupplyOrderLinkResult(linked=False, discrepancy=discrepancy)
@@ -171,8 +183,8 @@ async def link_order_to_wb_supply_if_compatible(
     order.supply_id = supply.id
     order.wb_supply_id = supply.wb_supply_id
     order.status = (
-        FBS_ORDER_STATUS_IN_SUPPLY
-        if supply.status == FBS_SUPPLY_STATUS_DRAFT
+        FBS_ORDER_STATUS_IN_DELIVERY if supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        else FBS_ORDER_STATUS_IN_SUPPLY if supply.status == FBS_SUPPLY_STATUS_DRAFT
         else FBS_ORDER_STATUS_ASSEMBLING
     )
     supply.cargo_type = supply.cargo_type or order.cargo_type

@@ -576,6 +576,7 @@ export type FbsTrackingOrder = {
   wb_order_id: number
   tracking_label: string
   wb_status: string | null
+  supplier_status?: string | null
   local_status: string
 }
 
@@ -584,6 +585,13 @@ export type FbsTrackingSummary = {
   orders: FbsTrackingOrder[]
   last_wb_sync_at: string | null
   checked_at: string
+}
+
+export type FbsTrackingStatus = {
+  supply_status: string
+  tracking_summary: FbsTrackingSummary
+  wb_closed_at: string | null
+  wb_scan_at: string | null
 }
 
 export type FbsPartialRejection = {
@@ -811,6 +819,19 @@ export async function syncFbsSupplyTracking(
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/sync-tracking`), {
+      method: 'POST',
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function syncFbsSupplyTrackingStatus(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+): Promise<FbsTrackingStatus> {
+  return jsonOrThrow<FbsTrackingStatus>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/tracking-status`), {
       method: 'POST',
       headers: { ...ah(token) },
     }),
