@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPackingScanController, type PackingScanDeps } from './fbsSequentialPacking'
-import type { FbsScanAutoPrintResult } from './fbsApi'
+import { createPackingScanController, routePackingScan, type PackingScanDeps } from './fbsSequentialPacking'
+import { FbsApiError, type FbsScanAutoPrintResult } from './fbsApi'
 
 function fixture(requiresKiz = true) {
   const result = (id: string): FbsScanAutoPrintResult => ({
@@ -95,5 +95,36 @@ describe('WMS-604 sequential packing', () => {
     await scanner.scan('barcode')
     expect(deps.bind).not.toHaveBeenCalled()
     expect(deps.print).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('WMS-604 scan routing recovery', () => {
+  it.each(['scan_product_not_found', 'scan_product_exhausted'])('continues to supply B on the same retry after saved supply A returns %s', async (code) => {
+    const first = fixture()
+    const second = fixture()
+    let saved = false
+    first.deps.saved = () => saved
+    // Recreate after overriding saved, as the controller captures its function.
+    first.scanner = createPackingScanController(first.deps)
+    vi.mocked(first.deps.claim).mockImplementation(() => { saved = true; return 'same-request' })
+    vi.mocked(first.deps.select).mockReset()
+      .mockRejectedValueOnce(new Error('network lost'))
+      .mockRejectedValueOnce(new FbsApiError(code, code, null, false, 404))
+    await expect(routePackingScan([first.scanner, second.scanner], 'barcode')).rejects.toThrow('network lost')
+    expect(second.deps.select).not.toHaveBeenCalled()
+    await routePackingScan([first.scanner, second.scanner], 'barcode')
+    expect(first.deps.select).toHaveBeenCalledTimes(2)
+    expect(second.deps.select).toHaveBeenCalledTimes(1)
+    expect(second.scanner.view()?.orderId).toBe('1')
+  })
+  it('keeps a selected order authoritative instead of routing its failure to another supply', async () => {
+    const first = fixture()
+    const second = fixture()
+    await first.scanner.scan('barcode')
+    vi.mocked(first.deps.bind).mockRejectedValueOnce(new FbsApiError('scan_product_not_found', 'binding failed', null, false, 404))
+    await expect(routePackingScan([first.scanner, second.scanner], 'kiz')).rejects.toThrow('binding failed')
+    expect(second.deps.select).not.toHaveBeenCalled()
+    expect(first.scanner.view()?.orderId).toBe('1')
   })
 })

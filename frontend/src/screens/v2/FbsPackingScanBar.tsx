@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
-import { FbsApiError } from './fbsApi'
 import { fbsErrorText } from './fbsUx'
-import type { PackingScanController } from './fbsSequentialPacking'
+import { routePackingScan, type PackingScanController } from './fbsSequentialPacking'
 
 export function FbsPackingScanBar({ controllers, enabled }: {
   controllers: PackingScanController[]; enabled: boolean
@@ -18,21 +17,7 @@ export function FbsPackingScanBar({ controllers, enabled }: {
     onScan: async (raw) => {
       setError(null)
       try {
-        const pending = controllers.find((one) => one.hasPending())
-          ?? controllers.find((one) => one.hasSavedAttempt(raw))
-        if (pending) {
-          await pending.scan(raw)
-        } else {
-          let selected = false
-          for (const controller of controllers) {
-            try { await controller.scan(raw); selected = true; break }
-            catch (cause) {
-              if (cause instanceof FbsApiError && ['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) continue
-              throw cause
-            }
-          }
-          if (!selected) throw new Error('В этой сборке не осталось заказов с таким штрихкодом.')
-        }
+        await routePackingScan(controllers, raw)
         playScanSuccess()
       } catch (cause) {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось обработать скан.')

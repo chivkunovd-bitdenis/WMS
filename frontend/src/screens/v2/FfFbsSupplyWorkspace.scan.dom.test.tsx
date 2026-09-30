@@ -5,9 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+import { printPreparedQr } from '../../utils/printPreparedQr'
 
 // The scanner tests render the real workspace and scan intake; unrelated modal
 // contents and the picking screen do not participate in these scenarios.
+// OS/browser print transport has its own tests; this suite verifies routing and packing.
+vi.mock('../../utils/printPreparedQr', () => ({ printPreparedQr: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
 vi.mock('../../utils/useMarkingCodePrint', () => ({ useMarkingCodePrint: () => ({ openPrint: vi.fn(), dialog: null }) }))
 vi.mock('./FbsSupplyHistoryDialog', () => ({ FbsSupplyHistoryDialog: () => null }))
@@ -134,7 +137,6 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === '/fixture.png') return new Response(new Blob(['fixture'], { type: 'image/png' }))
   if (path.endsWith('/print-claim')) return json({ claimed: true, started: false })
   if (path.endsWith('/print-started')) return json({ claimed: false, started: true })
-  if (path === '/print-image') return json({ job_id: body.job_id, status: 'submitted', receipt: 'test-printer-job' })
   if (path === '/operations/fbs-orders/kiz/validate') {
     await wait(delays.validate ?? 0)
     if (body.value === STICKER_A) return json({ detail: { code: 'invalid_kiz', message: 'Сканируйте Честный знак' } }, 422)
@@ -161,6 +163,7 @@ beforeEach(() => {
   delays = {}
   committedTails = {}
   selectedCount = 0
+  vi.mocked(printPreparedQr).mockClear()
   vi.stubGlobal('crypto', webcrypto)
   window.sessionStorage.clear()
   window.localStorage.clear()
@@ -394,7 +397,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
 
     expect(kizCalls()).toHaveLength(0)
     expect(activeRow()).toBe('order-a')
-    expect(calls.some((call) => call.path === '/print-image')).toBe(false)
+    expect(printPreparedQr).not.toHaveBeenCalled()
   })
 
   it('P2: ШК и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {

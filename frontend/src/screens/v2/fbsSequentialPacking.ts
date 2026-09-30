@@ -35,6 +35,22 @@ export type PackingScanDeps = {
   changed: () => void
 }
 
+/** Resume an uncertain selection first, then continue through the remaining supplies. */
+export async function routePackingScan(controllers: PackingScanController[], raw: string): Promise<void> {
+  const pending = controllers.find((one) => one.hasPending())
+  if (pending) return pending.scan(raw)
+  const saved = controllers.find((one) => one.hasSavedAttempt(raw))
+  const ordered = saved ? [saved, ...controllers.filter((one) => one !== saved)] : controllers
+  for (const controller of ordered) {
+    try { await controller.scan(raw); return }
+    catch (cause) {
+      if (cause instanceof FbsApiError && ['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) continue
+      throw cause
+    }
+  }
+  throw new Error('В этой сборке не осталось заказов с таким штрихкодом.')
+}
+
 /** One selected order survives binding/printing failures; only success releases it. */
 export function createPackingScanController(deps: PackingScanDeps): PackingScanController {
   let pending: { barcode: string; result: FbsScanAutoPrintResult; image: Promise<string>; needsKiz: boolean } | null = null
@@ -124,8 +140,17 @@ export function makePackingScanDeps(
   }
   return {
     active,
-    claim: (raw) => claimFbsPendingProductScan(token, storageId, raw,
-      { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey).idempotencyKey,
+    claim: (raw) => {
+      const attempt = claimFbsPendingProductScan(token, storageId, raw,
+        { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey)
+      // Capture the operator's box before the request: an uncertain selection
+      // and a later remount must never substitute the newly opened box.
+      if (attempt.packingBoxId === undefined) {
+        attempt.packingBoxId = currentBox()
+        updateFbsPendingProductScan(token, storageId, attempt)
+      }
+      return attempt.idempotencyKey
+    },
     saved: (raw) => Boolean(peekFbsPendingProductScan(token, storageId, raw)),
     remember: (raw, result) => {
       const attempt = peekFbsPendingProductScan(token, storageId, raw)
@@ -141,7 +166,7 @@ export function makePackingScanDeps(
     changed,
     select: async (barcode, idempotency_key) => {
       try {
-        const boxId = currentBox()
+        const boxId = peekFbsPendingProductScan(token, storageId, barcode)?.packingBoxId ?? null
         const selected = await scanFbsProductForAutoPrint(token, authHeaders, supplyId, {
           barcode, idempotency_key, print_qr: true, print_chz: false, reprint_chz: false, await_honest_sign: true,
         })
