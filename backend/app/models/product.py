@@ -76,6 +76,9 @@ class Product(Base):
     wb_vendor_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     wb_chrt_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     wb_barcode: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Operator-selected barcode for product labels across marketplaces. WB's
+    # provider barcode remains independent for matching and imports.
+    primary_print_barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wb_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wb_country_of_origin: Mapped[str | None] = mapped_column(String(255), nullable=True)
     country_of_origin_iso_code: Mapped[str | None] = mapped_column(String(2), nullable=True)

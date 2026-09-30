@@ -59,6 +59,8 @@ export function ProductCardDialog({
   const [cardStatus, setCardStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [cardData, setCardData] = useState<ProductCardData | null>(null)
   const [cardError, setCardError] = useState<string | null>(null)
+  const [primaryBarcodeBusy, setPrimaryBarcodeBusy] = useState(false)
+  const [primaryBarcodeError, setPrimaryBarcodeError] = useState<string | null>(null)
   const cardAbortRef = useRef<AbortController | null>(null)
 
   const [metricsStatus, setMetricsStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -80,6 +82,26 @@ export function ProductCardDialog({
   const bumpStockVersion = useCallback(() => {
     setStockVersion((v) => v + 1)
   }, [])
+
+  const selectPrimaryBarcode = useCallback(async (barcode: string) => {
+    if (primaryBarcodeBusy) return
+    setPrimaryBarcodeBusy(true)
+    setPrimaryBarcodeError(null)
+    try {
+      const res = await fetch(apiUrl(`/products/${row.id}/primary-barcode`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode }),
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      setCardData((await res.json()) as ProductCardData)
+      markChanged()
+    } catch (e) {
+      setPrimaryBarcodeError(e instanceof Error ? e.message : 'Не удалось сохранить основной ШК.')
+    } finally {
+      setPrimaryBarcodeBusy(false)
+    }
+  }, [authHeaders, markChanged, primaryBarcodeBusy, row.id, token])
 
   const loadCard = useCallback(
     async (productId: string) => {
@@ -328,7 +350,13 @@ export function ProductCardDialog({
                 </Button>
               </ErrorNotice>
             ) : (
-              <ProductCardMainTab data={cardData} />
+              <ProductCardMainTab
+                data={cardData}
+                canSelectPrimaryBarcode={canManageCatalog}
+                primaryBarcodeBusy={primaryBarcodeBusy}
+                primaryBarcodeError={primaryBarcodeError}
+                onSelectPrimaryBarcode={(barcode) => void selectPrimaryBarcode(barcode)}
+              />
             )}
           </Box>
 

@@ -1739,7 +1739,7 @@ async def _auto_import_groups(
             sku=product.sku_code,
             product_name=product.name,
             size=product.wb_size,
-            barcode=product.wb_barcode,
+            barcode=product.primary_print_barcode or product.wb_barcode,
             loaded_count=int(count),
         )
         for product, count in (await session.execute(stmt)).all()
@@ -2040,7 +2040,7 @@ async def assign_import_rows_to_product(
                 sku=product.sku_code,
                 product_name=product.name,
                 size=product.wb_size,
-                barcode=product.wb_barcode,
+                barcode=product.primary_print_barcode or product.wb_barcode,
                 loaded_count=0,
             )
             stored_assigned_keys = metadata.get("assigned_keys")
@@ -2157,7 +2157,7 @@ async def assign_import_rows_to_product(
             sku=product.sku_code,
             product_name=product.name,
             size=product.wb_size,
-            barcode=product.wb_barcode,
+            barcode=product.primary_print_barcode or product.wb_barcode,
             loaded_count=0,
         )
         return AssignMarkingCodesResult(

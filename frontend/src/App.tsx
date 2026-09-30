@@ -91,6 +91,7 @@ type ProductRow = {
   ozon_offer_id?: string | null
   wb_barcodes?: string[]
   wb_primary_barcode?: string | null
+  product_primary_barcode?: string | null
 }
 
 type SellerRow = { id: string; name: string; ozon_connected?: boolean | null }
@@ -544,9 +545,10 @@ export default function App() {
         id: string
         wb_barcodes?: string[]
         wb_primary_barcode?: string | null
+        product_primary_barcode?: string | null
       }[]
       const barcodesById = new Map(
-        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
+        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode, product_primary_barcode: r.product_primary_barcode }]),
       )
       return base.map((p) => {
         const wb = barcodesById.get(p.id)

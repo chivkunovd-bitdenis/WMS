@@ -55,7 +55,6 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
-import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
@@ -394,16 +393,9 @@ function productBarcodeOptionsForOrder(
   order: FbsWorkspace['orders'][number],
   marketplace: 'wb' | 'ozon',
 ) {
-  const options = resolveProductBarcodeOptions({
-    wb_primary_barcode: order.product.barcode,
-    marketplace_bindings: order.product.marketplace_bindings,
-  })
-  // An Ozon label must never silently fall back to a WB barcode.  An absent
-  // Ozon barcode stays absent and the established dialog explains that it
-  // cannot print one; the operator can correct the product binding first.
-  return marketplace === 'ozon'
-    ? options.filter((option) => option.marketplace === 'ozon')
-    : options
+  return order.product.barcode?.trim()
+    ? [{ marketplace, barcode: order.product.barcode.trim() }]
+    : []
 }
 
 function productLabelFromPosition(

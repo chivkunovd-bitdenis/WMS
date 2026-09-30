@@ -66,6 +66,7 @@ from app.services.fbs_stock_rule_service import (
     get_rule_views,
     set_rule_for_products,
 )
+from app.services.product_barcode_service import set_primary_product_barcode
 from app.services.product_merge_service import (
     ProductMergeError,
     merge_products,
@@ -153,6 +154,7 @@ class SellerWbCatalogOut(BaseModel):
     marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    product_primary_barcode: str | None = None
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -183,6 +185,7 @@ class FfCatalogOut(BaseModel):
     marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    product_primary_barcode: str | None = None
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -335,6 +338,12 @@ class ProductOzonLinkPatch(BaseModel):
 
     ozon_sku: str | None = Field(default=None, max_length=255)
     ozon_offer_id: str | None = Field(default=None, max_length=255)
+
+
+class ProductPrimaryBarcodePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    barcode: str = Field(min_length=1, max_length=64)
 
 
 class ProductMergeBody(BaseModel):
@@ -1171,6 +1180,23 @@ async def get_product_card(
             ProductCardLocationWarehouseOut(**warehouse) for warehouse in location_warehouses
         ],
     )
+
+
+@router.patch("/{product_id}/primary-barcode", response_model=ProductCardOut)
+async def patch_product_primary_barcode(
+    product_id: uuid.UUID,
+    body: ProductPrimaryBarcodePatch,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductCardOut:
+    product = await get_product(session, user.tenant_id, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="product_not_found")
+    try:
+        await set_primary_product_barcode(session, product, body.barcode)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    return await get_product_card(product_id, user, session)
 
 
 @router.get("/import-tz/template")

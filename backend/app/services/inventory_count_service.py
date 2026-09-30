@@ -553,15 +553,13 @@ async def get_count(
 def _print_sheet_barcode(
     product: Product, ozon_link: ProductMarketplaceLink | None
 ) -> str | None:
-    """WMS-497 R7: ШК WB, иначе первый ШК Ozon из привязки, иначе нет значения."""
+    """The current product-label choice, including Ozon-only products."""
+    from app.services.product_barcode_service import primary_product_barcode
 
-    if product.wb_barcode:
-        return product.wb_barcode
-    if ozon_link is not None and ozon_link.external_barcodes:
-        first = ozon_link.external_barcodes[0]
-        if isinstance(first, str) and first.strip():
-            return first.strip()
-    return None
+    return primary_product_barcode(
+        product,
+        ozon_barcodes=tuple(ozon_link.external_barcodes or []) if ozon_link else (),
+    )
 
 
 def _print_sheet_article(

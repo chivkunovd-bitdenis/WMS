@@ -80,6 +80,11 @@ type FfCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  product_primary_barcode?: string | null
+  marketplace_bindings?: Array<{
+    marketplace: 'wb' | 'ozon'
+    external_barcodes?: string[]
+  }>
   wb_size: string | null
   wb_color: string | null
   wb_brand: string | null
