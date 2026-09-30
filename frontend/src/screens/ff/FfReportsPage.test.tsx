@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { FfReportsPage, ReportNotices, reportExcelDisabledReason } from './FfReportsPage'
 
 describe('FfReportsPage pagination actions', () => {
+  it('hides the old Excel export for the seller while retaining the report', () => {
+    const markup = renderToStaticMarkup(<FfReportsPage token="test-token" hideExcelExport />)
+    expect(markup).not.toContain('ff-reports-download-excel')
+    expect(markup).toContain('Остатки и движения')
+  })
   it('keeps Excel primary and renders pagination as outlined disabled navigation', () => {
     const markup = renderToStaticMarkup(<FfReportsPage token="test-token" />)
 

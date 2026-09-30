@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         ),
     )
     jwt_algorithm: str = Field(default="HS256")
+    access_token_expire_minutes: int = Field(default=60 * 24, ge=1)
     celery_broker_url: str | None = Field(
         default=None,
         description="Redis URL for Celery (e.g. redis://redis:6379/0). "

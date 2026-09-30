@@ -3323,6 +3323,7 @@ export default function App() {
                 <FfReportsPage
                   token={token}
                   sellers={[]}
+                  hideExcelExport
                   warehouses={reportWarehouseOptions(warehouses)}
                 />
               ) : (

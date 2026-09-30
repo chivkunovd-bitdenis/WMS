@@ -28,6 +28,7 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
         response = await client.get(schema_url)
         assert response.status_code == 200
         schema = response.json()
+        assert schema["info"]["version"] == "1.0.0"
         assert schema["servers"] == [{"url": "."}]
         assert set(schema["paths"]) == {
             "/auth/login",
@@ -51,7 +52,6 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
             "date_to",
             "sku",
             "shk",
-            "warehouse_id",
             "marketplace",
             "cursor",
             "limit",
@@ -70,7 +70,6 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
         assert {item["name"] for item in export["parameters"]} == {
             "date_from",
             "date_to",
-            "warehouse_id",
             "sku",
             "shk",
             "marketplace",
@@ -92,3 +91,20 @@ async def test_client_swagger_routes_and_schema(prefix: str) -> None:
         common = await client.get(f"{prefix}/openapi.json")
         assert common.status_code == 200
         assert len(common.json()["paths"]) > len(schema["paths"])
+
+
+@pytest.mark.asyncio
+async def test_production_has_only_client_documentation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.settings import settings
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://wms.example"
+    ) as client:
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert (await client.get(path)).status_code == 404
+        assert (await client.get("/docs/client")).status_code == 200
+        schema = await client.get("/openapi-client.json")
+        assert schema.status_code == 200
+        assert schema.json()["info"]["version"] == "1.0.0"

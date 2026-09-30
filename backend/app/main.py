@@ -127,7 +127,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     install_document_event_tracking()
-    app = FastAPI(title="WMS API", lifespan=lifespan)
+    production = settings.app_env == "production"
+    app = FastAPI(
+        title="WMS API", lifespan=lifespan,
+        docs_url=None if production else "/docs",
+        redoc_url=None if production else "/redoc",
+        openapi_url=None if production else "/openapi.json",
+    )
 
     @app.exception_handler(IntegrityError)
     async def physical_warehouse_error(request: Request, exc: IntegrityError) -> JSONResponse:

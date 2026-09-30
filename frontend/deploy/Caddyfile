@@ -1,5 +1,16 @@
 {$WMS_PUBLIC_DOMAIN} {
   encode gzip zstd
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+
+  @internalDocs path /api/docs /api/docs/ /api/docs/oauth2-redirect /api/redoc /api/redoc/ /api/openapi.json
+  respond @internalDocs 404
 
   # API is mounted under /api/* on the public origin, but FastAPI routes are rooted at /.
   handle_path /api/* {
