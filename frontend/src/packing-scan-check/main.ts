@@ -15,14 +15,12 @@ const sizeSelect = document.querySelector<HTMLSelectElement>('#size')!
 sizeSelect.value = loadLabelSizeId()
 sizeSelect.addEventListener('change', () => saveLabelSizeId(sizeSelect.value as LabelSizeId))
 // QR rasterization happens once, before a scan, then uses exactly the same
-// local PNG → native spooler transport as real packing labels.
+// prepared-image browser printing as real packing labels.
 const prepared = new Map(TEST_LABELS.map((label) => {
   const canvas = document.createElement('canvas')
   bwipjs.toCanvas(canvas, { bcid: 'qrcode', text: label.qr, scale: 6, padding: 8 })
   return [label.barcode, canvas.toDataURL('image/png')]
 }))
-// Chrome can request local-network permission here, before the first scan.
-void fetch('http://127.0.0.1:17845/health', { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(5000) }).catch(() => undefined)
 let latestScan = 0
 function acceptScan(raw: string) {
   const value = raw.trim()

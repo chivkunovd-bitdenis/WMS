@@ -16,7 +16,7 @@ function scan(barcode: string) {
   document.querySelector<HTMLInputElement>('#scan')!.value = barcode
   document.querySelector('#scan-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 }
-describe('minimal native printer check', () => {
+describe('minimal Chrome printer check', () => {
   it('shows only barcode input and size without preview, catalog or buttons', () => {
     expect(document.querySelectorAll('input')).toHaveLength(1)
     expect(document.querySelectorAll('select')).toHaveLength(1)
@@ -24,7 +24,7 @@ describe('minimal native printer check', () => {
     expect(document.querySelector<HTMLElement>('#error')!.hidden).toBe(true)
     expect(toCanvas).toHaveBeenCalledTimes(10)
   })
-  it('dispatches all ten codes immediately through native transport, with focus preserved', () => {
+  it('dispatches all ten codes immediately through shared browser transport, with focus preserved', () => {
     for (const label of TEST_LABELS) scan(label.barcode)
     expect(printPreparedQr).toHaveBeenCalledTimes(10)
     expect(printPreparedQr.mock.calls[0]![0]).toMatchObject({ widthMm: 58, heightMm: 40, imageDataUrl: 'data:image/png;base64,test' })
@@ -41,7 +41,7 @@ describe('minimal native printer check', () => {
     expect(printPreparedQr).not.toHaveBeenCalled()
     expect(printSpy).not.toHaveBeenCalled()
   })
-  it('shows native rejection without falling back to browser print or retry', async () => {
+  it('shows a transport failure without a second print path or retry', async () => {
     printPreparedQr.mockRejectedValueOnce(new Error('Ошибка очереди принтера'))
     scan(TEST_LABELS[0]!.barcode)
     await Promise.resolve()

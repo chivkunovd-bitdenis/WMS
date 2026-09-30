@@ -1,28 +1,82 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { webcrypto } from 'node:crypto'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { printPreparedQr } from './printPreparedQr'
 const input = { imageDataUrl: 'data:image/png;base64,cG5n', idempotencyKey: '54afadf6-8c67-43a2-bbf3-545ca3e8a01a', widthMm: 58, heightMm: 40 }
-afterEach(() => vi.unstubAllGlobals())
-describe('native printer transport', () => {
-  it('accepts only the matching native receipt and makes one local request', async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'submitted', job_id: input.idempotencyKey, receipt: 'thermal-7' }) })
-    vi.stubGlobal('fetch', fetch)
+let frames: HTMLIFrameElement[]
+let targets: Array<EventTarget & { print: ReturnType<typeof vi.fn> }>
+let decode: ReturnType<typeof vi.fn>
+let autoFinish: boolean
+beforeEach(() => {
+  localStorage.clear()
+  document.body.innerHTML = '<input id="scan">'
+  document.querySelector<HTMLInputElement>('input')!.focus()
+  vi.stubGlobal('crypto', webcrypto)
+  frames = []; targets = []; autoFinish = true
+  decode = vi.fn().mockResolvedValue(undefined)
+  const create = document.createElement.bind(document)
+  vi.spyOn(document, 'createElement').mockImplementation((name: string) => {
+    const element = create(name)
+    if (name !== 'iframe') return element
+    const frame = element as HTMLIFrameElement
+    const target = Object.assign(new EventTarget(), { print: vi.fn() })
+    target.print.mockImplementation(() => { if (autoFinish) target.dispatchEvent(new Event('afterprint')) })
+    Object.defineProperty(frame, 'contentWindow', { value: target })
+    Object.defineProperty(frame, 'contentDocument', { value: { querySelector: () => ({ decode }) } })
+    frames.push(frame); targets.push(target)
+    return frame
+  })
+  const append = document.body.appendChild.bind(document.body)
+  vi.spyOn(document.body, 'appendChild').mockImplementation(<T extends Node>(node: T): T => {
+    const result = append(node)
+    if (node instanceof HTMLIFrameElement) queueMicrotask(() => node.dispatchEvent(new Event('load')))
+    return result
+  })
+})
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+describe('Chrome prepared-image printing', () => {
+  it('decodes before print, sets exact size and preserves scanner focus', async () => {
     await printPreparedQr(input)
-    expect(fetch).toHaveBeenCalledTimes(1)
-    expect(fetch.mock.calls[0]![0]).toBe('http://127.0.0.1:17845/print-image')
-    expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({ job_id: input.idempotencyKey, image_data_url: input.imageDataUrl, width_mm: 58, height_mm: 40 })
+    expect(decode).toHaveBeenCalledOnce()
+    expect(targets[0]!.print).toHaveBeenCalledOnce()
+    expect(decode.mock.invocationCallOrder[0]).toBeLessThan(targets[0]!.print.mock.invocationCallOrder[0]!)
+    expect(frames[0]!.srcdoc).toContain('@page { size: 58mm 40mm; margin: 0; }')
+    expect(document.querySelectorAll('iframe')).toHaveLength(0)
+    expect(document.activeElement?.id).toBe('scan')
   })
-  it('does not retry after a lost response and never invokes print UI', async () => {
-    const fetch = vi.fn().mockRejectedValue(new TypeError('network'))
-    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
-    vi.stubGlobal('fetch', fetch)
-    await expect(printPreparedQr(input)).rejects.toThrow('Нет связи')
-    expect(fetch).toHaveBeenCalledTimes(1)
-    expect(print).not.toHaveBeenCalled()
-    print.mockRestore()
+  it('serializes scans until afterprint and retains each label size', async () => {
+    autoFinish = false
+    const first = printPreparedQr(input)
+    const second = printPreparedQr({ ...input, idempotencyKey: 'second', widthMm: 60, heightMm: 80 })
+    await vi.waitFor(() => expect(targets[0]?.print).toHaveBeenCalledOnce())
+    expect(frames).toHaveLength(1)
+    targets[0]!.dispatchEvent(new Event('afterprint'))
+    await first
+    await vi.waitFor(() => expect(targets[1]?.print).toHaveBeenCalledOnce())
+    expect(frames[1]!.srcdoc).toContain('@page { size: 60mm 80mm; margin: 0; }')
+    targets[1]!.dispatchEvent(new Event('afterprint'))
+    await second
   })
-  it('does not treat HTTP success without a matching receipt as printing', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'submitted', job_id: 'other', receipt: 'thermal-1' }) }))
-    await expect(printPreparedQr(input)).rejects.toThrow('не подтверждена')
+  it('reuses completed UUID without printing again and rejects changed payload', async () => {
+    await printPreparedQr(input)
+    await printPreparedQr(input)
+    expect(frames).toHaveLength(1)
+    await expect(printPreparedQr({ ...input, widthMm: 60 })).rejects.toThrow('изменилась')
+  })
+  it('does not resubmit a persisted uncertain dispatch', async () => {
+    await printPreparedQr(input)
+    const key = `wms:qr-print:${input.idempotencyKey}`
+    const record = JSON.parse(localStorage.getItem(key)!)
+    localStorage.setItem(key, JSON.stringify({ ...record, state: 'dispatched' }))
+    await expect(printPreparedQr(input)).rejects.toThrow('уже передано браузеру')
+    expect(frames).toHaveLength(1)
+  })
+  it('does not print if decoding fails; same UUID can retry', async () => {
+    decode.mockRejectedValueOnce(new Error('broken image'))
+    await expect(printPreparedQr(input)).rejects.toThrow('broken image')
+    expect(targets[0]!.print).not.toHaveBeenCalled()
+    expect(localStorage.getItem(`wms:qr-print:${input.idempotencyKey}`)).toBeNull()
+    await printPreparedQr(input)
+    expect(targets[1]!.print).toHaveBeenCalledOnce()
   })
 })
