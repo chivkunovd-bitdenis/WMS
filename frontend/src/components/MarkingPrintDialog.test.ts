@@ -3,11 +3,42 @@ import { describe, expect, it } from 'vitest'
 import {
   mapConcurrentlyInOrder,
   resolveFbsFallbackLabelCopies,
+  resolveMarkingPrintAvailability,
   resolveProductTapeBarcodeError,
   resolveTapeCounts,
   withSelectedFbsTapeBarcode,
   remainingProductLabelsAfterPrintedCodes,
 } from './MarkingPrintDialog'
+
+describe('FBS tape without a ЧЗ block', () => {
+  const base = {
+    requiresHonestSign: true,
+    fbsTapeMode: true,
+    qrOnlyTape: false,
+    effectiveReprint: false,
+    allowPartial: false,
+    available: 0,
+    qtyNeed: 1,
+    selectedReprintCount: 0,
+    totalWbLabels: 1,
+    fbsTapeProductUnits: 1,
+    fbsTapeOrders: 1,
+  }
+
+  it('allows QR plus product barcode when the marking pool is empty', () => {
+    expect(resolveMarkingPrintAvailability({
+      ...base,
+      layout: { units: [{ block: 'label', copies: 1 }] },
+    })).toEqual({ markingPoolRequired: false, canPrintCount: 1 })
+  })
+
+  it('still blocks a tape that actually contains a ЧЗ block', () => {
+    expect(resolveMarkingPrintAvailability({
+      ...base,
+      layout: { units: [{ block: 'cz', copies: 1 }, { block: 'label', copies: 1 }] },
+    })).toEqual({ markingPoolRequired: true, canPrintCount: 0 })
+  })
+})
 
 describe('product tape barcode validation before consuming marking codes', () => {
   const mixedLayout = { units: [{ block: 'cz' as const, copies: 1 }, { block: 'label' as const, copies: 1 }] }

@@ -342,6 +342,37 @@ export function resolveFbsFallbackLabelCopies(
     : configuredCopies
 }
 
+export function resolveMarkingPrintAvailability(args: {
+  requiresHonestSign: boolean
+  fbsTapeMode: boolean
+  qrOnlyTape: boolean
+  effectiveReprint: boolean
+  layout: PrintLayout
+  allowPartial: boolean
+  available: number
+  qtyNeed: number
+  selectedReprintCount: number
+  totalWbLabels: number
+  fbsTapeProductUnits: number
+  fbsTapeOrders: number
+}) {
+  const markingPoolRequired = args.requiresHonestSign && (
+    !args.fbsTapeMode || args.layout.units.some((unit) => unit.block === 'cz' && unit.copies > 0)
+  )
+  const canPrintCount = args.qrOnlyTape
+    ? args.fbsTapeOrders
+    : args.effectiveReprint
+      ? args.fbsTapeMode ? args.qtyNeed : args.selectedReprintCount
+      : markingPoolRequired
+        ? args.allowPartial
+          ? Math.min(args.available, args.qtyNeed)
+          : args.available >= args.qtyNeed ? args.qtyNeed : 0
+        : args.fbsTapeMode
+          ? args.fbsTapeProductUnits
+          : args.totalWbLabels
+  return { markingPoolRequired, canPrintCount }
+}
+
 export function resolveProductTapeBarcodeError(
   barcodeOptions: ProductBarcodeOption[] | undefined,
   barcode: string | null | undefined,
@@ -740,6 +771,21 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       ? fbsTapeOrders.length
       : fbsTapeBarcodeLabels + (includesOrderQr ? fbsTapeOrders.length : 0)
     : 0
+  const available = ctx?.markingAvailable ?? 0
+  const { markingPoolRequired, canPrintCount } = resolveMarkingPrintAvailability({
+    requiresHonestSign,
+    fbsTapeMode,
+    qrOnlyTape,
+    effectiveReprint,
+    layout,
+    allowPartial,
+    available,
+    qtyNeed,
+    selectedReprintCount: selectedReprintCodeIds.length,
+    totalWbLabels,
+    fbsTapeProductUnits,
+    fbsTapeOrders: fbsTapeOrders.length,
+  })
   /**
    * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
    * сначала QR, потом его этикетки. Раньше предпросмотр строил один общий QR +
@@ -761,8 +807,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     qrOnlyTape ? 0 : fbsHonestSignOrders.length > 0
       ? Math.max(1, labelCopiesFromLayout(layout))
       : fbsLabelCopiesPerOrder
-  const available = ctx?.markingAvailable ?? 0
-  const quantitySummaryText = requiresHonestSign
+  const quantitySummaryText = markingPoolRequired
     ? effectiveReprint
       ? fbsTapeMode
         ? `К перепечатке: ${qtyNeed}`
@@ -772,8 +817,10 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
     : isCatalogSource
       ? `К печати: ${totalWbLabels}`
-      : `К упаковке: ${qtyNeed}`
-  const shortage = requiresHonestSign && !qrOnlyTape && !effectiveReprint
+      : fbsTapeMode
+        ? `К печати: ${fbsTapeProductUnits}`
+        : `К упаковке: ${qtyNeed}`
+  const shortage = markingPoolRequired && !qrOnlyTape && !effectiveReprint
     ? ctx?.fbsTape?.markingShortage ?? Math.max(0, qtyNeed - available)
     : 0
   /**
@@ -785,20 +832,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
    * стоял selectedReprintCodeIds.length, из-за чего в перепечатке FBS предпросмотр
    * ленты получал canPrintCount=0 и превью не строилось вовсе.
    */
-  const canPrintCount = qrOnlyTape
-    ? fbsTapeOrders.length
-    : effectiveReprint
-    ? fbsTapeMode
-      ? qtyNeed
-      : selectedReprintCodeIds.length
-    : requiresHonestSign
-      ? allowPartial
-        ? Math.min(available, qtyNeed)
-        : available >= qtyNeed
-          ? qtyNeed
-          : 0
-      : totalWbLabels
-
   // Превью показывает фактическое количество к печати, но не больше трёх единиц,
   // чтобы при печати полусотни лента не превращалась в простыню. Если единиц больше —
   // подпись под превью честно говорит, что показаны первые три.
@@ -1391,8 +1424,8 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       requiresHonestSign &&
       (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
     (!effectiveReprint && qtyNeed < 1) ||
-    (requiresHonestSign && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
-    (requiresHonestSign && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
+    (markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
+    (markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
     // L2 (21.08.2026): ноль этикеток ШК — не повод гасить кнопку, если в ленту всё равно
     // идут QR заказов. Гасим, только когда печатать действительно нечего. Считаем по
     // fbsLabelCopiesPerOrder: totalWbLabels проходит через clampPackUnits и никогда не
