@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
@@ -40,10 +40,19 @@ async def resolve_container_scan(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     barcode: str,
+    *,
+    casefold_candidates: frozenset[str] | None = None,
 ) -> InventoryContainerScanMatch:
     raw = barcode.strip()
-    if not raw:
+    if not raw and not casefold_candidates:
         raise InventoryContainerScanError("container_scan_not_found")
+
+    # Only the FBS pick scanner opts into normalized alternatives. Other
+    # container flows retain their exact lookup behavior.
+    def code_matches(column: Any) -> Any:
+        if casefold_candidates is None:
+            return column == raw
+        return func.upper(column).in_(casefold_candidates)
 
     matches: list[InventoryContainerScanMatch] = []
     pallets = await session.scalars(
@@ -51,7 +60,7 @@ async def resolve_container_scan(
             Pallet.tenant_id == tenant_id,
             Pallet.warehouse_id == warehouse_id,
             Pallet.disbanded_at.is_(None),
-            or_(Pallet.barcode == raw, Pallet.code == raw),
+            or_(code_matches(Pallet.barcode), code_matches(Pallet.code)),
         )
     )
     matches.extend(
@@ -62,7 +71,7 @@ async def resolve_container_scan(
         select(WarehouseBox).where(
             WarehouseBox.tenant_id == tenant_id,
             WarehouseBox.warehouse_id == warehouse_id,
-            WarehouseBox.internal_barcode == raw,
+            code_matches(WarehouseBox.internal_barcode),
         )
     )
     matches.extend(
@@ -90,7 +99,7 @@ async def resolve_container_scan(
                     InboundIntakeRequest.warehouse_id == warehouse_id,
                 ),
             ),
-            InboundIntakeBox.internal_barcode == raw,
+            code_matches(InboundIntakeBox.internal_barcode),
         )
     )
     matches.extend(
@@ -118,7 +127,7 @@ async def resolve_container_scan(
                     InboundIntakeRequest.warehouse_id == warehouse_id,
                 ),
             ),
-            InboundIntakeCargoPlace.internal_barcode == raw,
+            code_matches(InboundIntakeCargoPlace.internal_barcode),
         )
     )
     matches.extend(
