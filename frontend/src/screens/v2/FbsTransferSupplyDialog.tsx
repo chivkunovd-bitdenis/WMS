@@ -31,7 +31,8 @@ import { fbsErrorText, ordersWord } from './fbsUx'
 // WMS-562/WMS-581: перенос выбранных заказов упаковки в другую поставку WB.
 // Одно поле с выпадающим списком: первая строка — «Новая поставка»
 // (target_supply_id = null), дальше открытые поставки того же селлера в любом
-// рабочем состоянии, куда WB примет заказы: «номер WB · от даты создания».
+// рабочем состоянии, куда WB примет заказы: название поставки, а номер WB и
+// дата создания служат дополнительными ориентирами в списке.
 // При «Новой поставке» это же поле — строка ввода её названия. Один и тот же
 // ключ идемпотентности переиспользуется при повторе после ошибки или pending —
 // до тех пор, пока не сменился выбор заказов, назначения или названия.
@@ -54,9 +55,9 @@ type Props = {
 
 const NEW_SUPPLY_VALUE = '__wms562_new_supply__'
 
-function transferTargetLabel(target: FbsTransferTarget) {
+function transferTargetDetails(target: FbsTransferTarget) {
   const date = new Date(target.created_at)
-  return `${target.wb_supply_id} · от ${Number.isNaN(date.getTime()) ? target.created_at : date.toLocaleDateString('ru-RU')}`
+  return `WB ${target.wb_supply_id} · от ${Number.isNaN(date.getTime()) ? target.created_at : date.toLocaleDateString('ru-RU')}`
 }
 
 // Карточка поставки открывается тем же адресом, что и из списка FBS: ?supply_id=.
@@ -298,7 +299,7 @@ export function FbsTransferSupplyDialog({
                 fullWidth
                 label="Поставка"
                 placeholder="Новая поставка"
-                value={isNewTarget ? newName : selectedTargetRow ? transferTargetLabel(selectedTargetRow) : ''}
+                value={isNewTarget ? newName : selectedTargetRow?.name ?? ''}
                 onChange={(event) => {
                   if (isNewTarget) setNewName(event.target.value)
                 }}
@@ -356,8 +357,14 @@ export function FbsTransferSupplyDialog({
                     selected={target.id === selectedTarget}
                     onClick={() => chooseTarget(target.id)}
                     data-testid={`fbs-transfer-target-${target.id}`}
+                    sx={{ whiteSpace: 'normal' }}
                   >
-                    {transferTargetLabel(target)}
+                    <Stack spacing={0}>
+                      <Typography variant="body2">{target.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {transferTargetDetails(target)}
+                      </Typography>
+                    </Stack>
                   </MenuItem>
                 ))}
               </Menu>
