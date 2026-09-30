@@ -1,21 +1,15 @@
-import { LABEL_SIZES, loadLabelSizeId, saveLabelSizeId, type LabelSizeId } from '../utils/labelSize'
 import * as bwipjs from 'bwip-js'
-import { dispatchPreparedQrForCheck } from '../utils/printPreparedQr'
+import { printDirectQr } from '../utils/printDirectQr'
 import { findTestLabel, TEST_LABELS } from './catalog'
 import './style.css'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `<main><form id="scan-form">
   <input id="scan" aria-label="Штрихкод товара" autocomplete="off" autofocus placeholder="Штрихкод товара"/>
-  <select id="size" aria-label="Размер этикетки">${LABEL_SIZES.map((size) => `<option value="${size.id}">${size.label}</option>`).join('')}</select>
 </form><div id="error" role="alert" hidden></div></main>`
 const input = document.querySelector<HTMLInputElement>('#scan')!
 const errorMessage = document.querySelector<HTMLDivElement>('#error')!
-const sizeSelect = document.querySelector<HTMLSelectElement>('#size')!
-sizeSelect.value = loadLabelSizeId()
-sizeSelect.addEventListener('change', () => saveLabelSizeId(sizeSelect.value as LabelSizeId))
-// QR rasterization happens once, before a scan, then uses exactly the same
-// prepared-image browser printing as real packing labels.
+// Prepare QR before a scan; the native app fits it to the default printer media.
 const prepared = new Map(TEST_LABELS.map((label) => {
   const canvas = document.createElement('canvas')
   bwipjs.toCanvas(canvas, { bcid: 'qrcode', text: label.qr, scale: 6, padding: 8 })
@@ -34,12 +28,11 @@ function acceptScan(raw: string) {
     errorMessage.hidden = false
     return
   }
-  const size = LABEL_SIZES.find((item) => item.id === sizeSelect.value)!
-  void dispatchPreparedQrForCheck({
+  void printDirectQr({
     imageDataUrl: prepared.get(value)!,
     idempotencyKey: crypto.randomUUID(),
-    widthMm: size.widthMm,
-    heightMm: size.heightMm,
+    widthMm: 58,
+    heightMm: 40,
   }).catch((error: unknown) => {
     // Never hide a failed print with a later successful scan.
     errorMessage.textContent = error instanceof Error ? error.message : 'Принтер не принял этикетку'
