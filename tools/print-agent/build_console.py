@@ -20,16 +20,31 @@ def main():
         raise SystemExit("Commit the package sources before building")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     dist = ROOT / "dist-console"
-    command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
-               "--onedir", "--console", "--name", "wms-print",
-               "--distpath", str(dist), "--workpath", str(ROOT / "build-console"),
-               "--specpath", str(ROOT / "build-console"), "--collect-all", "certifi"]
-    if sys.platform == "win32":
+    package = dist / "wms-print"
+    if package.exists():
+        shutil.rmtree(package)
+    package.mkdir(parents=True)
+    if sys.platform == "darwin":
+        # A downloaded PyInstaller onedir package makes Gatekeeper assess its
+        # embedded Python.framework separately.  Without Developer ID this can
+        # still fail after the operator permits the main executable.  Compile
+        # one native binary that depends only on macOS system frameworks.
+        subprocess.run([
+            "swiftc", "-O", "-whole-module-optimization",
+            str(ROOT / "wms_print_direct_macos.swift"),
+            "-o", str(package / "wms-print"),
+        ], check=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", str(package / "wms-print")], check=True)
+        subprocess.run(["codesign", "--verify", "--strict", str(package / "wms-print")], check=True)
+    else:
+        command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
+                   "--onedir", "--console", "--name", "wms-print",
+                   "--distpath", str(dist), "--workpath", str(ROOT / "build-console"),
+                   "--specpath", str(ROOT / "build-console"), "--collect-all", "certifi"]
         for module in ("fitz", "PIL", "win32gui", "win32print", "win32ui"):
             command += ["--collect-all", module]
-    command.append(str(ROOT / "wms_print_direct.py"))
-    subprocess.run(command, check=True)
-    package = dist / "wms-print"
+        command.append(str(ROOT / "wms_print_direct.py"))
+        subprocess.run(command, check=True)
     (package / "build.json").write_text(json.dumps({
         "source_commit": revision, "platform": sys.platform,
         "architecture": platform.machine(), "runtime": "direct", "console": True,
@@ -45,19 +60,13 @@ def main():
         encoding="utf-8")
     target = f"Mac-{platform.machine()}" if sys.platform == "darwin" else "Windows-x64"
     if sys.platform == "darwin":
-        # PyInstaller can collect a Python framework without its original
-        # resources. Sign the collected bundle, and preserve its symlinks in ZIP.
-        for framework in (package / "_internal").glob("*.framework"):
-            subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(framework)], check=True)
-            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(framework)], check=True)
         archive = dist / f"WMS-Print-Console-{target}.zip"
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(package), str(archive)], check=True)
         unpacked = ROOT / "build-console" / "archive-check"
         if unpacked.exists():
             shutil.rmtree(unpacked)
         subprocess.run(["ditto", "-xk", str(archive), str(unpacked)], check=True)
-        for framework in (unpacked / "wms-print/_internal").glob("*.framework"):
-            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(framework)], check=True)
+        subprocess.run(["codesign", "--verify", "--strict", str(unpacked / "wms-print/wms-print")], check=True)
         subprocess.run([str(unpacked / "wms-print/wms-print"), "--self-test"], check=True)
         print(archive)
     else:
