@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -59,6 +60,7 @@ from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
 )
+from app.services.fbs_kiz_service import sticker_scan_candidates
 from app.services.fbs_supply_reconcile_service import list_deliver_operations_for_supply
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.inventory_container_service import (
@@ -70,6 +72,7 @@ from app.services.inventory_container_service import (
 from app.services.operation_fact_service import record_fbs_pick
 from app.services.ozon_fbs_process_service import OzonHandoffProgress
 from app.services.pick_option_location_service import PickOptionLocation
+from app.services.scan_resolver_service import normalize_scan_code
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
 )
@@ -2075,19 +2078,43 @@ async def _resolve_storage_location(
     warehouse_id: uuid.UUID,
     location_barcode: str,
 ) -> StorageLocation | None:
-    stmt = (
+    scope = (
         select(StorageLocation)
         .options(selectinload(StorageLocation.warehouse))
         .where(
             StorageLocation.tenant_id == tenant_id,
             StorageLocation.warehouse_id == warehouse_id,
-            or_(
-                StorageLocation.barcode == location_barcode,
-                StorageLocation.code == location_barcode,
-            ),
         )
     )
-    return (await session.execute(stmt)).scalar_one_or_none()
+    # Preserve exact addresses before considering keyboard-layout alternatives.
+    exact = (await session.scalars(scope.where(or_(
+        StorageLocation.barcode == location_barcode,
+        StorageLocation.code == location_barcode,
+    )))).all()
+    if len(exact) > 1:
+        raise FbsPickingError(
+            "wrong_location",
+            "Штрихкод соответствует нескольким ячейкам склада. Выберите ячейку вручную.",
+        )
+    if exact:
+        return exact[0]
+
+    cleaned = normalize_scan_code(location_barcode)
+    # AIM identifiers (e.g. ]Q3) may themselves arrive in Russian layout.
+    cleaned = re.sub(r"^[\]ъЪ][A-Za-zА-Яа-яЁё][0-9]", "", cleaned)
+    candidates = {value.upper() for value in sticker_scan_candidates(cleaned)}
+    if not candidates:
+        return None
+    matches = (await session.scalars(scope.where(or_(
+        func.upper(StorageLocation.barcode).in_(candidates),
+        func.upper(StorageLocation.code).in_(candidates),
+    )))).all()
+    if len(matches) > 1:
+        raise FbsPickingError(
+            "wrong_location",
+            "Штрихкод соответствует нескольким ячейкам склада. Выберите ячейку вручную.",
+        )
+    return matches[0] if matches else None
 
 
 def _pending_positions_by_product(
