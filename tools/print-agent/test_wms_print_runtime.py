@@ -162,7 +162,7 @@ class RuntimeTest(unittest.TestCase):
             self.assertNotIn("shell", kwargs)
             if args[0] == "/usr/bin/lpstat":
                 return SimpleNamespace(
-                    returncode=0, stdout="printer Synthetic_442 is idle\n"
+                    returncode=0, stdout="Synthetic_442 accepting requests since today\n"
                 )
             self.assertEqual(
                 args[:6], ["/usr/bin/lp", "-d", "Synthetic_442", "-n", "3", "--"]

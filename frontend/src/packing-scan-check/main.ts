@@ -1,5 +1,7 @@
-import { LABEL_SIZES } from '../utils/labelSize'
-import { findTestLabel } from './catalog'
+import { LABEL_SIZES, loadLabelSizeId, saveLabelSizeId, type LabelSizeId } from '../utils/labelSize'
+import * as bwipjs from 'bwip-js'
+import { printPreparedQr } from '../utils/printPreparedQr'
+import { findTestLabel, TEST_LABELS } from './catalog'
 import './style.css'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -9,17 +11,43 @@ app.innerHTML = `<main><form id="scan-form">
 </form><div id="error" role="alert" hidden></div></main>`
 const input = document.querySelector<HTMLInputElement>('#scan')!
 const errorMessage = document.querySelector<HTMLDivElement>('#error')!
+const sizeSelect = document.querySelector<HTMLSelectElement>('#size')!
+sizeSelect.value = loadLabelSizeId()
+sizeSelect.addEventListener('change', () => saveLabelSizeId(sizeSelect.value as LabelSizeId))
+// QR rasterization happens once, before a scan, then uses exactly the same
+// local PNG → native spooler transport as real packing labels.
+const prepared = new Map(TEST_LABELS.map((label) => {
+  const canvas = document.createElement('canvas')
+  bwipjs.toCanvas(canvas, { bcid: 'qrcode', text: label.qr, scale: 6, padding: 8 })
+  return [label.barcode, canvas.toDataURL('image/png')]
+}))
+// Chrome can request local-network permission here, before the first scan.
+void fetch('http://127.0.0.1:17845/health', { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(5000) }).catch(() => undefined)
+let latestScan = 0
 function acceptScan(raw: string) {
   const value = raw.trim()
   if (!value) return
   input.value = ''
-  // A browser print dialog is forbidden here. Until a direct printer connection
-  // is configured, do not send, queue or claim successful printing.
-  errorMessage.textContent = findTestLabel(value)
-    ? 'Принтер не подключён'
-    : `Неизвестный штрихкод: ${value}`
-  errorMessage.hidden = false
   input.focus({ preventScroll: true })
+  errorMessage.hidden = true
+  const scan = ++latestScan
+  if (!findTestLabel(value)) {
+    errorMessage.textContent = `Неизвестный штрихкод: ${value}`
+    errorMessage.hidden = false
+    return
+  }
+  const size = LABEL_SIZES.find((item) => item.id === sizeSelect.value)!
+  void printPreparedQr({
+    imageDataUrl: prepared.get(value)!,
+    idempotencyKey: crypto.randomUUID(),
+    widthMm: size.widthMm,
+    heightMm: size.heightMm,
+  }).catch((error: unknown) => {
+    // Never hide a failed print with a later successful scan.
+    errorMessage.textContent = error instanceof Error ? error.message : 'Принтер не принял этикетку'
+    errorMessage.hidden = false
+    if (scan === latestScan) input.focus({ preventScroll: true })
+  })
 }
 document.querySelector('#scan-form')!.addEventListener('submit', (event) => {
   event.preventDefault()
