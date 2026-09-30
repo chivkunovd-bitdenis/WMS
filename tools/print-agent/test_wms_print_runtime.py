@@ -48,6 +48,8 @@ class RuntimeTest(unittest.TestCase):
             fail_ack = False
 
             def api(self, path, body=None):
+                if path == "/agent/heartbeat":
+                    return {"paired": True}
                 if path == "/agent/next":
                     return {"job": owner.queue.pop(0) if owner.queue else None}
                 if self.fail_ack:
@@ -77,6 +79,133 @@ class RuntimeTest(unittest.TestCase):
         return runtime.process_once(
             self.config, self.directory, self.client, self.adapter
         )
+
+    def run_background(self, wait, *, once=False):
+        runtime.write_private(self.directory / "connection.json", self.config)
+
+        @contextmanager
+        def locked(_):
+            yield SimpleNamespace(wait=wait)
+
+        with (
+            patch.object(runtime, "state_directory", return_value=self.directory),
+            patch.object(runtime, "single_instance", locked),
+            patch.object(runtime, "printer_adapter", return_value=self.adapter),
+            patch.object(runtime, "Client", return_value=self.client),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stderr", new_callable=io.StringIO),
+        ):
+            return runtime.main(["--run", *(["--once"] if once else [])])
+
+    def test_background_drains_ten_jobs_before_waiting_for_more(self):
+        self.queue = [
+            {**self.job, "id": str(uuid.uuid4()), "claim_id": str(uuid.uuid4())}
+            for _ in range(10)
+        ]
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            self.assertLessEqual(len(waits), 11)
+            return len(waits) == 11
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [0] * 10 + [3])
+        self.assertEqual(len(self.submissions), 10)
+        self.assertEqual(len({ack["claim_id"] for ack in self.acks}), 10)
+
+    def test_background_empty_queue_keeps_polling_delay(self):
+        self.queue.clear()
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            return len(waits) == 3
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [3, 3, 3])
+        self.assertEqual(self.submissions, [])
+
+    def test_background_lost_ack_waits_then_recovers_without_reprinting(self):
+        self.client.fail_ack = True
+        self.queue.append(
+            {**self.job, "id": str(uuid.uuid4()), "claim_id": str(uuid.uuid4())}
+        )
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            self.client.fail_ack = False
+            return len(waits) == 4
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [3, 0, 0, 3])
+        self.assertEqual(len(self.submissions), 2)
+        self.assertEqual(len(self.acks), 2)
+        self.assertFalse((self.directory / "inflight.json").exists())
+
+    def test_background_error_after_progress_restores_polling_delay(self):
+        original_api = self.client.api
+        heartbeat_count = 0
+
+        def api(path, body=None):
+            nonlocal heartbeat_count
+            if path == "/agent/heartbeat":
+                heartbeat_count += 1
+                if heartbeat_count == 2:
+                    raise OSError("synthetic connection failure")
+            return original_api(path, body)
+
+        self.client.api = api
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            return len(waits) == 3
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [0, 3, 3])
+        self.assertEqual(len(self.submissions), 1)
+
+    def test_background_unknown_submission_is_not_retried_during_drain(self):
+        def unknown(*args):
+            self.submissions.append(args)
+            raise agent.UnknownPrintOutcome()
+
+        self.adapter.submit = unknown
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            return len(waits) == 3
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [0, 0, 3])
+        self.assertEqual(len(self.submissions), 1)
+        self.assertEqual(self.acks, [])
+
+    def test_background_can_stop_while_jobs_are_still_pending(self):
+        self.queue.append({**self.job, "id": str(uuid.uuid4())})
+        waits = []
+
+        def wait(seconds):
+            waits.append(seconds)
+            return True
+
+        self.assertEqual(self.run_background(wait), 0)
+        self.assertEqual(waits, [0])
+        self.assertEqual(len(self.submissions), 1)
+        self.assertEqual(len(self.queue), 1)
+
+    def test_background_once_exits_without_waiting_on_success_or_error(self):
+        def wait(_):
+            self.fail("--once must not enter the polling wait")
+
+        self.assertEqual(self.run_background(wait, once=True), 0)
+        self.queue.append({**self.job, "id": str(uuid.uuid4())})
+        self.client.fail_ack = True
+        self.assertEqual(self.run_background(wait, once=True), 2)
+        self.assertEqual(len(self.submissions), 2)
 
     def test_queue_acceptance_lost_ack_restart_only_replays_receipt(self):
         self.client.fail_ack = True
