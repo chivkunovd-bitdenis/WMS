@@ -69,6 +69,88 @@ export type PickRow = {
   places: PickPlace[]
 }
 
+export type CellPickRow =
+  | { kind: 'cell' | 'object'; key: string; depth: number; title: string; barcode: string | null; qty: number; objectKind?: ObjKind }
+  | { kind: 'goods'; key: string; depth: number; row: PickRow; place: PickPlace | null }
+
+type CellPickBranch = {
+  kind: 'cell' | 'object'
+  objectKind?: ObjKind
+  key: string
+  title: string
+  barcode: string | null
+  depth: number
+  goods: Array<{ row: PickRow; place: PickPlace | null }>
+  children: Map<string, CellPickBranch>
+}
+
+const cellOrder = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' })
+// API represents the unassigned sorting zone as a regular location named this way.
+// It must follow physical cells on a walking list, just like an absent cell.
+const UNASSIGNED_LOCATION = 'Без ячеек'
+
+/** FBS walk list: one cell, then its loose goods and nested containers. */
+export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cells: Cell[]): CellPickRow[] {
+  const roots = new Map<string, CellPickBranch>()
+  for (const row of rows) {
+    for (const place of row.places.length ? row.places : [null]) {
+      const { cell, chain } = place ? chainOf(place.holder, objects, cells) : { cell: null, chain: [] }
+      const rootKey = cell ? cellRef(cell.id) : 'no-cell'
+      const existingRoot = roots.get(rootKey)
+      const root: CellPickBranch = existingRoot ?? {
+          kind: 'cell', key: rootKey, title: cell?.code ?? 'Без ячейки',
+          barcode: cell?.barcode ?? null, depth: 0, goods: [], children: new Map(),
+        }
+      if (!existingRoot) roots.set(rootKey, root)
+      let branch: CellPickBranch = root
+      for (const object of chain) {
+        const key = objRef(object.id)
+        let child: CellPickBranch | undefined = branch.children.get(key)
+        if (!child) {
+          child = {
+            kind: 'object', key, title: `${KIND_TITLE[object.kind]} ${object.code}`,
+            barcode: object.barcode, objectKind: object.kind, depth: branch.depth + 1,
+            goods: [], children: new Map(),
+          }
+          branch.children.set(key, child)
+        }
+        branch = child
+      }
+      branch.goods.push({ row, place })
+    }
+  }
+
+  const flattened: CellPickRow[] = []
+  const append = (branch: CellPickBranch): number => {
+    const headerIndex = flattened.length
+    flattened.push({
+      kind: branch.kind, key: branch.key, depth: branch.depth,
+      title: branch.title, barcode: branch.barcode, qty: 0, objectKind: branch.objectKind,
+    })
+    let qty = 0
+    for (const { row, place } of [...branch.goods].sort((a, b) => (
+      cellOrder.compare(a.row.product.sku, b.row.product.sku) ||
+      cellOrder.compare(a.row.key, b.row.key)
+    ))) {
+      qty += place?.qty ?? 0
+      flattened.push({
+        kind: 'goods', key: `${row.key}|${place?.key ?? 'no-stock'}`,
+        depth: branch.depth + 1, row, place,
+      })
+    }
+    for (const child of [...branch.children.values()].sort((a, b) => cellOrder.compare(a.title, b.title))) {
+      qty += append(child)
+    }
+    flattened[headerIndex] = { ...flattened[headerIndex], qty } as CellPickRow
+    return qty
+  }
+  const isUnassigned = (branch: CellPickBranch) => branch.key === 'no-cell' || branch.title === UNASSIGNED_LOCATION
+  for (const branch of [...roots.values()].sort((a, b) => (
+    Number(isUnassigned(a)) - Number(isUnassigned(b)) || cellOrder.compare(a.title, b.title)
+  ))) append(branch)
+  return flattened
+}
+
 /**
  * Путь от места наружу: в чём оно лежит и на чём стоит, снизу вверх.
  *

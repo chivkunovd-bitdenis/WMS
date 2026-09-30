@@ -19,6 +19,7 @@ import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
 import { useScanIntake } from '../../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../../utils/scanFeedback'
 import { PickPlacesTree } from './PickPlacesTree'
+import { FbsCellPickTable } from './FbsCellPickTable'
 import {
   DOCUMENT,
   OBJECTS,
@@ -138,6 +139,8 @@ type UnloadPickScreenProps = {
    * отгрузки они остаются: там документ действительно надо закрыть.
    */
   hideFooterActions?: boolean
+  /** В сборке FBS обход начинается с ячейки, а не с товара. */
+  groupByCell?: boolean
 }
 
 /** «В 3 местах», «В 1 месте», «Нет на складе» — колонка «Где лежит» (§2). */
@@ -163,6 +166,7 @@ export function UnloadPickScreen({
   onPause,
   onComplete,
   hideFooterActions = false,
+  groupByCell = false,
 }: UnloadPickScreenProps) {
   const document = documentProp ?? DOCUMENT
   const seller = sellerProp ?? SELLER
@@ -703,7 +707,19 @@ export function UnloadPickScreen({
         />
       </Stack>
 
-      <DataTable
+      {groupByCell ? <FbsCellPickTable
+        rows={rows}
+        objects={objects}
+        cells={cells}
+        source={source}
+        onQtyChange={handlePlaceQtyChange}
+        canUndo={(row, place) => {
+          if (!place || row.picked === 0) return false
+          const lastIndex = history.map((operation) => operation.productId).lastIndexOf(row.product.id)
+          return lastIndex >= 0 && history[lastIndex]?.placeKey === place.key
+        }}
+        onUndo={undoLast}
+      /> : <DataTable
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.key}
@@ -729,7 +745,7 @@ export function UnloadPickScreen({
             />
           ),
         }}
-      />
+      />}
 
       {hideFooterActions ? null : (
       <Stack direction="row" sx={{ mt: 2, justifyContent: 'flex-end' }}>
