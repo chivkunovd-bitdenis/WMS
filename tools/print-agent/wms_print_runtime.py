@@ -187,18 +187,22 @@ class CupsAdapter:
 
     def queues(self) -> list[str]:
         result = self.run(
-            ["/usr/bin/lpstat", "-p"],
+            ["/usr/bin/lpstat", "-a"],
             capture_output=True,
             text=True,
             timeout=15,
             check=False,
             env={**os.environ, "LC_ALL": "C"},
         )
+        if result.returncode != 0:
+            raise OSError("Не удалось получить список очередей принтеров ОС")
         names = []
         for line in result.stdout.splitlines():
             words = line.split()
-            if len(words) > 1 and words[0] == "printer":
-                names.append(agent.check_queue(words[1]))
+            # -a always starts with the queue name; -p starts with a translated
+            # "printer" even with LC_ALL=C on macOS. Include rejecting queues too.
+            if words:
+                names.append(agent.check_queue(words[0]))
         return sorted(set(names))
 
     def submit(

@@ -37,7 +37,6 @@ from typing import Any
 
 MAX_BYTES = 16 * 1024 * 1024
 CHECKSUM_PATTERN = re.compile(r"[0-9a-f]{64}")
-RECEIPT_PATTERN = re.compile(r"\brequest id is ([A-Za-z0-9_.-]+)")
 SUPPORTED_CONTENT_TYPES = {"application/pdf", "image/png"}
 FILE_SIGNATURES = {"application/pdf": b"%PDF-", "image/png": b"\x89PNG\r\n\x1a\n"}
 
@@ -227,7 +226,14 @@ def submit_to_queue(
             raise UnknownPrintOutcome(
                 "Исход отправки в очередь ОС неизвестен; проверьте очередь вручную"
             ) from exc
-        receipt = RECEIPT_PATTERN.search(result.stdout or "")
+        # macOS may localize lp despite LC_ALL=C. Accept only a complete known
+        # receipt for the requested queue, never an arbitrary queue-number token
+        # from diagnostics. An unknown locale remains an unknown print outcome.
+        receipt = re.fullmatch(
+            rf"(?:request id is|id запроса) ({re.escape(queue)}-[1-9][0-9]*) "
+            r"\((?:[1-9][0-9]* file\(s\)|файлов [1-9][0-9]*)\)",
+            (result.stdout or "").strip(),
+        )
         if result.returncode != 0 or receipt is None:
             raise UnknownPrintOutcome(
                 "Квитанция очереди не подтверждена; автоматический повтор запрещён"

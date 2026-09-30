@@ -91,6 +91,41 @@ class PrintAgentTest(unittest.TestCase):
                 lambda *a, **kw: SimpleNamespace(returncode=1, stdout=""),
             )
 
+    def test_english_and_russian_cups_receipts_match_the_requested_queue(self):
+        for output in (
+            "request id is Warehouse_58-42 (1 file(s))\n",
+            "id запроса Warehouse_58-42 (файлов 1)\n",
+        ):
+            with self.subTest(output=output):
+                receipt = submit_to_queue(
+                    b"%PDF-test", "application/pdf", "Warehouse_58",
+                    lambda *a, **kw: SimpleNamespace(returncode=0, stdout=output),
+                )
+                self.assertEqual(receipt, "Warehouse_58-42")
+
+    def test_unrelated_or_ambiguous_cups_output_never_becomes_a_receipt(self):
+        for output, code in (
+            ("request id is Other-42 (1 file(s))", 0),
+            ("id запроса Other-42 (файлов 1)", 0),
+            ("request id is Warehouse_58-0 (1 file(s))", 0),
+            ("request id is Warehouse_58-42 (0 file(s))", 0),
+            ("error: request id is Warehouse_58-42 (1 file(s))", 0),
+            ("id запроса Warehouse_58-42 (файлов 1)\nwarning: failed", 0),
+            ("request id is Warehouse_58-42 (1 file(s))", 1),
+            ("request id is Warehouse_58-42 (1 file(s))\n"
+             "request id is Warehouse_58-43 (1 file(s))", 0),
+        ):
+            with self.subTest(output=output, code=code):
+                calls = []
+
+                def run(args, **kwargs):
+                    calls.append(args)
+                    return SimpleNamespace(returncode=code, stdout=output)
+
+                with self.assertRaises(UnknownPrintOutcome):
+                    submit_to_queue(b"%PDF-test", "application/pdf", "Warehouse_58", run)
+                self.assertEqual(len(calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

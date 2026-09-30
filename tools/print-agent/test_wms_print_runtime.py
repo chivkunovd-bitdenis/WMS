@@ -290,8 +290,9 @@ class RuntimeTest(unittest.TestCase):
             calls.append(args)
             self.assertNotIn("shell", kwargs)
             if args[0] == "/usr/bin/lpstat":
+                self.assertEqual(args, ["/usr/bin/lpstat", "-a"])
                 return SimpleNamespace(
-                    returncode=0, stdout="printer Synthetic_442 is idle\n"
+                    returncode=0, stdout="Synthetic_442 accepting requests since now\n"
                 )
             self.assertEqual(
                 args[:6], ["/usr/bin/lp", "-d", "Synthetic_442", "-n", "3", "--"]
@@ -309,6 +310,29 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         with self.assertRaises(ValueError):
             runtime.CupsAdapter(platform="win32")
+
+    def test_cups_queue_listing_is_independent_of_status_language(self):
+        for language_output in (
+            "WMS604_Proof accepting requests since Wed Sep 30\n"
+            "Offline not accepting requests since Wed Sep 30\n",
+            "WMS604_Proof принимает запросы с момента Wed Sep 30\n"
+            "Offline не принимает запросы с момента Wed Sep 30\n",
+        ):
+            with self.subTest(output=language_output):
+                def run(args, **kwargs):
+                    self.assertEqual(args, ["/usr/bin/lpstat", "-a"])
+                    return SimpleNamespace(returncode=0, stdout=language_output)
+
+                adapter = runtime.CupsAdapter(run=run, platform="darwin")
+                self.assertEqual(adapter.queues(), ["Offline", "WMS604_Proof"])
+
+    def test_failed_cups_listing_does_not_report_no_printers(self):
+        adapter = runtime.CupsAdapter(
+            run=lambda *a, **kw: SimpleNamespace(returncode=1, stdout=""),
+            platform="darwin",
+        )
+        with self.assertRaises(OSError):
+            adapter.queues()
 
     def test_safe_synthetic_queue_runs_real_child_process_once(self):
         if os.name == "nt":
