@@ -223,22 +223,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def open_chrome():
-    if sys.platform == "darwin":
-        subprocess.run(["/usr/bin/open", "-a", "Google Chrome", ORIGIN], check=True)
-    elif sys.platform == "win32":
-        import winreg
-        for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-            try:
-                with winreg.OpenKey(root, r"Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe") as key:
-                    chrome, _ = winreg.QueryValueEx(key, None)
-                subprocess.Popen([chrome, ORIGIN])
-                return
-            except OSError:
-                continue
-        raise RuntimeError("Установите Google Chrome")
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true")
@@ -251,12 +235,8 @@ def main():
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError:
-        if not args.serve:
-            open_chrome()
         return
     server.printer = Printer(state_directory() / "direct")
-    if not args.serve:
-        open_chrome()
     server.serve_forever()
 
 

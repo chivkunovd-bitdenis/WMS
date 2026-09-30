@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from wms_print_direct import Printer, default_printer
+from wms_print_direct import Printer, default_printer, main
 
 PNG = b'\x89PNG\r\n\x1a\n' + b'test'
 
@@ -43,6 +43,19 @@ class DirectPrintTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Printer(Path(root), submit).print(job(data=b'not a png'))
             submit.assert_not_called()
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.subprocess.Popen')
+    @patch('wms_print_direct.subprocess.run')
+    @patch('wms_print_direct.Printer')
+    @patch('wms_print_direct.ThreadingHTTPServer')
+    def test_start_and_reopen_never_launch_browser(self, server, printer, run, popen):
+        main()
+        server.return_value.serve_forever.assert_called_once()
+        server.side_effect = OSError('already running')
+        main()
+        run.assert_not_called()
+        popen.assert_not_called()
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     @patch('wms_print_direct.subprocess.run')
