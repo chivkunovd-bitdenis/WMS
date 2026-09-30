@@ -229,14 +229,16 @@ def main():
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
-        assert (ASSETS / "packing-scan-check.html").is_file()
+        DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()
         print("WMS Print Direct: package OK")
         return
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError:
+        print("WMS Print уже запущена либо локальный порт занят.", flush=True)
         return
     server.printer = Printer(state_directory() / "direct")
+    print("WMS Print запущена. Сканируйте в WMS. Оставьте это окно открытым.", flush=True)
     server.serve_forever()
 
 
