@@ -51,6 +51,16 @@ describe('Chrome prepared-image printing', () => {
     expect(frames[0]!.srcdoc).toContain(`@page { size: ${pageWidth}mm ${pageHeight}mm; margin: 0; }`)
     expect(frames[0]!.style.width).toBe(`${pageWidth}mm`)
     expect(frames[0]!.style.height).toBe(`${pageHeight}mm`)
+    expect(frames[0]!.srcdoc).toContain('margin: 0; padding: 0; object-fit: contain;')
+    expect(frames[0]!.srcdoc).not.toContain('padding: 2mm')
+    expect(frames[0]!.srcdoc).not.toContain('image-rendering:')
+    if (widthMm > heightMm) {
+      expect(frames[0]!.srcdoc).toContain(`width: ${widthMm}mm; height: ${heightMm}mm;`)
+      expect(frames[0]!.srcdoc).toContain(`transform: translateX(${heightMm}mm) rotate(90deg);`)
+    } else {
+      expect(frames[0]!.srcdoc).toContain('inset: 0; width: 100%; height: 100%;')
+      expect(frames[0]!.srcdoc).not.toContain('rotate(')
+    }
   })
   it('serializes scans until afterprint and retains each label size', async () => {
     autoFinish = false
