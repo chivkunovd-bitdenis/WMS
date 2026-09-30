@@ -283,6 +283,8 @@ describe('WMS-574 окно сборки', () => {
     expect(readFbsAssemblyStage(['a', 'b'], storage)).toBeNull()
     saveFbsAssemblyStage(['a', 'b'], 'picking', storage)
     expect(readFbsAssemblyStage(['a', 'b'], storage)).toBe('picking')
+    saveFbsAssemblyStage(['a', 'b'], 'boxes', storage)
+    expect(readFbsAssemblyStage(['a', 'b'], storage)).toBe('boxes')
     expect(readFbsAssemblyStage(['a'], storage)).toBeNull()
   })
 
@@ -403,5 +405,31 @@ describe('WMS-574 итоговое ревью', () => {
     expect(fbsCodeBelongsToSupply('0104600000099999215AbCdEfGh1234', supply)).toBe(false)
     expect(fbsCodeBelongsToSupply('4600000099999', supply)).toBe(false)
     expect(fbsCodeBelongsToSupply('*STICKER', supply)).toBe(false)
+  })
+})
+
+describe('WMS-604 independent seller creation', () => {
+  it('starts different sellers together, keeps one seller sequential and preserves group order', async () => {
+    const groups = ['wb|seller-a|1', 'wb|seller-a|2', 'wb|seller-b|1'].map((key) => ({
+      key, sellerName: key, wbWarehouseName: 'WB', cargoType: 'mgt', orderIds: [key],
+    }))
+    const calls: string[] = []
+    let releaseA: () => void = () => undefined
+    const waitA = new Promise<void>((resolve) => { releaseA = resolve })
+    const batches: string[][] = []
+    const running = runFbsSupplyGroupCreation(groups, new Map(), new Map(), async (group) => {
+      calls.push(group.key)
+      if (group.key === groups[0].key) await waitA
+      return { supply: { id: group.key, name: group.key, wb_supply_id: group.key } } as unknown as FbsWorkspace
+    }, {
+      newKey: () => crypto.randomUUID(), isApiError: () => false,
+      afterCreated: async (created) => { batches.push(created.map((row) => row.groupKey)) },
+    })
+    await Promise.resolve()
+    expect(calls).toEqual([groups[0].key, groups[2].key])
+    releaseA()
+    await running
+    expect(calls).toEqual([groups[0].key, groups[2].key, groups[1].key])
+    expect(batches).toEqual([groups.map((group) => group.key)])
   })
 })

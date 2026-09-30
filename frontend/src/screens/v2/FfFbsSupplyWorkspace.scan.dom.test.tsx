@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+
+// Only the actual workspace and scanner participate in these tests.
+vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
+vi.mock('../../utils/useMarkingCodePrint', () => ({ useMarkingCodePrint: () => ({ openPrint: vi.fn(), dialog: null }) }))
+vi.mock('./FbsSupplyHistoryDialog', () => ({ FbsSupplyHistoryDialog: () => null }))
+vi.mock('./FbsPrintPreviewDialog', () => ({ FbsPrintPreviewDialog: () => null }))
+vi.mock('./FbsTransferSupplyDialog', () => ({ FbsTransferSupplyDialog: () => null, makeFbsTransferSupplyDeps: () => ({}) }))
 
 // WMS-575 · «Упаковка и маркировка»: скан принимает вся вкладка, где бы ни
 // стоял курсор, коды подряд не теряются, отметка ЧЗ — по ответу commit.
@@ -395,5 +402,30 @@ describe('WMS-575 · исправления по ревью ночного ка�
     scan(KIZ_A)
     await settle(400)
     expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: KIZ_A })
+  })
+})
+
+describe('WMS-604 unified packing presentation', () => {
+  it('prepares missing stickers without a supply Start button and keeps rows and scanner registered', async () => {
+    const initial = workspace()
+    initial.orders.forEach((order) => { order.sticker.code = null })
+    const packingHost = document.createElement('div')
+    document.body.appendChild(packingHost)
+    const registerScanner = vi.fn()
+    const noop = () => undefined
+    await act(async () => root.render(<FfFbsSupplyWorkspace
+      token="t-575" authHeaders={() => ({})} supplyId={SUPPLY_ID} initialWorkspace={initial}
+      open onClose={noop} assemblyFrame={{ packingHost, registerScanner, active: false,
+        expanded: false, visible: true, onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
+        onWorkspaceChange: noop, registerEscape: noop }} />))
+    await settle(60)
+    expect(document.querySelector('[data-testid="fbs-assembly-supply-sup-575"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('Начать работу с поставкой')
+    expect(packingHost.querySelectorAll('[data-order-id]')).toHaveLength(2)
+    expect(packingHost.textContent).toContain('5001')
+    expect(registerScanner.mock.calls.some(([, controller]) => Boolean(controller))).toBe(true)
+    const prepares = calls.filter((call) => call.path.endsWith('/print-assets'))
+    expect(prepares).toHaveLength(1)
+    expect(prepares[0].body).toMatchObject({ kind: 'order_sticker', order_ids: ['order-a', 'order-b'], retry_missing: true })
   })
 })

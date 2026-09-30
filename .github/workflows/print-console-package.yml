@@ -1,0 +1,38 @@
+name: WMS Print Console
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/wms607-staging-print', 'codex/wms607-production']
+    paths: ['tools/print-agent/build_console.py', 'tools/print-agent/wms_print_direct.py', '.github/workflows/print-console-package.yml']
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: Windows-x64
+          - os: macos-14
+            artifact: Mac-arm64
+          - os: macos-15-intel
+            artifact: Mac-x86_64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pyinstaller==6.20.0 certifi==2026.2.25
+      - if: runner.os == 'Windows'
+        run: python -m pip install pywin32==311 Pillow==11.3.0 PyMuPDF==1.26.4
+      - run: python tools/print-agent/build_console.py
+      - if: runner.os != 'Windows'
+        run: tools/print-agent/dist-console/wms-print/wms-print --self-test
+      - if: runner.os == 'Windows'
+        run: tools/print-agent/dist-console/wms-print/wms-print.exe --self-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WMS-Print-Console-${{ matrix.artifact }}
+          path: tools/print-agent/dist-console/*.zip

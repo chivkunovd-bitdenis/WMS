@@ -381,6 +381,7 @@ class FbsScanAutoPrintBody(BaseModel):
     print_qr: bool = False
     print_chz: bool = False
     reprint_chz: bool = False
+    await_honest_sign: bool = False
 
     @model_validator(mode="after")
     def validate_chz_modes(self) -> FbsScanAutoPrintBody:
@@ -2438,6 +2439,7 @@ async def scan_fbs_supply_product_for_auto_print(
             print_chz=body.print_chz,
             reprint_chz=body.reprint_chz,
             actor_user_id=user.id,
+            await_honest_sign=body.await_honest_sign,
         )
     except scan_print_svc.FbsScanAutoPrintError as exc:
         _raise_from_scan_auto_print(exc)
@@ -2445,7 +2447,7 @@ async def scan_fbs_supply_product_for_auto_print(
 
     binding_target: FbsScanAutoPrintBindingTargetOut | None = None
     reprint_recovery: FbsScanAutoPrintReprintRecoveryOut | None = None
-    if body.reprint_chz:
+    if body.reprint_chz or body.await_honest_sign:
         try:
             binding_target = _scan_binding_target_out(
                 await kiz_svc.lookup_order_for_binding(
