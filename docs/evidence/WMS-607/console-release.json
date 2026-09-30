@@ -1,0 +1,13 @@
+{
+  "source_commit": "b9f79e1653d9520f4264685c4af03df5e6865ca6",
+  "runtime": "direct",
+  "console": true,
+  "ci_run": 36743513980,
+  "mac_local_package_self_test": "passed",
+  "mac_console_start": "WMS Print запущена. Сканируйте в WMS. Оставьте это окно открытым.",
+  "os_receipt": "WMS604_Proof-84",
+  "ready_png_to_os_receipt_ms": 55,
+  "physical_print_verified": false,
+  "windows_physical_print_verified": false,
+  "notarization": false
+}
