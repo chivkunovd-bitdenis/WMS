@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
-import { cellRef, type PickProduct } from './pickStub'
+import { cellRef, objRef, type PickProduct } from './pickStub'
 
 // WMS-575 · подбор: скан принимает вся вкладка, где бы ни стоял курсор.
 // Настоящий экран подбора в настоящем рендере; «сервер» — подставной onScan,
@@ -245,5 +245,41 @@ describe('WMS-575 · подбор принимает скан, где бы ни 
     await settle(30)
     expect(server.calls).toEqual([BARCODE])
     expect(leftQty()).toBe('2')
+  })
+})
+
+
+describe('WMS-602 · ячейка → тара → товар в подборе ФБС', () => {
+  it('передаёт ячейку в скан тары, затем выбранный короб в скан товара', async () => {
+    const onScan = vi.fn(async ({ barcode }: { barcode: string; sourceKey: string | null }): Promise<UnloadPickScanResult> => {
+      if (barcode === 'J-1-4') return {
+        kind: 'location', storageLocationId: 'cell-1', locationCode: 'Ж-1-4',
+      }
+      if (barcode === 'INB-M5KSFV1J1XP9WW') return {
+        kind: 'container', storageLocationId: 'cell-1', locationCode: 'Ж-1-4',
+        containerKind: 'box', containerId: 'box-1', containerCode: barcode,
+      }
+      return {
+        kind: 'product', sourceKey: objRef('box-1'), storageLocationId: 'cell-1',
+        productId: product.id, sku: product.sku, productName: product.name,
+        pickedQty: 1, allocationQuantity: 1,
+      }
+    })
+    await act(async () => root.render(<Screen onScan={onScan} />))
+    scan('J-1-4')
+    await settle(30)
+    expect(leftQty()).toBe('3')
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('Ж-1-4')
+    scan('INB-M5KSFV1J1XP9WW')
+    await settle(30)
+    expect(leftQty()).toBe('3')
+    expect(document.querySelector('[data-testid="pick-source"]')?.textContent).toBe('INB-M5KSFV1J1XP9WW')
+    scan(BARCODE)
+    await settle(30)
+    expect(onScan.mock.calls.map(([payload]) => payload)).toEqual([
+      { barcode: 'J-1-4', sourceKey: null },
+      { barcode: 'INB-M5KSFV1J1XP9WW', sourceKey: cellRef('cell-1') },
+      { barcode: BARCODE, sourceKey: objRef('box-1') },
+    ])
   })
 })
