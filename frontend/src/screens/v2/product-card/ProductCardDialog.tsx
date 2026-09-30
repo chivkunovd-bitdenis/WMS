@@ -25,6 +25,7 @@ type Props = {
   authHeaders: (t: string) => Record<string, string>
   /** Администратор ФФ — видит «Задать остаток» и может редактировать каталог. */
   canManageCatalog: boolean
+  canManageFbsStock?: boolean
   /** Доступен отчёт «Остатки и движения» — то же право, что пункт меню «Отчёты» (R3). */
   canViewMovements: boolean
   /** У организации включено адресное хранение — то же условие, что пункт меню «Ячейки» (R3). */
@@ -43,6 +44,7 @@ export function ProductCardDialog({
   token,
   authHeaders,
   canManageCatalog,
+  canManageFbsStock = false,
   canViewMovements,
   addressStorageEnabled,
   warehouses,
@@ -220,7 +222,7 @@ export function ProductCardDialog({
   const tabs: { key: TabKey; label: string }[] = [{ key: 'main', label: 'Основное' }]
   if (canViewMovements) tabs.push({ key: 'movements', label: 'Движения' })
   if (addressStorageEnabled) tabs.push({ key: 'location', label: 'Расположение' })
-  if (canManageCatalog && row.seller_id) tabs.push({ key: 'fbs_stock', label: 'Задать остаток' })
+  if (canManageFbsStock && row.seller_id) tabs.push({ key: 'fbs_stock', label: 'Задать остаток' })
 
   const displayName = cardData?.name ?? row.name
   const displayPhoto = cardData?.wb_primary_image_url ?? row.wb_primary_image_url
@@ -393,7 +395,7 @@ export function ProductCardDialog({
                   sellerName={row.seller_name}
                   token={token}
                   warehouses={warehouses}
-                  canEditBindings={canManageCatalog}
+                  canEditBindings={canManageFbsStock}
                   footerSlotEl={footerSlotEl}
                   onCardClose={closeCardFromFbsTab}
                   onBusyChange={setFbsStockBusy}

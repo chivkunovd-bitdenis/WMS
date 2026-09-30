@@ -53,6 +53,110 @@ async def _create_ff_staff(
 
 
 @pytest.mark.asyncio
+async def test_section_permissions_revoke_direct_api_with_existing_token(
+    async_client: AsyncClient,
+) -> None:
+    """A stale bearer token must never retain a revoked section permission."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Section Access Co",
+            "slug": f"staff-sections-{suffix}",
+            "admin_email": f"admin-sections-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, staff = await _create_ff_staff(
+        async_client,
+        ah,
+        suffix,
+        "sections",
+        {
+            "billing": True,
+            "storage": True,
+            "inventory": True,
+            "fbs": True,
+            "honest_sign": True,
+            "settings": True,
+        },
+    )
+    granted = (await async_client.get("/auth/me", headers=sh)).json()["permissions"]
+    assert all(
+        granted[key]
+        for key in ("billing", "storage", "inventory", "fbs", "honest_sign", "settings")
+    )
+    for path in (
+        "/billing/tariffs",
+        "/operations/storage/report",
+        "/operations/inventory-counts",
+        "/operations/fbs-supplies/worklist",
+        "/operations/marking-codes/pools",
+        "/tenant/settings",
+    ):
+        response = await async_client.get(path, headers=sh)
+        assert response.status_code != 403, (path, response.status_code, response.text)
+
+    revoked = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={
+            **FF_PERMISSION_DEFAULTS,
+            "billing": False,
+            "storage": False,
+            "fbs": False,
+            "honest_sign": False,
+        },
+    )
+    assert revoked.status_code == 200, revoked.text
+    me = await async_client.get("/auth/me", headers=sh)
+    assert me.status_code == 200
+    assert all(
+        me.json()["permissions"][key] is False
+        for key in ("billing", "storage", "inventory", "fbs", "honest_sign", "settings")
+    )
+
+    paths = (
+        "/billing/tariffs",
+        "/operations/storage/report",
+        "/operations/inventory-counts",
+        "/operations/fbs-supplies/worklist",
+        "/operations/marking-codes/pools",
+        "/tenant/settings",
+    )
+    for path in paths:
+        response = await async_client.get(path, headers=sh)
+        assert response.status_code == 403, (path, response.status_code, response.text)
+
+    fbs_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "fbs": True},
+    )
+    assert fbs_only.status_code == 200, fbs_only.text
+    fbs_response = await async_client.get("/operations/fbs-supplies/worklist", headers=sh)
+    assert fbs_response.status_code != 403, fbs_response.text
+    marking_response = await async_client.get("/operations/marking-codes/pools", headers=sh)
+    assert marking_response.status_code == 403, marking_response.text
+
+    storage_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "storage": True},
+    )
+    assert storage_only.status_code == 200, storage_only.text
+    assert (await async_client.get("/operations/storage/report", headers=sh)).status_code != 403
+    inventory_report = await async_client.get(
+        "/reports/inventory?date_from=2026-01-01T00:00:00Z&date_to=2026-02-01T00:00:00Z",
+        headers=sh,
+    )
+    assert inventory_report.status_code == 403, inventory_report.text
+    assert (await async_client.get("/operations/inventory-counts", headers=sh)).status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_creates_staff_user_first_login_and_permissions(
     async_client: AsyncClient,
 ) -> None:

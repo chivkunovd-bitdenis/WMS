@@ -26,12 +26,16 @@ from app.services.seller_staff_permissions_service import (
     get_seller_permissions,
 )
 from app.services.staff_permissions_service import (
+    PERM_BILLING,
     PERM_CELLS,
+    PERM_FBS,
+    PERM_HONEST_SIGN,
     PERM_INVENTORY,
     PERM_MP_SHIPMENTS,
     PERM_PACKAGING,
     PERM_RECEPTION,
     PERM_SHIFT_LEAD,
+    PERM_STORAGE,
     get_staff_permissions,
 )
 from app.services.subscription_service import subscription_state
@@ -94,9 +98,7 @@ _SUBSCRIPTION_FREE_PATHS = frozenset(
 
 async def get_current_user(
     request: Request,
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     if credentials is None or credentials.scheme.lower() != "bearer":
@@ -137,9 +139,7 @@ async def get_current_user(
     return user
 
 
-async def _assert_subscription_active(
-    request: Request, session: AsyncSession, user: User
-) -> None:
+async def _assert_subscription_active(request: Request, session: AsyncSession, user: User) -> None:
     """Закрыть систему, если подписка организации закончилась (WMS-381)."""
     if request.url.path in _SUBSCRIPTION_FREE_PATHS:
         return
@@ -155,9 +155,7 @@ async def _assert_subscription_active(
 
 async def get_effective_seller_id(
     user: Annotated[User, Depends(get_current_user)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> uuid.UUID | None:
     return await resolve_effective_seller_id(session, user, credentials)
@@ -222,6 +220,22 @@ def require_ff_permission(
     return _dep
 
 
+def require_ff_any_permission(*permissions: str) -> Callable[..., Awaitable[User]]:
+    async def _dep(
+        user: Annotated[User, Depends(get_current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
+    ) -> User:
+        if user.role == FULFILLMENT_ADMIN:
+            return user
+        if user.role == FULFILLMENT_STAFF:
+            perms = await get_staff_permissions(session, user)
+            if any(perms.has(permission) for permission in permissions):
+                return user
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    return _dep
+
+
 def require_ff_or_seller_with_permission(
     permission: str,
 ) -> Callable[..., Awaitable[User]]:
@@ -251,17 +265,57 @@ def require_ff_or_seller_with_permission(
 
 
 require_reception_access = require_ff_permission(PERM_RECEPTION)
-require_reception_or_seller_draft_access = require_ff_or_seller_with_permission(
-    PERM_RECEPTION
-)
+require_reception_or_seller_draft_access = require_ff_or_seller_with_permission(PERM_RECEPTION)
 require_mp_shipments_access = require_ff_or_seller_with_permission(PERM_MP_SHIPMENTS)
 require_cells_access = require_ff_permission(PERM_CELLS)
-require_packaging_access = require_ff_permission(PERM_PACKAGING)
+require_packaging_access = require_ff_any_permission(PERM_PACKAGING, PERM_FBS)
 # FBS picking, packaging and shipment are warehouse-operator work. Keep the
 # alias explicit so administrative FBS setup can continue to use
 # require_fulfillment_admin without accidentally widening its permissions.
-require_fbs_operator_access = require_packaging_access
+require_fbs_operator_access = require_ff_permission(PERM_FBS)
 require_shift_lead = require_ff_permission(PERM_SHIFT_LEAD)
+require_billing_access = require_ff_permission(PERM_BILLING)
+require_settings_access = require_ff_permission("settings")
+
+
+def require_ff_section_if_staff(permission: str) -> Callable[..., Awaitable[None]]:
+    """Section gate that preserves existing seller and admin route requirements."""
+
+    async def _dep(
+        user: Annotated[User, Depends(get_current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
+    ) -> None:
+        if user.role == FULFILLMENT_STAFF and not (await get_staff_permissions(session, user)).has(
+            permission
+        ):
+            raise HTTPException(status_code=403, detail="forbidden")
+
+    return _dep
+
+
+require_fbs_section_if_staff = require_ff_section_if_staff(PERM_FBS)
+require_storage_section_if_staff = require_ff_section_if_staff(PERM_STORAGE)
+require_marking_section_if_staff = require_ff_section_if_staff(PERM_HONEST_SIGN)
+
+
+async def require_marking_section_resource_if_staff(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Protect the ЧЗ catalogue while shared FBS marking operations stay available."""
+    if user.role != FULFILLMENT_STAFF:
+        return
+    path = request.url.path.removeprefix("/operations/marking-codes/")
+    perms = await get_staff_permissions(session, user)
+    pure_section = path.split("/", 1)[0] in {"import", "pools", "ledger", "inventory"}
+    allowed = (
+        perms.honest_sign
+        if pure_section
+        else perms.honest_sign or perms.fbs or perms.packaging or perms.shift_lead
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="forbidden")
 
 
 async def require_catalog_cells_read_access(
@@ -272,7 +326,17 @@ async def require_catalog_cells_read_access(
         return user
     if user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
-        if perms.has(PERM_CELLS) or perms.has(PERM_INVENTORY):
+        if any(
+            perms.has(permission)
+            for permission in (
+                PERM_CELLS,
+                PERM_INVENTORY,
+                PERM_STORAGE,
+                PERM_FBS,
+                PERM_HONEST_SIGN,
+                PERM_BILLING,
+            )
+        ):
             return user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -319,6 +383,10 @@ async def assert_product_catalog_read_access(
                 PERM_PACKAGING,
                 PERM_CELLS,
                 PERM_INVENTORY,
+                PERM_STORAGE,
+                PERM_FBS,
+                PERM_HONEST_SIGN,
+                PERM_BILLING,
             )
         ):
             return
@@ -349,9 +417,7 @@ async def assert_inventory_read_access(
 
 async def require_seller_billing_scope(
     user: Annotated[User, Depends(get_current_user)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> uuid.UUID:
     """Общая проверка доступа ко всем ручкам «Расчётов» кабинета селлера (WMS-549).
@@ -380,9 +446,7 @@ async def require_seller_billing_scope(
 
 async def seller_line_product_scope(
     user: Annotated[User, Depends(get_current_user)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> uuid.UUID | None:
     """For fulfillment_seller: filter operations to active seller when set."""

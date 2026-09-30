@@ -146,7 +146,7 @@ export function AuthedAppLayout({
   const canMpShipments = isAdmin || can('mp_shipments')
   const canPackaging = isAdmin || can('packaging')
   const canCatalogCells = isAdmin || can('cells') || can('inventory')
-  const canStorage = isAdmin || can('inventory')
+  const canStorage = isAdmin || can('storage')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -226,7 +226,7 @@ export function AuthedAppLayout({
                 </ListItemButton>
               </>
             ) : null}
-            {canPackaging ? (
+            {can('fbs') ? (
               <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs" data-task-id="NAV-01">
                 <ListItemText primary="FBS" />
               </ListItemButton>
@@ -259,7 +259,7 @@ export function AuthedAppLayout({
             {/* Инвентаризация — документ, и его надо где-то заводить и искать.
                 Пересчёт по одной строке склада запускается значком на карте, а
                 список документов и создание по фильтрам живут здесь. */}
-            {canStorage ? (
+            {can('inventory') ? (
               <ListItemButton component={NavLink} to={`${base}/stocktaking`} data-testid="nav-ff-stocktaking" data-task-id="NAV-01">
                 <ListItemText primary="Инвентаризация" />
               </ListItemButton>
@@ -274,12 +274,12 @@ export function AuthedAppLayout({
                 <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
-            {isAdmin ? (
+            {can('billing') ? (
               <ListItemButton component={NavLink} to={`${base}/billing`} data-testid="nav-ff-billing" data-task-id="NAV-01">
                 <ListItemText primary="Расчёты" />
               </ListItemButton>
             ) : null}
-            {isAdmin ? (
+            {can('honest_sign') ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/honest-sign`}
