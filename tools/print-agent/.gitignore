@@ -3,3 +3,9 @@ build/
 dist/
 *.spec
 __pycache__/
+
+/dist-direct/
+/build-direct/
+/direct-web/
+/dist-console/
+/build-console/

@@ -397,3 +397,28 @@ describe('WMS-575 · исправления по ревью ночного ка�
     expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: KIZ_A })
   })
 })
+
+describe('WMS-604 unified packing presentation', () => {
+  it('prepares missing stickers without a supply Start button and keeps rows and scanner registered', async () => {
+    const initial = workspace()
+    initial.orders.forEach((order) => { order.sticker.code = null })
+    const packingHost = document.createElement('div')
+    document.body.appendChild(packingHost)
+    const registerScanner = vi.fn()
+    const noop = () => undefined
+    await act(async () => root.render(<FfFbsSupplyWorkspace
+      token="t-575" authHeaders={() => ({})} supplyId={SUPPLY_ID} initialWorkspace={initial}
+      open onClose={noop} assemblyFrame={{ packingHost, registerScanner, active: false,
+        expanded: false, visible: true, onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
+        onWorkspaceChange: noop, registerEscape: noop }} />))
+    await settle(60)
+    expect(document.querySelector('[data-testid="fbs-assembly-supply-sup-575"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('Начать работу с поставкой')
+    expect(packingHost.querySelectorAll('[data-order-id]')).toHaveLength(2)
+    expect(packingHost.textContent).toContain('5001')
+    expect(registerScanner.mock.calls.some(([, controller]) => Boolean(controller))).toBe(true)
+    const prepares = calls.filter((call) => call.path.endsWith('/print-assets'))
+    expect(prepares).toHaveLength(1)
+    expect(prepares[0].body).toMatchObject({ kind: 'order_sticker', order_ids: ['order-a', 'order-b'], retry_missing: true })
+  })
+})

@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { createPackingScanController, makePackingScanDeps } from './fbsSequentialPacking'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
@@ -501,7 +503,7 @@ export function FfFbsSupplyWorkspace({
   const [selectedStage, setStage] = useState<StageKey>('composition')
   // WMS-574: рамка окна сборки всегда на упаковке и не трогает запомненную
   // вкладку карточки этой поставки.
-  const stage: StageKey = assemblyFrame ? 'packing' : selectedStage
+  const stage: StageKey = assemblyFrame ? assemblyFrame.stage ?? 'packing' : selectedStage
   const selectStage = (next: StageKey) => {
     if (assemblyFrame) return
     if (supplyId) saveFbsWorkspaceStage(supplyId, next)
@@ -636,6 +638,37 @@ export function FfFbsSupplyWorkspace({
     setAddOrdersOpen(false)
   }
 
+  const useSequentialPacking = Boolean(assemblyFrame?.registerScanner) && workspace?.supply.marketplace === 'wb'
+  const sequentialOpenRef = useRef(false)
+  sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing' && Boolean(assemblyFrame?.visible)
+  useEffect(() => () => { sequentialOpenRef.current = false }, [])
+  const sequentialWorkspaceRef = useRef(workspace)
+  sequentialWorkspaceRef.current = workspace
+  const sequentialFrameRef = useRef(assemblyFrame)
+  sequentialFrameRef.current = assemblyFrame
+  const [, setSequentialScanVersion] = useState(0)
+  const sequentialRefreshRef = useRef<() => void>(() => undefined)
+  const sequentialScanner = useMemo(() => {
+    if (!workspace || !useSequentialPacking) return null
+    return createPackingScanController(makePackingScanDeps(token, authHeaders,
+      () => sequentialWorkspaceRef.current!,
+      () => { setSequentialScanVersion((version) => version + 1); sequentialFrameRef.current?.onScanChange?.() },
+      () => sequentialRefreshRef.current(),
+      () => sequentialOpenRef.current && sequentialWorkspaceRef.current?.supply.id === supplyId,
+      () => assemblyOpenBoxIdRef.current,
+      (orderId, value) => setKizCommittedTails((current) => ({ ...current, [orderId]: kizValueTail(value) })),
+    ))
+  // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, supplyId, workspace?.supply.id, open, useSequentialPacking])
+  const registerSequentialScanner = assemblyFrame?.registerScanner
+  const unifiedStickerAttempts = useRef(new Set<string>())
+  useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
+  useEffect(() => {
+    if (!supplyId || !registerSequentialScanner) return
+    registerSequentialScanner(supplyId, sequentialScanner)
+    return () => registerSequentialScanner(supplyId, null)
+  }, [supplyId, sequentialScanner, registerSequentialScanner])
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
@@ -946,6 +979,25 @@ export function FfFbsSupplyWorkspace({
       if (write.isCurrent()) setBusy(false)
     }
   }
+
+  // The unified list has no per-supply Start button. Prepare the missing
+  // marketplace stickers on entry, without waiting for the first product scan.
+  useEffect(() => {
+    if (!open || stage !== 'packing' || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
+    const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
+    if (!missing.length) return
+    for (const order of missing) unifiedStickerAttempts.current.add(order.id)
+    const write = beginWorkspaceWrite()
+    void fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+      kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
+    }).then((batch) => {
+      if (!write.isCurrent()) return
+      if (batch.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
+      void load(true)
+    }).catch((cause: unknown) => {
+      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+    })
+  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {
     if (!workspace) return
@@ -2397,6 +2449,8 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
+  sequentialRefreshRef.current = () => { void load(true); void refreshPackagingTask() }
+
   const performSkipHonestSign = async () => {
     if (!workspace) return
     const write = beginWorkspaceWrite()
@@ -2601,6 +2655,7 @@ export function FfFbsSupplyWorkspace({
   }, [])
   const packingScanIntake = useScanIntake({
     enabled: open
+      && !useSequentialPacking
       && stage === 'packing'
       && Boolean(workspace)
       && Boolean(packagingTask)
@@ -2995,258 +3050,7 @@ export function FfFbsSupplyWorkspace({
     </>
   )
 
-  const packingPanel = workspace ? (
-    <>
-              {packagingTask || deliveryConfirmed ? (
-                <Paper variant="outlined" sx={assemblyFrame ? { overflow: 'hidden', border: 0, borderRadius: 0 } : { overflow: 'hidden' }}>
-                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                      <Box>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="h6">Упаковка и маркировка</Typography>
-                          {workspace.supply.honest_sign_skipped ? (
-                            <Chip
-                              size="small"
-                              color="warning"
-                              label="Сдаём без Честного знака"
-                              data-testid="fbs-honest-sign-skipped-chip"
-                            />
-                          ) : null}
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
-                        </Typography>
-                      </Box>
-                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => setPackingSelectedIds(selectedPackingOrders.length === packingOrders.length
-                            ? new Set()
-                            : new Set(packingOrders.map((order) => order.id)))}
-                          data-testid="fbs-packing-select-all"
-                        >
-                          {selectedPackingOrders.length === packingOrders.length && packingOrders.length > 0 ? 'Снять выбор' : 'Выбрать всё'}
-                        </Button>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => openBulkOrderMarkingPrint(
-                            printPackingOrders,
-                            printPackingOrders.every(orderPrintDone),
-                          )}
-                          data-task-id="FBS-21"
-                        >
-                          {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
-                        </Button>
-                        {!isOzonSupply && packagingEditable ? (
-                          <Button
-                            disabled={busy || packingOrdersWithCode === 0}
-                            onClick={checkMarkingsInWb}
-                            data-testid="fbs-packing-check-wb"
-                          >
-                            Проверить в WB
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
-                            Очистить ЧЗ
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button
-                            disabled={!packagingEditable || busy}
-                            onClick={() => setTransferDialogOpen(true)}
-                            data-testid="fbs-packing-transfer-supply"
-                          >
-                            Перенести в другую поставку
-                          </Button>
-                        ) : null}
-                        <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
-                          Всё упаковано
-                        </Button>
-                        {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
-                          <Button
-                            color="warning"
-                            disabled={!packagingEditable || skipHonestSignBusy || busy}
-                            onClick={() => setSkipHonestSignOpen(true)}
-                            data-testid="fbs-skip-honest-sign"
-                          >
-                            Сдать без Честного знака
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </Stack>
-                  </Box>
-                  {workspace.marking_pool && workspace.marking_pool.shortage > 0 ? (
-                    <Box sx={{ px: 2, py: 1.25, bgcolor: '#fdf4e7', borderBottom: 1, borderColor: 'divider' }}>
-                      <Typography variant="body2" sx={{ color: '#854f0b' }}>
-                        Не хватает Честных знаков: нужно {workspace.marking_pool.required}, в пуле {workspace.marking_pool.available}
-                      </Typography>
-                    </Box>
-                  ) : null}
-                  {anyOrderNeedsHonestSign ? (
-                    // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
-                    // строку активной, следующий скан (Честный знак) привязывает код к
-                    // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
-                    <Box
-                      sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
-                      data-testid="fbs-kiz-scan-bar"
-                      ref={packingScanIntake.bindRoot}
-                    >
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                        {assemblyFrame
-                          ? 'Сканы принимает только активная поставка'
-                          : 'Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером'}
-                      </Typography>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-                        <TextField
-                          inputRef={kizScanInputRef}
-                          autoFocus={packagingEditable}
-                          size="small"
-                          fullWidth
-                          autoComplete="off"
-                          value={kizScanValue}
-                          disabled={!packagingEditable || kizScanBusy}
-                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : (isOzonSupply ? 'Номер отправления или штрихкод Ozon' : 'Сканируйте QR стикера заказа')}
-                          onChange={(event) => setKizScanValue(event.target.value)}
-                          onKeyDown={onKizScanEnter}
-                          data-testid="fbs-kiz-scan-input"
-                          slotProps={{
-                            input: {
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <QrCodeScannerOutlined fontSize="small" color="action" />
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                          sx={{ '& input': { fontFamily: 'monospace' } }}
-                        />
-                        {!isOzonSupply ? (
-                          <>
-                            <FormControlLabel
-                              data-testid="fbs-scan-print-qr-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.printQr}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, printQr: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Печатать QR"
-                            />
-                            <FormControlLabel
-                              data-testid="fbs-scan-print-chz-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.printChz}
-                                  disabled={scanPrintPreferences.reprintChz}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, printChz: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Печатать ЧЗ"
-                            />
-                            <FormControlLabel
-                              data-testid="fbs-kiz-auto-reprint-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.reprintChz}
-                                  disabled={scanPrintPreferences.printChz}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, reprintChz: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Перепечатывать ЧЗ"
-                            />
-                          </>
-                        ) : null}
-                        {kizScanActive ? (
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
-                            <ProductPhotoThumb src={kizScanActive.product.image_url} alt={kizScanActive.product.name} size={32} previewSize={220} />
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
-                                {kizScanActive.product.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {providerName} № {fbsKizOrderNumber(kizScanActive)}
-                              </Typography>
-                            </Box>
-                            <Button size="small" startIcon={<CloseIcon fontSize="small" />} onClick={dropKizScanActive}
-                              disabled={kizScanBusy} data-testid="fbs-kiz-scan-reset">
-                              Сбросить
-                            </Button>
-                          </Stack>
-                        ) : null}
-                      </Stack>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', mt: 0.75 }}
-                        data-testid="fbs-kiz-scan-message"
-                      >
-                        {kizScanActive
-                          ? `Заказ ${providerName} № ${fbsKizOrderNumber(kizScanActive)} активен — сканируйте Честный знак, код уйдёт на проверку в ${providerName}.`
-                          : isOzonSupply ? 'Введите номер отправления или сканируйте штрихкод Ozon, затем Честный знак каждой единицы товара.' : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
-                      </Typography>
-                      {kizScanNotice ? <Typography variant="caption" sx={{ display: 'block' }} data-testid="fbs-kiz-scan-result">{kizScanNotice}</Typography> : null}
-                      {kizScanHints.length > 0 ? (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {kizScanHints.map((hint) => KIZ_HINT_TEXT[hint] ?? hint).join(' · ')}
-                        </Typography>
-                      ) : null}
-                      {kizScanError ? (
-                        <Typography
-                          variant="body2"
-                          component="div"
-                          sx={{ color: 'error.main', mt: 0.5 }}
-                          data-testid="fbs-kiz-scan-error"
-                        >
-                          {kizScanError.text}
-                          {kizScanError.debug ? (
-                            <>
-                              <Link
-                                component="button"
-                                type="button"
-                                variant="body2"
-                                color="inherit"
-                                underline="hover"
-                                onClick={() => setKizScanDebugOpen((current) => !current)}
-                                sx={{ ml: 1 }}
-                              >
-                                Что приехало со сканера
-                              </Link>
-                              <Collapse in={kizScanDebugOpen}>
-                                <Typography variant="caption" component="div" color="text.secondary">
-                                  Длина: {kizScanError.debug.length} · начало: {kizScanError.debug.first8 || '—'} · конец:{' '}
-                                  {kizScanError.debug.last8 || '—'}
-                                </Typography>
-                              </Collapse>
-                            </>
-                          ) : null}
-                        </Typography>
-                      ) : null}
-                      {assemblyFrame && assemblyBoxHint ? (
-                        <Typography variant="body2" sx={{ color: 'error.main', mt: 0.5 }} data-testid="fbs-assembly-box-hint">
-                          {assemblyBoxHint}
-                        </Typography>
-                      ) : null}
-                    </Box>
-                  ) : null}
+  const packingRows = workspace ? (
                   <Stack divider={<Divider flexItem />}>
                     {packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
@@ -3256,7 +3060,7 @@ export function FfFbsSupplyWorkspace({
                       const markingAvailable = line?.marking_available_count ?? 0
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
-                      const kizRowActive = kizScanActive?.order_id === order.id
+                      const kizRowActive = (sequentialScanner?.view()?.orderId ?? kizScanActive?.order_id) === order.id
                       const ozonPositions = isOzonSupply ? order.positions : []
                       const ids = (isOzonSupply
                         ? [
@@ -3489,6 +3293,262 @@ export function FfFbsSupplyWorkspace({
                       )
                     })}
                   </Stack>
+  ) : null
+
+  const packingPanel = workspace ? (
+    <>
+              {packagingTask || deliveryConfirmed || useSequentialPacking ? (
+                <Paper variant="outlined" sx={assemblyFrame ? { overflow: 'hidden', border: 0, borderRadius: 0 } : { overflow: 'hidden' }}>
+                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                      <Box>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="h6">Упаковка и маркировка</Typography>
+                          {workspace.supply.honest_sign_skipped ? (
+                            <Chip
+                              size="small"
+                              color="warning"
+                              label="Сдаём без Честного знака"
+                              data-testid="fbs-honest-sign-skipped-chip"
+                            />
+                          ) : null}
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                        <Button
+                          disabled={busy || packingOrders.length === 0}
+                          onClick={() => setPackingSelectedIds(selectedPackingOrders.length === packingOrders.length
+                            ? new Set()
+                            : new Set(packingOrders.map((order) => order.id)))}
+                          data-testid="fbs-packing-select-all"
+                        >
+                          {selectedPackingOrders.length === packingOrders.length && packingOrders.length > 0 ? 'Снять выбор' : 'Выбрать всё'}
+                        </Button>
+                        <Button
+                          disabled={busy || packingOrders.length === 0}
+                          onClick={() => openBulkOrderMarkingPrint(
+                            printPackingOrders,
+                            printPackingOrders.every(orderPrintDone),
+                          )}
+                          data-task-id="FBS-21"
+                        >
+                          {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
+                        </Button>
+                        {!isOzonSupply && packagingEditable ? (
+                          <Button
+                            disabled={busy || packingOrdersWithCode === 0}
+                            onClick={checkMarkingsInWb}
+                            data-testid="fbs-packing-check-wb"
+                          >
+                            Проверить в WB
+                          </Button>
+                        ) : null}
+                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
+                          <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
+                            Очистить ЧЗ
+                          </Button>
+                        ) : null}
+                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
+                          <Button
+                            disabled={!packagingEditable || busy}
+                            onClick={() => setTransferDialogOpen(true)}
+                            data-testid="fbs-packing-transfer-supply"
+                          >
+                            Перенести в другую поставку
+                          </Button>
+                        ) : null}
+
+                        {!useSequentialPacking ? <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
+                          Всё упаковано
+                        </Button> : null}
+                        {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
+                          <Button
+                            color="warning"
+                            disabled={!packagingEditable || skipHonestSignBusy || busy}
+                            onClick={() => setSkipHonestSignOpen(true)}
+                            data-testid="fbs-skip-honest-sign"
+                          >
+                            Сдать без Честного знака
+                          </Button>
+                        ) : null}
+                      </Stack>
+                    </Stack>
+                  </Box>
+                  {workspace.marking_pool && workspace.marking_pool.shortage > 0 ? (
+                    <Box sx={{ px: 2, py: 1.25, bgcolor: '#fdf4e7', borderBottom: 1, borderColor: 'divider' }}>
+                      <Typography variant="body2" sx={{ color: '#854f0b' }}>
+                        Не хватает Честных знаков: нужно {workspace.marking_pool.required}, в пуле {workspace.marking_pool.available}
+                      </Typography>
+                    </Box>
+                  ) : null}
+                  {!useSequentialPacking && anyOrderNeedsHonestSign ? (
+                    // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
+                    // строку активной, следующий скан (Честный знак) привязывает код к
+                    // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
+                    <Box
+                      sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
+                      data-testid="fbs-kiz-scan-bar"
+                      ref={packingScanIntake.bindRoot}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        {assemblyFrame
+                          ? 'Сканы принимает только активная поставка'
+                          : 'Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером'}
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+                        <TextField
+                          inputRef={kizScanInputRef}
+                          autoFocus={packagingEditable}
+                          size="small"
+                          fullWidth
+                          autoComplete="off"
+                          value={kizScanValue}
+                          disabled={!packagingEditable || kizScanBusy}
+                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : (isOzonSupply ? 'Номер отправления или штрихкод Ozon' : 'Сканируйте QR стикера заказа')}
+                          onChange={(event) => setKizScanValue(event.target.value)}
+                          onKeyDown={onKizScanEnter}
+                          data-testid="fbs-kiz-scan-input"
+                          slotProps={{
+                            input: {
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <QrCodeScannerOutlined fontSize="small" color="action" />
+                                </InputAdornment>
+                              ),
+                            },
+                          }}
+                          sx={{ '& input': { fontFamily: 'monospace' } }}
+                        />
+                        {!isOzonSupply ? (
+                          <>
+                            <FormControlLabel
+                              data-testid="fbs-scan-print-qr-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.printQr}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, printQr: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Печатать QR"
+                            />
+                            <FormControlLabel
+                              data-testid="fbs-scan-print-chz-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.printChz}
+                                  disabled={scanPrintPreferences.reprintChz}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, printChz: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Печатать ЧЗ"
+                            />
+                            <FormControlLabel
+                              data-testid="fbs-kiz-auto-reprint-toggle"
+                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={scanPrintPreferences.reprintChz}
+                                  disabled={scanPrintPreferences.printChz}
+                                  onChange={(event) => {
+                                    const next = { ...scanPrintPreferences, reprintChz: event.target.checked }
+                                    setScanPrintPreferences(next)
+                                    saveFbsScanPrintPreferences(token, next)
+                                  }}
+                                />
+                              }
+                              label="Перепечатывать ЧЗ"
+                            />
+                          </>
+                        ) : null}
+                        {kizScanActive ? (
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
+                            <ProductPhotoThumb src={kizScanActive.product.image_url} alt={kizScanActive.product.name} size={32} previewSize={220} />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+                                {kizScanActive.product.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {providerName} № {fbsKizOrderNumber(kizScanActive)}
+                              </Typography>
+                            </Box>
+                            <Button size="small" startIcon={<CloseIcon fontSize="small" />} onClick={dropKizScanActive}
+                              disabled={kizScanBusy} data-testid="fbs-kiz-scan-reset">
+                              Сбросить
+                            </Button>
+                          </Stack>
+                        ) : null}
+                      </Stack>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.75 }}
+                        data-testid="fbs-kiz-scan-message"
+                      >
+                        {kizScanActive
+                          ? `Заказ ${providerName} № ${fbsKizOrderNumber(kizScanActive)} активен — сканируйте Честный знак, код уйдёт на проверку в ${providerName}.`
+                          : isOzonSupply ? 'Введите номер отправления или сканируйте штрихкод Ozon, затем Честный знак каждой единицы товара.' : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
+                      </Typography>
+                      {kizScanNotice ? <Typography variant="caption" sx={{ display: 'block' }} data-testid="fbs-kiz-scan-result">{kizScanNotice}</Typography> : null}
+                      {kizScanHints.length > 0 ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {kizScanHints.map((hint) => KIZ_HINT_TEXT[hint] ?? hint).join(' · ')}
+                        </Typography>
+                      ) : null}
+                      {kizScanError ? (
+                        <Typography
+                          variant="body2"
+                          component="div"
+                          sx={{ color: 'error.main', mt: 0.5 }}
+                          data-testid="fbs-kiz-scan-error"
+                        >
+                          {kizScanError.text}
+                          {kizScanError.debug ? (
+                            <>
+                              <Link
+                                component="button"
+                                type="button"
+                                variant="body2"
+                                color="inherit"
+                                underline="hover"
+                                onClick={() => setKizScanDebugOpen((current) => !current)}
+                                sx={{ ml: 1 }}
+                              >
+                                Что приехало со сканера
+                              </Link>
+                              <Collapse in={kizScanDebugOpen}>
+                                <Typography variant="caption" component="div" color="text.secondary">
+                                  Длина: {kizScanError.debug.length} · начало: {kizScanError.debug.first8 || '—'} · конец:{' '}
+                                  {kizScanError.debug.last8 || '—'}
+                                </Typography>
+                              </Collapse>
+                            </>
+                          ) : null}
+                        </Typography>
+                      ) : null}
+                      {assemblyFrame && assemblyBoxHint ? (
+                        <Typography variant="body2" sx={{ color: 'error.main', mt: 0.5 }} data-testid="fbs-assembly-box-hint">
+                          {assemblyBoxHint}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  ) : null}
+                  {assemblyFrame?.registerScanner ? null : packingRows}
                 </Paper>
               ) : (
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
@@ -4159,6 +4219,82 @@ export function FfFbsSupplyWorkspace({
     </>
   )
 
+  // Shared with the individual supply: identical controls and operations.
+  const boxesPanel = workspace ? (
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
+                <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                    <Box>
+                      <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {hasNoDistributionBoxes
+                          ? `Без распределения · коробов ${workspace.boxes.length}`
+                          : `Распределено ${boxDistributedCount} из ${boxTotalCount} шт · осталось ${boxRemainingCount}`}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
+                      <Button
+                        startIcon={<PrintOutlinedIcon />}
+                        disabled={boxOperationsDisabled || busy || workspace.boxes.length === 0}
+                        onClick={() => void openAllBoxQrPreview()}
+                        data-testid="fbs-boxes-print-all-qr"
+                      >
+                        {isOzonSupply
+                          ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
+                          : `Печать всех QR (${workspace.boxes.length})`}
+                      </Button>
+                      {isOzonSupply ? (
+                        <Button
+                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
+                          onClick={() => void autoCreateOzonBoxes()}
+                          data-testid="fbs-boxes-ozon-auto-create"
+                        >
+                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
+                        </Button>
+                      ) : null}
+                      {!isOzonSupply ? <FormControlLabel
+                        control={(
+                          <Checkbox
+                            checked={boxesWithoutDistribution}
+                            onChange={(event) => {
+                              const enabled = event.target.checked
+                              void run(() => setFbsSupplyBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, enabled), '')
+                            }}
+                            disabled={boxEditingDisabled || busy || assignedBoxOrderIds.size > 0}
+                            data-testid="fbs-boxes-without-distribution"
+                            data-task-id="FBS-12"
+                          />
+                        )}
+                        label="Без распределения"
+                        data-task-id="FBS-12"
+                      /> : null}
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+                <Stack divider={<Divider flexItem />}>
+                  {workspace.boxes.map((box) => renderBoxRow(workspace, box))}
+                </Stack>
+              </Paper>
+              {!deliveryConfirmed ? (
+                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    disabled={busy}
+                    onClick={() => void openDeliveryConfirmation()}
+                    data-testid="fbs-deliver-open"
+                  >
+                    Передать в {providerName}
+                  </Button>
+                </Stack>
+              ) : null}
+              {supplyQrAfterDelivery}
+            </Stack>
+  ) : null
+
   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).
   if (assemblyFrame) {
@@ -4170,7 +4306,26 @@ export function FfFbsSupplyWorkspace({
         </>
       )
       : null
+    if (stage === 'boxes') {
+      return <Stack spacing={1.5} data-testid={`fbs-assembly-boxes-panel-${supplyId}`}>
+        {workspace ? <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          {fbsAssemblySupplyTitle(workspace)}
+        </Typography> : <LinearProgress />}
+        {frameMessages}
+        {boxesPanel}
+        {workspaceDialogs}
+      </Stack>
+    }
+    if (assemblyFrame.registerScanner && !isOzonSupply) {
+      return <>
+        {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
+        {frameMessages}
+        {workspaceDialogs}
+      </>
+    }
     return (
+      <>
+      {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
       <FbsAssemblySupplyFrame
         supplyId={supplyId ?? ''}
         title={workspace ? `${fbsAssemblySupplyTitle(workspace)} · ${workspaceRouteLabel}` : 'Загружаем данные поставки…'}
@@ -4211,6 +4366,7 @@ export function FfFbsSupplyWorkspace({
       >
         {workspaceDialogs}
       </FbsAssemblySupplyFrame>
+      </>
     )
   }
 
@@ -4480,80 +4636,7 @@ export function FfFbsSupplyWorkspace({
             </Stack>
           ) : null}
 
-          {workspace && stage === 'boxes' ? (
-            <Stack spacing={2}>
-              <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
-                <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                    <Box>
-                      <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {hasNoDistributionBoxes
-                          ? `Без распределения · коробов ${workspace.boxes.length}`
-                          : `Распределено ${boxDistributedCount} из ${boxTotalCount} шт · осталось ${boxRemainingCount}`}
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
-                      <Button
-                        startIcon={<PrintOutlinedIcon />}
-                        disabled={boxOperationsDisabled || busy || workspace.boxes.length === 0}
-                        onClick={() => void openAllBoxQrPreview()}
-                        data-testid="fbs-boxes-print-all-qr"
-                      >
-                        {isOzonSupply
-                          ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
-                          : `Печать всех QR (${workspace.boxes.length})`}
-                      </Button>
-                      {isOzonSupply ? (
-                        <Button
-                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
-                          onClick={() => void autoCreateOzonBoxes()}
-                          data-testid="fbs-boxes-ozon-auto-create"
-                        >
-                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
-                        </Button>
-                      ) : null}
-                      {!isOzonSupply ? <FormControlLabel
-                        control={(
-                          <Checkbox
-                            checked={boxesWithoutDistribution}
-                            onChange={(event) => {
-                              const enabled = event.target.checked
-                              void run(() => setFbsSupplyBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, enabled), '')
-                            }}
-                            disabled={boxEditingDisabled || busy || assignedBoxOrderIds.size > 0}
-                            data-testid="fbs-boxes-without-distribution"
-                            data-task-id="FBS-12"
-                          />
-                        )}
-                        label="Без распределения"
-                        data-task-id="FBS-12"
-                      /> : null}
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
-                    </Stack>
-                  </Stack>
-                </Box>
-                <Stack divider={<Divider flexItem />}>
-                  {workspace.boxes.map((box) => renderBoxRow(workspace, box))}
-                </Stack>
-              </Paper>
-              {!deliveryConfirmed ? (
-                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    disabled={busy}
-                    onClick={() => void openDeliveryConfirmation()}
-                    data-testid="fbs-deliver-open"
-                  >
-                    Передать в {providerName}
-                  </Button>
-                </Stack>
-              ) : null}
-              {supplyQrAfterDelivery}
-            </Stack>
-          ) : null}
+          {workspace && stage === 'boxes' ? boxesPanel : null}
         </Box>
       </DialogContent>
       {workspaceDialogs}

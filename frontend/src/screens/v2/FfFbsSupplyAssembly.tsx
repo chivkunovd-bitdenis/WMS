@@ -1,3 +1,5 @@
+import { FbsPackingScanBar } from './FbsPackingScanBar'
+import type { PackingScanController } from './fbsSequentialPacking'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -29,8 +31,6 @@ import { plural } from '../../utils/plural'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FfFbsAssemblyPick } from './FfFbsAssemblyPick'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { useScanIntake } from '../../hooks/useScanIntake'
-import { playScanError } from '../../utils/scanFeedback'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
@@ -63,6 +63,7 @@ const STAGES: Array<{ key: FbsAssemblyStageKey; label: string }> = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
   { key: 'packing', label: 'Упаковка и маркировка' },
+  { key: 'boxes', label: 'Короба' },
 ]
 
 type Props = {
@@ -88,7 +89,15 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // первом открытии «Упаковки» и живут до закрытия окна, чтобы активная
   // поставка и открытый короб не терялись при переходе между вкладками.
   const [framesMounted, setFramesMounted] = useState(false)
-  const [noActiveSupply, setNoActiveSupply] = useState(false)
+  const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
+  const scanners = useRef(new Map<string, PackingScanController>())
+  const [, setScannerVersion] = useState(0)
+  const onScanChange = useCallback(() => setScannerVersion((value) => value + 1), [])
+  const registerScanner = useCallback((id: string, scanner: PackingScanController | null) => {
+    if (scanner) scanners.current.set(id, scanner)
+    else scanners.current.delete(id)
+    setScannerVersion((value) => value + 1)
+  }, [])
   const escapeHandlerRef = useRef<(() => boolean) | null>(null)
   const openGeneration = useRef(0)
   const initialStageGeneration = useRef<number | null>(null)
@@ -100,7 +109,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     if (supplyIds.length) saveFbsAssemblyStage(supplyIds, next)
     setStage(next)
     setError(null)
-    if (next === 'packing') setFramesMounted(true)
+    if (next === 'packing' || next === 'boxes') setFramesMounted(true)
   }
 
   /** Читает одну поставку; применяет только последний начатый ответ по ней. */
@@ -151,11 +160,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setBusy(false)
     setActiveSupplyId(null)
     setExpandedIds(new Set())
-    setNoActiveSupply(false)
     setHistorySupplyId(null)
     const restoredStage = readFbsAssemblyStage(ids) ?? 'composition'
     setStage(restoredStage)
-    setFramesMounted(restoredStage === 'packing')
+    setFramesMounted(restoredStage === 'packing' || restoredStage === 'boxes')
     void loadAll()
   }, [open, idsKey, loadAll])
 
@@ -176,6 +184,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     [supplyIds, workspaces],
   )
   const allLoaded = ordered.length === supplyIds.length && supplyIds.length > 0
+  // Ozon keeps its existing active-frame scanner. Both hooks listen at the
+  // document capture phase, so WB must yield while that frame owns scanning.
+  const ozonOwnsPackingScan = activeSupplyId !== null
+    && workspaces[activeSupplyId]?.supply.marketplace === 'ozon'
   const { ready, total } = fbsAssemblyReadiness(ordered)
   const percent = total ? Math.round((ready / total) * 100) : 0
   const sellerNames = [...new Set(ordered.map((one) => one.supply.seller.name))].join(', ')
@@ -189,7 +201,6 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // start-work и открывает короб (карточка в режиме рамки); здесь только
   // «кто активен» и «кто развёрнут». Прежняя рамка завершается без запросов.
   const activateSupply = (supplyId: string) => {
-    setNoActiveSupply(false)
     setExpandedIds((current) => {
       const next = new Set(current)
       if (activeSupplyId && activeSupplyId !== supplyId) next.delete(activeSupplyId)
@@ -226,15 +237,6 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const registerEscape = useCallback((handler: (() => boolean) | null) => {
     escapeHandlerRef.current = handler
   }, [])
-
-  // R16: без активной поставки скан ничего не отправляет на сервер.
-  const { bindRoot: bindPackingRoot } = useScanIntake({
-    enabled: open && stage === 'packing' && allLoaded && activeSupplyId === null,
-    onScan: () => {
-      setNoActiveSupply(true)
-      playScanError()
-    },
-  })
 
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
@@ -404,13 +406,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
           {allLoaded && framesMounted ? (
             <Stack
               spacing={2}
-              ref={bindPackingRoot}
-              sx={{ display: stage === 'packing' ? 'flex' : 'none' }}
+              sx={{ display: stage === 'packing' || stage === 'boxes' ? 'flex' : 'none' }}
               data-testid="fbs-assembly-packing"
             >
-              {noActiveSupply && activeSupplyId === null ? (
-                <Alert severity="error" data-testid="fbs-assembly-no-active">Нет активной поставки.</Alert>
-              ) : null}
+              <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
+                <FbsPackingScanBar enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
+                  const scanner = scanners.current.get(id)
+                  return scanner ? [scanner] : []
+                })} />
+                <Box ref={setPackingHost} data-testid="fbs-unified-packing-rows" />
+              </Paper>
               {ordered.map((workspace) => {
                 const supplyId = workspace.supply.id
                 return (
@@ -422,9 +427,11 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     open={open}
                     onClose={() => undefined}
                     assemblyFrame={{
+                      packingHost, registerScanner, onScanChange,
                       active: activeSupplyId === supplyId,
                       expanded: expandedIds.has(supplyId),
-                      visible: stage === 'packing',
+                      stage: stage === 'boxes' ? 'boxes' : 'packing',
+                      visible: stage === 'packing' || stage === 'boxes',
                       onToggleExpanded: () => toggleExpanded(supplyId),
                       onActivate: () => activateSupply(supplyId),
                       onDeactivate: () => finishWork(supplyId),
