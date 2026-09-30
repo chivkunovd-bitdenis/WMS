@@ -227,12 +227,12 @@ def submit_to_queue(
             raise UnknownPrintOutcome(
                 "Исход отправки в очередь ОС неизвестен; проверьте очередь вручную"
             ) from exc
-        receipts = re.findall(r"(?<![A-Za-z0-9_.-])(" + re.escape(queue) + r"-\d+)(?![A-Za-z0-9_.-])", result.stdout or "")
-        if result.returncode != 0 or len(receipts) != 1:
+        receipt = RECEIPT_PATTERN.search(result.stdout or "")
+        if result.returncode != 0 or receipt is None:
             raise UnknownPrintOutcome(
                 "Квитанция очереди не подтверждена; автоматический повтор запрещён"
             )
-        return receipts[0]
+        return receipt.group(1)
     finally:
         # Once lp has returned, a cleanup failure must not turn its successful
         # queue receipt into a false failed handoff.

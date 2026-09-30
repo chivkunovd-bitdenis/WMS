@@ -1,7 +1,5 @@
 .build-venv/
 build/
 dist/
-build-scan-check/
-dist-scan-check/
 *.spec
 __pycache__/
