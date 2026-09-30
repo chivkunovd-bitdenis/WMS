@@ -27,6 +27,7 @@ import type { FbsWorkspace } from './fbsApi'
 
 /** Чем окно сборки управляет рамкой поставки. */
 export type FbsAssemblyFrameControl = {
+  stage?: 'packing' | 'boxes'
   packingHost?: HTMLElement | null
   registerScanner?: (supplyId: string, scanner: PackingScanController | null) => void
   onScanChange?: () => void

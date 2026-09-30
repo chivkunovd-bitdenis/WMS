@@ -504,7 +504,7 @@ export function FfFbsSupplyWorkspace({
   const [selectedStage, setStage] = useState<StageKey>('composition')
   // WMS-574: рамка окна сборки всегда на упаковке и не трогает запомненную
   // вкладку карточки этой поставки.
-  const stage: StageKey = assemblyFrame ? 'packing' : selectedStage
+  const stage: StageKey = assemblyFrame ? assemblyFrame.stage ?? 'packing' : selectedStage
   const selectStage = (next: StageKey) => {
     if (assemblyFrame) return
     if (supplyId) saveFbsWorkspaceStage(supplyId, next)
@@ -983,7 +983,7 @@ export function FfFbsSupplyWorkspace({
   // The unified list has no per-supply Start button. Prepare the missing
   // marketplace stickers on entry, without waiting for the first product scan.
   useEffect(() => {
-    if (!open || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
+    if (!open || stage !== 'packing' || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
     if (!missing.length) return
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
@@ -997,7 +997,7 @@ export function FfFbsSupplyWorkspace({
     }).catch((cause: unknown) => {
       if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     })
-  }, [open, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
+  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {
     if (!workspace) return
@@ -4220,6 +4220,82 @@ export function FfFbsSupplyWorkspace({
     </>
   )
 
+  // Shared with the individual supply: identical controls and operations.
+  const boxesPanel = workspace ? (
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
+                <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                    <Box>
+                      <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {hasNoDistributionBoxes
+                          ? `Без распределения · коробов ${workspace.boxes.length}`
+                          : `Распределено ${boxDistributedCount} из ${boxTotalCount} шт · осталось ${boxRemainingCount}`}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
+                      <Button
+                        startIcon={<PrintOutlinedIcon />}
+                        disabled={boxOperationsDisabled || busy || workspace.boxes.length === 0}
+                        onClick={() => void openAllBoxQrPreview()}
+                        data-testid="fbs-boxes-print-all-qr"
+                      >
+                        {isOzonSupply
+                          ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
+                          : `Печать всех QR (${workspace.boxes.length})`}
+                      </Button>
+                      {isOzonSupply ? (
+                        <Button
+                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
+                          onClick={() => void autoCreateOzonBoxes()}
+                          data-testid="fbs-boxes-ozon-auto-create"
+                        >
+                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
+                        </Button>
+                      ) : null}
+                      {!isOzonSupply ? <FormControlLabel
+                        control={(
+                          <Checkbox
+                            checked={boxesWithoutDistribution}
+                            onChange={(event) => {
+                              const enabled = event.target.checked
+                              void run(() => setFbsSupplyBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, enabled), '')
+                            }}
+                            disabled={boxEditingDisabled || busy || assignedBoxOrderIds.size > 0}
+                            data-testid="fbs-boxes-without-distribution"
+                            data-task-id="FBS-12"
+                          />
+                        )}
+                        label="Без распределения"
+                        data-task-id="FBS-12"
+                      /> : null}
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+                <Stack divider={<Divider flexItem />}>
+                  {workspace.boxes.map((box) => renderBoxRow(workspace, box))}
+                </Stack>
+              </Paper>
+              {!deliveryConfirmed ? (
+                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    disabled={busy}
+                    onClick={() => void openDeliveryConfirmation()}
+                    data-testid="fbs-deliver-open"
+                  >
+                    Передать в {providerName}
+                  </Button>
+                </Stack>
+              ) : null}
+              {supplyQrAfterDelivery}
+            </Stack>
+  ) : null
+
   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).
   if (assemblyFrame) {
@@ -4231,6 +4307,16 @@ export function FfFbsSupplyWorkspace({
         </>
       )
       : null
+    if (stage === 'boxes') {
+      return <Stack spacing={1.5} data-testid={`fbs-assembly-boxes-panel-${supplyId}`}>
+        {workspace ? <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          {fbsAssemblySupplyTitle(workspace)}
+        </Typography> : <LinearProgress />}
+        {frameMessages}
+        {boxesPanel}
+        {workspaceDialogs}
+      </Stack>
+    }
     if (assemblyFrame.registerScanner && !isOzonSupply) {
       return <>
         {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
@@ -4551,80 +4637,7 @@ export function FfFbsSupplyWorkspace({
             </Stack>
           ) : null}
 
-          {workspace && stage === 'boxes' ? (
-            <Stack spacing={2}>
-              <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
-                <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                    <Box>
-                      <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {hasNoDistributionBoxes
-                          ? `Без распределения · коробов ${workspace.boxes.length}`
-                          : `Распределено ${boxDistributedCount} из ${boxTotalCount} шт · осталось ${boxRemainingCount}`}
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
-                      <Button
-                        startIcon={<PrintOutlinedIcon />}
-                        disabled={boxOperationsDisabled || busy || workspace.boxes.length === 0}
-                        onClick={() => void openAllBoxQrPreview()}
-                        data-testid="fbs-boxes-print-all-qr"
-                      >
-                        {isOzonSupply
-                          ? `Печать всех этикеток Ozon (${workspace.boxes.length})`
-                          : `Печать всех QR (${workspace.boxes.length})`}
-                      </Button>
-                      {isOzonSupply ? (
-                        <Button
-                          disabled={boxEditingDisabled || busy || ozonAutoBoxesNothingToDo}
-                          onClick={() => void autoCreateOzonBoxes()}
-                          data-testid="fbs-boxes-ozon-auto-create"
-                        >
-                          {ozonAutoBoxesProgress ?? 'Создать автоматически'}
-                        </Button>
-                      ) : null}
-                      {!isOzonSupply ? <FormControlLabel
-                        control={(
-                          <Checkbox
-                            checked={boxesWithoutDistribution}
-                            onChange={(event) => {
-                              const enabled = event.target.checked
-                              void run(() => setFbsSupplyBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, enabled), '')
-                            }}
-                            disabled={boxEditingDisabled || busy || assignedBoxOrderIds.size > 0}
-                            data-testid="fbs-boxes-without-distribution"
-                            data-task-id="FBS-12"
-                          />
-                        )}
-                        label="Без распределения"
-                        data-task-id="FBS-12"
-                      /> : null}
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount) || ozonAutoBoxesProgress !== null} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
-                    </Stack>
-                  </Stack>
-                </Box>
-                <Stack divider={<Divider flexItem />}>
-                  {workspace.boxes.map((box) => renderBoxRow(workspace, box))}
-                </Stack>
-              </Paper>
-              {!deliveryConfirmed ? (
-                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    disabled={busy}
-                    onClick={() => void openDeliveryConfirmation()}
-                    data-testid="fbs-deliver-open"
-                  >
-                    Передать в {providerName}
-                  </Button>
-                </Stack>
-              ) : null}
-              {supplyQrAfterDelivery}
-            </Stack>
-          ) : null}
+          {workspace && stage === 'boxes' ? boxesPanel : null}
         </Box>
       </DialogContent>
       {workspaceDialogs}

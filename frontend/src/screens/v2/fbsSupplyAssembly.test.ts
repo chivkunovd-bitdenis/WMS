@@ -282,6 +282,8 @@ describe('WMS-574 окно сборки', () => {
     expect(readFbsAssemblyStage(['a', 'b'], storage)).toBeNull()
     saveFbsAssemblyStage(['a', 'b'], 'picking', storage)
     expect(readFbsAssemblyStage(['a', 'b'], storage)).toBe('picking')
+    saveFbsAssemblyStage(['a', 'b'], 'boxes', storage)
+    expect(readFbsAssemblyStage(['a', 'b'], storage)).toBe('boxes')
     expect(readFbsAssemblyStage(['a'], storage)).toBeNull()
   })
 

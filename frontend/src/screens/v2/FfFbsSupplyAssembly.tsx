@@ -63,6 +63,7 @@ const STAGES: Array<{ key: FbsAssemblyStageKey; label: string }> = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
   { key: 'packing', label: 'Упаковка и маркировка' },
+  { key: 'boxes', label: 'Короба' },
 ]
 
 type Props = {
@@ -106,7 +107,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     if (supplyIds.length) saveFbsAssemblyStage(supplyIds, next)
     setStage(next)
     setError(null)
-    if (next === 'packing') setFramesMounted(true)
+    if (next === 'packing' || next === 'boxes') setFramesMounted(true)
   }
 
   /** Читает одну поставку; применяет только последний начатый ответ по ней. */
@@ -148,7 +149,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setHistorySupplyId(null)
     const restoredStage = readFbsAssemblyStage(ids) ?? 'composition'
     setStage(restoredStage)
-    setFramesMounted(restoredStage === 'packing')
+    setFramesMounted(restoredStage === 'packing' || restoredStage === 'boxes')
     void loadAll()
   }, [open, idsKey, loadAll])
 
@@ -385,10 +386,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
           {allLoaded && framesMounted ? (
             <Stack
               spacing={2}
-              sx={{ display: stage === 'packing' ? 'flex' : 'none' }}
+              sx={{ display: stage === 'packing' || stage === 'boxes' ? 'flex' : 'none' }}
               data-testid="fbs-assembly-packing"
             >
-              <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
                 <FbsPackingScanBar enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
@@ -409,7 +410,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                       packingHost, registerScanner, onScanChange,
                       active: activeSupplyId === supplyId,
                       expanded: expandedIds.has(supplyId),
-                      visible: stage === 'packing',
+                      stage: stage === 'boxes' ? 'boxes' : 'packing',
+                      visible: stage === 'packing' || stage === 'boxes',
                       onToggleExpanded: () => toggleExpanded(supplyId),
                       onActivate: () => activateSupply(supplyId),
                       onDeactivate: () => finishWork(supplyId),
