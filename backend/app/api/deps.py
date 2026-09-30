@@ -269,6 +269,9 @@ require_reception_or_seller_draft_access = require_ff_or_seller_with_permission(
 require_mp_shipments_access = require_ff_or_seller_with_permission(PERM_MP_SHIPMENTS)
 require_cells_access = require_ff_permission(PERM_CELLS)
 require_packaging_access = require_ff_any_permission(PERM_PACKAGING, PERM_FBS)
+require_marking_artifact_access = require_ff_any_permission(
+    PERM_PACKAGING, PERM_FBS, PERM_HONEST_SIGN
+)
 # FBS picking, packaging and shipment are warehouse-operator work. Keep the
 # alias explicit so administrative FBS setup can continue to use
 # require_fulfillment_admin without accidentally widening its permissions.
@@ -308,7 +311,7 @@ async def require_marking_section_resource_if_staff(
         return
     path = request.url.path.removeprefix("/operations/marking-codes/")
     perms = await get_staff_permissions(session, user)
-    pure_section = path.split("/", 1)[0] in {
+    pure_section = path.endswith("/history") or path.split("/", 1)[0] in {
         "import",
         "pools",
         "ledger",

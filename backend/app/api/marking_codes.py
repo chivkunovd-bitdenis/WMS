@@ -10,17 +10,21 @@ from typing import Annotated, NoReturn
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
+    require_marking_artifact_access,
     require_packaging_access,
     require_shift_lead,
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
+from app.models.marking_code import MarkingCode
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.print_template import USER_LAST_LAYOUT_NAME
 from app.models.product import Product
 from app.models.user import User
@@ -30,6 +34,7 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+from app.services.staff_permissions_service import get_staff_permissions
 
 
 async def require_seller_honest_sign_if_seller(
@@ -1448,10 +1453,45 @@ async def print_product_marking_codes(
     return _print_marking_codes_out(result)
 
 
+async def _assert_code_artifact_access(
+    session: AsyncSession,
+    user: User,
+    code_ids: list[uuid.UUID],
+) -> None:
+    """A staff member without ЧЗ can print only codes bound to a tenant document."""
+    if user.role != FULFILLMENT_STAFF:
+        return
+    permissions = await get_staff_permissions(session, user)
+    if permissions.honest_sign:
+        return
+    if not (permissions.fbs or permissions.packaging):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    requested_ids = set(code_ids)
+    assigned_ids = set(
+        (
+            await session.scalars(
+                select(MarkingCode.id)
+                .join(
+                    PackagingTaskLine,
+                    PackagingTaskLine.id == MarkingCode.packaging_task_line_id,
+                )
+                .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+                .where(
+                    MarkingCode.id.in_(requested_ids),
+                    MarkingCode.tenant_id == user.tenant_id,
+                    PackagingTask.tenant_id == user.tenant_id,
+                )
+            )
+        ).all()
+    )
+    if assigned_ids != requested_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
 @router.get("/codes/{code_id}/label-artifact")
 async def get_marking_code_label_artifact(
     code_id: uuid.UUID,
-    user: Annotated[User, Depends(require_packaging_access)],
+    user: Annotated[User, Depends(require_marking_artifact_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     format: Annotated[str, Query(pattern="^(pdf|png)$")] = "png",
 ) -> Response:
@@ -1460,6 +1500,7 @@ async def get_marking_code_label_artifact(
     code = await session.get(MarkingCode, code_id)
     if code is None or code.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    await _assert_code_artifact_access(session, user, [code_id])
     pdf_bytes = code.label_artifact_pdf
     if not pdf_bytes or not await asyncio.to_thread(
         mc_svc.is_printable_label_artifact, pdf_bytes, code.cis_code
@@ -1490,9 +1531,10 @@ class LabelArtifactTapeIn(BaseModel):
 @router.post("/label-artifact-tape")
 async def post_label_artifact_tape_pdf(
     body: LabelArtifactTapeIn,
-    user: Annotated[User, Depends(require_packaging_access)],
+    user: Annotated[User, Depends(require_marking_artifact_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
+    await _assert_code_artifact_access(session, user, body.code_ids)
     try:
         pdf_bytes = await mc_svc.build_label_artifact_tape_pdf(
             session,
