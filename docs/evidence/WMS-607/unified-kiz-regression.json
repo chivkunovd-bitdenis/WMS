@@ -1,0 +1,20 @@
+{
+  "source_commit": "acf6940e81652e077a6d557331d4a562de75c333",
+  "regression": "Unified packing removed the manual start step but only called start-work after KIZ binding and printing.",
+  "read_only_staging_probe": {
+    "order_id": "dbcd0f77-6402-4621-96f0-dbefcc35e571",
+    "wb_order_id": 500051,
+    "supply_id": "fa0f4b00-3cd3-423a-b88a-b809d6b60434",
+    "packaging_task_id": null,
+    "active_fulfillments": 0,
+    "existing_backend_function_error": "packaging_line_not_found",
+    "transaction": "rolled back"
+  },
+  "fix": "Reuse ordinary FBS start-work before binding only if missing; reuse returned workspace for pack.",
+  "checks": {
+    "focused_frontend_tests": 15,
+    "typescript": "passed",
+    "production_build": "passed"
+  },
+  "live_ui": "pending"
+}
