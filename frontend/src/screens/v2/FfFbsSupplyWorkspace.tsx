@@ -57,6 +57,7 @@ import { useScanIntake } from '../../hooks/useScanIntake'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
+import { FbsSupplyTrackingCard } from './FbsSupplyTrackingCard'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
@@ -101,6 +102,7 @@ import {
   fbsKizOrderNumber,
   syncFbsOrderMarkings,
   syncFbsSupplyMarkings,
+  syncFbsSupplyTrackingStatus,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsOrderKiz,
@@ -666,6 +668,7 @@ export function FfFbsSupplyWorkspace({
   // следующее не запускаем: иначе каждый ответ устаревает к своему приходу и
   // строки не обновляются вообще.
   const silentRefreshInFlight = useRef(false)
+  const activeSupplySyncRef = useRef<string | null>(null)
 
   const load = useCallback(
     // onApplied вызывается только снимком, который действительно лёг на экран:
@@ -696,9 +699,21 @@ export function FfFbsSupplyWorkspace({
     },
     [open, supplyId, token, authHeaders, beginWorkspaceWrite],
   )
+  const refreshTrackingStage = useCallback(() => {
+    void load(true, (next) => {
+      if (next.stage === 'tracking' || !supplyId) return
+      // A WB cancellation can return a delivery supply to composition.
+      // Only this stage transition overrides the remembered tracking tab;
+      // ordinary silent workspace refreshes keep the operator's selection.
+      const nextStage = visualStage(next.stage)
+      saveFbsWorkspaceStage(supplyId, nextStage)
+      setStage(nextStage)
+    })
+  }, [load, supplyId])
 
   useEffect(() => {
     if (!open || !supplyId) return
+    activeSupplySyncRef.current = null
     setBusy(false)
     setError(null)
     setNotice(null)
@@ -753,6 +768,20 @@ export function FfFbsSupplyWorkspace({
     setKizCommittedTails({})
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
+
+  // A supply advanced in the WB cabinet may still appear in the local active
+  // list. Reconcile just that supply when opened, then switch to tracking.
+  useEffect(() => {
+    if (!open || !supplyId || workspace?.supply.marketplace !== 'wb'
+      || ['in_delivery', 'done'].includes(workspace.supply.status)
+      || activeSupplySyncRef.current === supplyId) return
+    activeSupplySyncRef.current = supplyId
+    const generation = workspaceOpenGeneration.current
+    void syncFbsSupplyTrackingStatus(token, authHeaders, supplyId).then(async (result) => {
+      if (generation !== workspaceOpenGeneration.current || result.supply_status === workspace.supply.status) return
+      await load(true)
+    }).catch(() => { /* The existing workspace remains usable during a WB outage. */ })
+  }, [open, supplyId, workspace?.supply.marketplace, workspace?.supply.status, token, authHeaders, load])
 
   useEffect(() => {
     setNotice(null)
@@ -838,14 +867,15 @@ export function FfFbsSupplyWorkspace({
   // (WMS-477) так сами зеленеют строки, чей Честный знак WB подтвердил в фоне;
   // load(true) не трогает вкладку, полосу прогресса и состояние скана.
   useEffect(() => {
-    if (!open || !supplyId || !['picking', 'packing', 'boxes'].includes(stage)) return
+    if (!open || !supplyId || !['picking', 'packing', 'boxes'].includes(stage)
+      || (workspace?.supply.marketplace === 'wb' && workspace.stage === 'tracking')) return
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible' || silentRefreshInFlight.current) return
       silentRefreshInFlight.current = true
       void load(true).finally(() => { silentRefreshInFlight.current = false })
     }, 15_000)
     return () => window.clearInterval(timer)
-  }, [open, supplyId, stage, load])
+  }, [open, supplyId, stage, workspace?.supply.marketplace, workspace?.stage, load])
 
   useEffect(() => {
     const taskId = workspace?.supply.packaging_task_id
@@ -4150,6 +4180,19 @@ export function FfFbsSupplyWorkspace({
       </Menu>
     </>
   )
+
+  if (workspace?.supply.marketplace === 'wb' && workspace.stage === 'tracking') {
+    return (
+      <FbsSupplyTrackingCard
+        token={token}
+        authHeaders={authHeaders}
+        workspace={workspace}
+        open={open}
+        onClose={requestClose}
+        onStageChange={refreshTrackingStage}
+      />
+    )
+  }
 
   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).

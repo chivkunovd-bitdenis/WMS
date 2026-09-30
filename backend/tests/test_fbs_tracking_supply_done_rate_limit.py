@@ -35,6 +35,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
 )
@@ -315,7 +316,7 @@ async def test_supply_closes_from_list_even_when_per_supply_endpoint_is_rate_lim
 
     assert result.supplies_synced == 1
     assert stub.detail_calls == [], "поставка есть в списке — поштучный запрос лишний"
-    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
 # TC-NEW-402 — список не доехал + 429 дважды на поштучном: пропуск виден в логе
@@ -515,7 +516,7 @@ async def test_eight_open_supplies_cost_one_list_request_and_zero_detail_request
     assert stub.list_calls == 1, "список поставок стоит один запрос на селлера"
     assert stub.detail_calls == [], "поштучный опрос вернулся — это регресс"
     for supply_id in supply_ids:
-        assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+        assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
 # TC-NEW-406 — цена прохода не зависит от числа поставок (WB всегда шлёт курсор)
@@ -634,7 +635,7 @@ async def test_in_delivery_supply_with_done_hint_closes_and_still_syncs_orders(
     assert stub.detail_calls == []
     assert order_calls, "sync_orders=True — статусы заказов обязаны опрашиваться"
     assert result.orders_updated == 2
-    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_IN_DELIVERY
     async with SessionLocal() as session:
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
@@ -742,12 +743,9 @@ async def test_not_done_supply_with_all_orders_cancelled(
         )
         assert remaining == []
 
-    # Находка: WB в этом же проходе сказал done=false, а поставка всё равно
-    # закрыта. Решение приняли по коллекции `supply.orders`, которая в памяти
-    # ещё держит только что отцепленные заказы: все они «терминальные», значит
-    # `_maybe_complete_supply` закрывает поставку. В итоге закрыта поставка,
-    # которая и в WB открыта, и локально пуста.
-    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+        # Отмена отцепляет оба заказа и возвращает пустую незакрытую поставку
+        # в черновик; stale relationship не должна закрывать её как done.
+    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DRAFT
 
 
 # TC-NEW-411 — одинаковый wb_supply_id у двух тенантов: изоляция
@@ -784,7 +782,7 @@ async def test_same_wb_supply_id_in_two_tenants_is_isolated(
         await sync_in_delivery_supplies(session, tenant_a, seller_a, http_client)
         await session.commit()
 
-    assert await _supply_status(supply_a) == FBS_SUPPLY_STATUS_DONE
+    assert await _supply_status(supply_a) == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert await _supply_status(supply_b) == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
@@ -893,7 +891,7 @@ async def test_list_429_recovers_on_retry_and_keeps_per_supply_calls_at_zero(
     assert stub.detail_calls == [], "повтор списка спас проход — поштучные не нужны"
     assert result.supplies_synced == 8
     for supply_id in supply_ids:
-        assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+        assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
 # TC-NEW-413 — токен селлера резолвится не один раз, а на каждую поставку
@@ -982,7 +980,7 @@ async def test_done_hint_closes_supply_even_when_order_status_endpoint_fails(
 
     assert stub.detail_calls == []
     assert result.supplies_synced == 1
-    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
+    assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_IN_DELIVERY
     async with SessionLocal() as session:
         order = (
             await session.execute(
