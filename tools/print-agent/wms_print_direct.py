@@ -23,7 +23,7 @@ from wms_print_runtime import WindowsAdapter, state_directory
 
 PORT = 17843
 ORIGIN = f"http://127.0.0.1:{PORT}"
-ALLOWED_ORIGINS = {ORIGIN, "https://sellerfocus.pro", "https://www.sellerfocus.pro"}
+ALLOWED_ORIGINS = {ORIGIN, "https://sellerfocus.pro", "https://www.sellerfocus.pro", "https://web-production-9e7c1.up.railway.app"}
 ASSETS = Path(__file__).resolve().parent / "direct-web"
 
 
