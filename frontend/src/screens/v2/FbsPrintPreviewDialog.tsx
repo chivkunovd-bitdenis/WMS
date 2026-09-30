@@ -20,6 +20,8 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { resolveFbsAssetUrl, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
 import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../utils/labelSize'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
+import { buildFbsImagePrintDocument } from './fbsImagePrintDocument'
+import { buildFbsPdfPrintTape } from './fbsPdfPrintTape'
 
 type Props = {
   token: string
@@ -167,53 +169,52 @@ export function FbsPrintPreviewDialog({
       setError('Нет готовых изображений — окно печати не открыто.')
       return
     }
-    // Документы печатает сам браузер своим просмотрщиком PDF: у этикетки Ozon
-    // собственный формат страницы, и наш лист 58x40 её бы обрезал. Вставить PDF
-    // в <img> тоже нельзя — получится битая картинка.
+    // Ozon присылает PDF со своим размером страниц. Соединяем страницы без
+    // перерисовки, чтобы все короба ушли в одно задание печати и одну вкладку.
     const documents = items.filter(({ asset }) => isDocument(asset))
     const images = items.filter(({ asset }) => !isDocument(asset))
-    if (documents.length > 0) {
-      const blocked = documents.some(({ objectUrl }) => !window.open(objectUrl, '_blank'))
-      if (blocked) {
-        setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
-        return
-      }
-    }
-    if (images.length === 0) {
-      appliedCopies.current = copies
-      return
-    }
-    const safeCopies = Math.max(1, Math.min(99, copies))
-    const popup = window.open('', '_blank')
-    if (!popup) {
+    // Окно нужно открыть прямо по нажатию кнопки: после асинхронной сборки
+    // браузер сочтёт его всплывающим и заблокирует.
+    const pdfPopup = documents.length > 0 ? window.open('', '_blank') : null
+    const imagePopup = images.length > 0 ? window.open('', '_blank') : null
+    if ((documents.length > 0 && !pdfPopup) || (images.length > 0 && !imagePopup)) {
+      pdfPopup?.close()
+      imagePopup?.close()
       setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
       return
     }
-    popup.opener = null
-    const pages = images
-      .flatMap(({ objectUrl, asset }) =>
-        Array.from(
-          { length: safeCopies },
-          () => `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`,
-        ),
-      )
-      .join('')
-    const pageWidthMm = `${labelSize.widthMm}mm`
-    const pageHeightMm = `${labelSize.heightMm}mm`
-    // Размер страницы объявляем, но вёрстку привязываем к реальному листу принтера:
-    // рулон 60x40 при объявленных 58x40 обрезал QR по краю. Проценты плюс max-* дают
-    // картинке вписаться в любую бумагу, а поле в 1 мм не даёт ей упереться в срез.
-    const printCss = [
-      `@page{size:${pageWidthMm} ${pageHeightMm};margin:0}`,
-      'html,body{margin:0;padding:0}',
-      '.label{box-sizing:border-box;width:100%;height:100vh;padding:1mm;display:flex;',
-      'align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}',
-      '.label:last-child{break-after:auto;page-break-after:auto}',
-      '.label img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto}',
-    ].join('')
-    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>${printCss}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
-    popup.document.close()
-    appliedCopies.current = copies
+    if (pdfPopup) {
+      pdfPopup.opener = null
+      pdfPopup.document.write('<!doctype html><html lang="ru"><meta charset="utf-8"><title>Лента этикеток Ozon</title><body>Собираем ленту этикеток Ozon…</body></html>')
+      pdfPopup.document.close()
+      void buildFbsPdfPrintTape(documents.map(({ objectUrl }) => objectUrl), copies)
+        .then((blob) => {
+          if (pdfPopup.closed) return
+          const tapeUrl = URL.createObjectURL(blob)
+          pdfPopup.location.replace(tapeUrl)
+          appliedCopies.current = copies
+          const cleanup = window.setInterval(() => {
+            if (pdfPopup.closed) {
+              URL.revokeObjectURL(tapeUrl)
+              window.clearInterval(cleanup)
+            }
+          }, 2000)
+        })
+        .catch((cause) => {
+          pdfPopup.close()
+          setError(cause instanceof Error ? cause.message : 'Не удалось собрать общую ленту Ozon.')
+        })
+    }
+    if (imagePopup) {
+      imagePopup.opener = null
+      imagePopup.document.write(buildFbsImagePrintDocument(
+        images.map(({ objectUrl, asset }) => ({ objectUrl, label: assetLabel(asset) })),
+        copies,
+        labelSize,
+      ))
+      imagePopup.document.close()
+      appliedCopies.current = copies
+    }
   }
 
   const apply = async (asset: FbsPrintAsset) => {
@@ -267,9 +268,8 @@ export function FbsPrintPreviewDialog({
           {warning ? <Alert severity="warning">{warning}</Alert> : null}
           {previews.some(({ asset }) => isDocument(asset)) ? (
             <Alert severity="info">
-              Этикетка Ozon приходит документом PDF со своим форматом страницы:
-              она откроется отдельной вкладкой, печать и число копий — в окне
-              печати браузера.
+              Этикетки Ozon откроются одной PDF-лентой с исходным размером страниц.
+              Печать — в окне браузера.
             </Alert>
           ) : null}
           {batch?.order_errors.map((item) => (
