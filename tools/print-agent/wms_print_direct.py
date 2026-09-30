@@ -224,6 +224,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # GitHub's English Windows runner and some operator PCs expose a legacy
+    # console encoding that cannot represent Russian status text.  A status
+    # line must never prevent the print service from starting.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="replace")
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true")
     parser.add_argument("--self-test", action="store_true")
