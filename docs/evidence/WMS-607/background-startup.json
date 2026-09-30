@@ -1,0 +1,30 @@
+{
+  "source_commit": "db9f5fa482a07d693dc7cd12569c9734ef47baf8",
+  "change": "Remove automatic Chrome demo-page launch only",
+  "unit_tests": 6,
+  "mac_package_self_test": "passed",
+  "mac_local_health": {
+    "app": "WMS Print Direct",
+    "printer": "WMS604_Proof"
+  },
+  "chrome_tabs_before": 24,
+  "chrome_tabs_after": 24,
+  "new_chrome_tabs": [],
+  "physical_print_tested_this_change": false,
+  "apple_developer_id_notarization": false,
+  "ci_run": 36742687263,
+  "ci_conclusion": "success",
+  "package_platforms": [
+    "Windows-x64",
+    "Mac-arm64",
+    "Mac-x86_64"
+  ],
+  "staging_deployment": {
+    "id": "f4af42b9-bdbc-44e6-9159-c5c37cb07cf9",
+    "status": "SUCCESS",
+    "commit": "db9f5fa482a07d693dc7cd12569c9734ef47baf8",
+    "public_fbs_bundle": "/assets/FfFbsOrdersScreen-Yamt9OOs.js",
+    "manual_qr_break_fix_present": true,
+    "direct_print_endpoint_present": true
+  }
+}
