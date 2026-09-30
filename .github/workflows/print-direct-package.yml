@@ -1,0 +1,47 @@
+name: WMS Print Direct
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/wms607-instant-print']
+    paths: ['tools/print-agent/**', 'frontend/src/packing-scan-check/**', 'frontend/src/utils/printDirectQr.ts', '.github/workflows/print-direct-package.yml']
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            artifact: Windows-x64
+          - os: macos-14
+            artifact: Mac-arm64
+          - os: macos-15-intel
+            artifact: Mac-x86_64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: python -m pip install pyinstaller==6.20.0 certifi==2026.2.25
+      - if: runner.os == 'Windows'
+        run: python -m pip install pywin32==311 Pillow==11.3.0 PyMuPDF==1.26.4
+      - run: python tools/print-agent/build_direct.py
+      - if: runner.os != 'Windows'
+        run: '"tools/print-agent/dist-direct/WMS Print.app/Contents/MacOS/WMS Print" --self-test'
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath 'tools/print-agent/dist-direct/WMS Print/WMS Print.exe' -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WMS-Print-${{ matrix.artifact }}
+          path: tools/print-agent/dist-direct/*.zip
