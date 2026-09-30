@@ -6,6 +6,7 @@ import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import type { FbsWorkspace } from './fbsApi'
 import type { FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
+import { saveFbsAssemblyStage } from './fbsSupplyAssembly'
 
 const { fetchWorkspace, wbScan, ozonScan } = vi.hoisted(() => ({
   fetchWorkspace: vi.fn(), wbScan: vi.fn(), ozonScan: vi.fn(),
@@ -61,6 +62,7 @@ beforeEach(() => {
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 async function render(ids: string[]) {
+  saveFbsAssemblyStage(ids, 'packing', window.sessionStorage)
   await act(async () => root.render(<FfFbsSupplyAssembly token="test" authHeaders={authHeaders} supplyIds={ids} open onClose={() => undefined} />))
 }
 async function click(id: string) {
