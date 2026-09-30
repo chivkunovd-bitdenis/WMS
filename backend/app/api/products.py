@@ -88,6 +88,7 @@ from app.services.seller_wb_catalog_service import (
     list_seller_wb_catalog_rows,
 )
 from app.services.staff_permissions_service import (
+    PERM_FBS,
     PERM_INVENTORY,
     PERM_RECEPTION,
     PERM_SHIFT_LEAD,
@@ -1634,7 +1635,11 @@ async def patch_product_fbs_stock_sync(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
-    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    if user.role == FULFILLMENT_STAFF:
+        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
+            raise HTTPException(status_code=403, detail="forbidden")
+    else:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -1644,7 +1649,7 @@ async def patch_product_fbs_stock_sync(
             owner_id = effective_seller_id
         if owner_id is None or p.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
+    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
     enabled_patch: bool | _SkipSentinel = PATCH_SKIP
@@ -1692,7 +1697,11 @@ async def _assert_product_rule_access(
     effective_seller_id: uuid.UUID | None,
 ) -> None:
     """Правило остатка правит фулфилмент или сам продавец — но только свой товар."""
-    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    if user.role == FULFILLMENT_STAFF:
+        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
+            raise HTTPException(status_code=403, detail="forbidden")
+    else:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
     product = await get_product(session, user.tenant_id, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -1702,7 +1711,7 @@ async def _assert_product_rule_access(
             owner_id = effective_seller_id
         if owner_id is None or product.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
+    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
@@ -1713,7 +1722,11 @@ async def _assert_products_rule_access(
     effective_seller_id: uuid.UUID | None,
 ) -> None:
     """Пакетная версия той же tenant/seller-проверки, что у одиночной ручки."""
-    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    if user.role == FULFILLMENT_STAFF:
+        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
+            raise HTTPException(status_code=403, detail="forbidden")
+    else:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
     rows = list(
         (
             await session.execute(
@@ -1734,7 +1747,7 @@ async def _assert_products_rule_access(
             owner_id = effective_seller_id
         if owner_id is None or any(seller_id != owner_id for _product_id, seller_id in rows):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
+    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 

@@ -423,7 +423,7 @@ export function ProductCardDialog({
                   sellerName={row.seller_name}
                   token={token}
                   warehouses={warehouses}
-                  canEditBindings={canManageFbsStock}
+                  canEditBindings={canManageCatalog}
                   footerSlotEl={footerSlotEl}
                   onCardClose={closeCardFromFbsTab}
                   onBusyChange={setFbsStockBusy}

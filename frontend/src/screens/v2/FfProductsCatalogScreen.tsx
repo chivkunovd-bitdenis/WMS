@@ -1939,7 +1939,7 @@ export function FfProductsCatalogScreen({
             sellerName={fbsDialogRows[0]!.seller_name ?? '—'}
             chosen={fbsDialogRows}
             warehouses={warehouses}
-            canEditBindings={canManageFbsStock}
+            canEditBindings={canManageCatalog}
             onClose={() => setFbsDialogRows(null)}
             onChanged={() => void load()}
             onLoadError={setFbsDialogError}

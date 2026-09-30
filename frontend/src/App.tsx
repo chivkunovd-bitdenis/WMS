@@ -3446,6 +3446,7 @@ export default function App() {
               <SectionErrorBoundary component="route">{token && canFbsOps ? (
                 <FfProductsFbsPage
                   token={token}
+                  canEditBindings={isFulfillmentAdmin}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
                   warehouses={warehouses}
                 />

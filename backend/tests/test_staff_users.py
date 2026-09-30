@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -138,6 +139,15 @@ async def test_section_permissions_revoke_direct_api_with_existing_token(
     assert fbs_only.status_code == 200, fbs_only.text
     fbs_response = await async_client.get("/operations/fbs-supplies/worklist", headers=sh)
     assert fbs_response.status_code != 403, fbs_response.text
+    absent_seller_id = uuid.uuid4()
+    bindings_response = await async_client.get(
+        f"/operations/fbs-sellers/{absent_seller_id}/warehouse-bindings", headers=sh
+    )
+    assert bindings_response.status_code != 403, bindings_response.text
+    ozon_warehouses_response = await async_client.get(
+        f"/operations/fbs-sellers/{absent_seller_id}/ozon-warehouses", headers=sh
+    )
+    assert ozon_warehouses_response.status_code != 403, ozon_warehouses_response.text
     marking_response = await async_client.get("/operations/marking-codes/pools", headers=sh)
     assert marking_response.status_code == 403, marking_response.text
 
