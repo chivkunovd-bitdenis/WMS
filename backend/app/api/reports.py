@@ -102,8 +102,6 @@ async def export_client_movements(
         media_type=_XLSX_MEDIA_TYPE,
         headers={"Content-Disposition": _content_disposition("client-movements.xlsx")},
     )
-
-
 def _content_disposition(filename: str) -> str:
     """RFC 5987: заголовок не может нести кириллицу как есть — даём ASCII-запасной
     вариант и полное имя в filename* для браузеров, которые его понимают."""

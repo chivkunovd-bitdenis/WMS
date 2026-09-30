@@ -16,6 +16,7 @@ import { alpha } from '@mui/material/styles'
 
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
+import { AssistantPanel } from '../components/assistant/AssistantPanel'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
@@ -31,6 +32,12 @@ type Props = {
   meRole?: string
   ffPermissions?: FfPermissions | null
   addressStorageEnabled?: boolean
+  // WMS-433/R23: снимок профиля из /auth/me. Панель есть только при
+  // assistant_enabled === true; без профиля (превью, сцены базы знаний) или у
+  // выключенного тенанта помощника в каркасе нет вовсе. Передаётся сам объект,
+  // а не булево: каждая перезагрузка профиля даёт новый объект, и панель по
+  // нему снимает свой отказ после 403 (см. AssistantPanel).
+  assistantProfile?: { assistant_enabled?: boolean } | null
 }
 
 export function AuthedAppLayout({
@@ -43,6 +50,7 @@ export function AuthedAppLayout({
   meRole = '',
   ffPermissions = null,
   addressStorageEnabled = true,
+  assistantProfile = null,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
   if (portal === 'seller') {
@@ -335,6 +343,9 @@ export function AuthedAppLayout({
         sx={(theme) => ({
           flexGrow: 1,
           p: 3,
+          // WMS-433: снизу запас под кнопку помощника в углу — при прокрутке до
+          // конца последняя строка таблицы остаётся над ней (R1).
+          pb: 10,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}
         data-testid="app-content"
@@ -342,6 +353,14 @@ export function AuthedAppLayout({
         <Toolbar />
         {children}
       </Box>
+      {/* WMS-433: помощник доступен всем сотрудникам ФФ, как «База знаний» (R20),
+          но только у тенанта, включённого на сервере (R23): для выключенного
+          панель не монтируется — ни кнопки, ни окна в DOM, ни опроса переписки,
+          что бы ни лежало в localStorage. Селлерский каркас выше его не
+          получает — это второй срез. */}
+      {assistantProfile?.assistant_enabled === true ? (
+        <AssistantPanel profile={assistantProfile} />
+      ) : null}
     </Box>
   )
 }

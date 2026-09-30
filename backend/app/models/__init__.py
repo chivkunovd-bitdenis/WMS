@@ -1,5 +1,6 @@
 """ORM models — import side effects register metadata for Alembic."""
 
+from app.models.assistant_message import AssistantMessage
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.billing import (
@@ -20,6 +21,7 @@ from app.models.billing import (
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
+from app.models.fbs_assembly_task import FbsAssemblyTask, FbsAssemblyTaskSupply
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FbsOrder,
@@ -114,6 +116,7 @@ from app.models.warehouse_storage_rack import WarehouseStorageRack
 from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 __all__ = [
+    "AssistantMessage",
     "BackgroundJob",
     "Base",
     "BillingInvoice",
@@ -134,6 +137,8 @@ __all__ = [
     "DocumentDisplaySequence",
     "DocumentEvent",
     "DocumentSequence",
+    "FbsAssemblyTask",
+    "FbsAssemblyTaskSupply",
     "FbsBindingStockPool",
     "FbsOrder",
     "FbsOrderMarking",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -19,10 +20,57 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.product import Product
 from app.models.user import User
-from tests.test_reports_wms531 import _org, _seller, _warehouse_location
+from app.services.tokens import decode_access_token
 
 PERIOD = {"date_from": "2026-09-01T00:00:00Z", "date_to": "2026-10-01T00:00:00Z"}
 AT = datetime(2026, 9, 12, 12, tzinfo=UTC)
+
+
+async def _org(
+    async_client: AsyncClient, *, name: str
+) -> tuple[dict[str, str], uuid.UUID, uuid.UUID]:
+    suffix = str(time.time_ns())
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": name,
+            "slug": f"{name.lower()}-{suffix}",
+            "admin_email": f"{name.lower()}-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    token = str(registered.json()["access_token"])
+    claims = decode_access_token(token)
+    return (
+        {"Authorization": f"Bearer {token}"},
+        uuid.UUID(str(claims["tenant_id"])),
+        uuid.UUID(str(claims["sub"])),
+    )
+
+
+async def _seller(async_client: AsyncClient, headers: dict[str, str], name: str) -> uuid.UUID:
+    response = await async_client.post("/sellers", headers=headers, json={"name": name})
+    assert response.status_code in (200, 201), response.text
+    return uuid.UUID(response.json()["id"])
+
+
+async def _warehouse_location(
+    async_client: AsyncClient, headers: dict[str, str], *, name: str
+) -> tuple[uuid.UUID, uuid.UUID]:
+    suffix = str(time.time_ns())
+    warehouse = await async_client.post(
+        "/warehouses", headers=headers, json={"name": name, "code": f"{name}-{suffix}"}
+    )
+    assert warehouse.status_code == 200, warehouse.text
+    warehouse_id = uuid.UUID(warehouse.json()["id"])
+    location = await async_client.post(
+        f"/warehouses/{warehouse_id}/locations",
+        headers=headers,
+        json={"code": f"A-{suffix}"},
+    )
+    assert location.status_code == 200, location.text
+    return warehouse_id, uuid.UUID(location.json()["id"])
 
 
 @pytest.mark.asyncio
@@ -641,8 +689,6 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
     seller_id = await _seller(async_client, headers, "Scope A")
     second_seller = await _seller(async_client, headers, "Scope B")
     warehouse_id, location_id = await _warehouse_location(async_client, headers, name="ManyWH")
-    from app.models.product_barcode import ProductBarcode
-
     at_start = datetime(2026, 9, 1, tzinfo=UTC)
     at_end = datetime(2026, 10, 1, tzinfo=UTC)
     async with SessionLocal() as session:
@@ -651,7 +697,7 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
             seller_id=seller_id,
             name="Many",
             sku_code="001",
-            wb_barcode=None,
+            wb_barcode="00009876",
             wb_size="XL",
         )
         other = Product(
@@ -663,11 +709,6 @@ async def test_client_report_full_page_boundary_and_scope(async_client: AsyncCli
         )
         session.add_all([product, other])
         await session.flush()
-        session.add(
-            ProductBarcode(
-                tenant_id=tenant_id, seller_id=seller_id, product_id=product.id, barcode="00009876"
-            )
-        )
         for index in range(205):
             session.add(
                 InventoryMovement(

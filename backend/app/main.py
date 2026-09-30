@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
@@ -21,6 +22,7 @@ from app.api.client_errors import router as client_errors_router
 from app.api.client_openapi import client_openapi
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
+from app.api.fbs_assembly_tasks import router as fbs_assembly_tasks_router
 from app.api.fbs_kiz import router as fbs_kiz_router
 from app.api.fbs_marking import router as fbs_marking_router
 from app.api.fbs_orders import router as fbs_orders_router
@@ -177,11 +179,13 @@ def create_app() -> FastAPI:
     app.include_router(discrepancy_acts_router)
     app.include_router(document_events_router)
     app.include_router(background_jobs_router)
+    app.include_router(assistant_router)
     app.include_router(billing_router)
     app.include_router(billing_invoices_v2_router)
     app.include_router(billing_profile_marketplace_router)
     app.include_router(seller_billing_router)
     app.include_router(storage_router)
+    app.include_router(fbs_assembly_tasks_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)
     app.include_router(fbs_kiz_router)

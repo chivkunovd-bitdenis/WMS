@@ -115,6 +115,68 @@ class Settings(BaseSettings):
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
         "Unset: derive from jwt_secret_key (dev/tests only; set explicitly in prod).",
     )
+    assistant_executor_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WMS_ASSISTANT_EXECUTOR_SECRET", "ASSISTANT_EXECUTOR_SECRET"
+        ),
+        description=(
+            "WMS-433: единственный секрет очереди AI-помощника (R10, В2 — владелец "
+            "разрешил один серверный секрет на стенде и production, значение "
+            "генерирует и хранит владелец, в репозитории его нет). Не пользовательский "
+            "токен: обслуживает все тенанты, поэтому эндпоинты исполнителя "
+            "(/assistant/executor/*) сравнивают его отдельным заголовком "
+            "X-WMS-Assistant-Secret, а не через Authorization Bearer/JWT. Пусто — "
+            "эндпоинты исполнителя отказывают всем (fail closed), как и до включения "
+            "помощника."
+        ),
+    )
+    assistant_enabled_tenants: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "WMS_ASSISTANT_ENABLED_TENANTS", "ASSISTANT_ENABLED_TENANTS"
+        ),
+        description=(
+            "WMS-433/R23 (уточнение владельца 17.09 «включать плавно»): список "
+            "slug тенантов через запятую, которым включён AI-помощник в "
+            "пользовательских ручках (POST/GET /assistant/messages) и в "
+            "признаке /auth/me.assistant_enabled. Пусто (по умолчанию) или "
+            "переменная не задана — помощник выключен у всех: так выкладка "
+            "production без явной настройки никого не включает сама по себе. "
+            "Значение «*» — включён у всех (используется на стенде). Регистр "
+            "и пробелы вокруг элементов списка не имеют значения — сравнение "
+            "идёт по нормализованному (lower + strip) slug. Ручки исполнителя "
+            "(/assistant/executor/*, общий секрет WMS_ASSISTANT_EXECUTOR_SECRET "
+            "выше) от этого списка не зависят — исполнитель дорабатывает уже "
+            "принятые сообщения независимо от того, выключен тенант позже "
+            "или нет."
+        ),
+    )
+    assistant_enabled_user_emails: str = Field(
+        default="",
+        validation_alias="WMS_ASSISTANT_ENABLED_USER_EMAILS",
+        description=(
+            "WMS-433/R24: optional comma-separated user email allowlist, applied "
+            "in addition to the tenant allowlist. Empty means no user restriction. "
+            "Only authenticated user emails are checked, ignoring case and whitespace. "
+            "Executor processing and stored conversations are unaffected."
+        ),
+    )
+    assistant_deploy_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_ASSISTANT_DEPLOY_VERSION", "WMS_DEPLOY_VERSION"),
+        description=(
+            "WMS-433/R9: версия сборки (git SHA), которую бэк сообщает исполнителю, "
+            "чтобы тот читал код именно этой версии. Бэк сам по себе версию не знает — "
+            "`scripts/deploy/prod-update.sh` вычисляет DEPLOY_SHA только как локальную "
+            "переменную выкладки и не передаёт её в окружение процесса; готового "
+            "Railway-параметра со сборочным SHA для стенда не проверено. Поэтому поле "
+            "пустое по умолчанию: как только ops явно прокинет эту переменную на "
+            "стенде/production, бэк начнёт её сообщать; до этого исполнитель сам "
+            "берёт вершину etalon и помечает это в служебном результате (R9), "
+            "пользователю это не показывается."
+        ),
+    )
     e2e_mock_wb_cards: bool = Field(
         default=False,
         description="Playwright/e2e: return stub WB cards JSON without calling the network.",
@@ -429,6 +491,22 @@ class Settings(BaseSettings):
         ]
         extras = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
         return list(dict.fromkeys([*defaults, *extras]))
+
+    @property
+    def assistant_enabled_tenant_slugs(self) -> frozenset[str] | None:
+        """WMS-433/R23: разобранный список slug из ``assistant_enabled_tenants``.
+
+        ``None`` — особое значение «включено у всех» (значение переменной
+        ровно ``*`` после обрезки пробелов). Иначе — normalised (нижний
+        регистр, без пустых элементов) набор slug; пустая переменная даёт
+        пустой ``frozenset`` — «выключено у всех», а не «включено у всех»,
+        как и требует R23 (production без настройки не открывает помощника
+        никому).
+        """
+        raw = self.assistant_enabled_tenants.strip()
+        if raw == "*":
+            return None
+        return frozenset(slug.strip().lower() for slug in raw.split(",") if slug.strip())
 
 
 settings = Settings()

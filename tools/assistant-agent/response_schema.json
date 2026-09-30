@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode",
+    "diagnosis_kind",
+    "answer_text",
+    "questions",
+    "needs_backlog_card",
+    "backlog_kind",
+    "backlog_summary",
+    "duplicate_of",
+    "confidence"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["how_to", "diagnosis", "wish", "off_topic"]
+    },
+    "diagnosis_kind": {
+      "type": ["string", "null"],
+      "enum": ["instruction", "state", "defect", null]
+    },
+    "answer_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {"type": "string", "maxLength": 300}
+    },
+    "needs_backlog_card": {"type": "boolean"},
+    "backlog_kind": {
+      "type": ["string", "null"],
+      "enum": ["bug", "user_story", null]
+    },
+    "backlog_summary": {
+      "type": ["string", "null"],
+      "maxLength": 1000
+    },
+    "duplicate_of": {
+      "type": ["string", "null"],
+      "description": "Решение аналитика 4.3: номер WMS-NNN из переданного списка кандидатов (карточки того же тенанта, заведённые через чат) или из истории этой переписки — ставить ТОЛЬКО при уверенном совпадении с той же проблемой. При сомнении — null, тогда заводится новая карточка. Скрипт принимает номер только из переданного списка/истории, чужой или несуществующий игнорирует."
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence": {
+      "type": "array",
+      "items": {"type": "string", "maxLength": 200}
+    }
+  }
+}

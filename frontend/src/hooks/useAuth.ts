@@ -49,6 +49,9 @@ export type Me = {
   numbered_inbound_box_labels?: boolean
   separate_marking_print_enabled?: boolean
   fbs_shipment_cutoff_time?: string | null
+  // WMS-433/R23: помощник включён для тенанта пользователя (сервер считает по
+  // WMS_ASSISTANT_ENABLED_TENANTS). Нет поля или false — кнопки и окна нет.
+  assistant_enabled?: boolean
 }
 
 export type AuthPortal = 'fulfillment' | 'seller'
