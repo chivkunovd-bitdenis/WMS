@@ -16,5 +16,22 @@
     "typescript": "passed",
     "production_build": "passed"
   },
-  "live_ui": "pending"
+  "live_ui": "passed: same selected order KIZ saved, accepted by emulator, printed to OS queue and scanner released",
+  "tested_wb_order_id": 500060,
+  "scan_id": "fd4ec937-bbec-4007-98c0-219eccb82d4a",
+  "print_receipt": "WMS604_Proof-82",
+  "frontend_deployment": {
+    "id": "5ce20949-5c90-424a-8de9-54d46a510107",
+    "status": "SUCCESS",
+    "sha": "acf6940e81652e077a6d557331d4a562de75c333",
+    "bundle": "FfFbsOrdersScreen-DD6mj2RH.js"
+  },
+  "emulator_deployment": {
+    "id": "bd4e28f4-40cb-4a13-8270-e328c89c8479",
+    "status": "SUCCESS",
+    "source_sha": "98eb1463cce459f06c226a906fb337bd27bff65b",
+    "runtime_endpoint_sha256": "93401985413fa7c8b8b3736545febf2bd515ccf992a110efa38232d4e935c0d8"
+  },
+  "browser_permission": "User explicitly approved local device access; clicked Allow.",
+  "limitations": "Mac Chrome with virtual WMS604_Proof queue; no physical printer or Windows end-to-end claim."
 }
