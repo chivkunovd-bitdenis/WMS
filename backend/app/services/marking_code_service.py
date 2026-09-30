@@ -61,7 +61,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services.catalog_service import get_product
+from app.services.catalog_service import ID_IN_BATCH_SIZE, chunked, get_product
 from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import (
     DOC_TYPE_MARKING_IMPORT,
@@ -2420,47 +2420,51 @@ async def count_available_for_products_batch(
 
     counts: dict[uuid.UUID, int] = dict.fromkeys(product_ids, 0)
 
-    pool_stmt = (
-        select(
-            MarkingPoolProduct.product_id,
-            func.count(func.distinct(MarkingCode.id)),
+    # The direct-code query binds this set twice (once in the linked-pool
+    # subquery). A large unpaged seller catalog otherwise exceeds PostgreSQL's
+    # 65,535-parameter limit before any rows can be returned.
+    for product_batch in chunked(sorted(product_ids), ID_IN_BATCH_SIZE):
+        pool_stmt = (
+            select(
+                MarkingPoolProduct.product_id,
+                func.count(func.distinct(MarkingCode.id)),
+            )
+            .join(
+                MarkingCode,
+                (MarkingCode.pool_id == MarkingPoolProduct.pool_id)
+                & (MarkingCode.tenant_id == MarkingPoolProduct.tenant_id),
+            )
+            .join(Product, Product.id == MarkingPoolProduct.product_id)
+            .where(
+                MarkingPoolProduct.tenant_id == tenant_id,
+                MarkingPoolProduct.product_id.in_(product_batch),
+                MarkingCode.status == STATUS_AVAILABLE,
+                MarkingCode.seller_id == Product.seller_id,
+                or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == Product.id),
+            )
+            .group_by(MarkingPoolProduct.product_id)
         )
-        .join(
-            MarkingCode,
-            (MarkingCode.pool_id == MarkingPoolProduct.pool_id)
-            & (MarkingCode.tenant_id == MarkingPoolProduct.tenant_id),
-        )
-        .join(Product, Product.id == MarkingPoolProduct.product_id)
-        .where(
-            MarkingPoolProduct.tenant_id == tenant_id,
-            MarkingPoolProduct.product_id.in_(product_ids),
-            MarkingCode.status == STATUS_AVAILABLE,
-            MarkingCode.seller_id == Product.seller_id,
-            or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == Product.id),
-        )
-        .group_by(MarkingPoolProduct.product_id)
-    )
-    for product_id, available in (await session.execute(pool_stmt)).all():
-        counts[product_id] = int(available)
+        for product_id, available in (await session.execute(pool_stmt)).all():
+            counts[product_id] = int(available)
 
-    linked_products = select(MarkingPoolProduct.product_id).where(
-        MarkingPoolProduct.tenant_id == tenant_id,
-        MarkingPoolProduct.product_id.in_(product_ids),
-    )
-    product_stmt = (
-        select(MarkingCode.product_id, func.count(MarkingCode.id))
-        .join(Product, Product.id == MarkingCode.product_id)
-        .where(
-            MarkingCode.tenant_id == tenant_id,
-            MarkingCode.product_id.in_(product_ids),
-            MarkingCode.product_id.not_in(linked_products),
-            MarkingCode.status == STATUS_AVAILABLE,
-            MarkingCode.seller_id == Product.seller_id,
+        linked_products = select(MarkingPoolProduct.product_id).where(
+            MarkingPoolProduct.tenant_id == tenant_id,
+            MarkingPoolProduct.product_id.in_(product_batch),
         )
-        .group_by(MarkingCode.product_id)
-    )
-    for product_id, available in (await session.execute(product_stmt)).all():
-        counts[product_id] = int(available)
+        product_stmt = (
+            select(MarkingCode.product_id, func.count(MarkingCode.id))
+            .join(Product, Product.id == MarkingCode.product_id)
+            .where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.product_id.in_(product_batch),
+                MarkingCode.product_id.not_in(linked_products),
+                MarkingCode.status == STATUS_AVAILABLE,
+                MarkingCode.seller_id == Product.seller_id,
+            )
+            .group_by(MarkingCode.product_id)
+        )
+        for product_id, available in (await session.execute(product_stmt)).all():
+            counts[product_id] = int(available)
 
     return counts
 
