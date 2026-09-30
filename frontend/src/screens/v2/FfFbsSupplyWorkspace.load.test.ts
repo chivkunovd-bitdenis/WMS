@@ -17,8 +17,10 @@ function visit(node: ts.Node) {
 visit(file)
 const callback = hooks.load
 const beginWrite = hooks.beginWorkspaceWrite
+const refreshTrackingStage = hooks.refreshTrackingStage
 if (!callback) throw new Error('Production load callback not found')
 if (!beginWrite) throw new Error('Production beginWorkspaceWrite helper not found')
+if (!refreshTrackingStage) throw new Error('Production tracking transition callback not found')
 
 function deferred() {
   let resolve!: (value: unknown) => void
@@ -34,6 +36,9 @@ function fixture(savedStages = new Map<string, string>()) {
   const shownSupplyId = { current: null as string | null }
   const pending = new Map<string, ReturnType<typeof deferred>>()
   const visible = { workspace: null as unknown, stage: '', error: '', busy: false }
+  const setStage = (update: string | ((previous: string) => string)) => {
+    visible.stage = typeof update === 'function' ? update(visible.stage) : update
+  }
   // Билет занимает настоящий продуктовый beginWorkspaceWrite, а не копия из теста:
   // иначе проверялось бы правило, которого в экране может уже не быть. У билета
   // описаны типы, поэтому исходник сначала переводится в JS.
@@ -58,17 +63,50 @@ function fixture(savedStages = new Map<string, string>()) {
       const response = deferred(); pending.set(supplyId, response); return response.promise
     }, beginWorkspaceWrite,
     (next: { supply: { id: string } }) => { visible.workspace = next; shownSupplyId.current = next.supply.id },
-    (update: (previous: string) => string) => { visible.stage = update(visible.stage) },
+    setStage,
     (next: string) => { visible.error = next }, (next: boolean) => { visible.busy = next },
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
     (supplyId: string) => savedStages.get(supplyId) ?? null,
   )
-  return { generation, writeSeq, pending, visible, load }
+  const trackingJs = ts.transpileModule(`const refreshTrackingStage = ${refreshTrackingStage}`, {
+    compilerOptions: { target: ts.ScriptTarget.ESNext },
+  }).outputText
+  const trackingFactory = new Function('load', 'supplyId', 'visualStage',
+    'saveFbsWorkspaceStage', 'setStage', `${trackingJs}; return refreshTrackingStage`) as (
+    ...args: unknown[]) => () => void
+  const trackStage = (id: string) => {
+    let read: Promise<unknown> | undefined
+    const tracking = trackingFactory(
+      (silent: boolean, onApplied: (applied: unknown) => void) => {
+        read = load(id)(silent, onApplied)
+        return read
+      }, id, (stage: string) => stage,
+      (supplyId: string, stage: string) => { savedStages.set(supplyId, stage) }, setStage,
+    )
+    tracking()
+    if (!read) throw new Error('Tracking callback did not start a workspace read')
+    return read
+  }
+  return { generation, writeSeq, pending, visible, load, trackStage, savedStages }
 }
 const workspace = (id: string) => ({ supply: { id, marketplace: 'wb' }, stage: id })
 
 describe('FBS workspace delayed response isolation', () => {
+  it('WMS-599 returns the selected tab from boxes to composition after tracking becomes draft', async () => {
+    const f = fixture(new Map([['A', 'boxes']]))
+    f.visible.stage = 'boxes'
+    const ordinaryRefresh = f.load('A')(true)
+    f.pending.get('A')!.resolve({ ...workspace('A'), stage: 'composition' }); await ordinaryRefresh
+    expect(f.visible.stage).toBe('boxes')
+
+    const trackingRefresh = f.trackStage('A')
+    f.pending.get('A')!.resolve({ ...workspace('A'), stage: 'composition' }); await trackingRefresh
+    expect(f.visible.workspace).toEqual({ ...workspace('A'), stage: 'composition' })
+    expect(f.visible.stage).toBe('composition')
+    expect(f.savedStages.get('A')).toBe('composition')
+  })
+
   it.each(['boxes', 'packing', 'composition'])('keeps the saved %s on initial reload', async (stage) => {
     const f = fixture(new Map([['A', stage]]))
     const loading = f.load('A')()

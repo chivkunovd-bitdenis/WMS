@@ -707,7 +707,17 @@ export function FfFbsSupplyWorkspace({
     },
     [open, supplyId, token, authHeaders, beginWorkspaceWrite],
   )
-  const refreshTrackingStage = useCallback(() => { void load(true) }, [load])
+  const refreshTrackingStage = useCallback(() => {
+    void load(true, (next) => {
+      if (next.stage === 'tracking' || !supplyId) return
+      // A WB cancellation can return a delivery supply to composition.
+      // Only this stage transition overrides the remembered tracking tab;
+      // ordinary silent workspace refreshes keep the operator's selection.
+      const nextStage = visualStage(next.stage)
+      saveFbsWorkspaceStage(supplyId, nextStage)
+      setStage(nextStage)
+    })
+  }, [load, supplyId])
 
   useEffect(() => {
     if (!open || !supplyId) return
