@@ -109,7 +109,6 @@ type Props = {
   warehouseId: string | null
   inboundSummaries: InboundSummaryRow[]
   mpUnloadSummaries: MpUnloadSummaryRow[]
-  onCreateCorrection: () => void
   onCreateMpUnload: () => Promise<string | null>
   onRefreshInboundList: () => Promise<void>
   onRefreshMpUnloadList: () => Promise<void>
@@ -124,7 +123,6 @@ export function SellerDocumentsScreen({
   warehouseId,
   inboundSummaries,
   mpUnloadSummaries,
-  onCreateCorrection,
   onCreateMpUnload,
   onRefreshInboundList,
   onRefreshMpUnloadList,
@@ -304,17 +302,6 @@ export function SellerDocumentsScreen({
                 </Button>
               </span>
             </Tooltip>
-            <Button
-              variant="text"
-              size="small"
-              color="inherit"
-              data-testid="seller-create-correction"
-              disabled={busy}
-              onClick={onCreateCorrection}
-              sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
-            >
-              Создать акт расхождений
-            </Button>
           </Stack>
         </Stack>
       </Paper>

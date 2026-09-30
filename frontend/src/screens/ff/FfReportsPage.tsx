@@ -27,6 +27,7 @@ type Props = {
   sellers?: { id: string; name: string }[]
   warehouses?: { id: string; name: string }[]
   contentInset?: number
+  hideExcelExport?: boolean
 }
 type ReportWarning =
   | { code: 'wildberries_stale'; source: 'wildberries'; last_updated_at: string | null }
@@ -182,7 +183,7 @@ const nextDateString = (date: string) => {
 }
 const moscowApiBoundary = (date: string) => `${date}T00:00:00+03:00`
 
-export function FfReportsPage({ token, onOpenInbound, sellers = [], contentInset = 308 }: Props) {
+export function FfReportsPage({ token, onOpenInbound, sellers = [], contentInset = 308, hideExcelExport = false }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
   const [dateFrom, setDateFrom] = useState(monthStart(now))
   const [dateTo, setDateTo] = useState(monthEnd(now))
@@ -543,7 +544,7 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], contentInset
       <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); setExpandedProduct(null) }} data-testid="ff-reports-grouping">
         <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
       </TextField>
-      <PrimaryAction onClick={() => void downloadExcel()} disabledReason={excelDisabledReason} data-testid="ff-reports-download-excel">{excelLoading ? 'Формирование Excel…' : 'Скачать Excel'}</PrimaryAction>
+      {!hideExcelExport && <PrimaryAction onClick={() => void downloadExcel()} disabledReason={excelDisabledReason} data-testid="ff-reports-download-excel">{excelLoading ? 'Формирование Excel…' : 'Скачать Excel'}</PrimaryAction>}
     </Stack>
     {tableError ? null : <><DataTable<SellerRow> columns={[
       { key: 'seller', header: 'Селлер', width: 320, render: row => <TextCell value={row.seller_name} width={310} /> },

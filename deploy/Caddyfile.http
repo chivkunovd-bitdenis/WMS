@@ -8,6 +8,17 @@
 
 :80 {
   encode gzip zstd
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+
+  @internalDocs path /api/docs /api/docs/ /api/docs/oauth2-redirect /api/redoc /api/redoc/ /api/openapi.json
+  respond @internalDocs 404
 
   handle_path /api/* {
     reverse_proxy api:8000 {

@@ -122,6 +122,12 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
         path: {method: deepcopy(source["paths"][path][method])} for path, method in _PATHS.items()
     }
     login = paths["/auth/login"]["post"]
+    for path in ("/reports/client-movements", "/reports/client-movements/export.xlsx"):
+        operation = paths[path]["get"]
+        operation["parameters"] = [
+            parameter for parameter in operation.get("parameters", [])
+            if parameter["name"] != "warehouse_id"
+        ]
     login["summary"] = "Вход и получение токена"
     login["description"] = (
         "Existing login for seller or fulfillment portal. Set body.portal to "
@@ -185,7 +191,7 @@ def client_openapi(source: dict[str, Any]) -> dict[str, Any]:
     }
     result: dict[str, Any] = {
         "openapi": source["openapi"],
-        "info": {"title": "WMS Client Reports API", "version": source["info"]["version"]},
+        "info": {"title": "WMS Client Reports API", "version": "1.0.0"},
         # Relative to /openapi-client.json: same API origin directly and behind /api.
         "servers": [{"url": "."}],
         "paths": paths,

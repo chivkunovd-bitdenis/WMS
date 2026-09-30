@@ -107,6 +107,16 @@ echo "==> run database migrations"
 echo "==> start application services"
 "${COMPOSE[@]}" up -d --no-deps api celery_worker celery_beat web
 
+# Read only non-secret settings from the running API, never its environment dump.
+echo "==> verify public access settings"
+"${COMPOSE[@]}" exec -T api python -c '
+from app.core.settings import settings
+assert settings.app_env == "production", "API must run in production mode"
+assert not settings.allow_public_registration, "Public registration must be disabled"
+assert settings.access_token_expire_minutes == 1440, "Access token TTL must be 24 hours"
+print("production mode; public registration disabled; access token TTL 1440 minutes")
+'
+
 # The old separate seller container is no longer defined in production compose.
 # Close only that project's obsolete HTTP listener after the combined web serves
 # its seller route; do not remove unrelated services or touch the outer Caddy.

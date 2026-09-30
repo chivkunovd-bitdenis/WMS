@@ -462,11 +462,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                       await refreshInboundList(token)
                     }
                   }}
-                  onCreateCorrection={() =>
-                    setOpsError(
-                      'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
-                    )
-                  }
                   onCreateMpUnload={async () => {
                     if (!token) {
                       return null
@@ -611,6 +606,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   sellers={[]}
                   warehouses={reportWarehouseOptions(warehouses)}
                   contentInset={288}
+                  hideExcelExport
                 />
               ) : (
                 accessDenied
