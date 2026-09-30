@@ -33,25 +33,17 @@ MAX_LIMIT = 1000
 _BATCH = 500
 _STOCK_EVENTS = (
     "inbound_intake",
-    "outbound_shipment",
     "fbs_shipment",
     "marketplace_unload",
-    "product_tz_import",
     "inventory_count",
-    "discrepancy_act",
-    "correction_phantom_return",
 )
 
 _EVENT_NAMES = {
     "inbound_intake": "Приёмка",
     "return": "Возврат товара",
-    "outbound_shipment": "Отгрузка",
     "fbs_shipment": "Отгрузка FBS",
     "marketplace_unload": "Отгрузка FBO",
-    "product_tz_import": "Оприходование по ТЗ",
     "inventory_count": "Инвентаризация",
-    "discrepancy_act": "Акт расхождений",
-    "correction_phantom_return": "Корректировка остатка",
 }
 
 
@@ -454,7 +446,20 @@ async def list_client_movements(
             .where(
                 InventoryMovement.tenant_id == tenant_id,
                 InventoryMovement.movement_type.in_(_STOCK_EVENTS),
-                InventoryMovement.quantity_delta != 0,
+                or_(
+                    and_(
+                        InventoryMovement.movement_type == "inbound_intake",
+                        InventoryMovement.quantity_delta > 0,
+                    ),
+                    and_(
+                        InventoryMovement.movement_type.in_(("fbs_shipment", "marketplace_unload")),
+                        InventoryMovement.quantity_delta < 0,
+                    ),
+                    and_(
+                        InventoryMovement.movement_type == "inventory_count",
+                        InventoryMovement.quantity_delta != 0,
+                    ),
+                ),
                 event_at >= start,
                 event_at < end,
                 or_(
@@ -676,11 +681,7 @@ async def build_client_movement_workbook(
             values = [
                 datetime.fromisoformat(row["occurred_at"]).strftime("%d.%m.%Y %H:%M:%S"),
                 "Оприходование" if delta > 0 else "Списание",
-                "Отмена отгрузки FBS"
-                if row["operation"] == "fbs_shipment" and delta > 0
-                else "Отмена приёмки"
-                if row["operation"] == "inbound_intake" and delta < 0
-                else _EVENT_NAMES[row["operation"]],
+                _EVENT_NAMES[row["operation"]],
                 document.get("number"),
                 row["sku"],
                 row["product_name"],
