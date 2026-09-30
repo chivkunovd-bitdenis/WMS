@@ -7,6 +7,7 @@ on:
       - 'tools/print-agent/wms_scan_bridge.py'
       - 'tools/print-agent/test_wms_scan_bridge.py'
       - 'tools/print-agent/build_scan_check_package.py'
+      - 'tools/print-agent/scan_check_encoding_hook.py'
       - 'tools/print-agent/scan-check-labels/**'
       - '.github/workflows/scan-check-package.yml'
 permissions:

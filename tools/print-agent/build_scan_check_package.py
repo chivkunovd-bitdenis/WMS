@@ -42,6 +42,8 @@ def main() -> None:
         "--onedir",
         "--name",
         "wms-scan-check",
+        "--runtime-hook",
+        str(ROOT / "scan_check_encoding_hook.py"),
         "--distpath",
         str(output),
         "--workpath",
