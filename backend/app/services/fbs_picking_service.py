@@ -66,6 +66,7 @@ from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_wor
 from app.services.inventory_container_service import (
     ContainerKind,
     InventoryContainerScanError,
+    InventoryContainerScanMatch,
     resolve_container_scan,
     validate_container,
 )
@@ -1003,6 +1004,42 @@ async def _implicit_pick_location(
     return await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
 
 
+def _container_scan_candidates(raw: str) -> frozenset[str]:
+    cleaned = normalize_scan_code(raw)
+    without_aim = re.sub(r"^[\]ъЪ][A-Za-zА-Яа-яЁё][0-9]", "", cleaned, count=1)
+    variants = {
+        candidate
+        for source in {cleaned, without_aim}
+        for candidate in sticker_scan_candidates(source)
+    }
+    # SQLite's upper() does not fold Cyrillic; retain both spellings there
+    # while PostgreSQL still compares against the uppercased form.
+    return frozenset(variants | {candidate.upper() for candidate in variants})
+
+
+async def _resolve_fbs_container_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    raw: str,
+) -> InventoryContainerScanMatch:
+    # Exact identity wins before any case/layout/AIM variants. The fallback
+    # considers all scoped matches together, so ambiguous variants cannot
+    # arbitrarily switch the operator to another source.
+    try:
+        return await resolve_container_scan(session, tenant_id, warehouse_id, raw)
+    except InventoryContainerScanError as exc:
+        if exc.code != "container_scan_not_found":
+            raise
+    return await resolve_container_scan(
+        session,
+        tenant_id,
+        warehouse_id,
+        raw,
+        casefold_candidates=_container_scan_candidates(raw),
+    )
+
+
 async def pick_scan(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1066,7 +1103,7 @@ async def pick_scan(
 
     # A new container barcode replaces the source retained by the scanner.
     try:
-        container = await resolve_container_scan(
+        container = await _resolve_fbs_container_scan(
             session,
             tenant_id,
             supply.warehouse_id,
@@ -1078,7 +1115,8 @@ async def pick_scan(
                 "invalid_container_reference",
                 "Штрихкод относится к нескольким складским тарам.",
             ) from exc
-    else:
+        container = None
+    if container is not None:
         location_id = await warehouse_map_service.resolve_container_location(
             session,
             tenant_id,
