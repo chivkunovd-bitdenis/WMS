@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ErrorNotice } from '../../../ui-kit'
 import { FbsStockDialogContainer } from '../../ff/products-fbs/FbsStockDialogContainer'
 import type { FbsStockDialogRow } from '../../ff/products-fbs/fbsStockDialogLoader'
@@ -59,10 +59,23 @@ export function ProductCardFbsStockTab({
   onCardClose,
   onBusyChange,
   onChanged,
+  stockVersion,
   active,
   onErrorChange,
 }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [externalRefreshVersion, setExternalRefreshVersion] = useState(0)
+  const seenStockVersion = useRef(stockVersion)
+  const ownVersionBumps = useRef(0)
+
+  useEffect(() => {
+    const changes = stockVersion - seenStockVersion.current
+    seenStockVersion.current = stockVersion
+    if (changes > ownVersionBumps.current) {
+      setExternalRefreshVersion((version) => version + 1)
+    }
+    ownVersionBumps.current = 0
+  }, [stockVersion])
 
   // Карточка узнаёт о нерешённой ошибке, чтобы вернуть «Закрыть» в нижнюю
   // панель вместо пропавших кнопок этой вкладки (ревью №1, F2).
@@ -102,9 +115,14 @@ export function ProductCardFbsStockTab({
       embedded
       footerSlotEl={footerSlotEl}
       onClose={() => onCardClose(true)}
-      onChanged={onChanged}
+      onChanged={() => {
+        ownVersionBumps.current += 1
+        onChanged()
+      }}
       onLoadError={setLoadError}
       onBusyChange={onBusyChange}
+      refreshVersion={externalRefreshVersion}
+      active={active}
     />
   )
 }
