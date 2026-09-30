@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ctypes
 import hashlib
 import io
 import json
@@ -12,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -22,6 +24,36 @@ PORT = 17843
 ORIGIN = f"http://127.0.0.1:{PORT}"
 ALLOWED_ORIGINS = {ORIGIN, "https://sellerfocus.pro", "https://www.sellerfocus.pro"}
 ASSETS = Path(__file__).resolve().parent / "direct-web"
+
+
+class CupsOption(ctypes.Structure):
+    _fields_ = [("name", ctypes.c_char_p), ("value", ctypes.c_char_p)]
+
+
+class MacPrinter:
+    def __init__(self):
+        self.lib = ctypes.CDLL("/usr/lib/libcups.2.dylib")
+        self.lib.cupsPrintFile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+                                          ctypes.c_int, ctypes.POINTER(CupsOption)]
+        self.lib.cupsPrintFile.restype = ctypes.c_int
+        self.lib.cupsGetDefault.argtypes = []
+        self.lib.cupsGetDefault.restype = ctypes.c_char_p
+
+    def default(self):
+        value = self.lib.cupsGetDefault()
+        return value.decode() if value else ""
+
+    def submit_default(self, data, queue):
+        options = (CupsOption * 3)(CupsOption(b"fit-to-page", b"true"),
+                                  CupsOption(b"copies", b"1"),
+                                  CupsOption(b"number-up", b"1"))
+        with tempfile.TemporaryDirectory(prefix="wms-qr-") as directory:
+            path = Path(directory) / "label.png"
+            path.write_bytes(data)
+            job_id = self.lib.cupsPrintFile(queue.encode(), os.fsencode(path), b"WMS QR", 3, options)
+        if job_id <= 0:
+            raise agent.UnknownPrintOutcome("macOS не подтвердила приём задания. Проверьте очередь принтера.")
+        return f"{queue}-{job_id}"
 
 
 class DefaultWindowsAdapter(WindowsAdapter):
@@ -79,15 +111,12 @@ class Printer:
         self.db = directory / "direct-jobs.sqlite3"
         self.lock = threading.Lock()
         self.submit = submit
-        self.adapter = DefaultWindowsAdapter() if submit is None and sys.platform == "win32" else None
+        self.adapter = (DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()) if submit is None else None
         with sqlite3.connect(self.db) as db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT)")
 
     def _submit(self, data, queue):
-        if sys.platform == "win32":
-            return self.adapter.submit_default(data, queue)
-        return agent.submit_to_queue(data, "image/png", queue,
-                                     executable=["/usr/bin/lp", "-o", "fit-to-page", "-o", "number-up=1"])
+        return self.adapter.submit_default(data, queue)
 
     def print(self, body):
         key = body.get("idempotencyKey")
@@ -109,7 +138,9 @@ class Printer:
                     raise agent.UnknownPrintOutcome("Задание уже передавалось. Проверьте очередь принтера; повтор автоматически не отправлен.")
                 return old[1]
             # Validate before crossing the irreversible OS-print boundary.
-            queue = default_printer() if self.submit is None else None
+            queue = (self.adapter.default() if sys.platform == "darwin" else default_printer()) if self.submit is None else None
+            if self.submit is None and not queue:
+                raise ValueError("В системе не выбран принтер по умолчанию")
             db.execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest))
             db.commit()
             receipt = self.submit(data) if self.submit else self._submit(data, queue)

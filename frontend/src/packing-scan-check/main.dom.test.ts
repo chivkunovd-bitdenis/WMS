@@ -44,7 +44,7 @@ describe('minimal Chrome printer check', () => {
   it('shows a transport failure without a second print path or retry', async () => {
     printDirectQr.mockRejectedValueOnce(new Error('Ошибка очереди принтера'))
     scan(TEST_LABELS[0]!.barcode)
-    await Promise.resolve()
+    await vi.waitFor(() => expect(document.querySelector('#error')!.textContent).toBe('Ошибка очереди принтера'))
     expect(document.querySelector('#error')!.textContent).toBe('Ошибка очереди принтера')
     expect(printDirectQr).toHaveBeenCalledTimes(1)
     expect(printSpy).not.toHaveBeenCalled()
