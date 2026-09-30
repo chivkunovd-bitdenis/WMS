@@ -308,7 +308,13 @@ async def require_marking_section_resource_if_staff(
         return
     path = request.url.path.removeprefix("/operations/marking-codes/")
     perms = await get_staff_permissions(session, user)
-    pure_section = path.split("/", 1)[0] in {"import", "pools", "ledger", "inventory"}
+    pure_section = path.split("/", 1)[0] in {
+        "import",
+        "pools",
+        "ledger",
+        "inventory",
+        "products",
+    }
     allowed = (
         perms.honest_sign
         if pure_section

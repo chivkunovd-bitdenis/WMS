@@ -151,6 +151,46 @@ async def test_section_permissions_revoke_direct_api_with_existing_token(
     marking_response = await async_client.get("/operations/marking-codes/pools", headers=sh)
     assert marking_response.status_code == 403, marking_response.text
 
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": "ЧЗ test seller", "email": f"marking-{suffix}@example.com"},
+    )
+    assert seller.status_code == 201, seller.text
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "ЧЗ test product",
+            "sku_code": f"CZ-{suffix}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    assert product.status_code == 200, product.text
+    product_id = product.json()["id"]
+    for path in ("marking-overview", "codes"):
+        response = await async_client.get(
+            f"/operations/marking-codes/products/{product_id}/{path}", headers=sh
+        )
+        assert response.status_code == 403, (path, response.status_code, response.text)
+    product_print = await async_client.post(
+        f"/operations/marking-codes/products/{product_id}/print",
+        headers=sh,
+        json={"quantity": 1},
+    )
+    assert product_print.status_code == 403, product_print.text
+
+    honest_sign_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "honest_sign": True},
+    )
+    assert honest_sign_only.status_code == 200, honest_sign_only.text
+    honest_sign_overview = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/marking-overview", headers=sh
+    )
+    assert honest_sign_overview.status_code == 200, honest_sign_overview.text
+
     storage_only = await async_client.patch(
         f"/auth/staff-accounts/{staff['id']}/permissions",
         headers=ah,
