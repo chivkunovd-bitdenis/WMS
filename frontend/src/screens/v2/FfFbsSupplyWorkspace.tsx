@@ -654,7 +654,8 @@ export function FfFbsSupplyWorkspace({
       (orderId, value) => setKizCommittedTails((current) => ({ ...current, [orderId]: kizValueTail(value) })),
       (orderId) => {
         setRecentlyScannedOrderId(orderId)
-        sequentialFrameRef.current?.onPromotePackingOrder?.(supplyId, orderId)
+        const selectedSupplyId = sequentialWorkspaceRef.current?.supply.id
+        if (selectedSupplyId) sequentialFrameRef.current?.onPromotePackingOrder?.(selectedSupplyId, orderId)
       },
     ))
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
