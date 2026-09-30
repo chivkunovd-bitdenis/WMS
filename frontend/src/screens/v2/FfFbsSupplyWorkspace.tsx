@@ -707,6 +707,7 @@ export function FfFbsSupplyWorkspace({
     },
     [open, supplyId, token, authHeaders, beginWorkspaceWrite],
   )
+  const refreshTrackingStage = useCallback(() => { void load(true) }, [load])
 
   useEffect(() => {
     if (!open || !supplyId) return
@@ -4186,6 +4187,7 @@ export function FfFbsSupplyWorkspace({
         workspace={workspace}
         open={open}
         onClose={requestClose}
+        onStageChange={refreshTrackingStage}
       />
     )
   }

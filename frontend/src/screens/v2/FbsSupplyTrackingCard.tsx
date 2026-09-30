@@ -34,6 +34,11 @@ const SUPPLIER_STATUS: Record<string, string> = {
   cancel: 'Отменён продавцом', cancel_carrier: 'Отменён перевозчиком',
 }
 
+const SUPPLY_STATUS: Record<string, string> = {
+  draft: 'Черновик', assembling: 'В работе', packed: 'Упакована',
+  in_delivery: 'В доставке', done: 'Завершена',
+}
+
 function wbMoment(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'Europe/Moscow', dateStyle: 'short', timeStyle: 'short',
@@ -41,13 +46,14 @@ function wbMoment(value: string): string {
 }
 
 export function FbsSupplyTrackingCard({
-  token, authHeaders, workspace, open, onClose,
+  token, authHeaders, workspace, open, onClose, onStageChange,
 }: {
   token: string
   authHeaders: (token: string) => Record<string, string>
   workspace: FbsWorkspace
   open: boolean
   onClose: () => void
+  onStageChange?: () => void
 }) {
   const supplyId = workspace.supply.id
   const [summary, setSummary] = useState<FbsTrackingSummary | null>(workspace.tracking_summary ?? null)
@@ -82,16 +88,21 @@ export function FbsSupplyTrackingCard({
       if (!openRef.current) return
       setSummary(result.tracking_summary)
       setSupplyStatus(result.supply_status)
-      setClosedAt(result.wb_closed_at)
-      setScanAt(result.wb_scan_at)
+      // A stale response can omit a WB event timestamp that this open card
+      // already observed. Keep the WB-provided event, never invent one.
+      if (result.wb_closed_at) setClosedAt(result.wb_closed_at)
+      if (result.wb_scan_at) setScanAt(result.wb_scan_at)
       setSyncError(false)
+      if (result.supply_status !== 'in_delivery' && result.supply_status !== 'done') {
+        onStageChange?.()
+      }
     } catch {
       if (openRef.current) setSyncError(true)
     } finally {
       syncingRef.current = false
       if (openRef.current) setSyncing(false)
     }
-  }, [token, authHeaders, supplyId])
+  }, [token, authHeaders, supplyId, onStageChange])
 
   useEffect(() => {
     if (!open) return
@@ -126,7 +137,7 @@ export function FbsSupplyTrackingCard({
               {workspace.supply.seller.name} · WB №{workspace.supply.wb_supply_id}
             </Typography>
             <Typography variant="body2" sx={{ mt: 1, fontWeight: 650 }}>
-              {supplyStatus === 'done' ? 'Завершена' : 'В доставке'}
+              {SUPPLY_STATUS[supplyStatus] ?? supplyStatus}
             </Typography>
             {closedAt ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Передана в доставку WB: {wbMoment(closedAt)}</Typography> : null}
             {scanAt ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Сканирована WB: {wbMoment(scanAt)}</Typography> : null}
@@ -137,7 +148,9 @@ export function FbsSupplyTrackingCard({
       </Box>
       <DialogContent sx={{ p: 2.5 }}>
         {syncError ? <Alert severity="warning" sx={{ mb: 2 }}>Не удалось обновить статусы WB. Показаны последние полученные данные.</Alert> : null}
-        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+        {supplyStatus !== 'in_delivery' && supplyStatus !== 'done' ? (
+          <Alert severity="info" sx={{ mb: 2 }}>Поставка вернулась в работу. Обновляем карточку.</Alert>
+        ) : <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
           <Table size="small" data-testid="fbs-tracking-orders">
             <TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Товар</TableCell><TableCell>Этап продавца</TableCell><TableCell>Статус WB</TableCell></TableRow></TableHead>
             <TableBody>
@@ -156,7 +169,7 @@ export function FbsSupplyTrackingCard({
               })}
             </TableBody>
           </Table>
-        </Paper>
+        </Paper>}
         <Box sx={{ mt: 2 }}>
           <Button
             onClick={() => setHistoryOpen((value) => !value)}

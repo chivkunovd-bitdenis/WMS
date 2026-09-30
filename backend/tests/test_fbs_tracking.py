@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -15,12 +16,14 @@ from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_DEFECT,
+    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
 )
@@ -338,6 +341,75 @@ async def test_addressed_tracking_twice_keeps_wb_handover_without_stock_movement
         ))
     assert before == after
     assert calls == ["GET supply", "POST order statuses"] * 2
+
+
+@pytest.mark.asyncio
+async def test_two_clients_cannot_apply_older_wb_snapshot_after_newer_terminal_status(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix,
+    )
+    supply_id = await _seed_in_delivery_supply(
+        tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
+        warehouse_id=uuid.UUID(warehouse_id), wb_order_ids=[991102],
+    )
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    requests = 0
+
+    async def details(
+        _client: httpx.AsyncClient, *, api_token: str, supply_id: str,
+        marketplace_api_base: str | None = None,
+    ) -> MarketplaceSupplyDetails:
+        _ = api_token, marketplace_api_base
+        return MarketplaceSupplyDetails(supply_id=supply_id, name="WB handover", done=True)
+
+    async def statuses(
+        _client: httpx.AsyncClient, *, api_token: str, order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, Any]]:
+        nonlocal requests
+        _ = api_token, marketplace_api_base
+        requests += 1
+        if requests == 1:
+            first_started.set()
+            await release_first.wait()
+            wb_status = "sorted"
+        else:
+            wb_status = "sold"
+        return [
+            {"id": order_id, "supplierStatus": "complete", "wbStatus": wb_status}
+            for order_id in order_ids
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service.fetch_marketplace_supply_details", details,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service.fetch_marketplace_orders_status", statuses,
+    )
+    path = f"/operations/fbs-supplies/{supply_id}/tracking-status"
+    first = asyncio.create_task(async_client.post(path, headers=headers))
+    await asyncio.wait_for(first_started.wait(), timeout=10)
+    second_response = await asyncio.wait_for(async_client.post(path, headers=headers), timeout=10)
+    assert second_response.status_code == 200, second_response.text
+    assert second_response.json()["supply_status"] == FBS_SUPPLY_STATUS_DONE
+    release_first.set()
+    first_response = await asyncio.wait_for(first, timeout=10)
+    assert first_response.status_code == 200, first_response.text
+    assert first_response.json()["supply_status"] == FBS_SUPPLY_STATUS_DONE
+    assert first_response.json()["tracking_summary"]["orders"][0]["wb_status"] == "sold"
+    assert requests == 2
+    async with SessionLocal() as session:
+        order = await session.scalar(select(FbsOrder).where(FbsOrder.wb_order_id == 991102))
+        supply = await session.get(FbsSupply, supply_id)
+        assert order is not None and supply is not None
+        assert order.status == FBS_ORDER_STATUS_DONE
+        assert order.wb_status == "sold"
+        assert supply.status == FBS_SUPPLY_STATUS_DONE
 
 
 @pytest.mark.asyncio

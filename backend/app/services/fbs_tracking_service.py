@@ -100,6 +100,7 @@ class InDeliverySyncResult:
 class TrackingProviderSnapshot:
     """Provider readback collected before locking the local supply row."""
 
+    started_at: datetime
     details: MarketplaceSupplyDetails | None
     status_rows: tuple[dict[str, Any], ...]
     status_error: WildberriesClientError | None
@@ -111,6 +112,7 @@ async def fetch_tracking_provider_snapshot(
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
 ) -> TrackingProviderSnapshot:
+    started_at = datetime.now(tz=UTC)
     token = await _resolve_marketplace_api_token(session, tenant_id, supply.seller_id)
     details: MarketplaceSupplyDetails | None = None
     with suppress(WildberriesClientError):
@@ -129,7 +131,7 @@ async def fetch_tracking_provider_snapshot(
         except WildberriesClientError as exc:
             status_error = exc
             break
-    return TrackingProviderSnapshot(details, tuple(rows), status_error)
+    return TrackingProviderSnapshot(started_at, details, tuple(rows), status_error)
 
 
 def order_tracking_label(order: FbsOrder) -> str:
@@ -415,11 +417,24 @@ async def sync_supply_tracking(
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
         .options(selectinload(FbsSupply.orders))
         .with_for_update()
+        # The addressed endpoint read this identity before its WB requests.
+        # A concurrent poll may have committed while those requests were in
+        # flight; reload both supply and orders under the row lock.
+        .execution_options(populate_existing=True)
     )
     result = await session.execute(stmt)
     supply = result.scalar_one_or_none()
     if supply is None:
         raise FbsTrackingError("supply_not_found")
+    if provider_snapshot is not None and supply.last_wb_sync_at is not None:
+        previous_sync = supply.last_wb_sync_at
+        if previous_sync.tzinfo is None:
+            previous_sync = previous_sync.replace(tzinfo=UTC)
+        if previous_sync >= provider_snapshot.started_at:
+            # No WB per-order version is supplied. A snapshot started before
+            # another poll committed cannot safely overwrite its newer read,
+            # regardless of whether WB later reports sold, sorted or cancel.
+            return TrackingSyncResult(orders_updated=0, supply_status=supply.status)
     if sync_orders is None:
         # An addressable manual sync needs current statuses even if the supply
         # was handed over in WB while its local card was still in assembly.

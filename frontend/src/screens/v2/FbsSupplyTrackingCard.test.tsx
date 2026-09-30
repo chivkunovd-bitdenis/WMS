@@ -138,4 +138,27 @@ describe('WB supply tracking card', () => {
       secondHost.remove()
     }
   })
+
+  it('shows draft immediately and asks the parent to reload this supply after all orders cancel', async () => {
+    const onStageChange = vi.fn()
+    const paths: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      paths.push(String(input))
+      return new Response(JSON.stringify({
+        supply_status: 'draft', wb_closed_at: null, wb_scan_at: null,
+        tracking_summary: { ...workspace.tracking_summary, orders: [] },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }))
+    await act(async () => {
+      root.render(<FbsSupplyTrackingCard
+        token="test" authHeaders={authHeaders} workspace={workspace}
+        open onClose={() => undefined} onStageChange={onStageChange}
+      />)
+    })
+    expect(paths).toEqual([expect.stringContaining('/supply-a/tracking-status')])
+    expect(onStageChange).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain('Черновик')
+    expect(document.body.textContent).toContain('Поставка вернулась в работу')
+    expect(document.querySelector('[data-testid="fbs-tracking-orders"]')).toBeNull()
+  })
 })
