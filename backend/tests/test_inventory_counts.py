@@ -17,6 +17,8 @@ from app.models.inventory_count import InventoryCountCreatedContainer, Inventory
 from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
@@ -179,6 +181,110 @@ async def _create_all(async_client: AsyncClient, setup: TenantSetup) -> dict[str
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _product_nodes(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    found: dict[str, dict[str, object]] = {}
+    for row in rows:
+        if row.get("kind") == "product":
+            found[str(row["product_id"])] = row
+        else:
+            children = row.get("children")
+            if isinstance(children, list):
+                found.update(_product_nodes(children))
+    return found
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_shows_actual_wb_alias_and_ozon_barcodes(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-598: table data is not limited to legacy Product.wb_barcode."""
+
+    setup = await _tenant(async_client, "BarcodeDisplay")
+    seller_id = await _seller(async_client, setup, "Селлер ШК")
+    canonical = await _product(async_client, setup, name="WB основной", seller_id=seller_id)
+    alias_only = await _product(async_client, setup, name="WB алиас", seller_id=seller_id)
+    ozon_only = await _product(async_client, setup, name="Ozon", seller_id=seller_id)
+    without_code = await _product(async_client, setup, name="Без ШК", seller_id=seller_id)
+    found_ozon = await _product(async_client, setup, name="Находка Ozon", seller_id=seller_id)
+
+    async with SessionLocal() as session:
+        canonical_product = await session.get(Product, canonical)
+        assert canonical_product is not None
+        canonical_product.wb_barcode = "WB-CANONICAL-598"
+        session.add_all(
+            [
+                ProductBarcode(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=canonical,
+                    barcode="WB-ALIAS-IGNORED-598",
+                    source="wb",
+                ),
+                ProductBarcode(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=alias_only,
+                    barcode="WB-ALIAS-598",
+                    source="wb",
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=ozon_only,
+                    marketplace="ozon",
+                    external_barcodes=["", "OZN-598-TABLE"],
+                    is_active=True,
+                ),
+                ProductMarketplaceLink(
+                    tenant_id=setup.tenant_id,
+                    seller_id=seller_id,
+                    product_id=found_ozon,
+                    marketplace="ozon",
+                    external_barcodes=["OZN-598-FOUND"],
+                    is_active=True,
+                ),
+            ]
+        )
+        await session.commit()
+
+    for product_id in (canonical, alias_only, ozon_only, without_code):
+        await _balance(setup, product_id, 1)
+
+    created = await _create_all(async_client, setup)
+    expected = {
+        str(canonical): "WB-CANONICAL-598",
+        str(alias_only): "WB-ALIAS-598",
+        str(ozon_only): "OZN-598-TABLE",
+        str(without_code): None,
+    }
+    flat = {line["product_id"]: line for line in created["lines"]}
+    tree = _product_nodes(
+        [child for cell in created["cells"] for child in cell["children"]]
+    )
+    for product_id, barcode in expected.items():
+        assert flat[product_id]["barcode"] == barcode
+        assert tree[product_id]["barcode"] == barcode
+    assert flat[str(ozon_only)]["wb_barcode"] is None
+    assert tree[str(ozon_only)]["wb_barcode"] is None
+
+    found = await async_client.post(
+        f"/operations/inventory-counts/{created['id']}/found",
+        headers=setup.headers,
+        json={"barcodes": ["OZN-598-FOUND"], "cell_id": str(setup.location_id)},
+    )
+    assert found.status_code == 200, found.text
+    detail = found.json()["count"]
+    found_flat = next(
+        line for line in detail["lines"] if line["product_id"] == str(found_ozon)
+    )
+    found_tree = _product_nodes(
+        [child for cell in detail["cells"] for child in cell["children"]]
+    )[str(found_ozon)]
+    assert found_flat["barcode"] == "OZN-598-FOUND"
+    assert found_tree["barcode"] == "OZN-598-FOUND"
+    assert found_flat["wb_barcode"] is None
 
 
 @pytest.mark.asyncio

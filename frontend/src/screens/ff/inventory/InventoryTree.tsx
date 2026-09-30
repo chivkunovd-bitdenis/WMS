@@ -317,8 +317,9 @@ export function InventoryTree({
       key: 'wb-barcode',
       header: 'ШК',
       width: 200,
-      render: (row) =>
-        row.kind === 'product' && row.wbBarcode ? (
+      render: (row) => {
+        const barcode = row.barcode || row.wbBarcode
+        return row.kind === 'product' && barcode ? (
           <Typography
             variant="body2"
             sx={{
@@ -326,9 +327,10 @@ export function InventoryTree({
               whiteSpace: 'nowrap',
             }}
           >
-            {row.wbBarcode}
+            {barcode}
           </Typography>
-        ) : null,
+        ) : null
+      },
     },
     {
       key: 'wb-size',

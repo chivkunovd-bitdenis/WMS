@@ -18,6 +18,8 @@ from app.models.product import Product
 from app.models.user import User
 from app.services import inventory_count_service as service
 from app.services import tenant_settings_service, warehouse_map_service
+from app.services.catalog_service import list_ozon_product_links
+from app.services.product_barcode_service import load_barcodes_by_product
 from app.services.sorting_location_service import SORTING_LOCATION_CODE, UNASSIGNED_LABEL
 from app.services.staff_permissions_service import PERM_INVENTORY
 
@@ -325,6 +327,34 @@ async def _photos(
     return await service.product_photos(session, list(unique.values()))
 
 
+async def _barcodes(
+    session: AsyncSession,
+    count: InventoryCount,
+) -> dict[uuid.UUID, str | None]:
+    """Return real marketplace codes without substituting WMS SKU values."""
+
+    products = {line.product.id: line.product for line in count.lines}
+    product_ids = set(products)
+    # Both helpers batch their lookups and scope every query to this tenant.
+    aliases = await load_barcodes_by_product(session, count.tenant_id, product_ids)
+    ozon_links = await list_ozon_product_links(session, count.tenant_id, product_ids)
+    result: dict[uuid.UUID, str | None] = {}
+    for product_id, product in products.items():
+        canonical = product.wb_barcode.strip() if product.wb_barcode else ""
+        alias = next(
+            (code.strip() for code in aliases.get(product_id, ()) if code.strip()),
+            "",
+        )
+        link = ozon_links.get(product_id)
+        external = link.external_barcodes if link is not None else []
+        ozon = next(
+            (code.strip() for code in external if isinstance(code, str) and code.strip()),
+            None,
+        )
+        result[product_id] = canonical or alias or ozon
+    return result
+
+
 async def _summary_out(
     session: AsyncSession,
     count: InventoryCount,
@@ -371,6 +401,7 @@ async def _summary_out(
 def _product_node(
     line: InventoryCountLine,
     *,
+    barcode: str | None,
     category: str | None,
     photo_url: str | None,
     current_quantity: int,
@@ -385,7 +416,7 @@ def _product_node(
         seller=product.seller.name if product.seller is not None else "Без селлера",
         seller_id=str(product.seller_id) if product.seller_id is not None else None,
         category=category,
-        barcode=product.wb_barcode,
+        barcode=barcode,
         wb_vendor_code=product.wb_vendor_code,
         wb_barcode=product.wb_barcode,
         wb_size=product.wb_size,
@@ -472,6 +503,7 @@ async def _detail_out(
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
     photos = await _photos(session, count)
+    barcodes = await _barcodes(session, count)
     line_rows: list[InventoryCountLineOut] = []
     # Пустой список — нормальное значение: без адресного хранения ячеек нет.
     scannable_cells: list[CountScannableCellOut] = []
@@ -522,6 +554,7 @@ async def _detail_out(
         category = categories.get(product.id)
         node = _product_node(
             line,
+            barcode=barcodes.get(product.id),
             category=category,
             photo_url=photos.get(product.id),
             current_quantity=current[line.id],
@@ -569,7 +602,7 @@ async def _detail_out(
                 seller_id=str(product.seller_id) if product.seller_id is not None else None,
                 seller_name=product.seller.name if product.seller is not None else None,
                 category=category,
-                barcode=product.wb_barcode,
+                barcode=barcodes.get(product.id),
                 wb_vendor_code=product.wb_vendor_code,
                 wb_barcode=product.wb_barcode,
                 wb_size=product.wb_size,
