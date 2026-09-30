@@ -184,7 +184,7 @@ class BridgeTest(unittest.TestCase):
                 else "id запроса WMS604_Test-10 (файлов 1)",
             )
 
-        adapter = bridge.SizedCupsAdapter(run=run)
+        adapter = bridge.SizedCupsAdapter(run=run, platform="darwin")
         self.assertEqual(adapter.queues(), ["WMS604_Test"])
         self.assertEqual(
             adapter.submit(b"%PDF-test", "application/pdf", "WMS604_Test", 1, 58, 40),
