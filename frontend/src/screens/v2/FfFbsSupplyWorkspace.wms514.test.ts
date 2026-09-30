@@ -173,7 +173,7 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
 
   it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {
     const scanBar = source.indexOf('data-testid="fbs-kiz-scan-bar"')
-    expect(source.slice(scanBar - 500, scanBar)).toContain('{anyOrderNeedsHonestSign ? (')
+    expect(source.slice(scanBar - 500, scanBar)).toContain('{!useSequentialPacking && anyOrderNeedsHonestSign ? (')
     expect(source).not.toContain('fbs-kiz-auto-reprint-error')
   })
 })
