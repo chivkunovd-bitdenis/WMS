@@ -12,6 +12,7 @@ beforeEach(() => {
   document.body.innerHTML = '<input id="scan">'
   document.querySelector<HTMLInputElement>('input')!.focus()
   vi.stubGlobal('crypto', webcrypto)
+  vi.spyOn(window, 'confirm').mockReturnValue(false)
   frames = []; targets = []; autoFinish = true
   decode = vi.fn().mockResolvedValue(undefined)
   const create = document.createElement.bind(document)
@@ -43,6 +44,7 @@ describe('Chrome prepared-image printing', () => {
     expect(frames[0]!.srcdoc).toContain('@page { size: 40mm 58mm; margin: 0; }')
     expect(document.querySelectorAll('iframe')).toHaveLength(0)
     expect(document.activeElement?.id).toBe('scan')
+    expect(window.confirm).not.toHaveBeenCalled()
   })
   it.each([[58, 40, 40, 58], [60, 40, 40, 60], [60, 80, 60, 80], [70, 120, 70, 120]])('keeps physical %sx%s paper as portrait %sx%s', async (widthMm, heightMm, pageWidth, pageHeight) => {
     await printPreparedQr({ ...input, widthMm, heightMm })
@@ -68,14 +70,33 @@ describe('Chrome prepared-image printing', () => {
     await printPreparedQr(input)
     expect(frames).toHaveLength(1)
     await expect(printPreparedQr({ ...input, widthMm: 60 })).rejects.toThrow('изменилась')
+    expect(window.confirm).not.toHaveBeenCalled()
   })
-  it('does not resubmit a persisted uncertain dispatch', async () => {
+  it('keeps an uncertain dispatch unchanged after cancelled recovery, without printing', async () => {
     await printPreparedQr(input)
     const key = `wms:qr-print:${input.idempotencyKey}`
     const record = JSON.parse(localStorage.getItem(key)!)
     localStorage.setItem(key, JSON.stringify({ ...record, state: 'dispatched' }))
     await expect(printPreparedQr(input)).rejects.toThrow('уже передано браузеру')
+    expect(window.confirm).toHaveBeenCalledOnce()
+    expect(JSON.parse(localStorage.getItem(key)!).state).toBe('dispatched')
     expect(frames).toHaveLength(1)
+  })
+  it('continues after operator confirms the existing label, without reprinting', async () => {
+    await printPreparedQr(input)
+    const key = `wms:qr-print:${input.idempotencyKey}`
+    const record = JSON.parse(localStorage.getItem(key)!)
+    localStorage.setItem(key, JSON.stringify({ ...record, state: 'dispatched' }))
+    vi.mocked(window.confirm).mockReturnValue(true)
+    await expect(printPreparedQr({ ...input, imageDataUrl: 'data:image/png;base64,b3RoZXI=' })).rejects.toThrow('изменилась')
+    expect(window.confirm).not.toHaveBeenCalled()
+    await printPreparedQr(input)
+    expect(window.confirm).toHaveBeenCalledOnce()
+    expect(JSON.parse(localStorage.getItem(key)!).state).toBe('browser-ended')
+    await printPreparedQr(input)
+    expect(window.confirm).toHaveBeenCalledOnce()
+    expect(frames).toHaveLength(1)
+    expect(targets[0]!.print).toHaveBeenCalledOnce()
   })
   it('does not print if decoding fails; same UUID can retry', async () => {
     decode.mockRejectedValueOnce(new Error('broken image'))

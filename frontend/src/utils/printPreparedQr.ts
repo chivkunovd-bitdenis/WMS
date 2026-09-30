@@ -31,6 +31,12 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
     const existing = JSON.parse(existingRaw) as Dispatch
     if (existing.fingerprint !== hash) throw new Error('Этикетка этого задания изменилась. Повторная печать остановлена.')
     if (existing.state === 'browser-ended') return
+    // Only recovery of an uncertain previous dispatch asks the operator.
+    // Confirmation continues packing without sending another printer job.
+    if (window.confirm('Проверьте принтер. Этикетка этого товара уже напечатана? ОК — продолжить упаковку без повторной печати; Отмена — ничего не менять.')) {
+      localStorage.setItem(key, JSON.stringify({ fingerprint: hash, state: 'browser-ended' } satisfies Dispatch))
+      return
+    }
     throw new Error('Это задание уже передано браузеру. Проверьте этикетку и очередь принтера перед повторной печатью.')
   }
 
