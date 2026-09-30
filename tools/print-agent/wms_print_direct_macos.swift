@@ -74,6 +74,16 @@ private func defaultPrinter() throws -> String {
     return name
 }
 
+private func parseReceipt(_ output: String, queue: String) -> String? {
+    let pattern = NSRegularExpression.escapedPattern(for: queue) + "-[0-9]+"
+    guard let expression = try? NSRegularExpression(pattern: pattern),
+          let match = expression.firstMatch(
+              in: output, range: NSRange(output.startIndex..., in: output)
+          ),
+          let range = Range(match.range, in: output) else { return nil }
+    return String(output[range])
+}
+
 private func submitToDefaultPrinter(_ data: Data, queue: String) throws -> String {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wms-qr-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -88,13 +98,9 @@ private func submitToDefaultPrinter(_ data: Data, queue: String) throws -> Strin
     guard !result.timedOut, result.status == 0 else {
         throw PrintError.message("Исход печати неизвестен. Проверьте очередь принтера.")
     }
-    let marker = "request id is "
-    guard let markerRange = result.output.range(of: marker) else {
-        throw PrintError.message("macOS не подтвердила приём задания. Проверьте очередь принтера.")
-    }
-    let suffix = result.output[markerRange.upperBound...]
-    let receipt = suffix.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? ""
-    guard !receipt.isEmpty else {
+    // CUPS localizes the surrounding text even with LC_ALL=C (for example,
+    // "id запроса queue-123").  The queue receipt itself has a stable form.
+    guard let receipt = parseReceipt(result.output, queue: queue) else {
         throw PrintError.message("macOS не подтвердила приём задания. Проверьте очередь принтера.")
     }
     return receipt
@@ -310,6 +316,10 @@ private func runSelfTest() throws {
     let body: [String: Any] = ["idempotencyKey": "self-test", "imageDataUrl": image]
     guard try printer.printJob(body) == "test-1", try printer.printJob(body) == "test-1", submissions == 1 else {
         throw PrintError.message("Проверка защиты от повторной печати не пройдена")
+    }
+    guard parseReceipt("request id is Test_Printer-41 (1 file)", queue: "Test_Printer") == "Test_Printer-41",
+          parseReceipt("id запроса Test_Printer-42 (файлов 1)", queue: "Test_Printer") == "Test_Printer-42" else {
+        throw PrintError.message("Проверка квитанции очереди не пройдена")
     }
     guard FileManager.default.isExecutableFile(atPath: "/usr/bin/lp"),
           FileManager.default.isExecutableFile(atPath: "/usr/bin/lpstat") else {
