@@ -6,7 +6,7 @@ export type PreparedQrInput = {
   heightMm: number
 }
 
-type Dispatch = { fingerprint: string; state: 'dispatched' | 'browser-ended' }
+type Dispatch = { fingerprint: string; state: 'dispatched' | 'browser-ended' | 'operator-confirmed' }
 const storagePrefix = 'wms:qr-print:'
 let queue: Promise<void> = Promise.resolve()
 
@@ -15,7 +15,7 @@ async function fingerprint(input: PreparedQrInput): Promise<string> {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function dispatch(input: PreparedQrInput): Promise<void> {
+async function dispatch(input: PreparedQrInput, checkOnly: boolean): Promise<void> {
   if (!input.idempotencyKey || !/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(input.imageDataUrl)
     || ![input.widthMm, input.heightMm].every((size) => Number.isFinite(size) && size > 0 && size <= 300)) {
     throw new Error('Некорректная этикетка для печати')
@@ -27,17 +27,18 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
   const imageLayout = input.widthMm > input.heightMm
     ? `left: 0; top: 0; width: ${input.widthMm}mm; height: ${input.heightMm}mm; transform-origin: top left; transform: translateX(${input.heightMm}mm) rotate(90deg);`
     : 'inset: 0; width: 100%; height: 100%;'
-  const key = `${storagePrefix}${input.idempotencyKey}`
+  const key = `${storagePrefix}${checkOnly ? 'check:' : ''}${input.idempotencyKey}`
   const hash = await fingerprint(input)
   const existingRaw = localStorage.getItem(key)
   if (existingRaw) {
     const existing = JSON.parse(existingRaw) as Dispatch
     if (existing.fingerprint !== hash) throw new Error('Этикетка этого задания изменилась. Повторная печать остановлена.')
-    if (existing.state === 'browser-ended') return
+    if (existing.state === 'operator-confirmed' || (checkOnly && existing.state === 'browser-ended')) return
+    if (checkOnly) throw new Error('Пробное задание уже передано браузеру. Проверьте очередь принтера.')
     // Only recovery of an uncertain previous dispatch asks the operator.
     // Confirmation continues packing without sending another printer job.
     if (window.confirm('Проверьте принтер. Этикетка этого товара уже напечатана? ОК — продолжить упаковку без повторной печати; Отмена — ничего не менять.')) {
-      localStorage.setItem(key, JSON.stringify({ fingerprint: hash, state: 'browser-ended' } satisfies Dispatch))
+      localStorage.setItem(key, JSON.stringify({ fingerprint: hash, state: 'operator-confirmed' } satisfies Dispatch))
       return
     }
     throw new Error('Это задание уже передано браузеру. Проверьте этикетку и очередь принтера перед повторной печатью.')
@@ -78,11 +79,16 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
         target.addEventListener('afterprint', () => {
           // afterprint means the browser flow ended. It cannot prove paper output
           // or distinguish cancellation in a Chrome without silent-print settings.
+          if (settled) {
+            frame.remove()
+            restoreFocus()
+            return
+          }
           try {
             localStorage.setItem(key, JSON.stringify({ fingerprint: hash, state: 'browser-ended' } satisfies Dispatch))
             frame.remove()
             restoreFocus()
-            settle()
+            settle(checkOnly ? undefined : new Error('Браузер закрыл окно печати, но не подтверждает выход этикетки. Заказ не упакован. Проверьте принтер; повторный скан этого товара позволит подтвердить уже напечатанную этикетку без перепечати.'))
           } catch (error) { settle(error) }
         }, { once: true })
         // Persist before the irreversible call: a reload/lost event must never
@@ -106,12 +112,23 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
   })
 }
 
-/** Resolves after browser print flow ends, not after a physical printer receipt. */
-export function printPreparedQr(input: PreparedQrInput): Promise<void> {
+function enqueue(input: PreparedQrInput, checkOnly: boolean): Promise<void> {
   const run = () => navigator.locks
-    ? navigator.locks.request('wms-qr-print', () => dispatch(input))
-    : dispatch(input)
+    ? navigator.locks.request('wms-qr-print', () => dispatch(input, checkOnly))
+    : dispatch(input, checkOnly)
   const result = queue.then(run, run)
   queue = result.catch(() => undefined)
   return result
+}
+
+/** Packing may continue only after explicit reconciliation of the physical label.
+ * afterprint also fires on Cancel and must never be used as a print receipt. */
+export function printPreparedQr(input: PreparedQrInput): Promise<void> {
+  return enqueue(input, false)
+}
+
+/** Isolated printer check only: resolves when Chrome's print flow ends (including
+ * Cancel). This is NOT a receipt and must never authorize packing an order. */
+export function dispatchPreparedQrForCheck(input: PreparedQrInput): Promise<void> {
+  return enqueue(input, true)
 }
