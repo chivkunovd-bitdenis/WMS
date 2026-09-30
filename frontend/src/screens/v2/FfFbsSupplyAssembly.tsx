@@ -183,6 +183,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     [supplyIds, workspaces],
   )
   const allLoaded = ordered.length === supplyIds.length && supplyIds.length > 0
+  // Ozon keeps its existing active-frame scanner. Both hooks listen at the
+  // document capture phase, so WB must yield while that frame owns scanning.
+  const ozonOwnsPackingScan = activeSupplyId !== null
+    && workspaces[activeSupplyId]?.supply.marketplace === 'ozon'
   const { ready, total } = fbsAssemblyReadiness(ordered)
   const percent = total ? Math.round((ready / total) * 100) : 0
   const sellerNames = [...new Set(ordered.map((one) => one.supply.seller.name))].join(', ')
@@ -405,7 +409,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               data-testid="fbs-assembly-packing"
             >
               <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-                <FbsPackingScanBar enabled={open && stage === 'packing'} controllers={supplyIds.flatMap((id) => {
+                <FbsPackingScanBar enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
