@@ -123,6 +123,7 @@ export function makePackingScanDeps(
   active: () => boolean = () => true,
   currentBox: () => string | null = () => null,
   onBound: (orderId: string, value: string) => void = () => undefined,
+  onSelected: (orderId: string) => void = () => undefined,
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
@@ -170,6 +171,7 @@ export function makePackingScanDeps(
       attempt.scanId = result.scan_id
       attempt.orderId = result.order_id
       updateFbsPendingProductScan(token, storageId, attempt)
+      onSelected(result.order_id)
     },
     complete: (raw) => { completeFbsPendingProductScan(token, storageId, raw); refreshed() },
     changed,
