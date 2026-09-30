@@ -92,7 +92,9 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
   const scanners = useRef(new Map<string, PackingScanController>())
   const [, setScannerVersion] = useState(0)
+  const [promotedSupplyId, setPromotedSupplyId] = useState<string | null>(null)
   const onScanChange = useCallback(() => setScannerVersion((value) => value + 1), [])
+  const onPromotePackingOrder = useCallback((supplyId: string) => setPromotedSupplyId(supplyId), [])
   const registerScanner = useCallback((id: string, scanner: PackingScanController | null) => {
     if (scanner) scanners.current.set(id, scanner)
     else scanners.current.delete(id)
@@ -414,7 +416,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
-                <Box ref={setPackingHost} data-testid="fbs-unified-packing-rows" />
+                <Box ref={setPackingHost} sx={{ display: 'flex', flexDirection: 'column' }} data-testid="fbs-unified-packing-rows" />
               </Paper>
               {ordered.map((workspace) => {
                 const supplyId = workspace.supply.id
@@ -427,7 +429,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     open={open}
                     onClose={() => undefined}
                     assemblyFrame={{
-                      packingHost, registerScanner, onScanChange,
+                      packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
                       active: activeSupplyId === supplyId,
                       expanded: expandedIds.has(supplyId),
                       stage: stage === 'boxes' ? 'boxes' : 'packing',

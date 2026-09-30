@@ -652,7 +652,10 @@ export function FfFbsSupplyWorkspace({
       () => sequentialOpenRef.current && sequentialWorkspaceRef.current?.supply.id === supplyId,
       () => assemblyOpenBoxIdRef.current,
       (orderId, value) => setKizCommittedTails((current) => ({ ...current, [orderId]: kizValueTail(value) })),
-      setRecentlyScannedOrderId,
+      (orderId) => {
+        setRecentlyScannedOrderId(orderId)
+        sequentialFrameRef.current?.onPromotePackingOrder?.(supplyId, orderId)
+      },
     ))
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3043,7 +3046,10 @@ export function FfFbsSupplyWorkspace({
   )
 
   const packingRows = workspace ? (
-                  <Stack divider={<Divider flexItem />}>
+                  <Stack
+                    divider={<Divider flexItem />}
+                    sx={{ order: assemblyFrame?.promotedSupplyId === supplyId ? -1 : 0 }}
+                  >
                     {packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
