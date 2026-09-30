@@ -34,6 +34,10 @@ jobs:
         run: python -m pip install pywin32==311
       - run: python -m unittest discover -s tools/print-agent -v
       - run: python tools/print-agent/build_scan_check_package.py
+      - if: runner.os == 'Windows'
+        run: tools/print-agent/dist-scan-check/wms-scan-check/wms-scan-check.exe --help
+      - if: runner.os == 'macOS'
+        run: tools/print-agent/dist-scan-check/wms-scan-check/wms-scan-check --help
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
