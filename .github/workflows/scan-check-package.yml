@@ -1,0 +1,42 @@
+name: WMS isolated scan-check packages
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'tools/print-agent/wms_scan_bridge.py'
+      - 'tools/print-agent/test_wms_scan_bridge.py'
+      - 'tools/print-agent/build_scan_check_package.py'
+      - 'tools/print-agent/scan-check-labels/**'
+      - '.github/workflows/scan-check-package.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: WMS-Scan-Check-macOS-arm64
+          - os: macos-15-intel
+            artifact: WMS-Scan-Check-macOS-Intel-x64
+          - os: windows-2022
+            artifact: WMS-Scan-Check-Windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pyinstaller==6.20.0 certifi==2026.2.25 Pillow==11.3.0 PyMuPDF==1.26.4
+      - if: runner.os == 'Windows'
+        run: python -m pip install pywin32==311
+      - run: python -m unittest discover -s tools/print-agent -v
+      - run: python tools/print-agent/build_scan_check_package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            tools/print-agent/dist-scan-check/*.zip
+            tools/print-agent/dist-scan-check/*.sha256
