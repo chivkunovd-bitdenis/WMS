@@ -31,6 +31,8 @@ export type FbsAssemblyFrameControl = {
   packingHost?: HTMLElement | null
   registerScanner?: (supplyId: string, scanner: PackingScanController | null) => void
   onScanChange?: () => void
+  promotedSupplyId?: string | null
+  onPromotePackingOrder?: (supplyId: string, orderId: string) => void
 
   /** Рамка активна: сканы принимает она, шапка светло-зелёная (R13). */
   active: boolean
