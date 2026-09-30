@@ -1,5 +1,5 @@
 import { apiUrl } from '../../api'
-import { printPreparedQr } from '../../utils/printPreparedQr'
+import { dispatchPreparedQrInKiosk } from '../../utils/printPreparedQr'
 import { loadLabelSizeId, resolveLabelSize } from '../../utils/labelSize'
 import { startClaimedAutomaticPrint } from './fbsKizAutoReprint'
 import {
@@ -211,7 +211,7 @@ export function makePackingScanDeps(
     print: async (result, imageDataUrl) => {
       const size = resolveLabelSize(loadLabelSizeId())
       await startClaimedAutomaticPrint(result.scan_id,
-        () => printPreparedQr({ imageDataUrl, idempotencyKey: result.scan_id, widthMm: size.widthMm, heightMm: size.heightMm }), {
+        () => dispatchPreparedQrInKiosk({ imageDataUrl, idempotencyKey: result.scan_id, widthMm: size.widthMm, heightMm: size.heightMm }), {
           claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, result.scan_id, 'qr', key),
           markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'qr', key),
           // Preserve ownership after an uncertain print dispatch. The exact same

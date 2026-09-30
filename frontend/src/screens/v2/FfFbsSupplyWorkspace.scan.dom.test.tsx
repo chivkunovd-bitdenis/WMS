@@ -5,12 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
-import { printPreparedQr } from '../../utils/printPreparedQr'
+import { dispatchPreparedQrInKiosk } from '../../utils/printPreparedQr'
 
 // The scanner tests render the real workspace and scan intake; unrelated modal
 // contents and the picking screen do not participate in these scenarios.
 // OS/browser print transport has its own tests; this suite verifies routing and packing.
-vi.mock('../../utils/printPreparedQr', () => ({ printPreparedQr: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../../utils/printPreparedQr', () => ({ dispatchPreparedQrInKiosk: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
 vi.mock('../../utils/useMarkingCodePrint', () => ({ useMarkingCodePrint: () => ({ openPrint: vi.fn(), dialog: null }) }))
 vi.mock('./FbsSupplyHistoryDialog', () => ({ FbsSupplyHistoryDialog: () => null }))
@@ -163,7 +163,7 @@ beforeEach(() => {
   delays = {}
   committedTails = {}
   selectedCount = 0
-  vi.mocked(printPreparedQr).mockClear()
+  vi.mocked(dispatchPreparedQrInKiosk).mockClear()
   vi.stubGlobal('crypto', webcrypto)
   window.sessionStorage.clear()
   window.localStorage.clear()
@@ -397,7 +397,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
 
     expect(kizCalls()).toHaveLength(0)
     expect(activeRow()).toBe('order-a')
-    expect(printPreparedQr).not.toHaveBeenCalled()
+    expect(dispatchPreparedQrInKiosk).not.toHaveBeenCalled()
   })
 
   it('P2: ШК и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {

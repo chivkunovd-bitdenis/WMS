@@ -15,7 +15,7 @@ async function fingerprint(input: PreparedQrInput): Promise<string> {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function dispatch(input: PreparedQrInput, checkOnly: boolean): Promise<void> {
+async function dispatch(input: PreparedQrInput, checkOnly: boolean, kiosk: boolean): Promise<void> {
   if (!input.idempotencyKey || !/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(input.imageDataUrl)
     || ![input.widthMm, input.heightMm].every((size) => Number.isFinite(size) && size > 0 && size <= 300)) {
     throw new Error('Некорректная этикетка для печати')
@@ -33,7 +33,7 @@ async function dispatch(input: PreparedQrInput, checkOnly: boolean): Promise<voi
   if (existingRaw) {
     const existing = JSON.parse(existingRaw) as Dispatch
     if (existing.fingerprint !== hash) throw new Error('Этикетка этого задания изменилась. Повторная печать остановлена.')
-    if (existing.state === 'operator-confirmed' || (checkOnly && existing.state === 'browser-ended')) return
+    if (existing.state === 'operator-confirmed' || ((checkOnly || kiosk) && existing.state === 'browser-ended')) return
     if (checkOnly) throw new Error('Пробное задание уже передано браузеру. Проверьте очередь принтера.')
     // Only recovery of an uncertain previous dispatch asks the operator.
     // Confirmation continues packing without sending another printer job.
@@ -88,7 +88,7 @@ async function dispatch(input: PreparedQrInput, checkOnly: boolean): Promise<voi
             localStorage.setItem(key, JSON.stringify({ fingerprint: hash, state: 'browser-ended' } satisfies Dispatch))
             frame.remove()
             restoreFocus()
-            settle(checkOnly ? undefined : new Error('Браузер закрыл окно печати, но не подтверждает выход этикетки. Заказ не упакован. Проверьте принтер; повторный скан этого товара позволит подтвердить уже напечатанную этикетку без перепечати.'))
+            settle(checkOnly || kiosk ? undefined : new Error('Браузер закрыл окно печати, но не подтверждает выход этикетки. Заказ не упакован. Проверьте принтер; повторный скан этого товара позволит подтвердить уже напечатанную этикетку без перепечати.'))
           } catch (error) { settle(error) }
         }, { once: true })
         // Persist before the irreversible call: a reload/lost event must never
@@ -112,10 +112,10 @@ async function dispatch(input: PreparedQrInput, checkOnly: boolean): Promise<voi
   })
 }
 
-function enqueue(input: PreparedQrInput, checkOnly: boolean): Promise<void> {
+function enqueue(input: PreparedQrInput, checkOnly: boolean, kiosk = false): Promise<void> {
   const run = () => navigator.locks
-    ? navigator.locks.request('wms-qr-print', () => dispatch(input, checkOnly))
-    : dispatch(input, checkOnly)
+    ? navigator.locks.request('wms-qr-print', () => dispatch(input, checkOnly, kiosk))
+    : dispatch(input, checkOnly, kiosk)
   const result = queue.then(run, run)
   queue = result.catch(() => undefined)
   return result
@@ -131,4 +131,12 @@ export function printPreparedQr(input: PreparedQrInput): Promise<void> {
  * Cancel). This is NOT a receipt and must never authorize packing an order. */
 export function dispatchPreparedQrForCheck(input: PreparedQrInput): Promise<void> {
   return enqueue(input, true)
+}
+
+/** Workstation contract: Chrome is launched with --kiosk-printing (or the
+ * equivalent managed policy). Resolve on browser dispatch completion, NOT a
+ * physical receipt. Ordinary Chrome's Cancel is indistinguishable and is not
+ * supported as a success signal for this workstation workflow. */
+export function dispatchPreparedQrInKiosk(input: PreparedQrInput): Promise<void> {
+  return enqueue(input, false, true)
 }

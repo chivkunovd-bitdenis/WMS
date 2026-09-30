@@ -2,7 +2,7 @@
 import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPackingScanController, type PackingScanDeps } from '../screens/v2/fbsSequentialPacking'
-import { dispatchPreparedQrForCheck, printPreparedQr } from './printPreparedQr'
+import { dispatchPreparedQrForCheck, dispatchPreparedQrInKiosk, printPreparedQr } from './printPreparedQr'
 const input = { imageDataUrl: 'data:image/png;base64,cG5n', idempotencyKey: '54afadf6-8c67-43a2-bbf3-545ca3e8a01a', widthMm: 58, heightMm: 40 }
 let frames: HTMLIFrameElement[]
 let targets: Array<EventTarget & { print: ReturnType<typeof vi.fn> }>
@@ -186,6 +186,49 @@ describe('Chrome prepared-image printing', () => {
     await printPreparedQr(input)
     expect(window.confirm).toHaveBeenCalledOnce()
     expect(targets[0]!.print).toHaveBeenCalledOnce()
+  })
+
+  it('kiosk dispatch completes without routine confirmation and reuses the same UUID', async () => {
+    await dispatchPreparedQrInKiosk(input)
+    await dispatchPreparedQrInKiosk(input)
+    expect(targets[0]!.print).toHaveBeenCalledOnce()
+    expect(frames).toHaveLength(1)
+    expect(window.confirm).not.toHaveBeenCalled()
+    expect(document.activeElement?.id).toBe('scan')
+    expect(JSON.parse(localStorage.getItem(`wms:qr-print:${input.idempotencyKey}`)!).state).toBe('browser-ended')
+    await expect(dispatchPreparedQrInKiosk({ ...input, widthMm: 60 })).rejects.toThrow('изменилась')
+  })
+  it('kiosk controller waits for KIZ then dispatches and advances consecutive products without clicks', async () => {
+    const deps: PackingScanDeps = {
+      select: vi.fn().mockResolvedValueOnce({ scan_id: 'scan-1', order_id: 'order-1', requires_honest_sign: true })
+        .mockResolvedValueOnce({ scan_id: 'scan-2', order_id: 'order-2', requires_honest_sign: true }),
+      preload: vi.fn().mockResolvedValue(input.imageDataUrl), bind: vi.fn(),
+      print: (result, imageDataUrl) => dispatchPreparedQrInKiosk({ ...input, idempotencyKey: result.scan_id, imageDataUrl }),
+      pack: vi.fn(), claim: () => 'request', saved: () => false,
+      remember: vi.fn(), complete: vi.fn(), changed: vi.fn(),
+    }
+    const scanner = createPackingScanController(deps)
+    await scanner.scan('barcode')
+    expect(targets).toHaveLength(0)
+    expect(scanner.view()).toMatchObject({ orderId: 'order-1', needsKiz: true })
+    await scanner.scan('kiz-1')
+    await scanner.scan('barcode')
+    await scanner.scan('kiz-2')
+    expect(deps.bind).toHaveBeenCalledTimes(2)
+    expect(deps.pack).toHaveBeenCalledTimes(2)
+    expect(targets).toHaveLength(2)
+    expect(scanner.hasPending()).toBe(false)
+    expect(window.confirm).not.toHaveBeenCalled()
+    expect(document.activeElement?.id).toBe('scan')
+  })
+  it('kiosk recovery never automatically repeats an uncertain previous dispatch', async () => {
+    await dispatchPreparedQrInKiosk(input)
+    const key = `wms:qr-print:${input.idempotencyKey}`
+    const record = JSON.parse(localStorage.getItem(key)!)
+    localStorage.setItem(key, JSON.stringify({ ...record, state: 'dispatched' }))
+    await expect(dispatchPreparedQrInKiosk(input)).rejects.toThrow('уже передано браузеру')
+    expect(targets[0]!.print).toHaveBeenCalledOnce()
+    expect(window.confirm).toHaveBeenCalledOnce()
   })
 
 })
