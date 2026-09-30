@@ -1052,6 +1052,7 @@ def main(argv: list[str] | None = None) -> int:
             config = read_private(directory / "connection.json")
             client = Client(config)
             while True:
+                wait_seconds = 3
                 try:
                     status = client.api("/agent/heartbeat")
                     if not status["paired"]:
@@ -1059,6 +1060,9 @@ def main(argv: list[str] | None = None) -> int:
                     message = process_once(config, directory, client, adapter)
                     if message:
                         print(message, flush=True)
+                        # Progress consumed a job or recovered an outbox entry.
+                        # Drain pending work immediately, checking stop each time.
+                        wait_seconds = 0
                 except (
                     OSError,
                     ValueError,
@@ -1075,7 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
                         return 2
                 if args.once:
                     return 0
-                if control.wait(3):
+                if control.wait(wait_seconds):
                     return 0
     except KeyboardInterrupt:
         return 0
