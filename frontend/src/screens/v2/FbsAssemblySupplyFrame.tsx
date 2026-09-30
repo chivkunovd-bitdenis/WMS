@@ -1,3 +1,4 @@
+import type { PackingScanController } from './fbsSequentialPacking'
 import type { ReactNode } from 'react'
 import {
   Box,
@@ -26,6 +27,10 @@ import type { FbsWorkspace } from './fbsApi'
 
 /** Чем окно сборки управляет рамкой поставки. */
 export type FbsAssemblyFrameControl = {
+  packingHost?: HTMLElement | null
+  registerScanner?: (supplyId: string, scanner: PackingScanController | null) => void
+  onScanChange?: () => void
+
   /** Рамка активна: сканы принимает она, шапка светло-зелёная (R13). */
   active: boolean
   /** Рамка развёрнута — у неактивной видны её короба (R12). */

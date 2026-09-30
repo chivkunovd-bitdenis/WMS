@@ -967,3 +967,67 @@ async def test_direct_full_kiz_reprint_does_not_touch_marking_pool(
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(KizReprint)) == 1
         assert await session.scalar(select(func.count()).select_from(MarkingCode)) == 0
+
+
+async def test_sequential_packing_skips_packed_and_replays_same_selection(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, barcode = await _seed_wb_supply(async_client)
+    async with SessionLocal() as session:
+        first = await session.scalar(
+            select(FbsOrder).where(FbsOrder.supply_id == supply_id).order_by(FbsOrder.wb_order_id)
+        )
+        assert first is not None
+        first.pack_status = "packed"
+        await session.commit()
+    body = {
+        "barcode": barcode,
+        "idempotency_key": "sequential-1",
+        "print_qr": False,
+        "print_chz": True,
+        "await_honest_sign": True,
+    }
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    selected = await async_client.post(url, headers=headers, json=body)
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["wb_order_id"] == 514_001
+    assert selected.json()["binding_target"]["order_id"] == selected.json()["order_id"]
+    replay = await async_client.post(url, headers=headers, json=body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["scan_id"] == selected.json()["scan_id"]
+    changed_mode = await async_client.post(
+        url, headers=headers, json={**body, "await_honest_sign": False}
+    )
+    assert changed_mode.status_code == 409
+    assert changed_mode.json()["detail"]["code"] == "idempotency_key_reused"
+
+
+async def test_sequential_binding_receipt_recovers_without_reprinting_kiz(
+    async_client: AsyncClient,
+) -> None:
+    _headers, supply_id, barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        user = await session.scalar(select(User).where(User.tenant_id == supply.tenant_id))
+        assert user is not None
+        tenant_id, actor_id = supply.tenant_id, user.id
+        selected = await scan_print_svc.select_order_for_product_scan(
+            session, tenant_id, supply_id, barcode=barcode,
+            idempotency_key="sequential-binding", print_qr=True,
+            print_chz=False, reprint_chz=False, await_honest_sign=True,
+            actor_user_id=actor_id,
+        )
+        await session.commit()
+        before = await scan_print_svc.recover_released_reprint_kiz(
+            session, tenant_id, supply_id, selected.scan_id, actor_id,
+        )
+        assert before.status == "not_attempted"
+    await _bind_canonical_kiz(
+        supply_id, "010460000000000121WMS604-BIND\x1d91TAIL", scan_id=selected.scan_id,
+    )
+    async with SessionLocal() as session:
+        recovered = await scan_print_svc.recover_released_reprint_kiz(
+            session, tenant_id, supply_id, selected.scan_id, actor_id,
+        )
+        assert recovered.status == "available"

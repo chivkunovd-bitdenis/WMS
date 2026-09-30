@@ -425,8 +425,8 @@ export async function runFbsSupplyGroupCreation(
 ): Promise<Map<string, FbsGroupCreateResult>> {
   const results = new Map(previous)
   const created: FbsGroupCreatedSupply[] = []
-  for (const group of groups) {
-    if (results.get(group.key)?.status === 'created') continue
+  const createOne = async (group: FbsSupplyGroupDraft) => {
+    if (results.get(group.key)?.status === 'created') return
     let idempotencyKey = keys.get(group.key)
     if (!idempotencyKey) {
       idempotencyKey = options.newKey()
@@ -451,6 +451,24 @@ export async function runFbsSupplyGroupCreation(
       options.onProgress?.(group.key, failure.result)
     }
   }
+  // WB limits and locks are seller-scoped. Keep each seller sequential while
+  // independent sellers proceed in at most three lanes; every group keeps its
+  // original idempotency key and individual recoverable result.
+  const bySeller = new Map<string, FbsSupplyGroupDraft[]>()
+  for (const group of groups) {
+    const sellerKey = group.key.split('|')[1] ?? 'legacy'
+    bySeller.set(sellerKey, [...(bySeller.get(sellerKey) ?? []), group])
+  }
+  const lanes = [...bySeller.values()]
+  const worker = async () => {
+    while (lanes.length) {
+      const lane = lanes.shift()!
+      for (const group of lane) await createOne(group)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, lanes.length) }, worker))
+  created.sort((a, b) => groups.findIndex((group) => group.key === a.groupKey)
+    - groups.findIndex((group) => group.key === b.groupKey))
   if (created.length > 0) await options.afterCreated?.(created)
   return results
 }

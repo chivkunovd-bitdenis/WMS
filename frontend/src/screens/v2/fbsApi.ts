@@ -454,6 +454,7 @@ export type FbsOrderPrintTape = {
 }
 
 export type FbsScanAutoPrintRequest = {
+  await_honest_sign?: boolean
   barcode: string
   idempotency_key: string
   print_qr: boolean

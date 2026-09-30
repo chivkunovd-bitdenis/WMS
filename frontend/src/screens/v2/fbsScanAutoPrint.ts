@@ -26,6 +26,7 @@ export type FbsPendingProductScanAttempt = {
   createdAt: number
   scanId?: string
   orderId?: string
+  packingBoxId?: string | null
   qrStarted: boolean
   chzStarted: boolean
 }
@@ -90,6 +91,7 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
         createdAt: row.createdAt,
         scanId: typeof row.scanId === 'string' ? row.scanId : undefined,
         orderId: typeof row.orderId === 'string' ? row.orderId : undefined,
+        packingBoxId: typeof row.packingBoxId === 'string' || row.packingBoxId === null ? row.packingBoxId : undefined,
         qrStarted: row.qrStarted === true,
         chzStarted: row.chzStarted === true,
       }]

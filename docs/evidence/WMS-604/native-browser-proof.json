@@ -1,0 +1,146 @@
+{
+  "browser": "147.0.7727.15",
+  "headless": true,
+  "permission": "local-network-access granted once for isolated test",
+  "url": "https://sellerfocus.pro/packing-scan-check/",
+  "rows": [
+    {
+      "barcode": "2900000000001",
+      "http_status": 200,
+      "elapsed_ms": 141.8,
+      "body": {
+        "job_id": "be32f6a5-23a4-4e87-a0f6-4f56842c633c",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-22"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000002",
+      "http_status": 200,
+      "elapsed_ms": 108.1,
+      "body": {
+        "job_id": "6f21f3c4-47ce-42a3-b1e6-5115d66f4d1b",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-23"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000003",
+      "http_status": 200,
+      "elapsed_ms": 104.3,
+      "body": {
+        "job_id": "fd071922-5df2-42a6-be33-a08c0a72ec0b",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-24"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000004",
+      "http_status": 200,
+      "elapsed_ms": 122.6,
+      "body": {
+        "job_id": "7fa87b83-efc9-4b3f-964d-0650c2361b8b",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-25"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000005",
+      "http_status": 200,
+      "elapsed_ms": 104.0,
+      "body": {
+        "job_id": "a40018df-2015-446d-8c5b-b3023df807e4",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-26"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000006",
+      "http_status": 200,
+      "elapsed_ms": 102.2,
+      "body": {
+        "job_id": "abd1d46d-5a98-47f9-98e8-9b7428643a90",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-27"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000007",
+      "http_status": 200,
+      "elapsed_ms": 110.9,
+      "body": {
+        "job_id": "1b9a5bd5-715f-4cee-866d-12b7a04718de",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-28"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000008",
+      "http_status": 200,
+      "elapsed_ms": 111.0,
+      "body": {
+        "job_id": "c1241c8f-7c6d-4920-ac71-8434636c1f58",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-29"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000009",
+      "http_status": 200,
+      "elapsed_ms": 109.3,
+      "body": {
+        "job_id": "ba4544d8-e084-445e-a378-13b400be0302",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-30"
+      },
+      "focused": true
+    },
+    {
+      "barcode": "2900000000010",
+      "http_status": 200,
+      "elapsed_ms": 120.4,
+      "body": {
+        "job_id": "247f6efe-e67e-4ea1-8775-c55de483e0de",
+        "status": "submitted",
+        "receipt": "WMS604_Proof-31"
+      },
+      "focused": true
+    }
+  ],
+  "print_calls": 0,
+  "dialogs": [],
+  "popups": [],
+  "page_errors": [],
+  "visible_error": null,
+  "date": "2026-09-30",
+  "functional_source_commit": "5875d6d7555ab93010436bfbceb931905bddf572",
+  "package_source_commit": "274d4ff0",
+  "transport": "Public HTTPS page -> loopback native bridge -> macOS CUPS -> dedicated virtual IPP printer",
+  "physical_printer_verified": false,
+  "delivered_documents": {
+    "count": 10,
+    "pages_each": 1,
+    "width_mm": 58,
+    "height_mm": 40,
+    "independent_decode": "All PDFs rasterized at 203 dpi and decoded with ZXing; exact WMS-PRINT-TEST-01 through WMS-PRINT-TEST-10"
+  },
+  "packaged_macos_smoke": {
+    "package_source_commit": "274d4ff0c8e003851135882d16858628a6ed1a99",
+    "frozen_executable_started_and_detached": true,
+    "http_status": 200,
+    "native_result": {
+      "job_id": "c067bbda-dd56-436c-a527-7ba04e869225",
+      "status": "submitted",
+      "receipt": "WMS604_Proof-32"
+    },
+    "focus_kept": true
+  }
+}

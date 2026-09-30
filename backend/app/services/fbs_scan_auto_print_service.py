@@ -95,6 +95,7 @@ def _selection_payload(
     print_qr: bool,
     print_chz: bool,
     reprint_chz: bool,
+    await_honest_sign: bool,
 ) -> dict[str, object]:
     return {
         "kind": _EVENT_KIND,
@@ -105,6 +106,7 @@ def _selection_payload(
         "print_qr": print_qr,
         "print_chz": print_chz,
         "reprint_chz": reprint_chz,
+        "await_honest_sign": await_honest_sign,
     }
 
 
@@ -116,6 +118,7 @@ def _selection_from_event(
     print_qr: bool,
     print_chz: bool,
     reprint_chz: bool,
+    await_honest_sign: bool,
 ) -> FbsScanAutoPrintSelection:
     payload = event.payload_json or {}
     if (
@@ -126,6 +129,7 @@ def _selection_from_event(
         or payload.get("print_qr") != print_qr
         or payload.get("print_chz") != print_chz
         or payload.get("reprint_chz") != reprint_chz
+        or bool(payload.get("await_honest_sign")) != await_honest_sign
     ):
         raise FbsScanAutoPrintError("idempotency_key_reused")
     try:
@@ -152,6 +156,7 @@ async def select_order_for_product_scan(
     print_chz: bool,
     reprint_chz: bool,
     actor_user_id: uuid.UUID,
+    await_honest_sign: bool = False,
 ) -> FbsScanAutoPrintSelection:
     # Fail closed before even reading the supply.  The all-off workstation
     # state is deliberately not a selection mode: it must leave no durable
@@ -200,7 +205,7 @@ async def select_order_for_product_scan(
         for order in orders
         if order.status != FBS_ORDER_STATUS_CANCELLED
         and (
-            not reprint_chz
+            not (reprint_chz or await_honest_sign)
             or (
                 order.status in FBS_ORDER_MARKING_WRITE_STATUSES
                 and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
@@ -250,13 +255,18 @@ async def select_order_for_product_scan(
                     print_qr=print_qr,
                     print_chz=print_chz,
                     reprint_chz=reprint_chz,
+                    await_honest_sign=await_honest_sign,
                 )
             try:
                 served_order_ids.add(uuid.UUID(str(payload["order_id"])))
             except (KeyError, TypeError, ValueError):
                 continue
 
-        candidates = [order for order in matching if order.id not in served_order_ids]
+        candidates = [
+            order for order in matching
+            if order.id not in served_order_ids
+            and (not await_honest_sign or order.pack_status != "packed")
+        ]
         if not candidates:
             raise FbsScanAutoPrintError("scan_product_exhausted")
         selected = min(candidates, key=picking_list_order_key)
@@ -268,6 +278,7 @@ async def select_order_for_product_scan(
             print_qr=print_qr,
             print_chz=print_chz,
             reprint_chz=reprint_chz,
+            await_honest_sign=await_honest_sign,
         )
         inserted = await record_document_event(
             session,
@@ -578,7 +589,7 @@ async def validate_bound_reprint_context(
     if (
         selection_event is None
         or payload.get("kind") != _EVENT_KIND
-        or payload.get("reprint_chz") is not True
+        or not (payload.get("reprint_chz") or payload.get("await_honest_sign"))
         or payload.get("order_id") != str(order_id)
         or selection_event.actor_user_id != actor_user_id
     ):
@@ -622,7 +633,8 @@ async def recover_released_reprint_kiz(
     )
     if selection_event.actor_user_id != actor_user_id:
         raise FbsScanAutoPrintError("scan_selection_not_found")
-    if (selection_event.payload_json or {}).get("reprint_chz") is not True:
+    payload = selection_event.payload_json or {}
+    if not (payload.get("reprint_chz") or payload.get("await_honest_sign")):
         return FbsScanAutoPrintReprintRecovery(status="not_attempted")
     state = await _target_state(session, tenant_id, supply_id, scan_id, "chz")
     if state.started:

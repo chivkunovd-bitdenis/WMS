@@ -1,9 +1,21 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+import { printPreparedQr } from '../../utils/printPreparedQr'
+
+// The scanner tests render the real workspace and scan intake; unrelated modal
+// contents and the picking screen do not participate in these scenarios.
+// OS/browser print transport has its own tests; this suite verifies routing and packing.
+vi.mock('../../utils/printPreparedQr', () => ({ printPreparedQr: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
+vi.mock('../../utils/useMarkingCodePrint', () => ({ useMarkingCodePrint: () => ({ openPrint: vi.fn(), dialog: null }) }))
+vi.mock('./FbsSupplyHistoryDialog', () => ({ FbsSupplyHistoryDialog: () => null }))
+vi.mock('./FbsPrintPreviewDialog', () => ({ FbsPrintPreviewDialog: () => null }))
+vi.mock('./FbsTransferSupplyDialog', () => ({ FbsTransferSupplyDialog: () => null, makeFbsTransferSupplyDeps: () => ({}) }))
 
 // WMS-575 · «Упаковка и маркировка»: скан принимает вся вкладка, где бы ни
 // стоял курсор, коды подряд не теряются, отметка ЧЗ — по ответу commit.
@@ -17,8 +29,8 @@ beforeAll(() => {
 })
 
 const SUPPLY_ID = 'sup-575'
-const STICKER_A = '*CDhjtA1111'
-const STICKER_B = '*CDhjtB2222'
+const STICKER_A = '4600000000017'
+const STICKER_B = STICKER_A
 const KIZ_A = '0104600000000017215AbCdEfGh1234'
 
 function order(id: string, wbOrderId: number, index: number, tail: string | null) {
@@ -95,6 +107,7 @@ const packagingTask = {
 type Call = { method: string; path: string; body: unknown }
 let calls: Call[]
 let delays: Record<string, number>
+let selectedCount = 0
 let committedTails: Record<string, string | null>
 const originalFetch = globalThis.fetch
 
@@ -113,21 +126,20 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const path = url.pathname.replace(/^\/api/, '')
   calls.push({ method, path: `${path}${url.search}`, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
-  if (path === '/operations/fbs-orders/kiz/lookup') {
+  if (path.endsWith('/scan-auto-print')) {
     await wait(delays.lookup ?? 0)
-    const sticker = url.searchParams.get('sticker')
-    const orderId = sticker === STICKER_A ? 'order-a' : sticker === STICKER_B ? 'order-b' : null
-    if (!orderId) {
-      return json({ detail: { code: 'sticker_not_found', message: 'sticker_not_found' } }, 404)
-    }
-    return json({
-      order_id: orderId, wb_order_id: orderId === 'order-a' ? 5001 : 5002,
-      product: { name: 'Футболка', image_url: null, barcode: null, seller_article: null },
-      current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
+    const orderId = selectedCount++ === 0 ? 'order-a' : 'order-b'
+    return json({ scan_id: `scan-${orderId}`, order_id: orderId, wb_order_id: orderId === 'order-a' ? 5001 : 5002,
+      requires_honest_sign: true, reprint_recovery: null, qr_asset: { status: 'ready', preview_url: '/fixture.png' },
+      binding_target: { order_id: orderId, product: { name: 'Футболка' } }, order_errors: [],
     })
   }
+  if (path === '/fixture.png') return new Response(new Blob(['fixture'], { type: 'image/png' }))
+  if (path.endsWith('/print-claim')) return json({ claimed: true, started: false })
+  if (path.endsWith('/print-started')) return json({ claimed: false, started: true })
   if (path === '/operations/fbs-orders/kiz/validate') {
     await wait(delays.validate ?? 0)
+    if (body.value === STICKER_A) return json({ detail: { code: 'invalid_kiz', message: 'Сканируйте Честный знак' } }, 422)
     return json({ ok: true, hints: [] })
   }
   if (path === '/operations/fbs-orders/kiz/commit') {
@@ -150,6 +162,9 @@ beforeEach(() => {
   calls = []
   delays = {}
   committedTails = {}
+  selectedCount = 0
+  vi.mocked(printPreparedQr).mockClear()
+  vi.stubGlobal('crypto', webcrypto)
   window.sessionStorage.clear()
   window.localStorage.clear()
   globalThis.fetch = server as typeof fetch
@@ -163,6 +178,7 @@ afterEach(() => {
   host.remove()
   document.body.innerHTML = ''
   globalThis.fetch = originalFetch
+  vi.unstubAllGlobals()
 })
 
 async function settle(ms = 0) {
@@ -202,7 +218,7 @@ async function openPackingTab(initial: FbsWorkspace = workspace()) {
     )
   })
   await settle(50)
-  expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).not.toBeNull()
+  expect(document.querySelector('[data-testid="fbs-unified-scan"]')).not.toBeNull()
 }
 
 const activeRow = () => document.querySelector<HTMLElement>('[data-testid="fbs-kiz-row-active"]')?.dataset.orderId ?? null
@@ -210,7 +226,7 @@ const rowTail = (orderId: string) => document.querySelector<HTMLElement>(`[data-
 const kizCalls = () => calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/'))
 
 describe('WMS-575 · «Упаковка и маркировка» принимает скан в любой точке', () => {
-  it('C5/R5: фокус на «Выбрать всё» — стикер A, ЧЗ A, стикер B без единого клика', async () => {
+  it('C5/R5: фокус на «Выбрать всё» — ШК товара, ЧЗ A, следующий ШК без единого клика', async () => {
     await openPackingTab()
     const selectAll = document.querySelector<HTMLButtonElement>('[data-testid="fbs-packing-select-all"]')!
     act(() => selectAll.focus())
@@ -227,10 +243,8 @@ describe('WMS-575 · «Упаковка и маркировка» принима
     await settle(60)
 
     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual([
-      '/operations/fbs-orders/kiz/lookup',
       '/operations/fbs-orders/kiz/validate',
       '/operations/fbs-orders/kiz/commit',
-      '/operations/fbs-orders/kiz/lookup',
     ])
     const commit = kizCalls().find((call) => call.path === '/operations/fbs-orders/kiz/commit')!
     expect((commit.body as { pairs: Array<{ order_id: string; value: string }> }).pairs[0]).toMatchObject({
@@ -241,7 +255,7 @@ describe('WMS-575 · «Упаковка и маркировка» принима
     expect(document.querySelectorAll('[data-testid="fbs-packing-select-order"] input:checked')).toHaveLength(0)
   })
 
-  it('C6/R6: стикер A и ЧЗ A подряд, пока сервер отвечает, — оба обработаны по порядку, ЧЗ у заказа A', async () => {
+  it('C6/R6: ШК товара и ЧЗ A подряд, пока сервер отвечает, — оба обработаны по порядку, ЧЗ у заказа A', async () => {
     delays = { lookup: 150, validate: 50, commit: 50 }
     await openPackingTab()
     act(() => (document.activeElement as HTMLElement | null)?.blur())
@@ -251,11 +265,10 @@ describe('WMS-575 · «Упаковка и маркировка» принима
     await settle(600)
 
     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual([
-      '/operations/fbs-orders/kiz/lookup',
       '/operations/fbs-orders/kiz/validate',
       '/operations/fbs-orders/kiz/commit',
     ])
-    const validate = kizCalls()[1]!
+    const validate = kizCalls()[0]!
     expect(validate.body).toMatchObject({ order_id: 'order-a', value: KIZ_A })
   })
 
@@ -284,13 +297,13 @@ describe('WMS-575 · «Упаковка и маркировка» принима
 
   it('C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле', async () => {
     await openPackingTab()
-    const input = document.querySelector<HTMLInputElement>('[data-testid="fbs-kiz-scan-input"] input, input[data-testid="fbs-kiz-scan-input"]')
-      ?? document.querySelector<HTMLElement>('[data-testid="fbs-kiz-scan-input"]')!.querySelector('input')!
+    const input = document.querySelector<HTMLInputElement>('[data-testid="fbs-unified-scan"] input')!
     act(() => input.focus())
     scan(STICKER_A)
     await settle(60)
 
-    expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
+    expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(1)
+    expect(kizCalls()).toHaveLength(0)
     expect(activeRow()).toBe('order-a')
     expect(input.value).toBe('')
   })
@@ -350,7 +363,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
 
   it('P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана', async () => {
     await openPackingTab()
-    const input = document.querySelector<HTMLElement>('[data-testid="fbs-kiz-scan-input"]')!.querySelector('input')!
+    const input = document.querySelector<HTMLInputElement>('[data-testid="fbs-unified-scan"] input')!
     act(() => input.focus())
     scan(STICKER_A)
     await settle(60)
@@ -374,7 +387,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
     expect(bodyOf('/operations/fbs-orders/kiz/commit')?.pairs?.[0]).toMatchObject({ order_id: 'order-a', value: KIZ_SYMBOLS })
   })
 
-  it('P2: сканер дважды прочитал стикер, пока шёл поиск, — второй снимает выбор, а не уходит как ЧЗ', async () => {
+  it('WMS-604: повтор товарного ШК вместо ЧЗ оставляет тот же заказ и не печатает', async () => {
     delays = { lookup: 150 }
     await openPackingTab()
     act(() => (document.activeElement as HTMLElement | null)?.blur())
@@ -382,12 +395,12 @@ describe('WMS-575 · исправления по ревью ночного ка�
     scan(STICKER_A)
     await settle(400)
 
-    expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
-    expect(activeRow()).toBeNull()
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).toBeNull()
+    expect(kizCalls()).toHaveLength(0)
+    expect(activeRow()).toBe('order-a')
+    expect(printPreparedQr).not.toHaveBeenCalled()
   })
 
-  it('P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {
+  it('P2: ШК и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {
     delays = { lookup: 150 }
     await openPackingTab()
     act(() => (document.activeElement as HTMLElement | null)?.blur())

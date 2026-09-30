@@ -75,7 +75,7 @@ export function FbsSupplyGroupCreateDialog({
   const [deliveryType, setDeliveryType] = useState<'warehouse_sc' | 'pvz'>('warehouse_sc')
   const [preflights, setPreflights] = useState<Record<string, PreflightState>>({})
   const [results, setResults] = useState<Map<string, FbsGroupCreateResult>>(() => new Map())
-  const [creatingKey, setCreatingKey] = useState<string | null>(null)
+  const [creatingKeys, setCreatingKeys] = useState<Set<string>>(() => new Set())
   const [creating, setCreating] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [assemblyTaskError, setAssemblyTaskError] = useState<string | null>(null)
@@ -97,7 +97,7 @@ export function FbsSupplyGroupCreateDialog({
     if (!open) return
     setDeliveryType('warehouse_sc')
     setResults(new Map())
-    setCreatingKey(null)
+    setCreatingKeys(new Set())
     setAttempted(false)
     setAssemblyTaskError(null)
     keysRef.current = new Map()
@@ -207,10 +207,10 @@ export function FbsSupplyGroupCreateDialog({
           isApiError: (cause) => cause instanceof FbsApiError,
           onProgress: (groupKey, result) => {
             if (result === 'creating') {
-              setCreatingKey(groupKey)
+              setCreatingKeys((current) => new Set(current).add(groupKey))
               return
             }
-            setCreatingKey(null)
+            setCreatingKeys((current) => { const next = new Set(current); next.delete(groupKey); return next })
             setResults((current) => new Map(current).set(groupKey, result))
           },
           afterCreated: async (created) => {
@@ -238,14 +238,14 @@ export function FbsSupplyGroupCreateDialog({
     } finally {
       creatingRef.current = false
       setCreating(false)
-      setCreatingKey(null)
+      setCreatingKeys(new Set())
       setAttempted(true)
     }
   }
 
   const groupStatus = (group: FbsSupplyGroupDraft) => {
     const result = results.get(group.key)
-    if (creatingKey === group.key) {
+    if (creatingKeys.has(group.key)) {
       return (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <CircularProgress size={14} />
