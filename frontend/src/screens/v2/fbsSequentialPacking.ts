@@ -126,6 +126,15 @@ export function makePackingScanDeps(
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
+  let startedWorkspace: FbsWorkspace | null = null
+  const ensureSupplyStarted = async () => {
+    const current = workspace()
+    if (current.supply.id !== supplyId) throw new Error('Поставка изменилась. Повторите скан в исходной поставке.')
+    if (current.supply.packaging_task_id) return current
+    if (!startedWorkspace) startedWorkspace = await startFbsSupplyWork(token, authHeaders, supplyId)
+    if (!startedWorkspace.supply.packaging_task_id) throw new Error('Не удалось начать работу с поставкой. Повторите скан.')
+    return startedWorkspace
+  }
   // Separate unfinished new-flow scans from historical checkbox-based print scans.
   const storageId = `${supplyId}:sequential-packing`
   const request = async (path: string, init?: RequestInit) => {
@@ -193,6 +202,9 @@ export function makePackingScanDeps(
     },
     bind: async (result, raw) => {
       await validateFbsKiz(token, authHeaders, result.order_id, raw)
+      // The ordinary supply screen starts work before KIZ binding. The unified
+      // screen has no Start button, so preserve the same server prerequisite here.
+      await ensureSupplyStarted()
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
       const codeKey = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
       const commit = (confirmed: boolean) => commitFbsKiz(token, authHeaders, [{
@@ -221,9 +233,7 @@ export function makePackingScanDeps(
         })
     },
     pack: async (result) => {
-      let current = workspace()
-      if (current.supply.id !== supplyId) throw new Error('Поставка изменилась. Повторите скан в исходной поставке.')
-      if (!current.supply.packaging_task_id) current = await startFbsSupplyWork(token, authHeaders, supplyId)
+      const current = await ensureSupplyStarted()
       const taskId = current.supply.packaging_task_id
       if (!taskId) throw new Error('Задание упаковки ещё не создано.')
       const task = await request(`/operations/packaging-tasks/${taskId}`) as PackagingTask
