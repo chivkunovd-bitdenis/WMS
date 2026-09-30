@@ -720,6 +720,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         onNote={() => undefined}
         hideHeader
         hideFooterActions
+        groupByCell
         products={screenData.products}
         plan={screenData.plan}
         stock={screenData.stock}
