@@ -545,14 +545,9 @@ export function FfFbsSupplyWorkspace({
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
   const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
   const [kizScanValue, setKizScanValue] = useState('')
-  // Ссылки на строки заказов: после скана стикера подкручиваем список к нужной,
-  // иначе в поставке на 26 позиций оператор не понимает, какая строка ожила.
-  const kizRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
-
-  useEffect(() => {
-    if (!kizScanActive) return
-    kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [kizScanActive])
+  // Последний распознанный скан поднимается первой строкой и сразу подсвечивается:
+  // оператор видит результат до печати и фонового перечитывания вердикта WB.
+  const [recentlyScannedOrderId, setRecentlyScannedOrderId] = useState<string | null>(null)
   const [kizScanBusy, setKizScanBusy] = useState(false)
   const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
@@ -657,6 +652,7 @@ export function FfFbsSupplyWorkspace({
       () => sequentialOpenRef.current && sequentialWorkspaceRef.current?.supply.id === supplyId,
       () => assemblyOpenBoxIdRef.current,
       (orderId, value) => setKizCommittedTails((current) => ({ ...current, [orderId]: kizValueTail(value) })),
+      setRecentlyScannedOrderId,
     ))
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1133,6 +1129,7 @@ export function FfFbsSupplyWorkspace({
           }
           if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
           kizSelectedStickerRef.current = raw
+          setRecentlyScannedOrderId(found.order_id)
           if (found.needs_confirmation) setKizConfirmTarget(found)
           else setKizScanActive(found)
           activeProductScanBarcodeRef.current = null
@@ -1244,6 +1241,7 @@ export function FfFbsSupplyWorkspace({
         attempt.scanId = result.scan_id
         attempt.orderId = result.order_id
         updateFbsPendingProductScan(token, workspace.supply.id, attempt)
+        setRecentlyScannedOrderId(result.order_id)
         // WMS-575, Д5: заказ выбран сервером — звук по ответу scan-auto-print.
         // Печать идёт своей очередью ниже; её сбой даст сигнал ошибки отдельно.
         playScanSuccess()
@@ -1472,9 +1470,6 @@ export function FfFbsSupplyWorkspace({
           completeFbsPendingProductScan(token, workspace.supply.id, raw)
         }
 
-        window.requestAnimationFrame(() => {
-          kizRowRefs.current[result.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        })
         if (printErrors.length > 0) {
           setKizScanError({
             text: `Заказ WB № ${result.wb_order_id} выбран. ${printErrors.join(' ')}`,
@@ -1711,11 +1706,6 @@ export function FfFbsSupplyWorkspace({
             })
           }
         })()
-        // Native scanner typing can bring the input back into view. After the
-        // updated row renders, return to the order whose KIZ was just saved.
-        window.requestAnimationFrame(() => {
-          kizRowRefs.current[savedOrderId]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        })
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
         playScanError()
@@ -2559,11 +2549,13 @@ export function FfFbsSupplyWorkspace({
   const packingOrders = useMemo(() => {
     if (!workspace) return []
     return [...workspace.orders].sort((a, b) => {
+      if (a.id === recentlyScannedOrderId) return -1
+      if (b.id === recentlyScannedOrderId) return 1
       const byName = a.product.name.localeCompare(b.product.name, 'ru')
       if (byName !== 0) return byName
       return a.wb_order_id - b.wb_order_id
     })
-  }, [workspace])
+  }, [workspace, recentlyScannedOrderId])
 
   // WB ставит ЧЗ в optional, поэтому после «Очистить ЧЗ» проверка «метки приняты»
   // проходит по пустому списку. Без кода заказ не напечатан, иначе «Печать всего»
@@ -3061,6 +3053,7 @@ export function FfFbsSupplyWorkspace({
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = (sequentialScanner?.view()?.orderId ?? kizScanActive?.order_id) === order.id
+                      const scanHighlighted = kizRowActive || recentlyScannedOrderId === order.id
                       const ozonPositions = isOzonSupply ? order.positions : []
                       const ids = (isOzonSupply
                         ? [
@@ -3094,7 +3087,6 @@ export function FfFbsSupplyWorkspace({
                       return (
                         <Stack
                           key={order.id}
-                          ref={(node: HTMLDivElement | null) => { kizRowRefs.current[order.id] = node }}
                           direction="row"
                           spacing={1.5}
                           sx={{
@@ -3103,14 +3095,15 @@ export function FfFbsSupplyWorkspace({
                             py: 1.25,
                             bgcolor: markingView.tone === 'error'
                               ? (theme) => alpha(theme.palette.error.main, 0.08)
-                              : kizRowActive ? 'info.light'
+                              : scanHighlighted ? 'success.light'
                                 : markingView.tone === 'success' ? 'success.light'
                                   : (printed ? 'action.hover' : 'background.paper'),
                             borderLeft: '4px solid',
                             borderLeftColor: markingShortage || markingView.tone === 'error' ? 'error.main'
-                              : kizRowActive ? 'info.main' : markingView.tone === 'success' ? 'success.main' : 'transparent',
+                              : scanHighlighted ? 'success.main' : markingView.tone === 'success' ? 'success.main' : 'transparent',
                           }}
                           data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
+                          data-scan-highlighted={scanHighlighted ? 'true' : undefined}
                           data-kiz-tail={tail ?? ''}
                           data-marking-tone={markingView.tone}
                           data-order-id={order.id}
