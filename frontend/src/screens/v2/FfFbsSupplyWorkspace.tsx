@@ -2331,8 +2331,14 @@ export function FfFbsSupplyWorkspace({
       setNotice(`ЧЗ очищены у ${cleared} заказов.`)
     } finally {
       setClearMarkingOrders(null)
-      await refreshPackagingTask()
-      setBusy(false)
+      try {
+        // DELETE removes both the WB value and the saved WMS snapshot. Reload the
+        // workspace immediately so the old tail cannot remain in the open row
+        // until the next 15-second background refresh.
+        await Promise.all([refreshPackagingTask(), load(true)])
+      } finally {
+        setBusy(false)
+      }
     }
   }
 
