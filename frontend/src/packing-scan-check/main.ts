@@ -28,11 +28,15 @@ function acceptScan(raw: string) {
     errorMessage.hidden = false
     return
   }
+  const startedAt = performance.now()
   void printDirectQr({
     imageDataUrl: prepared.get(value)!,
     idempotencyKey: crypto.randomUUID(),
     widthMm: 58,
     heightMm: 40,
+  }).then(() => {
+    app.dataset.lastPrintMs = String(Math.round(performance.now() - startedAt))
+    app.dataset.printedCount = String(Number(app.dataset.printedCount || 0) + 1)
   }).catch((error: unknown) => {
     // Never hide a failed print with a later successful scan.
     errorMessage.textContent = error instanceof Error ? error.message : 'Принтер не принял этикетку'
