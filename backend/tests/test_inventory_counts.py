@@ -269,6 +269,25 @@ async def test_inventory_count_shows_actual_wb_alias_and_ozon_barcodes(
     assert flat[str(ozon_only)]["wb_barcode"] is None
     assert tree[str(ozon_only)]["wb_barcode"] is None
 
+    selected = await async_client.patch(
+        f"/products/{canonical}/primary-barcode",
+        headers=setup.headers,
+        json={"barcode": "WB-ALIAS-IGNORED-598"},
+    )
+    assert selected.status_code == 200, selected.text
+    refreshed = await async_client.get(
+        f"/operations/inventory-counts/{created['id']}", headers=setup.headers
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    refreshed_count = refreshed.json()
+    refreshed_flat = {line["product_id"]: line for line in refreshed_count["lines"]}
+    refreshed_tree = _product_nodes(
+        [child for cell in refreshed_count["cells"] for child in cell["children"]]
+    )
+    assert refreshed_flat[str(canonical)]["barcode"] == "WB-ALIAS-IGNORED-598"
+    assert refreshed_tree[str(canonical)]["barcode"] == "WB-ALIAS-IGNORED-598"
+    assert refreshed_flat[str(canonical)]["wb_barcode"] == "WB-CANONICAL-598"
+
     found = await async_client.post(
         f"/operations/inventory-counts/{created['id']}/found",
         headers=setup.headers,

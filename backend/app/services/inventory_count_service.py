@@ -41,6 +41,10 @@ from app.services import (
 from app.services.catalog_service import list_ozon_product_links, load_ozon_primary_image_urls
 from app.services.defect_warehouse_service import DEFECT_LOCATION_CODE, defect_service_write
 from app.services.inventory_container_service import ContainerKind
+from app.services.product_barcode_service import (
+    load_barcodes_by_product,
+    primary_product_barcode,
+)
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -551,13 +555,14 @@ async def get_count(
 
 
 def _print_sheet_barcode(
-    product: Product, ozon_link: ProductMarketplaceLink | None
+    product: Product,
+    ozon_link: ProductMarketplaceLink | None,
+    wb_barcodes: tuple[str, ...] = (),
 ) -> str | None:
     """The current product-label choice, including Ozon-only products."""
-    from app.services.product_barcode_service import primary_product_barcode
-
     return primary_product_barcode(
         product,
+        wb_barcodes=wb_barcodes,
         ozon_barcodes=tuple(ozon_link.external_barcodes or []) if ozon_link else (),
     )
 
@@ -615,6 +620,7 @@ async def print_sheet_data(
 
     all_product_ids = set(lines_products) | set(selected_products)
     ozon_links = await list_ozon_product_links(session, tenant_id, all_product_ids)
+    aliases = await load_barcodes_by_product(session, tenant_id, all_product_ids)
 
     totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
         session, tenant_id, list(lines_products)
@@ -623,7 +629,7 @@ async def print_sheet_data(
     rows = [
         PrintSheetRow(
             product_id=pid,
-            barcode=_print_sheet_barcode(product, ozon_links.get(pid)),
+            barcode=_print_sheet_barcode(product, ozon_links.get(pid), aliases.get(pid, ())),
             article=_print_sheet_article(product, ozon_links.get(pid)),
             name=product.name,
             total=totals[pid].on_hand if pid in totals else 0,
