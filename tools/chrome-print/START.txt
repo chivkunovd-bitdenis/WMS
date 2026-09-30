@@ -1,10 +1,10 @@
-Это текстовые команды запуска уже установленного Google Chrome. Они ничего не устанавливают и не скачивают, не запускают помощников, не меняют службы или настройки безопасности.
+Скачать запуск Chrome:
+Windows: https://sellerfocus.pro/packing-scan-check/WMS-Chrome-Print-Windows.zip
+Mac: https://sellerfocus.pro/packing-scan-check/WMS-Chrome-Print-macOS.zip
 
-Windows: сохраните WMS-Chrome-Print-Windows.cmd и откройте его двойным щелчком.
-macOS: сохраните WMS-Chrome-Print-macOS.command. В Terminal выполните: sh "$HOME/Downloads/WMS-Chrome-Print-macOS.command"
+Windows: откройте ZIP, извлеките .cmd и запустите двойным щелчком.
+Mac: откройте ZIP. Затем в Terminal выполните: sh "$HOME/Downloads/WMS-Chrome-Print-macOS.command"
 
-Команда открывает отдельное окно Chrome с --kiosk-printing и отдельным постоянным профилем. Личный Chrome закрывать не нужно. Для рабочей печати открывайте страницу через эту команду: обычный запуск Chrome не включает этот режим.
+Откроется отдельное окно установленного Chrome в режиме --kiosk-printing. Он отправляет этикетку на принтер по умолчанию без окна подтверждения. Размер бумаги задаётся на принтере и выбирается на странице. Для следующих смен запускайте Chrome той же командой.
 
-Термопринтер должен быть установлен и выбран принтером по умолчанию в ОС. В его настройках заранее выберите размер бумаги, совпадающий с размером на странице. В режиме --kiosk-printing Chrome отправляет печать без окна подтверждения. Команды не меняют принтер и размер бумаги за вас.
-
-Лист из 10 тестовых штрихкодов: https://sellerfocus.pro/packing-scan-check/test-barcodes.pdf
+Тестовые штрихкоды: https://sellerfocus.pro/packing-scan-check/test-barcodes.pdf
