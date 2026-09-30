@@ -1372,6 +1372,81 @@ async def test_inventory_count_scan_with_line_id_resolves_same_barcode_across_se
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_line_id_accepts_selected_ozon_barcode_only_for_its_product(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "PrimaryLineScan")
+    seller_a = await _seller(async_client, setup, "Ozon seller")
+    seller_b = await _seller(async_client, setup, "Other seller")
+    product_a = await _product(async_client, setup, name="Ozon A", seller_id=seller_a)
+    product_b = await _product(async_client, setup, name="WB B", seller_id=seller_b)
+    async with SessionLocal() as session:
+        first = await session.get(Product, product_a)
+        other = await session.get(Product, product_b)
+        assert first is not None and other is not None
+        first.wb_barcode = "WB-LINE-A"
+        other.wb_barcode = "WB-LINE-B"
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=setup.tenant_id,
+                seller_id=seller_a,
+                product_id=product_a,
+                marketplace="ozon",
+                external_barcodes=["OZN-LINE-A"],
+                is_active=True,
+            )
+        )
+        await session.commit()
+    await _balance(setup, product_a, 2)
+    await _balance(setup, product_b, 2)
+    created = await _create_all(async_client, setup)
+    line_a = next(line for line in created["lines"] if line["product_id"] == str(product_a))
+
+    selected = await async_client.patch(
+        f"/products/{product_a}/primary-barcode",
+        headers=setup.headers,
+        json={"barcode": "OZN-LINE-A"},
+    )
+    assert selected.status_code == 200, selected.text
+    refreshed = await async_client.get(
+        f"/operations/inventory-counts/{created['id']}", headers=setup.headers
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    refreshed_line = next(
+        line for line in refreshed.json()["lines"] if line["id"] == line_a["id"]
+    )
+    assert refreshed_line["barcode"] == "OZN-LINE-A"
+
+    counted = await async_client.post(
+        f"/operations/inventory-counts/{created['id']}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": ["OZN-LINE-A"],
+            "cell_id": str(setup.location_id),
+            "line_id": line_a["id"],
+            "scan_id": "primary-line-a",
+        },
+    )
+    assert counted.status_code == 200, counted.text
+    counted_lines = {line["product_id"]: line for line in counted.json()["count"]["lines"]}
+    assert counted_lines[str(product_a)]["actual_quantity"] == 1
+    assert counted_lines[str(product_b)]["actual_quantity"] is None
+
+    wrong_product = await async_client.post(
+        f"/operations/inventory-counts/{created['id']}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": ["WB-LINE-B"],
+            "cell_id": str(setup.location_id),
+            "line_id": line_a["id"],
+            "scan_id": "wrong-product-line-a",
+        },
+    )
+    assert wrong_product.status_code == 422, wrong_product.text
+    assert wrong_product.json()["detail"] == "line_barcode_mismatch"
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_drops_empty_places_but_keeps_them_scannable(
     async_client: AsyncClient,
 ) -> None:

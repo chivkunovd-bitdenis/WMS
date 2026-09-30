@@ -1492,10 +1492,25 @@ async def record_found(
         )
         if existing is None:
             raise InventoryCountError("line_not_found")
+        product_id = existing.product_id
+        aliases = await load_barcodes_by_product(session, tenant_id, {product_id})
+        ozon_links = await list_ozon_product_links(session, tenant_id, {product_id})
+        wb_barcodes = aliases.get(product_id, ())
+        ozon_link = ozon_links.get(product_id)
+        ozon_barcodes = tuple(ozon_link.external_barcodes or []) if ozon_link else ()
+        primary_barcode = primary_product_barcode(
+            existing.product, wb_barcodes=wb_barcodes, ozon_barcodes=ozon_barcodes
+        )
         line_codes = {
-            value.lower()
-            for value in (existing.product.wb_barcode, existing.product.sku_code)
-            if value
+            value.strip().lower()
+            for value in (
+                existing.product.wb_barcode,
+                existing.product.sku_code,
+                primary_barcode,
+                *wb_barcodes,
+                *ozon_barcodes,
+            )
+            if isinstance(value, str) and value.strip()
         }
         if line_codes.isdisjoint(lowered):
             # Экран прислал не тот код для этой строки — довериться голому
