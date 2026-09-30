@@ -10,7 +10,12 @@ from app.core.settings import settings
 from app.services.tokens import create_access_token, decode_access_token
 
 
-def test_access_token_has_finite_lifetime() -> None:
+@pytest.fixture(autouse=True)
+def use_test_signing_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "jwt_secret_key", "test-only-signing-secret-with-enough-length")
+
+
+def test_access_token_has_no_expiration() -> None:
     user_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
     seller_id = uuid.uuid4()
@@ -29,23 +34,22 @@ def test_access_token_has_finite_lifetime() -> None:
     assert claims["seller_id"] == str(seller_id)
     assert claims["role"] == "fulfillment_seller"
     assert "iat" in claims
-    assert claims["exp"] - claims["iat"] == settings.access_token_expire_minutes * 60
+    assert "exp" not in claims
 
 
-@pytest.mark.parametrize("legacy", [False, True])
-def test_expired_access_tokens_are_rejected(legacy: bool) -> None:
+def test_expired_access_tokens_are_rejected() -> None:
     issued = datetime.now(UTC) - timedelta(minutes=settings.access_token_expire_minutes + 1)
     payload = {"sub": str(uuid.uuid4()), "iat": issued}
-    if not legacy:
-        payload["exp"] = issued + timedelta(minutes=settings.access_token_expire_minutes)
+    payload["exp"] = issued + timedelta(minutes=settings.access_token_expire_minutes)
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_access_token(token)
 
 
-def test_recent_legacy_session_remains_valid() -> None:
+@pytest.mark.parametrize("age_days", [0, 3650])
+def test_signed_session_without_expiration_remains_valid(age_days: int) -> None:
     token = jwt.encode(
-        {"sub": str(uuid.uuid4()), "iat": datetime.now(UTC)},
+        {"sub": str(uuid.uuid4()), "iat": datetime.now(UTC) - timedelta(days=age_days)},
         settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
     )
     assert decode_access_token(token)["sub"]
