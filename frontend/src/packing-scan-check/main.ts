@@ -1,6 +1,6 @@
 import { LABEL_SIZES, loadLabelSizeId, saveLabelSizeId, type LabelSizeId } from '../utils/labelSize'
 import * as bwipjs from 'bwip-js'
-import { printPreparedQr } from '../utils/printPreparedQr'
+import { dispatchPreparedQrForCheck } from '../utils/printPreparedQr'
 import { findTestLabel, TEST_LABELS } from './catalog'
 import './style.css'
 
@@ -35,7 +35,7 @@ function acceptScan(raw: string) {
     return
   }
   const size = LABEL_SIZES.find((item) => item.id === sizeSelect.value)!
-  void printPreparedQr({
+  void dispatchPreparedQrForCheck({
     imageDataUrl: prepared.get(value)!,
     idempotencyKey: crypto.randomUUID(),
     widthMm: size.widthMm,
