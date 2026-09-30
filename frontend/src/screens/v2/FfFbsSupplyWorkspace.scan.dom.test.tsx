@@ -134,6 +134,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       binding_target: { order_id: orderId, product: { name: 'Футболка' } }, order_errors: [],
     })
   }
+  if (path.endsWith('/print-assets')) return json({ assets: [], order_errors: [] })
   if (path === '/fixture.png') return new Response(new Blob(['fixture'], { type: 'image/png' }))
   if (path.endsWith('/print-claim')) return json({ claimed: true, started: false })
   if (path.endsWith('/print-started')) return json({ claimed: false, started: true })
@@ -224,6 +225,31 @@ async function openPackingTab(initial: FbsWorkspace = workspace()) {
 const activeRow = () => document.querySelector<HTMLElement>('[data-testid="fbs-kiz-row-active"]')?.dataset.orderId ?? null
 const rowTail = (orderId: string) => document.querySelector<HTMLElement>(`[data-order-id="${orderId}"]`)?.dataset.kizTail ?? ''
 const kizCalls = () => calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/'))
+
+describe('WMS-604 unified packing presentation', () => {
+  it('prepares missing stickers without a supply Start button and keeps rows and scanner registered', async () => {
+    const initial = workspace()
+    initial.orders.forEach((order) => { order.sticker.code = null })
+    const packingHost = document.createElement('div')
+    document.body.appendChild(packingHost)
+    const registerScanner = vi.fn()
+    const noop = () => undefined
+    await act(async () => root.render(<FfFbsSupplyWorkspace
+      token="t-575" authHeaders={() => ({})} supplyId={SUPPLY_ID} initialWorkspace={initial}
+      open onClose={noop} assemblyFrame={{ packingHost, registerScanner, active: false,
+        expanded: false, visible: true, onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
+        onWorkspaceChange: noop, registerEscape: noop }} />))
+    await settle(60)
+    expect(document.querySelector('[data-testid="fbs-assembly-supply-sup-575"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('Начать работу с поставкой')
+    expect(packingHost.querySelectorAll('[data-order-id]')).toHaveLength(2)
+    expect(packingHost.textContent).toContain('5001')
+    expect(registerScanner.mock.calls.some(([, controller]) => Boolean(controller))).toBe(true)
+    const prepares = calls.filter((call) => call.path.endsWith('/print-assets'))
+    expect(prepares).toHaveLength(1)
+    expect(prepares[0].body).toMatchObject({ kind: 'order_sticker', order_ids: ['order-a', 'order-b'], retry_missing: true })
+  })
+})
 
 describe('WMS-575 · «Упаковка и маркировка» принимает скан в любой точке', () => {
   it('C5/R5: фокус на «Выбрать всё» — ШК товара, ЧЗ A, следующий ШК без единого клика', async () => {

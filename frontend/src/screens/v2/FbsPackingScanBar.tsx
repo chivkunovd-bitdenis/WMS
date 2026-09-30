@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { LabelSizeSelect } from '../../components/LabelSizeSelect'
+import { loadLabelSizeId } from '../../utils/labelSize'
 import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
@@ -9,6 +11,7 @@ export function FbsPackingScanBar({ controllers, enabled }: {
   controllers: PackingScanController[]; enabled: boolean
 }) {
   const [value, setValue] = useState('')
+  const [labelSizeId, setLabelSizeId] = useState(loadLabelSizeId)
   const [error, setError] = useState<string | null>(null)
   const active = controllers.find((one) => one.hasPending())?.view()
   const intake = useScanIntake({
@@ -34,6 +37,7 @@ export function FbsPackingScanBar({ controllers, enabled }: {
         onChange={(event) => setValue(event.target.value)}
         slotProps={{ htmlInput: { 'data-packing-scan': 'true' } }}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); intake.submit(value); setValue('') } }} />
+      <LabelSizeSelect value={labelSizeId} onChange={(size) => setLabelSizeId(size.id)} />
       {active ? <Typography variant="body2" sx={{ minWidth: 160 }}>
         {active.name}{active.needsKiz ? ' · сканируйте ЧЗ' : ' · завершение упаковки'}
       </Typography> : null}

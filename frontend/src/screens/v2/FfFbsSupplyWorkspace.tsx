@@ -662,6 +662,8 @@ export function FfFbsSupplyWorkspace({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, supplyId, workspace?.supply.id, open])
   const registerSequentialScanner = assemblyFrame?.registerScanner
+  const unifiedStickerAttempts = useRef(new Set<string>())
+  useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
@@ -977,6 +979,25 @@ export function FfFbsSupplyWorkspace({
       if (write.isCurrent()) setBusy(false)
     }
   }
+
+  // The unified list has no per-supply Start button. Prepare the missing
+  // marketplace stickers on entry, without waiting for the first product scan.
+  useEffect(() => {
+    if (!open || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
+    const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
+    if (!missing.length) return
+    for (const order of missing) unifiedStickerAttempts.current.add(order.id)
+    const write = beginWorkspaceWrite()
+    void fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+      kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
+    }).then((batch) => {
+      if (!write.isCurrent()) return
+      if (batch.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
+      void load(true)
+    }).catch((cause: unknown) => {
+      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+    })
+  }, [open, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {
     if (!workspace) return
@@ -4210,6 +4231,13 @@ export function FfFbsSupplyWorkspace({
         </>
       )
       : null
+    if (assemblyFrame.registerScanner && !isOzonSupply) {
+      return <>
+        {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
+        {frameMessages}
+        {workspaceDialogs}
+      </>
+    }
     return (
       <>
       {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
