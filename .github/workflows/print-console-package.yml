@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
+          - os: windows-latest
             artifact: Windows-x64
           - os: macos-14
             artifact: Mac-arm64
