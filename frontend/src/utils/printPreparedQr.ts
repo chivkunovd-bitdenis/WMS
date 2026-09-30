@@ -20,6 +20,10 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
     || ![input.widthMm, input.heightMm].every((size) => Number.isFinite(size) && size > 0 && size <= 300)) {
     throw new Error('Некорректная этикетка для печати')
   }
+  // Chrome silent printing uses the printer's portrait media orientation.
+  // Normalize the same physical sheet to avoid clipping landscape CSS pages.
+  const pageWidth = Math.min(input.widthMm, input.heightMm)
+  const pageHeight = Math.max(input.widthMm, input.heightMm)
   const key = `${storagePrefix}${input.idempotencyKey}`
   const hash = await fingerprint(input)
   const existingRaw = localStorage.getItem(key)
@@ -34,7 +38,7 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
     const frame = document.createElement('iframe')
     frame.setAttribute('aria-hidden', 'true')
     frame.tabIndex = -1
-    Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: `${input.widthMm}mm`, height: `${input.heightMm}mm`, border: '0' })
+    Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: `${pageWidth}mm`, height: `${pageHeight}mm`, border: '0' })
     let settled = false
     let crossedPrintBoundary = false
     const active = document.activeElement
@@ -85,7 +89,7 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
       }
     }
     frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>WMS label</title><style>
-      @page { size: ${input.widthMm}mm ${input.heightMm}mm; margin: 0; }
+      @page { size: ${pageWidth}mm ${pageHeight}mm; margin: 0; }
       html, body { margin: 0; padding: 0; }
       img { position: fixed; inset: 0; display: block; box-sizing: border-box; width: 100%; height: 100%; padding: 2mm; object-fit: contain; image-rendering: pixelated; }
       </style></head><body><img src="${input.imageDataUrl}" alt=""></body></html>`

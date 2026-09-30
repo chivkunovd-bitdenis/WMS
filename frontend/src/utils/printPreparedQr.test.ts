@@ -40,9 +40,15 @@ describe('Chrome prepared-image printing', () => {
     expect(decode).toHaveBeenCalledOnce()
     expect(targets[0]!.print).toHaveBeenCalledOnce()
     expect(decode.mock.invocationCallOrder[0]).toBeLessThan(targets[0]!.print.mock.invocationCallOrder[0]!)
-    expect(frames[0]!.srcdoc).toContain('@page { size: 58mm 40mm; margin: 0; }')
+    expect(frames[0]!.srcdoc).toContain('@page { size: 40mm 58mm; margin: 0; }')
     expect(document.querySelectorAll('iframe')).toHaveLength(0)
     expect(document.activeElement?.id).toBe('scan')
+  })
+  it.each([[58, 40, 40, 58], [60, 40, 40, 60], [60, 80, 60, 80], [70, 120, 70, 120]])('keeps physical %sx%s paper as portrait %sx%s', async (widthMm, heightMm, pageWidth, pageHeight) => {
+    await printPreparedQr({ ...input, widthMm, heightMm })
+    expect(frames[0]!.srcdoc).toContain(`@page { size: ${pageWidth}mm ${pageHeight}mm; margin: 0; }`)
+    expect(frames[0]!.style.width).toBe(`${pageWidth}mm`)
+    expect(frames[0]!.style.height).toBe(`${pageHeight}mm`)
   })
   it('serializes scans until afterprint and retains each label size', async () => {
     autoFinish = false
