@@ -327,6 +327,15 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               <Typography variant="caption" sx={{ fontWeight: 750 }}>{ready} из {total} подготовлено к отгрузке</Typography>
             </Stack>
           </Box>
+          <Button
+            variant="outlined"
+            startIcon={<PrintOutlinedIcon />}
+            onClick={() => void printPickingList()}
+            disabled={!allLoaded}
+            data-testid="fbs-pick-list-print"
+          >
+            Печать листа подбора
+          </Button>
           <IconButton onClick={requestClose} disabled={busy} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>
@@ -391,16 +400,9 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
           ) : null}
 
           {allLoaded && stage === 'picking' ? (
-            <Stack spacing={2}>
-              <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
-                  Печать листа подбора
-                </Button>
-              </Stack>
-              <Box data-testid="fbs-pick-unified">
-                <FfFbsAssemblyPick token={token} supplies={pickSupplies} />
-              </Box>
-            </Stack>
+            <Box data-testid="fbs-pick-unified">
+              <FfFbsAssemblyPick token={token} supplies={pickSupplies} />
+            </Box>
           ) : null}
 
           {/* Рамки держатся смонтированными после первого открытия «Упаковки»;
