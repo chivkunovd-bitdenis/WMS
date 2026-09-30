@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
+from contextlib import closing
 import hashlib
 import io
 import json
@@ -112,7 +113,7 @@ class Printer:
         self.lock = threading.Lock()
         self.submit = submit
         self.adapter = (DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()) if submit is None else None
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT)")
 
     def _submit(self, data, queue):
@@ -129,7 +130,7 @@ class Printer:
         if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 4_000_000:
             raise ValueError("Некорректная PNG-этикетка")
         digest = hashlib.sha256(data).hexdigest()
-        with self.lock, sqlite3.connect(self.db) as db:
+        with self.lock, closing(sqlite3.connect(self.db)) as db:
             old = db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
             if old:
                 if old[0] != digest:
