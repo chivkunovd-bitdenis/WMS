@@ -1272,25 +1272,38 @@ async def cancel_order_kiz(
     try:
         order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
         current = await _current_sgtin_marking_for_update(session, order.id, include_rejected=True)
-        if current is None:
+        saved_meta = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+        saved_sgtin = saved_meta.get(MARKING_KIND_SGTIN)
+        has_saved_sgtin = isinstance(saved_sgtin, dict) and bool(saved_sgtin.get("value"))
+        if current is None and not has_saved_sgtin:
             raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
         line = None
-        if current.marking_code is not None and current.marking_code.packaging_task_line_id:
+        if (
+            current is not None
+            and current.marking_code is not None
+            and current.marking_code.packaging_task_line_id
+        ):
             line = await session.scalar(
                 select(PackagingTaskLine)
                 .where(PackagingTaskLine.id == current.marking_code.packaging_task_line_id)
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
-        await void_existing_sgtin_marking(
-            session,
-            tenant_id,
-            order,
-            current,
-            http_client,
-            actor_user_id=actor_user_id,
-            reason=_VOID_OPERATOR_CANCEL_REASON,
-        )
+        if current is not None:
+            await void_existing_sgtin_marking(
+                session,
+                tenant_id,
+                order,
+                current,
+                http_client,
+                actor_user_id=actor_user_id,
+                reason=_VOID_OPERATOR_CANCEL_REASON,
+            )
+        else:
+            token = await marking_svc.require_marketplace_token(
+                session, tenant_id, order.seller_id
+            )
+            await _delete_sgtin_from_wb(order, http_client, token)
         if line is not None:
             # Cancelled labels no longer cover a unit. Re-read the existing codes
             # under the same line lock as printing; pool-to-external replacement
@@ -1312,6 +1325,20 @@ async def cancel_order_kiz(
             line.qty_marking_printed = sum(
                 count for source, count in counts.items() if source != _EXTERNAL_FBS_MARKING_SOURCE
             )
+        remaining_markings = list(
+            (
+                await session.scalars(
+                    select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.id)
+                )
+            ).all()
+        )
+        next_meta = dict(saved_meta)
+        next_meta.pop(MARKING_KIND_SGTIN, None)
+        order.meta_details_json = next_meta
+        order.metadata_delivery_allowed = marking_svc.compute_delivery_allowed(
+            order, remaining_markings
+        )
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.commit()
     except Exception:
         await session.rollback()
