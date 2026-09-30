@@ -151,7 +151,7 @@ export function parseFbsAssemblySupplyIds(value: string | null): string[] {
   return [...new Set(ids)]
 }
 
-export type FbsAssemblyStageKey = 'composition' | 'picking' | 'packing'
+export type FbsAssemblyStageKey = 'composition' | 'picking' | 'packing' | 'boxes'
 
 type StageStorage = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -162,7 +162,7 @@ function assemblyStageKey(supplyIds: string[]): string {
 export function readFbsAssemblyStage(supplyIds: string[], storage?: StageStorage): FbsAssemblyStageKey | null {
   try {
     const value = (storage ?? window.sessionStorage).getItem(assemblyStageKey(supplyIds))
-    return value === 'composition' || value === 'picking' || value === 'packing' ? value : null
+    return value === 'composition' || value === 'picking' || value === 'packing' || value === 'boxes' ? value : null
   } catch {
     return null
   }

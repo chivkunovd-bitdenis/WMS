@@ -30,10 +30,10 @@ vi.mock('./FfFbsSupplyWorkspace', () => ({
     // The production Ozon workspace retains this active-frame condition.
     // Use the real scanner hook so a physical burst exposes double listeners.
     const intake = useScanIntake({
-      enabled: open && ozon && assemblyFrame.active && assemblyFrame.visible,
+      enabled: open && ozon && assemblyFrame.active && assemblyFrame.visible && assemblyFrame.stage !== 'boxes',
       emitRaw: true, onScan: ozonScan,
     })
-    return <div ref={intake.bindRoot}>
+    return <div ref={intake.bindRoot} data-stage={assemblyFrame.stage}>
       <button data-testid={`activate-${supplyId}`} onClick={assemblyFrame.onActivate}>Начать</button>
       <button data-testid={`finish-${supplyId}`} onClick={assemblyFrame.onDeactivate}>Завершить</button>
     </div>
@@ -77,6 +77,20 @@ async function scan(raw: string) {
 }
 
 describe('WMS-604 mixed marketplace scan ownership', () => {
+  it('opens boxes after packing and suspends scan intake until returning to packing', async () => {
+    await render(['wb', 'ozon'])
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Состав', 'Подбор', 'Упаковка и маркировка', 'Короба'])
+    await act(async () => tabs.find((tab) => tab.textContent === 'Короба')!.click())
+    expect(document.querySelectorAll('[data-stage="boxes"]')).toHaveLength(2)
+    await scan('4600000000017')
+    expect(wbScan).not.toHaveBeenCalled()
+    expect(ozonScan).not.toHaveBeenCalled()
+    await act(async () => tabs.find((tab) => tab.textContent === 'Упаковка и маркировка')!.click())
+    await scan('4600000000017')
+    expect(wbScan).toHaveBeenCalledTimes(1)
+  })
+
   it('routes each physical scan once across WB → active Ozon → WB', async () => {
     await render(['wb', 'ozon'])
     await scan('4600000000017')
