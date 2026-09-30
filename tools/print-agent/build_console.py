@@ -44,7 +44,24 @@ def main():
         "Сборка без Developer ID/notarization: macOS может запросить разрешение запуска.\n",
         encoding="utf-8")
     target = f"Mac-{platform.machine()}" if sys.platform == "darwin" else "Windows-x64"
-    print(shutil.make_archive(str(dist / f"WMS-Print-Console-{target}"), "zip", dist, "wms-print"))
+    if sys.platform == "darwin":
+        # PyInstaller can collect a Python framework without its original
+        # resources. Sign the collected bundle, and preserve its symlinks in ZIP.
+        for framework in (package / "_internal").glob("*.framework"):
+            subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(framework)], check=True)
+            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(framework)], check=True)
+        archive = dist / f"WMS-Print-Console-{target}.zip"
+        subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(package), str(archive)], check=True)
+        unpacked = ROOT / "build-console" / "archive-check"
+        if unpacked.exists():
+            shutil.rmtree(unpacked)
+        subprocess.run(["ditto", "-xk", str(archive), str(unpacked)], check=True)
+        for framework in (unpacked / "wms-print/_internal").glob("*.framework"):
+            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(framework)], check=True)
+        subprocess.run([str(unpacked / "wms-print/wms-print"), "--self-test"], check=True)
+        print(archive)
+    else:
+        print(shutil.make_archive(str(dist / f"WMS-Print-Console-{target}"), "zip", dist, "wms-print"))
 
 
 if __name__ == "__main__":
