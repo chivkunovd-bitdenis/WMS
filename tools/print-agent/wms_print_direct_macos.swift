@@ -209,6 +209,16 @@ private final class Printer {
                 jobs[job.idempotencyKey]=job
             } catch { blocked.insert(file.deletingPathExtension().lastPathComponent);diagnostics.append("Повреждена запись \(file.lastPathComponent); исходник сохранён") }
         }
+        // An orphan image may be an interrupted enqueue OR a lost metadata file from
+        // an already submitted job. After restart those cases cannot be distinguished.
+        let knownFiles=Set(jobs.keys.map { digest(Data($0.utf8)) })
+        for file in try FileManager.default.contentsOfDirectory(at:records,includingPropertiesForKeys:nil) where file.pathExtension == "png" {
+            let name=file.deletingPathExtension().lastPathComponent
+            if !knownFiles.contains(name) && !blocked.contains(name) {
+                blocked.insert(name)
+                diagnostics.append("Для PNG \(file.lastPathComponent) отсутствует описание; исход неизвестен, повтор защищён")
+            }
+        }
         // Saved means no irreversible call began. Only this state resumes automatically.
         if autoWork { for job in jobs.values where job.status == "saved" { schedule(job.idempotencyKey) } }
     }
@@ -608,6 +618,23 @@ private func runSelfTest() throws {
     linked=try Printer(directory:linkedPath,autoWork:false)
     try check((try linked!.list()["jobs"] as! [[String:Any]]).count==1,"corrupt child does not hide other history")
     try check(!(try linked!.list()["diagnostics"] as! [String]).isEmpty,"corrupt child diagnostic")
+    linked=nil
+    try FileManager.default.removeItem(at:childFile)
+    linked=try Printer(directory:linkedPath,autoWork:false)
+    do { _=try linked!.printJob(body("child"));throw PrintError.message("orphan PNG accepted") }
+    catch PrintError.message(let message) { try check(message.contains("повреждена"),"orphan PNG cannot cause duplicate after restart") }
+    let legacyPath=root.appendingPathComponent("legacy")
+    try FileManager.default.createDirectory(at:legacyPath,withIntermediateDirectories:true)
+    var identity=png;identity.append(Data("|58.0x40.0".utf8))
+    let oldData=try JSONSerialization.data(withJSONObject:["v3":["hash":digest(png),"receipt":"test-printer-3"],"v4":["hash":digest(identity),"receipt":"test-printer-4"],"uncertain":["hash":digest(identity)]])
+    let oldFile=legacyPath.appendingPathComponent("direct-jobs.json")
+    try durableWrite(oldData,oldFile)
+    let old=try Printer(directory:legacyPath,autoWork:false,submit:{_,_ in throw PrintError.message("legacy must not submit")})
+    for key in ["v3","v4","uncertain"] {
+        let job=try old.printJob(body(key))
+        try check(job["legacy"] as? Bool == true && job["imageAvailable"] as? Bool == false && job["widthMm"]==nil,"legacy provenance preserved")
+    }
+    try check(try Data(contentsOf:oldFile)==oldData,"old journal untouched")
     print("WMS Print Direct macOS: package OK; durable 350 jobs, abrupt process exits, disk faults, lost receipt, reconciliation, explicit copies, retry race, dimensions, process timeout")
 }
 private func runServer(testDirectory:URL?=nil) throws {

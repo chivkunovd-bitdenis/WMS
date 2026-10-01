@@ -42,7 +42,10 @@ class NativeRuntimeTest(unittest.TestCase):
         subprocess.run(
             [
                 "swiftc",
+                "-O",
+                "-whole-module-optimization",
                 str(ROOT / "wms_print_direct_macos.swift"),
+                "-Xlinker",
                 str(cls.root / "cups.o"),
                 "-lcups",
                 "-o",

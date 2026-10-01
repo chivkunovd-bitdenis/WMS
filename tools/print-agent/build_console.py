@@ -52,6 +52,7 @@ def main():
                 "-O",
                 "-whole-module-optimization",
                 str(ROOT / "wms_print_direct_macos.swift"),
+                "-Xlinker",
                 str(cups_object),
                 "-lcups",
                 "-o",
