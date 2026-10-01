@@ -470,6 +470,20 @@ async def create_manual_task(
     return loaded
 
 
+def _line_has_progress(line: PackagingTaskLine) -> bool:
+    # Printing happens before picking. Deleting such a row clears the code and
+    # print-history foreign keys (ON DELETE SET NULL), losing their binding.
+    return any(
+        value > 0
+        for value in (
+            line.qty_packed_in_task,
+            line.qty_confirmed_packed,
+            line.qty_marking_printed,
+            line.qty_marking_external,
+        )
+    )
+
+
 async def sync_lines_from_unload_plan(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -543,9 +557,9 @@ async def sync_lines_from_unload_plan(
 
     for product_id, ln in existing.items():
         if product_id not in seen:
-            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+            if _line_has_progress(ln):
                 pick_changed_with_progress = True
-            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+            else:
                 await session.delete(ln)
 
     task.pick_resync_warning = pick_changed_with_progress
@@ -644,9 +658,9 @@ async def sync_lines_from_pick_allocations(
             )
     for product_id, ln in existing.items():
         if product_id not in seen:
-            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+            if _line_has_progress(ln):
                 pick_changed_with_progress = True
-            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+            else:
                 await session.delete(ln)
 
     task.pick_resync_warning = pick_changed_with_progress
