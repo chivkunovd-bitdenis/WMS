@@ -259,6 +259,10 @@ async def select_order_for_product_scan(
                     reprint_chz=reprint_chz,
                     await_honest_sign=await_honest_sign,
                 )
+            # A row-field scan (WMS-630) never reserves the order for ordinary
+            # product scans: a failed row attempt must not hide the order.
+            if str(payload.get("barcode", "")).startswith("order:"):
+                continue
             try:
                 served_order_ids.add(uuid.UUID(str(payload["order_id"])))
             except (KeyError, TypeError, ValueError):
