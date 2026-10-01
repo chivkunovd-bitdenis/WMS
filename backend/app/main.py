@@ -13,6 +13,7 @@ from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
+from app.api.developer_requests import router as developer_requests_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
 from app.api.fbs_kiz import router as fbs_kiz_router
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(developer_requests_router)
     app.include_router(staff_accounts_router)
     app.include_router(seller_staff_accounts_router)
     app.include_router(subscription_router)

@@ -21,10 +21,16 @@ _broker = settings.celery_broker_url or "memory://"
 celery_app = Celery(
     "wms",
     broker=_broker,
-    include=["app.tasks.background_jobs", "app.tasks.billing_tasks"],
+    include=[
+        "app.tasks.background_jobs", "app.tasks.billing_tasks", "app.tasks.developer_requests",
+    ],
 )
 celery_app.conf.task_ignore_result = True
 celery_app.conf.beat_schedule = {
+    "developer-requests-sync": {
+        "task": "wms.developer_requests_sync",
+        "schedule": float(settings.trello_sync_interval_sec),
+    },
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
         "schedule": crontab(hour=3, minute=0),
