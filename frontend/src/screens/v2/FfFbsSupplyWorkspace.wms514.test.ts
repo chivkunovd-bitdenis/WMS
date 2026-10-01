@@ -140,7 +140,7 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       source.indexOf('const scanKizCode = useCallback'),
       source.indexOf('const dropKizScanActive = useCallback'),
     )
-    expect(kizScan).toContain('const pendingProductAttempt = productBarcode && workspace?.supply.id')
+    expect(kizScan).toContain('const pendingProductAttempt = productBarcode')
     expect(kizScan).toContain('const effectivePreferences = pendingProductAttempt?.preferences ?? preferences')
     expect(kizScan).toContain('boundReprintStarted = await kizAutoPrintQueueRef.current.enqueue')
     expect(kizScan).toContain('pendingProductAttempt.chzStarted = true')

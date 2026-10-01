@@ -196,3 +196,17 @@ describe('WMS-514 · durable automatic print target', () => {
     expect(releaseClaim).not.toHaveBeenCalled()
   })
 })
+
+
+it('WMS-625 checks native outcome even when server already marked started', async () => {
+  const print = vi.fn()
+  const markStarted = vi.fn()
+  const reconcileStarted = vi.fn(async () => { throw new Error('queue canceled') })
+  await expect(startClaimedAutomaticPrint('scan', print, {
+    claim: async () => ({ claimed: false, started: true }), markStarted,
+    releaseClaim: async () => undefined, reconcileStarted,
+  })).rejects.toThrow('queue canceled')
+  expect(print).not.toHaveBeenCalled()
+  expect(markStarted).not.toHaveBeenCalled()
+  expect(reconcileStarted).toHaveBeenCalledOnce()
+})

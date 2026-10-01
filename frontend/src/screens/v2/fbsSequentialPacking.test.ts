@@ -128,3 +128,14 @@ describe('WMS-604 scan routing recovery', () => {
     expect(first.scanner.view()?.orderId).toBe('1')
   })
 })
+
+
+it('WMS-625 routes restored pending barcode before selecting any other order after reload', async () => {
+  const first = fixture(false)
+  const second = fixture(false)
+  first.deps.pendingBarcode = () => 'original-barcode'
+  first.scanner = createPackingScanController(first.deps)
+  await expect(routePackingScan([second.scanner, first.scanner], 'new-barcode')).rejects.toThrow('original-barcode')
+  expect(first.deps.select).not.toHaveBeenCalled()
+  expect(second.deps.select).not.toHaveBeenCalled()
+})

@@ -1,3 +1,6 @@
+import { dispatchDurableQr, prepareDurableQr, restoreDurableQr, type DirectQrContext } from '../../utils/durableDirectQr'
+import { loadLabelSizeId, resolveLabelSize } from '../../utils/labelSize'
+import { packingScanLocks } from './fbsPackingScanLocks'
 import { resolveFbsAssetUrl, type FbsPrintAsset } from './fbsApi'
 import {
   buildWbOrderQrLabelHtml,
@@ -24,6 +27,7 @@ export type FbsPendingProductScanAttempt = {
   idempotencyKey: string
   preferences: FbsScanPrintPreferences
   createdAt: number
+  ownerId?: string
   scanId?: string
   orderId?: string
   packingBoxId?: string | null
@@ -33,7 +37,7 @@ export type FbsPendingProductScanAttempt = {
 
 type TokenClaims = { sub?: unknown; tenant_id?: unknown }
 
-function tokenIdentity(token: string): { tenant: string; user: string } {
+export function tokenIdentity(token: string): { tenant: string; user: string } {
   try {
     const payload = token.split('.')[1]
     if (!payload) throw new Error('token payload is absent')
@@ -69,26 +73,34 @@ function normalizePreferences(value: unknown): FbsScanPrintPreferences | null {
   }
 }
 
-function readPendingAttempts(token: string, supplyId: string): FbsPendingProductScanAttempt[] {
+export function readPendingAttempts(token: string, supplyId: string): FbsPendingProductScanAttempt[] {
   try {
     const raw = window.localStorage.getItem(fbsPendingProductScanStorageKey(token, supplyId))
     const parsed = raw ? JSON.parse(raw) : []
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) throw new Error('Invalid saved attempts')
     return parsed.flatMap((value): FbsPendingProductScanAttempt[] => {
-      if (!value || typeof value !== 'object') return []
+      if (!value || typeof value !== 'object') {
+        throw new Error('Invalid saved attempt')
+        return []
+      }
       const row = value as Partial<FbsPendingProductScanAttempt>
       const preferences = normalizePreferences(row.preferences)
       if (
         typeof row.barcode !== 'string'
         || typeof row.idempotencyKey !== 'string'
-        || typeof row.createdAt !== 'number'
+        || !row.barcode || !row.idempotencyKey
+        || typeof row.createdAt !== 'number' || !Number.isFinite(row.createdAt)
         || !preferences
-      ) return []
+      ) {
+        throw new Error('Invalid saved attempt')
+        return []
+      }
       return [{
         barcode: row.barcode,
         idempotencyKey: row.idempotencyKey,
         preferences,
         createdAt: row.createdAt,
+        ownerId: typeof row.ownerId === 'string' ? row.ownerId : undefined,
         scanId: typeof row.scanId === 'string' ? row.scanId : undefined,
         orderId: typeof row.orderId === 'string' ? row.orderId : undefined,
         packingBoxId: typeof row.packingBoxId === 'string' || row.packingBoxId === null ? row.packingBoxId : undefined,
@@ -97,7 +109,7 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
       }]
     })
   } catch {
-    return []
+    throw new Error('Не удалось прочитать сохранённую попытку скана. Не очищайте данные сайта: исходный заказ нужно восстановить до нового скана.')
   }
 }
 
@@ -111,7 +123,7 @@ function writePendingAttempts(
     if (attempts.length === 0) window.localStorage.removeItem(key)
     else window.localStorage.setItem(key, JSON.stringify(attempts))
   } catch {
-    // Server idempotency remains authoritative when workstation storage is unavailable.
+    throw new Error('Не удалось сохранить попытку скана в браузере. Освободите место или разрешите хранилище и повторите исходный штрихкод.')
   }
 }
 
@@ -126,9 +138,10 @@ export function claimFbsPendingProductScan(
   barcode: string,
   preferences: FbsScanPrintPreferences,
   createId: () => string,
+  ownerId?: string,
 ): FbsPendingProductScanAttempt {
   const attempts = readPendingAttempts(token, supplyId)
-  const existing = attempts.find((attempt) => attempt.barcode === barcode)
+  const existing = attempts.find((attempt) => attempt.barcode === barcode && attempt.ownerId === ownerId)
   if (existing) {
     writePendingAttempts(token, supplyId, attempts)
     return existing
@@ -138,6 +151,7 @@ export function claimFbsPendingProductScan(
     idempotencyKey: createId(),
     preferences: { ...preferences },
     createdAt: Date.now(),
+    ownerId,
     qrStarted: false,
     chzStarted: false,
   }
@@ -149,10 +163,10 @@ export function peekFbsPendingProductScan(
   token: string,
   supplyId: string,
   barcode: string,
+  ownerId?: string,
 ): FbsPendingProductScanAttempt | null {
   const attempts = readPendingAttempts(token, supplyId)
-  writePendingAttempts(token, supplyId, attempts)
-  return attempts.find((attempt) => attempt.barcode === barcode) ?? null
+  return attempts.find((attempt) => attempt.barcode === barcode && attempt.ownerId === ownerId) ?? null
 }
 
 export function updateFbsPendingProductScan(
@@ -161,7 +175,7 @@ export function updateFbsPendingProductScan(
   attempt: FbsPendingProductScanAttempt,
 ): void {
   const attempts = readPendingAttempts(token, supplyId)
-  const next = attempts.filter((item) => item.barcode !== attempt.barcode)
+  const next = attempts.filter((item) => item.idempotencyKey !== attempt.idempotencyKey)
   writePendingAttempts(token, supplyId, [...next, attempt])
 }
 
@@ -169,11 +183,12 @@ export function completeFbsPendingProductScan(
   token: string,
   supplyId: string,
   barcode: string,
+  ownerId?: string,
 ): void {
   writePendingAttempts(
     token,
     supplyId,
-    readPendingAttempts(token, supplyId).filter((attempt) => attempt.barcode !== barcode),
+    readPendingAttempts(token, supplyId).filter((attempt) => attempt.barcode !== barcode || attempt.ownerId !== ownerId),
   )
 }
 
@@ -272,4 +287,44 @@ export async function printFbsOrderQrAsset(
   }
   const dataUrl = await blobToDataUrl(await response.blob())
   await printTapeSections([buildWbOrderQrLabelHtml(dataUrl)])
+}
+
+/** Call inside the supply flow lock, before selecting any server-side unit. */
+export async function claimOwnedFbsPendingProductScan(
+  token: string, supplyId: string, barcode: string, preferences: FbsScanPrintPreferences,
+  createId: () => string, ownerId: string,
+): Promise<FbsPendingProductScanAttempt> {
+  const attempts = readPendingAttempts(token, supplyId)
+  const own = attempts.find((attempt) => attempt.ownerId === ownerId)
+  if (own && own.barcode !== barcode) throw new Error(`Есть незавершённая попытка печати. Повторите её штрихкод ${own.barcode}, чтобы восстановить исходный заказ.`)
+  let original = own
+  if (!original) {
+    for (const attempt of attempts) {
+      if (!attempt.ownerId || !await packingScanLocks().active(attempt.ownerId)) { original = attempt; break }
+    }
+  }
+  if (original) {
+    if (original.barcode !== barcode) throw new Error(`Есть незавершённая попытка печати. Повторите её штрихкод ${original.barcode}, чтобы восстановить исходный заказ.`)
+    original.ownerId = ownerId
+    updateFbsPendingProductScan(token, supplyId, original)
+    return original
+  }
+  return claimFbsPendingProductScan(token, supplyId, barcode, preferences, createId, ownerId)
+}
+
+/** Ordinary WB only shares QR transport, keeping selection and quantity semantics. */
+export async function printFbsDurableOrderQrAsset(
+  token: string, asset: FbsPrintAsset, context: DirectQrContext, requireExisting = false,
+): Promise<void> {
+  let attempt = await restoreDurableQr(context.scanId, context)
+  if (!attempt) {
+    if (requireExisting) throw new Error('Исходная этикетка не найдена в браузере. Результат прежней отправки нужно сверить в журнале WMS Print; новая копия не отправлена.')
+    if (asset.status !== 'ready' || !asset.preview_url) throw new Error('Стикер заказа ещё не готов к печати.')
+    const response = await fetch(resolveFbsAssetUrl(asset.preview_url), { headers: { Authorization: `Bearer ${token}` } })
+    if (!response.ok) throw new Error('Не удалось загрузить стикер заказа для печати.')
+    const imageDataUrl = await blobToDataUrl(await response.blob())
+    const size = resolveLabelSize(loadLabelSizeId())
+    attempt = await prepareDurableQr({ imageDataUrl, idempotencyKey: context.scanId, widthMm: size.widthMm, heightMm: size.heightMm, context })
+  }
+  await dispatchDurableQr(attempt.input, undefined, undefined, requireExisting)
 }

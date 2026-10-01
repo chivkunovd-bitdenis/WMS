@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('./fbsPackingScanLocks', () => ({ packingScanLocks: () => ({ owner: async () => 'test-owner', active: async () => false, run: async (_scope: string, action: () => Promise<unknown>) => action() }) }))
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
 
