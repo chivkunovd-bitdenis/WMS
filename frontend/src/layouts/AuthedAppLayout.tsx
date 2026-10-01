@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 
+import { DeveloperRequests, type DeveloperRequestsProps } from '../components/developer-requests/DeveloperRequests'
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
 import type { FfPermissions } from '../utils/ffPermissions'
@@ -21,6 +22,7 @@ import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions
 
 type Props = {
   children: ReactNode
+  developerRequests?: DeveloperRequestsProps
   onLogout: () => void
   title?: string
   subtitle?: string
@@ -35,6 +37,7 @@ type Props = {
 
 export function AuthedAppLayout({
   children,
+  developerRequests,
   onLogout,
   userLabel,
   userJobTitle,
@@ -133,10 +136,11 @@ export function AuthedAppLayout({
           </Box>
         </Drawer>
 
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }} data-testid="app-content">
+        <Box component="main" sx={{ flexGrow: 1, p: 3, pb: developerRequests ? 10 : 3 }} data-testid="app-content">
           <Toolbar />
           {children}
         </Box>
+        {developerRequests && <DeveloperRequests {...developerRequests} />}
       </Box>
     )
   }
@@ -335,6 +339,7 @@ export function AuthedAppLayout({
         sx={(theme) => ({
           flexGrow: 1,
           p: 3,
+          pb: developerRequests ? 10 : 3,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}
         data-testid="app-content"
@@ -342,6 +347,7 @@ export function AuthedAppLayout({
         <Toolbar />
         {children}
       </Box>
+      {developerRequests && <DeveloperRequests {...developerRequests} />}
     </Box>
   )
 }

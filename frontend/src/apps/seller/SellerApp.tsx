@@ -412,6 +412,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     )
     return (
       <SellerLayout
+        developerRequests={{ me, token }}
         onLogout={() => logout()}
         title="Портал селлера"
         userLabel={me.display_name}

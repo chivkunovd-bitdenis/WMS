@@ -3005,6 +3005,7 @@ export default function App() {
 
     const v2 = (
       <AuthedAppLayout
+        developerRequests={{ me, token }}
         onLogout={onLogout}
         title="Портал ФФ"
         userLabel={me.display_name}

@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 
+import { DeveloperRequests, type DeveloperRequestsProps } from '../../components/developer-requests/DeveloperRequests'
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
@@ -56,6 +57,7 @@ export function visibleSellerNavItems(base: string, permissions: SellerPermissio
 
 type Props = {
   children: ReactNode
+  developerRequests?: DeveloperRequestsProps
   onLogout: () => void
   title?: string
   userLabel?: string
@@ -75,6 +77,7 @@ type Props = {
 
 export function SellerLayout({
   children,
+  developerRequests,
   onLogout,
   title = 'Портал селлера',
   userLabel,
@@ -198,10 +201,11 @@ export function SellerLayout({
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 3 } }} data-testid="app-content">
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 3 }, pb: developerRequests ? 10 : undefined }} data-testid="app-content">
         <Toolbar />
         {children}
       </Box>
+      {developerRequests && <DeveloperRequests {...developerRequests} />}
     </Box>
   )
 }

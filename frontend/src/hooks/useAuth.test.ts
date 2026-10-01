@@ -87,6 +87,7 @@ describe('cross-tab session change', () => {
 
 function meFixture(sellerName: string): Me {
   return {
+    tenant_id: 'tenant-a',
     id: `user-${sellerName}`,
     email: `${sellerName}@example.test`,
     display_name: sellerName,

@@ -3,6 +3,18 @@ x-withdrawal-environment: &withdrawal-environment
   WITHDRAWAL_ENVIRONMENT: ${WITHDRAWAL_ENVIRONMENT:-production}
   WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED: ${WITHDRAWAL_PRODUCTION_SUBMIT_ENABLED:-false}
 
+# Optional WMS-624 bridge. Definitions only: no credentials are stored here.
+x-trello-environment: &trello-environment
+  TRELLO_API_KEY: ${TRELLO_API_KEY:-}
+  TRELLO_TOKEN: ${TRELLO_TOKEN:-}
+  TRELLO_BOARD_ID: ${TRELLO_BOARD_ID:-}
+  TRELLO_REVIEW_LIST_ID: ${TRELLO_REVIEW_LIST_ID:-}
+  TRELLO_QUEUED_LIST_ID: ${TRELLO_QUEUED_LIST_ID:-}
+  TRELLO_IN_PROGRESS_LIST_ID: ${TRELLO_IN_PROGRESS_LIST_ID:-}
+  TRELLO_COMPLETED_LIST_ID: ${TRELLO_COMPLETED_LIST_ID:-}
+  TRELLO_CLIENT_LABEL_ID: ${TRELLO_CLIENT_LABEL_ID:-}
+  TRELLO_SYNC_INTERVAL_SEC: ${TRELLO_SYNC_INTERVAL_SEC:-60}
+
 services:
   db:
     image: postgres:16
@@ -106,7 +118,7 @@ services:
       context: ./backend
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
     environment:
-      <<: *withdrawal-environment
+      <<: [*withdrawal-environment, *trello-environment]
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
@@ -129,6 +141,7 @@ services:
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     environment:
       <<: *withdrawal-environment
+      TRELLO_SYNC_INTERVAL_SEC: ${TRELLO_SYNC_INTERVAL_SEC:-60}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
