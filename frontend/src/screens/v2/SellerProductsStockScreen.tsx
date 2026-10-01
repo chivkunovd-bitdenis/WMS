@@ -30,6 +30,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
+import { useSellerAsyncScope } from './useSellerAsyncScope'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductStockLines } from '../../components/ProductStockLines'
 import { formatStockQty } from '../../utils/formatStockQty'
@@ -334,9 +335,10 @@ async function checkPlatformConnected(
   headers: Record<string, string>,
   url: string,
   isConnected: (body: unknown) => boolean,
+  signal?: AbortSignal,
 ): Promise<{ status: ConnectionStatus; message: string | null }> {
   try {
-    const res = await fetch(apiUrl(url), { headers })
+    const res = await fetch(apiUrl(url), { headers, signal })
     if (!res.ok) {
       return { status: 'check_failed', message: await readApiErrorMessage(res) }
     }
@@ -356,8 +358,11 @@ async function startMarketplaceSync(
     platformFallback: string
     checkFallback: string
   },
+  signal?: AbortSignal,
 ): Promise<MarketplaceSyncStart> {
-  const check = await checkPlatformConnected(headers, options.tokensUrl, options.isConnected)
+  if (signal?.aborted) return { kind: 'skipped' }
+  const check = await checkPlatformConnected(headers, options.tokensUrl, options.isConnected, signal)
+  if (signal?.aborted) return { kind: 'skipped' }
   if (check.status === 'check_failed') {
     return {
       kind: 'failed',
@@ -368,7 +373,7 @@ async function startMarketplaceSync(
     return { kind: 'skipped' }
   }
   try {
-    const res = await fetch(apiUrl(options.syncUrl), { method: 'POST', headers })
+    const res = await fetch(apiUrl(options.syncUrl), { method: 'POST', headers, signal })
     if (!res.ok) {
       return {
         kind: 'failed',
@@ -393,25 +398,27 @@ async function startMarketplaceSync(
 
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
+  signal?: AbortSignal,
+  marketplace?: 'wildberries' | 'ozon',
 ): Promise<SellerCatalogSyncOutcome> {
   // Astra P1: прежняя версия считала 2xx-ответ /sync-products готовым каталогом
   // и сразу перечитывала /seller-catalog/page на пустых данных. Теперь мы
   // возвращаем идентификатор job'а каждой подключённой площадки и даём
   // наблюдателю (observeImportJob) решить, когда реально вызывать load().
-  const wb = await startMarketplaceSync(headers, {
+  const wb: MarketplaceSyncStart = marketplace === 'ozon' ? { kind: 'skipped' } : await startMarketplaceSync(headers, {
     tokensUrl: '/integrations/wildberries/self/tokens',
     syncUrl: '/integrations/wildberries/self/sync-products',
     isConnected: (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
     platformFallback: 'Не удалось синхронизировать Wildberries.',
     checkFallback: 'Не удалось проверить подключение Wildberries.',
-  })
-  const ozon = await startMarketplaceSync(headers, {
+  }, signal)
+  const ozon: MarketplaceSyncStart = marketplace === 'wildberries' ? { kind: 'skipped' } : await startMarketplaceSync(headers, {
     tokensUrl: '/integrations/ozon/self/account',
     syncUrl: '/integrations/ozon/self/sync-products',
     isConnected: (body) => Boolean((body as { connected?: boolean }).connected),
     platformFallback: 'Не удалось синхронизировать Ozon.',
     checkFallback: 'Не удалось проверить подключение Ozon.',
-  })
+  }, signal)
   return { wb, ozon }
 }
 
@@ -529,13 +536,14 @@ export function SellerProductsStockScreen({
   const [wbSyncProgress, setWbSyncProgress] = useState<SyncProgressState | null>(null)
   const [ozonSyncProgress, setOzonSyncProgress] = useState<SyncProgressState | null>(null)
   const syncAbortRef = useRef<Map<'wildberries' | 'ozon', AbortController>>(new Map())
+  const captureScope = useSellerAsyncScope(token)
   useEffect(() => {
     const aborts = syncAbortRef.current
     return () => {
       for (const controller of aborts.values()) controller.abort()
       aborts.clear()
     }
-  }, [])
+  }, [token])
 
   // Токен сессии, к которой относятся показанные строки. Держим в ref, чтобы
   // ответ, пришедший после смены сессии, было с чем сравнить (WMS-488).
@@ -550,6 +558,8 @@ export function SellerProductsStockScreen({
     setReserveDirections({})
     setSelectedKeys(new Set())
     setSelectedItemsByKey(new Map())
+    setWbSyncProgress(null)
+    setOzonSyncProgress(null)
   }, [token])
 
   useEffect(() => {
@@ -614,6 +624,9 @@ export function SellerProductsStockScreen({
       return changed ? next : current
     })
   }, [authHeaders, debouncedSearch, filterCategory, filterFulfillment, filterMarketplace, page, rowsPerPage, token])
+
+  const latestLoadRef = useRef(load)
+  useEffect(() => { latestLoadRef.current = load }, [load])
 
   useEffect(() => {
     void load()
@@ -797,6 +810,8 @@ export function SellerProductsStockScreen({
 
   const watchMarketplaceSync = useCallback(
     (marketplaceToWatch: 'wildberries' | 'ozon', jobId: string) => {
+      const scope = captureScope()
+      if (!scope.isCurrent()) return
       syncAbortRef.current.get(marketplaceToWatch)?.abort()
       const controller = new AbortController()
       syncAbortRef.current.set(marketplaceToWatch, controller)
@@ -811,7 +826,7 @@ export function SellerProductsStockScreen({
             setMarketplaceSyncProgress(marketplaceToWatch, null)
             // Astra P1: каталог перечитываем ТОЛЬКО после реального
             // завершения этой площадки, а не сразу после 202.
-            await load()
+            if (scope.isCurrent()) await latestLoadRef.current()
           },
           onFailed: (message) =>
             setMarketplaceSyncProgress(marketplaceToWatch, {
@@ -823,10 +838,11 @@ export function SellerProductsStockScreen({
         controller.signal,
       )
     },
-    [authHeaders, load, setMarketplaceSyncProgress, token],
+    [authHeaders, captureScope, setMarketplaceSyncProgress, token],
   )
 
   async function onSyncProducts() {
+    const scope = captureScope()
     setError(null)
     setNotice(null)
     // Прежний общий busy заменён на per-mp прогресс; busy=true только пока
@@ -836,7 +852,8 @@ export function SellerProductsStockScreen({
     setWbSyncProgress(null)
     setOzonSyncProgress(null)
     try {
-      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
+      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) }, scope.signal)
+      if (!scope.isCurrent()) return
       ;(['wildberries', 'ozon'] as const).forEach((mp) => {
         const start = mp === 'wildberries' ? outcome.wb : outcome.ozon
         if (start.kind === 'skipped') return
@@ -848,16 +865,18 @@ export function SellerProductsStockScreen({
         watchMarketplaceSync(mp, start.jobId)
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
+      if (scope.isCurrent()) setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
     } finally {
-      setBusy(false)
+      if (scope.isCurrent()) setBusy(false)
     }
   }
 
   const retrySyncMarketplace = useCallback(
     async (marketplaceToRetry: 'wildberries' | 'ozon') => {
+      const scope = captureScope()
       setMarketplaceSyncProgress(marketplaceToRetry, { jobId: '', stage: 'queued', error: null })
-      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
+      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) }, scope.signal, marketplaceToRetry)
+      if (!scope.isCurrent()) return
       const start = marketplaceToRetry === 'wildberries' ? outcome.wb : outcome.ozon
       if (start.kind === 'skipped') {
         setMarketplaceSyncProgress(marketplaceToRetry, null)
@@ -878,7 +897,7 @@ export function SellerProductsStockScreen({
       })
       watchMarketplaceSync(marketplaceToRetry, start.jobId)
     },
-    [authHeaders, setMarketplaceSyncProgress, token, watchMarketplaceSync],
+    [authHeaders, captureScope, setMarketplaceSyncProgress, token, watchMarketplaceSync],
   )
 
   async function addSelectedToFulfillment() {

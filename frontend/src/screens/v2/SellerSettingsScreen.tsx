@@ -28,6 +28,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
+import { useSellerAsyncScope } from './useSellerAsyncScope'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { sellerStaffError, sellerStaffRequest } from '../../utils/sellerStaffRequest'
 import {
@@ -42,6 +43,7 @@ import {
 } from './SellerCatalogSelectionDialog'
 import {
   describeImportStage,
+  catalogImportError,
   extractCatalogJobId,
   extractCatalogJobInitialStage,
   observeImportJob,
@@ -269,6 +271,27 @@ export function SellerSettingsScreen({
   const [wbImportProgress, setWbImportProgress] = useState<ImportProgressState | null>(null)
   const [ozonImportProgress, setOzonImportProgress] = useState<ImportProgressState | null>(null)
   const importAbortRef = useRef<Map<SellerCatalogMarketplace, AbortController>>(new Map())
+  const captureScope = useSellerAsyncScope(token)
+
+  useEffect(() => {
+    setWbImportProgress(null)
+    setOzonImportProgress(null)
+    setCatalogSelectionMarketplace(null)
+    setHasContentKey(null)
+    setWbCardsCount(null)
+    setOzonStatus(null)
+    setBusy(false)
+    setOzonBusy(false)
+    setContentKey('')
+    setOzonClientId('')
+    setOzonApiKey('')
+    setOpen(false)
+    setDialogError(null)
+    setError(null)
+    setOzonError(null)
+    setOkMsg(null)
+    setOzonOk(null)
+  }, [token])
 
   useEffect(() => {
     setProfileFullName(me?.full_name ?? '')
@@ -302,12 +325,15 @@ export function SellerSettingsScreen({
   }, [authHeaders, permissions.settings, token])
 
   async function loadOzonStatus(): Promise<void> {
+    const scope = captureScope()
     try {
       const res = await fetch(apiUrl('/integrations/ozon/self/account'), {
         headers: { ...authHeaders(token) },
+        signal: scope.signal,
       })
       if (res.ok) {
         const status = (await res.json()) as OzonAccountStatus
+        if (!scope.isCurrent()) return
         setOzonStatus(status)
         // Astra P2: при перезагрузке страницы persisted last_sync_error был
         // в API, но не на экране — селлер не знал, что импорт упал, и у него
@@ -316,7 +342,7 @@ export function SellerSettingsScreen({
         setOzonImportProgress((current) => {
           if (current && current.jobId) return current
           if (status.connected && status.last_sync_error) {
-            return { jobId: '', stage: 'failed', error: status.last_sync_error }
+            return { jobId: '', stage: 'failed', error: catalogImportError(status.last_sync_error) }
           }
           return current
         })
@@ -351,6 +377,7 @@ export function SellerSettingsScreen({
   }
 
   async function saveOzon(): Promise<void> {
+    const scope = captureScope()
     setOzonError(null)
     setOzonOk(null)
     const clientId = ozonClientId.trim()
@@ -366,12 +393,15 @@ export function SellerSettingsScreen({
         method: 'PUT',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_id: clientId, api_key: apiKey }),
+        signal: scope.signal,
       })
       if (!res.ok) {
-        setOzonError(ozonErrorText(await readApiErrorMessage(res)))
+        const message = ozonErrorText(await readApiErrorMessage(res))
+        if (scope.isCurrent()) setOzonError(message)
         return
       }
       const status = (await res.json()) as OzonAccountStatus
+      if (!scope.isCurrent()) return
       setOzonStatus(status)
       setOzonClientId('')
       setOzonApiKey('')
@@ -391,9 +421,9 @@ export function SellerSettingsScreen({
         await maybeOpenCatalogSelection('ozon')
       }
     } catch {
-      setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
+      if (scope.isCurrent()) setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
     } finally {
-      setOzonBusy(false)
+      if (scope.isCurrent()) setOzonBusy(false)
     }
   }
 
@@ -401,6 +431,7 @@ export function SellerSettingsScreen({
   // sync-products возвращают 202 + CatalogSyncJobOut, экран подхватывает их
   // тем же watchCatalogImportJob.
   async function retryCatalogImport(marketplaceToRetry: SellerCatalogMarketplace): Promise<void> {
+    const scope = captureScope()
     const url =
       marketplaceToRetry === 'wildberries'
         ? '/integrations/wildberries/self/sync-products'
@@ -412,12 +443,15 @@ export function SellerSettingsScreen({
       const res = await fetch(apiUrl(url), {
         method: 'POST',
         headers: { ...authHeaders(token) },
+        signal: scope.signal,
       })
       if (!res.ok) {
-        setProgress({ jobId: '', stage: 'failed', error: await readApiErrorMessage(res) })
+        const message = await readApiErrorMessage(res)
+        if (scope.isCurrent()) setProgress({ jobId: '', stage: 'failed', error: message })
         return
       }
       const parsed = parseCatalogSyncResponse(await res.json())
+      if (!scope.isCurrent()) return
       if (!parsed) {
         setProgress({ jobId: '', stage: 'failed', error: describeImportStage('failed') })
         return
@@ -425,6 +459,7 @@ export function SellerSettingsScreen({
       setProgress({ jobId: parsed.jobId, stage: parsed.stage, error: null })
       void watchCatalogImportJob(marketplaceToRetry, parsed.jobId, { openSelectionOnSuccess: false })
     } catch (e) {
+      if (!scope.isCurrent()) return
       setProgress({
         jobId: '',
         stage: 'failed',
@@ -528,6 +563,7 @@ export function SellerSettingsScreen({
   }, [permissions.staff, token])
 
   async function refreshWbCardsCount(): Promise<void> {
+    const scope = captureScope()
     // Astra P2: прежний /products/wb-catalog возвращал ВЕСЬ seller-каталог
     // (WB+Ozon) и грузил весь массив ради .length. Теперь запрашиваем ровно
     // WB-срез, limit=1 — читаем только scope_total (количество WB-карточек
@@ -545,11 +581,13 @@ export function SellerSettingsScreen({
       })
       const res = await fetch(apiUrl(`/seller-catalog/page?${params.toString()}`), {
         headers: { ...authHeaders(token) },
+        signal: scope.signal,
       })
       if (!res.ok) {
         return
       }
       const body = (await res.json()) as { scope_total?: number }
+      if (!scope.isCurrent()) return
       setWbCardsCount(typeof body.scope_total === 'number' ? body.scope_total : null)
     } catch {
       // ignore
@@ -579,6 +617,8 @@ export function SellerSettingsScreen({
     jobId: string,
     options: { openSelectionOnSuccess: boolean } = { openSelectionOnSuccess: false },
   ): Promise<void> {
+    const scope = captureScope()
+    if (!scope.isCurrent()) return
     importAbortRef.current.get(marketplaceToPoll)?.abort()
     const controller = new AbortController()
     importAbortRef.current.set(marketplaceToPoll, controller)
@@ -598,6 +638,7 @@ export function SellerSettingsScreen({
             // импорта — раньше onSyncNow рисовал «карточек: 0» на 202.
             await refreshWbCardsCount()
           }
+          if (!scope.isCurrent()) return
           if (options.openSelectionOnSuccess) {
             await maybeOpenCatalogSelection(marketplaceToPoll)
           }
@@ -609,10 +650,8 @@ export function SellerSettingsScreen({
     )
   }
 
-  // Контракт отмены наблюдения при смене токена/выходе — то же, что в
-  // SellerProductsStockScreen (WMS-488). Пока в этом экране один token на
-  // жизнь компонента, но на случай будущего силового refresh/switch — отменяем
-  // при размонтировании.
+  // Смена сессии и уход со страницы прекращают только наблюдение:
+  // уже принятое сервером задание продолжает выполняться.
   useEffect(() => {
     const trackedAborts = importAbortRef.current
     return () => {
@@ -621,7 +660,7 @@ export function SellerSettingsScreen({
       }
       trackedAborts.clear()
     }
-  }, [])
+  }, [token])
 
   // WMS-548 R1: сама проверка «первый ли это ключ, прошла ли проверка, есть ли
   // право «Товары»» — в shouldOpenCatalogSelectionAfterKeySave (чистая функция,
@@ -629,6 +668,7 @@ export function SellerSettingsScreen({
   // гейт «нашлась ли хоть одна карточка» (А9), которым нельзя пренебречь: без
   // него окно открылось бы пустым, если карточек в кабинете вообще нет.
   async function maybeOpenCatalogSelection(marketplaceToOpen: SellerCatalogMarketplace): Promise<void> {
+    const scope = captureScope()
     const params = new URLSearchParams({
       marketplace: marketplaceToOpen,
       on_fulfillment: 'all',
@@ -640,12 +680,13 @@ export function SellerSettingsScreen({
       apiUrl(`/seller-catalog/page?${params.toString()}`),
       { ...authHeaders(token) },
     )
-    if (has) {
+    if (has && scope.isCurrent()) {
       setCatalogSelectionMarketplace(marketplaceToOpen)
     }
   }
 
   async function onSave() {
+    const scope = captureScope()
     setError(null)
     setDialogError(null)
     setOkMsg(null)
@@ -664,9 +705,11 @@ export function SellerSettingsScreen({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ content_api_token: trimmed }),
+        signal: scope.signal,
       })
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
+        if (!scope.isCurrent()) return
         // QA-дефект 1 (01.10): сообщение показываем внутри самого диалога —
         // верхний Alert при открытой модалке не виден. Введённый ключ не
         // чистим: селлер поправит опечатку и повторит без ввода заново.
@@ -683,11 +726,13 @@ export function SellerSettingsScreen({
         cards_received?: number
         cards_saved?: number
       }
+      if (!scope.isCurrent()) return
       setOpen(false)
       setDialogError(null)
       setContentKey('')
       setHasContentKey(true)
       await refreshWbCardsCount()
+      if (!scope.isCurrent()) return
       if (j.validation_ok === false) {
         if (j.validation_error === 'missing_marketplace_scope') {
           setOkMsg(
@@ -725,9 +770,9 @@ export function SellerSettingsScreen({
       // Astra P2: сетевой или JSON-сбой WB-save не должен уходить в верхний
       // Alert за диалогом — покажем внутри самого диалога, введённый ключ
       // не стираем для повтора.
-      setDialogError(e instanceof Error ? e.message : 'Не удалось сохранить ключ.')
+      if (scope.isCurrent()) setDialogError(e instanceof Error ? e.message : 'Не удалось сохранить ключ.')
     } finally {
-      setBusy(false)
+      if (scope.isCurrent()) setBusy(false)
     }
   }
 
@@ -737,6 +782,7 @@ export function SellerSettingsScreen({
   // после подтверждённого успеха, а не сразу после 202 (это и было источником
   // ложного «WB карточек: 0»).
   async function onSyncNow() {
+    const scope = captureScope()
     setError(null)
     setOkMsg(null)
     setBusy(true)
@@ -744,12 +790,15 @@ export function SellerSettingsScreen({
       const res = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
         method: 'POST',
         headers: { ...authHeaders(token) },
+        signal: scope.signal,
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        const message = await readApiErrorMessage(res)
+        if (scope.isCurrent()) setError(message)
         return
       }
       const parsed = parseCatalogSyncResponse(await res.json())
+      if (!scope.isCurrent()) return
       if (!parsed) {
         setError(describeImportStage('failed'))
         return
@@ -757,9 +806,9 @@ export function SellerSettingsScreen({
       setWbImportProgress({ jobId: parsed.jobId, stage: parsed.stage, error: null })
       void watchCatalogImportJob('wildberries', parsed.jobId, { openSelectionOnSuccess: false })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось запустить синхронизацию.')
+      if (scope.isCurrent()) setError(e instanceof Error ? e.message : 'Не удалось запустить синхронизацию.')
     } finally {
-      setBusy(false)
+      if (scope.isCurrent()) setBusy(false)
     }
   }
 

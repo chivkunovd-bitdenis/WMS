@@ -20,6 +20,16 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 // попадёт на новый backend без поля `state`, и наоборот.
 export type ImportJobStage = 'queued' | 'running' | 'succeeded' | 'failed'
 
+export function catalogImportError(message: string): string {
+  if (message === 'ozon_catalog_unavailable') {
+    return 'Не удалось загрузить каталог Ozon. Повторите загрузку позже.'
+  }
+  if (message === 'wb_validation_unavailable') {
+    return 'Не удалось проверить ключ Wildberries. Попробуйте ещё раз позже.'
+  }
+  return message
+}
+
 const RAW_TO_STAGE: Record<string, ImportJobStage> = {
   queued: 'queued',
   pending: 'queued',
@@ -92,7 +102,7 @@ export async function pollImportJob(
   if (stage === 'failed') {
     return {
       outcome: 'failed',
-      message: body.error_message ?? describeImportStage('failed'),
+      message: catalogImportError(body.error_message ?? describeImportStage('failed')),
     }
   }
   return { outcome: 'in_progress', stage }
