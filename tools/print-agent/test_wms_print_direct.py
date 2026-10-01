@@ -9,6 +9,7 @@ import tempfile
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import wms_print_agent as agent
@@ -24,8 +25,13 @@ except ImportError:  # the Windows package always has Pillow
 
 PNG = b'\x89PNG\r\n\x1a\n' + b'test'
 
-def job(key='scan-1', data=PNG):
-    return {'idempotencyKey': key, 'imageDataUrl': 'data:image/png;base64,' + base64.b64encode(data).decode()}
+def job(key='scan-1', data=PNG, width=58, height=40):
+    return {
+        'idempotencyKey': key,
+        'imageDataUrl': 'data:image/png;base64,' + base64.b64encode(data).decode(),
+        'widthMm': width,
+        'heightMm': height,
+    }
 
 
 class DirectPrintTest(unittest.TestCase):
@@ -61,6 +67,44 @@ class DirectPrintTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 printer.print(job(data=PNG+b'changed'))
             submit.assert_called_once()
+
+    def test_changed_size_is_part_of_idempotent_job(self):
+        with tempfile.TemporaryDirectory() as root:
+            submit = Mock(return_value='printer-123')
+            printer = Printer(Path(root), submit)
+            printer.print(job())
+            with self.assertRaises(ValueError):
+                printer.print(job(width=60))
+            submit.assert_called_once()
+
+    def test_missing_or_invalid_size_never_reaches_printer(self):
+        with tempfile.TemporaryDirectory() as root:
+            submit = Mock()
+            invalid = job()
+            del invalid['widthMm']
+            with self.assertRaisesRegex(ValueError, 'размер'):
+                Printer(Path(root), submit).print(invalid)
+            with self.assertRaisesRegex(ValueError, 'размер'):
+                Printer(Path(root), submit).print(job(width=True))
+            submit.assert_not_called()
+
+    def test_identity_formula_is_the_installed_one(self):
+        # Journals written by the installed Windows release must still be recognised.
+        import hashlib
+        with tempfile.TemporaryDirectory() as root:
+            printer = Printer(Path(root), Mock(return_value='x'))
+            printer.print(job())
+            row = printer._lookup('scan-1')
+            self.assertEqual(row[0], hashlib.sha256(PNG + b'|580x400').hexdigest())
+
+    def test_windows_health_and_print_resolve_the_system_default_printer(self):
+        win32print = SimpleNamespace(GetDefaultPrinter=Mock(return_value='Xprinter XP-420B'))
+        with (
+            patch('wms_print_direct.sys.platform', 'win32'),
+            patch.dict(sys.modules, {'win32print': win32print}),
+        ):
+            self.assertEqual(default_printer(), 'Xprinter XP-420B')
+        win32print.GetDefaultPrinter.assert_called_once_with()
 
     def test_invalid_content_never_reaches_printer(self):
         with tempfile.TemporaryDirectory() as root:
@@ -106,7 +150,7 @@ class FakeAdapter:
     def default(self):
         return 'Label'
 
-    def submit_default(self, data, queue, mark):
+    def submit_default(self, data, queue, mark, width_mm=None, height_mm=None):
         self.calls += 1
         if self.before:
             raise self.before
@@ -200,7 +244,7 @@ class RetryBoundaryTest(unittest.TestCase):
         calls = []
 
         class Slow(FakeAdapter):
-            def submit_default(self, data, queue, mark):
+            def submit_default(self, data, queue, mark, width_mm=None, height_mm=None):
                 self.calls += 1
                 release.wait(10)      # e.g. a driver call that hangs while preparing
                 mark()                # too late: the browser has been told "not sent"
@@ -224,7 +268,7 @@ class RetryBoundaryTest(unittest.TestCase):
             self.assertIsNone(printer._lookup('scan-1'))  # key is free
             printer.print_timeout = 5
             release.set()
-            adapter.submit_default = lambda data, queue, mark: (mark(), 'Label-2')[1]
+            adapter.submit_default = lambda data, queue, mark, w=None, h=None: (mark(), 'Label-2')[1]
             self.assertEqual(printer.print(job()), 'Label-2')
 
     @patch('wms_print_direct.sys.platform', 'darwin')
@@ -244,7 +288,7 @@ class ParallelAndBudgetTest(unittest.TestCase):
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_parallel_repeat_while_first_is_processing_hears_in_progress(self):
         class Slow(FakeAdapter):
-            def submit_default(self, data, queue, mark):
+            def submit_default(self, data, queue, mark, width_mm=None, height_mm=None):
                 time.sleep(0.8)   # still preparing: nothing is marked yet
                 mark()
                 return 'Label-5'
@@ -273,7 +317,7 @@ class ParallelAndBudgetTest(unittest.TestCase):
                     threading.Timer(0.9, lambda: (blocker.commit(), blocker.close())).start()
                     return 'Label'
 
-                def submit_default(inner, data, queue, mark):
+                def submit_default(inner, data, queue, mark, width_mm=None, height_mm=None):
                     mark()
                     sent.append(1)
                     return 'Label-1'
@@ -316,7 +360,8 @@ class FakeDC:
         self.area, self.dpi, self.events = area, dpi, events if events is not None else []
 
     def GetDeviceCaps(self, index):
-        return {8: self.area[0], 10: self.area[1], 88: self.dpi[0], 90: self.dpi[1]}[index]
+        return {8: self.area[0], 10: self.area[1], 88: self.dpi[0], 90: self.dpi[1],
+                110: self.area[0], 111: self.area[1]}[index]
 
     def StartDoc(self, name):
         self.events.append('StartDoc')
@@ -340,33 +385,33 @@ class WindowsAdapterTest(unittest.TestCase):
             def draw(self, handle, box): drawn.append((self.image.size, box))
 
         adapter = DefaultWindowsAdapter(modules={'Image': Image, 'ImageWin': Mock(Dib=Dib)})
-        adapter._create_printer_dc = Mock(side_effect=dc_error, return_value=dc)
+        adapter._create_sized_printer_dc = Mock(side_effect=dc_error, return_value=dc)
         return adapter, drawn
 
     def test_undecodable_png_fails_before_mark(self):
         mark = Mock()
         adapter, _ = self.adapter(FakeDC())
         with self.assertRaises(Exception):
-            adapter.submit_default(b'\x89PNG\r\n\x1a\ntest', 'Q', mark)
+            adapter.submit_default(b'\x89PNG\r\n\x1a\ntest', 'Q', mark, 58, 40)
         mark.assert_not_called()
 
     def test_driver_failure_fails_before_mark(self):
         mark = Mock()
         adapter, _ = self.adapter(dc_error=ValueError('driver refused'))
         with self.assertRaises(ValueError):
-            adapter.submit_default(png(), 'Q', mark)
+            adapter.submit_default(png(), 'Q', mark, 58, 40)
         mark.assert_not_called()
 
     def test_mark_is_set_right_before_start_doc(self):
         events = []
         adapter, drawn = self.adapter(FakeDC(events=events))
-        self.assertEqual(adapter.submit_default(png(size=(58, 40)), 'Q', lambda: events.append('mark')), 'windows-5')
+        self.assertEqual(adapter.submit_default(png(size=(58, 40)), 'Q', lambda: events.append('mark'), 58, 40), 'windows-5')
         self.assertEqual(events[:2], ['mark', 'StartDoc'])
         self.assertEqual(drawn[0][1], (0, 0, 464, 320))  # unchanged landscape-on-landscape fit
 
     def test_landscape_label_on_portrait_page_is_turned_and_larger(self):
         adapter, drawn = self.adapter(FakeDC(area=(320, 464)))
-        adapter.submit_default(png(size=(580, 400)), 'Q', lambda: None)
+        adapter.submit_default(png(size=(580, 400)), 'Q', lambda: None, 40, 58)
         size, box = drawn[0]
         self.assertEqual(size, (400, 580))  # turned by 90 degrees
         self.assertEqual(box, (0, 0, 320, 464))
@@ -376,7 +421,7 @@ class WindowsAdapterTest(unittest.TestCase):
         dc.EndPage = Mock(side_effect=OSError('spooler'))
         adapter, _ = self.adapter(dc)
         with self.assertRaises(agent.UnknownPrintOutcome):
-            adapter.submit_default(png(), 'Q', lambda: None)
+            adapter.submit_default(png(), 'Q', lambda: None, 58, 40)
         self.assertIn('AbortDoc', dc.events)
 
 
@@ -528,6 +573,111 @@ class SingleInstanceTest(unittest.TestCase):
             with patch('wms_print_direct.sys.executable', '/nonexistent/python'), \
                     patch('wms_print_direct.__file__', str(Path(root, 'x.py'))):
                 self.assertEqual(wms_print_direct.build_id(), 'abc123')
+
+
+    @unittest.skipIf(Image is None, 'Pillow is required')
+    def test_windows_custom_size_is_applied_to_one_job_devmode(self):
+        calls = []
+
+        class FakePrint:
+            @staticmethod
+            def OpenPrinter(queue):
+                calls.append(('open', queue))
+                return queue
+
+            @staticmethod
+            def GetPrinter(handle, level):
+                self.assertEqual(level, 2)
+                return {'pDevMode': SimpleNamespace(
+                    PaperSize=9, PaperWidth=2100, PaperLength=2970,
+                    Copies=2, Collate=1, Fields=0x00000002,
+                )}
+
+            @staticmethod
+            def DocumentProperties(hwnd, handle, queue, output, input_, mode):
+                calls.append((
+                    'devmode', output.PaperSize, output.PaperWidth,
+                    output.PaperLength, output.Copies, output.Fields,
+                ))
+                return 1
+
+            @staticmethod
+            def ClosePrinter(handle):
+                calls.append(('close', handle))
+
+        class FakeDc:
+            def GetDeviceCaps(self, index):
+                return {
+                    8: 464, 10: 320, 88: 203, 90: 203,
+                    110: 464, 111: 320, 112: 0, 113: 0,
+                }[index]
+
+            def StartDoc(self, title):
+                calls.append(('start-doc', title))
+                return 607
+
+            def StartPage(self):
+                calls.append(('start-page',))
+
+            def GetHandleOutput(self):
+                return 17
+
+            def EndPage(self):
+                calls.append(('end-page',))
+
+            def EndDoc(self):
+                calls.append(('end-doc',))
+
+            def AbortDoc(self):
+                calls.append(('abort',))
+
+            def DeleteDC(self):
+                calls.append(('delete-dc',))
+
+        class FakeDib:
+            def __init__(self, image):
+                self.image = image
+
+            def draw(self, handle, target):
+                calls.append(('draw', handle, target))
+
+        adapter = DefaultWindowsAdapter({
+            'win32print': FakePrint,
+            'win32gui': SimpleNamespace(CreateDC=lambda driver, queue, devmode: 17),
+            'win32ui': SimpleNamespace(CreateDCFromHandle=lambda handle: FakeDc()),
+            'Image': Image,
+            'ImageWin': SimpleNamespace(Dib=FakeDib),
+            'fitz': None,
+        })
+
+        self.assertEqual(
+            adapter.submit_default(png(size=(464, 320)), 'Xprinter XP-420B', None, 58, 40),
+            'windows-607',
+        )
+        devmode = next(call for call in calls if call[0] == 'devmode')
+        self.assertEqual(devmode[1:5], (0, 580, 400, 1))
+        self.assertEqual(devmode[5] & 0x00000002, 0)
+        self.assertEqual(
+            devmode[5] & (0x00000004 | 0x00000008 | 0x00000100),
+            0x00000004 | 0x00000008 | 0x00000100,
+        )
+        self.assertIn(('draw', 17, (0, 0, 464, 320)), calls)
+        self.assertNotIn(('abort',), calls)
+
+
+class StandardCaseUnchangedTest(unittest.TestCase):
+    """The layout of 1bdd6cdf for the normal 58x40 job must be bit-for-bit the same."""
+    def test_equal_dpi_matches_the_installed_pixel_ratio_formula(self):
+        for label_w, label_h in ((58, 40), (40, 58), (100, 150), (30, 20), (75, 120)):
+            for dpi in (203, 300):
+                page_w, page_h = round(label_w / 25.4 * dpi), round(label_h / 25.4 * dpi)
+                for image_w, image_h in ((label_w * 10, label_h * 10), (page_w, page_h), (464, 320) if label_w > label_h else (320, 464)):
+                    ratio = min(page_w / image_w, page_h / image_h)
+                    w, h = max(1, round(image_w * ratio)), max(1, round(image_h * ratio))
+                    installed = (False, (page_w - w) // 2, (page_h - h) // 2, w, h)
+                    turned_expected = fit_layout(image_w, image_h, page_w, page_h, dpi, dpi)
+                    if abs(image_w / image_h - label_w / label_h) < 0.02:  # image has the label's proportions
+                        self.assertEqual(turned_expected, installed, (label_w, label_h, dpi, image_w, image_h))
 
 
 if __name__ == '__main__':

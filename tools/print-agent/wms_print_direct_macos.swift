@@ -187,7 +187,52 @@ private func preparePNG(_ data: Data) throws -> Data {
     return output as Data
 }
 
-private func submitToDefaultPrinter(_ data: Data, queue: String, deadline: Date,
+private struct LabelSize {
+    let width: Double
+    let height: Double
+}
+
+private func labelSize(_ body: [String: Any]) throws -> LabelSize {
+    guard let width = (body["widthMm"] as? NSNumber)?.doubleValue,
+          let height = (body["heightMm"] as? NSNumber)?.doubleValue,
+          width >= 10, width <= 300, height >= 10, height <= 300 else {
+        throw PrintError.message("WMS не передала корректный размер этикетки")
+    }
+    return LabelSize(width: width, height: height)
+}
+
+private func millimeters(_ value: Double) -> String {
+    value.rounded() == value
+        ? String(Int(value))
+        : String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), value)
+}
+
+/// The label size travels to macOS as a custom paper size (installed release 9a33b651).
+private func printArguments(
+    queue: String, label: String, width: Double, height: Double
+) -> [String] {
+    [
+        "-d", queue,
+        "-o", "media=Custom.\(millimeters(width))x\(millimeters(height))mm",
+        "-o", "fit-to-page",
+        "-o", "copies=1",
+        "--", label,
+    ]
+}
+
+/// The size is part of the job identity.  The first form is the one written by the
+/// installed Swift release; the others are what the Python release and the oldest
+/// size-less journals hold, so an old key is still recognised in every journal.
+private func identityDigests(_ data: Data, _ size: LabelSize) -> (primary: String, python: String, legacy: String) {
+    func sha(_ value: Data) -> String { SHA256.hash(data: value).map { String(format: "%02x", $0) }.joined() }
+    var swiftIdentity = data
+    swiftIdentity.append(Data("|\(size.width)x\(size.height)".utf8))
+    var pythonIdentity = data
+    pythonIdentity.append(Data("|\(Int((size.width * 10).rounded()))x\(Int((size.height * 10).rounded()))".utf8))
+    return (sha(swiftIdentity), sha(pythonIdentity), sha(data))
+}
+
+private func submitToDefaultPrinter(_ data: Data, queue: String, size: LabelSize, deadline: Date,
                                     mark: () throws -> Void) throws -> String {
     // Everything before mark() may fail without any job in the OS.
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wms-qr-\(UUID().uuidString)")
@@ -201,7 +246,8 @@ private func submitToDefaultPrinter(_ data: Data, queue: String, deadline: Date,
     }
     try mark()  // the next step is the first one that can reach the OS queue
     let limit = max(2, min(lpTimeout, deadline.timeIntervalSinceNow - 4))
-    let result = try run("/usr/bin/lp", ["-d", queue, "-o", "fit-to-page", "-o", "copies=1", "--", label.path],
+    let result = try run("/usr/bin/lp",
+                         printArguments(queue: queue, label: label.path, width: size.width, height: size.height),
                          timeout: limit, grace: 1.5)
     guard !result.timedOut, result.status == 0 else { throw PrintError.message(unknownOutcomeText) }
     // CUPS localizes the surrounding text even with LC_ALL=C (for example,
@@ -290,7 +336,7 @@ private final class Printer {
     private let printLock = NSLock()  // one OS print call at a time
     private let storeURL: URL
     private let legacyURL: URL
-    private let submit: (Data, String, Date, () throws -> Void) throws -> String
+    private let submit: (Data, String, LabelSize, Date, () throws -> Void) throws -> String
     private let queue: (TimeInterval) throws -> String
     private var jobs: [String: StoredJob]
     private var inflight = Set<String>()  // keys being processed right now, guarded by `state`
@@ -299,7 +345,7 @@ private final class Printer {
 
     init(
         directory: URL,
-        submit: @escaping (Data, String, Date, () throws -> Void) throws -> String = submitToDefaultPrinter,
+        submit: @escaping (Data, String, LabelSize, Date, () throws -> Void) throws -> String = submitToDefaultPrinter,
         queue: @escaping (TimeInterval) throws -> String = { try defaultPrinter(timeout: $0) }
     ) throws {
         self.submit = submit
@@ -381,11 +427,13 @@ private final class Printer {
               data.count <= 4_000_000, data.starts(with: pngPrefix) else {
             throw PrintError.message("Ожидается корректная PNG-этикетка")
         }
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let size = try labelSize(body)
+        let digests = identityDigests(data, size)
+        let digest = digests.primary
 
         // The key's own history is answered first, never behind the print queue.  A new
         // key is registered as "in progress" at once: a parallel repeat gets "unknown".
-        if let known = try knownResult(key, digest, deadline: deadline) { return known }
+        if let known = try knownResult(key, digests, deadline: deadline) { return known }
         defer { state.lock(); inflight.remove(key); state.unlock() }
         guard printLock.lock(before: deadline) else {
             throw PrintError.message("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
@@ -414,7 +462,8 @@ private final class Printer {
             do {
                 try persist()
                 if mirror {
-                    try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digest],
+                    // The Python release reads this journal with its own identity formula.
+                    try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digests.python],
                                       busyMs: busyBudget(deadline))
                 }
             } catch {
@@ -431,7 +480,7 @@ private final class Printer {
         }
         let receipt: String
         do {
-            receipt = try submit(ready, queue, deadline, mark)
+            receipt = try submit(ready, queue, size, deadline, mark)
         } catch PrintError.notSent(let reason) {
             if marked {
                 state.lock()
@@ -456,12 +505,13 @@ private final class Printer {
 
     /// A stored receipt, an error for a possibly-sent or in-progress job, or nil for a new
     /// key (which is registered as in progress under the same lock).
-    private func knownResult(_ key: String, _ digest: String, deadline: Date) throws -> String? {
+    private func knownResult(_ key: String, _ digests: (primary: String, python: String, legacy: String),
+                             deadline: Date) throws -> String? {
         state.lock()
         defer { state.unlock() }
         try importLegacy(busyMs: busyBudget(deadline))  // retried until the old journal has been read
         if let old = jobs[key] {
-            guard old.hash == digest else { throw PrintError.message("Содержимое этого задания изменилось") }
+            guard [digests.primary, digests.python, digests.legacy].contains(old.hash) else { throw PrintError.message("Содержимое этого задания изменилось") }
             guard let receipt = old.receipt else { throw PrintError.message(unknownOutcomeText) }
             return receipt
         }
@@ -669,12 +719,13 @@ private func runSelfTest() throws {
     var submissions = 0
     let printer = try Printer(
         directory: directory,
-        submit: { _, _, _, mark in try mark(); submissions += 1; return "test-1" },
+        submit: { _, _, _, _, mark in try mark(); submissions += 1; return "test-1" },
         queue: { _ in "test-printer" }
     )
     let opaque = testPNG(width: 4, height: 4, alpha: 255, hasAlphaChannel: false)
     func jobBody(_ key: String, _ png: Data) -> [String: Any] {
-        ["idempotencyKey": key, "imageDataUrl": "data:image/png;base64," + png.base64EncodedString()]
+        ["idempotencyKey": key, "imageDataUrl": "data:image/png;base64," + png.base64EncodedString(),
+         "widthMm": 58, "heightMm": 40]
     }
     let body = jobBody("self-test", opaque)
     guard try printer.printJob(body) == "test-1", try printer.printJob(body) == "test-1", submissions == 1 else {
@@ -688,12 +739,29 @@ private func runSelfTest() throws {
           FileManager.default.isExecutableFile(atPath: "/usr/bin/lpstat") else {
         throw PrintError.message("Системная печать macOS недоступна")
     }
+    // The label size reaches macOS exactly as in the installed release; the size is part of the identity.
+    guard printArguments(queue: "Test_Printer", label: "/tmp/label.png", width: 58, height: 40)
+            == ["-d", "Test_Printer", "-o", "media=Custom.58x40mm", "-o", "fit-to-page", "-o", "copies=1", "--", "/tmp/label.png"],
+          millimeters(58.5) == "58.50" else { throw fail("lp arguments differ from the installed release") }
+    guard try labelSize(["widthMm": 58, "heightMm": 40]).width == 58,
+          (try? labelSize(["widthMm": 58])) == nil, (try? labelSize(["widthMm": 5, "heightMm": 40])) == nil else {
+        throw fail("label size validation")
+    }
+    let sample = identityDigests(Data("abc".utf8), LabelSize(width: 58, height: 40))
+    func sha(_ text: String) -> String { SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined() }
+    guard sample.primary == sha("abc|58.0x40.0"), sample.python == sha("abc|580x400"), sample.legacy == sha("abc") else {
+        throw fail("identity formula differs from the installed releases")
+    }
+
+    var wrongSize = body
+    wrongSize["widthMm"] = 60
+    guard says({ try printer.printJob(wrongSize) }, "изменилось"), submissions == 1 else { throw fail("same key, other size") }
 
     // A failure before the OS boundary, or a failed journal write, leaves the key retryable.
     var attempt = 0
     let retry = try Printer(
         directory: directory.appendingPathComponent("retry"),
-        submit: { _, _, _, mark in
+        submit: { _, _, _, _, mark in
             attempt += 1
             try mark()
             if attempt == 1 { throw PrintError.notSent("lp did not start") }
@@ -712,7 +780,7 @@ private func runSelfTest() throws {
     var sent = 0
     let writes = try Printer(
         directory: directory.appendingPathComponent("writes"),
-        submit: { _, _, _, mark in try mark(); sent += 1; return "w-\(sent)" }, queue: { _ in "test-printer" })
+        submit: { _, _, _, _, mark in try mark(); sent += 1; return "w-\(sent)" }, queue: { _ in "test-printer" })
     let store = directory.appendingPathComponent("writes/direct-jobs.json")
     try? FileManager.default.removeItem(at: store)
     try FileManager.default.createDirectory(at: store, withIntermediateDirectories: false)
@@ -736,7 +804,7 @@ private func runSelfTest() throws {
     legacyBusyMs = 100
     var legacySent = 0
     var legacyFail = false
-    let migrated = try Printer(directory: legacyDirectory, submit: { _, _, _, mark in
+    let migrated = try Printer(directory: legacyDirectory, submit: { _, _, _, _, mark in
         try mark(); legacySent += 1
         if legacyFail { throw PrintError.notSent("no lp") }
         return "new-\(legacySent)"
@@ -744,7 +812,7 @@ private func runSelfTest() throws {
     guard try migrated.printJob(jobBody("old-key", opaque)) == "Old-5", legacySent == 0,
           says({ try migrated.printJob(jobBody("old-open", opaque)) }, "проверьте принтер"),
           legacySent == 0,
-          try Printer(directory: legacyDirectory, submit: { _, _, _, _ in "x" }, queue: { _ in "q" })
+          try Printer(directory: legacyDirectory, submit: { _, _, _, _, _ in "x" }, queue: { _ in "q" })
               .printJob(jobBody("old-key", opaque)) == "Old-5" else { throw fail("legacy import") }
     // New marks and receipts are written into the old journal too (a way back to the Python build).
     guard try migrated.printJob(jobBody("fresh", opaque)) == "new-1",
@@ -763,7 +831,7 @@ private func runSelfTest() throws {
     guard sqlite3_open(busyFile.path, &holder) == SQLITE_OK,
           sqlite3_exec(holder, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK else { throw fail("busy fixture") }
     var busySent = 0
-    let blocked = try Printer(directory: busyDirectory, submit: { _, _, _, mark in try mark(); busySent += 1; return "b-1" },
+    let blocked = try Printer(directory: busyDirectory, submit: { _, _, _, _, mark in try mark(); busySent += 1; return "b-1" },
                               queue: { _ in "test-printer" })
     guard says({ try blocked.printJob(jobBody("old-key", opaque)) }, "Закройте старую версию"),
           says({ try blocked.printJob(jobBody("brand-new", opaque)) }, "Закройте старую версию"),
@@ -777,7 +845,7 @@ private func runSelfTest() throws {
     let damagedDirectory = directory.appendingPathComponent("damaged")
     try FileManager.default.createDirectory(at: damagedDirectory, withIntermediateDirectories: true)
     try Data("this is not sqlite at all, only text".utf8).write(to: damagedDirectory.appendingPathComponent("direct-jobs.sqlite3"))
-    let damaged = try Printer(directory: damagedDirectory, submit: { _, _, _, mark in try mark(); return "d-1" },
+    let damaged = try Printer(directory: damagedDirectory, submit: { _, _, _, _, mark in try mark(); return "d-1" },
                               queue: { _ in "test-printer" })
     guard try damaged.printJob(jobBody("any", opaque)) == "d-1" else { throw fail("damaged old journal stopped printing") }
 
@@ -785,7 +853,7 @@ private func runSelfTest() throws {
     // the key's own history is answered at once; too little time left never starts a job.
     let slowDirectory = directory.appendingPathComponent("slow")
     var slowSent = 0
-    let slow = try Printer(directory: slowDirectory, submit: { _, _, _, mark in
+    let slow = try Printer(directory: slowDirectory, submit: { _, _, _, _, mark in
         try mark(); slowSent += 1; Thread.sleep(forTimeInterval: 1.5); return "s-\(slowSent)"
     }, queue: { _ in "test-printer" })
     let worker = Thread { _ = try? slow.printJob(jobBody("inflight", opaque)) }
@@ -800,7 +868,7 @@ private func runSelfTest() throws {
 
     // A clean install creates the old journal and keeps it level, so going back to the Python build is safe.
     let cleanDirectory = directory.appendingPathComponent("clean")
-    let clean = try Printer(directory: cleanDirectory, submit: { _, _, _, mark in try mark(); return "c-1" }, queue: { _ in "test-printer" })
+    let clean = try Printer(directory: cleanDirectory, submit: { _, _, _, _, mark in try mark(); return "c-1" }, queue: { _ in "test-printer" })
     let cleanFile = cleanDirectory.appendingPathComponent("direct-jobs.sqlite3")
     guard FileManager.default.fileExists(atPath: cleanFile.path), try clean.printJob(jobBody("c", opaque)) == "c-1",
           legacyRows(cleanFile)["c"] == "c-1" else { throw fail("old journal on a clean install") }
@@ -816,7 +884,7 @@ private func runSelfTest() throws {
           sqlite3_exec(level, legacySchema + ";INSERT INTO jobs VALUES ('json-open', '\(levelHash)', NULL)", nil, nil, nil) == SQLITE_OK
     else { throw fail("level fixture") }
     sqlite3_close(level)
-    _ = try Printer(directory: levelDirectory, submit: { _, _, _, _ in "x" }, queue: { _ in "q" })
+    _ = try Printer(directory: levelDirectory, submit: { _, _, _, _, _ in "x" }, queue: { _ in "q" })
     guard legacyRows(levelDirectory.appendingPathComponent("direct-jobs.sqlite3"))["json-only"] == "J-9",
           legacyRows(levelDirectory.appendingPathComponent("direct-jobs.sqlite3"))["json-open"] == "-" else {
         throw fail("json keys were not copied into the old journal")
@@ -825,7 +893,7 @@ private func runSelfTest() throws {
     // A parallel repeat of a key that is being processed hears "in progress", never "not sent".
     let racingDirectory = directory.appendingPathComponent("racing")
     var racingSent = 0
-    let racing = try Printer(directory: racingDirectory, submit: { _, _, _, mark in
+    let racing = try Printer(directory: racingDirectory, submit: { _, _, _, _, mark in
         Thread.sleep(forTimeInterval: 1.0)  // still preparing: nothing is marked yet
         try mark(); racingSent += 1; return "r-1"
     }, queue: { _ in "test-printer" })
@@ -840,7 +908,7 @@ private func runSelfTest() throws {
     // Waiting for the journal may use up the budget: the job is then not sent and the mark is removed.
     let lateDirectory = directory.appendingPathComponent("late")
     var lateSent = 0
-    let late = try Printer(directory: lateDirectory, submit: { _, _, _, mark in try mark(); lateSent += 1; return "l-1" },
+    let late = try Printer(directory: lateDirectory, submit: { _, _, _, _, mark in try mark(); lateSent += 1; return "l-1" },
                            queue: { _ in "test-printer" })
     let lateFile = lateDirectory.appendingPathComponent("direct-jobs.sqlite3")
     var blocker: OpaquePointer?
@@ -854,6 +922,32 @@ private func runSelfTest() throws {
     legacyBusyMs = 100
     guard lateText.contains("не отправлялось"), lateSent == 0, legacyRows(lateFile)["late-key"] == nil,
           try late.printJob(jobBody("late-key", opaque)) == "l-1", lateSent == 1 else { throw fail("budget spent on the journal: \(lateText)") }
+
+    // Rows written by the Python release (its identity formula) are recognised, and the
+    // rows this program writes are readable by it: the same key is never printed twice.
+    let pyDirectory = directory.appendingPathComponent("pyformat")
+    try FileManager.default.createDirectory(at: pyDirectory, withIntermediateDirectories: true)
+    let pyFile = pyDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    let pyDigest = identityDigests(opaque, LabelSize(width: 58, height: 40)).python
+    var pyDB: OpaquePointer?
+    guard sqlite3_open(pyFile.path, &pyDB) == SQLITE_OK,
+          sqlite3_exec(pyDB, legacySchema + ";INSERT INTO jobs VALUES ('py-key', '\(pyDigest)', 'Py-1')", nil, nil, nil) == SQLITE_OK
+    else { throw fail("python-format fixture") }
+    sqlite3_close(pyDB)
+    var pySent = 0
+    let pyPrinter = try Printer(directory: pyDirectory, submit: { _, _, _, _, mark in try mark(); pySent += 1; return "py-new" },
+                                queue: { _ in "test-printer" })
+    guard try pyPrinter.printJob(jobBody("py-key", opaque)) == "Py-1", pySent == 0,
+          try pyPrinter.printJob(jobBody("swift-key", opaque)) == "py-new" else { throw fail("python-format identity") }
+    var check: OpaquePointer?
+    var query: OpaquePointer?
+    guard sqlite3_open_v2(pyFile.path, &check, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
+          sqlite3_prepare_v2(check, "SELECT hash FROM jobs WHERE id='swift-key'", -1, &query, nil) == SQLITE_OK,
+          sqlite3_step(query) == SQLITE_ROW, String(cString: sqlite3_column_text(query, 0)) == pyDigest else {
+        throw fail("mirror row is not in the Python identity format")
+    }
+    sqlite3_finalize(query)
+    sqlite3_close(check)
 
     // A tool that ignores SIGTERM is killed; the output pipe is drained meanwhile.
     let hung = Date()
