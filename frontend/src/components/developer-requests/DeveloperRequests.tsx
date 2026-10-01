@@ -28,7 +28,7 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
   const [section, setSection] = useState<'new' | 'mine'>('new')
   const [errors, setErrors] = useState<ReturnType<typeof validateDraft>>({})
   const [error, setError] = useState('')
-  const [conflict, setConflict] = useState(false)
+  const [recovery, setRecovery] = useState<'unknown' | 'conflict' | null>(null)
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
   const [success, setSuccess] = useState(false)
@@ -59,11 +59,11 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
     if (!storageError) {
       try { setDraft(readDraft(scope)); setStorageError(false) } catch { setStorageError(true) }
     }
-    setOpen(true); setSection('new'); setSuccess(false); setError(''); setErrors({}); setConflict(false)
+    setOpen(true); setSection('new'); setSuccess(false); setError(''); setErrors({}); setRecovery(null)
   }
   function clear() {
     if (submitting.current) return
-    saveDraft(emptyDraft(), true); setErrors({}); setError(''); setConflict(false)
+    saveDraft(emptyDraft(), true); setErrors({}); setError(''); setRecovery(null)
   }
   function changeSection(value: 'new' | 'mine') {
     setSection(value); setDetailId(null); setDetail(null); setSuccess(false)
@@ -96,21 +96,21 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
     if (!recover && Object.keys(validation).length) { setErrors(validation); return }
     const payload: RequestPayload = recover && draft.attempt ? draft.attempt : requestPayload(draft, pathname)
     if (!recover && draft.attempt && JSON.stringify(payload) !== JSON.stringify(draft.attempt)) {
-      setConflict(true)
+      setRecovery('unknown')
       setError('Результат предыдущей отправки пока не подтверждён. Проверьте её отправку перед отправкой изменённого текста. Изменения останутся в черновике.')
       return
     }
     const sentDraft = { ...draft, attempt: draft.attempt ?? payload }
     saveDraft(sentDraft)
-    submitting.current = true; setBusy(true); setError(''); setConflict(false)
+    submitting.current = true; setBusy(true); setError(''); setRecovery(null)
     try {
       const res = await fetch(apiUrl('/developer-requests'), {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
       if (!mounted.current) return
       if (res.status === 409) {
-        setConflict(true)
-        setError('Предыдущая попытка уже сохранена с другим текстом. Проверьте её отправку — текущие изменения останутся в черновике.')
+        setRecovery('conflict')
+        setError('Предыдущая попытка уже сохранена с другим текстом. Посмотрите её в «Моих заявках» или продолжите текущий текст как новый черновик.')
         return
       }
       if (res.status === 422) {
@@ -146,7 +146,7 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
       <Button size="small" onClick={clear} disabled={busy}>Очистить черновик</Button>
       <Box sx={{ display: 'flex', gap: 1, ml: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       <SecondaryAction onClick={() => setOpen(false)}>Отменить</SecondaryAction>
-      <PrimaryAction type="submit" form="developer-request-form" disabled={busy || conflict}>
+      <PrimaryAction type="submit" form="developer-request-form" disabled={busy || Boolean(recovery)}>
         {busy ? 'Отправляем…' : 'Отправить'}
       </PrimaryAction>
       </Box>
@@ -179,8 +179,13 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
           <PrimaryAction onClick={() => { setSuccess(false); setError('') }}>{keptEdits ? 'Продолжить черновик' : 'Новая заявка'}</PrimaryAction>
         </Stack> : <Stack component="form" id="developer-request-form" noValidate spacing={2.5} onSubmit={(event) => { event.preventDefault(); void submit() }}>
           {storageError && <Alert severity="warning">Браузер не смог сохранить черновик. Не обновляйте страницу до отправки.</Alert>}
-          {error && <Alert severity="error" role="alert">{error}{conflict && <Box sx={{ mt: 1 }}>
-            <Button size="small" onClick={() => void submit(true)} disabled={busy}>Проверить отправку</Button>
+          {error && <Alert severity="error" role="alert">{error}{recovery && <Box sx={{ mt: 1 }}>
+            {recovery === 'conflict' ? <Button size="small" onClick={() => {
+              // A confirmed 409 proves the key is already used. Starting a new draft is explicit and sends nothing.
+              saveDraft({ ...draft, key: crypto.randomUUID(), attempt: undefined })
+              setRecovery(null); setError(''); setErrors({})
+            }} disabled={busy}>Продолжить как новый черновик</Button> :
+              <Button size="small" onClick={() => void submit(true)} disabled={busy}>Проверить отправку</Button>}
             <Button size="small" onClick={() => changeSection('mine')}>Мои заявки</Button>
           </Box>}</Alert>}
           <SelectInput label="Тип обращения" value={draft.type} onChange={(value) => edit('type', value as RequestType)}

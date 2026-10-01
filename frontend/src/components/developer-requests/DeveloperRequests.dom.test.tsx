@@ -123,15 +123,39 @@ describe('WMS-624 developer requests', () => {
     expect(payloads()[1]).toMatchObject({ problem: 'Проблема', proposal: 'Предложение' })
     expect(document.body.textContent).toContain('Спасибо, ваше обращение зафиксировано')
   })
-  it('keeps the draft on a server 409 and requires deliberate recovery instead of assigning a new key', async () => {
-    fetcher.mockImplementationOnce(async () => response({}, 409))
-    await render(); await click('Задача разработчикам'); await fill('Описание ошибки', 'Исходный текст'); await click('Отправить')
-    expect(document.body.textContent).toContain('Предыдущая попытка уже сохранена с другим текстом')
-    expect(field('Описание ошибки').value).toBe('Исходный текст')
+  it('exits a persistent two-tab 409 only through an explicit new draft, preserving text and the already-saved request', async () => {
+    const saved = new Map<string, RequestPayload>()
+    fetcher.mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return response([...saved.values()].map((payload, index) => record(payload, `saved-${index}`)))
+      const payload: RequestPayload = JSON.parse(init.body)
+      const existing = saved.get(payload.idempotency_key)
+      if (existing && JSON.stringify(existing) !== JSON.stringify(payload)) return response({}, 409)
+      saved.set(payload.idempotency_key, payload)
+      return response(record(payload))
+    })
+    await render(); await click('Задача разработчикам'); await fill('Описание ошибки', 'Текст вкладки B')
+    const draftKey = JSON.parse(localStorage.getItem(draftStorageKey(identity))!).key
+    // Tab A has already saved a different body with the key that both tabs loaded.
+    const fromTabA: RequestPayload = { idempotency_key: draftKey, type: 'bug', description: 'Текст вкладки A', page_url: '/app/ff/fbs' }
+    saved.set(draftKey, fromTabA)
+    await click('Отправить')
+    expect(field('Описание ошибки').value).toBe('Текст вкладки B')
     expect(button('Отправить').disabled).toBe(true)
-    await fill('Описание ошибки', 'Исправленный текст'); await click('Проверить отправку')
-    expect(payloads()[1]).toEqual(payloads()[0])
-    await click('Продолжить черновик'); expect(field('Описание ошибки').value).toBe('Исправленный текст')
+    expect(JSON.parse(localStorage.getItem(draftStorageKey(identity))!).key).toBe(draftKey)
+    await click('Закрыть'); await click('Задача разработчикам'); await click('Отправить')
+    expect(payloads()).toHaveLength(2)
+    expect(saved.size).toBe(1) // The conflict is persistent, not a mock-once response.
+    await click('Продолжить как новый черновик')
+    expect(payloads()).toHaveLength(2) // The recovery action itself does not create a request.
+    expect(field('Описание ошибки').value).toBe('Текст вкладки B')
+    const next = JSON.parse(localStorage.getItem(draftStorageKey(identity))!)
+    expect(next.key).not.toBe(draftKey); expect(next.attempt).toBeUndefined()
+    expect(button('Отправить').disabled).toBe(false)
+    await click('Отправить')
+    expect(saved.size).toBe(2)
+    expect(saved.get(draftKey)).toEqual(fromTabA)
+    expect(saved.get(next.key)?.description).toBe('Текст вкладки B')
+    expect(document.body.textContent).toContain('Спасибо, ваше обращение зафиксировано')
   })
   it('guards double submit and ignores an old-scope response without clearing the next scope draft', async () => {
     let resolve!: (res: Response) => void
