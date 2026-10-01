@@ -88,6 +88,17 @@ type SellerCatalogPage = {
 
 type FulfillmentFilter = 'all' | 'yes' | 'no'
 
+// WMS-614 R1/R2: срез каталога по площадке. Значение 'all' — пустое, тогда
+// marketplace в запрос не кладём, чтобы для сервера это был прежний запрос без
+// фильтра. 'wildberries'/'ozon' уходят в query одним и тем же именем в /page и
+// /keys (D3): «найдено» и «выбрать все найденные» обязаны считаться по одному
+// и тому же срезу, иначе выдадут разное число (класс ошибки WMS-538).
+export type MarketplaceFilter = 'all' | 'wildberries' | 'ozon'
+
+export function marketplaceFilterParam(filter: MarketplaceFilter): string | null {
+  return filter === 'all' ? null : filter
+}
+
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
 // запрос и те же три числа Остаток / Резерв / Доступно, что в каталоге
 // фулфилмента (CAT-20, WMS-532 R4); не на ФФ карточки в этом ответе не
@@ -321,19 +332,38 @@ async function checkPlatformConnected(
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
 ): Promise<SellerCatalogSyncOutcome> {
-  // WB — ровно поведение etalon (см. docstring выше): без предварительной
-  // проверки подключения, ошибка — текстом сервера как есть.
+  // QA-дефект 2 (WMS-615, 01.10): раньше WB-синхронизация звалась всегда и
+  // у Ozon-only селлера возвращала `missing_content_token`, которое
+  // перекрывало честный успех Ozon на экране. Теперь WB предваряется той же
+  // проверкой подключения, что и Ozon: при отсутствии ключа — тихо
+  // пропускаем площадку, при отказе самой проверки — показываем ошибку.
+  const wbCheck = await checkPlatformConnected(
+    headers,
+    '/integrations/wildberries/self/tokens',
+    (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
+  )
+
   let wbFailure: string | null = null
-  try {
-    const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-      method: 'POST',
-      headers,
-    })
-    if (!wbRes.ok) {
-      wbFailure = await readApiErrorMessage(wbRes)
+  if (wbCheck.status === 'check_failed') {
+    wbFailure = humanSyncFailureMessage(
+      wbCheck.message ?? '',
+      'Не удалось проверить подключение Wildberries.',
+    )
+  } else if (wbCheck.status === 'connected') {
+    try {
+      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
+        method: 'POST',
+        headers,
+      })
+      if (!wbRes.ok) {
+        wbFailure = humanSyncFailureMessage(
+          await readApiErrorMessage(wbRes),
+          'Не удалось синхронизировать Wildberries.',
+        )
+      }
+    } catch (e) {
+      wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать товары.'
     }
-  } catch (e) {
-    wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать товары.'
   }
 
   const ozonCheck = await checkPlatformConnected(
@@ -412,6 +442,10 @@ export function SellerProductsStockScreen({
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterFulfillment, setFilterFulfillment] = useState<FulfillmentFilter>('all')
+  // WMS-614 R1: по умолчанию «Все маркетплейсы» — исходный список до действия
+  // селлера не меняется. Фильтр живёт в URL-параметрах каталога (R3), не в
+  // локальном состоянии «на этой странице».
+  const [filterMarketplace, setFilterMarketplace] = useState<MarketplaceFilter>('all')
 
   // ── Резервы: список направлений остатка, только чтение (CAT-20) ──────────
   const [reservesProductId, setReservesProductId] = useState<string | null>(null)
@@ -440,7 +474,7 @@ export function SellerProductsStockScreen({
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedSearch, filterCategory, filterFulfillment, rowsPerPage])
+  }, [debouncedSearch, filterCategory, filterFulfillment, filterMarketplace, rowsPerPage])
 
   const load = useCallback(async () => {
     const requestToken = token
@@ -457,6 +491,11 @@ export function SellerProductsStockScreen({
     })
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (filterCategory) params.set('category', filterCategory)
+    // WMS-614 R3: тот же параметр marketplace должен совпадать между /page и
+    // /keys (seller catalog dialog). Здесь используется только /page; keys —
+    // в SellerCatalogSelectionDialog, где marketplace уже фиксирован окном.
+    const marketplaceParam = marketplaceFilterParam(filterMarketplace)
+    if (marketplaceParam) params.set('marketplace', marketplaceParam)
     const result = await loadSellerCatalogPage(
       { ...authHeaders(requestToken) },
       params,
@@ -489,7 +528,7 @@ export function SellerProductsStockScreen({
       }
       return changed ? next : current
     })
-  }, [authHeaders, debouncedSearch, filterCategory, filterFulfillment, page, rowsPerPage, token])
+  }, [authHeaders, debouncedSearch, filterCategory, filterFulfillment, filterMarketplace, page, rowsPerPage, token])
 
   useEffect(() => {
     void load()
@@ -961,6 +1000,20 @@ export function SellerProductsStockScreen({
               <MenuItem value="all">Все товары</MenuItem>
               <MenuItem value="yes">На фулфилменте</MenuItem>
               <MenuItem value="no">Не на фулфилменте</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="seller-catalog-marketplace-filter-label">Маркетплейс</InputLabel>
+            <Select
+              labelId="seller-catalog-marketplace-filter-label"
+              label="Маркетплейс"
+              value={filterMarketplace}
+              onChange={(e) => setFilterMarketplace(e.target.value as MarketplaceFilter)}
+              data-testid="seller-catalog-marketplace-filter"
+            >
+              <MenuItem value="all">Все маркетплейсы</MenuItem>
+              <MenuItem value="wildberries">Wildberries</MenuItem>
+              <MenuItem value="ozon">Ozon</MenuItem>
             </Select>
           </FormControl>
           <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
