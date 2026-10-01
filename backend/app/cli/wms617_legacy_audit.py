@@ -210,6 +210,7 @@ async def legacy_audit(
         candidate_rates = {r.id: r for r in rates if r.seller_id in selected_sellers}
         valid_charges = [c for c in charges
                          if c.seller_id in selected_sellers and c.entry_type == "charge"
+                         and c.amount is not None and c.amount > 0
                          and c.source_type == "inbound_intake" and c.source_id in candidate_intakes
                          and candidate_intakes[c.source_id].seller_id == c.seller_id
                          and c.tariff_version_v2_id in candidate_rates

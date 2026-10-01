@@ -295,6 +295,9 @@ async def test_complete_legacy_dataset_is_reused_without_mutations(
     ("invoice_cross_seller", "billing_each_seller"),
     ("rate_cross_seller", "billing_each_seller"),
     ("rate_snapshot", "billing_each_seller"),
+    ("zero_second_seller_charge", "billing_each_seller"),
+    ("negative_second_seller_charge", "billing_each_seller"),
+    ("null_second_seller_charge", "billing_each_seller"),
 ])
 async def test_legacy_relationship_gaps_prevent_reuse(
     db_session, monkeypatch, defect, expected_gap,
@@ -317,6 +320,12 @@ async def test_legacy_relationship_gaps_prevent_reuse(
         elif defect == "invoice_cross_seller":
             invoice = await session.get(BillingInvoiceV2, demo.demo_id("invoice"))
             invoice.seller_id = demo.demo_id("seller/2")
+        elif defect in {"zero_second_seller_charge", "negative_second_seller_charge",
+                        "null_second_seller_charge"}:
+            charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
+            charge.amount = {"zero_second_seller_charge": 0,
+                             "negative_second_seller_charge": -15000,
+                             "null_second_seller_charge": None}[defect]
         elif defect == "rate_snapshot":
             charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
             charge.rate = 1
@@ -333,7 +342,9 @@ async def test_legacy_relationship_gaps_prevent_reuse(
     if defect == "wrong_marking_sku":
         assert legacy["counts"]["available_marking"] == 20
         assert legacy["candidate"]["marking_by_product"] == {str(demo.demo_id("product/2")): 0}
-    elif defect in {"one_seller_billing", "rate_cross_seller", "rate_snapshot"}:
+    elif defect in {"one_seller_billing", "rate_cross_seller", "rate_snapshot",
+                    "zero_second_seller_charge", "negative_second_seller_charge",
+                    "null_second_seller_charge"}:
         second = legacy["candidate"]["billing_by_seller"][str(demo.demo_id("seller/2"))]
         assert second["profile"] and second["rate_ids"] and not second["charge_ids"]
     else:
