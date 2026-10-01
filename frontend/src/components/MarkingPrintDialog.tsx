@@ -963,6 +963,9 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       setError(firstError ? firstError.message : 'Нет заказов для печати.')
       return false
     }
+    // The server flag describes the product, not the selected print layout.
+    // With ЧЗ = 0, barcode labels must not depend on returned marking codes.
+    const printsMarkingCodes = printLayout.units.some((unit) => unit.block === 'cz' && unit.copies > 0)
     const orderById = new Map(ctx.fbsTape.orders.map((order) => [order.orderId, order]))
     const fallbackLabelCopies = resolveFbsFallbackLabelCopies(
       fbsHonestSignOrders.length > 0,
@@ -1010,7 +1013,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                 qrAssetToConfirm = asset
               }
             }
-            if (printedOrder.requires_honest_sign) {
+            if (printsMarkingCodes && printedOrder.requires_honest_sign) {
               if (printedOrder.printed_codes.length > 0) {
                 const units: MarkingTapeUnitInput[] = printedOrder.printed_codes.map((code) => ({
                   cis: code.cis_code,
@@ -1042,7 +1045,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                 )
               }
             }
-            const fallbackLabels = printedOrder.requires_honest_sign
+            const fallbackLabels = printsMarkingCodes && printedOrder.requires_honest_sign
               ? remainingProductLabelsAfterPrintedCodes(printOrder, printedOrder.printed_codes)
               : printOrder.productLabels ?? [{ productLabel: printOrder.productLabel, copies: 1 }]
             if (fallbackLabelCopies > 0) {
