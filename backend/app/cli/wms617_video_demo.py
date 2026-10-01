@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cli.wms617_legacy_audit import legacy_audit
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.billing import (
@@ -151,7 +152,10 @@ async def audit(session: AsyncSession) -> dict[str, Any]:
                       "name": p.name, "primary_print_barcode": p.primary_print_barcode,
                       "barcodes": sorted(a.barcode for a in aliases if a.product_id == p.id),
                       "stock": sum(b.quantity for b in balances if b.product_id == p.id),
-                      "locations": [{"id": str(b.storage_location_id), "quantity": b.quantity}
+                      "locations": [{"id": str(b.storage_location_id), "quantity": b.quantity,
+                                     "container_kind": b.container_kind,
+                                     "container_id": (
+                                         str(b.container_id) if b.container_id else None)}
                                     for b in balances if b.product_id == p.id]}
                      for p in products],
         "orders": [{"id": str(o.id), "marketplace": o.marketplace,
@@ -292,6 +296,8 @@ async def seed(
                     storage_location_id=loc.id, quantity_delta=qty,
                     movement_type="inbound_intake", inbound_intake_line_id=line.id,
                     actor_user_id=actor_id,
+                    container_kind="box" if n == 1 and loc.id == locations[0].id else None,
+                    container_id=demo_id("box") if n == 1 and loc.id == locations[0].id else None,
                 )
         await _add(session, BillingLedgerEntry, f"charge/{part}", **scope,
                    seller_id=sid, warehouse_id=warehouse_id, performer_id=actor_id,
@@ -311,6 +317,9 @@ async def seed(
                 await _add(session, InventoryCountLine, f"count-line/{kind}/{n}/{loc.code}",
                            count_id=count.id, product_id=product.id, storage_location_id=loc.id,
                            expected_quantity=qty,
+                           container_kind="box" if n == 1 and loc.id == locations[0].id else None,
+                           container_id=(demo_id("box")
+                                         if n == 1 and loc.id == locations[0].id else None),
                            actual_quantity=qty - 1 if kind == "partial" and n == 1 else None)
     pool = await _add(session, MarkingPool, "marking-pool", **scope,
                       seller_id=sellers[1].id, gtin="0" + barcode(2), title=MARKER)
@@ -433,10 +442,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     async with SessionLocal() as session, session.begin():
         await guard(session, args.tenant_id, args.warehouse_id, args.actor_id, lock=args.apply)
         before = await audit(session)
+        existing = await legacy_audit(session, TENANT_ID, args.warehouse_id)
+        before["legacy_audit"] = existing
         created = await seed(session, warehouse_id=args.warehouse_id, actor_id=args.actor_id,
-                             now=datetime.now(UTC)) if args.apply else False
+                             now=datetime.now(UTC)) if (
+                                 args.apply and existing["decision"] == "additive_scope"
+                             ) else False
         after = await audit(session) if args.apply else before
-        result = {"mode": "apply" if args.apply else "audit", "created": created,
+        after["legacy_audit"] = existing
+        result = {"decision": existing["decision"], "mode": "apply" if args.apply else "audit",
+                  "created": created,
                   "before": before, "after": after}
     return result
 

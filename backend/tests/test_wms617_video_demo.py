@@ -45,6 +45,14 @@ async def test_seed_repeat_audit_preserves_operator_and_unrelated_rows(db_sessio
     await db_session.commit()
     result = await demo.run(args)
     assert result["created"] is True
+    assert result["decision"] == "additive_scope"
+    legacy = result["before"]["legacy_audit"]
+    assert legacy["counts"]["products"] == 1
+    assert "six_skus_two_barcodes_primary_stock" in legacy["gaps"]
+    assert legacy["products"][0]["id"] == str(unrelated.id)
+    assert legacy["products"][0]["barcodes"] == []
+    assert legacy["products"][0]["stock"] == legacy["products"][0]["reserved"] == 0
+    assert result["after"]["legacy_audit"] == legacy
     after = result["after"]
     assert len(after["products"]) == 6
     assert len(after["orders"]) == 12
@@ -185,3 +193,86 @@ async def test_seed_is_readable_by_existing_workspace_catalog_and_invoice(db_ses
             session, tenant_id=demo.TENANT_ID, seller_id=demo.demo_id("seller/1"),
         )
         assert any(row.rate_kopecks == 500 for row in rates)
+
+
+@pytest.mark.asyncio
+async def test_seed_supports_cell_box_product_pick_and_inventory_source(db_session, monkeypatch):
+    from app.services.fbs_picking_service import pick_scan
+    from app.services.inventory_service import physical_on_hand_in_container
+
+    args = await prepare(db_session, monkeypatch)
+    (await db_session.get(Tenant, demo.TENANT_ID)).address_storage_enabled = True
+    await db_session.commit()
+    await demo.run(args)
+    async with SessionLocal() as session:
+        actor = await session.get(User, args.actor_id)
+        product_id = demo.demo_id("product/1")
+        supply_id = demo.demo_id("supply/normal")
+        location_id = demo.demo_id("location/1")
+        box_id = demo.demo_id("box")
+        assert await physical_on_hand_in_container(
+            session, demo.TENANT_ID, product_id, location_id, "box", box_id,
+        ) == 20
+        count_line = await session.get(
+            InventoryCountLine, demo.demo_id("count-line/draft/1/WMS617-01"),
+        )
+        assert (count_line.container_kind, count_line.container_id) == ("box", box_id)
+        location = await pick_scan(
+            session, demo.TENANT_ID, supply_id, barcode="WMS617-CELL-1",
+            product_id_hint=None, storage_location_id=None, idempotency_key="demo-cell",
+            actor=actor,
+        )
+        assert location.kind == "location" and location.storage_location_id == location_id
+        container = await pick_scan(
+            session, demo.TENANT_ID, supply_id, barcode="WMS617-BOX-01",
+            product_id_hint=None, storage_location_id=location_id,
+            idempotency_key="demo-box", actor=actor,
+        )
+        assert container.kind == "container" and container.container_id == box_id
+        result = await pick_scan(
+            session, demo.TENANT_ID, supply_id, barcode=demo.barcode(1, 1),
+            product_id_hint=None, storage_location_id=location_id,
+            container_kind="box", container_id=box_id,
+            idempotency_key="demo-product", actor=actor,
+        )
+        assert result.kind == "product"
+        assert await physical_on_hand_in_container(
+            session, demo.TENANT_ID, product_id, location_id, "box", box_id,
+        ) == 19
+        assert (await session.get(FbsOrder, demo.demo_id("order/3"))).pick_status == "picked"
+
+
+@pytest.mark.asyncio
+async def test_complete_legacy_dataset_is_reused_without_mutations(db_session, monkeypatch):
+    args = await prepare(db_session, monkeypatch)
+    await demo.run(args)
+    async with SessionLocal() as session:
+        for n in range(1, 7):
+            product = await session.get(Product, demo.demo_id(f"product/{n}"))
+            product.sku_code = f"FBS-VIDEO-EXISTING-{n}"
+        await session.commit()
+    statements = []
+
+    def capture(_conn, _cursor, sql, _params, _ctx, _many):
+        statements.append(sql.strip().split()[0].upper())
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        result = await demo.run(args)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    legacy = result["before"]["legacy_audit"]
+    assert result["decision"] == "reuse_local_scope", legacy["gaps"]
+    assert result["created"] is False
+    assert not set(statements) & {"INSERT", "UPDATE", "DELETE"}
+    assert all(legacy["local_readiness_checks"].values())
+    assert legacy["counts"]["products"] == 6
+    assert legacy["counts"]["orders"] == 12
+    assert sum(p["reserved"] for p in legacy["products"]) == 14
+    assert len(legacy["intake_ids"]) == 3
+    assert len(legacy["inventory_documents"]) == 2
+    assert len(legacy["supplies"]) == 4
+    assert all(p["document_movements"] for p in legacy["products"])
+    assert all(o["wb_order_id"] for o in legacy["orders"] if o["marketplace"] == "wb")
+    assert legacy["provider_verification"].startswith("unverified")
+    assert result["after"]["legacy_audit"] == legacy
