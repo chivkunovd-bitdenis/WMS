@@ -8,7 +8,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import event
+from sqlalchemy import event, select
+from sqlalchemy.sql import visitors
+from sqlalchemy.sql.selectable import Select, Subquery
 
 from app.core.roles import FULFILLMENT_SELLER
 from app.db.session import SessionLocal, engine
@@ -368,30 +370,48 @@ async def test_seller_fbs_batches_ozon_quantities_without_n_plus_one(
         )
         await session.commit()
 
-    statements: list[str] = []
+    product_queries: list[Select] = []
 
-    def capture_statement(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
-        statements.append(statement.lower())
+    def capture_statement(_conn, statement, _multiparams, _params, _options) -> None:
+        if isinstance(statement, Select) and any(
+            getattr(node, "name", None) == "fbs_order_products"
+            for node in visitors.iterate(statement)
+        ):
+            product_queries.append(statement)
 
-    event.listen(engine.sync_engine, "before_cursor_execute", capture_statement)
+    event.listen(engine.sync_engine, "before_execute", capture_statement)
     try:
         response = await async_client.get(
-            "/seller-fbs/orders", headers=headers, params={"limit": 20}
+            "/seller-fbs/orders", headers=headers, params={"limit": 5, "offset": 7}
         )
     finally:
-        event.remove(engine.sync_engine, "before_cursor_execute", capture_statement)
+        event.remove(engine.sync_engine, "before_execute", capture_statement)
 
     assert response.status_code == 200, response.text
     assert response.json()["total"] == 20
+    expected_ids = {order.id for order in orders[7:12]}
+    assert {uuid.UUID(item["id"]) for item in response.json()["items"]} == expected_ids
     assert {item["items_quantity"] for item in response.json()["items"]} == {2}
-    product_queries = [sql for sql in statements if "fbs_order_products" in sql]
     assert len(product_queries) == 1
-    compact_sql = " ".join(product_queries[0].split())
-    assert (
-        "where fbs_order_products.order_id in (select seller_fbs_page.id"
-        in compact_sql
+
+    # Inspect the executed SQLAlchemy tree, independent of driver placeholders.
+    subqueries = {
+        node.name: node
+        for node in visitors.iterate(product_queries[0])
+        if isinstance(node, Subquery)
+    }
+    page = subqueries["seller_fbs_page"]
+    quantities = subqueries["seller_fbs_page_quantities"].element
+    assert quantities.whereclause.compare(
+        FbsOrderProduct.order_id.in_(select(page.c.id))
     )
-    assert "limit ? offset ?" in compact_sql
+
+    # An unbounded aggregate can produce the same API response after the outer
+    # join. Execute the captured aggregate itself to prove it only reads this
+    # page, including its nonzero offset, rather than all 20 orders.
+    async with SessionLocal() as session:
+        quantity_rows = (await session.execute(quantities)).all()
+    assert {row.order_id for row in quantity_rows} == expected_ids
 
 
 def test_seller_fbs_uses_master_marketplace_status_sets() -> None:
