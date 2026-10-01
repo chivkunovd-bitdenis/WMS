@@ -64,6 +64,8 @@ fbscancelleddeliveryorders.test
 fbscellpicktable
 fbscellpicktable.test
 fbschips
+fbsdeliverycheckgroups
+fbsdeliverycheckgroups.test
 fbskizautoprintqueue
 fbskizscandialog
 fbsmarkingscene

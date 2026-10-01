@@ -577,6 +577,7 @@ export type FbsDeliveryCheckGroup = {
   title: string
   description: string | null
   orderIds: number[]
+  orderDetails?: Record<number, string[]>
 }
 
 export type FbsDeliveryCheckSummary = {
@@ -593,6 +594,7 @@ function deliveryCheckPresentation(check: FbsDeliveryCheckRow) {
     }
   }
   const titles: Record<string, string> = {
+    marking_not_allowed: 'Маркировка требует проверки',
     wb_terminal_order_ignored: 'Заказы уже отменены или закрыты',
     wb_supply_composition_discrepancy: 'Состав поставки не совпадает с WB',
     negative_stock: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
@@ -643,7 +645,7 @@ export function summarizeDeliveryChecks(
         continue
       }
       const presentation = deliveryCheckPresentation(check)
-      const group = groups.get(presentation.key) ?? {
+      const group: FbsDeliveryCheckGroup = groups.get(presentation.key) ?? {
         key: presentation.key,
         title: presentation.title,
         description: presentation.description,
@@ -652,6 +654,17 @@ export function summarizeDeliveryChecks(
       const wbOrderId = deliveryCheckWbOrderId(check, wbOrderIdByOrderId)
       if (wbOrderId !== undefined && !group.orderIds.includes(wbOrderId)) {
         group.orderIds.push(wbOrderId)
+      }
+      if (wbOrderId !== undefined && ['marking_not_allowed', 'negative_stock', 'wb_supply_composition_discrepancy'].includes(check.code)) {
+        // The type is shared, but provider reasons and shortage quantities are
+        // specific to each order. Keep every distinct detail inside its row.
+        const message = check.code === 'wb_supply_composition_discrepancy'
+          ? check.message.replace(/^Заказ WB \d+[:\s]+/, '')
+          : check.message
+        const detail = fbsErrorText(message.trim())
+        group.orderDetails ??= {}
+        const details = group.orderDetails[wbOrderId] ??= []
+        if (detail && !details.includes(detail)) details.push(detail)
       }
       groups.set(presentation.key, group)
     }

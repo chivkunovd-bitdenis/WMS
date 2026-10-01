@@ -282,6 +282,7 @@ describe('summarizeDeliveryChecks', () => {
       title: 'Состав поставки не совпадает с WB',
       description: null,
       orderIds: [530013, 530015],
+      orderDetails: { 530013: ['seller_mismatch.'], 530015: ['unknown_order.'] },
     }])
   })
 
@@ -295,6 +296,27 @@ describe('summarizeDeliveryChecks', () => {
       title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
       description: null,
       orderIds: [530009, 530011],
+      orderDetails: {
+        530009: ['Не хватает 1 шт.; после подтверждения остаток будет списан в минус.'],
+        530011: ['Не хватает 5 шт.; после подтверждения остаток будет списан в минус.'],
+      },
+    }])
+  })
+
+  it('сохраняет разные причины маркировки у конкретных заказов внутри одной группы', () => {
+    const pending = 'WB ещё не подтвердил маркировку.'
+    const rejected = 'WB не принял маркировку: код уже использован'
+    const replacement = 'WB подтвердил другой код маркировки.'
+    const summary = summarizeDeliveryChecks([
+      check('marking_not_allowed', pending, 'warning', 'a'),
+      check('marking_not_allowed', rejected, 'warning', 'b'),
+      check('marking_not_allowed', replacement, 'warning', 'c'),
+      check('marking_not_allowed', rejected, 'warning', 'b'),
+    ], new Map([['a', 530009], ['b', 530011], ['c', 530015]]))
+    expect(summary.warnings).toEqual([{
+      key: 'marking_not_allowed', title: 'Маркировка требует проверки', description: null,
+      orderIds: [530009, 530011, 530015],
+      orderDetails: { 530009: [pending], 530011: [rejected], 530015: [replacement] },
     }])
   })
 
@@ -330,6 +352,7 @@ describe('summarizeDeliveryChecks', () => {
       title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
       description: null,
       orderIds: [777],
+      orderDetails: { 777: ['Остаток уйдёт в минус.'] },
     }])
   })
 })
