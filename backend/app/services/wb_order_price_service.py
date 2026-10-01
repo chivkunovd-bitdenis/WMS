@@ -6,8 +6,10 @@ import copy
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,9 @@ from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 WB_ORDERS_SOURCE = "/api/v3/orders"
 WB_NEW_ORDERS_SOURCE = "/api/v3/orders/new"
+WB_STATISTICS_ORDERS_URL = (
+    "https://statistics-api.wildberries.ru/api/v1/supplier/orders"
+)
 CRPT_MAX_PRODUCT_COST = 99_999_999_999_999_999
 _FIELDS = {
     "finalPrice": "final_price",
@@ -126,3 +131,111 @@ async def resolve_wb_product_cost(
     if snapshot is None:
         raise WbPriceDataError("missing_price_snapshot", "WB: снимок финальной цены отсутствует")
     return product_cost_from_snapshot(snapshot)
+
+
+def statistics_finished_price_to_kopecks(value: object) -> int:
+    """Convert WB Statistics finishedPrice RUB to exact integer kopecks."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str, Decimal)):
+        raise WbPriceDataError(
+            "invalid_wb_statistics_price",
+            "WB Statistics: finishedPrice имеет неверный формат",
+        )
+    try:
+        rubles = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise WbPriceDataError(
+            "invalid_wb_statistics_price",
+            "WB Statistics: finishedPrice имеет неверный формат",
+        ) from exc
+    kopecks = rubles * 100
+    if not rubles.is_finite() or kopecks != kopecks.to_integral_value():
+        raise WbPriceDataError(
+            "invalid_wb_statistics_price",
+            "WB Statistics: finishedPrice нельзя точно перевести в копейки",
+        )
+    result = int(kopecks)
+    # WB documents that zero can be returned temporarily while the report is filling.
+    if result == 0:
+        raise WbPriceDataError(
+            "wb_statistics_price_not_ready",
+            "WB Statistics: цена заказа ещё не рассчитана",
+        )
+    if not 0 < result <= CRPT_MAX_PRODUCT_COST:
+        raise WbPriceDataError(
+            "rub_price_out_of_range",
+            "WB Statistics: finishedPrice вне диапазона Честного знака",
+        )
+    return result
+
+
+async def fetch_statistics_order_prices(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    date_from: datetime,
+    rids: set[str],
+) -> dict[str, int]:
+    """Fetch one WB orders report and return exact sale prices keyed by FBS rid/srid."""
+    if not api_token or not rids:
+        return {}
+    if date_from.tzinfo is None:
+        date_from = date_from.replace(tzinfo=UTC)
+    date_from_value = date_from.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    try:
+        response = await client.get(
+            WB_STATISTICS_ORDERS_URL,
+            headers={"Authorization": api_token},
+            params={"dateFrom": date_from_value, "flag": 0},
+        )
+    except httpx.HTTPError as exc:
+        raise WbPriceDataError(
+            "wb_statistics_unavailable",
+            "WB Statistics: не удалось получить цены заказов",
+        ) from exc
+    if response.status_code in {401, 403}:
+        raise WbPriceDataError(
+            "wb_statistics_access_denied",
+            "WB Statistics: у сохранённого ключа нет доступа к отчёту заказов",
+        )
+    if response.status_code >= 400:
+        raise WbPriceDataError(
+            "wb_statistics_unavailable",
+            f"WB Statistics: отчёт заказов недоступен (HTTP {response.status_code})",
+        )
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise WbPriceDataError(
+            "wb_statistics_invalid_response",
+            "WB Statistics: отчёт заказов вернул некорректный ответ",
+        ) from exc
+    if not isinstance(payload, list):
+        raise WbPriceDataError(
+            "wb_statistics_invalid_response",
+            "WB Statistics: отчёт заказов вернул некорректный ответ",
+        )
+    result: dict[str, int] = {}
+    errors: dict[str, WbPriceDataError] = {}
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        rid = row.get("srid")
+        if not isinstance(rid, str) or rid not in rids or row.get("isCancel") is True:
+            continue
+        try:
+            price = statistics_finished_price_to_kopecks(row.get("finishedPrice"))
+        except WbPriceDataError as exc:
+            errors[rid] = exc
+            continue
+        existing = result.get(rid)
+        if existing is not None and existing != price:
+            raise WbPriceDataError(
+                "wb_statistics_price_conflict",
+                f"WB Statistics: для заказа {rid} получены разные цены",
+            )
+        result[rid] = price
+    if not result and len(rids) == 1:
+        only_rid = next(iter(rids))
+        if only_rid in errors:
+            raise errors[only_rid]
+    return result
