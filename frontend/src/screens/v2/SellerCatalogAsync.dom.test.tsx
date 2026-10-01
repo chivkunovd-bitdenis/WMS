@@ -65,6 +65,81 @@ function normalResponse(url: string) {
 }
 
 describe('catalog job lifecycle in actual seller screens', () => {
+  it('settings loads the WB-only server count after reading an existing key on reload', async () => {
+    const tokens = deferred<Response>()
+    const fetchMock = vi.fn((url: RequestInfo | URL) => String(url).endsWith('/tokens')
+      ? tokens.promise
+      : Promise.resolve(normalResponse(String(url))))
+    vi.stubGlobal('fetch', fetchMock)
+    await render(settings())
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/seller-catalog/page'))).toHaveLength(0)
+    await act(async () => { tokens.resolve(json({ has_content_token: true })) })
+    expect(element('seller-settings-wb-count').textContent).toBe('WB товары: 100')
+    const pages = fetchMock.mock.calls.filter(([url]) => String(url).includes('/seller-catalog/page'))
+    expect(pages).toHaveLength(1)
+    expect(Object.fromEntries(new URL(String(pages[0][0]), 'http://local').searchParams)).toEqual({
+      marketplace: 'wildberries', on_fulfillment: 'all', limit: '1', offset: '0',
+    })
+  })
+
+  it('settings refreshes the WB count when the first saved key finishes importing without another action', async () => {
+    const completion = deferred<Response>()
+    let imported = false
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const path = String(url)
+      if (path.endsWith('/tokens')) return Promise.resolve(json({ has_content_token: false }))
+      if (path.endsWith('/content-token')) return Promise.resolve(json({ validation_ok: true, catalog_job: { id: 'first-wb-job', state: 'queued' } }))
+      if (path.includes('/background-jobs/')) return completion.promise
+      if (path.includes('/seller-catalog/page')) return Promise.resolve(json({ items: [], total: imported ? 55000 : 0, scope_total: imported ? 55000 : 0, categories: [] }))
+      return Promise.resolve(normalResponse(path))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await render(settings())
+    await click('seller-settings-add-key')
+    await input('seller-settings-key-input', 'synthetic')
+    await click('seller-settings-save')
+    expect(element('seller-settings-key-status').textContent).toBe('добавлен')
+    expect(element('seller-settings-wb-import-progress').dataset.stage).toBe('queued')
+    expect(element('seller-settings-wb-count').textContent).toBe('WB товары: 0')
+    imported = true
+    await act(async () => { completion.resolve(json({ state: 'succeeded' })) })
+    expect(element('seller-settings-wb-count').textContent).toBe('WB товары: 55000')
+    expect(document.querySelector('[data-testid="seller-settings-wb-import-progress"]')).toBeNull()
+  })
+
+  it('settings never fetches a WB count for an Ozon-only seller', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/tokens')
+      ? json({ has_content_token: false })
+      : normalResponse(String(url))))
+    vi.stubGlobal('fetch', fetchMock)
+    await render(settings())
+    expect(element('seller-settings-key-status').textContent).toBe('не добавлен')
+    expect(element('seller-settings-ozon-card').textContent).toContain('Ключ принят')
+    expect(document.querySelector('[data-testid="seller-settings-wb-count"]')).toBeNull()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/seller-catalog/page'))).toHaveLength(0)
+  })
+
+  it.each(['unmount', 'session switch'] as const)('settings discards a late WB count after %s', async (transition) => {
+    const late = deferred<Response>()
+    const fetchMock = vi.fn((url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url)
+      if (path.includes('/seller-catalog/page') && (options?.headers as Record<string, string>)?.Authorization === 'Bearer seller-a') return late.promise
+      return Promise.resolve(normalResponse(path))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await render(settings())
+    const countCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/seller-catalog/page'))
+    expect(countCall).toBeDefined()
+    if (transition === 'unmount') await unmount()
+    else await render(settings('seller-b'))
+    expect(countCall![1]?.signal?.aborted).toBe(true)
+    fetchMock.mockClear()
+    await act(async () => { late.resolve(json({ scope_total: 999 })) })
+    expect(fetchMock).not.toHaveBeenCalled()
+    if (transition === 'unmount') expect(document.querySelector('[data-testid="seller-settings-wb-count"]')).toBeNull()
+    else expect(element('seller-settings-wb-count').textContent).toBe('WB товары: 100')
+  })
+
   it('reloads the current marketplace/search/page/fulfillment after an older job completes', async () => {
     const completion = deferred<Response>()
     const fetchMock = vi.fn((url: RequestInfo | URL) => {

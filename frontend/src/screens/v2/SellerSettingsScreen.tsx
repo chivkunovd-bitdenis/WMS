@@ -314,6 +314,7 @@ export function SellerSettingsScreen({
         const j = (await res.json()) as { has_content_token: boolean }
         if (!cancelled) {
           setHasContentKey(Boolean(j.has_content_token))
+          void refreshWbCardsCount(Boolean(j.has_content_token))
         }
       } catch {
         // ignore
@@ -562,13 +563,16 @@ export function SellerSettingsScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when permission or token changes
   }, [permissions.staff, token])
 
-  async function refreshWbCardsCount(): Promise<void> {
+  async function refreshWbCardsCount(hasWbKey: boolean): Promise<void> {
     const scope = captureScope()
+    if (!scope.isCurrent()) return
     // Astra P2: прежний /products/wb-catalog возвращал ВЕСЬ seller-каталог
     // (WB+Ozon) и грузил весь массив ради .length. Теперь запрашиваем ровно
     // WB-срез, limit=1 — читаем только scope_total (количество WB-карточек
     // в тенанте/селлере), без загрузки каталога в браузер.
-    if (hasContentKey !== true) {
+    // Use the confirmed connection result: save/job callbacks can still
+    // capture hasContentKey=false from before the first key was saved.
+    if (!hasWbKey) {
       setWbCardsCount(null)
       return
     }
@@ -636,7 +640,7 @@ export function SellerSettingsScreen({
           if (marketplaceToPoll === 'wildberries') {
             // Astra P1: WB-счётчик правдив только после фактического конца
             // импорта — раньше onSyncNow рисовал «карточек: 0» на 202.
-            await refreshWbCardsCount()
+            await refreshWbCardsCount(true)
           }
           if (!scope.isCurrent()) return
           if (options.openSelectionOnSuccess) {
@@ -731,7 +735,7 @@ export function SellerSettingsScreen({
       setDialogError(null)
       setContentKey('')
       setHasContentKey(true)
-      await refreshWbCardsCount()
+      await refreshWbCardsCount(true)
       if (!scope.isCurrent()) return
       if (j.validation_ok === false) {
         if (j.validation_error === 'missing_marketplace_scope') {
