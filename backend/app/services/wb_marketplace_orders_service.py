@@ -1279,6 +1279,13 @@ async def link_confirmed_orders_to_wb_supplies(
         if local_supply.wb_supply_id in supplies_dict:
             wb_name, wb_done = supplies_dict[local_supply.wb_supply_id]
             if wb_done:
+                from app.services.fbs_observed_delivery_service import (
+                    reconcile_observed_wb_delivery,
+                )
+
+                await reconcile_observed_wb_delivery(
+                    session, local_supply, http_client, api_token,
+                )
                 local_supply.status = FBS_SUPPLY_STATUS_DONE
                 if wb_name:
                     local_supply.name = wb_name
