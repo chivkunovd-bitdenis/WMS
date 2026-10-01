@@ -1,0 +1,49 @@
+{
+  "verified_at_utc": "2026-10-01T18:24:53Z",
+  "task": "WMS-628",
+  "production_source_sha": "ce92c957e6ebcdd3482dc94d0589a468592ff458",
+  "production_branch": "codex/wms628-production",
+  "tested_original_code_sha": "fc86f717b139b517802deb3da889012a9cdba0bf",
+  "production_code_cherry_pick_sha": "32f855bc",
+  "image": "wms-prod-api:wms628-ce92c957",
+  "base_image": "wms-prod-api:wms627-660bc5c7",
+  "base_source_sha": "660bc5c7ee299e8c91ecc5071790dcc6aa6df7c3",
+  "base_image_id": "sha256:844b4fdacf7fee8ceae913cb41c808838104cb8d05d6b4cd7119fbb2dc457162",
+  "changed_python_modules": [
+    "services/fbs_picking_service.py"
+  ],
+  "preserved_python_modules": 328,
+  "live_python_modules_match_git": 329,
+  "fbs_module_sha256": "18f406b207f7c537cb78ea9cd2b7877d0553a2f5d235da5a0e1b765d52ad9d17",
+  "running_services": [
+    "api",
+    "celery_worker",
+    "celery_beat"
+  ],
+  "restart_counts": {
+    "api": 0,
+    "celery_worker": 0,
+    "celery_beat": 0
+  },
+  "source_label_matches_all_running_services": true,
+  "api_health": {
+    "status": "ok"
+  },
+  "celery_ping": "pong; 1 node online",
+  "private_proxy_route_status": {
+    "/api/health": 200,
+    "/app/ff/dashboard": 200,
+    "/seller/": 200,
+    "/api/auth/me": 401
+  },
+  "preserved_api_worker_data_volume": "wms_prod_wms_appdata",
+  "web_container_created": "2026-10-01T08:24:34.042933321Z",
+  "web_image_id": "sha256:1962418c94294962d35df6dbb6c1368174f2a75156701e5f6cc1b6e209480888",
+  "migrations_run": false,
+  "manual_production_data_mutations": false,
+  "cross_review_completed": false,
+  "cross_review_limitation": "Required Opus 5 Extra invocation failed due to usage limit; owner directly instructed urgent production deployment.",
+  "physical_operator_scan_verified": false,
+  "actual_wrong_barcode_provided": false,
+  "rollback_image": "wms-prod-api:wms627-660bc5c7"
+}
