@@ -283,6 +283,43 @@ class PrintAllMarkingOut(BaseModel):
     dry_run: bool
 
 
+class PrintFboBulkIn(BaseModel):
+    layout_json: PrintLayoutOut | None = None
+    allow_partial: bool = False
+    issue_marking_codes: bool = True
+
+
+class FboProductLabelOut(BaseModel):
+    product_name: str
+    sku_code: str
+    barcode: str
+    wb_vendor_code: str | None = None
+    wb_size: str | None = None
+    wb_color: str | None = None
+    wb_brand: str | None = None
+    wb_composition: str | None = None
+    seller_name: str | None = None
+
+
+class PrintFboBulkLineOut(BaseModel):
+    packaging_task_line_id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    requires_honest_sign: bool
+    quantity: int
+    shortage: int
+    product_label: FboProductLabelOut
+    printed_codes: list[PrintedCodeOut] = Field(default_factory=list)
+
+
+class PrintFboBulkOut(BaseModel):
+    packaging_task_id: str
+    layout: PrintLayoutOut
+    lines: list[PrintFboBulkLineOut]
+    shortage: int
+
+
 class PoolProductOut(BaseModel):
     id: str
     sku_code: str
@@ -1907,6 +1944,78 @@ async def print_all_marking_codes_for_task(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PrintAllMarkingOut:
     _raise_marking_endpoint_gone("print-all")
+
+
+@router.post(
+    "/packaging-tasks/{task_id}/print-fbo-bulk",
+    response_model=PrintFboBulkOut,
+    summary=(
+        "WMS-618: idempotent CZ issuance for one FBO shipment. The response is "
+        "the current snapshot of every line (CZ and non-CZ) with the FULL set "
+        "of codes now bound to the line — already-linked plus whatever this "
+        "call issued — so a retry after a lost response gives the same tape."
+    ),
+)
+async def print_fbo_bulk_marking_codes(
+    task_id: uuid.UUID,
+    body: PrintFboBulkIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PrintFboBulkOut:
+    layout_payload: dict[str, object] | None = None
+    if body.layout_json is not None:
+        layout_payload = _layout_in_to_dict(body.layout_json)
+
+    try:
+        result = await mc_svc.print_fbo_bulk_for_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+            layout=layout_payload,
+            allow_partial=body.allow_partial,
+            issue_marking_codes=body.issue_marking_codes,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        if exc.code == "task_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="task_not_found"
+            ) from exc
+        if exc.code == "not_fbo_shipment":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="not_fbo_shipment",
+            ) from exc
+        raise _http_from_mc_error(exc) from exc
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+
+    return PrintFboBulkOut(
+        packaging_task_id=str(result.packaging_task_id),
+        layout=_layout_out(result.layout),
+        lines=[
+            PrintFboBulkLineOut(
+                packaging_task_line_id=str(line.packaging_task_line_id),
+                product_id=str(line.product_id),
+                sku_code=line.sku_code,
+                product_name=line.product_name,
+                requires_honest_sign=line.requires_honest_sign,
+                quantity=line.quantity,
+                shortage=line.shortage,
+                product_label=FboProductLabelOut.model_validate(line.product_label),
+                printed_codes=[
+                    PrintedCodeOut(
+                        id=str(code.id),
+                        cis_code=code.cis_code,
+                        has_label_artifact=code.has_label_artifact,
+                    )
+                    for code in line.printed_codes
+                ],
+            )
+            for line in result.lines
+        ],
+        shortage=result.total_shortage,
+    )
 
 
 class MarkingReprintRequestOut(BaseModel):

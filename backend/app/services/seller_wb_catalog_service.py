@@ -445,6 +445,41 @@ async def list_linked_wb_catalog_rows(
     )
 
 
+async def product_labels_for_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, dict[str, str | None]]:
+    """Current thermal-label fields using the same enrichment as the catalog UI."""
+    products = list((await session.scalars(
+        select(Product)
+        .where(Product.tenant_id == tenant_id, Product.id.in_(product_ids))
+        .options(selectinload(Product.seller))
+        .execution_options(populate_existing=True)
+    )).all())
+    rows = await _enrich_linked_products(session, tenant_id, products)
+    labels: dict[uuid.UUID, dict[str, str | None]] = {}
+    for row in rows:
+        barcodes = [row.wb_primary_barcode, *row.wb_barcodes]
+        for marketplace in ("wb", "ozon"):
+            for binding in row.marketplace_bindings:
+                if binding.get("marketplace") == marketplace:
+                    barcodes.extend(binding.get("external_barcodes") or [])
+        barcode = next((code.strip() for code in barcodes if code and code.strip()), "")
+        labels[row.product_id] = {
+            "product_name": row.name,
+            "sku_code": row.sku_code,
+            "barcode": barcode,
+            "wb_vendor_code": row.wb_vendor_code,
+            "wb_size": row.wb_size,
+            "wb_color": row.wb_color,
+            "wb_brand": row.wb_brand,
+            "wb_composition": row.wb_composition,
+            "seller_name": row.seller_name,
+        }
+    return labels
+
+
 async def _enrich_linked_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,

@@ -59,6 +59,7 @@ import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { postFboBulkMarkingPrint } from '../../utils/fboBulkMarkingPrint'
 import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
 import { formatHumanDocumentNumber } from './documentDisplay'
 
@@ -404,6 +405,65 @@ export function FfPackagingTaskPanel({
       },
       { reprint: opts?.reprint },
     )
+  }
+
+  /**
+   * WMS-618: общая печать ШК/ЧЗ по всей FBO-отгрузке через ту же модалку, что и
+   * построчная «ШК + ЧЗ». Открывается тот же `openPrint` (один экземпляр диалога
+   * выше по дереву), только контекст помечен `fboBulk` — сервер выпустит ЧЗ по
+   * всем требующим ЧЗ строкам одним атомарным запросом, а дальнейший состав
+   * ленты (группы, разделители, конструктор) обсчитывает диалог тем же кодом,
+   * которым рендерится превью.
+   */
+  const openFboBulkPrintForTask = () => {
+    const bulkLines = task.lines.map((ln) => {
+      const meta = getDisplayMeta(ln.product_id, ln)
+      return {
+        lineId: ln.id,
+        productId: ln.product_id,
+        productName: ln.product_name,
+        skuCode: ln.sku_code,
+        requiresHonestSign: ln.requires_honest_sign,
+        qtyNeedPack: ln.qty_need_pack,
+        productLabel: displayMetaToProductLabel(meta),
+      }
+    })
+    const firstLine = task.lines[0]
+    const firstMeta = firstLine ? getDisplayMeta(firstLine.product_id, firstLine) : null
+    openPrint({
+      token,
+      productId: firstLine?.product_id ?? '',
+      sellerId: firstLine?.seller_id ?? null,
+      documentNumber: formatHumanDocumentNumber(task),
+      // В общей печати пул проверяет сервер атомарно; локальный availability-счётчик
+      // не используется, поэтому передаём 0 только как заглушку — диалог в
+      // fboBulk-режиме его игнорирует (см. resolveMarkingPrintAvailability).
+      qtyNeedPack: bulkLines.reduce((sum, l) => sum + Math.max(0, l.qtyNeedPack), 0),
+      markingAvailable: 0,
+      qtyMarkingPrinted: 0,
+      // Заголовок/конструктор дёргают requiresHonestSign из первой строки, если
+      // ни одна в отгрузке не требует ЧЗ — диалог сам сложит ленту из ШК и
+      // спрячет блоки ЧЗ.
+      requiresHonestSign: bulkLines.some((l) => l.requiresHonestSign),
+      skuCode: `${task.lines.length} ${task.lines.length === 1 ? 'товар' : 'товаров'}`,
+      productName: formatHumanDocumentNumber(task) ?? 'Отгрузка',
+      productLabel: firstMeta ? displayMetaToProductLabel(firstMeta) : null,
+      fboBulk: {
+        taskId: task.id,
+        lines: bulkLines,
+        print: ({ layout, allowPartial, issueMarkingCodes }) =>
+          postFboBulkMarkingPrint({
+            token,
+            taskId: task.id,
+            layout,
+            allowPartial,
+            issueMarkingCodes,
+          }),
+      },
+      onPrinted: () => {
+        void refreshTask()
+      },
+    })
   }
 
   /** MPU-05 (18.08): единая кнопка печати листа отгрузки (накладная + ТЗ в одной форме
@@ -902,7 +962,7 @@ export function FfPackagingTaskPanel({
         </Paper>
       ) : null}
       {isMpUnloadTask ? (
-        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', rowGap: 1 }}>
           {/* MPU-05 (18.08): заказчик хочет одну кнопку печати вместо двух — печатает
               готовую форму «Лист отгрузки» (накладная + ТЗ в одном листе, план в «Кол-во»,
               «Факт» пустой под руку). Форма уже была готова в printShipmentPackagingSheet,
@@ -915,6 +975,19 @@ export function FfPackagingTaskPanel({
             data-testid="ff-packaging-print-sheet"
           >
             Печать накладной
+          </Button>
+          {/* WMS-618: «Печать всё» — рядом с печатью накладной, в контексте этой открытой
+              FBO-отгрузки. Открывает тот же MarkingPrintDialog, что и построчная «ШК + ЧЗ»,
+              но применяет конструктор ко всем товарам отгрузки сразу. */}
+          <Button
+            variant="outlined"
+            size="large"
+            startIcon={<PrintOutlined />}
+            onClick={openFboBulkPrintForTask}
+            disabled={!taskEditable || task.lines.length < 1}
+            data-testid="ff-packaging-print-all"
+          >
+            Печать всё
           </Button>
         </Stack>
       ) : null}
