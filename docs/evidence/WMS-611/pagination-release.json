@@ -1,0 +1,10 @@
+{
+  "release": "9c8b0a02277b09b065df5a9288c373c95eb6cf04",
+  "path": "/app/ff/fbs",
+  "printAsset": "useMarkingCodePrint-CQij4ZSP.js",
+  "sha256": "0ab7fb9b741876d34641936501fbe860988d02e141369ec53199e7ec5303b6b1",
+  "matchesLocalBuild": true,
+  "health": {
+    "status": "ok"
+  }
+}
