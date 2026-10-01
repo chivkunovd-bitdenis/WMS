@@ -597,11 +597,30 @@ function deliveryCheckPresentation(check: FbsDeliveryCheckRow) {
       description: 'Передаче не мешает; нанести можно и после неё.',
     }
   }
-  return {
-    key: `${check.code}:${check.message}`,
-    title: fbsErrorText(check.message),
-    description: null,
+  const titles: Record<string, string> = {
+    wb_terminal_order_ignored: 'Заказы уже отменены или закрыты',
+    wb_supply_composition_discrepancy: 'Состав поставки не совпадает с WB',
+    negative_stock: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
   }
+  return {
+    key: check.code,
+    title: titles[check.code] ?? fbsErrorText(check.message),
+    description: check.code === 'wb_terminal_order_ignored'
+      ? 'Исключены из списания и не мешают передаче поставки.'
+      : null,
+  }
+}
+
+function deliveryCheckWbOrderId(check: FbsDeliveryCheckRow, orderIds: Map<string, number>) {
+  const mapped = check.order_id ? orderIds.get(check.order_id) : undefined
+  if (mapped !== undefined) return mapped
+  // A composition discrepancy can reference an order absent from the local
+  // workspace. The existing API carries that WB number in this exact prefix.
+  if (check.code === 'wb_terminal_order_ignored' || check.code === 'wb_supply_composition_discrepancy') {
+    const match = /^Заказ WB (\d+)(?=[:\s])/.exec(check.message)
+    if (match) return Number(match[1])
+  }
+  return undefined
 }
 
 /**
@@ -635,7 +654,7 @@ export function summarizeDeliveryChecks(
         description: presentation.description,
         orderIds: [],
       }
-      const wbOrderId = check.order_id ? wbOrderIdByOrderId.get(check.order_id) : undefined
+      const wbOrderId = deliveryCheckWbOrderId(check, wbOrderIdByOrderId)
       if (wbOrderId !== undefined && !group.orderIds.includes(wbOrderId)) {
         group.orderIds.push(wbOrderId)
       }

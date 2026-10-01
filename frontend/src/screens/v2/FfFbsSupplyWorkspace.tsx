@@ -66,6 +66,7 @@ import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
+import { FbsCancelledDeliveryOrders } from './FbsCancelledDeliveryOrders'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
@@ -4409,17 +4410,7 @@ export function FfFbsSupplyWorkspace({
             ) : null}
             {cancelledDeliveryOrders.length > 0 ? (
               <Alert severity="warning">
-                <Typography variant="subtitle2">Отменённые заказы</Typography>
-                <Typography variant="body2">Выньте эти товары из коробов перед передачей. Они будут исключены из поставки.</Typography>
-                {cancelledDeliveryOrders.map((order) => (
-                  <Typography key={order.order_id} variant="body2">
-                    WB {order.wb_order_id} · {order.article ?? 'Артикул не указан'}
-                    {order.product_name ? ` · ${order.product_name}` : ''}
-                    {' · '}{order.boxes.length > 0
-                      ? order.boxes.map((box) => `Короб ${box.box_number} (${box.box_barcode})`).join(', ')
-                      : 'Короб не назначен'}
-                  </Typography>
-                ))}
+                <FbsCancelledDeliveryOrders orders={cancelledDeliveryOrders} />
               </Alert>
             ) : null}
             {!deliveryPreflightLoading
