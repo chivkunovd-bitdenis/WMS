@@ -33,7 +33,7 @@ export type FbsPendingProductScanAttempt = {
 
 type TokenClaims = { sub?: unknown; tenant_id?: unknown }
 
-function tokenIdentity(token: string): { tenant: string; user: string } {
+export function tokenIdentity(token: string): { tenant: string; user: string } {
   try {
     const payload = token.split('.')[1]
     if (!payload) throw new Error('token payload is absent')
@@ -69,13 +69,16 @@ function normalizePreferences(value: unknown): FbsScanPrintPreferences | null {
   }
 }
 
-function readPendingAttempts(token: string, supplyId: string): FbsPendingProductScanAttempt[] {
+export function readPendingAttempts(token: string, supplyId: string): FbsPendingProductScanAttempt[] {
   try {
     const raw = window.localStorage.getItem(fbsPendingProductScanStorageKey(token, supplyId))
     const parsed = raw ? JSON.parse(raw) : []
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) throw new Error('Invalid saved attempts')
     return parsed.flatMap((value): FbsPendingProductScanAttempt[] => {
-      if (!value || typeof value !== 'object') return []
+      if (!value || typeof value !== 'object') {
+        if (supplyId.endsWith(':sequential-packing')) throw new Error('Invalid saved attempt')
+        return []
+      }
       const row = value as Partial<FbsPendingProductScanAttempt>
       const preferences = normalizePreferences(row.preferences)
       if (
@@ -83,7 +86,10 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
         || typeof row.idempotencyKey !== 'string'
         || typeof row.createdAt !== 'number'
         || !preferences
-      ) return []
+      ) {
+        if (supplyId.endsWith(':sequential-packing')) throw new Error('Invalid saved attempt')
+        return []
+      }
       return [{
         barcode: row.barcode,
         idempotencyKey: row.idempotencyKey,
@@ -97,6 +103,7 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
       }]
     })
   } catch {
+    if (supplyId.endsWith(':sequential-packing')) throw new Error('Не удалось прочитать сохранённую попытку скана. Не очищайте данные сайта: исходный заказ нужно восстановить до нового скана.')
     return []
   }
 }
@@ -111,7 +118,8 @@ function writePendingAttempts(
     if (attempts.length === 0) window.localStorage.removeItem(key)
     else window.localStorage.setItem(key, JSON.stringify(attempts))
   } catch {
-    // Server idempotency remains authoritative when workstation storage is unavailable.
+    if (supplyId.endsWith(':sequential-packing')) throw new Error('Не удалось сохранить попытку скана в браузере. Освободите место или разрешите хранилище и повторите исходный штрихкод.')
+    // Legacy checkbox flow retains its existing storage behavior.
   }
 }
 

@@ -1,10 +1,10 @@
 import { apiUrl } from '../../api'
-import { dispatchPreparedQrInKiosk } from '../../utils/printPreparedQr'
+import { dispatchDurableQr, prepareDurableQr, restoreDurableQr, type DirectQrContext } from '../../utils/durableDirectQr'
 import { loadLabelSizeId, resolveLabelSize } from '../../utils/labelSize'
 import { startClaimedAutomaticPrint } from './fbsKizAutoReprint'
 import {
   claimFbsPendingProductScan, completeFbsPendingProductScan, peekFbsPendingProductScan,
-  updateFbsPendingProductScan,
+  updateFbsPendingProductScan, tokenIdentity, readPendingAttempts,
 } from './fbsScanAutoPrint'
 import {
   assignFbsPackingBoxOrders, claimFbsScanAutoPrintTarget, commitFbsKiz, createFbsIdempotencyKey,
@@ -30,6 +30,7 @@ export type PackingScanDeps = {
   pack: (result: FbsScanAutoPrintResult) => Promise<void>
   claim: (raw: string) => string
   saved: (raw: string) => boolean
+  pendingBarcode?: () => string | undefined
   remember: (raw: string, result: FbsScanAutoPrintResult) => void
   complete: (raw: string) => void
   changed: () => void
@@ -67,7 +68,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
   }
   return {
     hasPending: () => pending !== null,
-    hasSavedAttempt: deps.saved,
+    hasSavedAttempt: (raw) => Boolean(deps.pendingBarcode?.()) || deps.saved(raw),
     view: () => pending ? {
       orderId: pending.result.order_id,
       name: pending.result.binding_target?.product.name ?? `WB № ${pending.result.wb_order_id}`,
@@ -99,6 +100,8 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         await finish()
         return
       }
+      const savedBarcode = deps.pendingBarcode?.()
+      if (savedBarcode && savedBarcode !== raw) throw new Error(`Есть незавершённая попытка упаковки. Повторите её штрихкод ${savedBarcode}, чтобы восстановить исходный заказ.`)
       const result = await deps.select(raw, deps.claim(raw))
       deps.remember(raw, result)
       if (deps.active?.() === false) return
@@ -127,6 +130,14 @@ export function makePackingScanDeps(
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
+  const scanBarcodes = new Map<string, string>()
+  const contextFor = (result: FbsScanAutoPrintResult): DirectQrContext => {
+    const identity = tokenIdentity(token)
+    const barcode = scanBarcodes.get(result.scan_id)
+    if (!barcode) throw new Error('Не найден исходный штрихкод попытки печати. Повторите скан товара.')
+    return { tenantId: identity.tenant, userId: identity.user, supplyId, orderId: result.order_id,
+      scanId: result.scan_id, barcode, marketplace: 'wildberries', wbOrderId: result.wb_order_id }
+  }
   let startedWorkspace: FbsWorkspace | null = null
   const ensureSupplyStarted = async () => {
     const current = workspace()
@@ -150,6 +161,7 @@ export function makePackingScanDeps(
   }
   return {
     active,
+    pendingBarcode: () => readPendingAttempts(token, storageId)[0]?.barcode,
     claim: (raw) => {
       const attempt = claimFbsPendingProductScan(token, storageId, raw,
         { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey)
@@ -182,25 +194,34 @@ export function makePackingScanDeps(
           barcode, idempotency_key, print_qr: true, print_chz: false, reprint_chz: false, await_honest_sign: true,
         })
         scanBoxes.set(selected.scan_id, boxId)
+        scanBarcodes.set(selected.scan_id, barcode)
         return selected
       } catch (cause) {
         if (cause instanceof FbsApiError && ['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) {
+          const saved = peekFbsPendingProductScan(token, storageId, barcode)
+          if (saved?.scanId) throw new Error('Не удалось восстановить исходный заказ незавершённой печати. Повторный выбор другого заказа остановлен.')
           completeFbsPendingProductScan(token, storageId, barcode)
         }
         throw cause
       }
     },
     preload: async (result) => {
+      const context = contextFor(result)
+      const saved = await restoreDurableQr(result.scan_id, context)
+      if (saved) return saved.input.imageDataUrl
+      const size = resolveLabelSize(loadLabelSizeId())
       if (!result.qr_asset?.preview_url) throw new Error('Стикер QR заказа не получен.')
       const response = await fetch(resolveFbsAssetUrl(result.qr_asset.preview_url), { headers: authHeaders(token) })
       if (!response.ok) throw new Error('Не удалось загрузить стикер заказа.')
       const blob = await response.blob()
-      return new Promise<string>((resolve, reject) => {
+      const imageDataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onerror = () => reject(new Error('Не удалось прочитать стикер заказа.'))
         reader.onload = () => resolve(String(reader.result))
         reader.readAsDataURL(blob)
       })
+      await prepareDurableQr({ imageDataUrl, idempotencyKey: result.scan_id, widthMm: size.widthMm, heightMm: size.heightMm, context })
+      return imageDataUrl
     },
     bind: async (result, raw) => {
       await validateFbsKiz(token, authHeaders, result.order_id, raw)
@@ -223,9 +244,11 @@ export function makePackingScanDeps(
       refreshed()
     },
     print: async (result, imageDataUrl) => {
-      const size = resolveLabelSize(loadLabelSizeId())
-      await startClaimedAutomaticPrint(result.scan_id,
-        () => dispatchPreparedQrInKiosk({ imageDataUrl, idempotencyKey: result.scan_id, widthMm: size.widthMm, heightMm: size.heightMm }), {
+      const saved = await restoreDurableQr(result.scan_id, contextFor(result))
+      if (!saved || saved.input.imageDataUrl !== imageDataUrl) throw new Error('Исходная этикетка не сохранена. Повторите штрихкод товара.')
+      const dispatch = () => dispatchDurableQr(saved.input)
+      await startClaimedAutomaticPrint(result.scan_id, dispatch, {
+          reconcileStarted: () => dispatchDurableQr(saved.input, undefined, undefined, true),
           claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, result.scan_id, 'qr', key),
           markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'qr', key),
           // Preserve ownership after an uncertain print dispatch. The exact same
