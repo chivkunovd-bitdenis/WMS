@@ -1651,7 +1651,7 @@ export function SellerSettingsScreen({
           token={token}
           authHeaders={authHeaders}
           onClose={() => setCatalogSelectionMarketplace(null)}
-          onAdded={() => refreshWbCardsCount()}
+          onAdded={() => refreshWbCardsCount(catalogSelectionMarketplace === 'wildberries' || Boolean(hasContentKey))}
         />
       ) : null}
     </Box>
