@@ -376,6 +376,7 @@ class FbsOrderTapePrintOut(BaseModel):
 
 
 class FbsScanAutoPrintBody(BaseModel):
+    order_id: uuid.UUID | None = None
     barcode: str = Field(min_length=1, max_length=128)
     idempotency_key: str = Field(min_length=1, max_length=128)
     print_qr: bool = False
@@ -2440,6 +2441,7 @@ async def scan_fbs_supply_product_for_auto_print(
             reprint_chz=body.reprint_chz,
             actor_user_id=user.id,
             await_honest_sign=body.await_honest_sign,
+            order_id=body.order_id,
         )
     except scan_print_svc.FbsScanAutoPrintError as exc:
         _raise_from_scan_auto_print(exc)

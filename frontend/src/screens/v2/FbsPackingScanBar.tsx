@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
 import { loadLabelSizeId } from '../../utils/labelSize'
 import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
@@ -30,6 +30,12 @@ export function FbsPackingScanBar({ controllers, enabled }: {
     onReceived: () => setValue(''),
     isScanOnlyField: (element) => element instanceof HTMLInputElement && element.dataset.packingScan === 'true',
   })
+  useEffect(() => {
+    if (!intake.listening) return
+    const acceptRow = (event: Event) => intake.submit((event as CustomEvent<string>).detail)
+    document.addEventListener('fbs-packing-row-scan', acceptRow)
+    return () => document.removeEventListener('fbs-packing-row-scan', acceptRow)
+  }, [intake.listening, intake.submit])
   return <Box ref={intake.bindRoot} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }} data-testid="fbs-unified-scan">
     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
       <TextField size="small" fullWidth autoFocus value={value} disabled={!enabled} autoComplete="off"
