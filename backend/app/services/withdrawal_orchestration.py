@@ -39,12 +39,8 @@ from app.services.true_api_withdrawal import (
     safe_provider_error,
 )
 from app.services.wb_order_price_service import (
-    WB_STATISTICS_ORDERS_SOURCE,
     WbPriceDataError,
-    WbProductCost,
-    capture_wb_price_snapshot,
     fetch_statistics_order_prices,
-    resolve_wb_product_cost,
 )
 from app.services.wildberries_credentials_service import get_decrypted_marketplace_token
 from app.services.withdrawal_document_builder import WithdrawalProduct, build_withdrawal_documents
@@ -586,27 +582,14 @@ async def authenticate_and_build(
         and len(group_ids.get(info.product_group, set())) == 1
         and info.product_group not in discovery_errors
     ]
-    resolved_prices: dict[uuid.UUID, WbProductCost] = {}
     price_errors: dict[uuid.UUID, WbPriceDataError] = {}
-    missing_order_ids: set[uuid.UUID] = set()
-    for item in required_items:
-        try:
-            resolved_prices[item.order_id] = await resolve_wb_product_cost(
-                session,
-                tenant_id=scope.tenant_id,
-                seller_id=scope.seller_id,
-                order_id=item.order_id,
-            )
-        except WbPriceDataError as exc:
-            price_errors[item.order_id] = exc
-            missing_order_ids.add(item.order_id)
-
+    required_order_ids = {item.order_id for item in required_items}
     statistics_prices: dict[uuid.UUID, int] = {}
-    if missing_order_ids:
+    if required_order_ids:
         orders = list(
             await session.scalars(
                 select(FbsOrder).where(
-                    FbsOrder.id.in_(missing_order_ids),
+                    FbsOrder.id.in_(required_order_ids),
                     FbsOrder.tenant_id == scope.tenant_id,
                     FbsOrder.seller_id == scope.seller_id,
                     FbsOrder.marketplace == "wb",
@@ -623,7 +606,7 @@ async def authenticate_and_build(
             for order in orders
             if order.wb_rid and order.created_at_wb is not None
         }
-        for order_id in missing_order_ids:
+        for order_id in required_order_ids:
             order = orders_by_id.get(order_id)
             if order is None or not order.wb_rid:
                 price_errors[order_id] = WbPriceDataError(
@@ -659,9 +642,6 @@ async def authenticate_and_build(
                         )
                     else:
                         statistics_prices[order.id] = fetched_price
-    elif required_items:
-        # Price reads start a local transaction. End it before any later provider wait.
-        await session.commit()
 
     await lock_seller(session, scope)
     operation = await get_operation(session, scope, operation_id, lock=True)
@@ -710,28 +690,13 @@ async def authenticate_and_build(
             item.state, item.error = "failed", discovery_errors[info.product_group]
             continue
         try:
-            resolved_price = resolved_prices.get(item.order_id)
-            if resolved_price is None and item.order_id in statistics_prices:
-                snapshot = await capture_wb_price_snapshot(
-                    session,
-                    tenant_id=scope.tenant_id,
-                    seller_id=scope.seller_id,
-                    order_id=item.order_id,
-                    row={
-                        "convertedFinalPrice": statistics_prices[item.order_id],
-                        "convertedCurrencyCode": 643,
-                    },
-                    source=WB_STATISTICS_ORDERS_SOURCE,
-                )
-                assert snapshot is not None
-                resolved_price = WbProductCost(statistics_prices[item.order_id], snapshot.id)
-            if resolved_price is None:
+            product_cost = statistics_prices.get(item.order_id)
+            if product_cost is None:
                 raise price_errors.get(item.order_id) or WbPriceDataError(
                     "wb_order_price_not_found",
                     "WB: фактическая цена заказа не найдена",
                 )
-            item.price_snapshot_id = resolved_price.snapshot_id
-            item.product_cost = resolved_price.product_cost
+            item.product_cost = product_cost
             fias, kpp = required_external_mod(
                 inn=inn,
                 pg=info.product_group,
@@ -745,7 +710,7 @@ async def authenticate_and_build(
             WithdrawalProduct(
                 item.id,
                 item.provider_cis or "",
-                resolved_price.product_cost,
+                product_cost,
                 info.product_group,
                 fias,
                 kpp,

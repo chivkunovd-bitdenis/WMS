@@ -100,6 +100,7 @@ async def seed(
         seller_id=seller.id,
         warehouse_id=warehouse.id,
         wb_order_id=uuid.uuid4().int % 1_000_000_000,
+        wb_rid=uuid.uuid4().hex,
         supply_id=supply.id,
         product_id=product.id,
         marketplace="wb",

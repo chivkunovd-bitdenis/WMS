@@ -18,7 +18,6 @@ from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 WB_ORDERS_SOURCE = "/api/v3/orders"
 WB_NEW_ORDERS_SOURCE = "/api/v3/orders/new"
-WB_STATISTICS_ORDERS_SOURCE = "/api/v1/supplier/orders"
 WB_STATISTICS_ORDERS_URL = (
     "https://statistics-api.wildberries.ru/api/v1/supplier/orders"
 )
@@ -90,11 +89,7 @@ async def capture_wb_price_snapshot(
     row: dict[str, Any],
     source: str = WB_ORDERS_SOURCE,
 ) -> WbOrderPriceSnapshot | None:
-    if source not in {
-        WB_ORDERS_SOURCE,
-        WB_NEW_ORDERS_SOURCE,
-        WB_STATISTICS_ORDERS_SOURCE,
-    }:
+    if source not in {WB_ORDERS_SOURCE, WB_NEW_ORDERS_SOURCE}:
         raise ValueError("unsupported_wb_price_source")
     # /orders/new may omit final prices. Never erase history with that partial feed.
     if source == WB_NEW_ORDERS_SOURCE and not any(field in row for field in _FIELDS):
@@ -127,28 +122,15 @@ async def capture_wb_price_snapshot(
 async def resolve_wb_product_cost(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, order_id: uuid.UUID
 ) -> WbProductCost:
-    snapshots = list(await session.scalars(select(WbOrderPriceSnapshot).join(
+    snapshot = await session.scalar(select(WbOrderPriceSnapshot).join(
         FbsOrder, FbsOrder.id == WbOrderPriceSnapshot.order_id,
     ).where(
         FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id,
         FbsOrder.seller_id == seller_id, FbsOrder.marketplace == "wb",
-    ).order_by(WbOrderPriceSnapshot.revision.desc())))
-    if not snapshots:
+    ).order_by(WbOrderPriceSnapshot.revision.desc()).limit(1))
+    if snapshot is None:
         raise WbPriceDataError("missing_price_snapshot", "WB: снимок финальной цены отсутствует")
-    latest_error: WbPriceDataError | None = None
-    for snapshot in snapshots:
-        try:
-            return product_cost_from_snapshot(snapshot)
-        except WbPriceDataError as exc:
-            # /api/v3/orders does not expose finalPrice. Such a later partial
-            # snapshot must not hide valid evidence captured earlier from
-            # /api/v3/orders/new. Invalid or conflicting values remain fatal.
-            if exc.code != "missing_rub_final_price":
-                raise
-            if latest_error is None:
-                latest_error = exc
-    assert latest_error is not None
-    raise latest_error
+    return product_cost_from_snapshot(snapshot)
 
 
 def statistics_finished_price_to_kopecks(value: object) -> int:

@@ -247,24 +247,19 @@ async def test_missing_and_bad_fields_never_use_legacy_price(db_session: AsyncSe
         db_session, tenant, seller, row, preserve_unmapped_warehouse=True,
     )
     order_id = order.id
-    for value, code in [(None, None), (10**30, "rub_price_out_of_range"),
-                        (12.5, "invalid_rub_price")]:
+    for value, code in [(None, "missing_rub_final_price"),
+                        (10**30, "rub_price_out_of_range"), (12.5, "invalid_rub_price")]:
         row["finalPrice"] = row["convertedFinalPrice"] = value
         await orders.upsert_order_from_wb_row(
             db_session, tenant, seller, row, preserve_unmapped_warehouse=True,
         )
         await db_session.commit()
         db_session.expire_all()
-        if code is None:
-            assert (await resolve_wb_product_cost(
+        with pytest.raises(WbPriceDataError) as error:
+            await resolve_wb_product_cost(
                 db_session, tenant_id=tenant, seller_id=seller, order_id=order_id,
-            )).product_cost == 12345
-        else:
-            with pytest.raises(WbPriceDataError) as error:
-                await resolve_wb_product_cost(
-                    db_session, tenant_id=tenant, seller_id=seller, order_id=order_id,
-                )
-            assert error.value.code == code
+            )
+        assert error.value.code == code
 
 
 async def test_partial_new_feed_preserves_snapshot_and_scope(db_session: AsyncSession) -> None:
