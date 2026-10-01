@@ -9,3 +9,6 @@ __pycache__/
 /direct-web/
 /dist-console/
 /build-console/
+
+# Incident archive retained locally for read-only comparison, never shipped.
+incident-release/

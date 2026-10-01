@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>История WMS Print</title>
+<style>body{font:16px system-ui;margin:24px auto;padding:0 20px;max-width:1100px;background:#f8fafc;color:#172033}h1{font-size:24px}button,input{font:inherit;padding:8px;margin:4px;border:1px solid #bac4d2;border-radius:6px;background:white}button{cursor:pointer}article{background:white;padding:16px;border:1px solid #d9e0e8;border-radius:8px;margin:12px 0;overflow-wrap:anywhere}pre{white-space:pre-wrap;font:13px ui-monospace}img{max-width:300px;max-height:300px;border:1px solid #ddd}#error{color:#9f1239;white-space:pre-wrap}small{color:#4b5563}</style>
+<h1>История WMS Print</h1>
+<p>Здесь сохранены исходные этикетки и наблюдаемые результаты системной очереди. Даже «завершено в очереди» не подтверждает выход и читаемость бумаги.</p>
+<button id="refresh">Обновить</button><input id="filter" placeholder="Заказ, скан, штрихкод или ключ" size="38"><p id="error" role="alert"></p><main id="jobs"></main>
+<script>
+const names={saved:'Сохранено, ожидает отправки',submitting:'Передаётся в очередь',unknown:'Исход неизвестен',accepted:'Принято очередью',pending:'Ожидает в очереди',held:'Приостановлено',processing:'Очередь обрабатывает',stopped:'Очередь остановилась',canceled:'Отменено в очереди',aborted:'Ошибка очереди',completed:'Завершено в очереди',failed_before_submit:'Отказ до отправки'};
+let jobs=[];const root=document.querySelector('#jobs'),error=document.querySelector('#error');
+function el(tag,text,parent){const n=document.createElement(tag);n.textContent=text;parent?.append(n);return n}
+async function request(path,body){const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Print':'1'},body:JSON.stringify(body)});const value=await r.json();if(!r.ok)throw Error(value.error||`Ошибка ${r.status}`);return value}
+async function refresh(){try{const value=await request('/jobs');jobs=value.jobs;error.textContent=value.diagnostics.join('\n');render()}catch(e){error.textContent=e.message}}
+function render(){root.replaceChildren();const q=document.querySelector('#filter').value.toLowerCase();for(const job of jobs){if(q&&!JSON.stringify(job).toLowerCase().includes(q))continue;const card=el('article','',root);el('strong',names[job.status]||job.status,card);el('p',job.idempotencyKey,card);el('p',job.reason,card);const context=Object.entries(job.context||{}).map(([k,v])=>`${k}: ${v}`).join(' · ');if(context)el('p',context,card);el('small',`Создано: ${job.createdAt} · Обновлено: ${job.updatedAt} · Очередь: ${job.queue||'не определена'} · Квитанция: ${job.receipt||'нет'} · Размер: ${job.widthMm||'?'} × ${job.heightMm||'?'} мм`,card);if(job.parentKey)el('p',`Повтор задания: ${job.parentKey}`,card);const path='/jobs/'+encodeURIComponent(job.idempotencyKey);
+if(job.imageAvailable){const a=el('a',' Открыть исходную PNG',card);a.href=path+'/image';a.target='_blank';a.rel='noopener';}
+const actions=el('div','',card);function action(label,fn){const b=el('button',label,actions);b.onclick=async()=>{b.disabled=true;try{await fn();await refresh()}catch(e){error.textContent=e.message}finally{b.disabled=false}}}
+action('Сверить с очередью',()=>request(path+'/reconcile',{}));
+if(['saved','failed_before_submit'].includes(job.status)&&job.imageAvailable)action('Отправить сохранённое задание',()=>request(path+'/retry',{}));
+if(!['saved','submitting'].includes(job.status)&&job.imageAvailable)action('Создать повторную этикетку',async()=>{await request(path+'/reconcile',{});if(!confirm('Сначала проверьте принтер и системную очередь. Исходная этикетка могла уже выйти или ещё выйти позднее. Создать ОДНУ новую связанную копию, осознавая риск дубликата?'))return;const slot='wms-reprint:'+job.idempotencyKey;let child=localStorage.getItem(slot);if(!child){child=crypto.randomUUID();localStorage.setItem(slot,child)}await request(path+'/reprint',{idempotencyKey:child,acknowledgeDuplicateRisk:true});localStorage.removeItem(slot)});
+const details=el('details','',card);el('summary','Полные сведения и история',details);el('pre',JSON.stringify(job,null,2),details)}}
+document.querySelector('#refresh').onclick=refresh;document.querySelector('#filter').oninput=render;refresh();
+</script></html>
