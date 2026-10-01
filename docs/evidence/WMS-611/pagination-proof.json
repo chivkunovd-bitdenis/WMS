@@ -1,0 +1,42 @@
+[
+  {
+    "size": "58x40",
+    "pages": 24,
+    "empty_text_pages": [],
+    "product_pages_with_barcode": 12,
+    "product_pages_with_size": 12,
+    "product_pages_with_footer": 12
+  },
+  {
+    "size": "60x40",
+    "pages": 24,
+    "empty_text_pages": [],
+    "product_pages_with_barcode": 12,
+    "product_pages_with_size": 12,
+    "product_pages_with_footer": 0
+  },
+  {
+    "size": "60x80",
+    "pages": 24,
+    "empty_text_pages": [],
+    "product_pages_with_barcode": 12,
+    "product_pages_with_size": 12,
+    "product_pages_with_footer": 12
+  },
+  {
+    "size": "70x120",
+    "pages": 24,
+    "empty_text_pages": [],
+    "product_pages_with_barcode": 12,
+    "product_pages_with_size": 12,
+    "product_pages_with_footer": 12
+  },
+  {
+    "size": "58x39-driver",
+    "pages": 24,
+    "empty_text_pages": [],
+    "product_pages_with_barcode": 12,
+    "product_pages_with_size": 12,
+    "product_pages_with_footer": 12
+  }
+]
