@@ -846,13 +846,10 @@ async def test_fbs_pvz_deliver_warns_about_boxes_but_does_not_stop(
         supply_name="PVZ deliver",
     )
 
-    # Коробов ещё нет: оператор видит предупреждение, но кнопка живая.
+    # Короба не участвуют в проверке готовности передачи.
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
     assert preflight["can_deliver"] is True
-    assert any(
-        check["code"] == "physical_boxes_required" and check["severity"] == "warning"
-        for check in preflight["checks"]
-    )
+    assert all(check["code"] != "physical_boxes_required" for check in preflight["checks"])
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 

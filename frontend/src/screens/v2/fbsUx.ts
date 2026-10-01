@@ -589,16 +589,7 @@ export type FbsDeliveryCheckSummary = {
   warnings: FbsDeliveryCheckGroup[]
 }
 
-function deliveryCheckPresentation(check: FbsDeliveryCheckRow, physicalBoxesMissing: boolean) {
-  if (check.code === 'physical_boxes_required' || check.code === 'packed_order_unassigned') {
-    return {
-      key: 'boxes_required',
-      title: physicalBoxesMissing ? 'Не созданы короба' : 'Не все заказы распределены по коробам',
-      description: physicalBoxesMissing
-        ? 'Создайте короба и распределите по ним заказы.'
-        : 'Распределите оставшиеся заказы по коробам.',
-    }
-  }
+function deliveryCheckPresentation(check: FbsDeliveryCheckRow) {
   if (check.code === 'marking_required') {
     return {
       key: 'marking_required',
@@ -618,9 +609,9 @@ function deliveryCheckPresentation(check: FbsDeliveryCheckRow, physicalBoxesMiss
  *
  * Сервер отдаёт по одной строке на заказ. Здесь одинаковые причины
  * схлопываются в одну строку, а номера заказов WB остаются отдельным списком,
- * который интерфейс раскрывает по запросу оператора. Отсутствие физических
- * коробов и поштучные строки «заказ без короба» — одна проблема, поэтому они
- * также объединяются в одну строку.
+ * который интерфейс раскрывает по запросу оператора. Устаревшие проверки
+ * коробов отбрасываются: наличие и распределение коробов передаче не мешает
+ * и владельцу не нужно даже как предупреждение.
  *
  * Запреты и предупреждения разводятся по уровню, а не по полю `ok`: уход
  * остатка в минус и отменённый заказ WB приходят с `ok = false`, но передачу
@@ -631,13 +622,13 @@ export function summarizeDeliveryChecks(
   wbOrderIdByOrderId: Map<string, number>,
 ): FbsDeliveryCheckSummary {
   const collect = (severity: 'blocker' | 'warning') => {
-    const physicalBoxesMissing = checks.some((check) => (
-      check.severity === severity && check.code === 'physical_boxes_required'
-    ))
     const groups = new Map<string, FbsDeliveryCheckGroup>()
     for (const check of checks) {
       if (check.severity !== severity) continue
-      const presentation = deliveryCheckPresentation(check, physicalBoxesMissing)
+      if (check.code === 'physical_boxes_required' || check.code === 'packed_order_unassigned') {
+        continue
+      }
+      const presentation = deliveryCheckPresentation(check)
       const group = groups.get(presentation.key) ?? {
         key: presentation.key,
         title: presentation.title,
@@ -650,11 +641,7 @@ export function summarizeDeliveryChecks(
       }
       groups.set(presentation.key, group)
     }
-    const priority = (group: FbsDeliveryCheckGroup) => (
-      group.key === 'boxes_required' ? 0 : group.key === 'marking_required' ? 1 : 2
-    )
     return [...groups.values()]
-      .sort((a, b) => priority(a) - priority(b))
       .map((group) => ({
         ...group,
         orderIds: [...group.orderIds].sort((a, b) => a - b),

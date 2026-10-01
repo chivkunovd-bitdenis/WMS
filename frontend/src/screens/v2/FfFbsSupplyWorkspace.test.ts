@@ -263,7 +263,7 @@ describe('summarizeDeliveryChecks', () => {
     }])
   })
 
-  it('объединяет отсутствие коробов и заказы без короба в одну строку', () => {
+  it('не показывает отсутствие коробов и распределения в проверке передачи', () => {
     const summary = summarizeDeliveryChecks(
       [
         check('physical_boxes_required', 'В поставке пока нет коробов.', 'warning'),
@@ -272,27 +272,7 @@ describe('summarizeDeliveryChecks', () => {
       ],
       new Map([['a', 530015], ['b', 530009]]),
     )
-    expect(summary.warnings).toEqual([{
-      key: 'boxes_required',
-      title: 'Не созданы короба',
-      description: 'Создайте короба и распределите по ним заказы.',
-      orderIds: [530009, 530015],
-    }])
-  })
-
-  it('показывает короба первой строкой, даже если сервер сначала прислал ЧЗ', () => {
-    const summary = summarizeDeliveryChecks(
-      [
-        check('marking_required', 'Честный знак не нанесён.', 'warning', 'a'),
-        check('physical_boxes_required', 'В поставке пока нет коробов.', 'warning'),
-        check('packed_order_unassigned', 'Для заказа не указан короб.', 'warning', 'a'),
-      ],
-      new Map([['a', 530009]]),
-    )
-    expect(summary.warnings.map((group) => group.key)).toEqual([
-      'boxes_required',
-      'marking_required',
-    ])
+    expect(summary.warnings).toEqual([])
   })
 
   it('разводит запреты и предупреждения по уровню, а не по признаку ok', () => {
