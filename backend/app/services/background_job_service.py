@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
 from app.models.inventory_movement import InventoryMovement
+from app.models.seller import Seller
 from app.services import wildberries_sync_service as wb_sync
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ JOB_STATUS_FAILED = "failed"
 
 JOB_TYPE_MOVEMENTS_DIGEST = "movements_digest"
 JOB_TYPE_WILDBERRIES_CARDS_SYNC = "wildberries_cards_sync"
+JOB_TYPE_SELLER_WB_CATALOG_SYNC = "seller_wb_catalog_sync"
+JOB_TYPE_OZON_CATALOG_SYNC = "ozon_catalog_sync"
 JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
@@ -45,6 +48,67 @@ async def create_pending_job(
         payload_json=payload_json,
     )
     session.add(job)
+    await session.commit()
+    await session.refresh(job)
+    return job
+
+
+async def create_or_get_seller_catalog_sync_job(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    job_type: str,
+    marketplace: str,
+) -> tuple[BackgroundJob, bool]:
+    """Create one active catalog job per seller/marketplace.
+
+    The seller row is the existing durable lock target.  It serialises the
+    lookup/create pair on PostgreSQL without introducing a new table or a
+    second source of sync state.  A repeated click while a job is pending or
+    running receives that same job id and therefore cannot start a duplicate
+    full-catalog import.
+    """
+    seller = await session.scalar(
+        select(Seller)
+        .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if seller is None:
+        raise ValueError("seller_not_found")
+    active = await session.scalar(
+        select(BackgroundJob)
+        .where(
+            BackgroundJob.tenant_id == tenant_id,
+            BackgroundJob.job_type == job_type,
+            BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
+            BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
+        )
+        .order_by(BackgroundJob.created_at.desc())
+        .limit(1)
+    )
+    if active is not None:
+        await session.commit()
+        return active, False
+    job = BackgroundJob(
+        tenant_id=tenant_id,
+        job_type=job_type,
+        status=JOB_STATUS_PENDING,
+        payload_json={"seller_id": str(seller_id), "marketplace": marketplace},
+    )
+    session.add(job)
+    await session.commit()
+    await session.refresh(job)
+    return job, True
+
+
+async def mark_job_dispatch_failed(
+    session: AsyncSession, job: BackgroundJob, *, error_code: str
+) -> BackgroundJob:
+    job.status = JOB_STATUS_FAILED
+    job.result_json = None
+    job.error_message = error_code
+    job.finished_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(job)
     return job
@@ -168,9 +232,18 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
         await session.commit()
         try:
             async with httpx.AsyncClient() as http_client:
-                result = await wb_sync.sync_cards_list(
-                    session, job.tenant_id, seller_uuid, http_client
-                )
+                if job.job_type == JOB_TYPE_SELLER_WB_CATALOG_SYNC:
+                    from app.services.wildberries_product_sync_service import (
+                        sync_wb_products_for_seller,
+                    )
+
+                    result = await sync_wb_products_for_seller(
+                        session, job.tenant_id, seller_uuid, http_client
+                    )
+                else:
+                    result = await wb_sync.sync_cards_list(
+                        session, job.tenant_id, seller_uuid, http_client
+                    )
             job.status = JOB_STATUS_DONE
             job.result_json = result
             job.error_message = None
@@ -180,10 +253,153 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
             job.result_json = None
             job.error_message = exc.code
         except Exception as exc:
-            logger.exception("wildberries sync job failed: %s", exc)
+            logger.exception(
+                "wildberries sync job failed job=%s exception_type=%s",
+                job_id,
+                type(exc).__name__,
+            )
             job.status = JOB_STATUS_FAILED
             job.result_json = None
-            job.error_message = str(exc)
+            job.error_message = "wildberries_catalog_failed"
+        job.finished_at = datetime.now(UTC)
+        await session.commit()
+
+
+def _safe_ozon_catalog_error(exc: Exception) -> str:
+    """Return a public-safe stable code; never persist provider payloads."""
+    from app.services.marketplace_provider import MarketplaceProviderError
+
+    if not isinstance(exc, MarketplaceProviderError):
+        return "ozon_catalog_failed"
+    if exc.code in {"ozon_catalog_invalid_response", "ozon_catalog_incomplete"}:
+        return exc.code
+    if exc.status_code == 429:
+        return "ozon_catalog_rate_limited"
+    if exc.status_code in {401, 403}:
+        return "ozon_catalog_credentials_rejected"
+    return "ozon_catalog_unavailable"
+
+
+def _ozon_catalog_error_is_retryable(exc: Exception) -> bool:
+    from app.services.marketplace_provider import MarketplaceProviderError
+
+    return (
+        isinstance(exc, MarketplaceProviderError)
+        and exc.code not in {"ozon_catalog_invalid_response", "ozon_catalog_incomplete"}
+        and (exc.status_code is None or exc.status_code == 429 or exc.status_code >= 500)
+    )
+
+
+async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
+    """Import one seller's complete Ozon snapshot and publish honest sync state."""
+    from app.services.marketplace_account_service import (
+        MarketplaceAccountError,
+        MarketplaceAccountService,
+        SellerNotFound,
+    )
+    from app.services.ozon_product_import_service import import_ozon_product_cards
+    from app.services.ozon_provider_factory import build_ozon_provider
+
+    async with SessionLocal() as session:
+        job = await session.get(BackgroundJob, job_id)
+        if job is None:
+            logger.warning("background job missing: %s", job_id)
+            return
+        tenant_id = job.tenant_id
+        payload = job.payload_json or {}
+        raw_seller_id = payload.get("seller_id")
+        try:
+            seller_id = uuid.UUID(raw_seller_id) if isinstance(raw_seller_id, str) else None
+        except ValueError:
+            seller_id = None
+        if seller_id is None:
+            job.status = JOB_STATUS_FAILED
+            job.started_at = datetime.now(UTC)
+            job.finished_at = datetime.now(UTC)
+            job.error_message = "invalid_job_seller_id"
+            await session.commit()
+            return
+
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        job.finished_at = None
+        job.error_message = None
+        await session.commit()
+
+        account_service = MarketplaceAccountService(session)
+        error: Exception | None = None
+        result: Any = None
+        try:
+            client_id, api_key = await account_service.stored_credentials(
+                tenant_id, seller_id
+            )
+            for attempt in range(3):
+                try:
+                    result = await import_ozon_product_cards(
+                        session,
+                        tenant_id,
+                        seller_id,
+                        build_ozon_provider(),
+                        client_id=client_id,
+                        api_key=api_key,
+                    )
+                    error = None
+                    break
+                except Exception as exc:
+                    error = exc
+                    await session.rollback()
+                    if attempt == 2 or not _ozon_catalog_error_is_retryable(exc):
+                        break
+                    await asyncio.sleep(0.25 * (2**attempt))
+            if error is not None:
+                raise error
+            assert result is not None
+            await account_service.mark_catalog_sync_succeeded(tenant_id, seller_id)
+            job = await session.get(BackgroundJob, job_id)
+            if job is None:
+                return
+            job.status = JOB_STATUS_DONE
+            job.result_json = {
+                "tenant_id": str(tenant_id),
+                "seller_id": str(seller_id),
+                "marketplace": "ozon",
+                "cards_received": result.cards_read,
+                "cards_saved": result.cards_saved,
+                "links_created": result.links_created,
+                "products_created": result.products_created,
+            }
+            job.error_message = None
+        except (SellerNotFound, MarketplaceAccountError) as exc:
+            await session.rollback()
+            code = exc.code
+            try:
+                await MarketplaceAccountService(session).mark_catalog_sync_failed(
+                    tenant_id, seller_id, code
+                )
+            except MarketplaceAccountError:
+                await session.rollback()
+            job = await session.get(BackgroundJob, job_id)
+            if job is None:
+                return
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = code
+        except Exception as exc:
+            await session.rollback()
+            code = _safe_ozon_catalog_error(exc)
+            logger.warning("ozon catalog sync failed job=%s code=%s", job_id, code)
+            try:
+                await MarketplaceAccountService(session).mark_catalog_sync_failed(
+                    tenant_id, seller_id, code
+                )
+            except MarketplaceAccountError:
+                await session.rollback()
+            job = await session.get(BackgroundJob, job_id)
+            if job is None:
+                return
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = code
         job.finished_at = datetime.now(UTC)
         await session.commit()
 

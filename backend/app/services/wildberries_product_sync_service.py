@@ -145,7 +145,7 @@ async def _sync_scheduled_seller(
     async with SessionLocal() as session:
         active_job = await session.scalar(select(BackgroundJob.id).where(
             BackgroundJob.tenant_id == tenant_id,
-            BackgroundJob.job_type == "wildberries_cards_sync",
+            BackgroundJob.job_type.in_(("wildberries_cards_sync", "seller_wb_catalog_sync")),
             BackgroundJob.status.in_(("pending", "running")),
             BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
         ).limit(1))

@@ -199,6 +199,29 @@ class MarketplaceAccountService:
             raise MarketplaceAccountError("ozon_not_connected")
         return row.external_account_id, decrypt_secret(row.secret_encrypted)
 
+    async def mark_catalog_sync_succeeded(
+        self, tenant_id: uuid.UUID, seller_id: uuid.UUID
+    ) -> None:
+        """Publish completion only after the entire catalog was persisted."""
+        await self._seller_in_tenant(tenant_id, seller_id)
+        row = await self._row(tenant_id, seller_id, lock=True)
+        if row is None or not row.is_active:
+            raise MarketplaceAccountError("ozon_not_connected")
+        row.last_synced_at = datetime.now(tz=UTC)
+        row.last_sync_error_code = None
+        await self.session.commit()
+
+    async def mark_catalog_sync_failed(
+        self, tenant_id: uuid.UUID, seller_id: uuid.UUID, error_code: str
+    ) -> None:
+        """Store a stable safe code without changing the last successful time."""
+        await self._seller_in_tenant(tenant_id, seller_id)
+        row = await self._row(tenant_id, seller_id, lock=True)
+        if row is None or not row.is_active:
+            raise MarketplaceAccountError("ozon_not_connected")
+        row.last_sync_error_code = error_code[:64]
+        await self.session.commit()
+
     async def disconnect(
         self, tenant_id: uuid.UUID, seller_id: uuid.UUID, actor_id: uuid.UUID
     ) -> None:

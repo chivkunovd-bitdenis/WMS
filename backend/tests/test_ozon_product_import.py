@@ -21,7 +21,11 @@ from app.models.tenant import Tenant
 from app.services import catalog_service as catalog_svc
 from app.services import ozon_product_import_service as import_svc
 from app.services import scan_resolver_service as scan_svc
-from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 
 GLASSES_CARD: dict[str, Any] = {
     "id": 6204279711,
@@ -84,6 +88,53 @@ def _provider(cards: list[dict[str, Any]]) -> OzonMarketplaceProvider:
             }
         )
     )
+
+
+class _LargeCatalogProvider:
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.calls = 0
+
+    async def call(self, **kwargs: Any) -> dict[str, object]:
+        self.calls += 1
+        payload = kwargs["payload"]
+        start = int(payload.get("last_id") or 0)
+        end = min(start + import_svc.ATTRIBUTES_PAGE_LIMIT, self.total)
+        return {
+            "result": [{"id": str(index)} for index in range(start, end)],
+            "last_id": str(end) if end < self.total else "",
+        }
+
+
+async def test_fetch_product_cards_reads_all_fifteen_thousand_without_silent_cap() -> None:
+    provider = _LargeCatalogProvider(15_000)
+
+    rows = await import_svc.fetch_product_cards(
+        provider,  # type: ignore[arg-type]
+        client_id="synthetic",
+        api_key="synthetic",
+    )
+
+    assert provider.calls == 150
+    assert len(rows) == 15_000
+    assert rows[10_000]["id"] == "10000"
+    assert rows[-1]["id"] == "14999"
+
+
+async def test_fetch_product_cards_rejects_repeated_cursor_instead_of_partial_success() -> None:
+    class StalledProvider:
+        async def call(self, **_kwargs: Any) -> dict[str, object]:
+            return {
+                "result": [{"id": str(index)} for index in range(100)],
+                "last_id": "same-cursor",
+            }
+
+    with pytest.raises(MarketplaceProviderError, match="ozon_catalog_incomplete"):
+        await import_svc.fetch_product_cards(
+            StalledProvider(),  # type: ignore[arg-type]
+            client_id="synthetic",
+            api_key="synthetic",
+        )
 
 
 async def test_import_fills_dimensions_so_storage_can_be_charged(

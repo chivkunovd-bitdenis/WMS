@@ -9,6 +9,7 @@ from app.celery_app import celery_app
 from app.services.background_job_service import (
     run_fbs_stock_sync_job,
     run_movements_digest_job,
+    run_ozon_catalog_sync_job,
     run_wildberries_cards_sync_job,
     run_wildberries_marketplace_orders_sync_job,
     run_wildberries_supplies_sync_job,
@@ -30,6 +31,11 @@ def run_storage_measurement_rebuild_task(job_id: str) -> None:
 @celery_app.task(name="wms.wildberries_cards_sync")
 def run_wildberries_cards_sync_task(job_id: str) -> None:
     asyncio.run(run_wildberries_cards_sync_job(uuid.UUID(job_id)))
+
+
+@celery_app.task(name="wms.ozon_catalog_sync")
+def run_ozon_catalog_sync_task(job_id: str) -> None:
+    asyncio.run(run_ozon_catalog_sync_job(uuid.UUID(job_id)))
 
 
 @celery_app.task(name="wms.wb_catalog_hourly_sync")

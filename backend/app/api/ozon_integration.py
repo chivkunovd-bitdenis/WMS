@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -16,24 +17,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import assert_seller_permission, get_current_user, get_effective_seller_id
 from app.core.roles import FULFILLMENT_SELLER
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.catalog_sync import CatalogSyncJobOut, catalog_sync_job_out
+from app.services import background_job_service as job_svc
+from app.services.background_job_service import JOB_TYPE_OZON_CATALOG_SYNC
 from app.services.marketplace_account_service import (
     MarketplaceAccountError,
     MarketplaceAccountService,
     SellerNotFound,
 )
-from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
 from app.services.ozon_client import OzonValidationResult, validate_ozon_credentials
-from app.services.ozon_product_import_service import (
-    OzonProductImportResult,
-    import_ozon_product_cards,
-)
-from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.seller_marketplace_requisites_service import (
     autofill_requisites_after_key_saved,
 )
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
+
+logger = logging.getLogger(__name__)
 
 
 class OzonAccountStatusOut(BaseModel):
@@ -46,6 +47,10 @@ class OzonAccountStatusOut(BaseModel):
     credentials_updated_at: datetime | None
     last_synced_at: datetime | None
     last_sync_error: str | None
+
+
+class OzonAccountSaveOut(OzonAccountStatusOut):
+    catalog_job: CatalogSyncJobOut
 
 
 class OzonAccountPutIn(BaseModel):
@@ -121,6 +126,46 @@ def _validation_failure(result: OzonValidationResult) -> tuple[int, str, str, st
     return 502, "ozon_validation_failed", "unavailable", "unexpected_status"
 
 
+async def _queue_ozon_catalog_sync(
+    background_tasks: BackgroundTasks,
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> CatalogSyncJobOut:
+    job, created = await job_svc.create_or_get_seller_catalog_sync_job(
+        session,
+        tenant_id,
+        seller_id,
+        job_type=JOB_TYPE_OZON_CATALOG_SYNC,
+        marketplace="ozon",
+    )
+    if created:
+        try:
+            if settings.celery_broker_url:
+                from app.tasks.background_jobs import run_ozon_catalog_sync_task
+
+                run_ozon_catalog_sync_task.delay(str(job.id))
+            else:
+                background_tasks.add_task(job_svc.run_ozon_catalog_sync_job, job.id)
+        except Exception:
+            logger.exception(
+                "Ozon catalog job dispatch failed job=%s tenant_id=%s seller_id=%s",
+                job.id,
+                tenant_id,
+                seller_id,
+            )
+            job = await job_svc.mark_job_dispatch_failed(
+                session, job, error_code="catalog_job_dispatch_failed"
+            )
+            try:
+                await MarketplaceAccountService(session).mark_catalog_sync_failed(
+                    tenant_id, seller_id, "catalog_job_dispatch_failed"
+                )
+            except MarketplaceAccountError:
+                await session.rollback()
+    return catalog_sync_job_out(job, marketplace="ozon")
+
+
 @router.get("/self/account", response_model=OzonAccountStatusOut)
 async def get_self_account(
     user: Annotated[User, Depends(get_current_user)],
@@ -137,13 +182,14 @@ async def get_self_account(
         raise HTTPException(status_code=404, detail="seller_not_found") from None
 
 
-@router.put("/self/account", response_model=OzonAccountStatusOut)
+@router.put("/self/account", response_model=OzonAccountSaveOut)
 async def put_self_account(
     candidate: OzonAccountPutIn,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-) -> OzonAccountStatusOut | JSONResponse:
+) -> OzonAccountSaveOut | JSONResponse:
     seller_id = await _scope(user, session, effective_seller_id)
     # Читаем тенант до сохранения. Одновременный второй такой же PUT уводит
     # сохранение в откат, а откат сбрасывает загруженные поля `user`: обращение
@@ -160,39 +206,25 @@ async def put_self_account(
         )
     except SellerNotFound:
         raise HTTPException(status_code=404, detail="seller_not_found") from None
-    # Ключи сохранены — значит каталог можно тянуть прямо сейчас, как это делает
-    # Wildberries при сохранении токена. Селлер вводит два поля и получает свои
-    # товары, а не пустой каталог с отдельной кнопкой, о которой надо догадаться.
-    await _import_catalog_after_save(session, tenant_id, seller_id)
+    catalog_job = await _queue_ozon_catalog_sync(
+        background_tasks, session, tenant_id, seller_id
+    )
     # WMS-547 R5: ключи проверены (validate_ozon_credentials выше) и сохранены —
     # пробуем один раз подтянуть реквизиты. Не трогает уже существующую запись
     # (R6) и не поднимает исключение наружу (R7).
-    await autofill_requisites_after_key_saved(tenant_id, seller_id, marketplace="ozon")
-    return OzonAccountStatusOut.model_validate(saved.status)
-
-
-async def _import_catalog_after_save(
-    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
-) -> None:
-    """Импорт каталога вслед за сохранением ключей. Молчит, если кабинет не ответил.
-
-    Сбой импорта не имеет права отменить сохранение ключей: ключи проверены и
-    приняты, а каталог селлер дотянет кнопкой «Синхронизировать товары».
-    """
     try:
-        client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
-            tenant_id, seller_id
+        background_tasks.add_task(
+            autofill_requisites_after_key_saved, tenant_id, seller_id, marketplace="ozon"
         )
-        await import_ozon_product_cards(
-            session,
+    except Exception:
+        logger.exception(
+            "Ozon requisites task dispatch failed tenant_id=%s seller_id=%s",
             tenant_id,
             seller_id,
-            build_ozon_provider(),
-            client_id=client_id,
-            api_key=api_key,
         )
-    except (SellerNotFound, MarketplaceAccountError, MarketplaceProviderError):
-        return
+    return OzonAccountSaveOut.model_validate(
+        {**saved.status, "catalog_job": catalog_job}
+    )
 
 
 @router.post("/self/account/test-connection", response_model=OzonAccountStatusOut)
@@ -232,81 +264,29 @@ async def test_self_account(
     return _error(http_status, code)
 
 
-class OzonSelfSyncProductsOut(BaseModel):
-    """Ровно то, что импорт сделал, без обещаний того, чего он не делает."""
-
-    cards_read: int
-    links_matched: int
-    links_created: int
-    products_created: int
-    dimensions_applied: int
-    barcodes_applied: int
-    images_applied: int
-    product_ids_applied: int
-    skipped_manual_dimensions: int
-    skipped_unknown_units: int
-    unmatched_offer_ids: list[str]
-
-
-def _sync_products_out(result: OzonProductImportResult) -> OzonSelfSyncProductsOut:
-    return OzonSelfSyncProductsOut(
-        cards_read=result.cards_read,
-        links_matched=result.links_matched,
-        links_created=result.links_created,
-        products_created=result.products_created,
-        dimensions_applied=result.dimensions_applied,
-        barcodes_applied=result.barcodes_applied,
-        images_applied=result.images_applied,
-        product_ids_applied=result.product_ids_applied,
-        skipped_manual_dimensions=result.skipped_manual_dimensions,
-        skipped_unknown_units=result.skipped_unknown_units,
-        unmatched_offer_ids=result.unmatched_offer_ids[:50],
-    )
-
-
-@router.post("/self/sync-products", response_model=OzonSelfSyncProductsOut)
+@router.post(
+    "/self/sync-products",
+    response_model=CatalogSyncJobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def sync_ozon_products_now(
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-) -> OzonSelfSyncProductsOut:
-    """Притянуть каталог Ozon целиком: товары, связки, габариты, штрихкод, фото.
-
-    Импорт сам находит среди наших товаров тот, о котором карточка, а чего не
-    нашёл — заводит и помечает озоновским. Без габаритов у такого товара нет
-    объёма, а значит нет и начисления за хранение: литро-дни считаются нулевыми
-    и строка счёта не создаётся вовсе.
-
-    Карточки, по которым признак дал больше одного кандидата, возвращаются в
-    `unmatched_offer_ids`: их объединяет оператор руками.
-    """
+) -> CatalogSyncJobOut:
+    """Queue a complete Ozon catalog refresh and return its durable job."""
     seller_id = await _scope(user, session, effective_seller_id)
     service = MarketplaceAccountService(session)
     try:
-        client_id, api_key = await service.stored_credentials(user.tenant_id, seller_id)
+        await service.stored_credentials(user.tenant_id, seller_id)
     except SellerNotFound:
         raise HTTPException(status_code=404, detail="seller_not_found") from None
     except MarketplaceAccountError as exc:
         return _error(409, exc.code)  # type: ignore[return-value]
-    try:
-        result = await import_ozon_product_cards(
-            session,
-            user.tenant_id,
-            seller_id,
-            build_ozon_provider(),
-            client_id=client_id,
-            api_key=api_key,
-        )
-    except MarketplaceProviderError as exc:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_403_FORBIDDEN
-                if exc.is_account_blocked
-                else status.HTTP_502_BAD_GATEWAY
-            ),
-            detail={"code": exc.code, "message": provider_error_message(exc)},
-        ) from None
-    return _sync_products_out(result)
+    return await _queue_ozon_catalog_sync(
+        background_tasks, session, user.tenant_id, seller_id
+    )
 
 
 @router.delete("/self/account", status_code=status.HTTP_204_NO_CONTENT)

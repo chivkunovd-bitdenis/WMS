@@ -51,12 +51,16 @@ from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.services.catalog_service import OZON_PRIMARY_IMAGE_KEY, update_product_dimensions
-from app.services.marketplace_provider import OzonMarketplaceProvider
+from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
 
 PRODUCT_ATTRIBUTES_PATH = "/v4/product/info/attributes"
 # Живой ответ отдаёт сто карточек за страницу; больше Ozon и не отдаёт.
 ATTRIBUTES_PAGE_LIMIT = 100
-MAX_ATTRIBUTE_PAGES = 100
+# Это только защита от бесконечного ответа с постоянно меняющимся курсором,
+# а не продуктовый лимит каталога. При её достижении импорт обязан упасть явно,
+# иначе частичный снимок будет выглядеть полным. Миллион карточек заметно выше
+# проверяемых 15-55 тысяч и всё ещё ограничивает повреждённый провайдер.
+MAX_ATTRIBUTE_PAGES = 10_000
 
 DIMENSIONS_SOURCE_OZON = "ozon"
 
@@ -74,6 +78,7 @@ _OVERWRITABLE_SOURCES = frozenset({DIMENSIONS_SOURCE_OZON})
 @dataclass
 class OzonProductImportResult:
     cards_read: int = 0
+    cards_saved: int = 0
     links_matched: int = 0
     links_created: int = 0
     products_created: int = 0
@@ -343,6 +348,7 @@ async def fetch_product_cards(
     """Пройти каталог Ozon постранично и вернуть карточки как есть."""
     cards: list[dict[str, Any]] = []
     last_id = ""
+    seen_cursors: set[str] = set()
     for _ in range(MAX_ATTRIBUTE_PAGES):
         payload: dict[str, Any] = {
             "filter": {"visibility": "ALL"},
@@ -357,14 +363,32 @@ async def fetch_product_cards(
             payload=payload,
         )
         if not isinstance(raw, dict):
-            break
+            raise MarketplaceProviderError(
+                "ozon", None, code="ozon_catalog_invalid_response"
+            )
         page = raw.get("result")
-        rows = [item for item in page if isinstance(item, dict)] if isinstance(page, list) else []
+        if not isinstance(page, list) or any(not isinstance(item, dict) for item in page):
+            raise MarketplaceProviderError(
+                "ozon", None, code="ozon_catalog_invalid_response"
+            )
+        rows = [item for item in page if isinstance(item, dict)]
         cards.extend(rows)
         next_id = raw.get("last_id")
-        last_id = next_id if isinstance(next_id, str) else ""
-        if not last_id or len(rows) < ATTRIBUTES_PAGE_LIMIT:
+        if next_id is not None and not isinstance(next_id, str):
+            raise MarketplaceProviderError(
+                "ozon", None, code="ozon_catalog_invalid_response"
+            )
+        next_cursor = next_id.strip() if isinstance(next_id, str) else ""
+        if not next_cursor or len(rows) < ATTRIBUTES_PAGE_LIMIT:
             break
+        if next_cursor == last_id or next_cursor in seen_cursors:
+            raise MarketplaceProviderError(
+                "ozon", None, code="ozon_catalog_incomplete"
+            )
+        seen_cursors.add(next_cursor)
+        last_id = next_cursor
+    else:
+        raise MarketplaceProviderError("ozon", None, code="ozon_catalog_incomplete")
     return cards
 
 
@@ -771,7 +795,9 @@ async def import_ozon_product_cards(
     if not cards:
         return result
 
-    await upsert_ozon_imported_cards(session, tenant_id, seller_id, cards)
+    result.cards_saved = await upsert_ozon_imported_cards(
+        session, tenant_id, seller_id, cards
+    )
     context = await build_ozon_match_context(session, tenant_id, seller_id)
 
     for card in cards:
