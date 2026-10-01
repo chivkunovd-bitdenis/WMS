@@ -544,6 +544,29 @@ describe('WMS-625 ordinary WB durable QR', () => {
     expect(productScans()).toHaveLength(0)
     expect(nativePosts()).toHaveLength(0)
   })
+  it('corrupt durable journal does not block known sticker and ordinary KIZ with flags off', async () => {
+    durable.noLocks = true
+    await openPackingTab()
+    const key = fbsPendingProductScanStorageKey('t-575', SUPPLY_ID)
+    window.localStorage.setItem(key, '{broken')
+    scan(STICKER_A); await settle(100)
+    expect(activeRow()).toBe('order-a')
+    scan(KIZ_A); await settle(100)
+    expect(kizCalls().some((call) => call.path === '/operations/fbs-orders/kiz/commit')).toBe(true)
+    expect(productScans()).toHaveLength(0)
+    expect(nativePosts()).toHaveLength(0)
+    expect(window.localStorage.getItem(key)).toBe('{broken')
+  })
+  it('corrupt durable journal still stops a product scan before selection without discarding it', async () => {
+    setPreferences(true); await openPackingTab()
+    const key = fbsPendingProductScanStorageKey('t-575', SUPPLY_ID)
+    window.localStorage.setItem(key, '{broken')
+    scan(PRODUCT); await settle(100)
+    expect(productScans()).toHaveLength(0)
+    expect(nativePosts()).toHaveLength(0)
+    expect(window.localStorage.getItem(key)).toBe('{broken')
+    expect(document.body.textContent).toContain('Не удалось прочитать сохранённую попытку')
+  })
   it('storage failure stops before server product selection', async () => {
     setPreferences(true); await openPackingTab()
     const setItem = Storage.prototype.setItem

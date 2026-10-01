@@ -1125,18 +1125,6 @@ export function FfFbsSupplyWorkspace({
       setKizScanDebugOpen(false)
       setKizScanNotice(null)
       try {
-        const durableScope = !isOzonSupply && (preferences.printQr || preferences.printChz || preferences.reprintChz
-          || readPendingAttempts(token, workspace.supply.id).some((attempt) => attempt.barcode === raw))
-        const scanFlow = async () => {
-        const ownerId = durableScope ? await packingScanLocks().owner() : undefined
-        if (!isOzonSupply) {
-          for (const attempt of readPendingAttempts(token, workspace.supply.id)) {
-            if (attempt.barcode === raw && (attempt.ownerId === ownerId || !attempt.ownerId || !await packingScanLocks().active(attempt.ownerId))) {
-              preferences = attempt.preferences
-              break
-            }
-          }
-        }
         // Classification priority 2: a known order sticker wins before a full
         // KIZ or product barcode, even when no automatic print mode is active.
         let stickerNotFound: unknown = null
@@ -1163,6 +1151,19 @@ export function FfFbsSupplyWorkspace({
             throw cause
           }
           stickerNotFound = cause
+        }
+
+        const durableScope = !isOzonSupply && (preferences.printQr || preferences.printChz || preferences.reprintChz
+          || readPendingAttempts(token, workspace.supply.id).some((attempt) => attempt.barcode === raw))
+        const scanFlow = async () => {
+        const ownerId = durableScope ? await packingScanLocks().owner() : undefined
+        if (!isOzonSupply) {
+          for (const attempt of readPendingAttempts(token, workspace.supply.id)) {
+            if (attempt.barcode === raw && (attempt.ownerId === ownerId || !attempt.ownerId || !await packingScanLocks().active(attempt.ownerId))) {
+              preferences = attempt.preferences
+              break
+            }
+          }
         }
 
         // Ozon and the all-off state stay on the pre-WMS-514 path. In
