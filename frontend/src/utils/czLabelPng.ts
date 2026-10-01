@@ -40,7 +40,10 @@ export async function renderLabelSectionPng(section: string, size: LabelSize): P
   const height = Math.round(size.heightMm * PX_PER_MM)
   // The tape CSS is used unchanged; only the matrix is kept pixel-sharp when scaled.
   const css = `${buildTapePageCss(size)}\n.cz-matrix img { image-rendering: pixelated; }`
-  const xhtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${size.widthMm}mm;height:${size.heightMm}mm;margin:0;padding:0;overflow:hidden;background:#fff;color:#111;font-family:Arial, Helvetica, sans-serif"><style><![CDATA[${css}]]></style>${section}</div>`
+  // XML forbids control characters (a GS separator in the visible code tail, P1-6):
+  // they are not printable anyway and are dropped from the markup only.
+  const markup = section.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  const xhtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${size.widthMm}mm;height:${size.heightMm}mm;margin:0;padding:0;overflow:hidden;background:#fff;color:#111;font-family:Arial, Helvetica, sans-serif"><style><![CDATA[${css}]]></style>${markup}</div>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${cssWidth} ${cssHeight}"><foreignObject x="0" y="0" width="${cssWidth}" height="${cssHeight}">${xhtml}</foreignObject></svg>`
   const image = new Image()
   await new Promise<void>((resolve, reject) => {

@@ -27,6 +27,10 @@ export type FbsPendingProductScanAttempt = {
   scanId?: string
   orderId?: string
   packingBoxId?: string | null
+  /** WMS-631: selected by order sticker / row, resumed the same way after reload. */
+  explicit?: boolean
+  /** WMS-631: label size frozen for every label of this attempt. */
+  labelSizeId?: string
   qrStarted: boolean
   chzStarted: boolean
 }
@@ -92,6 +96,8 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
         scanId: typeof row.scanId === 'string' ? row.scanId : undefined,
         orderId: typeof row.orderId === 'string' ? row.orderId : undefined,
         packingBoxId: typeof row.packingBoxId === 'string' || row.packingBoxId === null ? row.packingBoxId : undefined,
+        explicit: row.explicit === true ? true : undefined,
+        labelSizeId: typeof row.labelSizeId === 'string' ? row.labelSizeId : undefined,
         qrStarted: row.qrStarted === true,
         chzStarted: row.chzStarted === true,
       }]

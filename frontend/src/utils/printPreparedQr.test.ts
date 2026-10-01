@@ -47,9 +47,9 @@ describe('direct OS queue printing', () => {
       select: vi.fn().mockResolvedValue({ scan_id: input.idempotencyKey, order_id: 'order-1', requires_honest_sign: false, printed_codes: [] }),
       lookupSticker: vi.fn(), directReprint: vi.fn(), release: vi.fn(), undo: vi.fn(),
       preload: vi.fn().mockResolvedValue(input.imageDataUrl), bind: vi.fn(),
-      print: (result, imageDataUrl) => printPreparedQr({ ...input, idempotencyKey: result.scan_id, imageDataUrl }),
+      print: (result, imageDataUrl, _size) => printPreparedQr({ ...input, idempotencyKey: result.scan_id, imageDataUrl }),
       printChz: vi.fn(), printCopy: vi.fn(),
-      pack: vi.fn(), claim: () => ({ key: 'request-1', preferences: qrOnly }), saved: () => false,
+      pack: vi.fn(), claim: () => ({ key: 'request-1', preferences: qrOnly, labelSizeId: '58x40', explicit: false, qrDone: false }), saved: () => false,
       remember: vi.fn(), complete: vi.fn(), changed: vi.fn(),
     }
     const scanner = createPackingScanController(deps)

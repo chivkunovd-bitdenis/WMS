@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { createPackingScanController, makePackingScanDeps, routePackingScan } from './fbsSequentialPacking'
+import { createPackingScanController, makePackingScanDeps, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
@@ -1924,7 +1924,10 @@ export function FfFbsSupplyWorkspace({
     setKizScanBusy(true)
     setKizScanError(null)
     try {
-      await sequentialScanner.undo()
+      const scanner = sequentialScanner
+      // Д21: a partial undo (the replaced KIZ unknown) reports in the same error line.
+      const warning = await runPackingSerial(() => scanner.undo!())
+      if (warning) setKizScanError({ text: warning, debug: null })
     } catch (cause) {
       setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.', debug: null })
       playScanError()
@@ -1938,7 +1941,8 @@ export function FfFbsSupplyWorkspace({
     if (!sequentialScanner?.cancel) return
     setKizScanError(null)
     try {
-      await sequentialScanner.cancel()
+      const scanner = sequentialScanner
+      await runPackingSerial(() => scanner.cancel!())
     } catch (cause) {
       setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять выбор.', debug: null })
       playScanError()
@@ -2845,7 +2849,7 @@ export function FfFbsSupplyWorkspace({
       && stage === 'packing'
       && Boolean(workspace)
       && Boolean(packagingTask)
-      && anyOrderNeedsHonestSign
+      && (ordinaryWbPacking || anyOrderNeedsHonestSign)
       && packagingEditable
       // WMS-574: в окне сборки сканер слушает только активная рамка на открытой вкладке.
       && (!assemblyFrame || (assemblyFrame.active && assemblyFrame.visible)),
@@ -3596,7 +3600,7 @@ export function FfFbsSupplyWorkspace({
                           </Button>
                         ) : null}
 
-                        <Button variant="contained" disabled={!packagingEditable || busy || !packagingTask} onClick={() => void packEverything()}>
+                        <Button variant="contained" disabled={!packagingEditable || busy || (assemblyWbPacking && !packagingTask)} onClick={() => void packEverything()}>
                           Всё упаковано
                         </Button>
                         {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
@@ -3619,7 +3623,7 @@ export function FfFbsSupplyWorkspace({
                       </Typography>
                     </Box>
                   ) : null}
-                  {!assemblyWbPacking && anyOrderNeedsHonestSign ? (
+                  {!assemblyWbPacking && (ordinaryWbPacking || anyOrderNeedsHonestSign) ? (
                     // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
                     // строку активной, следующий скан (Честный знак) привязывает код к
                     // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.

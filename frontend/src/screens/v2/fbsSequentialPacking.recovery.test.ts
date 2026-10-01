@@ -34,13 +34,13 @@ describe('WMS-604 original packing box survives recovery', () => {
     else {
       const selected = await first.select('barcode', key, QR)
       first.remember('barcode', selected)
-      await expect(first.pack(selected, false, 'barcode')).rejects.toThrow('response lost')
+      await expect(first.pack(selected, false, 'barcode', null)).rejects.toThrow('response lost')
     }
     const resumed = make('different-box-after-reload')
     expect(resumed.claim('barcode', QR).key).toBe(key)
     const selected = await resumed.select('barcode', key, QR)
     resumed.remember('barcode', selected)
-    await resumed.pack(selected, false, 'barcode')
+    await resumed.pack(selected, false, 'barcode', null)
     expect(calls.filter((path) => path.includes('/boxes/'))).toEqual(['/api/operations/fbs-supplies/supply-1/boxes/original-box/orders'])
   })
   it('keeps an explicit no-box selection instead of capturing a newly opened box on retry', async () => {
@@ -54,7 +54,7 @@ describe('WMS-604 original packing box survives recovery', () => {
     first.remember('barcode', await first.select('barcode', key, QR))
     const resumed = make('new-box')
     expect(resumed.claim('barcode', QR).key).toBe(key)
-    await resumed.pack(await resumed.select('barcode', key, QR), false, 'barcode')
+    await resumed.pack(await resumed.select('barcode', key, QR), false, 'barcode', null)
     expect(fetcher.mock.calls.some(([path]) => path.includes('/boxes/'))).toBe(false)
   })
 })

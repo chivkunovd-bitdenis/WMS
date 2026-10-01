@@ -5,7 +5,7 @@ import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { fbsErrorText } from './fbsUx'
-import { routePackingScan, type PackingScanController } from './fbsSequentialPacking'
+import { routePackingScan, runPackingSerial, type PackingScanController } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
@@ -27,7 +27,9 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
     if (!undoTarget?.undo) return
     setUndoing(true)
     setError(null)
-    void undoTarget.undo()
+    const target = undoTarget
+    void runPackingSerial(() => target.undo!())
+      .then((warning) => { if (warning) setError(warning) })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.')
         playScanError()
@@ -67,7 +69,7 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
       event.preventDefault()
       event.stopPropagation()
       setError(null)
-      void waiting.cancel().catch((cause: unknown) => {
+      void runPackingSerial(() => waiting.cancel!()).catch((cause: unknown) => {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять выбор.')
         playScanError()
       })
@@ -82,10 +84,11 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
         onChange={(event) => setValue(event.target.value)}
         slotProps={{ htmlInput: { 'data-packing-scan': 'true' } }}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); intake.submit(value); setValue('') } }} />
-      <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
+      {/* WB only: an Ozon-only assembly keeps its bar exactly as before (R16). */}
+      {controllers.length > 0 ? <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
         setPrintPreferences(next)
         saveFbsScanPrintPreferences(token, next)
-      }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} />
+      }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} /> : null}
       <LabelSizeSelect value={labelSizeId} onChange={(size) => setLabelSizeId(size.id)} />
       {active ? <Typography variant="body2" sx={{ minWidth: 160 }}>
         {active.name}{active.needsKiz ? ' · сканируйте ЧЗ' : ' · завершение упаковки'}

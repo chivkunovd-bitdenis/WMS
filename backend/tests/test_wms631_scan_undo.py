@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -17,6 +18,10 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderMarking,
 )
+from app.models.fbs_supply import FbsSupply
+from app.models.product import Product
+from app.models.user import User
+from app.services import fbs_kiz_service as kiz_svc
 from tests.test_wms514_scan_auto_print import _seed_wb_supply
 
 pytestmark = pytest.mark.asyncio
@@ -121,9 +126,10 @@ async def test_scan_undo_releases_selection_and_is_idempotent(
     }
     undo_url = f"/operations/fbs-supplies/{supply_id}/scan-undo"
     first = await async_client.post(undo_url, headers=headers, json=body)
-    assert first.status_code == 204, first.text
+    assert first.status_code == 200, first.text
+    assert first.json() == {"warning": None}
     second = await async_client.post(undo_url, headers=headers, json=body)
-    assert second.status_code == 204, second.text
+    assert second.status_code == 200, second.text
     again = await async_client.post(url, headers=headers, json=_select_body(barcode, "u-2"))
     assert again.status_code == 200, again.text
     assert again.json()["order_id"] == selected.json()["order_id"]
@@ -158,26 +164,103 @@ async def test_kiz_rollback_refuses_a_code_changed_by_another_action(
                 meta_status=META_STATUS_ASSIGNED,
             )
         )
+        # This scan's binding receipt: it bound ScannedCode, later someone bound OtherCode.
+        actor = await session.scalar(select(User.id).where(User.tenant_id == order.tenant_id))
+        await kiz_svc.record_kiz_bound_event(
+            session,
+            tenant_id=order.tenant_id,
+            actor_user_id=actor,
+            order=order,
+            new_code_id=None,
+            new_value="0104600000000001215ScannedCode",
+            previous=None,
+            idempotency_key=f"test-bound:{order.id}",
+        )
         await session.commit()
         order_id = order.id
     response = await async_client.post(
-        f"/operations/fbs-orders/{order_id}/kiz/rollback",
+        f"/operations/fbs-supplies/{supply_id}/scan-undo",
         headers=headers,
-        json={"value": "0104600000000001215ScannedCode"},
+        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
     )
     assert response.status_code == 409, response.text
     assert response.json()["detail"]["code"] == "kiz_rollback_changed"
+    async with SessionLocal() as session:
+        kept = await session.scalar(
+            select(FbsOrderMarking.value).where(FbsOrderMarking.order_id == order_id)
+        )
+    assert kept == "0104600000000001215OtherCode"
 
 
-async def test_kiz_rollback_without_any_code_is_a_no_op(async_client: AsyncClient) -> None:
+async def test_kiz_rollback_without_a_binding_receipt_is_a_no_op(
+    async_client: AsyncClient,
+) -> None:
     headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
     async with SessionLocal() as session:
         order = await session.scalar(select(FbsOrder).where(FbsOrder.supply_id == supply_id))
         assert order is not None
         order_id = order.id
     response = await async_client.post(
-        f"/operations/fbs-orders/{order_id}/kiz/rollback",
+        f"/operations/fbs-supplies/{supply_id}/scan-undo",
         headers=headers,
-        json={"value": "0104600000000001215ScannedCode"},
+        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
     )
-    assert response.status_code == 204, response.text
+    assert response.status_code == 200, response.text
+    assert response.json() == {"warning": None}
+
+
+async def test_kiz_rollback_refuses_an_order_moved_to_another_supply(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        order = await session.scalar(select(FbsOrder).where(FbsOrder.supply_id == supply_id))
+        assert order is not None
+        order_id = order.id
+    other = await async_client.post(
+        f"/operations/fbs-supplies/{uuid.uuid4()}/scan-undo",
+        headers=headers,
+        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
+    )
+    assert other.status_code == 409, other.text
+    assert other.json()["detail"]["code"] == "scan_undo_order_moved"
+
+
+async def test_sticker_selection_of_a_packed_order_can_be_released(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        order = await session.scalar(select(FbsOrder).where(FbsOrder.supply_id == supply_id))
+        assert order is not None
+        order.pack_status = "packed"
+        await session.commit()
+        order_id = order.id
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    selected = await async_client.post(
+        url, headers=headers, json={**_select_body("*WMS5140", "st-1"), "order_id": str(order_id)}
+    )
+    assert selected.status_code == 200, selected.text
+    released = await async_client.post(
+        f"{url}/{selected.json()['scan_id']}/cancel", headers=headers
+    )
+    assert released.status_code == 204, released.text
+
+
+async def test_honest_sign_skip_means_no_kiz_is_awaited(async_client: AsyncClient) -> None:
+    headers, supply_id, barcode = await _seed_wb_supply(async_client, order_count=1)
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.honest_sign_skipped_at = datetime.now(UTC)
+        product = await session.scalar(select(Product).where(Product.wb_barcode == barcode))
+        assert product is not None
+        product.requires_honest_sign = True
+        await session.commit()
+    selected = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/scan-auto-print",
+        headers=headers,
+        json=_select_body(barcode, "skip-1"),
+    )
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["binding_target"]["requires_honest_sign"] is False

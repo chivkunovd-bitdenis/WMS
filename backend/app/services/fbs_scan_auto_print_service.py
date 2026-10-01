@@ -354,6 +354,7 @@ async def cancel_selection(
     scan_id: uuid.UUID,
     *,
     actor_user_id: uuid.UUID,
+    order_id: uuid.UUID | None = None,
 ) -> None:
     """Release one unfinished product-scan selection (WMS-631 R20, Escape).
 
@@ -366,19 +367,25 @@ async def cancel_selection(
         raise FbsScanAutoPrintError("scan_selection_not_found")
     payload = selection_event.payload_json or {}
     try:
-        order_id = uuid.UUID(str(payload["order_id"]))
+        selected_order_id = uuid.UUID(str(payload["order_id"]))
     except (KeyError, TypeError, ValueError) as exc:
         raise FbsScanAutoPrintError("scan_selection_corrupt") from exc
-    order = await session.scalar(
-        select(FbsOrder).where(
-            FbsOrder.id == order_id,
-            FbsOrder.tenant_id == tenant_id,
-            FbsOrder.supply_id == supply_id,
+    if order_id is not None and selected_order_id != order_id:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+
+    # Only a unit this very scan packed keeps its selection (unpack it first).
+    packed_by_scan = await session.scalar(
+        select(FbsPackagingFulfillment.id)
+        .where(
+            FbsPackagingFulfillment.tenant_id == tenant_id,
+            FbsPackagingFulfillment.fbs_order_id == selected_order_id,
+            FbsPackagingFulfillment.pack_idempotency_key.startswith(f"{scan_id}:packed"),
+            FbsPackagingFulfillment.undone_at.is_(None),
         )
+        .limit(1)
     )
-    if order is not None and order.pack_status == "packed" and not str(
-        payload.get("barcode", "")
-    ).startswith("order:"):
+    if packed_by_scan is not None:
         raise FbsScanAutoPrintError("scan_selection_packed")
     await record_document_event(
         session,
@@ -392,6 +399,18 @@ async def cancel_selection(
         payload_json={"kind": _CANCEL_EVENT_KIND, "scan_id": str(scan_id)},
         idempotency_key=f"wms631-cancel:{scan_id}",
     )
+
+
+async def is_selection_cancelled(
+    session: AsyncSession, tenant_id: uuid.UUID, scan_id: uuid.UUID
+) -> bool:
+    found = await session.scalar(
+        select(DocumentEvent.id).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == f"wms631-cancel:{scan_id}",
+        )
+    )
+    return found is not None
 
 
 def _target_attempt_digest(scan_id: uuid.UUID, target: str, attempt_key: str) -> str:
@@ -675,6 +694,9 @@ async def validate_bound_reprint_context(
         or selection_event.actor_user_id != actor_user_id
     ):
         raise FbsScanAutoPrintError("scan_selection_not_found")
+    if await is_selection_cancelled(session, tenant_id, scan_id):
+        # WMS-631 R20: Escape won; a late KIZ commit of that scan saves nothing.
+        raise FbsScanAutoPrintError("scan_selection_cancelled")
     scoped_order = await session.scalar(
         select(FbsOrder.id)
         .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
@@ -765,6 +787,11 @@ async def claim_reprint_kiz_recovery(
     if state.started:
         return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
     if state.active_claim is not None:
+        # The same attempt may finish its own unconfirmed claim: the print
+        # transport reconciles the job by the same key and never prints twice.
+        own = state.active_claim == _target_attempt_digest(scan_id, "chz", key)
+        if own and current is not None and current.id == state.active_marking_id:
+            return FbsScanAutoPrintTargetClaim(claimed=True, started=False, kiz=current.value)
         return FbsScanAutoPrintTargetClaim(claimed=False, started=False)
     candidate_marking_id = _candidate_reprint_marking_id(state)
     if (

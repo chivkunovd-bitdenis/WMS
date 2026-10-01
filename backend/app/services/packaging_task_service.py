@@ -1564,15 +1564,23 @@ async def undo_fbs_scan_unit(
             raise PackagingTaskServiceError("supply_not_found")
         order = await session.scalar(
             select(FbsOrder)
-            .where(
-                FbsOrder.id == order_id,
-                FbsOrder.tenant_id == tenant_id,
-                FbsOrder.supply_id == supply_id,
-            )
+            .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
             .with_for_update()
         )
         if order is None:
             raise PackagingTaskServiceError("order_not_found")
+        if order.supply_id != supply_id:
+            raise PackagingTaskServiceError(
+                "scan_undo_order_moved",
+                message="Заказ перенесён в другую поставку — этот скан не отменить.",
+            )
+        if supply.packaging_task_id is not None:
+            supply_task = await session.get(PackagingTask, supply.packaging_task_id)
+            if supply_task is not None and supply_task.status in (STATUS_DONE, STATUS_CANCELLED):
+                raise PackagingTaskServiceError(
+                    "scan_undo_task_closed",
+                    message="Задание упаковки завершено — этот скан уже не отменить.",
+                )
         if pack_idempotency_key:
             fulfillment = await session.scalar(
                 select(FbsPackagingFulfillment).where(
@@ -1607,19 +1615,18 @@ async def undo_fbs_scan_unit(
                 if other is None:
                     order.pack_status = PACK_STATUS_PENDING
                     order.packed_at = None
-                pack_event = await session.scalar(
-                    select(PackagingTaskEvent)
-                    .where(
-                        PackagingTaskEvent.tenant_id == tenant_id,
-                        PackagingTaskEvent.task_id == task.id,
-                        PackagingTaskEvent.line_id == line.id,
-                        PackagingTaskEvent.action.in_(REVERSIBLE_PACK_EVENTS),
-                        PackagingTaskEvent.reversed_at.is_(None),
-                        PackagingTaskEvent.quantity == 1,
-                    )
-                    .order_by(PackagingTaskEvent.event_sequence.desc())
-                    .limit(1)
+                # The event of exactly this scan's pack (same id rule as record_pack_progress).
+                pack_event = await session.get(
+                    PackagingTaskEvent,
+                    uuid.uuid5(tenant_id, f"pack-progress:{pack_idempotency_key}"),
                 )
+                if pack_event is not None and (
+                    pack_event.tenant_id != tenant_id
+                    or pack_event.task_id != task.id
+                    or pack_event.line_id != line.id
+                    or pack_event.reversed_at is not None
+                ):
+                    pack_event = None
                 if pack_event is not None:
                     pack_event.reversed_at = now
                     pack_event.reversed_by_user_id = acting_user_id
@@ -1652,7 +1659,8 @@ async def undo_fbs_scan_unit(
         if release_selection and scan_id is not None:
             try:
                 await scan_print_svc.cancel_selection(
-                    session, tenant_id, supply_id, scan_id, actor_user_id=acting_user_id
+                    session, tenant_id, supply_id, scan_id,
+                    actor_user_id=acting_user_id, order_id=order.id,
                 )
             except scan_print_svc.FbsScanAutoPrintError as exc:
                 raise PackagingTaskServiceError(exc.code) from exc

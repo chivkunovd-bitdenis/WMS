@@ -435,6 +435,8 @@ class FbsScanAutoPrintOut(BaseModel):
     printed_codes: list[FbsOrderTapePrintedCodeOut]
     shortage: int
     order_errors: list[FbsPrintOrderErrorOut]
+    # WMS-631 R19: the pool KIZ in printed_codes was bound by this very scan.
+    chz_issued_by_scan: bool = False
 
 
 class FbsScanUndoBody(BaseModel):
@@ -445,6 +447,8 @@ class FbsScanUndoBody(BaseModel):
     pack_idempotency_key: str | None = Field(default=None, max_length=128)
     box_id: uuid.UUID | None = None
     release_selection: bool = False
+    # The KIZ this scan bound (canonical value from the bind answer).
+    kiz: str | None = Field(default=None, max_length=512)
 
 
 class FbsScanAutoPrintTargetBody(BaseModel):
@@ -2504,6 +2508,9 @@ async def scan_fbs_supply_product_for_auto_print(
             order_errors=[],
         )
 
+    had_kiz_before = (
+        await kiz_svc.order_has_sgtin(session, selected.order_id) if body.print_chz else True
+    )
     layout: dict[str, object] = (
         {"units": [{"block": "cz", "copies": 1}]} if body.print_chz else {"units": []}
     )
@@ -2533,6 +2540,20 @@ async def scan_fbs_supply_product_for_auto_print(
         (order for order in result.orders if order.order_id == selected.order_id),
         None,
     )
+    chz_issued = False
+    if body.print_chz and order_result is not None and order_result.printed_codes:
+        printed = order_result.printed_codes[0]
+        chz_issued = await kiz_svc.note_pool_kiz_issued(
+            session,
+            user.tenant_id,
+            user.id,
+            scan_id=selected.scan_id,
+            order_id=selected.order_id,
+            code_id=printed.id,
+            value=printed.cis_code,
+            had_kiz_before=had_kiz_before,
+        )
+        await session.commit()
     qr_asset_model = next(
         (
             asset
@@ -2582,6 +2603,7 @@ async def scan_fbs_supply_product_for_auto_print(
             )
             for error in result.order_errors
         ],
+        chz_issued_by_scan=chz_issued,
     )
 
 
@@ -2729,30 +2751,62 @@ async def cancel_fbs_scan_auto_print_selection(
     await session.commit()
 
 
-@router.post("/{supply_id}/scan-undo", status_code=status.HTTP_204_NO_CONTENT)
+class FbsScanUndoOut(BaseModel):
+    warning: str | None = None
+
+
+@router.post("/{supply_id}/scan-undo", response_model=FbsScanUndoOut)
 async def undo_fbs_packing_scan(
     supply_id: uuid.UUID,
     body: FbsScanUndoBody,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> None:
-    """WMS-631 R19: unpack this scan's unit, take it out of its box, free the selection."""
+) -> FbsScanUndoOut:
+    """WMS-631 R19: undo one packing scan — its KIZ, its unit, its box, its selection.
+
+    The KIZ goes first: if WB refuses, nothing else changed and the step stays.
+    A repeat continues from what is already undone.
+    """
+    # The KIZ stage commits on its own; keep plain ids, not expiring ORM attributes.
+    tenant_id, user_id = user.tenant_id, user.id
+    warning: str | None = None
+    if body.kiz:
+        try:
+            async with httpx.AsyncClient() as http_client:
+                warning = await kiz_svc.rollback_scan_kiz(
+                    session,
+                    tenant_id,
+                    user_id,
+                    supply_id,
+                    body.order_id,
+                    body.kiz,
+                    http_client,
+                )
+        except kiz_svc.FbsKizError as exc:
+            await session.rollback()
+            status_code = (
+                status.HTTP_502_BAD_GATEWAY
+                if exc.code.startswith("wb_")
+                else status.HTTP_409_CONFLICT
+            )
+            raise_fbs_http(status_code, exc.code, message=exc.message)
     try:
         await packaging_task_svc.undo_fbs_scan_unit(
             session,
-            user.tenant_id,
+            tenant_id,
             supply_id,
             order_id=body.order_id,
             pack_idempotency_key=body.pack_idempotency_key,
             box_id=body.box_id,
             scan_id=body.scan_id,
             release_selection=body.release_selection,
-            acting_user_id=user.id,
+            acting_user_id=user_id,
         )
     except packaging_task_svc.PackagingTaskServiceError as exc:
-        if exc.code in {"supply_not_found", "order_not_found", "scan_selection_not_found"}:
-            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        if exc.code in {"supply_not_found", "order_not_found"}:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code, message=exc.message)
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, message=exc.message)
+    return FbsScanUndoOut(warning=warning)
 
 
 @router.post(
