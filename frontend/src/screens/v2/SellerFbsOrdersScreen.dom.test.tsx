@@ -137,4 +137,67 @@ describe('SellerFbsOrdersScreen — WMS-616 end-to-end wiring', () => {
     const retry = host!.querySelector('[data-testid="seller-fbs-retry"]')
     expect(retry).not.toBeNull()
   })
+
+  // Astra P2 (ревью после 6605df5b): forceAgeTick в прошлой версии вызывал
+  // перерисовку, но useMemo resolvedNowIso не зависел от счётчика — возраст
+  // замирал на старом значении. Регрессия: при реальном «прошло больше часа»
+  // возраст должен обновиться от «< 1 ч» до «1 ч» без перезагрузки страницы.
+  it('updates the age cell after the tick fires, instead of freezing at the first render', async () => {
+    // Фиксируем клиентские часы фиктивным таймером и performance.now, чтобы
+    // elapsed рос по нашему расписанию. perfRef — монотонный счётчик,
+    // который возвращает performance.now() при обоих вызовах (на монтировании
+    // и в useMemo).
+    vi.useFakeTimers()
+    let perfNowMs = 0
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => perfNowMs)
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          jsonResponse(200, {
+            items: [
+              {
+                id: 'order-1',
+                marketplace: 'wb',
+                external_order_id: 'WB-1',
+                status_group: 'new',
+                items_quantity: null,
+                received_at: '2026-10-01T12:00:00.000Z',
+              },
+            ],
+            total: 1,
+            server_now: '2026-10-01T12:00:30.000Z',
+          }),
+        ),
+      )
+
+      await mount(<SellerFbsOrdersScreen token="t" authHeaders={() => ({})} />)
+      // Прокручиваем микро/макро-задачи, чтобы fetch завершился и effect
+      // поставил perfAnchor.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // На этом моменте возраст < 1 ч: сервер показывает 12:00:30, заказ
+      // пришёл в 12:00:00 — прошло 30 секунд.
+      let ageCell = host!.querySelector('[data-testid="seller-fbs-order-age-order-1"]')
+      expect(ageCell?.textContent).toBe('< 1 ч')
+
+      // Монотонное время продвинулось на 65 минут. Один tick AGE_TICK_MS
+      // (60_000 ms) должен сдвинуть счётчик ageTick → useMemo пересчитается
+      // с новым performance.now() → возраст станет «1 ч».
+      perfNowMs = 65 * 60_000
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      ageCell = host!.querySelector('[data-testid="seller-fbs-order-age-order-1"]')
+      expect(ageCell?.textContent).toBe('1 ч')
+    } finally {
+      perfSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
 })

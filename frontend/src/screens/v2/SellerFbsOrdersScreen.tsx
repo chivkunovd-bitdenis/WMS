@@ -113,27 +113,43 @@ export function SellerFbsOrdersScreen({ token, authHeaders }: Props) {
     return () => abortRef.current?.abort()
   }, [load])
 
-  // «Возраст» рендерится от serverNowIso + прошедшее с последнего ответа
-  // клиентское время. Как в FBS-пилле дедлайна (WMS-432), только проще:
-  // пересчитываем раз в минуту единым tick-ом, без useSyncExternalStore —
-  // здесь нет отдельного компонента на строку, пересчёт дешёвый.
-  const [clientAnchorMs, setClientAnchorMs] = useState<number>(() => Date.now())
-  const [, forceAgeTick] = useState(0)
+  // Astra P2: «Возраст» рендерится от server_now + монотонное прошедшее с
+  // момента ответа. Прошлая версия считала через Date.now()/useMemo, где
+  // зависимости не менялись между тиками — значение useMemo оставалось тем же,
+  // и возраст замирал. performance.now() монотонный, не зависит от NTP-прыжков
+  // часов клиента, а ageTick гарантирует перерисовку таблицы раз в минуту.
+  const [perfAnchor, setPerfAnchor] = useState<{
+    serverNowMs: number
+    perfMs: number
+  } | null>(null)
+  const [ageTick, setAgeTick] = useState(0)
   useEffect(() => {
-    if (!serverNowIso) return
-    setClientAnchorMs(Date.now())
+    if (!serverNowIso) {
+      setPerfAnchor(null)
+      return
+    }
+    const serverNowMs = Date.parse(serverNowIso)
+    if (!Number.isFinite(serverNowMs)) {
+      setPerfAnchor(null)
+      return
+    }
+    setPerfAnchor({ serverNowMs, perfMs: performance.now() })
+    setAgeTick(0)
   }, [serverNowIso])
   useEffect(() => {
-    if (!serverNowIso) return
-    const timer = window.setInterval(() => forceAgeTick((n) => n + 1), AGE_TICK_MS)
+    if (!perfAnchor) return
+    const timer = window.setInterval(() => setAgeTick((n) => n + 1), AGE_TICK_MS)
     return () => window.clearInterval(timer)
-  }, [serverNowIso])
+  }, [perfAnchor])
 
   const resolvedNowIso = useMemo(() => {
-    if (!serverNowIso) return null
-    const anchoredNow = Date.parse(serverNowIso) + (Date.now() - clientAnchorMs)
-    return new Date(anchoredNow).toISOString()
-  }, [clientAnchorMs, serverNowIso])
+    if (!perfAnchor) return null
+    const elapsed = performance.now() - perfAnchor.perfMs
+    return new Date(perfAnchor.serverNowMs + elapsed).toISOString()
+    // Зависимость от ageTick — именно та, из-за которой возраст перестал
+    // замирать: forceAgeTick меняется, useMemo пересчитывается.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfAnchor, ageTick])
 
   return (
     <Box
