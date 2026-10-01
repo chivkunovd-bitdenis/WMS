@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   Alert,
   Box,
@@ -40,6 +40,13 @@ import {
   SellerCatalogSelectionDialog,
   type SellerCatalogMarketplace,
 } from './SellerCatalogSelectionDialog'
+import {
+  describeImportStage,
+  extractCatalogJobId,
+  extractCatalogJobInitialStage,
+  pollImportJob,
+  type ImportJobStage,
+} from './sellerCatalogImportProgress'
 
 type Props = {
   token: string
@@ -130,6 +137,56 @@ const MARKETPLACE_OPTIONS = [
   { value: 'ozon', label: 'Ozon' },
 ] as const
 
+// WMS-615 R13/R14: компактная строка под каждой карточкой площадки. Одна
+// строчка статуса + кнопка «Повторить» при отказе. Намеренно без таблиц
+// прогресса и процента: backend-контракт прогресс не возвращает, а показывать
+// неизвестное число — ложь.
+function CatalogImportProgressRow({
+  marketplace,
+  progress,
+  onRetry,
+}: {
+  marketplace: SellerCatalogMarketplace
+  progress: { stage: ImportJobStage; error: string | null }
+  onRetry: () => void
+}) {
+  const testIdSuffix = marketplace === 'wildberries' ? 'wb' : 'ozon'
+  if (progress.stage === 'failed') {
+    return (
+      <Alert
+        severity="error"
+        data-testid={`seller-settings-${testIdSuffix}-import-failed`}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={onRetry}
+            data-testid={`seller-settings-${testIdSuffix}-import-retry`}
+          >
+            Повторить
+          </Button>
+        }
+      >
+        {progress.error ?? describeImportStage('failed')}
+      </Alert>
+    )
+  }
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: 'center' }}
+      data-testid={`seller-settings-${testIdSuffix}-import-progress`}
+      data-stage={progress.stage}
+    >
+      <CircularProgress size={16} />
+      <Typography variant="body2" color="text.secondary">
+        {describeImportStage(progress.stage)}
+      </Typography>
+    </Stack>
+  )
+}
+
 export function SellerSettingsScreen({
   token,
   authHeaders,
@@ -141,6 +198,12 @@ export function SellerSettingsScreen({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // QA-дефект 1 (WMS-615, 01.10): invalid_wb_token приходил только в верхний
+  // Alert «seller-settings-error», который перекрыт модалкой — селлер видел
+  // только спиннер и не понимал, что ключ отклонён. Дублируем сообщение
+  // внутрь самого диалога, не очищая введённое значение (сохранность для
+  // повтора после опечатки).
+  const [dialogError, setDialogError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
   const [contentKey, setContentKey] = useState('')
   const [hasContentKey, setHasContentKey] = useState<boolean | null>(null)
@@ -187,6 +250,24 @@ export function SellerSettingsScreen({
   // WMS-548 R1: окно выбора товаров после первого ключа площадки — не при замене.
   const [catalogSelectionMarketplace, setCatalogSelectionMarketplace] =
     useState<SellerCatalogMarketplace | null>(null)
+
+  // WMS-615 R13/R14: фоновая загрузка каталога после сохранения реквизитов.
+  // Экран остаётся в контексте «Настройки», показывает компактный статус и
+  // открывает окно выбора только когда импорт действительно завершился
+  // (ImportJobStage === 'succeeded'). Отказ оставляет кнопку «Повторить».
+  //
+  // Пара объектов (WB/Ozon) — чтобы отказ одной площадки не мешал другой
+  // (R7). Активная задача хранится вместе с marketplace: один и тот же
+  // job id может прийти и к WB, и к Ozon, если backend-агент выберет общий
+  // пул.
+  type ImportProgressState = {
+    jobId: string
+    stage: ImportJobStage
+    error: string | null
+  }
+  const [wbImportProgress, setWbImportProgress] = useState<ImportProgressState | null>(null)
+  const [ozonImportProgress, setOzonImportProgress] = useState<ImportProgressState | null>(null)
+  const importAbortRef = useRef<Map<SellerCatalogMarketplace, AbortController>>(new Map())
 
   useEffect(() => {
     setProfileFullName(me?.full_name ?? '')
@@ -289,12 +370,63 @@ export function SellerSettingsScreen({
           canManageProducts: permissions.products,
         })
       ) {
-        await maybeOpenCatalogSelection('ozon')
+        // WMS-615 R13 (Ozon-ветка): тот же контракт `catalog_job` в теле
+        // PUT /ozon/self/account. До его появления работаем в прежнем
+        // синхронном режиме (etalon).
+        const jobId = extractCatalogJobId(status)
+        if (jobId) {
+          setOzonImportProgress({ jobId, stage: extractCatalogJobInitialStage(status), error: null })
+          void watchCatalogImportJob('ozon', jobId)
+        } else {
+          await maybeOpenCatalogSelection('ozon')
+        }
       }
     } catch {
       setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
     } finally {
       setOzonBusy(false)
+    }
+  }
+
+  // «Повторить загрузку товаров» (WMS-615 R14). Backend сделал оба
+  // `/integrations/{wb,ozon}/self/sync-products` фоновыми (CatalogSyncJobOut),
+  // поэтому повтор — тот же POST, что раньше, но теперь он возвращает job id
+  // и экран подхватывает его тем же `watchCatalogImportJob`.
+  async function retryCatalogImport(marketplaceToRetry: SellerCatalogMarketplace): Promise<void> {
+    const url =
+      marketplaceToRetry === 'wildberries'
+        ? '/integrations/wildberries/self/sync-products'
+        : '/integrations/ozon/self/sync-products'
+    const setProgress = (next: ImportProgressState | null) =>
+      setMarketplaceProgress(marketplaceToRetry, next)
+    setProgress({ jobId: '', stage: 'queued', error: null })
+    try {
+      const res = await fetch(apiUrl(url), {
+        method: 'POST',
+        headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) {
+        setProgress({ jobId: '', stage: 'failed', error: await readApiErrorMessage(res) })
+        return
+      }
+      const body = (await res.json()) as unknown
+      const jobId = extractCatalogJobId({ catalog_job: body }) ?? extractCatalogJobId(body)
+      if (!jobId) {
+        setProgress({ jobId: '', stage: 'failed', error: describeImportStage('failed') })
+        return
+      }
+      setProgress({
+        jobId,
+        stage: extractCatalogJobInitialStage({ catalog_job: body }),
+        error: null,
+      })
+      void watchCatalogImportJob(marketplaceToRetry, jobId)
+    } catch (e) {
+      setProgress({
+        jobId: '',
+        stage: 'failed',
+        error: e instanceof Error ? e.message : describeImportStage('failed'),
+      })
     }
   }
 
@@ -393,6 +525,14 @@ export function SellerSettingsScreen({
   }, [permissions.staff, token])
 
   async function refreshWbCardsCount(): Promise<void> {
+    // QA-дефект 3 (WMS-615, 01.10): /products/wb-catalog возвращает ВЕСЬ
+    // seller-каталог (WB+Ozon), не только WB. Пока backend не даст отдельный
+    // WB-счётчик, запрашиваем его только когда WB-ключ подключён — иначе
+    // число Ozon-товаров попало бы в подпись «WB товары: N».
+    if (hasContentKey !== true) {
+      setWbCardsCount(null)
+      return
+    }
     try {
       const res = await fetch(apiUrl('/products/wb-catalog'), {
         headers: { ...authHeaders(token) },
@@ -406,6 +546,86 @@ export function SellerSettingsScreen({
       // ignore
     }
   }
+
+  function setMarketplaceProgress(
+    marketplaceToUpdate: SellerCatalogMarketplace,
+    next: ImportProgressState | null,
+  ): void {
+    if (marketplaceToUpdate === 'wildberries') {
+      setWbImportProgress(next)
+    } else {
+      setOzonImportProgress(next)
+    }
+  }
+
+  // WMS-615 R13: фон импорта. По одному опросу раз в 2 секунды — тот же шаг,
+  // что уже прижился в этом проекте для похожих ожиданий (fbs print jobs);
+  // чаще не нужно, крупный WB прогон идёт десятками секунд даже на тесте.
+  async function watchCatalogImportJob(
+    marketplaceToPoll: SellerCatalogMarketplace,
+    jobId: string,
+  ): Promise<void> {
+    importAbortRef.current.get(marketplaceToPoll)?.abort()
+    const controller = new AbortController()
+    importAbortRef.current.set(marketplaceToPoll, controller)
+    try {
+      while (!controller.signal.aborted) {
+        const observation = await pollImportJob(
+          fetch,
+          jobId,
+          { ...authHeaders(token) },
+          controller.signal,
+        )
+        if (controller.signal.aborted) return
+        if (observation.outcome === 'in_progress') {
+          setMarketplaceProgress(marketplaceToPoll, {
+            jobId,
+            stage: observation.stage,
+            error: null,
+          })
+          await new Promise((resolve) => window.setTimeout(resolve, 2000))
+          continue
+        }
+        if (observation.outcome === 'failed') {
+          setMarketplaceProgress(marketplaceToPoll, {
+            jobId,
+            stage: 'failed',
+            error: observation.message,
+          })
+          return
+        }
+        // succeeded: окно выбора открывается ТОЛЬКО здесь (R13). Снимаем
+        // прогресс и даём selection-dialog поработать.
+        setMarketplaceProgress(marketplaceToPoll, null)
+        await maybeOpenCatalogSelection(marketplaceToPoll)
+        return
+      }
+    } catch (e) {
+      // Любое падение самого опроса — отказ, не ложный успех: экран остаётся
+      // в контексте, у селлера есть «Повторить».
+      if (!controller.signal.aborted) {
+        setMarketplaceProgress(marketplaceToPoll, {
+          jobId,
+          stage: 'failed',
+          error: e instanceof Error ? e.message : describeImportStage('failed'),
+        })
+      }
+    }
+  }
+
+  // Контракт отмены наблюдения при смене токена/выходе — то же, что в
+  // SellerProductsStockScreen (WMS-488). Пока в этом экране один token на
+  // жизнь компонента, но на случай будущего силового refresh/switch — отменяем
+  // при размонтировании.
+  useEffect(() => {
+    const trackedAborts = importAbortRef.current
+    return () => {
+      for (const controller of trackedAborts.values()) {
+        controller.abort()
+      }
+      trackedAborts.clear()
+    }
+  }, [])
 
   // WMS-548 R1: сама проверка «первый ли это ключ, прошла ли проверка, есть ли
   // право «Товары»» — в shouldOpenCatalogSelectionAfterKeySave (чистая функция,
@@ -431,10 +651,11 @@ export function SellerSettingsScreen({
 
   async function onSave() {
     setError(null)
+    setDialogError(null)
     setOkMsg(null)
     const trimmed = contentKey.trim()
     if (!trimmed) {
-      setError('Введите API ключ.')
+      setDialogError('Введите API ключ.')
       return
     }
     const hadKeyBefore = hasContentKey === true
@@ -450,7 +671,10 @@ export function SellerSettingsScreen({
       })
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
-        setError(
+        // QA-дефект 1 (01.10): сообщение показываем внутри самого диалога —
+        // верхний Alert при открытой модалке не виден. Введённый ключ не
+        // чистим: селлер поправит опечатку и повторит без ввода заново.
+        setDialogError(
           msg.includes('invalid_wb_token')
             ? 'Этот API ключ не подходит (проверка WB не прошла).'
             : msg,
@@ -464,6 +688,7 @@ export function SellerSettingsScreen({
         cards_saved?: number
       }
       setOpen(false)
+      setDialogError(null)
       setContentKey('')
       setHasContentKey(true)
       await refreshWbCardsCount()
@@ -489,7 +714,18 @@ export function SellerSettingsScreen({
           canManageProducts: permissions.products,
         })
       ) {
-        await maybeOpenCatalogSelection('wildberries')
+        // WMS-615 R13: если backend ответил идентификатором фоновой задачи
+        // (новый контракт `catalog_job`), окно выбора не открываем до её
+        // завершения — пусть селлер видит честный ход загрузки. Иначе
+        // остаёмся в прежнем синхронном поведении (fallback до выкатки
+        // backend-правки).
+        const jobId = extractCatalogJobId(j)
+        if (jobId) {
+          setWbImportProgress({ jobId, stage: extractCatalogJobInitialStage(j), error: null })
+          void watchCatalogImportJob('wildberries', jobId)
+        } else {
+          await maybeOpenCatalogSelection('wildberries')
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ключ.')
@@ -953,14 +1189,24 @@ export function SellerSettingsScreen({
               {hasContentKey ? 'добавлен' : hasContentKey === false ? 'не добавлен' : '—'}
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
-            <Typography variant="body2" color="text.secondary" data-testid="seller-settings-wb-count">
-              WB товары: {wbCardsCount ?? '—'}
-            </Typography>
+            {/* QA-дефект 3 (WMS-615, 01.10): /products/wb-catalog возвращает
+                весь каталог селлера (товары обеих площадок). У Ozon-only
+                селлера её строка «1 товар» показывалась как «WB товары: 1»,
+                хотя WB-ключа нет. Пока у backend нет отдельного WB-счётчика,
+                честно показываем число только когда WB-ключ подключён. */}
+            {hasContentKey ? (
+              <Typography variant="body2" color="text.secondary" data-testid="seller-settings-wb-count">
+                WB товары: {wbCardsCount ?? '—'}
+              </Typography>
+            ) : null}
           </Stack>
           <Box>
             <Button
               variant="contained"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                setDialogError(null)
+                setOpen(true)
+              }}
               disabled={busy}
               data-testid="seller-settings-add-key"
             >
@@ -976,6 +1222,13 @@ export function SellerSettingsScreen({
               Синхронизировать товары
             </Button>
           </Box>
+          {wbImportProgress ? (
+            <CatalogImportProgressRow
+              marketplace="wildberries"
+              progress={wbImportProgress}
+              onRetry={() => void retryCatalogImport('wildberries')}
+            />
+          ) : null}
         </Stack>
       </Paper>
 
@@ -1012,6 +1265,13 @@ export function SellerSettingsScreen({
               включили: заказы, статусы и остатки не передаются. Заказы Ozon в системе пока не
               появятся.
             </Alert>
+          ) : null}
+          {ozonImportProgress ? (
+            <CatalogImportProgressRow
+              marketplace="ozon"
+              progress={ozonImportProgress}
+              onRetry={() => void retryCatalogImport('ozon')}
+            />
           ) : null}
           {ozonStatus?.connected && !ozonEditing ? (
             <>
@@ -1126,7 +1386,11 @@ export function SellerSettingsScreen({
 
       <Dialog
         open={open}
-        onClose={() => (busy ? undefined : setOpen(false))}
+        onClose={() => {
+          if (busy) return
+          setOpen(false)
+          setDialogError(null)
+        }}
         fullWidth
         maxWidth="sm"
         data-testid="seller-settings-key-dialog"
@@ -1134,6 +1398,11 @@ export function SellerSettingsScreen({
         <DialogTitle>WB API ключ</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            {dialogError ? (
+              <Alert severity="error" data-testid="seller-settings-key-dialog-error">
+                {dialogError}
+              </Alert>
+            ) : null}
             <TextField
               label="WB API ключ"
               value={contentKey}
@@ -1149,7 +1418,14 @@ export function SellerSettingsScreen({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)} disabled={busy} data-testid="seller-settings-cancel">
+          <Button
+            onClick={() => {
+              setOpen(false)
+              setDialogError(null)
+            }}
+            disabled={busy}
+            data-testid="seller-settings-cancel"
+          >
             Отмена
           </Button>
           <Button variant="contained" onClick={() => void onSave()} disabled={busy} data-testid="seller-settings-save">
