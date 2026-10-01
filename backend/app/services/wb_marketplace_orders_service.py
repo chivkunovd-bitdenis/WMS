@@ -758,6 +758,7 @@ async def _apply_wb_status_to_order(
         from app.services.fbs_packaging_integration_service import (
             detach_cancelled_order_from_supply,
         )
+        from app.services.fbs_picking_service import release_picks_of_cancelled_order
 
         order.status = FBS_ORDER_STATUS_CANCELLED
         await reverse_fbs_shipment_if_needed(
@@ -769,6 +770,10 @@ async def _apply_wb_status_to_order(
         # работы не было. Сторно идёт ровно сюда — руками такой заказ отменить
         # нельзя, статусы sorted и done в отмену не пускают.
         await reverse_fbs_order_billing(session, order, performer_id=actor_user_id)
+        # Штука, снятая подбором на сортировку, возвращается в ячейку/тару.
+        await release_picks_of_cancelled_order(
+            session, order.tenant_id, order, actor_user_id=actor_user_id,
+        )
         await detach_cancelled_order_from_supply(
             session,
             order.tenant_id,

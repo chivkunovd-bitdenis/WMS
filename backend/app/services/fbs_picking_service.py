@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -35,6 +36,7 @@ from app.models.fbs_order_pick import (
     FbsOrderPick,
     FbsOrderPickEvent,
 )
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -77,6 +79,8 @@ from app.services.scan_resolver_service import normalize_scan_code
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -1862,59 +1866,14 @@ async def undo_pick(
                 "Заказ ещё не подобран.",
                 context={"order_id": str(order_id)},
             )
-        original_movement = None
-        if position_pick.inventory_movement_id is not None:
-            original_movement = await session.scalar(
-                select(InventoryMovement).where(
-                    InventoryMovement.id == position_pick.inventory_movement_id,
-                    InventoryMovement.tenant_id == tenant_id,
-                )
-            )
-        original_movement_type = original_movement.movement_type if original_movement else None
-        if original_movement_type == "fbs_order_pick":
-            await inventory_service.record_movement_and_adjust_balance(
-                session,
-                tenant_id=tenant_id,
-                product_id=position_pick.product_id,
-                storage_location_id=position_pick.sorting_storage_location_id,
-                quantity_delta=-1,
-                movement_type="fbs_order_pick_undo",
-                actor_user_id=actor.id,
-            )
-        elif position_pick.inventory_movement_id is not None:
-            await inventory_service.transfer_on_hand_between_locations(
-                session,
-                tenant_id,
-                from_storage_location_id=position_pick.sorting_storage_location_id,
-                to_storage_location_id=position_pick.source_storage_location_id,
-                product_id=position_pick.product_id,
-                quantity=1,
-                actor_user_id=actor.id,
-                to_container_kind=cast(ContainerKind | None, original_movement.container_kind)
-                if original_movement
-                else None,
-                to_container_id=original_movement.container_id if original_movement else None,
-            )
-        position_pick.undo_idempotency_key = idempotency_key
-        position_pick.undone_at = datetime.now(tz=UTC)
-        if position_pick.undone_by_user_id is None:
-            position_pick.undone_by_user_id = actor.id
-        position = await session.get(FbsOrderProduct, position_pick.order_product_id)
-        assert position is not None
-        position.picked_quantity = max(0, position.picked_quantity - 1)
-        order.pick_status = PICK_STATUS_PENDING
-        order.picked_at = None
-        await session.flush()
-        await record_fbs_pick(
+        await _undo_ozon_position_pick(
             session,
-            supply=supply,
-            pick=position_pick,
-            source_event_id=position_pick.id,
-            source_kind="fbs_order_product_pick",
-            actor_user_id=position_pick.undone_by_user_id,
-            occurred_at=position_pick.undone_at,
-            reversal=True,
-            product=await session.get(Product, position_pick.product_id),
+            tenant_id,
+            supply,
+            order,
+            position_pick,
+            actor_user_id=actor.id,
+            idempotency_key=idempotency_key,
         )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
@@ -1957,6 +1916,96 @@ async def undo_pick(
     if existing_undo is not None:
         return await get_supply_workspace(session, tenant_id, supply_id)
 
+    await _undo_wb_pick(
+        session,
+        tenant_id,
+        supply,
+        order,
+        pick,
+        actor_user_id=actor.id,
+        idempotency_key=idempotency_key,
+    )
+    return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def _undo_ozon_position_pick(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    order: FbsOrder,
+    position_pick: FbsOrderProductPick,
+    *,
+    actor_user_id: uuid.UUID | None,
+    idempotency_key: str,
+) -> None:
+    """Вернуть штуку Ozon-подбора на место и пометить позицию снятой."""
+    original_movement = None
+    if position_pick.inventory_movement_id is not None:
+        original_movement = await session.scalar(
+            select(InventoryMovement).where(
+                InventoryMovement.id == position_pick.inventory_movement_id,
+                InventoryMovement.tenant_id == tenant_id,
+            )
+        )
+    original_movement_type = original_movement.movement_type if original_movement else None
+    if original_movement_type == "fbs_order_pick":
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=position_pick.product_id,
+            storage_location_id=position_pick.sorting_storage_location_id,
+            quantity_delta=-1,
+            movement_type="fbs_order_pick_undo",
+            actor_user_id=actor_user_id,
+        )
+    elif position_pick.inventory_movement_id is not None:
+        await inventory_service.transfer_on_hand_between_locations(
+            session,
+            tenant_id,
+            from_storage_location_id=position_pick.sorting_storage_location_id,
+            to_storage_location_id=position_pick.source_storage_location_id,
+            product_id=position_pick.product_id,
+            quantity=1,
+            actor_user_id=actor_user_id,
+            to_container_kind=cast(ContainerKind | None, original_movement.container_kind)
+            if original_movement
+            else None,
+            to_container_id=original_movement.container_id if original_movement else None,
+        )
+    position_pick.undo_idempotency_key = idempotency_key
+    position_pick.undone_at = datetime.now(tz=UTC)
+    if position_pick.undone_by_user_id is None:
+        position_pick.undone_by_user_id = actor_user_id
+    position = await session.get(FbsOrderProduct, position_pick.order_product_id)
+    assert position is not None
+    position.picked_quantity = max(0, position.picked_quantity - 1)
+    order.pick_status = PICK_STATUS_PENDING
+    order.picked_at = None
+    await session.flush()
+    await record_fbs_pick(
+        session,
+        supply=supply,
+        pick=position_pick,
+        source_event_id=position_pick.id,
+        source_kind="fbs_order_product_pick",
+        actor_user_id=position_pick.undone_by_user_id,
+        occurred_at=position_pick.undone_at,
+        reversal=True,
+        product=await session.get(Product, position_pick.product_id),
+    )
+
+
+async def _undo_wb_pick(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    order: FbsOrder,
+    pick: FbsOrderPick,
+    *,
+    actor_user_id: uuid.UUID | None,
+    idempotency_key: str,
+) -> None:
+    """Вернуть штуку WB-подбора из сортировки в исходную ячейку/тару."""
     movement_id: uuid.UUID | None = None
     original_movement_type = None
     if pick.inventory_movement_id is not None:
@@ -1975,7 +2024,7 @@ async def undo_pick(
                 storage_location_id=pick.sorting_storage_location_id,
                 quantity_delta=-1,
                 movement_type="fbs_order_pick_undo",
-                actor_user_id=actor.id,
+                actor_user_id=actor_user_id,
             )
             await session.flush()
             movement_id = movement.id
@@ -1987,7 +2036,7 @@ async def undo_pick(
                 to_storage_location_id=pick.source_storage_location_id,
                 product_id=pick.product_id,
                 quantity=1,
-                actor_user_id=actor.id,
+                actor_user_id=actor_user_id,
                 # Возврат кладём ровно туда, откуда сняли: в тот же короб.
                 to_container_kind=cast("ContainerKind | None", pick.source_container_kind),
                 to_container_id=pick.source_container_id,
@@ -1999,14 +2048,14 @@ async def undo_pick(
         raise FbsPickingError(
             "insufficient_unpacked",
             "Недостаточно остатка в зоне сортировки для отмены подбора.",
-            context={"order_id": str(order_id)},
+            context={"order_id": str(order.id)},
         ) from exc
     undone_at = datetime.now(tz=UTC)
     pick.undone_at = undone_at
     undo_event = FbsOrderPickEvent(
         pick_id=pick.id,
         event_type=PICK_EVENT_UNDONE,
-        actor_user_id=actor.id,
+        actor_user_id=actor_user_id,
         idempotency_key=idempotency_key,
         source_storage_location_id=pick.source_storage_location_id,
         sorting_storage_location_id=pick.sorting_storage_location_id,
@@ -2031,13 +2080,111 @@ async def undo_pick(
         pick=pick,
         source_event_id=undo_event.id,
         source_kind="fbs_order_pick_event",
-        actor_user_id=actor.id,
+        actor_user_id=actor_user_id,
         occurred_at=undone_at,
         reversal=True,
         original_source_event_id=original_event_id,
         product=await session.get(Product, pick.product_id),
     )
-    return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def release_picks_of_cancelled_order(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> int:
+    """Отменить активный подбор отменённого заказа и вернуть штуку на место.
+
+    Делает то же, что отмена подбора оператором: штука уходит из сортировки в ту
+    ячейку и ту тару, откуда её сняли. Меняется только расположение, остаток
+    нет. Повтор безопасен: у снятого подбора второй возврат не создаётся.
+
+    Заказ, по которому отгрузка уже списана, не трогаем: штуки на сортировке
+    больше нет, возвращать нечего. Если вернуть не получилось (исходная ячейка
+    удалена, на сортировке штуки нет), подбор просто снимается: отмена заказа
+    не должна упираться в расположение. Каждый подбор снимается в своей точке
+    сохранения, чтобы сбой не оставил полу-возврат.
+    """
+    if order.supply_id is None:
+        return 0
+    shipped = await session.scalar(
+        select(FbsShipmentReversalLedger.id).where(
+            FbsShipmentReversalLedger.tenant_id == tenant_id,
+            FbsShipmentReversalLedger.fbs_order_id == order.id,
+            FbsShipmentReversalLedger.shipment_movement_id.is_not(None),
+        )
+    )
+    if shipped is not None:
+        return 0
+    try:
+        supply = await _load_supply(session, tenant_id, order.supply_id)
+    except FbsPickingError:
+        return 0
+
+    released = 0
+    wb_pick = await _load_active_pick_for_order(session, tenant_id, order.id)
+    if wb_pick is not None:
+        key = f"order-cancelled:{wb_pick.id}"
+        try:
+            async with session.begin_nested():
+                await _undo_wb_pick(
+                    session, tenant_id, supply, order, wb_pick,
+                    actor_user_id=actor_user_id, idempotency_key=key,
+                )
+        except FbsPickingError:
+            logger.warning(
+                "cancelled order pick released without stock return: order_id=%s", order.id
+            )
+            wb_pick.undone_at = datetime.now(tz=UTC)
+            session.add(
+                FbsOrderPickEvent(
+                    pick_id=wb_pick.id,
+                    event_type=PICK_EVENT_UNDONE,
+                    actor_user_id=actor_user_id,
+                    idempotency_key=key,
+                    source_storage_location_id=wb_pick.source_storage_location_id,
+                    sorting_storage_location_id=wb_pick.sorting_storage_location_id,
+                    inventory_movement_id=None,
+                )
+            )
+            await session.flush()
+        released += 1
+
+    position_picks = (
+        await session.scalars(
+            select(FbsOrderProductPick)
+            .join(FbsOrderProduct, FbsOrderProduct.id == FbsOrderProductPick.order_product_id)
+            .where(
+                FbsOrderProductPick.tenant_id == tenant_id,
+                FbsOrderProduct.order_id == order.id,
+                FbsOrderProductPick.undone_at.is_(None),
+            )
+            .order_by(FbsOrderProductPick.picked_at.desc())
+        )
+    ).all()
+    for position_pick in position_picks:
+        key = f"order-cancelled:{position_pick.id}"
+        try:
+            async with session.begin_nested():
+                await _undo_ozon_position_pick(
+                    session, tenant_id, supply, order, position_pick,
+                    actor_user_id=actor_user_id, idempotency_key=key,
+                )
+        except ValueError:
+            logger.warning(
+                "cancelled order pick released without stock return: order_id=%s", order.id
+            )
+            position_pick.undo_idempotency_key = key
+            position_pick.undone_at = datetime.now(tz=UTC)
+            position_pick.undone_by_user_id = actor_user_id
+            position = await session.get(FbsOrderProduct, position_pick.order_product_id)
+            if position is not None:
+                position.picked_quantity = max(0, position.picked_quantity - 1)
+            await session.flush()
+        released += 1
+    return released
 
 
 async def _load_supply(
@@ -2320,6 +2467,7 @@ __all__ = [
     "get_pick_options",
     "manual_pick_product",
     "pick_scan",
+    "release_picks_of_cancelled_order",
     "scan_pick_location",
     "scan_pick_product",
     "select_pick_location",
