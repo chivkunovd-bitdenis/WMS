@@ -59,6 +59,8 @@ fbsapierror
 fbsassemblysupplyframe
 fbsassemblytaskrows
 fbscancelledafterpackdialog
+fbscancelleddeliveryorders
+fbscancelleddeliveryorders.test
 fbscellpicktable
 fbscellpicktable.test
 fbschips

@@ -263,6 +263,41 @@ describe('summarizeDeliveryChecks', () => {
     }])
   })
 
+  it('объединяет расхождения и закрытые заказы по типу, оставляя WB-номера только в раскрытии', () => {
+    const summary = summarizeDeliveryChecks([
+      check('wb_terminal_order_ignored', 'Заказ WB 530011 уже отменён или закрыт; он исключён из списания.', 'warning', 'b'),
+      check('wb_terminal_order_ignored', 'Заказ WB 530009 уже отменён или закрыт; он исключён из списания.', 'warning', 'a'),
+      check('wb_terminal_order_ignored', 'Заказ WB 530009 уже отменён или закрыт; он исключён из списания.', 'warning', 'a'),
+      check('wb_supply_composition_discrepancy', 'Заказ WB 530015: unknown_order.', 'blocker'),
+      check('wb_supply_composition_discrepancy', 'Заказ WB 530013: seller_mismatch.', 'blocker', 'missing-local-order'),
+    ], new Map([['a', 530009], ['b', 530011]]))
+    expect(summary.warnings).toEqual([{
+      key: 'wb_terminal_order_ignored',
+      title: 'Заказы уже отменены или закрыты',
+      description: 'Исключены из списания и не мешают передаче поставки.',
+      orderIds: [530009, 530011],
+    }])
+    expect(summary.blockers).toEqual([{
+      key: 'wb_supply_composition_discrepancy',
+      title: 'Состав поставки не совпадает с WB',
+      description: null,
+      orderIds: [530013, 530015],
+    }])
+  })
+
+  it('не создаёт отдельные строки нехватки по каждому количеству', () => {
+    const summary = summarizeDeliveryChecks([
+      check('negative_stock', 'Не хватает 1 шт.; после подтверждения остаток будет списан в минус.', 'warning', 'a'),
+      check('negative_stock', 'Не хватает 5 шт.; после подтверждения остаток будет списан в минус.', 'warning', 'b'),
+    ], new Map([['a', 530009], ['b', 530011]]))
+    expect(summary.warnings).toEqual([{
+      key: 'negative_stock',
+      title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
+      description: null,
+      orderIds: [530009, 530011],
+    }])
+  })
+
   it('не показывает отсутствие коробов и распределения в проверке передачи', () => {
     const summary = summarizeDeliveryChecks(
       [
@@ -285,14 +320,14 @@ describe('summarizeDeliveryChecks', () => {
       new Map([['a', 777]]),
     )
     expect(summary.blockers).toEqual([{
-      key: 'supply_bad_status:Поставка уже передана или закрыта.',
+      key: 'supply_bad_status',
       title: 'Поставка уже передана или закрыта.',
       description: null,
       orderIds: [],
     }])
     expect(summary.warnings).toEqual([{
-      key: 'negative_stock:Остаток уйдёт в минус.',
-      title: 'Остаток уйдёт в минус.',
+      key: 'negative_stock',
+      title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
       description: null,
       orderIds: [777],
     }])
