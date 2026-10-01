@@ -6,6 +6,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
+import * as preparedQr from '../../utils/printPreparedQr'
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -189,6 +190,7 @@ afterEach(() => {
   host.remove()
   document.body.innerHTML = ''
   globalThis.fetch = originalFetch
+  vi.restoreAllMocks()
 })
 
 async function settle(ms = 0) {
@@ -530,10 +532,34 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(document.querySelector('[data-testid="fbs-kiz-row-input"]')).toBeNull()
   })
 
-  it.each([false, true])('unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=%s', async (delayed) => {
+  it.each([false, true])('unified registerScanner: замена без диалога, native print и следующий скан при delayed commit=%s', async (delayed) => {
     let releaseCommit: () => void = () => undefined
     if (delayed) commitGate = new Promise<void>((resolve) => { releaseCommit = resolve })
     committedTails = { 'order-a': 'OLD0000A', 'order-b': 'OLD0000B' }
+    const nativePrint = vi.spyOn(preparedQr, 'dispatchPreparedQrInKiosk').mockResolvedValue(undefined)
+    const browserConfirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const rowScanId = 'scan-row-b'
+    // Unified row scans now use the same select -> bind -> print -> pack API as barcode scans.
+    globalThis.fetch = async (request, init) => {
+      const url = new URL(typeof request === 'string' ? request : request instanceof URL ? request.href : request.url, 'http://wms.test')
+      const path = url.pathname.replace(/^\/api/, '')
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
+      if (path.endsWith('/scan-auto-print') && body?.order_id === 'order-b') {
+        calls.push({ method: 'POST', path, body })
+        return json({ scan_id: rowScanId, order_id: 'order-b', wb_order_id: 5002,
+          requires_honest_sign: true, qr_asset: { preview_url: '/api/fixture-row-qr' },
+          replayed: false, binding_target: null, reprint_recovery: null,
+          codes: [], printed_codes: [], shortage: 0, order_errors: [] })
+      }
+      if (path === '/fixture-row-qr') {
+        return { ok: true, blob: async () => new Blob(['fixture-qr'], { type: 'image/png' }) } as Response
+      }
+      if (path.endsWith(`/${rowScanId}/print-claim`) || path.endsWith(`/${rowScanId}/print-started`)) {
+        calls.push({ method: 'POST', path, body })
+        return json({ claimed: true, started: path.endsWith('/print-started') })
+      }
+      return server(request, init)
+    }
     const initial = workspace(committedTails)
     initial.supply.packaging_task_id = null
     const packingHost = document.createElement('div')
@@ -560,16 +586,19 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     focus('order-b')
     expect(activeRow()).toBe('order-b')
     scan(KIZ_A)
-    await settle(30)
-    expect(rowTail('order-b')).toBe('OLD0000B')
-    await confirm()
+    await settle(80)
+    expect(document.querySelector('[data-testid="fbs-kiz-confirm-replace"]')).toBeNull()
+    expect(browserConfirm).not.toHaveBeenCalled()
     if (delayed) {
-      await settle(250) // Модальное подтверждение закрылось, commit ещё ждёт ответ сервера.
+      // The old code and queued next scan remain pending until the server acknowledges commit.
+      expect(rowTail('order-b')).toBe('OLD0000B')
+      expect(nativePrint).not.toHaveBeenCalled()
+      expect(calls.some((call) => call.path.endsWith('/pack'))).toBe(false)
       scan(STICKER_A)
       await settle(30)
       expect(rowTail('order-b')).toBe('OLD0000B')
       expect(kizCalls()).toHaveLength(2)
-      expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(0)
+      expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(1)
       act(() => releaseCommit())
       await settle(80)
     }
@@ -583,8 +612,19 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(calls.filter((call) => call.path.endsWith('/start-work'))).toHaveLength(1)
     expect(calls.some((call) => call.path.includes('/assign'))).toBe(false)
     const productScans = calls.filter((call) => call.path.endsWith('/scan-auto-print'))
-    expect(productScans).toHaveLength(delayed ? 1 : 0)
-    if (delayed) expect(productScans[0].body).toMatchObject({ barcode: STICKER_A })
+    expect(productScans).toHaveLength(delayed ? 2 : 1)
+    expect(productScans[0].body).toMatchObject({ barcode: 'order:order-b', order_id: 'order-b', print_qr: true })
+    if (delayed) expect(productScans[1].body).toMatchObject({ barcode: STICKER_A })
+    expect(nativePrint).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ idempotencyKey: rowScanId }))
+    const commitIndex = calls.findIndex((call) => call.path.endsWith('/kiz/commit'))
+    const claimIndex = calls.findIndex((call) => call.path.endsWith('/print-claim'))
+    const startedIndex = calls.findIndex((call) => call.path.endsWith('/print-started'))
+    const packIndex = calls.findIndex((call) => call.path.endsWith('/pack'))
+    expect(claimIndex).toBeGreaterThan(commitIndex)
+    expect(startedIndex).toBeGreaterThan(claimIndex)
+    expect(packIndex).toBeGreaterThan(startedIndex)
+    expect(calls.filter((call) => call.path.endsWith('/pack'))).toHaveLength(1)
+    expect(calls[packIndex].body).toMatchObject({ quantity: 1, order_id: 'order-b', idempotency_key: `${rowScanId}:packed` })
   })
 })
 
