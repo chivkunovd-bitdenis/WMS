@@ -19,7 +19,10 @@ from app.models.user import User
 from app.services import inventory_count_service as service
 from app.services import tenant_settings_service, warehouse_map_service
 from app.services.catalog_service import list_ozon_product_links
-from app.services.product_barcode_service import load_barcodes_by_product
+from app.services.product_barcode_service import (
+    load_barcodes_by_product,
+    primary_product_barcode,
+)
 from app.services.sorting_location_service import SORTING_LOCATION_CODE, UNASSIGNED_LABEL
 from app.services.staff_permissions_service import PERM_INVENTORY
 
@@ -340,18 +343,12 @@ async def _barcodes(
     ozon_links = await list_ozon_product_links(session, count.tenant_id, product_ids)
     result: dict[uuid.UUID, str | None] = {}
     for product_id, product in products.items():
-        canonical = product.wb_barcode.strip() if product.wb_barcode else ""
-        alias = next(
-            (code.strip() for code in aliases.get(product_id, ()) if code.strip()),
-            "",
-        )
         link = ozon_links.get(product_id)
-        external = link.external_barcodes if link is not None else []
-        ozon = next(
-            (code.strip() for code in external if isinstance(code, str) and code.strip()),
-            None,
+        result[product_id] = primary_product_barcode(
+            product,
+            wb_barcodes=aliases.get(product_id, ()),
+            ozon_barcodes=tuple(link.external_barcodes or []) if link is not None else (),
         )
-        result[product_id] = canonical or alias or ozon
     return result
 
 

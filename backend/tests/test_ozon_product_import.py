@@ -22,6 +22,11 @@ from app.services import catalog_service as catalog_svc
 from app.services import ozon_product_import_service as import_svc
 from app.services import scan_resolver_service as scan_svc
 from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from app.services.product_barcode_service import (
+    primary_product_barcode,
+    set_primary_product_barcode,
+)
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 GLASSES_CARD: dict[str, Any] = {
     "id": 6204279711,
@@ -280,6 +285,52 @@ async def test_scanner_finds_the_product_by_the_ozon_barcode(
 
     assert match.type == "product"
     assert match.id == product.id
+
+
+async def test_ozon_barcode_change_keeps_selected_code_printable_and_scannable(
+    db_session: AsyncSession,
+) -> None:
+    tenant, seller, product = await _seed(db_session)
+    old_code = "OZN5680762790"
+    new_code = "OZN5680762790-NEW"
+    await import_svc.import_ozon_product_cards(
+        db_session, tenant.id, seller.id, _provider([GLASSES_CARD]), client_id="c", api_key="k"
+    )
+    await set_primary_product_barcode(db_session, product, old_code)
+
+    changed_card = {**GLASSES_CARD, "barcode": new_code, "barcodes": [new_code]}
+    await import_svc.import_ozon_product_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        _provider([changed_card]),
+        client_id="c",
+        api_key="k",
+    )
+
+    link = (
+        await db_session.execute(
+            ProductMarketplaceLink.__table__.select().where(
+                ProductMarketplaceLink.tenant_id == tenant.id
+            )
+        )
+    ).one()
+    assert link.external_barcodes == [new_code, old_code]
+    await db_session.refresh(product)
+    assert product.primary_print_barcode == old_code
+    assert primary_product_barcode(product, ozon_barcodes=tuple(link.external_barcodes)) == old_code
+    rows = await list_seller_wb_catalog_rows(
+        db_session, tenant.id, seller.id, product_ids={product.id}
+    )
+    assert rows[0].product_primary_barcode == old_code
+    assert rows[0].marketplace_bindings[0]["external_barcodes"] == [new_code, old_code]
+    assert await import_svc.find_product_ids_by_marketplace_barcode(
+        db_session, tenant.id, [old_code], seller_id=seller.id
+    ) == [product.id]
+    for code in (old_code, new_code):
+        match = await scan_svc.resolve_any_scan(db_session, tenant.id, code)
+        assert match.type == "product"
+        assert match.id == product.id
 
 
 async def test_scanner_still_finds_nothing_for_an_unknown_code(

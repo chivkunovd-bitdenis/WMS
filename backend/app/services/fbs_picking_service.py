@@ -1425,7 +1425,11 @@ async def _pick_location_payload(
             {
                 "product_id": str(product_id),
                 "name": product.name,
-                "barcode": product.wb_barcode or positions[0][0].wb_barcode,
+                "barcode": (
+                    product.primary_print_barcode
+                    or product.wb_barcode
+                    or positions[0][0].wb_barcode
+                ),
                 "remaining_qty": min(remaining_units, available),
                 "nearest_deadline_at": min(order.deadline_at for order, _ in positions).isoformat(),
             }

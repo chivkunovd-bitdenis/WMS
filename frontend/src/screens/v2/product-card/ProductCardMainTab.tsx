@@ -1,9 +1,14 @@
 import type { ReactNode } from 'react'
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { resolveProductBarcodeOptions } from '../../../types/wbProductCatalog'
 import type { ProductCardData } from './productCardTypes'
 
 type Props = {
   data: ProductCardData
+  canSelectPrimaryBarcode?: boolean
+  primaryBarcodeBusy?: boolean
+  primaryBarcodeError?: string | null
+  onSelectPrimaryBarcode?: (barcode: string) => void
 }
 
 const EMPTY = '—'
@@ -62,13 +67,43 @@ function FieldGrid({ children }: { children: ReactNode }) {
   )
 }
 
-export function ProductCardMainTab({ data }: Props) {
+export function ProductCardMainTab({
+  data, canSelectPrimaryBarcode, primaryBarcodeBusy, primaryBarcodeError, onSelectPrimaryBarcode,
+}: Props) {
   const hasWb = data.marketplaces.includes('wb')
   const hasOzon = data.marketplaces.includes('ozon')
   const ozonBinding = data.marketplace_bindings.find((b) => b.marketplace === 'ozon') ?? null
+  const knownBarcodes = Array.from(new Map(
+    resolveProductBarcodeOptions(data).map(({ marketplace, barcode }) => [barcode, { marketplace, barcode }]),
+  ).values())
+  const primaryBarcode = data.product_primary_barcode ?? knownBarcodes[0]?.barcode ?? null
 
   return (
     <Stack spacing={3} data-testid="product-card-main-tab">
+      {knownBarcodes.length > 1 && canSelectPrimaryBarcode ? (
+        <TextField
+          select
+          size="small"
+          label="Основной ШК для печати"
+          value={primaryBarcode ?? ''}
+          onChange={(event) => onSelectPrimaryBarcode?.(event.target.value)}
+          disabled={primaryBarcodeBusy}
+          error={Boolean(primaryBarcodeError)}
+          helperText={primaryBarcodeError ?? undefined}
+          data-testid="product-card-primary-barcode"
+          sx={{ maxWidth: 420 }}
+        >
+          {knownBarcodes.map(({ marketplace, barcode }) => (
+            <MenuItem key={barcode} value={barcode}>
+              {marketplace === 'ozon' ? 'Ozon' : 'WB'} · {barcode}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : knownBarcodes.length > 0 ? (
+        <FieldGrid>
+          <FieldRow label="Основной ШК для печати" value={primaryBarcode ?? EMPTY} testId="product-card-primary-barcode" />
+        </FieldGrid>
+      ) : null}
       <FieldGrid>
         <FieldRow label="Селлер" value={textOrDash(data.seller_name)} testId="product-card-field-seller" />
         <FieldRow label="Название" value={textOrDash(data.name)} testId="product-card-field-name" />

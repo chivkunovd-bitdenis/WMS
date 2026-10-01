@@ -50,6 +50,7 @@ export type WbCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  product_primary_barcode?: string | null
   wb_size?: string | null
   wb_composition?: string | null
 }
@@ -701,6 +702,7 @@ export function SellerInboundDraftScreen({
 
   const linePrintMeta = (line: InboundLine, cat: WbCatalogRow | undefined): ProductLineDisplayMeta => {
     const barcode =
+      cat?.product_primary_barcode ??
       cat?.wb_primary_barcode ??
       line.wb_barcode ??
       (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
@@ -710,6 +712,7 @@ export function SellerInboundDraftScreen({
       seller_name: null,
       wb_primary_image_url: cat?.wb_primary_image_url ?? null,
       wb_primary_barcode: barcode,
+      product_primary_barcode: cat?.product_primary_barcode ?? barcode,
       wb_barcodes: cat?.wb_barcodes ?? (line.wb_barcode ? [line.wb_barcode] : []),
       wb_vendor_code: cat?.wb_vendor_code ?? null,
       wb_nm_id: cat?.wb_nm_id ?? null,
@@ -1016,6 +1019,7 @@ export function SellerInboundDraftScreen({
                   const cat = catalogById.get(ln.product_id)
                   const img = cat?.wb_primary_image_url ?? undefined
                   const barcode =
+                    cat?.product_primary_barcode ??
                     cat?.wb_primary_barcode ??
                     ln.wb_barcode ??
                     (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)

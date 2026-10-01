@@ -84,6 +84,10 @@ class StaffPermissionsOut(BaseModel):
     inventory: bool
     packaging: bool
     shift_lead: bool
+    billing: bool
+    storage: bool
+    fbs: bool
+    honest_sign: bool
 
 
 class SellerPermissionsOut(BaseModel):
@@ -374,9 +378,7 @@ async def resend_invite_route(
 @router.get("/me", response_model=UserMeResponse)
 async def me(
     user: Annotated[User, Depends(get_current_user)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserMeResponse:
     from sqlalchemy import select
@@ -431,6 +433,10 @@ async def me(
         inventory=perms_dict["inventory"],
         packaging=perms_dict["packaging"],
         shift_lead=perms_dict["shift_lead"],
+        billing=perms_dict["billing"],
+        storage=perms_dict["storage"],
+        fbs=perms_dict["fbs"],
+        honest_sign=perms_dict["honest_sign"],
     )
     seller_perms_snapshot = await get_seller_permissions(session, user)
     seller_perms_dict = seller_perms_snapshot.as_dict()
@@ -537,7 +543,9 @@ async def login_by_name_route(
     check_login_rate_limit(request=request, email=body.full_name)
     try:
         _user, token = await login_by_name(
-            session, full_name=body.full_name, password=body.password,
+            session,
+            full_name=body.full_name,
+            password=body.password,
             organization=body.organization,
         )
     except AuthError:

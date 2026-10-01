@@ -6,13 +6,13 @@ export type FfPermissions = {
   inventory: boolean
   packaging: boolean
   shift_lead: boolean
+  billing: boolean
+  storage: boolean
+  fbs: boolean
+  honest_sign: boolean
 }
 
-export type FfStaffAccessKey =
-  | 'reception'
-  | 'shipments'
-  | 'catalog_cells'
-  | 'settings_staff'
+export type FfStaffAccessKey = keyof FfPermissions
 
 export type FfStaffAccessState = Record<FfStaffAccessKey, boolean>
 
@@ -63,20 +63,22 @@ export const FF_STAFF_ACCESS_BLOCKS: {
   label: string
 }[] = [
   { key: 'reception', label: 'Приёмка' },
-  { key: 'shipments', label: 'Отгрузки' },
-  { key: 'catalog_cells', label: 'Каталог и ячейки' },
-  { key: 'settings_staff', label: 'Настройки и сотрудники' },
+  { key: 'mp_shipments', label: 'Отгрузки' },
+  { key: 'packaging', label: 'Упаковка' },
+  { key: 'fbs', label: 'FBS' },
+  { key: 'cells', label: 'Ячейки' },
+  { key: 'storage', label: 'Хранение' },
+  { key: 'inventory', label: 'Инвентаризация' },
+  { key: 'billing', label: 'Расчёты' },
+  { key: 'honest_sign', label: 'Честный знак' },
+  { key: 'settings', label: 'Настройки' },
+  { key: 'shift_lead', label: 'Старший смены' },
 ]
 
 export function ffPermissionsToStaffAccess(
   permissions: FfPermissions,
 ): FfStaffAccessState {
-  return {
-    reception: permissions.reception,
-    shipments: permissions.mp_shipments || permissions.packaging,
-    catalog_cells: permissions.cells || permissions.inventory,
-    settings_staff: permissions.settings,
-  }
+  return permissions
 }
 
 export function applyFfStaffAccessChange(
@@ -84,25 +86,7 @@ export function applyFfStaffAccessChange(
   key: FfStaffAccessKey,
   checked: boolean,
 ): FfPermissions {
-  if (key === 'reception') {
-    return { ...permissions, reception: checked }
-  }
-  if (key === 'shipments') {
-    return {
-      ...permissions,
-      mp_shipments: checked,
-      packaging: checked,
-      shift_lead: checked,
-    }
-  }
-  if (key === 'catalog_cells') {
-    return {
-      ...permissions,
-      cells: checked,
-      inventory: checked,
-    }
-  }
-  return { ...permissions, settings: checked }
+  return { ...permissions, [key]: checked }
 }
 
 export function adminFfPermissions(): FfPermissions {
@@ -114,6 +98,10 @@ export function adminFfPermissions(): FfPermissions {
     inventory: true,
     packaging: true,
     shift_lead: true,
+    billing: true,
+    storage: true,
+    fbs: true,
+    honest_sign: true,
   }
 }
 
@@ -124,8 +112,8 @@ export function resolveFfPermissions(
   if (role === 'fulfillment_admin') {
     return adminFfPermissions()
   }
-  return (
-    permissions ?? {
+  return {
+    ...{
       settings: false,
       mp_shipments: false,
       reception: false,
@@ -133,8 +121,13 @@ export function resolveFfPermissions(
       inventory: false,
       packaging: false,
       shift_lead: false,
-    }
-  )
+      billing: false,
+      storage: false,
+      fbs: false,
+      honest_sign: false,
+    },
+    ...(permissions ?? {}),
+  }
 }
 
 export function canAccessFfBlock(

@@ -25,7 +25,7 @@ from app.services.catalog_service import (
     marketplace_scope_condition,
     ozon_link_primary_image_url,
 )
-from app.services.product_barcode_service import load_barcodes_by_product
+from app.services.product_barcode_service import load_barcodes_by_product, primary_product_barcode
 from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
@@ -56,6 +56,7 @@ class SellerWbCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    product_primary_barcode: str | None = None
     marketplace_bindings: tuple[dict[str, Any], ...] = ()
     wb_size: str | None = None
     wb_color: str | None = None
@@ -83,6 +84,7 @@ class SellerWbCatalogRow:
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
             "wb_primary_barcode": self.wb_primary_barcode,
+            "product_primary_barcode": self.product_primary_barcode,
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
             "wb_brand": self.wb_brand,
@@ -331,6 +333,11 @@ async def list_seller_wb_catalog_rows(
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
                 wb_primary_barcode=primary,
+                product_primary_barcode=primary_product_barcode(
+                    p,
+                    barcodes,
+                    tuple(ozon_links[p.id].external_barcodes or []) if p.id in ozon_links else (),
+                ),
                 marketplace_bindings=_ozon_barcode_binding(ozon_links.get(p.id)),
                 wb_size=wb_size,
                 wb_color=wb_color,
@@ -365,6 +372,7 @@ class FfCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    product_primary_barcode: str | None = None
     marketplace_bindings: tuple[dict[str, Any], ...] = ()
     ozon_sku: str | None = None
     ozon_offer_id: str | None = None
@@ -396,6 +404,7 @@ class FfCatalogRow:
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
             "wb_primary_barcode": self.wb_primary_barcode,
+            "product_primary_barcode": self.product_primary_barcode,
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
             "wb_brand": self.wb_brand,
@@ -524,6 +533,11 @@ async def _enrich_linked_products(
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
                 wb_primary_barcode=primary,
+                product_primary_barcode=primary_product_barcode(
+                    p,
+                    barcodes,
+                    tuple(ozon_links[p.id].external_barcodes or []) if p.id in ozon_links else (),
+                ),
                 marketplace_bindings=_ozon_barcode_binding(ozon_links.get(p.id)),
                 wb_size=wb_size,
                 wb_color=wb_color,

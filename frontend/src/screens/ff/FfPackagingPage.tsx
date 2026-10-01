@@ -55,7 +55,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
-import { resolveProductBarcodeOptions, resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
+import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
@@ -391,7 +391,9 @@ export function FfPackagingTaskPanel({
         productName: ln.product_name,
         productLabel: displayMetaToProductLabel(meta),
         productBarcodeOptions: meta.marketplace_bindings?.some((binding) => binding.marketplace === 'ozon')
-          ? resolveProductBarcodeOptions(meta)
+          ? resolveProductPrimaryBarcode(meta)
+            ? [{ marketplace: 'ozon', barcode: resolveProductPrimaryBarcode(meta) }]
+            : []
           : undefined,
         packagingInstructions: ln.packaging_instructions,
         onPrinted: () => {
