@@ -26,6 +26,8 @@ from app.services import ozon_product_import_service as ozon_import
 from app.services import ozon_provider_factory
 from app.services import wildberries_product_sync_service as wb_product_sync
 from app.services.integration_fernet import encrypt_secret
+from app.services.marketplace_provider import MarketplaceProviderError
+from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_credentials_service import SKIP, patch_seller_tokens
 from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
@@ -105,6 +107,36 @@ async def _save_ozon_key(
         account.is_active = True
         account.validation_status = "valid"
         account.credentials_updated_at = now
+        await session.commit()
+
+
+async def _clear_wb_content_key(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
+    async with SessionLocal() as session:
+        row = await patch_seller_tokens(
+            session,
+            tenant_id,
+            seller_id,
+            content_api_token=None,
+            supplies_api_token=SKIP,
+        )
+        assert row is not None
+
+
+async def _disconnect_ozon_account(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
+    async with SessionLocal() as session:
+        account = await session.scalar(
+            select(MarketplaceAccount).where(
+                MarketplaceAccount.tenant_id == tenant_id,
+                MarketplaceAccount.seller_id == seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+            )
+        )
+        assert account is not None
+        account.external_account_id = None
+        account.secret_encrypted = None
+        account.is_active = False
+        account.validation_status = "not_configured"
+        account.credentials_updated_at = None
         await session.commit()
 
 
@@ -338,6 +370,156 @@ async def test_wb_key_change_replaces_running_generation_and_discards_old_respon
         assert old.result_json is None
         assert replacement is not None and replacement.status == jobs.JOB_STATUS_DONE
         assert imported_ids == {302}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("marketplace", ["wildberries", "ozon"])
+async def test_credentials_removed_before_run_terminalize_and_allow_restart(
+    db_session,
+    marketplace: str,
+) -> None:
+    tenant_id, seller_id = await _seller()
+    if marketplace == "wildberries":
+        await _save_wb_key(tenant_id, seller_id, "before-run")
+        job_type = jobs.JOB_TYPE_SELLER_WB_CATALOG_SYNC
+    else:
+        await _save_ozon_key(
+            tenant_id, seller_id, client_id="before-run", api_key="before-run-key"
+        )
+        job_type = jobs.JOB_TYPE_OZON_CATALOG_SYNC
+    async with SessionLocal() as session:
+        job, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=job_type,
+            marketplace=marketplace,
+        )
+        assert created
+        job_id = job.id
+
+    if marketplace == "wildberries":
+        await _clear_wb_content_key(tenant_id, seller_id)
+        await jobs.run_wildberries_cards_sync_job(job_id)
+        await _save_wb_key(tenant_id, seller_id, "after-clear")
+    else:
+        await _disconnect_ozon_account(tenant_id, seller_id)
+        await jobs.run_ozon_catalog_sync_job(job_id)
+        await _save_ozon_key(
+            tenant_id, seller_id, client_id="after-disconnect", api_key="after-key"
+        )
+
+    async with SessionLocal() as session:
+        stored = await session.get(BackgroundJob, job_id)
+        assert stored is not None
+        assert stored.status == jobs.JOB_STATUS_FAILED
+        assert stored.error_message == "catalog_job_credentials_changed"
+        assert stored.finished_at is not None
+        assert stored.result_json is None
+        replacement, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=job_type,
+            marketplace=marketplace,
+        )
+        assert created
+        assert replacement.id != job_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("marketplace", ["wildberries", "ozon"])
+async def test_provider_rejection_after_generation_change_terminalizes_without_writes(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+    marketplace: str,
+) -> None:
+    tenant_id, seller_id = await _seller()
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+    if marketplace == "wildberries":
+        await _save_wb_key(tenant_id, seller_id, "provider-old")
+        job_type = jobs.JOB_TYPE_SELLER_WB_CATALOG_SYNC
+
+        async def rejected_wb(_client, *, api_token):
+            assert api_token == "provider-old"
+            fetch_started.set()
+            await release_fetch.wait()
+            raise WildberriesClientError("upstream_error", status_code=401)
+
+        monkeypatch.setattr(wb_product_sync, "fetch_all_cards", rejected_wb)
+    else:
+        await _save_ozon_key(
+            tenant_id, seller_id, client_id="provider-client", api_key="provider-key"
+        )
+        job_type = jobs.JOB_TYPE_OZON_CATALOG_SYNC
+
+        async def rejected_ozon(_provider, *, client_id, api_key):
+            assert (client_id, api_key) == ("provider-client", "provider-key")
+            fetch_started.set()
+            await release_fetch.wait()
+            raise MarketplaceProviderError("ozon", 401, code="ozon_credentials_rejected")
+
+        monkeypatch.setattr(ozon_import, "fetch_product_cards", rejected_ozon)
+        monkeypatch.setattr(ozon_provider_factory, "build_ozon_provider", lambda: object())
+
+    async with SessionLocal() as session:
+        job, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=job_type,
+            marketplace=marketplace,
+        )
+        assert created
+        job_id = job.id
+    runner = (
+        jobs.run_wildberries_cards_sync_job
+        if marketplace == "wildberries"
+        else jobs.run_ozon_catalog_sync_job
+    )
+    worker = asyncio.create_task(runner(job_id))
+    await fetch_started.wait()
+    if marketplace == "wildberries":
+        await _save_wb_key(tenant_id, seller_id, "provider-new")
+    else:
+        await _disconnect_ozon_account(tenant_id, seller_id)
+    release_fetch.set()
+    await worker
+
+    async with SessionLocal() as session:
+        stored = await session.get(BackgroundJob, job_id)
+        wb_snapshots = await session.scalar(
+            select(func.count(SellerWildberriesImportedCard.id)).where(
+                SellerWildberriesImportedCard.seller_id == seller_id
+            )
+        )
+        ozon_snapshots = await session.scalar(
+            select(func.count(SellerOzonImportedCard.id)).where(
+                SellerOzonImportedCard.seller_id == seller_id
+            )
+        )
+        assert stored is not None
+        assert stored.status == jobs.JOB_STATUS_FAILED
+        assert stored.error_message == "catalog_job_credentials_changed"
+        assert stored.finished_at is not None
+        assert stored.result_json is None
+        assert wb_snapshots == ozon_snapshots == 0
+
+    if marketplace == "ozon":
+        await _save_ozon_key(
+            tenant_id, seller_id, client_id="provider-new", api_key="provider-new-key"
+        )
+    async with SessionLocal() as session:
+        replacement, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=job_type,
+            marketplace=marketplace,
+        )
+        assert created
+        assert replacement.id != job_id
 
 
 @pytest.mark.asyncio

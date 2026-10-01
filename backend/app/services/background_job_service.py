@@ -169,6 +169,14 @@ async def _finish_catalog_job_if_owned(
     except CatalogJobOwnershipLost:
         await session.rollback()
         logger.info("catalog job ownership lost before finish: %s", job_id)
+        await _finish_claimed_job_by_lease(
+            session,
+            job_id=job_id,
+            lease_started_at=lease_started_at,
+            status=JOB_STATUS_FAILED,
+            result_json=None,
+            error_message="catalog_job_credentials_changed",
+        )
         return False
     finished = await session.execute(
         update(BackgroundJob)
@@ -726,6 +734,14 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
                 )
             except CatalogJobOwnershipLost:
                 await session.rollback()
+                await _finish_claimed_job_by_lease(
+                    session,
+                    job_id=job_id,
+                    lease_started_at=lease_started_at,
+                    status=JOB_STATUS_FAILED,
+                    result_json=None,
+                    error_message="catalog_job_credentials_changed",
+                )
                 return
             except MarketplaceAccountError:
                 await session.rollback()
@@ -757,6 +773,14 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
                 )
             except CatalogJobOwnershipLost:
                 await session.rollback()
+                await _finish_claimed_job_by_lease(
+                    session,
+                    job_id=job_id,
+                    lease_started_at=lease_started_at,
+                    status=JOB_STATUS_FAILED,
+                    result_json=None,
+                    error_message="catalog_job_credentials_changed",
+                )
                 return
             except MarketplaceAccountError:
                 await session.rollback()
