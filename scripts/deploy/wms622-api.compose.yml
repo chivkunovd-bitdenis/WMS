@@ -1,0 +1,3 @@
+services:
+  api:
+    image: ${WMS622_IMAGE:?set exact WMS-622 image tag}
