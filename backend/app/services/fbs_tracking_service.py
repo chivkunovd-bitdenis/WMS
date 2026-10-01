@@ -250,6 +250,18 @@ async def _sync_supply_orders_from_wb(
                 )
             ).done
 
+    if wb_supply_done:
+        from app.services.fbs_observed_delivery_service import reconcile_observed_wb_delivery
+        from app.services.fbs_shipment_service import FbsShipmentError
+
+        try:
+            await reconcile_observed_wb_delivery(
+                session, supply, http_client, token, actor_user_id=actor_user_id,
+            )
+        except (WildberriesClientError, FbsShipmentError, ValueError) as exc:
+            # Keep the supply retryable; never commit done with a missing stock movement.
+            raise FbsTrackingError("wb_delivery_stock_reconciliation_failed") from exc
+
     # The seller autopoll has already synchronized all order statuses in one
     # batch. For draft/assembling/packed supplies this pass only reconciles the
     # authoritative supply flag, avoiding another WB request per supply.

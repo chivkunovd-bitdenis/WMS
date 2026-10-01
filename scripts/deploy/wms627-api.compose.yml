@@ -1,0 +1,7 @@
+services:
+  api:
+    image: ${WMS627_IMAGE:?set exact WMS-627 image tag}
+  celery_worker:
+    image: ${WMS627_IMAGE:?set exact WMS-627 image tag}
+  celery_beat:
+    image: ${WMS627_IMAGE:?set exact WMS-627 image tag}
