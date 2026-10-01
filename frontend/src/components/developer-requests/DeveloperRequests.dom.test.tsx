@@ -174,7 +174,7 @@ describe('WMS-624 developer requests', () => {
     const rows = ['review', 'queued', 'in_progress', 'completed'].map((status, i) => ({ ...record({ idempotency_key: 'x', type: 'improvement', screen: `Экран ${i}`, problem: 'Полная проблема', proposal: 'Полное предложение', page_url: '/app/ff/fbs' }, `r${i}`), status, created_at: `2026-10-0${i + 1}T12:00:00Z` }))
     fetcher.mockImplementation(async (url) => response(String(url).endsWith('/r3') ? rows[3] : rows))
     await render(); await click('Задача разработчикам'); await fill('Описание ошибки', 'Черновик'); await click('Мои заявки')
-    for (const label of ['На рассмотрении', 'В очереди', 'В работе', 'Завершена']) expect(document.body.textContent).toContain(label)
+    for (const label of ['На рассмотрении', 'В очереди', 'В работе', 'Готово']) expect(document.body.textContent).toContain(label)
     const items = [...document.querySelectorAll('.MuiListItemButton-root')]
     expect(items[0].textContent).toContain('Экран 3')
     await act(async () => (items[0] as HTMLElement).click())

@@ -38,7 +38,7 @@ export type Draft = {
   attempt?: RequestPayload
 }
 export const statusLabels: Record<RequestStatus, string> = {
-  review: 'На рассмотрении', queued: 'В очереди', in_progress: 'В работе', completed: 'Завершена',
+  review: 'На рассмотрении', queued: 'В очереди', in_progress: 'В работе', completed: 'Готово',
 }
 export const typeLabels: Record<RequestType, string> = { bug: 'Ошибка', improvement: 'Улучшение / доработка' }
 export function draftStorageKey(me: RequestIdentity): string {
