@@ -8,6 +8,7 @@ export type DurableQrInput = PreparedQrInput & { context: DirectQrContext }
 export type NativeQrJob = {
   idempotencyKey?: string; status?: string; receipt?: string; reason?: string; error?: string
   context?: DirectQrContext; widthMm?: number; heightMm?: number
+  hash?: string; parentKey?: string; reprints?: NativeQrJob[]
 }
 export type DurableQrAttempt = { input: DurableQrInput; createdAt: number; result?: NativeQrJob }
 export interface QrAttemptStore {
@@ -57,6 +58,7 @@ export const qrAttemptStore: QrAttemptStore = {
 function sameContext(a: DirectQrContext, b: DirectQrContext): boolean {
   return Boolean(a && b) && a.tenantId === b.tenantId && a.userId === b.userId && a.supplyId === b.supplyId
     && a.orderId === b.orderId && a.scanId === b.scanId && a.barcode === b.barcode
+    && a.marketplace === b.marketplace && a.wbOrderId === b.wbOrderId
 }
 export async function restoreDurableQr(key: string, context: DirectQrContext, store = qrAttemptStore): Promise<DurableQrAttempt | undefined> {
   const saved = await store.get(key)
@@ -80,6 +82,19 @@ export async function prepareDurableQr(input: DurableQrInput, store = qrAttemptS
 }
 const BASE = 'http://127.0.0.1:17843'
 const ACCEPTED = new Set(['accepted', 'pending', 'processing', 'completed'])
+function accepted(job: NativeQrJob): boolean {
+  return typeof job.receipt === 'string' && Boolean(job.receipt.trim()) && (!job.status || ACCEPTED.has(job.status))
+}
+function matchingReprint(parent: NativeQrJob, child: NativeQrJob, input: DurableQrInput): boolean {
+  return parent.idempotencyKey === input.idempotencyKey
+    && typeof parent.hash === 'string' && /^[a-f0-9]{64}$/.test(parent.hash)
+    && parent.widthMm === input.widthMm && parent.heightMm === input.heightMm
+    && Boolean(parent.context && sameContext(parent.context, input.context))
+    && typeof child.idempotencyKey === 'string' && Boolean(child.idempotencyKey)
+    && child.idempotencyKey !== input.idempotencyKey && child.parentKey === input.idempotencyKey
+    && child.hash === parent.hash && child.widthMm === input.widthMm && child.heightMm === input.heightMm
+    && Boolean(child.context && sameContext(child.context, input.context))
+}
 export type DurableQrTransport = { fetch: typeof fetch; wait: () => Promise<void>; polls: number }
 const transport: DurableQrTransport = {
   fetch: (...args) => fetch(...args), wait: () => new Promise((resolve) => setTimeout(resolve, 500)), polls: 60,
@@ -89,7 +104,7 @@ const transport: DurableQrTransport = {
 export async function dispatchDurableQr(input: DurableQrInput, store = qrAttemptStore, io = transport, requireExisting = false): Promise<void> {
   const attempt = await prepareDurableQr(input, store)
   const path = `/jobs/${encodeURIComponent(input.idempotencyKey)}`
-  const request = async (path: string, method = 'GET', body?: unknown): Promise<NativeQrJob | null> => {
+  const request = async (path: string, method = 'GET', body?: unknown, expectedKey = input.idempotencyKey): Promise<NativeQrJob | null> => {
     let response: Response
     try {
       response = await io.fetch(`${BASE}${path}`, {
@@ -102,14 +117,16 @@ export async function dispatchDurableQr(input: DurableQrInput, store = qrAttempt
     if (method === 'GET' && response.status === 404) return null
     const job = await response.json() as NativeQrJob
     if (!response.ok) throw new Error(job.error ?? job.reason ?? 'Не удалось прочитать результат WMS Print.')
-    if ((job.idempotencyKey && job.idempotencyKey !== input.idempotencyKey)
+    if ((job.idempotencyKey && job.idempotencyKey !== expectedKey)
       || (job.context && !sameContext(job.context, input.context))
       || (job.widthMm !== undefined && job.widthMm !== input.widthMm)
       || (job.heightMm !== undefined && job.heightMm !== input.heightMm)) {
       throw new Error('WMS Print вернул результат другого задания. Повторная печать не отправлена.')
     }
-    attempt.result = job
-    await store.put(attempt)
+    if (expectedKey === input.idempotencyKey) {
+      attempt.result = job
+      await store.put(attempt)
+    }
     return job
   }
   let job = await request(path)
@@ -121,16 +138,28 @@ export async function dispatchDurableQr(input: DurableQrInput, store = qrAttempt
     // The old helper has no GET endpoint; POST with the same key still reconciles
     // its durable receipt. The exact image and dimensions are never regenerated.
     job = await request('/print', 'POST', { ...input, protocolVersion: 2 })
-  } else if (['saved', 'failed_before_submit'].includes(job.status ?? '')) {
+  } else if (!job.reprints?.length && ['saved', 'failed_before_submit'].includes(job.status ?? '')) {
     job = await request(`${path}/retry`, 'POST')
-  } else if (job.status === 'unknown' || job.status === 'submitting') {
+  } else if (!job.reprints?.length && (job.status === 'unknown' || job.status === 'submitting')) {
     job = await request(`${path}/reconcile`, 'POST')
   }
   for (let poll = 0; job && ['saved', 'submitting'].includes(job.status ?? '') && poll < io.polls; poll++) {
     await io.wait()
     job = await request(path)
   }
-  if (job?.receipt && (!job.status || ACCEPTED.has(job.status))) return
+  if (job && accepted(job)) return
+  // An operator may have explicitly reprinted the retained image in native
+  // history. Reconcile that linked job, then commit the refreshed original
+  // record before completing its existing packing intent. Never retry parent.
+  const child = job?.reprints?.slice().reverse().find((candidate) => matchingReprint(job!, candidate, input))
+  if (job && child?.idempotencyKey) {
+    const reconciled = await request(`/jobs/${encodeURIComponent(child.idempotencyKey)}/reconcile`, 'POST', undefined, child.idempotencyKey)
+    job = await request(path)
+    const currentChild = job?.reprints?.find((candidate) => candidate.idempotencyKey === child.idempotencyKey)
+    if (job && reconciled && currentChild
+      && matchingReprint(job, reconciled, input) && matchingReprint(job, currentChild, input)
+      && reconciled.status && currentChild.status && accepted(reconciled) && accepted(currentChild)) return
+  }
   const labels: Record<string, string> = {
     saved: 'сохранено, ожидает отправки', submitting: 'результат передачи ещё не установлен',
     unknown: 'результат передачи неизвестен', canceled: 'задание отменено', aborted: 'очередь прервала задание',

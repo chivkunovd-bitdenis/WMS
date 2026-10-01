@@ -14,7 +14,7 @@
 
 Команды из frontend: `npx tsc --noEmit -p tsconfig.app.json`; `npm run build`; `npx vitest run src/utils/durableDirectQr.test.ts src/screens/v2/fbsScanAutoPrint.durability.test.ts src/screens/v2/fbsSequentialPacking.test.ts src/screens/v2/fbsSequentialPacking.recovery.test.ts src/screens/v2/fbsSequentialPacking.binding.test.ts src/screens/v2/fbsKizAutoReprint.test.ts src/screens/v2/fbsScanAutoPrint.test.ts`.
 
-Целевые 56 проверок прошли: сохранение до сети, quota/write/read/corrupt failures, исходный ключ после remount, потерянный POST response, async saved/submitting/accepted, canceled/aborted/stopped/held/unknown с receipt, проверенный presubmit retry, ошибка commit результата, несовпадение размеров/PNG/пользователя, legacy receipt, отсутствующий native job при серверном started, отдельные намерения двух одинаковых единиц, ЧЗ/привязка и исходный короб.
+Целевые 75 проверок прошли: сохранение до сети, quota/write/read/corrupt failures, исходный ключ после remount, потерянный POST response, async saved/submitting/accepted, canceled/aborted/stopped/held/unknown с receipt, проверенный presubmit retry, ошибка commit результата, несовпадение размеров/PNG/пользователя, legacy receipt, отсутствующий native job при серверном started, отдельные намерения двух одинаковых единиц, ЧЗ/привязка и исходный короб. Дополнительно проверены завершение исходной упаковки по связанной явной перепечатке, обязательная свежая сверка дочернего задания и отказ при неверных parentKey/hash/размере/пользователе/WB order ID, отсутствии квитанции либо неизвестном результате дочернего задания. Ошибка сохранения обновлённого результата не допускает pack.
 
 ## Реальный браузер
 
@@ -29,10 +29,12 @@
 5. Следующий одинаковый товар: новый fixture-scan-2, selectedOrders=2, printPosts=2, размер новой попытки 70×120; первая попытка остаётся 58×40.
 6. Вторая очередь отменена после потерянного ответа; reload и повтор: selectedOrders=2, printPosts=2, packed только order-1, pending order-2, result=canceled, exactPng=true. Ошибка показывает WB №625002, штрихкод, исходный ключ и localhost-журнал. Ложной упаковки и новой копии нет. Получен скриншот CUA этого состояния.
 
+7. После явной тестовой перепечатки fixture-scan-2 создан связанный fixture-scan-2:explicit-reprint; счётчик отправок вырос до 3 только от этой команды. Выполнены reload и исходный скан: selectedOrders=2, printPosts=3, packed=[order-1,order-2], original result=canceled, reprints=[accepted child с parent fixture-scan-2], exactPng=true. Ещё один reload сохранил всю эту историю. Браузер новой копии не отправлял.
+
 ## Границы
 
 Нативный протокол согласован с runtime-разработчиком: protocolVersion:2 даёт async202 и polling; legacy helper без GET сохраняет совместимость через тот же POST key и настоящую receipt. Accepted/pending/processing/completed вместе с receipt означают приём очередью, не бумагу. Canceled/aborted/held/stopped/unknown не являются успехом.
 
-Повтор скана адресно выполняет безопасный native retry только для saved/failed_before_submit. Для canceled/aborted/unknown он читает результат и сохраняет исходную попытку, не создавая скрытую копию. Согласование результата явной native-перепечатки дочерним ключом с исходной браузерной попыткой отдельно передано ведущему; текущий клиент не принимает произвольное дочернее задание за исходное.
+Повтор скана адресно выполняет безопасный native retry только для saved/failed_before_submit. Для canceled/aborted/unknown он читает результат и сохраняет исходную попытку, не создавая скрытую копию. Явная перепечатка через native-журнал возвращается в исходную браузерную попытку через reprints[]: проверяются parentKey, hash исходных PNG+размера, размеры, полный контекст и отдельный ключ. Браузер выполняет POST child/reconcile, повторно читает исходное задание и сохраняет оригинал с reprints до pack. Только совпадающий дочерний результат с известным accepted/pending/processing/completed и настоящей квитанцией завершает исходный pending. Original status остаётся canceled/aborted/unknown в сохранённой истории. При наличии дочерней перепечатки браузер не вызывает retry оригинала, даже если оригинал failed_before_submit: иначе неизвестный исход дочернего задания мог бы породить скрытый дубликат.
 
 Проверка физической этикетки, рабочего принтера и ночных 17 пропусков этим тестом не выполнена. Production deploy/merge не выполнялись.

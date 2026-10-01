@@ -4,7 +4,7 @@
 <h1>WMS-625: проверка сохранности QR</h1>
 <p>Изолированная проверка: настоящий контроллер массовой сборки и IndexedDB браузера, тестовые WMS API и очередь. Подключения к принтеру и рабочим заказам нет.</p>
 <label>Штрихкод <input id="barcode" value="460000625"></label>
-<button id="scan">Сканировать</button><button id="offline">Native недоступен</button><button id="lost">Потерять ответ после приёма</button><button id="online">Восстановить native</button><button id="cancel">Отменить задание в очереди</button><button id="size">Изменить размер настройки</button><button id="reload">Перезагрузить страницу</button>
+<button id="scan">Сканировать</button><button id="offline">Native недоступен</button><button id="lost">Потерять ответ после приёма</button><button id="online">Восстановить native</button><button id="cancel">Отменить задание в очереди</button><button id="reprint">Явно перепечатать исходную этикетку</button><button id="size">Изменить размер настройки</button><button id="reload">Перезагрузить страницу</button>
 <pre id="result">Загрузка…</pre><img id="image" alt="Исходная PNG этикетки">
 <script type="module">
 import { createPackingScanController, makePackingScanDeps } from '/src/screens/v2/fbsSequentialPacking.ts'
@@ -23,13 +23,13 @@ window.fetch=async (url,init={})=>{
   if(state.mode==='offline')throw new TypeError('test native offline')
   if(path.endsWith('/print')) {
    state.posts++
-   const job=state.jobs[body.idempotencyKey] ||= {...body,status:'accepted',receipt:`fixture-${state.posts}`}
+   const job=state.jobs[body.idempotencyKey] ||= {...body,hash:'a'.repeat(64),status:'accepted',receipt:`fixture-${state.posts}`}
    save(state)
    if(state.mode==='lost'){state.mode='online';save(state);throw new TypeError('test response lost')}
    return json(job,202)
   }
   const key=decodeURIComponent(path.split('/jobs/')[1].split('/')[0])
-  return state.jobs[key]?json(state.jobs[key]):json({},404)
+  return state.jobs[key]?json({...state.jobs[key],reprints:Object.values(state.jobs).filter(job=>job.parentKey===key)}):json({},404)
  }
  if(path.endsWith('/scan-auto-print')) {
   state.selections[body.idempotency_key] ||= Object.keys(state.selections).length+1;save(state)
@@ -52,12 +52,13 @@ async function show(){
  const state=read();const n=Object.keys(state.selections).length
  const context={tenantId:'fixture-tenant',userId:'fixture-user',supplyId:'fixture-supply',orderId:`order-${n}`,scanId:`fixture-scan-${n}`,barcode:'460000625',marketplace:'wildberries',wbOrderId:625000+n}
  const saved=n?await restoreDurableQr(`fixture-scan-${n}`,context):null
- $('result').textContent=JSON.stringify({native:state.mode,selectedOrders:n,printPosts:state.posts,packed:state.packed,active:controller.view(),savedKey:saved?.input.idempotencyKey,savedSize:saved?`${saved.input.widthMm}×${saved.input.heightMm}`:null,exactPng:saved?.input.imageDataUrl===png,result:saved?.result?.status,error:lastError},null,2)
+ $('result').textContent=JSON.stringify({native:state.mode,selectedOrders:n,printPosts:state.posts,packed:state.packed,active:controller.view(),savedKey:saved?.input.idempotencyKey,savedSize:saved?`${saved.input.widthMm}×${saved.input.heightMm}`:null,exactPng:saved?.input.imageDataUrl===png,result:saved?.result?.status,reprints:saved?.result?.reprints?.map(job=>({key:job.idempotencyKey,status:job.status,parent:job.parentKey})),error:lastError},null,2)
  if(saved)$('image').src=saved.input.imageDataUrl
 }
 $('scan').onclick=async()=>{lastError='';try{await controller.scan($('barcode').value)}catch(error){lastError=error.message}await show()}
 for(const mode of ['offline','lost','online'])$(mode).onclick=()=>{const state=read();state.mode=mode;save(state);show()}
 $('cancel').onclick=()=>{const state=read();Object.values(state.jobs).forEach(job=>job.status='canceled');save(state);show()}
+$('reprint').onclick=()=>{const state=read();const key=`fixture-scan-${Object.keys(state.selections).length}`;const parent=state.jobs[key];if(parent){parent.hash='a'.repeat(64);const childKey=`${key}:explicit-reprint`;state.jobs[childKey]={...parent,idempotencyKey:childKey,parentKey:key,status:'accepted',receipt:`fixture-explicit-${++state.posts}`};save(state)}show()}
 $('size').onclick=()=>{localStorage.setItem('wms.print.labelSizeId','70x120');show()}
 $('reload').onclick=()=>location.reload()
 await show()

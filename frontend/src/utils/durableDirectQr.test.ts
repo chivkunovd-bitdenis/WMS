@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { dispatchDurableQr, prepareDurableQr, restoreDurableQr, type DurableQrAttempt, type DurableQrInput, type QrAttemptStore } from './durableDirectQr'
+import { dispatchDurableQr, prepareDurableQr, restoreDurableQr, type DurableQrAttempt, type DurableQrInput, type QrAttemptStore, type NativeQrJob } from './durableDirectQr'
+
+import { createPackingScanController } from '../screens/v2/fbsSequentialPacking'
+import type { FbsScanAutoPrintResult } from '../screens/v2/fbsApi'
 
 const input: DurableQrInput = {
   idempotencyKey: 'scan-one', imageDataUrl: 'data:image/png;base64,EXACT', widthMm: 58, heightMm: 40,
@@ -112,5 +115,100 @@ describe('durable direct QR protocol', () => {
     await dispatchDurableQr({ ...input, idempotencyKey: 'scan-two', context: { ...input.context, orderId: 'order-two', scanId: 'scan-two' } }, store, io)
     expect(rows.size).toBe(2)
     expect(io.fetch.mock.calls.filter(([, opts]) => opts?.method === 'POST')).toHaveLength(2)
+  })
+})
+
+
+function linkedJobs(childOverrides: Partial<NativeQrJob> = {}) {
+  const hash = 'a'.repeat(64)
+  const child: NativeQrJob = {
+    idempotencyKey: 'explicit-reprint', parentKey: input.idempotencyKey, hash,
+    widthMm: input.widthMm, heightMm: input.heightMm, context: input.context,
+    status: 'accepted', receipt: 'printer-child', ...childOverrides,
+  }
+  const parent: NativeQrJob = {
+    idempotencyKey: input.idempotencyKey, hash, widthMm: input.widthMm,
+    heightMm: input.heightMm, context: input.context, status: 'canceled', receipt: 'printer-parent', reprints: [child],
+  }
+  return { parent, child }
+}
+function recoveryController(store: QrAttemptStore, io: ReturnType<typeof fixture>['io']) {
+  const pack = vi.fn(async () => undefined)
+  const complete = vi.fn()
+  const select = vi.fn(async () => ({ scan_id: input.idempotencyKey, order_id: input.context.orderId,
+    wb_order_id: input.context.wbOrderId, requires_honest_sign: false } as FbsScanAutoPrintResult))
+  const controller = createPackingScanController({ select, preload: async () => input.imageDataUrl,
+    print: () => dispatchDurableQr(input, store, io, true), pack,
+    bind: async () => undefined, claim: () => 'original-selection-key', saved: () => true,
+    remember: () => undefined, complete, changed: () => undefined,
+  })
+  return { controller, pack, complete, select }
+}
+
+describe('explicit native reprint recovers original packing intent', () => {
+  it('reconciles linked child and persists canceled parent with accepted child before packing original order', async () => {
+    const { store, rows, io } = fixture()
+    const { parent, child } = linkedJobs()
+    io.fetch.mockResolvedValueOnce(response(parent)).mockResolvedValueOnce(response(child)).mockResolvedValueOnce(response(parent))
+    const { controller, pack, complete } = recoveryController(store, io)
+    pack.mockImplementation(async () => {
+      expect(rows.get(input.idempotencyKey)?.result).toEqual(parent)
+    })
+    await controller.scan(input.context.barcode)
+    expect(pack).toHaveBeenCalledWith(expect.objectContaining({ order_id: input.context.orderId }))
+    expect(complete).toHaveBeenCalledWith(input.context.barcode)
+    expect(controller.hasPending()).toBe(false)
+    expect(io.fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      'http://127.0.0.1:17843/jobs/scan-one',
+      'http://127.0.0.1:17843/jobs/explicit-reprint/reconcile',
+      'http://127.0.0.1:17843/jobs/scan-one',
+    ])
+    expect(rows.get(input.idempotencyKey)?.result?.status).toBe('canceled')
+  })
+  it.each([
+    { parentKey: 'another-original' }, { hash: 'b'.repeat(64) }, { hash: undefined },
+    { widthMm: 70 }, { heightMm: 120 }, { context: { ...input.context, userId: 'other' } },
+    { context: { ...input.context, wbOrderId: 999 } }, { context: undefined },
+    { idempotencyKey: input.idempotencyKey }, { status: 'unknown' }, { status: 'canceled' },
+    { status: 'submitting' }, { status: undefined }, { receipt: '' }, { receipt: undefined },
+  ])('does not pack or silently repeat parent when child proof is insufficient: %j', async (override) => {
+    const { store, io } = fixture()
+    const { parent, child } = linkedJobs(override)
+    io.fetch.mockImplementation(async (url) => response(String(url).includes('/explicit-reprint/') ? child : parent))
+    const { controller, pack, complete } = recoveryController(store, io)
+    await expect(controller.scan(input.context.barcode)).rejects.toThrow()
+    expect(pack).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+    expect(controller.hasPending()).toBe(true)
+    expect(io.fetch.mock.calls.some(([url]) => String(url).endsWith('/print') || String(url).endsWith('/retry'))).toBe(false)
+  })
+  it('does not trust an old accepted child after reconciliation says canceled', async () => {
+    const { store, io } = fixture()
+    const { parent, child } = linkedJobs()
+    const canceled = { ...child, status: 'canceled' }
+    io.fetch.mockResolvedValueOnce(response(parent)).mockResolvedValueOnce(response(canceled))
+      .mockResolvedValueOnce(response({ ...parent, reprints: [canceled] }))
+    const { controller, pack } = recoveryController(store, io)
+    await expect(controller.scan(input.context.barcode)).rejects.toThrow('отменено')
+    expect(pack).not.toHaveBeenCalled()
+  })
+  it('does not retry a pre-submit parent while its explicit child remains unknown', async () => {
+    const { store, io } = fixture()
+    const { parent, child } = linkedJobs({ status: 'unknown' })
+    parent.status = 'failed_before_submit'
+    io.fetch.mockImplementation(async (url) => response(String(url).includes('/explicit-reprint/') ? child : parent))
+    await expect(dispatchDurableQr(input, store, io)).rejects.toThrow()
+    expect(io.fetch.mock.calls.some(([url]) => String(url).endsWith('/retry') || String(url).endsWith('/print'))).toBe(false)
+  })
+  it('does not pack before updated parent and linked acceptance commit to browser storage', async () => {
+    const { store, io } = fixture()
+    const { parent, child } = linkedJobs()
+    const put = store.put
+    let writes = 0
+    store.put = async (attempt) => { if (++writes === 3) throw new Error('result commit failed'); await put(attempt) }
+    io.fetch.mockResolvedValueOnce(response(parent)).mockResolvedValueOnce(response(child)).mockResolvedValueOnce(response(parent))
+    const { controller, pack } = recoveryController(store, io)
+    await expect(controller.scan(input.context.barcode)).rejects.toThrow('result commit failed')
+    expect(pack).not.toHaveBeenCalled()
   })
 })
