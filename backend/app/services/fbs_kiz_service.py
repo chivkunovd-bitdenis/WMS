@@ -55,6 +55,7 @@ from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
+from app.services.operation_fact_service import normalize_marketplace
 from app.services.ozon_kiz_service import OzonKizCommitOutcome, OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
 from app.services.ozon_marking_position_service import (
@@ -685,7 +686,7 @@ async def _binding_lookup_for_order(
         needs_confirmation=current_out is not None and order.marketplace != "ozon",
         can_bind=True,
         block_reason=None,
-        marketplace=order.marketplace or "wb",
+        marketplace=normalize_marketplace(order.marketplace) or "wb",
         external_order_id=order.external_order_id,
     )
 

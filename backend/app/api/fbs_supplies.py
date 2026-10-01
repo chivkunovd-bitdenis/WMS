@@ -50,6 +50,7 @@ from app.services.fbs_tracking_service import (
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.marketplace_account_service import MarketplaceAccountError
 from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
+from app.services.operation_fact_service import normalize_marketplace
 from app.services.ozon_fbs_errors import OzonFbsProcessError
 
 router = APIRouter(prefix="/operations/fbs-supplies", tags=["operations"])
@@ -822,7 +823,7 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         orders_out = [_order_out(order) for order in supply.orders]
     return FbsSupplyOut(
         id=str(supply.id),
-        marketplace=cast(Literal["wb", "ozon"], supply.marketplace),
+        marketplace=cast(Literal["wb", "ozon"], normalize_marketplace(supply.marketplace)),
         seller_id=str(supply.seller_id),
         warehouse_id=str(supply.warehouse_id),
         wb_supply_id=supply.wb_supply_id,

@@ -57,6 +57,7 @@ from app.services.fbs_tracking_service import (
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
 from app.services.marking_code_service import count_available_for_products_batch
+from app.services.operation_fact_service import normalize_marketplace
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -155,7 +156,7 @@ async def get_supply_workspace(
     return {
         "supply": {
             "id": str(supply.id),
-            "marketplace": supply.marketplace,
+            "marketplace": normalize_marketplace(supply.marketplace),
             "wb_supply_id": supply.wb_supply_id,
             "external_supply_id": supply.external_supply_id,
             # «wms» — поставку собрали у нас, «wb» — её собрал сам продавец в

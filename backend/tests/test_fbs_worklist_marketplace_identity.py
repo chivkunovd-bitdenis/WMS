@@ -11,7 +11,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.services.fbs_worklist_service import _map_order
 
 
-@pytest.mark.parametrize("marketplace", ["ozon", "wb"])
+@pytest.mark.parametrize("marketplace", ["ozon", "wb", "wildberries", " WB "])
 @pytest.mark.parametrize("ozon_barcode", ["OZON-BARCODE", None])
 def test_worklist_identifiers_stay_with_order_marketplace(marketplace, ozon_barcode):
     now = datetime.now(UTC)
@@ -47,8 +47,11 @@ def test_worklist_identifiers_stay_with_order_marketplace(marketplace, ozon_barc
         address_storage_enabled=False,
     )
     result = _map_order(order, ctx, now)
+    expected_marketplace = "ozon" if marketplace == "ozon" else "wb"
+    assert result["marketplace"] == expected_marketplace
+    assert order.marketplace == marketplace
     item = result["product"]
-    assert [b["marketplace"] for b in item["marketplace_bindings"]] == [marketplace]
+    assert [b["marketplace"] for b in item["marketplace_bindings"]] == [expected_marketplace]
     warning = next(b["message"] for b in result["selection_blockers"]
                    if b["code"] == "warehouse_unmapped")
     if marketplace == "ozon":

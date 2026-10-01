@@ -599,6 +599,7 @@ def test_scan_debug_masks_gs_in_edges() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("marketplace", ["wb", "wildberries"])
 @pytest.mark.parametrize(
     ("sticker_code", "wb_barcode", "meta_details_json", "scan"),
     [
@@ -613,6 +614,7 @@ async def test_fbs_kiz_lookup_matches_tolerant_sticker_fields(
     wb_barcode: str,
     meta_details_json: dict[str, Any] | None,
     scan: str,
+    marketplace: str,
 ) -> None:
     # TC-NEW-FBS-KIZ-001 / TC-NEW-FBS-KIZ-002: lookup by sticker variants.
     headers, suffix = await _register_ff_admin(async_client)
@@ -637,10 +639,17 @@ async def test_fbs_kiz_lookup_matches_tolerant_sticker_fields(
         meta_details_json=meta_details_json,
     )
 
+    async with SessionLocal() as session:
+        stored = await session.get(FbsOrder, order.order_id)
+        assert stored is not None
+        stored.marketplace = marketplace
+        await session.commit()
+
     response = await _lookup(async_client, headers, supply_id=supply_id, sticker=scan)
 
     assert response.status_code == 200, response.text
     body = response.json()
+    assert body["marketplace"] == "wb"
     assert body["order_id"] == str(order.order_id)
     assert body["wb_order_id"] == order.wb_order_id
     assert body["product"] == {
