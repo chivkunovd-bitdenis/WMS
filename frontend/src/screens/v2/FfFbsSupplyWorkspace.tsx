@@ -1558,9 +1558,9 @@ export function FfFbsSupplyWorkspace({
       const pendingProductAttempt = productBarcode && workspace?.supply.id
         ? peekFbsPendingProductScan(token, workspace.supply.id, productBarcode)
         : null
-      const effectivePreferences = useSequentialPacking && kizRowInputRef.current
-        ? { printQr: false, printChz: false, reprintChz: false }
-        : pendingProductAttempt?.preferences ?? preferences
+      // Выбор конкретной строки меняет только способ выбора заказа. Настройки
+      // печати остаются теми же, что и в штатном сценарии сканирования.
+      const effectivePreferences = pendingProductAttempt?.preferences ?? preferences
       const scan = {
         attemptId: createFbsIdempotencyKey(),
         orderId: kizScanActive.order_id,
