@@ -1,0 +1,2 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+{"mode": "applied", "orders": 35, "supplies": 16, "tenants": {"ArtMaks": 10, "FFAdam": 13, "Империя ФФ": 12}, "affected_stock_before": 1761, "affected_stock_after": 1726, "negative_quantity": 7, "source_modes": {"storage_loose": 13, "sorting_loose": 14, "manual_pick": 1, "forced_negative": 7}}

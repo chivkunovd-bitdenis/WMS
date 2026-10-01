@@ -1,0 +1,7 @@
+api true wms-prod-api:wms627-660bc5c7 660bc5c7ee299e8c91ecc5071790dcc6aa6df7c3
+api hashes match committed source
+celery_worker true wms-prod-api:wms627-660bc5c7 660bc5c7ee299e8c91ecc5071790dcc6aa6df7c3
+celery_worker hashes match committed source
+celery_beat true wms-prod-api:wms627-660bc5c7 660bc5c7ee299e8c91ecc5071790dcc6aa6df7c3
+celery_beat hashes match committed source
+200 {"status":"ok"}

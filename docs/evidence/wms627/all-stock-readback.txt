@@ -1,0 +1,4 @@
+{"independent_ledger_readback": [{"tenant": "ArtMaks", "orders": 10, "delta": -10}, {"tenant": "FFAdam", "orders": 13, "delta": -13}, {"tenant": "Империя ФФ", "orders": 12, "delta": -12}]}
+{"tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523", "seller_id": "65f4aa92-c187-4faf-a7fc-ab8935a54164", "warehouse": 1870359, "checked": 2, "expected": 358, "wb": 358, "mismatches": []}
+{"tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622", "seller_id": "d1f26146-e99a-41af-9471-9c80ec990db3", "warehouse": 2067199, "checked": 1, "expected": 53, "wb": 53, "mismatches": []}
+{"tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622", "seller_id": "115c765e-bafa-4909-8dfd-0681f15cc620", "warehouse": 2228378, "checked": 3, "expected": 392, "wb": 392, "mismatches": []}

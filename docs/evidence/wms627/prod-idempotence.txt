@@ -1,0 +1,2 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+{"production_idempotence": {"WB-GI-285910955": 0, "WB-GI-285911018": 0}, "WB_requests": 0, "committed_changes": 0}

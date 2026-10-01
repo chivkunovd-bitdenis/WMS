@@ -1,0 +1,3 @@
+{"section": "WB_stocks_readback", "warehouse": 2240404, "affected_products": 150, "published_products_checked": 149, "expected_sum": 1363, "wb_sum": 1363, "mismatches": []}
+{"stock": [{"seller_stock": 3751, "sorting_stock": 13, "sorting_positive": 14}]}
+{"ledger": [{"wb_supply_id": "WB-GI-285910955", "ledger_count": 358, "stock_delta": -358}, {"wb_supply_id": "WB-GI-285911018", "ledger_count": 23, "stock_delta": -23}]}
