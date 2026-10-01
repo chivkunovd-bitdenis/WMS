@@ -53,6 +53,18 @@ class Settings(BaseSettings):
         default=False,
         description="Production create requires separate release authorization; default closed.",
     )
+    trello_api_key: str | None = Field(default=None, repr=False)
+    trello_token: str | None = Field(default=None, repr=False)
+    trello_board_id: str | None = None
+    trello_review_list_id: str | None = None
+    trello_queued_list_id: str | None = None
+    trello_in_progress_list_id: str | None = None
+    trello_completed_list_id: str | None = None
+    trello_client_label_id: str | None = Field(
+        default=None, description="Existing colored Клиент label on the private board.",
+    )
+    trello_sync_interval_sec: int = Field(default=60, ge=30)
+
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
         description="WB Content API host (override in tests/mocks).",
