@@ -414,14 +414,10 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         supply_name="Deliver bad status",
     )
 
-    # Отсутствие физических коробов больше не запрет, а предупреждение:
-    # решение владельца от 01.09.2026 — склад из-за коробов не стоит.
+    # Отсутствие физических коробов не относится к проверке передачи.
     preflight = await _delivery_preflight(async_client, headers, supply_bad["id"])
     assert preflight["can_deliver"] is True
-    boxes_check = next(
-        check for check in preflight["checks"] if check["code"] == "physical_boxes_required"
-    )
-    assert boxes_check["severity"] == "warning"
+    assert all(check["code"] != "physical_boxes_required" for check in preflight["checks"])
 
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
     assert bad.status_code == 200, bad.text
