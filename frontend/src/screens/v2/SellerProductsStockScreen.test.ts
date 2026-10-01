@@ -133,34 +133,52 @@ describe('seller catalog page response', () => {
 
     expect(result).toEqual({ outcome: 'loaded', page: pageResponse(items) })
   })
+
+  // WMS-614 R3: экран обязан дотащить marketplace в тот же запрос страницы,
+  // который делает сервер; без неё сервер отдаст все площадки и экран покажет
+  // чужой срез.
+  it('forwards the marketplace query param to /seller-catalog/page exactly as the caller composed it', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, pageResponse([])))
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const params = pageParams()
+    params.set('marketplace', 'ozon')
+    await loadSellerCatalogPage({ Authorization: 'Bearer t' }, params, () => true)
+
+    const calls = fetchImpl.mock.calls as unknown as Array<[RequestInfo | URL, unknown]>
+    expect(calls.length).toBeGreaterThan(0)
+    const url = String(calls[0]![0])
+    expect(url).toContain('marketplace=ozon')
+  })
 })
 
-// WMS-548, ревью Astra №1, F4 (и доработка по её приёмке): «Синхронизировать
-// по API» обязана обновить каждую подключённую площадку саму по себе — отказ
-// или отсутствие ключа одной площадки не должны отменять синхронизацию другой.
-// Неподключённая площадка (нет ключа) пропускается молча — это не ошибка;
-// отказ самого запроса синхронизации уже подключённой площадки обязан быть
-// виден человеческим текстом, а не кодом и не проглочен.
+// Astra P1 (ревью после b1014a8c): /sync-products теперь возвращает 202 +
+// CatalogSyncJobOut {id, marketplace, state}. Экран обязан не считать это
+// завершением, а вернуть идентификатор job'а наверх для наблюдения через
+// observeImportJob. Для подключённой площадки — kind='job' с jobId; для
+// отключённой — 'skipped' (НЕ failure); для отказа ручки — 'failed' с
+// человеческим текстом.
 describe('syncSellerCatalogMarketplaces', () => {
   function urlOf(input: RequestInfo | URL): string {
     return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   }
 
-  // Владелец 27.09.2026 отменил предварительную проверку подключения WB как
-  // выход за рамки задачи: WB здесь вызывается напрямую, как в etalon, без
-  // GET /integrations/wildberries/self/tokens. Дефолт wbSync — успех, чтобы
-  // тесты, посвящённые только Ozon, не писали лишний булерплейт.
   function fetchMock(
     handlers: Partial<{
+      wbTokens: () => Response | Promise<Response>
       wbSync: () => Response | Promise<Response>
-      ozonAccount: () => Response
+      ozonAccount: () => Response | Promise<Response>
       ozonSync: () => Response | Promise<Response>
     }>,
   ) {
     return vi.fn(async (input: RequestInfo | URL) => {
       const url = urlOf(input)
+      if (url.includes('/integrations/wildberries/self/tokens')) {
+        return (handlers.wbTokens ?? (() => jsonResponse(200, { has_content_token: false })))()
+      }
       if (url.includes('/integrations/wildberries/self/sync-products')) {
-        return (handlers.wbSync ?? (() => jsonResponse(200, { updated: 0 })))()
+        if (!handlers.wbSync) throw new Error(`unexpected WB sync request: ${url}`)
+        return handlers.wbSync()
       }
       if (url.includes('/integrations/ozon/self/account')) {
         return (handlers.ozonAccount ?? (() => jsonResponse(200, { connected: false })))()
@@ -173,52 +191,71 @@ describe('syncSellerCatalogMarketplaces', () => {
     })
   }
 
-  it('calls WB sync-products directly, without a connection pre-check, matching etalon', async () => {
+  it('does not call WB sync-products on an Ozon-only seller — WB stays "skipped", not a failure', async () => {
     const fetchImpl = fetchMock({
-      wbSync: () => jsonResponse(200, { updated: 3 }),
+      wbTokens: () => jsonResponse(200, { has_content_token: false }),
       ozonAccount: () => jsonResponse(200, { connected: true }),
-      ozonSync: () => jsonResponse(200, { updated: 3 }),
+      ozonSync: () => jsonResponse(202, { id: 'job-ozon', marketplace: 'ozon', state: 'queued' }),
     })
     vi.stubGlobal('fetch', fetchImpl)
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'skipped' })
+    expect(outcome.ozon).toEqual({ kind: 'job', jobId: 'job-ozon', stage: 'queued' })
     const calledUrls = fetchImpl.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL))
-    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/tokens'))).toBe(false)
-    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/sync-products'))).toBe(true)
+    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/sync-products'))).toBe(false)
   })
 
-  it('shows the raw server error text for a rejected WB sync, exactly as etalon does (no translation)', async () => {
+  it('returns a jobId when WB sync-products answers 202 with CatalogSyncJobOut — this is a start, not a completion', async () => {
+    const fetchImpl = fetchMock({
+      wbTokens: () => jsonResponse(200, { has_content_token: true }),
+      wbSync: () => jsonResponse(202, { id: 'job-wb', marketplace: 'wildberries', state: 'running' }),
+      ozonAccount: () => jsonResponse(200, { connected: true }),
+      ozonSync: () => jsonResponse(202, { id: 'job-ozon', marketplace: 'ozon', state: 'queued' }),
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
+
+    expect(outcome.wb).toEqual({ kind: 'job', jobId: 'job-wb', stage: 'running' })
+    expect(outcome.ozon).toEqual({ kind: 'job', jobId: 'job-ozon', stage: 'queued' })
+  })
+
+  it('reports a WB sync failure with a human message instead of a raw server code', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
         wbSync: () => jsonResponse(422, { detail: 'invalid_wb_token' }),
       }),
     )
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: 'invalid_wb_token', ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'failed', message: 'Ключ WB не подходит — проверка не прошла.' })
+    expect(outcome.ozon).toEqual({ kind: 'skipped' })
   })
 
-  it('shows the raw server error text for an unrecognised WB error code too (no generic fallback phrase)', async () => {
+  it('falls back to a generic WB phrase for unrecognised machine-looking codes, not the raw code', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
         wbSync: () => jsonResponse(502, { detail: 'upstream_error' }),
       }),
     )
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: 'upstream_error', ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'failed', message: 'Не удалось синхронизировать Wildberries.' })
   })
 
   it('reports a network failure of the WB sync call itself instead of swallowing it', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
         wbSync: () => {
           throw new TypeError('Failed to fetch')
         },
@@ -227,7 +264,24 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: 'Failed to fetch', ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'failed', message: 'Failed to fetch' })
+    expect(outcome.ozon).toEqual({ kind: 'skipped' })
+  })
+
+  it('fails WB with the check-fallback phrase when GET /integrations/wildberries/self/tokens fails, without blocking Ozon', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchMock({
+        wbTokens: () => jsonResponse(500, { detail: 'boom' }),
+        ozonAccount: () => jsonResponse(200, { connected: true }),
+        ozonSync: () => jsonResponse(202, { id: 'job-ozon', marketplace: 'ozon', state: 'queued' }),
+      }),
+    )
+
+    const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
+
+    expect(outcome.wb).toEqual({ kind: 'failed', message: 'Не удалось проверить подключение Wildberries.' })
+    expect(outcome.ozon).toEqual({ kind: 'job', jobId: 'job-ozon', stage: 'queued' })
   })
 
   it('reports a network failure of the Ozon sync call itself instead of swallowing it', async () => {
@@ -243,16 +297,15 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: 'Failed to fetch' })
+    expect(outcome.ozon).toEqual({ kind: 'failed', message: 'Failed to fetch' })
+    expect(outcome.wb).toEqual({ kind: 'skipped' })
   })
 
-  // R12/F4 (ревью Astra №1): единственное, что из старой WB-логики сохранено
-  // после отката владельцем — отказ WB не должен отменять попытку синхронизировать
-  // Ozon, и наоборот.
   it('reports both failures at once when both platforms fail to sync, without one blocking the other', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
         wbSync: () => jsonResponse(422, { detail: 'invalid_wb_token' }),
         ozonAccount: () => jsonResponse(200, { connected: true }),
         ozonSync: () => jsonResponse(500, { detail: 'ozon_unavailable' }),
@@ -261,33 +314,32 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({
-      wbFailure: 'invalid_wb_token',
-      ozonFailure: 'Не удалось синхронизировать Ozon.',
-    })
+    expect(outcome.wb).toEqual({ kind: 'failed', message: 'Ключ WB не подходит — проверка не прошла.' })
+    expect(outcome.ozon).toEqual({ kind: 'failed', message: 'Не удалось синхронизировать Ozon.' })
   })
 
-  it('does not call Ozon sync-products when Ozon is not connected, and reports no Ozon failure', async () => {
+  it('does not call Ozon sync-products when Ozon is not connected — Ozon stays "skipped"', async () => {
     const fetchImpl = fetchMock({
-      wbSync: () => jsonResponse(200, { updated: 4 }),
+      wbTokens: () => jsonResponse(200, { has_content_token: true }),
+      wbSync: () => jsonResponse(202, { id: 'job-wb', marketplace: 'wildberries', state: 'queued' }),
       ozonAccount: () => jsonResponse(200, { connected: false }),
     })
     vi.stubGlobal('fetch', fetchImpl)
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'job', jobId: 'job-wb', stage: 'queued' })
+    expect(outcome.ozon).toEqual({ kind: 'skipped' })
     const calledUrls = fetchImpl.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL))
     expect(calledUrls.some((u) => u.includes('/integrations/ozon/self/sync-products'))).toBe(false)
   })
 
-  // F9 (ревью Astra №2), Ozon-сторона — владелец её не отменял: отказ самой
-  // проверки подключения обязан оставить понятную ошибку Ozon, не трогая WB.
-  it('shows a clear error when the Ozon connection check itself fails over the network, without blocking WB', async () => {
+  it('fails Ozon when its connection check itself errors out, without blocking WB', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
-        wbSync: () => jsonResponse(200, { updated: 1 }),
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
+        wbSync: () => jsonResponse(202, { id: 'job-wb', marketplace: 'wildberries', state: 'queued' }),
         ozonAccount: () => {
           throw new TypeError('Failed to fetch')
         },
@@ -296,35 +348,35 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: 'Failed to fetch' })
+    expect(outcome.wb).toEqual({ kind: 'job', jobId: 'job-wb', stage: 'queued' })
+    expect(outcome.ozon).toEqual({ kind: 'failed', message: 'Failed to fetch' })
   })
 
   it.each([403, 500, 503])(
-    'shows a clear error when GET /ozon/self/account answers %i, instead of silently skipping Ozon',
+    'fails Ozon with the check-fallback phrase when GET /ozon/self/account answers %i, instead of silently skipping',
     async (status) => {
       vi.stubGlobal(
         'fetch',
         fetchMock({
-          wbSync: () => jsonResponse(200, { updated: 1 }),
+          wbTokens: () => jsonResponse(200, { has_content_token: true }),
+          wbSync: () => jsonResponse(202, { id: 'job-wb', marketplace: 'wildberries', state: 'queued' }),
           ozonAccount: () => jsonResponse(status, { detail: 'boom' }),
         }),
       )
 
       const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-      // 'boom' — код, похожий на машинный (readApiErrorMessage его не знает),
-      // поэтому экран не показывает его голым, а даёт человеческий текст.
-      // Важно здесь другое: сообщение вообще есть, и это сообщение Ozon.
-      expect(outcome.wbFailure).toBeNull()
-      expect(outcome.ozonFailure).toBe('Не удалось проверить подключение Ozon.')
+      expect(outcome.wb).toEqual({ kind: 'job', jobId: 'job-wb', stage: 'queued' })
+      expect(outcome.ozon).toEqual({ kind: 'failed', message: 'Не удалось проверить подключение Ozon.' })
     },
   )
 
-  it('shows a clear error when GET /ozon/self/account returns unparsable JSON', async () => {
+  it('fails Ozon when GET /ozon/self/account returns unparsable JSON', async () => {
     vi.stubGlobal(
       'fetch',
       fetchMock({
-        wbSync: () => jsonResponse(200, { updated: 1 }),
+        wbTokens: () => jsonResponse(200, { has_content_token: true }),
+        wbSync: () => jsonResponse(202, { id: 'job-wb', marketplace: 'wildberries', state: 'queued' }),
         ozonAccount: () =>
           new Response('not json', { status: 200, headers: { 'Content-Type': 'application/json' } }),
       }),
@@ -332,21 +384,23 @@ describe('syncSellerCatalogMarketplaces', () => {
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome.wbFailure).toBeNull()
-    expect(outcome.ozonFailure).not.toBeNull()
+    expect(outcome.wb).toEqual({ kind: 'job', jobId: 'job-wb', stage: 'queued' })
+    expect(outcome.ozon.kind).toBe('failed')
   })
 
-  it('still silently skips a confirmed-not-connected Ozon without any error', async () => {
+  it('silently skips both platforms when neither has a connected key — no job started, no failure', async () => {
     const fetchImpl = fetchMock({
-      wbSync: () => jsonResponse(200, { updated: 1 }),
+      wbTokens: () => jsonResponse(200, { has_content_token: false }),
       ozonAccount: () => jsonResponse(200, { connected: false }),
     })
     vi.stubGlobal('fetch', fetchImpl)
 
     const outcome = await syncSellerCatalogMarketplaces({ Authorization: 'Bearer t' })
 
-    expect(outcome).toEqual({ wbFailure: null, ozonFailure: null })
+    expect(outcome.wb).toEqual({ kind: 'skipped' })
+    expect(outcome.ozon).toEqual({ kind: 'skipped' })
     const calledUrls = fetchImpl.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL))
+    expect(calledUrls.some((u) => u.includes('/integrations/wildberries/self/sync-products'))).toBe(false)
     expect(calledUrls.some((u) => u.includes('/integrations/ozon/self/sync-products'))).toBe(false)
   })
 })

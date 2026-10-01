@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -77,6 +78,7 @@ async def _mark_legacy_products_for_card(
     nm: int | None,
     *,
     multi_variant: bool,
+    before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> int:
     """Pre-split merged SKU (one row per nmID) → ``OLD/…`` + ``[OLD]`` name."""
     if nm is None or not multi_variant:
@@ -98,6 +100,8 @@ async def _mark_legacy_products_for_card(
             p.name = f"{OLD_NAME_PREFIX}{p.name}"[:255]
         marked += 1
     if marked:
+        if before_commit is not None:
+            await before_commit(session)
         await session.commit()
     return marked
 
@@ -160,7 +164,8 @@ async def _find_product_for_variant(
     if variant.chrt_id is None:
         return None, False
     by_chrt = await session.execute(
-        select(Product).where(
+        select(Product)
+        .where(
             Product.tenant_id == tenant_id,
             Product.seller_id == seller_id,
             Product.wb_chrt_id == variant.chrt_id,
@@ -292,6 +297,8 @@ async def upsert_products_from_wb_cards(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cards: list[object],
+    *,
+    before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Create or update one Product per WB ``chrtID`` and retain every size SKU."""
     created = 0
@@ -330,6 +337,7 @@ async def upsert_products_from_wb_cards(
             seller_id,
             nm,
             multi_variant=multi,
+            before_commit=before_commit,
         )
 
         for variant in variants:
@@ -359,9 +367,7 @@ async def upsert_products_from_wb_cards(
                 is_new = p is None
                 retained_codes = variant.barcodes
                 if p is not None and p.wb_barcode and p.wb_barcode.strip():
-                    retained_codes = tuple(
-                        dict.fromkeys((p.wb_barcode.strip(), *retained_codes))
-                    )
+                    retained_codes = tuple(dict.fromkeys((p.wb_barcode.strip(), *retained_codes)))
                 conflicts = await _barcode_conflicts_for_variant(
                     session,
                     tenant_id=tenant_id,
@@ -410,9 +416,7 @@ async def upsert_products_from_wb_cards(
                     )
                 try:
                     await session.flush()
-                    barcode_result = await add_barcodes_to_product(
-                        session, p, retained_codes
-                    )
+                    barcode_result = await add_barcodes_to_product(session, p, retained_codes)
                     if barcode_result.conflicts:
                         existing_product_ids = {
                             existing_product_id
@@ -480,8 +484,7 @@ async def upsert_products_from_wb_cards(
                         protected_manual_measurement = (
                             not is_new
                             and active_event is not None
-                            and active_event.source
-                            in {"manual", "container_override", "container"}
+                            and active_event.source in {"manual", "container_override", "container"}
                         )
                         await _record_dimension_event(
                             session,
@@ -514,6 +517,8 @@ async def upsert_products_from_wb_cards(
                         p.wb_country_of_origin = card_country
                     if p.wb_shelf_life is None and card_shelf_life is not None:
                         p.wb_shelf_life = card_shelf_life
+                    if before_commit is not None:
+                        await before_commit(session)
                     await session.commit()
                 except IntegrityError:
                     await session.rollback()

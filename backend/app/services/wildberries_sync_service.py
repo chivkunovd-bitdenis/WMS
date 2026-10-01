@@ -28,6 +28,17 @@ class WildberriesSyncError(Exception):
         super().__init__(code)
 
 
+async def validate_content_token(
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str,
+) -> None:
+    """Validate Content access with one bounded page, never the whole catalog."""
+    data = await fetch_cards_list(http_client, api_token=api_token, limit=1)
+    if not isinstance(data.get("cards"), list):
+        raise WildberriesClientError("invalid_response")
+
+
 async def fetch_all_cards(
     http_client: httpx.AsyncClient,
     *,

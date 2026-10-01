@@ -21,7 +21,11 @@ from app.models.tenant import Tenant
 from app.services import catalog_service as catalog_svc
 from app.services import ozon_product_import_service as import_svc
 from app.services import scan_resolver_service as scan_svc
-from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 
 GLASSES_CARD: dict[str, Any] = {
     "id": 6204279711,
@@ -84,6 +88,53 @@ def _provider(cards: list[dict[str, Any]]) -> OzonMarketplaceProvider:
             }
         )
     )
+
+
+class _LargeCatalogProvider:
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.calls = 0
+
+    async def call(self, **kwargs: Any) -> dict[str, object]:
+        self.calls += 1
+        payload = kwargs["payload"]
+        start = int(payload.get("last_id") or 0)
+        end = min(start + import_svc.ATTRIBUTES_PAGE_LIMIT, self.total)
+        return {
+            "result": [{"id": str(index)} for index in range(start, end)],
+            "last_id": str(end) if end < self.total else "",
+        }
+
+
+async def test_fetch_product_cards_reads_all_fifteen_thousand_without_silent_cap() -> None:
+    provider = _LargeCatalogProvider(15_000)
+
+    rows = await import_svc.fetch_product_cards(
+        provider,  # type: ignore[arg-type]
+        client_id="synthetic",
+        api_key="synthetic",
+    )
+
+    assert provider.calls == 150
+    assert len(rows) == 15_000
+    assert rows[10_000]["id"] == "10000"
+    assert rows[-1]["id"] == "14999"
+
+
+async def test_fetch_product_cards_rejects_repeated_cursor_instead_of_partial_success() -> None:
+    class StalledProvider:
+        async def call(self, **_kwargs: Any) -> dict[str, object]:
+            return {
+                "result": [{"id": str(index)} for index in range(100)],
+                "last_id": "same-cursor",
+            }
+
+    with pytest.raises(MarketplaceProviderError, match="ozon_catalog_incomplete"):
+        await import_svc.fetch_product_cards(
+            StalledProvider(),  # type: ignore[arg-type]
+            client_id="synthetic",
+            api_key="synthetic",
+        )
 
 
 async def test_import_fills_dimensions_so_storage_can_be_charged(
@@ -247,6 +298,66 @@ async def test_second_sync_of_an_unmatched_card_does_not_duplicate_the_snapshot(
     assert result.unmatched_offer_ids == ["OZ562479787Sum1AVblack"]
     products = list((await db_session.execute(Product.__table__.select())).mappings().all())
     assert products == []
+
+
+async def test_empty_complete_catalog_clears_only_that_seller_snapshot(
+    db_session: AsyncSession,
+) -> None:
+    """An empty successful Ozon response is a snapshot, not an early no-op."""
+    from app.models.seller_ozon_imported_card import SellerOzonImportedCard
+
+    tenant, seller, _product = await _seed(db_session)
+    foreign_tenant, foreign_seller = await _seed_without_link(db_session)
+    await import_svc.import_ozon_product_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        _provider([GLASSES_CARD, BAG_CARD]),
+        client_id="c",
+        api_key="k",
+    )
+    await import_svc.import_ozon_product_cards(
+        db_session,
+        foreign_tenant.id,
+        foreign_seller.id,
+        _provider([BAG_CARD]),
+        client_id="c",
+        api_key="k",
+    )
+
+    result = await import_svc.import_ozon_product_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        _provider([]),
+        client_id="c",
+        api_key="k",
+    )
+
+    assert result.cards_read == result.cards_saved == 0
+    own = list(
+        (
+            await db_session.execute(
+                SellerOzonImportedCard.__table__.select().where(
+                    SellerOzonImportedCard.seller_id == seller.id
+                )
+            )
+        ).mappings()
+    )
+    foreign = list(
+        (
+            await db_session.execute(
+                SellerOzonImportedCard.__table__.select().where(
+                    SellerOzonImportedCard.seller_id == foreign_seller.id
+                )
+            )
+        ).mappings()
+    )
+    assert own == []
+    assert [row["ozon_product_id"] for row in foreign] == ["6149741392"]
+    # Snapshot cleanup never removes or creates WMS products.
+    products = list((await db_session.execute(Product.__table__.select())).mappings())
+    assert len(products) == 1
 
     from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 

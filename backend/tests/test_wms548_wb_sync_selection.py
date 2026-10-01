@@ -142,11 +142,19 @@ async def test_self_content_token_save_records_snapshot_without_creating_product
     assert save.status_code == 200, save.text
     body = save.json()
     assert body["validation_ok"] is True
-    assert body["cards_received"] == 2
-    assert body["cards_saved"] == 2
+    assert body["cards_received"] == 0
+    assert body["cards_saved"] == 0
     assert body["products_created"] == 0
     assert body["products_updated"] == 0
     assert body["products_skipped"] == 0
+    assert body["catalog_job"]["state"] == "queued"
+    job = await async_client.get(
+        f"/operations/background-jobs/{body['catalog_job']['id']}", headers=headers
+    )
+    assert job.status_code == 200
+    assert job.json()["state"] == "succeeded"
+    assert job.json()["result_json"]["cards_received"] == 2
+    assert job.json()["result_json"]["cards_saved"] == 2
 
     async with SessionLocal() as session:
         assert await _product_count(session, tenant_id, seller_id) == 0
@@ -220,8 +228,13 @@ async def test_sync_updates_only_selected_card_adds_new_size_leaves_others_untou
     sync = await async_client.post(
         "/integrations/wildberries/self/sync-products", headers=headers,
     )
-    assert sync.status_code == 200, sync.text
-    body = sync.json()
+    assert sync.status_code == 202, sync.text
+    job = await async_client.get(
+        f"/operations/background-jobs/{sync.json()['id']}", headers=headers
+    )
+    assert job.status_code == 200
+    body = job.json()["result_json"]
+    assert job.json()["state"] == "succeeded"
     assert body["cards_received"] == 3
     assert body["cards_saved"] == 3
     assert body["products_created"] == 1  # новый размер M у выбранной карточки
