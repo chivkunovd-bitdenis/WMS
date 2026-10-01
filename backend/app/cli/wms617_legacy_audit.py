@@ -33,6 +33,38 @@ from app.models.storage_location import StorageLocation
 from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
 
 
+def _invoice_reconciles(
+    invoice: BillingInvoiceV2,
+    lines: list[BillingInvoiceV2Line],
+    sources: list[BillingInvoiceV2Source],
+    charges: dict[uuid.UUID, BillingLedgerEntry],
+) -> bool:
+    """Accept only a complete, nonduplicated snapshot of this seller's charges."""
+    if invoice.status != "issued" or not lines:
+        return False
+    if invoice.total_amount_kopecks != sum(line.total_amount_kopecks for line in lines):
+        return False
+    linked: set[uuid.UUID] = set()
+    for line in lines:
+        line_sources = [source for source in sources if source.invoice_line_id == line.id]
+        if not line_sources or line.total_amount_kopecks != sum(
+            source.signed_amount_kopecks_snapshot for source in line_sources
+        ):
+            return False
+        for source in line_sources:
+            charge_id = source.billing_ledger_entry_id
+            if charge_id is None or charge_id in linked or charge_id not in charges:
+                return False
+            charge = charges[charge_id]
+            if (charge.seller_id != invoice.seller_id or charge.amount is None
+                    or charge.amount <= 0 or source.signed_amount_kopecks_snapshot != charge.amount
+                    or (line.unit_price_kopecks is not None
+                        and line.unit_price_kopecks != charge.rate)):
+                return False
+            linked.add(charge_id)
+    return len(linked) >= 2
+
+
 async def legacy_audit(
     session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID,
 ) -> dict[str, Any]:
@@ -86,6 +118,10 @@ async def legacy_audit(
     ))).all())
     invoices = list((await session.scalars(select(BillingInvoiceV2).where(
         BillingInvoiceV2.tenant_id == tenant_id, BillingInvoiceV2.seller_id.in_(sids),
+    ))).all())
+    invoice_lines = list((await session.scalars(select(BillingInvoiceV2Line).where(
+        BillingInvoiceV2Line.tenant_id == tenant_id,
+        BillingInvoiceV2Line.invoice_id.in_([i.id for i in invoices]),
     ))).all())
     invoice_sources = (await session.execute(select(BillingInvoiceV2Line, BillingInvoiceV2Source)
         .join(BillingInvoiceV2Source,
@@ -177,7 +213,8 @@ async def legacy_audit(
                          and c.source_type == "inbound_intake" and c.source_id in candidate_intakes
                          and candidate_intakes[c.source_id].seller_id == c.seller_id
                          and c.tariff_version_v2_id in candidate_rates
-                         and candidate_rates[c.tariff_version_v2_id].seller_id == c.seller_id]
+                         and candidate_rates[c.tariff_version_v2_id].seller_id == c.seller_id
+                         and candidate_rates[c.tariff_version_v2_id].rate == c.rate]
         charge_by_id = {c.id: c for c in valid_charges}
         billing_by_seller = {
             str(sid): {"profile": any(p.seller_id == sid for p in profiles),
@@ -186,15 +223,11 @@ async def legacy_audit(
                        "charge_ids": [str(c.id) for c in valid_charges if c.seller_id == sid]}
             for sid in sorted(selected_sellers, key=str)
         }
-        linked_invoices = []
-        for invoice in invoices:
-            linked = [source.billing_ledger_entry_id for line, source in invoice_sources
-                      if line.invoice_id == invoice.id
-                      and source.billing_ledger_entry_id in charge_by_id
-                      and charge_by_id[source.billing_ledger_entry_id].seller_id
-                      == invoice.seller_id]
-            if invoice.status == "issued" and len(set(linked)) >= 2:
-                linked_invoices.append(str(invoice.id))
+        linked_invoices = [str(invoice.id) for invoice in invoices if _invoice_reconciles(
+            invoice, [line for line in invoice_lines if line.invoice_id == invoice.id],
+            [source for line, source in invoice_sources if line.invoice_id == invoice.id],
+            charge_by_id,
+        )]
         marked = [product_by_id[p["id"]] for p in candidate
                   if product_by_id[p["id"]].requires_honest_sign]
         marking_by_product = {

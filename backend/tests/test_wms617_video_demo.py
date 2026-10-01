@@ -294,6 +294,7 @@ async def test_complete_legacy_dataset_is_reused_without_mutations(
     ("one_seller_billing", "billing_each_seller"),
     ("invoice_cross_seller", "billing_each_seller"),
     ("rate_cross_seller", "billing_each_seller"),
+    ("rate_snapshot", "billing_each_seller"),
 ])
 async def test_legacy_relationship_gaps_prevent_reuse(
     db_session, monkeypatch, defect, expected_gap,
@@ -316,6 +317,9 @@ async def test_legacy_relationship_gaps_prevent_reuse(
         elif defect == "invoice_cross_seller":
             invoice = await session.get(BillingInvoiceV2, demo.demo_id("invoice"))
             invoice.seller_id = demo.demo_id("seller/2")
+        elif defect == "rate_snapshot":
+            charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
+            charge.rate = 1
         else:
             charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
             charge.tariff_version_v2_id = demo.demo_id("rate/1")
@@ -329,8 +333,58 @@ async def test_legacy_relationship_gaps_prevent_reuse(
     if defect == "wrong_marking_sku":
         assert legacy["counts"]["available_marking"] == 20
         assert legacy["candidate"]["marking_by_product"] == {str(demo.demo_id("product/2")): 0}
-    elif defect in {"one_seller_billing", "rate_cross_seller"}:
+    elif defect in {"one_seller_billing", "rate_cross_seller", "rate_snapshot"}:
         second = legacy["candidate"]["billing_by_seller"][str(demo.demo_id("seller/2"))]
         assert second["profile"] and second["rate_ids"] and not second["charge_ids"]
     else:
         assert legacy["candidate"]["invoice_ids"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect", [
+    "invoice_total", "line_total", "source_snapshot", "source_sign", "unit_price",
+    "duplicate_source", "missing_source",
+])
+async def test_legacy_invoice_arithmetic_must_reconcile(db_session, monkeypatch, defect):
+    from app.models.billing import BillingInvoiceV2, BillingInvoiceV2Line, BillingInvoiceV2Source
+
+    args = await prepare(db_session, monkeypatch)
+    await demo.run(args)
+    async with SessionLocal() as session:
+        for n in range(1, 7):
+            product = await session.get(Product, demo.demo_id(f"product/{n}"))
+            product.sku_code = f"FBS-VIDEO-EXISTING-{n}"
+        invoice = await session.get(BillingInvoiceV2, demo.demo_id("invoice"))
+        line = await session.get(BillingInvoiceV2Line, demo.demo_id("invoice-line/1"))
+        source = await session.get(BillingInvoiceV2Source, demo.demo_id("invoice-source/1"))
+        if defect == "invoice_total":
+            invoice.total_amount_kopecks = 1
+        elif defect == "line_total":
+            line.total_amount_kopecks = 1
+            invoice.total_amount_kopecks = 45001
+        elif defect in {"source_snapshot", "source_sign"}:
+            # Preserve upper-level sums: only the comparison with the charge catches this.
+            source.signed_amount_kopecks_snapshot = 1 if defect == "source_snapshot" else -30000
+            line.total_amount_kopecks = source.signed_amount_kopecks_snapshot
+            invoice.total_amount_kopecks = 45000 + line.total_amount_kopecks
+        elif defect == "unit_price":
+            line.unit_price_kopecks = 1
+        elif defect == "duplicate_source":
+            session.add(BillingInvoiceV2Source(
+                tenant_id=demo.TENANT_ID, invoice_line_id=line.id,
+                billing_ledger_entry_id=demo.demo_id("charge/1"),
+                signed_amount_kopecks_snapshot=30000,
+            ))
+            line.total_amount_kopecks = 60000
+            invoice.total_amount_kopecks = 105000
+        else:
+            await session.delete(source)
+            line.total_amount_kopecks = 0
+            invoice.total_amount_kopecks = 45000
+        await session.commit()
+    args.apply = False
+    result = await demo.run(args)
+    legacy = result["before"]["legacy_audit"]
+    assert result["decision"] == "additive_scope"
+    assert legacy["gaps"] == ["billing_each_seller"]
+    assert legacy["candidate"]["invoice_ids"] == []
