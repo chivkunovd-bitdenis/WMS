@@ -26,6 +26,7 @@ private let requestBudget: TimeInterval = 25
 private let minimumToStart: TimeInterval = 6
 private var legacyBusyMs: Int32 = 2000
 private let unknownOutcomeText = "Исход печати неизвестен: задание уже отправлялось на принтер. Проверьте принтер; повтор автоматически не отправлен."
+private let inProgressText = "Это задание уже в работе, исход пока неизвестен. Проверьте принтер; повтор автоматически не отправлен."
 private let closeOldText = "Закройте старую версию WMS Print и повторите."
 
 /// Build id shown by /health; a second start compares it with the running copy.
@@ -223,12 +224,12 @@ private func sqliteBusy(_ code: Int32) -> Bool { [SQLITE_BUSY, SQLITE_LOCKED].co
 
 /// Jobs of the previous (Python) release lived in direct-jobs.sqlite3.  Every
 /// step is checked: a partial read is never taken for the whole history.
-private func legacyJobs(at url: URL) -> LegacyResult {
+private func legacyJobs(at url: URL, busyMs: Int32) -> LegacyResult {
     var db: OpaquePointer?
     defer { sqlite3_close(db) }
     let opened = sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil)
     guard opened == SQLITE_OK else { return sqliteBusy(opened) ? .busy : .unreadable("open \(opened)") }
-    sqlite3_busy_timeout(db, legacyBusyMs)
+    sqlite3_busy_timeout(db, busyMs)
     var statement: OpaquePointer?
     defer { sqlite3_finalize(statement) }
     let prepared = sqlite3_prepare_v2(db, "SELECT id, hash, receipt FROM jobs", -1, &statement, nil)
@@ -247,23 +248,41 @@ private func legacyJobs(at url: URL) -> LegacyResult {
     return .ok(result)
 }
 
-/// Writes one statement into the old journal (same schema) so that going back
-/// to the previous program still sees the history.
-private func legacyExecute(_ url: URL, _ sql: String, _ arguments: [String?]) throws {
+private let legacySchema = "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT)"
+
+/// Writes statements into the old journal (same schema) in one transaction, so
+/// that going back to the previous program still sees the history.  The wait
+/// for a locked file never exceeds ``busyMs`` (the rest of the request budget).
+private func legacyBatch(_ url: URL, _ operations: [(String, [String?])], busyMs: Int32, create: Bool = false) throws {
     var db: OpaquePointer?
     defer { sqlite3_close(db) }
-    guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
-        throw PrintError.message(closeOldText)
+    let flags = SQLITE_OPEN_READWRITE | (create ? SQLITE_OPEN_CREATE : 0)
+    guard sqlite3_open_v2(url.path, &db, flags, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
+    sqlite3_busy_timeout(db, busyMs)
+    guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
+    var committed = false
+    defer { if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) } }
+    for (sql, arguments) in operations {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
+        for (index, value) in arguments.enumerated() {
+            if let value { sqlite3_bind_text(statement, Int32(index + 1), value, -1, sqliteTransient) }
+            else { sqlite3_bind_null(statement, Int32(index + 1)) }
+        }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw PrintError.message(closeOldText) }
     }
-    sqlite3_busy_timeout(db, legacyBusyMs)
-    var statement: OpaquePointer?
-    defer { sqlite3_finalize(statement) }
-    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
-    for (index, value) in arguments.enumerated() {
-        if let value { sqlite3_bind_text(statement, Int32(index + 1), value, -1, sqliteTransient) }
-        else { sqlite3_bind_null(statement, Int32(index + 1)) }
-    }
-    guard sqlite3_step(statement) == SQLITE_DONE else { throw PrintError.message(closeOldText) }
+    guard sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
+    committed = true
+}
+
+private func legacyExecute(_ url: URL, _ sql: String, _ arguments: [String?], busyMs: Int32) throws {
+    try legacyBatch(url, [(sql, arguments)], busyMs: busyMs)
+}
+
+/// Milliseconds of the request budget left, capped by the normal wait for a locked file.
+private func busyBudget(_ deadline: Date) -> Int32 {
+    Int32(max(50, min(Double(legacyBusyMs), deadline.timeIntervalSinceNow * 1000)))
 }
 
 private final class Printer {
@@ -274,7 +293,8 @@ private final class Printer {
     private let submit: (Data, String, Date, () throws -> Void) throws -> String
     private let queue: (TimeInterval) throws -> String
     private var jobs: [String: StoredJob]
-    private var legacyChecked = false  // the old sqlite journal was read (or is not usable)
+    private var inflight = Set<String>()  // keys being processed right now, guarded by `state`
+    private var legacyChecked = false  // the old sqlite journal was read and brought level with the json
     private var mirror = false         // marks and receipts are copied into the old journal
 
     init(
@@ -299,19 +319,27 @@ private final class Printer {
         }
         // A locked old journal must not stop the program; it stops printing instead
         // (see printJob) until the old copy is closed and the journal can be read.
-        do { try importLegacy() } catch { fputs("\(error)\n", stderr) }
+        do { try importLegacy(busyMs: legacyBusyMs) } catch { fputs("\(error)\n", stderr) }
     }
 
     private func persist() throws {
         try JSONEncoder().encode(jobs).write(to: storeURL, options: .atomic)
     }
 
-    /// Keys of the earlier Python release keep protecting against repeats.
-    /// Locked file: error, nothing is printed.  Damaged file: warning, work goes on.
-    private func importLegacy() throws {
+    /// The old sqlite journal (created when missing, same schema) and the json are
+    /// brought level in both directions, so going back to the Python build still
+    /// sees every key.  Locked file: error, nothing is printed.  Damaged file:
+    /// warning, work goes on without the mirror.
+    private func importLegacy(busyMs: Int32) throws {
         guard !legacyChecked else { return }
-        guard FileManager.default.fileExists(atPath: legacyURL.path) else { legacyChecked = true; return }
-        switch legacyJobs(at: legacyURL) {
+        if !FileManager.default.fileExists(atPath: legacyURL.path) {
+            do { try legacyBatch(legacyURL, [(legacySchema, [])], busyMs: busyMs, create: true) } catch {
+                fputs("Старый журнал direct-jobs.sqlite3 не создан; печать идёт без него\n", stderr)
+                legacyChecked = true
+                return
+            }
+        }
+        switch legacyJobs(at: legacyURL, busyMs: busyMs) {
         case .busy:
             throw PrintError.message(closeOldText)
         case .unreadable(let reason):
@@ -326,6 +354,18 @@ private final class Printer {
                     throw PrintError.message("Не удалось сохранить журнал WMS Print: \(error.localizedDescription)")
                 }
             }
+            // The other direction: keys known only to the json (or with a newer receipt).
+            var operations: [(String, [String?])] = []
+            for (key, job) in jobs {
+                if let known = old[key] {
+                    if known.receipt == nil, let receipt = job.receipt {
+                        operations.append(("UPDATE jobs SET receipt=? WHERE id=?", [receipt, key]))
+                    }
+                } else {
+                    operations.append(("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?)", [key, job.hash, job.receipt]))
+                }
+            }
+            if !operations.isEmpty { try legacyBatch(legacyURL, operations, busyMs: busyMs) }
             legacyChecked = true
             mirror = true
         }
@@ -343,14 +383,14 @@ private final class Printer {
         }
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 
-        // The key's own history is answered first, never behind the print queue.
-        if let known = try knownResult(key, digest) { return known }
+        // The key's own history is answered first, never behind the print queue.  A new
+        // key is registered as "in progress" at once: a parallel repeat gets "unknown".
+        if let known = try knownResult(key, digest, deadline: deadline) { return known }
+        defer { state.lock(); inflight.remove(key); state.unlock() }
         guard printLock.lock(before: deadline) else {
             throw PrintError.message("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
         }
         defer { printLock.unlock() }
-        // The same key may have been sent while this request waited.
-        if let known = try knownResult(key, digest) { return known }
         guard deadline.timeIntervalSinceNow > minimumToStart else {
             throw PrintError.message("Время ожидания истекло. Это задание не отправлялось; повторите.")
         }
@@ -366,14 +406,26 @@ private final class Printer {
                 throw PrintError.notSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
             }
             jobs[key] = StoredJob(hash: digest, receipt: nil)
+            func undo() {
+                jobs[key] = nil
+                try? persist()
+                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key], busyMs: 2000) }
+            }
             do {
                 try persist()
-                if mirror { try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digest]) }
+                if mirror {
+                    try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digest],
+                                      busyMs: busyBudget(deadline))
+                }
             } catch {
-                jobs[key] = nil  // not recorded everywhere, not sent: roll back
-                try? persist()
+                undo()  // not recorded everywhere, not sent
                 if error is PrintError { throw PrintError.notSent("\(error). Задание не отправлялось.") }
                 throw PrintError.notSent("Не удалось записать журнал печати; задание не отправлялось")
+            }
+            // Waiting for the journal may have used up the budget: then the job is not sent.
+            guard deadline.timeIntervalSinceNow > minimumToStart else {
+                undo()
+                throw PrintError.notSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
             }
             marked = true
         }
@@ -385,7 +437,7 @@ private final class Printer {
                 state.lock()
                 jobs[key] = nil
                 try? persist()
-                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key]) }
+                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key], busyMs: 2000) }
                 state.unlock()
             }
             throw PrintError.message(reason)
@@ -396,21 +448,26 @@ private final class Printer {
         // The job is already in the OS queue; a failed write must not report it as lost.
         do { try persist() } catch { fputs("Квитанция не записана в журнал: \(error)\n", stderr) }
         if mirror {
-            do { try legacyExecute(legacyURL, "UPDATE jobs SET receipt=? WHERE id=?", [receipt, key]) }
+            do { try legacyExecute(legacyURL, "UPDATE jobs SET receipt=? WHERE id=?", [receipt, key], busyMs: 2000) }
             catch { fputs("Квитанция не записана в старый журнал: \(error)\n", stderr) }
         }
         return receipt
     }
 
-    /// A stored receipt, an error for a possibly-sent job, or nil for a new key.
-    private func knownResult(_ key: String, _ digest: String) throws -> String? {
+    /// A stored receipt, an error for a possibly-sent or in-progress job, or nil for a new
+    /// key (which is registered as in progress under the same lock).
+    private func knownResult(_ key: String, _ digest: String, deadline: Date) throws -> String? {
         state.lock()
         defer { state.unlock() }
-        try importLegacy()  // retried until the old journal has been read
-        guard let old = jobs[key] else { return nil }
-        guard old.hash == digest else { throw PrintError.message("Содержимое этого задания изменилось") }
-        guard let receipt = old.receipt else { throw PrintError.message(unknownOutcomeText) }
-        return receipt
+        try importLegacy(busyMs: busyBudget(deadline))  // retried until the old journal has been read
+        if let old = jobs[key] {
+            guard old.hash == digest else { throw PrintError.message("Содержимое этого задания изменилось") }
+            guard let receipt = old.receipt else { throw PrintError.message(unknownOutcomeText) }
+            return receipt
+        }
+        if inflight.contains(key) { throw PrintError.message(inProgressText) }
+        inflight.insert(key)
+        return nil
     }
 }
 
@@ -741,6 +798,63 @@ private func runSelfTest() throws {
     guard says({ try slow.printJob(jobBody("late", opaque), deadline: Date().addingTimeInterval(3)) }, "не отправлялось"),
           slowSent == 1 else { throw fail("deadline: a late job was started") }
 
+    // A clean install creates the old journal and keeps it level, so going back to the Python build is safe.
+    let cleanDirectory = directory.appendingPathComponent("clean")
+    let clean = try Printer(directory: cleanDirectory, submit: { _, _, _, mark in try mark(); return "c-1" }, queue: { _ in "test-printer" })
+    let cleanFile = cleanDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    guard FileManager.default.fileExists(atPath: cleanFile.path), try clean.printJob(jobBody("c", opaque)) == "c-1",
+          legacyRows(cleanFile)["c"] == "c-1" else { throw fail("old journal on a clean install") }
+    // Keys known only to the json are copied into the old journal when the program starts.
+    let levelDirectory = directory.appendingPathComponent("level")
+    try FileManager.default.createDirectory(at: levelDirectory, withIntermediateDirectories: true)
+    let levelHash = SHA256.hash(data: opaque).map { String(format: "%02x", $0) }.joined()
+    try JSONEncoder().encode(["json-only": StoredJob(hash: levelHash, receipt: "J-9"),
+                              "json-open": StoredJob(hash: levelHash, receipt: nil)])
+        .write(to: levelDirectory.appendingPathComponent("direct-jobs.json"))
+    var level: OpaquePointer?
+    guard sqlite3_open(levelDirectory.appendingPathComponent("direct-jobs.sqlite3").path, &level) == SQLITE_OK,
+          sqlite3_exec(level, legacySchema + ";INSERT INTO jobs VALUES ('json-open', '\(levelHash)', NULL)", nil, nil, nil) == SQLITE_OK
+    else { throw fail("level fixture") }
+    sqlite3_close(level)
+    _ = try Printer(directory: levelDirectory, submit: { _, _, _, _ in "x" }, queue: { _ in "q" })
+    guard legacyRows(levelDirectory.appendingPathComponent("direct-jobs.sqlite3"))["json-only"] == "J-9",
+          legacyRows(levelDirectory.appendingPathComponent("direct-jobs.sqlite3"))["json-open"] == "-" else {
+        throw fail("json keys were not copied into the old journal")
+    }
+
+    // A parallel repeat of a key that is being processed hears "in progress", never "not sent".
+    let racingDirectory = directory.appendingPathComponent("racing")
+    var racingSent = 0
+    let racing = try Printer(directory: racingDirectory, submit: { _, _, _, mark in
+        Thread.sleep(forTimeInterval: 1.0)  // still preparing: nothing is marked yet
+        try mark(); racingSent += 1; return "r-1"
+    }, queue: { _ in "test-printer" })
+    let first = Thread { _ = try? racing.printJob(jobBody("race", opaque)) }
+    first.start()
+    Thread.sleep(forTimeInterval: 0.3)
+    let twin = refused({ try racing.printJob(jobBody("race", opaque), deadline: Date().addingTimeInterval(7)) }) ?? ""
+    guard twin.contains("в работе"), !twin.contains("не отправлялось") else { throw fail("parallel repeat: \(twin)") }
+    Thread.sleep(forTimeInterval: 1.2)
+    guard try racing.printJob(jobBody("race", opaque)) == "r-1", racingSent == 1 else { throw fail("race result") }
+
+    // Waiting for the journal may use up the budget: the job is then not sent and the mark is removed.
+    let lateDirectory = directory.appendingPathComponent("late")
+    var lateSent = 0
+    let late = try Printer(directory: lateDirectory, submit: { _, _, _, mark in try mark(); lateSent += 1; return "l-1" },
+                           queue: { _ in "test-printer" })
+    let lateFile = lateDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    var blocker: OpaquePointer?
+    guard sqlite3_open(lateFile.path, &blocker) == SQLITE_OK, sqlite3_exec(blocker, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK
+    else { throw fail("late fixture") }
+    legacyBusyMs = 3000
+    Thread.detachNewThread { Thread.sleep(forTimeInterval: 1.2); sqlite3_exec(blocker, "COMMIT", nil, nil, nil) }
+    let tight = Date().addingTimeInterval(minimumToStart + 0.6)
+    let lateText = refused({ try late.printJob(jobBody("late-key", opaque), deadline: tight) }) ?? ""
+    sqlite3_close(blocker)
+    legacyBusyMs = 100
+    guard lateText.contains("не отправлялось"), lateSent == 0, legacyRows(lateFile)["late-key"] == nil,
+          try late.printJob(jobBody("late-key", opaque)) == "l-1", lateSent == 1 else { throw fail("budget spent on the journal: \(lateText)") }
+
     // A tool that ignores SIGTERM is killed; the output pipe is drained meanwhile.
     let hung = Date()
     let stuck = try run("/bin/sh", ["-c", "trap '' TERM; exec sleep 30"], timeout: 0.3, grace: 0.3)
@@ -765,8 +879,8 @@ private func runSelfTest() throws {
     print("WMS Print Direct macOS: package OK")
 }
 
-/// Asks whatever listens on the port who it is: its build id when it is WMS Print, otherwise nil.
-private func liveInstance(attempts: Int) -> String? {
+/// Asks whatever listens on the port who it is: build id and /health status when it is WMS Print, otherwise nil.
+private func liveInstance(attempts: Int) -> (build: String, healthy: Bool)? {
     for attempt in 0..<attempts {
         let descriptor = socket(AF_INET, SOCK_STREAM, 0)
         if descriptor >= 0 {
@@ -796,7 +910,10 @@ private func liveInstance(attempts: Int) -> String? {
                 }
                 if let split = received.range(of: Data("\r\n\r\n".utf8)),
                    let value = try? JSONSerialization.jsonObject(with: received[split.upperBound...]) as? [String: Any],
-                   value["app"] as? String == appName { return value["build"] as? String ?? "" }
+                   value["app"] as? String == appName {
+                    let status = String(data: received[..<split.lowerBound], encoding: .utf8) ?? ""
+                    return (value["build"] as? String ?? "", status.hasPrefix("HTTP/1.1 200"))
+                }
             }
         }
         if attempt + 1 < attempts { Thread.sleep(forTimeInterval: 0.3) }
@@ -807,8 +924,12 @@ private func liveInstance(attempts: Int) -> String? {
 /// True when the running copy is this very build (quiet exit); throws for another build.
 private func existingCopyIsCurrent(attempts: Int) throws -> Bool {
     guard let running = liveInstance(attempts: attempts) else { return false }
-    guard running == buildID else {
+    guard running.build == buildID else {
         throw PrintError.message("Запущена другая версия WMS Print. Закройте её и откройте эту снова.")
+    }
+    // A /health error (no printer, driver trouble) is not "working".
+    guard running.healthy else {
+        throw PrintError.message("Эта версия WMS Print уже запущена, но проверка принтера (/health) не проходит. Проверьте принтер или закройте программу и откройте её снова.")
     }
     print("WMS Print уже запущена и работает. Это окно можно закрыть.")
     return true

@@ -72,7 +72,7 @@ class DirectPrintTest(unittest.TestCase):
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
     @patch('wms_print_direct.subprocess.Popen')
     @patch('wms_print_direct.subprocess.run')
-    @patch('wms_print_direct.running_instance', return_value=wms_print_direct.BUILD)
+    @patch('wms_print_direct.running_instance', return_value=(wms_print_direct.BUILD, True))
     @patch('wms_print_direct.acquire_instance', return_value=True)
     @patch('wms_print_direct.Printer')
     @patch('wms_print_direct.DirectServer')
@@ -238,6 +238,79 @@ class RetryBoundaryTest(unittest.TestCase):
             self.assertEqual(adapter.calls, 0)
 
 
+class ParallelAndBudgetTest(unittest.TestCase):
+    printer = RetryBoundaryTest.printer
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_parallel_repeat_while_first_is_processing_hears_in_progress(self):
+        class Slow(FakeAdapter):
+            def submit_default(self, data, queue, mark):
+                time.sleep(0.8)   # still preparing: nothing is marked yet
+                mark()
+                return 'Label-5'
+
+        with tempfile.TemporaryDirectory() as root:
+            printer = self.printer(root, Slow())
+            first = threading.Thread(target=lambda: printer.print(job()))
+            first.start()
+            time.sleep(0.2)
+            with self.assertRaises(agent.UnknownPrintOutcome) as raised:
+                printer.print(job())
+            self.assertIn('в работе', str(raised.exception))
+            self.assertNotIn('не отправлялось', str(raised.exception))
+            first.join()
+            self.assertEqual(printer.print(job()), 'Label-5')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_budget_spent_waiting_for_the_journal_means_not_sent_and_mark_removed(self):
+        with tempfile.TemporaryDirectory() as root:
+            sent = []
+
+            class Locking(FakeAdapter):
+                def default(inner):
+                    blocker = sqlite3.connect(Path(root) / 'direct-jobs.sqlite3', timeout=1, check_same_thread=False)
+                    blocker.execute('BEGIN EXCLUSIVE')
+                    threading.Timer(0.9, lambda: (blocker.commit(), blocker.close())).start()
+                    return 'Label'
+
+                def submit_default(inner, data, queue, mark):
+                    mark()
+                    sent.append(1)
+                    return 'Label-1'
+
+            printer = self.printer(root, Locking())
+            printer.print_timeout, printer.minimum_to_start = 1.2, 0.5
+            with self.assertRaises(PrintNotSent) as raised:
+                printer.print(job())
+            self.assertIn('не отправлялось', str(raised.exception))
+            self.assertEqual(sent, [])
+            self.assertIsNone(printer._lookup('scan-1'))
+            printer.print_timeout, printer.minimum_to_start = 5, 0.5
+            self.assertEqual(printer.print(job()), 'Label-1')
+
+
+class HealthTest(unittest.TestCase):
+    def test_health_error_is_not_working(self):
+        server = DirectServer(('127.0.0.1', 0), Handler)
+        server.printer = Mock(hung=True)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            self.assertEqual(running_instance(server.server_port), (wms_print_direct.BUILD, False))
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.running_instance', return_value=(wms_print_direct.BUILD, False))
+    @patch('wms_print_direct.acquire_instance', return_value=False)
+    @patch('wms_print_direct.DirectServer')
+    def test_second_start_does_not_call_a_failing_copy_working(self, server, acquire, running):
+        with self.assertRaises(SystemExit) as stop:
+            main()
+        self.assertEqual(stop.exception.code, 1)
+        server.assert_not_called()
+
+
 class FakeDC:
     def __init__(self, area=(464, 320), dpi=(203, 203), events=None):
         self.area, self.dpi, self.events = area, dpi, events if events is not None else []
@@ -388,7 +461,7 @@ class SingleInstanceTest(unittest.TestCase):
         try:
             with self.assertRaises(OSError):
                 DirectServer(('127.0.0.1', port), Handler)
-            self.assertEqual(running_instance(port), wms_print_direct.BUILD)
+            self.assertEqual(running_instance(port)[0], wms_print_direct.BUILD)
         finally:
             first.shutdown()
             first.server_close()
@@ -422,7 +495,7 @@ class SingleInstanceTest(unittest.TestCase):
         self.assertEqual(stop.exception.code, 1)
 
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
-    @patch('wms_print_direct.running_instance', return_value=wms_print_direct.BUILD)
+    @patch('wms_print_direct.running_instance', return_value=(wms_print_direct.BUILD, True))
     @patch('wms_print_direct.acquire_instance', return_value=False)
     @patch('wms_print_direct.DirectServer')
     def test_second_copy_quietly_succeeds_when_first_is_alive(self, server, acquire, running):
@@ -430,7 +503,7 @@ class SingleInstanceTest(unittest.TestCase):
         server.assert_not_called()
 
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
-    @patch('wms_print_direct.running_instance', return_value='another-build')
+    @patch('wms_print_direct.running_instance', return_value=('another-build', True))
     @patch('wms_print_direct.acquire_instance', return_value=False)
     @patch('wms_print_direct.DirectServer')
     def test_other_build_is_reported_and_left_running(self, server, acquire, running):
@@ -440,7 +513,7 @@ class SingleInstanceTest(unittest.TestCase):
         server.assert_not_called()
 
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
-    @patch('wms_print_direct.running_instance', return_value='')  # an older copy has no build id
+    @patch('wms_print_direct.running_instance', return_value=('', True))  # an older copy has no build id
     @patch('wms_print_direct.acquire_instance', return_value=True)
     @patch('wms_print_direct.DirectServer', side_effect=OSError('busy'))
     def test_older_copy_without_lock_is_another_build(self, server, acquire, running):

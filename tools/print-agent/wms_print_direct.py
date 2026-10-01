@@ -38,6 +38,7 @@ PRINT_TIMEOUT = 25
 MINIMUM_TO_START = 6
 MAX_PIXELS = 40_000_000
 UNKNOWN_TEXT = "Исход печати неизвестен: задание уже отправлялось на принтер. Проверьте принтер; повтор автоматически не отправлен."
+IN_PROGRESS_TEXT = "Это задание уже в работе, исход пока неизвестен. Проверьте принтер; повтор автоматически не отправлен."
 HUNG_TEXT = "Принтер не отвечает. Перезапустите WMS Print и проверьте принтер."
 
 
@@ -191,6 +192,7 @@ class Printer:
         self.lock = threading.Lock()   # short database sections only
         self.slot = threading.Lock()   # one OS print call at a time
         self.hung = False              # a worker outlived its deadline and still holds the slot
+        self.inflight = set()          # keys being processed right now, guarded by self.lock
         self.print_timeout = print_timeout
         self.minimum_to_start = minimum_to_start
         self.submit = submit
@@ -201,25 +203,31 @@ class Printer:
     def _submit(self, data, queue, mark):
         return self.adapter.submit_default(data, queue, mark)
 
-    def _execute(self, sql, params=()):
-        with self.lock, closing(sqlite3.connect(self.db, timeout=10)) as db:
+    def _execute(self, sql, params=(), timeout=10):
+        with self.lock, closing(sqlite3.connect(self.db, timeout=max(0.05, timeout))) as db:
             db.execute(sql, params)
             db.commit()
+
+    def _begin(self, key, digest, deadline):
+        """Stored receipt, an error for a possibly sent or in-progress job, or None for a
+        new key, which is registered as in progress under the same lock."""
+        with self.lock:
+            with closing(sqlite3.connect(self.db, timeout=max(0.05, min(10, deadline - time.monotonic())))) as db:
+                old = db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
+            if old:
+                if old[0] != digest:
+                    raise ValueError("Содержимое этого задания изменилось")
+                if old[1] is None:
+                    raise agent.UnknownPrintOutcome(UNKNOWN_TEXT)
+                return old[1]
+            if key in self.inflight:
+                raise agent.UnknownPrintOutcome(IN_PROGRESS_TEXT)
+            self.inflight.add(key)
+            return None
 
     def _lookup(self, key):
         with self.lock, closing(sqlite3.connect(self.db, timeout=10)) as db:
             return db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
-
-    def _known(self, key, digest):
-        """Stored receipt, an error for a possibly sent job, or None for a new key."""
-        old = self._lookup(key)
-        if not old:
-            return None
-        if old[0] != digest:
-            raise ValueError("Содержимое этого задания изменилось")
-        if old[1] is None:
-            raise agent.UnknownPrintOutcome(UNKNOWN_TEXT)
-        return old[1]
 
     def _work(self, key, digest, data, deadline, gate, outcome):
         """Runs the blocking OS call; owns the slot until the call really ends.
@@ -229,10 +237,16 @@ class Printer:
         """
         try:
             def mark():
+                late = PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
                 with gate["lock"]:
                     if gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start:
-                        raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
-                    self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest))
+                        raise late
+                    # The wait for a locked journal is part of the same budget.
+                    self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest),
+                                  timeout=deadline - time.monotonic())
+                    if gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start:
+                        self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
+                        raise late  # the budget went on the journal: not sent, mark removed
                     gate["marked"] = True
 
             try:
@@ -246,7 +260,7 @@ class Printer:
                     receipt = self._submit(data, queue, mark)
             except PrintNotSent:
                 if gate["marked"]:  # proven: the OS never received the job
-                    self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,))
+                    self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
                     gate["marked"] = False
                 raise
             try:
@@ -258,6 +272,8 @@ class Printer:
             outcome["error"] = exc
         finally:
             self.hung = False
+            with self.lock:
+                self.inflight.discard(key)
             self.slot.release()
 
     def print(self, body, started=None):
@@ -272,29 +288,32 @@ class Printer:
         if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 4_000_000:
             raise ValueError("Некорректная PNG-этикетка")
         digest = hashlib.sha256(data).hexdigest()
-        # The key's own history is answered first, never behind the print queue.
-        known = self._known(key, digest)
+        # The key's own history is answered first, never behind the print queue; a new
+        # key is registered as in progress at once, so a parallel repeat hears "unknown".
+        known = self._begin(key, digest, deadline)
         if known is not None:
             return known
-        if not self.slot.acquire(timeout=max(0.0, deadline - time.monotonic())):
-            if self.hung:
-                raise PrintNotSent(HUNG_TEXT + " Это задание не отправлялось.")
-            raise PrintNotSent("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
         started_worker = False
         try:
-            known = self._known(key, digest)  # a twin may have been sent while this one waited
-            if known is not None:
-                return known
-            if deadline - time.monotonic() < self.minimum_to_start:
-                raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
-            outcome = {}
-            gate = {"lock": threading.Lock(), "cancelled": False, "marked": False}
-            worker = threading.Thread(target=self._work, args=(key, digest, data, deadline, gate, outcome), daemon=True)
-            worker.start()
-            started_worker = True  # the worker releases the slot
+            if not self.slot.acquire(timeout=max(0.0, deadline - time.monotonic())):
+                if self.hung:
+                    raise PrintNotSent(HUNG_TEXT + " Это задание не отправлялось.")
+                raise PrintNotSent("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
+            try:
+                if deadline - time.monotonic() < self.minimum_to_start:
+                    raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
+                outcome = {}
+                gate = {"lock": threading.Lock(), "cancelled": False, "marked": False}
+                worker = threading.Thread(target=self._work, args=(key, digest, data, deadline, gate, outcome), daemon=True)
+                worker.start()
+                started_worker = True  # the worker releases the slot and the in-progress mark
+            finally:
+                if not started_worker:
+                    self.slot.release()
         finally:
             if not started_worker:
-                self.slot.release()
+                with self.lock:
+                    self.inflight.discard(key)
         worker.join(max(0.0, deadline - time.monotonic()))
         if worker.is_alive():
             with gate["lock"]:
@@ -363,6 +382,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/health":
             try:
+                if self.server.printer.hung:
+                    raise RuntimeError(HUNG_TEXT)
                 self.respond(200, {"app": APP_NAME, "build": BUILD, "printer": default_printer()})
             except Exception as exc:
                 self.respond(503, {"app": APP_NAME, "build": BUILD, "error": str(exc)})
@@ -427,18 +448,19 @@ def acquire_instance(directory):
 
 
 def running_instance(port=PORT, attempts=1, delay=0.3):
-    """Build id of a live WMS Print answering on the port, else None (never touches the process)."""
+    """(build id, /health was OK) of a live WMS Print on the port, else None (never touches the process)."""
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for attempt in range(attempts):
         try:
+            healthy = True
             try:
                 with opener.open(f"http://127.0.0.1:{port}/health", timeout=2) as response:
                     body = response.read()
             except urllib.error.HTTPError as error:  # 503 still names the program
-                body = error.read()
+                body, healthy = error.read(), False
             value = json.loads(body)
             if value.get("app") == APP_NAME:
-                return str(value.get("build", ""))
+                return str(value.get("build", "")), healthy
         except (OSError, ValueError, AttributeError):
             pass
         if attempt + 1 < attempts:
@@ -449,11 +471,16 @@ def running_instance(port=PORT, attempts=1, delay=0.3):
 def existing_copy_is_current(attempts):
     """True: the running copy is this very build (quiet exit).  False: nothing answers.
     Another build: SystemExit with an instruction, the running copy is never touched."""
-    running = running_instance(attempts=attempts)
-    if running is None:
+    found = running_instance(attempts=attempts)
+    if found is None:
         return False
+    running, healthy = found
     if running != BUILD:
         print("Запущена другая версия WMS Print. Закройте её и откройте эту снова.", file=sys.stderr, flush=True)
+        sys.exit(1)
+    if not healthy:  # a /health error (no printer, hung driver) is not "working"
+        print("Эта версия WMS Print уже запущена, но проверка принтера (/health) не проходит. "
+              "Проверьте принтер или закройте программу и откройте её снова.", file=sys.stderr, flush=True)
         sys.exit(1)
     print("WMS Print уже запущена и работает. Это окно можно закрыть.", flush=True)
     return True
