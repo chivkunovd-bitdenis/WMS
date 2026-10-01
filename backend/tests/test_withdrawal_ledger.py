@@ -159,12 +159,13 @@ async def document(
     op.token_expires_at = datetime.now(UTC) + timedelta(hours=1)
     op.state = state
     item = (await current_items(session, scope, op.id))[0]
+    item.product_cost = 99_999_999_999_999_999
     payload = json.dumps(
         {
             "inn": INN,
             "action": "DISTANCE",
             "action_date": "2026-09-23",
-            "products": [{"cis": item.cis}],
+            "products": [{"cis": item.cis, "product_cost": item.product_cost}],
         },
         separators=(",", ":"),
     ).encode()

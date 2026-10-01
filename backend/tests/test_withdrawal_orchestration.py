@@ -248,7 +248,7 @@ def test_builder_group_split_exact_bytes_and_moscow_date() -> None:
 
 
 @pytest.mark.asyncio
-async def test_required_group_fetches_exact_order_price_from_wb_statistics(
+async def test_missing_local_price_fetches_exact_order_price_from_wb_statistics(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -274,8 +274,7 @@ async def test_required_group_fetches_exact_order_price_from_wb_statistics(
     prices = AsyncMock(return_value={order.wb_rid: 12_345})
     monkeypatch.setattr(withdrawal_orchestration, "get_decrypted_marketplace_token", token)
     monkeypatch.setattr(withdrawal_orchestration, "fetch_statistics_order_prices", prices)
-    shoes_mod = {**MOD, "productGroups": ["shoes"]}
-    emulator = Emulator([shoes_mod], product_group="shoes")
+    emulator = Emulator([MOD])
     async with httpx.AsyncClient(transport=httpx.MockTransport(emulator.handle)) as http:
         runtime = emulator.runtime(http)
         operation = await create_operation(
@@ -355,7 +354,7 @@ async def test_emulator_sign_submit_recover_once(
         document = documents[0]
         body = json.loads(document.exact_payload)
         assert body["fias_id"] == FIAS
-        assert body["products"] == [{"cis": ki}]
+        assert body["products"] == [{"cis": ki, "product_cost": 99999999999999999}]
         assert (await current_items(db_session, scope, operation.id))[0].cis == marking.value
         output = await _output(db_session, scope, operation, runtime)
         assert output.items[0].wb_order_id == str(order.wb_order_id)

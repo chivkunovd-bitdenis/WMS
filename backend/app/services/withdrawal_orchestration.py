@@ -32,7 +32,6 @@ from app.models.marking_withdrawal import (
 )
 from app.services.integration_fernet import decrypt_secret, encrypt_secret
 from app.services.true_api_withdrawal import (
-    DISTANCE_PRICE_REQUIRED_GROUPS,
     AuthSession,
     CisInfo,
     Environment,
@@ -577,7 +576,7 @@ async def authenticate_and_build(
         item
         for item in items
         if (info := by_cis.get(item.provider_cis or "")) is not None
-        and info.product_group in DISTANCE_PRICE_REQUIRED_GROUPS
+        and info.product_group in DISTANCE_GROUPS
         and cis_error(
             info,
             inn=inn,
@@ -710,34 +709,29 @@ async def authenticate_and_build(
         if info.product_group in discovery_errors:
             item.state, item.error = "failed", discovery_errors[info.product_group]
             continue
-        product_cost: int | None = None
         try:
-            if info.product_group in DISTANCE_PRICE_REQUIRED_GROUPS:
-                resolved_price = resolved_prices.get(item.order_id)
-                if resolved_price is None and item.order_id in statistics_prices:
-                    snapshot = await capture_wb_price_snapshot(
-                        session,
-                        tenant_id=scope.tenant_id,
-                        seller_id=scope.seller_id,
-                        order_id=item.order_id,
-                        row={
-                            "convertedFinalPrice": statistics_prices[item.order_id],
-                            "convertedCurrencyCode": 643,
-                        },
-                        source=WB_STATISTICS_ORDERS_SOURCE,
-                    )
-                    assert snapshot is not None
-                    resolved_price = WbProductCost(
-                        statistics_prices[item.order_id], snapshot.id
-                    )
-                if resolved_price is None:
-                    raise price_errors.get(item.order_id) or WbPriceDataError(
-                        "wb_order_price_not_found",
-                        "WB: фактическая цена заказа не найдена",
-                    )
-                item.price_snapshot_id = resolved_price.snapshot_id
-                item.product_cost = resolved_price.product_cost
-                product_cost = resolved_price.product_cost
+            resolved_price = resolved_prices.get(item.order_id)
+            if resolved_price is None and item.order_id in statistics_prices:
+                snapshot = await capture_wb_price_snapshot(
+                    session,
+                    tenant_id=scope.tenant_id,
+                    seller_id=scope.seller_id,
+                    order_id=item.order_id,
+                    row={
+                        "convertedFinalPrice": statistics_prices[item.order_id],
+                        "convertedCurrencyCode": 643,
+                    },
+                    source=WB_STATISTICS_ORDERS_SOURCE,
+                )
+                assert snapshot is not None
+                resolved_price = WbProductCost(statistics_prices[item.order_id], snapshot.id)
+            if resolved_price is None:
+                raise price_errors.get(item.order_id) or WbPriceDataError(
+                    "wb_order_price_not_found",
+                    "WB: фактическая цена заказа не найдена",
+                )
+            item.price_snapshot_id = resolved_price.snapshot_id
+            item.product_cost = resolved_price.product_cost
             fias, kpp = required_external_mod(
                 inn=inn,
                 pg=info.product_group,
@@ -749,7 +743,12 @@ async def authenticate_and_build(
             continue
         prepared.append(
             WithdrawalProduct(
-                item.id, item.provider_cis or "", product_cost, info.product_group, fias, kpp
+                item.id,
+                item.provider_cis or "",
+                resolved_price.product_cost,
+                info.product_group,
+                fias,
+                kpp,
             )
         )
     built = build_withdrawal_documents(

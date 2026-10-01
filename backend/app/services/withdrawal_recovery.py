@@ -54,18 +54,12 @@ def _identity(body: Any) -> tuple[Any, ...] | None:
     products = body.get("products")
     if not isinstance(products, list) or not products:
         return None
-    costs: dict[str, int | None] = {}
+    costs: dict[str, int] = {}
     for product in products:
         if not isinstance(product, dict):
             return None
-        cis = product.get("cis")
-        cost = product.get("product_cost")
-        if (
-            not isinstance(cis, str)
-            or not cis
-            or (cost is not None and type(cost) is not int)
-            or cis in costs
-        ):
+        cis, cost = product.get("cis"), product.get("product_cost")
+        if not isinstance(cis, str) or not cis or type(cost) is not int or cis in costs:
             return None
         costs[cis] = cost
     for key in ("inn", "action_date"):
