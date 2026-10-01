@@ -119,6 +119,20 @@ type Props<Row> = {
    * рамка вокруг всей строки.
    */
   selectedKey?: string | number | null
+  /**
+   * Прилипить шапку к внешнему скроллу, а не к своему `TableContainer`.
+   *
+   * По умолчанию у `TableContainer` `overflow-x: auto`: он сам становится
+   * ближайшим скролл-контейнером, и `position: sticky` держится за его верх, а
+   * не за окно/диалог, из-за чего на длинном списке шапка уезжает вместе с
+   * таблицей. Флаг снимает `overflow` — тогда `sticky` цепляется за настоящий
+   * прокручиваемый предок (у экрана подбора FBS это `DialogContent`).
+   * Дополнительно ставим шапке непрозрачный фон и запас по z-index: без этого
+   * содержимое строк проступает сквозь заголовки и мешает читать. Включать
+   * только там, где `fixedLayout` и колонки помещаются по ширине: без scroll-x
+   * у контейнера широкая таблица начнёт распирать своего родителя.
+   */
+  pageStickyHeader?: boolean
 }
 
 export function DataTable<Row>({
@@ -136,6 +150,7 @@ export function DataTable<Row>({
   selectedKey = null,
   hideHeader = false,
   isComplete,
+  pageStickyHeader = false,
 }: Props<Row>) {
   const theme = useTheme()
   const showEmpty = !loading && rows.length === 0
@@ -170,21 +185,41 @@ export function DataTable<Row>({
     }
   }
 
+  // Шапка цепляется за настоящий скролл-контейнер (top: 0) и получает
+  // непрозрачный фон в цвете Paper: сквозь стандартный фон MUI строки
+  // проступают и накладываются на заголовки. z-index берём с запасом — MUI
+  // ставит sticky-ячейкам 2, а в диалоге под нами лежит собственная тень.
+  const pageStickyHeadSx = pageStickyHeader
+    ? { top: 0, zIndex: 3, backgroundColor: 'background.paper' as const }
+    : null
   return (
-    <TableContainer component={Paper} variant="outlined" data-testid={testId}>
+    <TableContainer
+      component={Paper}
+      variant="outlined"
+      data-testid={testId}
+      // `overflow: visible` возвращает свойство `position: sticky` внешнему
+      // скроллу — окну или `DialogContent`. Для остальных экранов флаг просто
+      // не включается, и контейнер работает как раньше.
+      sx={pageStickyHeader ? { overflow: 'visible' } : undefined}
+    >
       {/* stickyHeader по умолчанию: на двухстах строках без липкой шапки
           оператор читает число не из того столбца (канон R-05). */}
       <Table stickyHeader size="small" sx={fixedLayout ? { tableLayout: 'fixed' } : undefined}>
         {hideHeader ? null : (
         <TableHead>
           <TableRow>
-            {expand ? <TableCell width={56} sx={{ whiteSpace: 'nowrap' }} /> : null}
+            {expand ? (
+              <TableCell
+                width={56}
+                sx={{ whiteSpace: 'nowrap', ...(pageStickyHeadSx ?? null) }}
+              />
+            ) : null}
             {columns.map((column) => (
               <TableCell
                 key={column.key}
                 align={column.align ?? 'left'}
                 width={column.width}
-                sx={{ whiteSpace: 'nowrap' }}
+                sx={{ whiteSpace: 'nowrap', ...(pageStickyHeadSx ?? null) }}
               >
                 {column.header}
               </TableCell>
