@@ -20,6 +20,7 @@ boxfillrow
 boximportdialog
 boxlabelprintdialog
 busyline
+cardowner
 cargotypechip
 catalogcreatescene
 catalogscene
@@ -45,6 +46,7 @@ dangeraction
 dashboardcard
 datatable
 deadlinepill
+deliverycheckgrouplist
 deliveryroutechip
 deltacell
 emptypanel
@@ -55,7 +57,10 @@ errorfallback
 errornotice
 fbsapierror
 fbsassemblysupplyframe
+fbsassemblytaskrows
 fbscancelledafterpackdialog
+fbscellpicktable
+fbscellpicktable.test
 fbschips
 fbskizautoprintqueue
 fbskizscandialog
@@ -64,6 +69,7 @@ fbsmarkingstatuschip
 fbsmetricpanel
 fbsmetricscreen
 fbsordersscene
+fbspackingscanbar
 fbspackscene
 fbspickscene
 fbsprintoutcomeunknownerror
@@ -83,6 +89,8 @@ fbssupplycreatedialog
 fbssupplygroupcreatedialog
 fbssupplyhistorydialog
 fbssupplyhistorytimeline
+fbssupplytrackingcard
+fbssupplytrackingcard.test
 fbstransfersupplydialog
 fbstransfersupplydialog.test
 ffaccessdeniedpage
@@ -104,10 +112,13 @@ ffdashboard
 fffbsassemblypick
 fffbsassemblypick.dom.test
 fffbsordersscreen
+fffbsordersscreen.wms588.dom.test
 fffbspicklist
 fffbssectionnav
 fffbsstocksyncscreen
 fffbssupplyassembly
+fffbssupplyassembly.dom.test
+fffbssupplyassembly.scanners.dom.test
 fffbssupplyworkspace
 fffbssupplyworkspace.assembly.dom.test
 fffbssupplyworkspace.reprintkiz.dom.test
@@ -197,6 +208,7 @@ inventorylistscene
 inventoryscanfield
 inventoryscenes
 inventorytree
+inventorytree.barcode.dom.test
 invoicedocumentdetails
 invoiceprintpreview
 kizprintoutcomeunknownerror
@@ -220,6 +232,7 @@ markinglabelpreview
 markingpoolproductsdialog
 markingpoolproductspanel
 markingprintdialog
+markingprintdialog.availability.dom.test
 markingprintdialogcontent
 markingproductcodesdialog
 markingsellerpicker
@@ -259,6 +272,7 @@ pageheader
 pathprobe
 percentslider
 periodpicker
+pickedchip
 picklistpreview
 pickplacestree
 pickqtydialog
@@ -285,6 +299,7 @@ productbarcodeprintbutton
 productbarcodeprintdialog
 productcarddialog
 productcardfbsstocktab
+productcardfbsstocktab.cross-entry.dom.test
 productcardlocationtab
 productcardlocationtab.test
 productcardmaintab
@@ -370,6 +385,7 @@ stocksyncstatuschip
 stubbedscene
 subscriptionblockedscreen
 summaryitem
+supplyrow
 tableskeletonbody
 textcell
 textinput
@@ -402,6 +418,7 @@ useplaceamongdialogs
 usescanintake
 usescanintake.test
 useseparatemarkingprint
+usesequentialpacking
 usesubscription
 usewarehousemapactions
 usewbproductcatalog

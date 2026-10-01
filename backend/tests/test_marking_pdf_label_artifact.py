@@ -1089,7 +1089,7 @@ async def test_png_artifact_retrieval_repairs_distortion_without_mutating_storag
 
     response = await api.get_marking_code_label_artifact(
         uuid.uuid4(),
-        SimpleNamespace(tenant_id=tenant_id),  # type: ignore[arg-type]
+        SimpleNamespace(tenant_id=tenant_id, role="fulfillment_admin"),  # type: ignore[arg-type]
         FakeSession(),  # type: ignore[arg-type]
         format="png",
     )
