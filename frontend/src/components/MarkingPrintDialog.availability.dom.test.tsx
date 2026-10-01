@@ -3,10 +3,12 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkingPrintDialog, type MarkingPrintContext } from './MarkingPrintDialog'
+import { printTapeSections } from '../utils/printMarkingCodeLabel'
 vi.mock('./MarkingLabelPreview', () => ({ MarkingLabelPreview: () => null }))
 vi.mock('../utils/printMarkingCodeLabel', async (original) => ({
-  ...await original<Record<string, unknown>>(), beginPrintUserGesture: vi.fn(), cancelPendingPrintWindow: vi.fn(),
+  ...await original<Record<string, unknown>>(), beginPrintUserGesture: vi.fn(), cancelPendingPrintWindow: vi.fn(), printTapeSections: vi.fn(),
 }))
+vi.mock('../utils/renderBarcodeDataUrl', () => ({ renderBarcodeDataUrl: () => 'data:image/png;base64,cHJvb2Y=' }))
 let root: Root
 let host: HTMLDivElement
 const print = vi.fn()
@@ -68,6 +70,37 @@ describe('WMS-611 FBS print availability', () => {
     print.mockResolvedValue({ orders: [], order_errors: [{ message: 'test stop before physical print' }], shortage: 0 })
     await act(async () => button().click())
     expect(print.mock.calls[0][0].layout.units).toEqual([{ block: 'label', copies: 1 }])
+  })
+  it('builds QR plus barcode for every marked WB product when ЧЗ=0', async () => {
+    const ctx = context()
+    ctx.qtyNeedPack = 12
+    ctx.fbsTape!.orders = Array.from({ length: 12 }, (_, i) => ({ ...ctx.fbsTape!.orders[0], orderId: `wb-${i}`, wbOrderId: 700 + i }))
+    await render(ctx)
+    for (const [testId, value] of [['marking-print-wb-qty', '1'], ['marking-print-cz-qty', '0']]) {
+      const input = document.querySelector<HTMLInputElement>(`[data-testid="${testId}"] input`)!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    print.mockResolvedValue({ orders: ctx.fbsTape!.orders.map(o => ({
+      order_id: o.orderId, wb_order_id: o.wbOrderId, requires_honest_sign: true,
+      printed_codes: [], qr_asset: { id: o.orderId, preview_url: '/test-qr.png', applied_at: 'already-applied' },
+    })), order_errors: [], shortage: 0 })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['qr'], { type: 'image/png' }) }))
+    vi.mocked(printTapeSections).mockClear()
+    await act(async () => button().click())
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+    expect(document.querySelector('[data-testid="marking-print-error"]')?.textContent ?? null).toBeNull()
+    expect(printTapeSections).toHaveBeenCalledTimes(1)
+    const sections = vi.mocked(printTapeSections).mock.calls[0][0]
+    expect(sections).toHaveLength(24)
+    for (let i = 0; i < 12; i++) {
+      expect(sections[2 * i]).toContain('data-tape-block="wb_qr"')
+      expect(sections[2 * i + 1]).toContain('data-tape-block="label"')
+      expect(sections[2 * i + 1]).toContain(label.barcode)
+      expect(sections[2 * i + 1]).toContain(label.product_name)
+    }
   })
   it('allows an assigned-code batch even when no free codes remain', async () => {
     const ctx = context(); ctx.fbsTape!.markingShortage = 0

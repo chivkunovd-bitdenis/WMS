@@ -34,11 +34,12 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   .label {
     width: ${size.widthMm}mm;
     height: ${size.heightMm}mm;
+    max-height: 100vh;
     overflow: hidden;
-    page-break-after: always;
-    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
-  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label + .label { page-break-before: always; break-before: page; }
   .label--cz {
     padding: ${labelMm(1.5 * k.uniform)};
     display: flex;
@@ -156,7 +157,10 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     text-align: center;
   }
   .label:not(.label--cz):not(.label--wb-qr) {
+    /* Absorb a slightly shorter printable page in the top whitespace,
+       keeping product text and footer inside the same label. */
     padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
+    padding-top: max(0mm, calc(${labelMm(1.4 * k.uniform)} - max(0mm, ${size.heightMm}mm - 100vh)));
     display: flex;
     flex-direction: column;
   }
