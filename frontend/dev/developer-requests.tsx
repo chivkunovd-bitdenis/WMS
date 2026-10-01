@@ -24,6 +24,13 @@ window.fetch = async (input, init) => {
   const records = rows()
   if (init?.method === 'POST') {
     if (behavior === '500') return json({}, 500)
+    // Inject a known pre-save rejection; this fixture does not duplicate the server's length calculation.
+    if (behavior === '422') return json({ detail: {
+      code: 'developer_request_description_too_long',
+      message: 'Обращение слишком длинное для передачи разработчикам. Сократите текст и отправьте ещё раз.',
+      max_length: 16384,
+      actual_length: 18100,
+    } }, 422)
     const payload: RequestPayload = JSON.parse(String(init.body))
     const existing = records.find((item) => item.owner === owner() && item.payload.idempotency_key === payload.idempotency_key)
     if (existing) return JSON.stringify(existing.payload) === JSON.stringify(payload) ? json(existing.record) : json({}, 409)
@@ -59,7 +66,7 @@ function Preview() {
       <SelectInput label="Пользователь" value={author} onChange={setAuthor} options={['a','b'].map((value) => ({ value, label: `Автор ${value}` }))} />
       <SelectInput label="Организация" value={tenant} onChange={setTenant} options={['a','b'].map((value) => ({ value, label: `Организация ${value}` }))} />
       <SelectInput label="Магазин" value={shop} onChange={setShop} options={['a','b'].map((value) => ({ value, label: `Магазин ${value}` }))} />
-      <SelectInput label="Ответ API" value={mode} onChange={setMode} options={[{ value: 'ok', label: 'Успех' }, { value: '500', label: '500 до сохранения' }, { value: 'lost', label: 'Потеря ответа после сохранения' }]} />
+      <SelectInput label="Ответ API" value={mode} onChange={setMode} options={[{ value: 'ok', label: 'Успех' }, { value: '500', label: '500 до сохранения' }, { value: '422', label: '422: слишком длинное обращение' }, { value: 'lost', label: 'Потеря ответа после сохранения' }]} />
       <SelectInput label="Стадия всех тестовых заявок" value={status} onChange={(value) => { setStatus(value); localStorage.setItem(key, JSON.stringify(rows().map((item) => ({ ...item, record: { ...item.record, status: value as RequestStatus } })))) }} options={[{value:'review', label:'На рассмотрении'}, {value:'queued',label:'В очереди'},{value:'in_progress',label:'В работе'},{value:'completed',label:'Завершена'}]} />
     </Stack>
     <Stack direction="row" spacing={1}><Button onClick={() => navigate('/app/ff/fbs?private=fixture#fragment')}>FBS</Button><Button onClick={() => navigate('/app/ff/billing')}>Расчёты</Button><Button onClick={() => setActionBar(!actionBar)}>Панель действий</Button></Stack>
