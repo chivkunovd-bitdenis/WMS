@@ -1,3 +1,4 @@
+import { packingScanLocks } from './fbsPackingScanLocks'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps } from './fbsSequentialPacking'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
@@ -146,13 +147,16 @@ import {
   startClaimedAutomaticPrint,
 } from './fbsKizAutoReprint'
 import {
-  claimFbsPendingProductScan,
+  claimOwnedFbsPendingProductScan,
+  readPendingAttempts,
+  fbsPendingProductScanStorageKey,
+  tokenIdentity,
   completeFbsPendingProductScan,
   fbsPendingProductScanComplete,
   loadFbsScanPrintPreferences,
   mergeFbsBufferedHardwareScan,
   peekFbsPendingProductScan,
-  printFbsOrderQrAsset,
+  printFbsDurableOrderQrAsset,
   productScanPrintPlan,
   saveFbsScanPrintPreferences,
   updateFbsPendingProductScan,
@@ -1121,6 +1125,18 @@ export function FfFbsSupplyWorkspace({
       setKizScanDebugOpen(false)
       setKizScanNotice(null)
       try {
+        const durableScope = !isOzonSupply && (preferences.printQr || preferences.printChz || preferences.reprintChz
+          || readPendingAttempts(token, workspace.supply.id).some((attempt) => attempt.barcode === raw))
+        const scanFlow = async () => {
+        const ownerId = durableScope ? await packingScanLocks().owner() : undefined
+        if (!isOzonSupply) {
+          for (const attempt of readPendingAttempts(token, workspace.supply.id)) {
+            if (attempt.barcode === raw && (attempt.ownerId === ownerId || !attempt.ownerId || !await packingScanLocks().active(attempt.ownerId))) {
+              preferences = attempt.preferences
+              break
+            }
+          }
+        }
         // Classification priority 2: a known order sticker wins before a full
         // KIZ or product barcode, even when no automatic print mode is active.
         let stickerNotFound: unknown = null
@@ -1218,12 +1234,13 @@ export function FfFbsSupplyWorkspace({
         }
 
         // Classification priority 4: deterministic product-unit selection.
-        const attempt = claimFbsPendingProductScan(
+        const attempt = await claimOwnedFbsPendingProductScan(
           token,
           workspace.supply.id,
           raw,
           preferences,
           createFbsIdempotencyKey,
+          ownerId!,
         )
         const plan = productScanPrintPlan(attempt.preferences)
         const result = await scanFbsProductForAutoPrint(
@@ -1269,48 +1286,24 @@ export function FfFbsSupplyWorkspace({
             printErrors.push('Стикер QR заказа не получен.')
           } else {
             try {
-              const printAttemptKey = createFbsIdempotencyKey()
+              const identity = tokenIdentity(token)
+              const context = { tenantId: identity.tenant, userId: identity.user,
+                supplyId: workspace.supply.id, orderId: result.order_id, scanId: result.scan_id,
+                barcode: raw, marketplace: 'wildberries' as const, wbOrderId: result.wb_order_id }
               await kizAutoPrintQueueRef.current.enqueue(
-                {
-                  attemptId: `${result.scan_id}:qr:${printAttemptKey}`,
-                  orderId: result.order_id,
-                  kiz: result.qr_asset.id,
-                  enabled: true,
-                },
+                { attemptId: `${result.scan_id}:qr:${createFbsIdempotencyKey()}`, orderId: result.order_id, kiz: result.qr_asset.id, enabled: true },
                 async () => {
                   const printResult = await startClaimedAutomaticPrint(
-                    printAttemptKey,
-                    async () => printFbsOrderQrAsset(token, result.qr_asset!),
+                    result.scan_id,
+                    () => printFbsDurableOrderQrAsset(token, result.qr_asset!, context),
                     {
-                      claim: (attemptKey) => claimFbsScanAutoPrintTarget(
-                        token,
-                        authHeaders,
-                        workspace.supply.id,
-                        result.scan_id,
-                        'qr',
-                        attemptKey,
-                      ),
-                      markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(
-                        token,
-                        authHeaders,
-                        workspace.supply.id,
-                        result.scan_id,
-                        'qr',
-                        attemptKey,
-                      ),
-                      releaseClaim: (attemptKey) => releaseFbsScanAutoPrintTargetClaim(
-                        token,
-                        authHeaders,
-                        workspace.supply.id,
-                        result.scan_id,
-                        'qr',
-                        attemptKey,
-                      ),
+                      reconcileStarted: () => printFbsDurableOrderQrAsset(token, result.qr_asset!, context, true),
+                      claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, workspace.supply.id, result.scan_id, 'qr', key),
+                      markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, workspace.supply.id, result.scan_id, 'qr', key),
+                      releaseClaim: async () => undefined,
                     },
                   )
-                  if (!printResult.started) {
-                    throw new Error('Сервер не подтвердил запуск печати QR.')
-                  }
+                  if (!printResult.started) throw new Error('Сервер не подтвердил запуск печати QR.')
                 },
               )
               attempt.qrStarted = true
@@ -1471,7 +1464,7 @@ export function FfFbsSupplyWorkspace({
 
         const attemptComplete = fbsPendingProductScanComplete(attempt)
         if (attemptComplete) {
-          completeFbsPendingProductScan(token, workspace.supply.id, raw)
+          completeFbsPendingProductScan(token, workspace.supply.id, raw, ownerId)
         }
 
         if (printErrors.length > 0) {
@@ -1504,6 +1497,9 @@ export function FfFbsSupplyWorkspace({
         )
         // Перечитывание поставки догоняет в фоне и не держит следующий скан (Д5).
         if (plan.printChz) void load(true)
+        }
+        if (durableScope) await packingScanLocks().run(fbsPendingProductScanStorageKey(token, workspace.supply.id), scanFlow)
+        else await scanFlow()
       } catch (cause) {
         setKizScanError({
           // WMS-574 R16: код не из активной поставки окна сборки называет её номер WB.
@@ -1527,22 +1523,18 @@ export function FfFbsSupplyWorkspace({
     ) => {
       if (!kizScanActive) return
       const productBarcode = activeProductScanBarcodeRef.current
-      const pendingProductAttempt = productBarcode && workspace?.supply.id
-        ? peekFbsPendingProductScan(token, workspace.supply.id, productBarcode)
-        : null
-      const effectivePreferences = pendingProductAttempt?.preferences ?? preferences
       const scan = {
         attemptId: createFbsIdempotencyKey(),
         orderId: kizScanActive.order_id,
-        enabled: !isOzonSupply && effectivePreferences.reprintChz,
+        enabled: !isOzonSupply && preferences.reprintChz,
         workspaceGeneration: workspaceOpenGeneration.current,
       }
       busyHardwareCaptureEnabledRef.current = (
         !isOzonSupply
         && (
-          effectivePreferences.printQr
-          || effectivePreferences.printChz
-          || effectivePreferences.reprintChz
+          preferences.printQr
+          || preferences.printChz
+          || preferences.reprintChz
         )
       )
       setKizScanBusy(true)
@@ -1551,6 +1543,13 @@ export function FfFbsSupplyWorkspace({
       setKizScanDebugOpen(false)
       setKizScanNotice(null)
       try {
+        if (!workspace) return
+        const scanFlow = async () => {
+        const ownerId = productBarcode ? await packingScanLocks().owner() : undefined
+        const pendingProductAttempt = productBarcode
+          ? peekFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId) : null
+        const effectivePreferences = pendingProductAttempt?.preferences ?? preferences
+        scan.enabled = !isOzonSupply && effectivePreferences.reprintChz
         const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
         setKizScanHints(validated.hints)
         const results = await commitFbsKiz(
@@ -1676,7 +1675,7 @@ export function FfFbsSupplyWorkspace({
               updateFbsPendingProductScan(token, workspace.supply.id, pendingProductAttempt)
             }
             if (fbsPendingProductScanComplete(pendingProductAttempt)) {
-              completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+              completeFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId)
             }
           }
           activeProductScanBarcodeRef.current = null
@@ -1710,6 +1709,9 @@ export function FfFbsSupplyWorkspace({
             })
           }
         })()
+        }
+        if (productBarcode) await packingScanLocks().run(fbsPendingProductScanStorageKey(token, workspace.supply.id), scanFlow)
+        else await scanFlow()
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
         playScanError()
@@ -1724,13 +1726,18 @@ export function FfFbsSupplyWorkspace({
 
   // WMS-403: keep the original scanner reset; WMS-514 additionally closes only
   // its own pending product attempt so a later physical scan is a new action.
-  const dropKizScanActive = useCallback(() => {
+  const dropKizScanActive = useCallback(async () => {
     const productBarcode = activeProductScanBarcodeRef.current
     if (productBarcode && workspace?.supply.id) {
       // Reset is an explicit cancellation of the selected product unit. A
       // later physical scan must receive a fresh request id/snapshot instead
       // of reviving the cancelled attempt forever.
-      completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+      await packingScanLocks().run(fbsPendingProductScanStorageKey(token, workspace.supply.id), async () => {
+        const ownerId = await packingScanLocks().owner()
+        const pending = peekFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId)
+        if (pending?.preferences.printQr && !pending.qrStarted) return
+        completeFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId)
+      })
     }
     setKizScanActive(null)
     kizSelectedStickerRef.current = ''
@@ -1745,10 +1752,15 @@ export function FfFbsSupplyWorkspace({
     refocusKizInput(true)
   }, [refocusKizInput, token, workspace?.supply.id])
 
-  const dismissKizConfirmation = useCallback(() => {
+  const dismissKizConfirmation = useCallback(async () => {
     const productBarcode = activeProductScanBarcodeRef.current
     if (productBarcode && workspace?.supply.id) {
-      completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
+      await packingScanLocks().run(fbsPendingProductScanStorageKey(token, workspace.supply.id), async () => {
+        const ownerId = await packingScanLocks().owner()
+        const pending = peekFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId)
+        if (pending?.preferences.printQr && !pending.qrStarted) return
+        completeFbsPendingProductScan(token, workspace.supply.id, productBarcode, ownerId)
+      })
       activeProductScanBarcodeRef.current = null
     }
     setKizConfirmTarget(null)

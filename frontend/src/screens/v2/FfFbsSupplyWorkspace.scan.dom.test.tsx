@@ -1,9 +1,28 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
+import { directQrHash, type DurableQrAttempt } from '../../utils/durableDirectQr'
+import { fbsPendingProductScanStorageKey, readPendingAttempts } from './fbsScanAutoPrint'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('./fbsPackingScanLocks', () => ({ packingScanLocks: () => { if (durable.noLocks) throw new Error('no navigator.locks'); return { owner: async () => 'test-owner', active: async () => false, run: async (_scope: string, action: () => Promise<unknown>) => action() } } }))
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+
+const durable = vi.hoisted(() => ({ noLocks: false, rows: new Map<string, DurableQrAttempt>(), chz: vi.fn(async () => undefined) }))
+vi.mock('../../utils/durableDirectQr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/durableDirectQr')>()
+  const store = { get: async (key: string) => structuredClone(durable.rows.get(key)),
+    put: async (attempt: DurableQrAttempt) => { durable.rows.set(attempt.input.idempotencyKey, structuredClone(attempt)) } }
+  return { ...actual,
+    prepareDurableQr: (input: Parameters<typeof actual.prepareDurableQr>[0]) => actual.prepareDurableQr(input, store),
+    restoreDurableQr: (key: string, context: Parameters<typeof actual.restoreDurableQr>[1]) => actual.restoreDurableQr(key, context, store),
+    dispatchDurableQr: (input: Parameters<typeof actual.dispatchDurableQr>[0], _store?: unknown, _io?: unknown, existing = false) => actual.dispatchDurableQr(input, store, undefined, existing),
+  }
+})
+vi.mock('../../utils/printMarkingCodeLabel', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../utils/printMarkingCodeLabel')>(), printMarkingCodeTape: durable.chz,
+}))
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -102,6 +121,13 @@ const packagingTask = {
 type Call = { method: string; path: string; body: unknown }
 let calls: Call[]
 let delays: Record<string, number>
+const PRODUCT = '4600000000017'
+const png = 'data:image/png;base64,AQID'
+let nativeMode: 'online' | 'lost' | 'missing'
+let nativeJobs: Map<string, Record<string, unknown>>
+let selections: Map<string, number>
+let printStarted: Set<string>
+let newChz: boolean
 let committedTails: Record<string, string | null>
 const originalFetch = globalThis.fetch
 
@@ -119,6 +145,36 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
   const path = url.pathname.replace(/^\/api/, '')
   calls.push({ method, path: `${path}${url.search}`, body })
+  if (url.hostname === '127.0.0.1') {
+    if (path === '/health') return json({ app: 'WMS Print Direct', protocolVersion: 2 })
+    if (path === '/print') {
+      const sent = body as Parameters<typeof directQrHash>[0]
+      const job = { ...sent, hash: await directQrHash(sent), status: 'accepted', receipt: `queue-${nativeJobs.size + 1}` }
+      nativeJobs.set(sent.idempotencyKey, job)
+      if (nativeMode === 'lost') { nativeMode = 'online'; throw new Error('lost POST response') }
+      return json(job, 202)
+    }
+    const key = decodeURIComponent(path.split('/jobs/')[1]?.split('/')[0] ?? '')
+    return nativeMode !== 'missing' && nativeJobs.has(key) ? json(nativeJobs.get(key)) : json({}, 404)
+  }
+  if (path === '/fixture-ordinary-label.png') return new Response(Uint8Array.from([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } })
+  if (path.endsWith('/scan-auto-print')) {
+    const sent = body as { idempotency_key: string }
+    if (!selections.has(sent.idempotency_key)) selections.set(sent.idempotency_key, selections.size + 1)
+    const index = selections.get(sent.idempotency_key)!
+    return json({ scan_id: `ordinary-scan-${index}`, order_id: index === 1 ? 'order-a' : 'order-b', wb_order_id: 5000 + index,
+      requires_honest_sign: newChz, qr_asset: { id: 'qr', status: 'ready', preview_url: '/fixture-ordinary-label.png' },
+      printed_codes: newChz ? [{ id: 'code-one', cis_code: KIZ_A }] : [], shortage: 0, order_errors: [], reprint_recovery: null })
+  }
+  if (path.endsWith('/print-claim')) {
+    const key = path.split('/scan-auto-print/')[1]!.split('/')[0]!
+    return json({ claimed: !printStarted.has(key), started: printStarted.has(key) })
+  }
+  if (path.endsWith('/print-started')) {
+    const key = path.split('/scan-auto-print/')[1]!.split('/')[0]!
+    printStarted.add(key)
+    return json({ claimed: false, started: true })
+  }
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === '/operations/fbs-orders/kiz/lookup') {
     await wait(delays.lookup ?? 0)
@@ -154,6 +210,9 @@ let host: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
+  durable.rows.clear(); durable.chz.mockClear(); durable.noLocks = false
+  nativeJobs = new Map(); selections = new Map(); printStarted = new Set(); nativeMode = 'online'; newChz = false
   calls = []
   delays = {}
   committedTails = {}
@@ -427,5 +486,75 @@ describe('WMS-604 unified packing presentation', () => {
     const prepares = calls.filter((call) => call.path.endsWith('/print-assets'))
     expect(prepares).toHaveLength(1)
     expect(prepares[0].body).toMatchObject({ kind: 'order_sticker', order_ids: ['order-a', 'order-b'], retry_missing: true })
+  })
+})
+
+describe('WMS-625 ordinary WB durable QR', () => {
+  const nativePosts = () => calls.filter((call) => call.path === '/print')
+  const setPreferences = (printQr: boolean, printChz = false) => window.localStorage.setItem(
+    'wms:fbs:scan-auto-print:unknown-tenant:unknown-user', JSON.stringify({ printQr, printChz, reprintChz: false }))
+  const productScans = () => calls.filter((call) => call.path.endsWith('/scan-auto-print'))
+  const remount = async () => { await act(async () => root.unmount()); root = createRoot(host); await openPackingTab() }
+  it('lost native response + reload retains QR+CHZ snapshot and completed CHZ, then recovers same order without auto-pack', async () => {
+    newChz = true; nativeMode = 'lost'; setPreferences(true, true)
+    await openPackingTab(); scan(PRODUCT); await settle(130)
+    expect(nativePosts()).toHaveLength(1)
+    expect(durable.chz).toHaveBeenCalledTimes(1)
+    const pending = readPendingAttempts('t-575', SUPPLY_ID)[0]!
+    expect(pending).toMatchObject({ orderId: 'order-a', scanId: 'ordinary-scan-1', qrStarted: false, chzStarted: true })
+    expect(durable.rows.get('ordinary-scan-1')?.dispatchStartedAt).toBeGreaterThan(0)
+    setPreferences(false); await remount(); scan(PRODUCT); await settle(130)
+    expect(productScans()).toHaveLength(2)
+    expect(productScans()[1].body).toEqual(productScans()[0].body)
+    expect(nativePosts()).toHaveLength(1)
+    expect(durable.chz).toHaveBeenCalledTimes(1)
+    expect(readPendingAttempts('t-575', SUPPLY_ID)).toEqual([])
+    expect(calls.some((call) => call.path.endsWith('/pack'))).toBe(false)
+    expect(durable.rows.get('ordinary-scan-1')?.input.imageDataUrl).toBe(png)
+  })
+  it('unknown POST followed by native GET404 stays on same order without another copy', async () => {
+    nativeMode = 'lost'; setPreferences(true)
+    await openPackingTab(); scan(PRODUCT); await settle(120)
+    nativeMode = 'missing'; await remount(); scan(PRODUCT); await settle(120)
+    expect(nativePosts()).toHaveLength(1)
+    expect(selections.size).toBe(1)
+    expect(document.body.textContent).toContain('новая копия не отправлена')
+    expect(readPendingAttempts('t-575', SUPPLY_ID)[0]?.scanId).toBe('ordinary-scan-1')
+  })
+  it('successive identical product units have separate QR intents without changing quantity workflow', async () => {
+    setPreferences(true); await openPackingTab(); scan(PRODUCT); await settle(100); scan(PRODUCT); await settle(100)
+    expect(nativePosts()).toHaveLength(2)
+    expect(selections.size).toBe(2)
+    expect(Array.from(durable.rows.keys())).toEqual(['ordinary-scan-1', 'ordinary-scan-2'])
+    expect(calls.some((call) => call.path.endsWith('/pack'))).toBe(false)
+  })
+  it('CHZ-only keeps ordinary code path and never contacts native', async () => {
+    newChz = true; setPreferences(false, true); await openPackingTab(); scan(PRODUCT); await settle(100)
+    expect(productScans()).toHaveLength(1)
+    expect(durable.chz).toHaveBeenCalledTimes(1)
+    expect(calls.some((call) => call.path === '/health' || call.path.startsWith('/jobs/') || call.path === '/print')).toBe(false)
+  })
+  it.each(['wb', 'ozon'])('%s sticker/KIZ path still works with flags off and no Web Locks', async (marketplace) => {
+    durable.noLocks = true
+    const initial = workspace(); initial.supply.marketplace = marketplace as 'wb' | 'ozon'
+    await openPackingTab(initial); scan(STICKER_A); await settle(80)
+    expect(activeRow()).toBe('order-a')
+    scan(KIZ_A); await settle(100)
+    expect(kizCalls().some((call) => call.path === '/operations/fbs-orders/kiz/commit')).toBe(true)
+    expect(productScans()).toHaveLength(0)
+    expect(nativePosts()).toHaveLength(0)
+  })
+  it('storage failure stops before server product selection', async () => {
+    setPreferences(true); await openPackingTab()
+    const setItem = Storage.prototype.setItem
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (key === fbsPendingProductScanStorageKey('t-575', SUPPLY_ID)) throw new Error('quota')
+      setItem.call(this, key, value)
+    })
+    scan(PRODUCT); await settle(100)
+    expect(productScans()).toHaveLength(0)
+    expect(nativePosts()).toHaveLength(0)
+    expect(document.body.textContent).toContain('Не удалось сохранить попытку')
+    write.mockRestore()
   })
 })

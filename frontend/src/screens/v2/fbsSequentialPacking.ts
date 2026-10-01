@@ -1,10 +1,11 @@
+import { packingScanLocks } from './fbsPackingScanLocks'
 import { apiUrl } from '../../api'
 import { dispatchDurableQr, prepareDurableQr, restoreDurableQr, type DirectQrContext } from '../../utils/durableDirectQr'
 import { loadLabelSizeId, resolveLabelSize } from '../../utils/labelSize'
 import { startClaimedAutomaticPrint } from './fbsKizAutoReprint'
 import {
   claimFbsPendingProductScan, completeFbsPendingProductScan, peekFbsPendingProductScan,
-  updateFbsPendingProductScan, tokenIdentity, readPendingAttempts,
+  updateFbsPendingProductScan, tokenIdentity, readPendingAttempts, fbsPendingProductScanStorageKey,
 } from './fbsScanAutoPrint'
 import {
   assignFbsPackingBoxOrders, claimFbsScanAutoPrintTarget, commitFbsKiz, createFbsIdempotencyKey,
@@ -18,7 +19,7 @@ export type PackingScanView = { orderId: string; name: string; needsKiz: boolean
 export type PackingScanController = {
   scan: (raw: string) => Promise<void>
   hasPending: () => boolean
-  hasSavedAttempt: (raw: string) => boolean
+  hasSavedAttempt: (raw: string) => boolean | Promise<boolean>
   view: () => PackingScanView
 }
 export type PackingScanDeps = {
@@ -28,11 +29,12 @@ export type PackingScanDeps = {
   bind: (result: FbsScanAutoPrintResult, raw: string) => Promise<void>
   print: (result: FbsScanAutoPrintResult, image: string) => Promise<void>
   pack: (result: FbsScanAutoPrintResult) => Promise<void>
-  claim: (raw: string) => string
-  saved: (raw: string) => boolean
-  pendingBarcode?: () => string | undefined
-  remember: (raw: string, result: FbsScanAutoPrintResult) => void
-  complete: (raw: string) => void
+  claim: (raw: string) => string | Promise<string>
+  saved: (raw: string) => boolean | Promise<boolean>
+  pendingBarcode?: () => string | undefined | Promise<string | undefined>
+  exclusive?: (action: () => Promise<void>) => Promise<void>
+  remember: (raw: string, result: FbsScanAutoPrintResult) => void | Promise<void>
+  complete: (raw: string) => void | Promise<void>
   changed: () => void
 }
 
@@ -40,7 +42,8 @@ export type PackingScanDeps = {
 export async function routePackingScan(controllers: PackingScanController[], raw: string): Promise<void> {
   const pending = controllers.find((one) => one.hasPending())
   if (pending) return pending.scan(raw)
-  const saved = controllers.find((one) => one.hasSavedAttempt(raw))
+  let saved: PackingScanController | undefined
+  for (const controller of controllers) { if (await controller.hasSavedAttempt(raw)) { saved = controller; break } }
   const ordered = saved ? [saved, ...controllers.filter((one) => one !== saved)] : controllers
   for (const controller of ordered) {
     try { await controller.scan(raw); return }
@@ -62,26 +65,27 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
     if (deps.active?.() === false) throw new Error('Упаковка закрыта. Откройте её и повторите скан товара для продолжения.')
     await deps.print(current.result, image)
     await deps.pack(current.result)
-    deps.complete(current.barcode)
+    await deps.complete(current.barcode)
     pending = null
     deps.changed()
   }
   return {
     hasPending: () => pending !== null,
-    hasSavedAttempt: (raw) => Boolean(deps.pendingBarcode?.()) || deps.saved(raw),
+    hasSavedAttempt: async (raw) => Boolean(await deps.pendingBarcode?.()) || await deps.saved(raw),
     view: () => pending ? {
       orderId: pending.result.order_id,
       name: pending.result.binding_target?.product.name ?? `WB № ${pending.result.wb_order_id}`,
       needsKiz: pending.needsKiz,
     } : null,
     async scan(raw) {
+      const run = async () => {
       if (deps.active?.() === false) return
       if (pending) {
         if (!pending.needsKiz && raw !== pending.barcode) {
           throw new Error(`Не завершена упаковка ${pending.result.binding_target?.product.name ?? `заказа WB № ${pending.result.wb_order_id}`}. Повторите его штрихкод ${pending.barcode}.`)
         }
         if (pending.needsKiz && raw === pending.barcode) {
-          const recovered = await deps.select(raw, deps.claim(raw))
+          const recovered = await deps.select(raw, await deps.claim(raw))
           if (recovered.scan_id !== pending.result.scan_id || recovered.order_id !== pending.result.order_id) {
             throw new Error('Сервер вернул другой заказ для незавершённого скана.')
           }
@@ -100,10 +104,10 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         await finish()
         return
       }
-      const savedBarcode = deps.pendingBarcode?.()
+      const savedBarcode = await deps.pendingBarcode?.()
       if (savedBarcode && savedBarcode !== raw) throw new Error(`Есть незавершённая попытка упаковки. Повторите её штрихкод ${savedBarcode}, чтобы восстановить исходный заказ.`)
-      const result = await deps.select(raw, deps.claim(raw))
-      deps.remember(raw, result)
+      const result = await deps.select(raw, await deps.claim(raw))
+      await deps.remember(raw, result)
       if (deps.active?.() === false) return
       pending = {
         barcode: raw, result, image: deps.preload(result),
@@ -113,6 +117,9 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       void pending.image.catch(() => undefined)
       deps.changed()
       if (!pending.needsKiz) await finish()
+      }
+      if (deps.exclusive) await deps.exclusive(run)
+      else await run()
     },
   }
 }
@@ -127,6 +134,7 @@ export function makePackingScanDeps(
   currentBox: () => string | null = () => null,
   onBound: (orderId: string, value: string) => void = () => undefined,
   onSelected: (orderId: string) => void = () => undefined,
+  locks: typeof packingScanLocks = packingScanLocks,
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
@@ -149,6 +157,19 @@ export function makePackingScanDeps(
   }
   // Separate unfinished new-flow scans from historical checkbox-based print scans.
   const storageId = `${supplyId}:sequential-packing`
+  const scope = fbsPendingProductScanStorageKey(token, storageId)
+  const stateLock = <T>(action: () => Promise<T>) => locks().run(`${scope}:state`, action)
+  const recoverable = async () => {
+    const ownerId = await locks().owner()
+    const attempts = readPendingAttempts(token, storageId)
+    const own = attempts.filter((attempt) => attempt.ownerId === ownerId)
+    const inactive = []
+    for (const attempt of attempts) {
+      if (attempt.ownerId !== ownerId && (!attempt.ownerId || !await locks().active(attempt.ownerId))) inactive.push(attempt)
+    }
+    return [...own, ...inactive]
+  }
+  const ownAttempt = async (raw: string) => peekFbsPendingProductScan(token, storageId, raw, await locks().owner())
   const request = async (path: string, init?: RequestInit) => {
     const response = await fetch(apiUrl(path), { ...init, headers: {
       ...authHeaders(token), 'Content-Type': 'application/json', ...init?.headers,
@@ -161,22 +182,27 @@ export function makePackingScanDeps(
   }
   return {
     active,
-    pendingBarcode: () => readPendingAttempts(token, storageId)[0]?.barcode,
-    claim: (raw) => {
-      const attempt = claimFbsPendingProductScan(token, storageId, raw,
-        { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey)
-      // Capture the operator's box before the request: an uncertain selection
-      // and a later remount must never substitute the newly opened box.
+    exclusive: (action) => locks().run(fbsPendingProductScanStorageKey(token, supplyId), action),
+    pendingBarcode: async () => (await recoverable())[0]?.barcode,
+    claim: (raw) => stateLock(async () => {
+      const ownerId = await locks().owner()
+      const original = (await recoverable()).find((attempt) => attempt.barcode === raw)
+      if (original && original.ownerId !== ownerId) {
+        original.ownerId = ownerId
+        updateFbsPendingProductScan(token, storageId, original)
+      }
+      const attempt = original ?? claimFbsPendingProductScan(token, storageId, raw,
+        { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey, ownerId)
       if (attempt.packingBoxId === undefined) {
         attempt.packingBoxId = currentBox()
         updateFbsPendingProductScan(token, storageId, attempt)
       }
       return attempt.idempotencyKey
-    },
-    saved: (raw) => Boolean(peekFbsPendingProductScan(token, storageId, raw)),
-    remember: (raw, result) => {
-      const attempt = peekFbsPendingProductScan(token, storageId, raw)
-      if (!attempt) return
+    }),
+    saved: async (raw) => (await recoverable()).some((attempt) => attempt.barcode === raw),
+    remember: (raw, result) => stateLock(async () => {
+      const attempt = await ownAttempt(raw)
+      if (!attempt) throw new Error('Исходная попытка скана не принадлежит этой вкладке. Заказ не завершён.')
       if ((attempt.scanId && attempt.scanId !== result.scan_id) || (attempt.orderId && attempt.orderId !== result.order_id)) {
         throw new Error('Сервер вернул другой заказ для незавершённого скана.')
       }
@@ -184,12 +210,17 @@ export function makePackingScanDeps(
       attempt.orderId = result.order_id
       updateFbsPendingProductScan(token, storageId, attempt)
       onSelected(result.order_id)
-    },
-    complete: (raw) => { completeFbsPendingProductScan(token, storageId, raw); refreshed() },
+    }),
+    complete: (raw) => stateLock(async () => {
+      completeFbsPendingProductScan(token, storageId, raw, await locks().owner())
+      refreshed()
+    }),
     changed,
     select: async (barcode, idempotency_key) => {
       try {
-        const boxId = peekFbsPendingProductScan(token, storageId, barcode)?.packingBoxId ?? null
+        const attempt = await ownAttempt(barcode)
+        if (!attempt || attempt.idempotencyKey !== idempotency_key) throw new Error('Исходный ключ скана не сохранён за этой вкладкой. Новый заказ не выбран.')
+        const boxId = attempt.packingBoxId ?? null
         const selected = await scanFbsProductForAutoPrint(token, authHeaders, supplyId, {
           barcode, idempotency_key, print_qr: true, print_chz: false, reprint_chz: false, await_honest_sign: true,
         })
@@ -198,9 +229,9 @@ export function makePackingScanDeps(
         return selected
       } catch (cause) {
         if (cause instanceof FbsApiError && ['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) {
-          const saved = peekFbsPendingProductScan(token, storageId, barcode)
+          const saved = await ownAttempt(barcode)
           if (saved?.scanId) throw new Error('Не удалось восстановить исходный заказ незавершённой печати. Повторный выбор другого заказа остановлен.')
-          completeFbsPendingProductScan(token, storageId, barcode)
+          await stateLock(async () => completeFbsPendingProductScan(token, storageId, barcode, await locks().owner()))
         }
         throw cause
       }
