@@ -174,7 +174,7 @@ async def test_delegated_token_enqueues_active_and_worker_uses_active(
     called = []
     queued = []
 
-    async def sync(session, tenant_id, seller_id, http_client):
+    async def sync(session, tenant_id, seller_id, http_client, **_kwargs):
         called.append((tenant_id, seller_id))
         return {"processed": 1}
 
@@ -191,10 +191,10 @@ async def test_delegated_token_enqueues_active_and_worker_uses_active(
     job_id = uuid.UUID(response.json()["id"])
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
-        assert job.payload_json == {
-            "seller_id": str(users["b"].seller_id),
-            "marketplace": "wildberries",
-        }
+        assert job.payload_json is not None
+        assert job.payload_json["seller_id"] == str(users["b"].seller_id)
+        assert job.payload_json["marketplace"] == "wildberries"
+        assert isinstance(job.payload_json["credentials_generation"], str)
     if celery:
         assert queued == [str(job_id)]
         await jobs.run_wildberries_cards_sync_job(job_id)
@@ -312,7 +312,7 @@ async def test_direct_marketplace_sync_uses_active(async_client, monkeypatch):
     async def wb_credentials(session, tenant_id, seller_id):
         return "fixture", None
 
-    async def wb_sync(session, tenant_id, seller_id, http_client):
+    async def wb_sync(session, tenant_id, seller_id, http_client, **_kwargs):
         seen.append(("wb", seller_id))
         return {"cards_received": 0, "cards_saved": 0}
 
@@ -323,7 +323,7 @@ async def test_direct_marketplace_sync_uses_active(async_client, monkeypatch):
         seen.append(("ozon-import", seller_id))
         return OzonProductImportResult()
 
-    async def ozon_sync_succeeded(self, tenant_id, seller_id):
+    async def ozon_sync_succeeded(self, tenant_id, seller_id, **_kwargs):
         return None
 
     monkeypatch.setattr(wb, "get_decrypted_tokens_for_seller", wb_credentials)
@@ -363,9 +363,12 @@ async def test_direct_marketplace_sync_uses_active(async_client, monkeypatch):
         for job_id in jobs_by_marketplace.values():
             job = await session.get(BackgroundJob, job_id)
             assert job is not None
-            assert job.payload_json == {"seller_id": str(users["b"].seller_id), "marketplace": (
+            assert job.payload_json is not None
+            assert job.payload_json["seller_id"] == str(users["b"].seller_id)
+            assert job.payload_json["marketplace"] == (
                 "wildberries" if job_id == jobs_by_marketplace["wildberries"] else "ozon"
-            )}
+            )
+            assert isinstance(job.payload_json["credentials_generation"], str)
 
     await jobs.run_wildberries_cards_sync_job(jobs_by_marketplace["wildberries"])
     await jobs.run_ozon_catalog_sync_job(jobs_by_marketplace["ozon"])

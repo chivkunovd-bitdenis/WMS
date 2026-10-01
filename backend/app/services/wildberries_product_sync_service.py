@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -41,7 +42,9 @@ def _parse_card_nm_id(card: dict[str, Any]) -> int | None:
 
 
 async def get_selected_wb_nm_ids(
-    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
 ) -> set[int]:
     """nmID of the WB cards already "on fulfilment" for this seller (WMS-548 А3).
 
@@ -65,7 +68,8 @@ async def get_selected_wb_nm_ids(
 
 
 def filter_wb_cards_to_selected(
-    cards: list[Any], selected_nm_ids: set[int],
+    cards: list[Any],
+    selected_nm_ids: set[int],
 ) -> list[Any]:
     """Keep only cards already selected (see ``get_selected_wb_nm_ids``).
 
@@ -97,6 +101,8 @@ async def sync_wb_products_for_seller(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Import all WB cards and upsert size-variant Product rows for one seller."""
     pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
@@ -106,32 +112,47 @@ async def sync_wb_products_for_seller(
     if not content_token:
         raise WildberriesSyncError("missing_content_token")
     try:
-        raw_cards, cursor_present = await fetch_all_cards(
-            http_client, api_token=content_token
-        )
+        raw_cards, cursor_present = await fetch_all_cards(http_client, api_token=content_token)
         cards = [card for card in raw_cards if isinstance(card, dict)]
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
-    result = await _save_wb_cards(session, tenant_id, seller_id, cards)
+    result = await _save_wb_cards(
+        session,
+        tenant_id,
+        seller_id,
+        cards,
+        before_commit=before_commit,
+    )
     result["cursor_present"] = cursor_present
     return result
 
 
 async def _save_wb_cards(
-    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
     cards: list[dict[str, Any]],
+    *,
+    before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     # Снимок обновляется по всем карточкам всегда; товары WMS — только по тем,
     # что уже выбраны (см. get_selected_wb_nm_ids). WMS-548 R5: синхронизация не
     # заводит новые карточки и не трогает те, что селлер не выбрал.
-    saved = await upsert_imported_cards(session, tenant_id, seller_id, cards)
+    saved = await upsert_imported_cards(
+        session,
+        tenant_id,
+        seller_id,
+        cards,
+        before_commit=before_commit,
+    )
     selected_nm_ids = await get_selected_wb_nm_ids(session, tenant_id, seller_id)
     prod_stats = await upsert_products_from_wb_cards(
         session,
         tenant_id,
         seller_id,
         filter_wb_cards_to_selected(list(cards), selected_nm_ids),
+        before_commit=before_commit,
     )
     return {
         "seller_id": str(seller_id),
@@ -143,17 +164,23 @@ async def _save_wb_cards(
 
 
 async def _sync_scheduled_seller(
-    tenant_id: uuid.UUID, seller_id: uuid.UUID, http_client: httpx.AsyncClient,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
 ) -> dict[str, Any]:
     # Own the read session: do not commit a caller's transaction to release its
     # connection. No DB session/lock remains open while fetching all WB pages.
     async with SessionLocal() as session:
-        active_job = await session.scalar(select(BackgroundJob.id).where(
-            BackgroundJob.tenant_id == tenant_id,
-            BackgroundJob.job_type.in_(("wildberries_cards_sync", "seller_wb_catalog_sync")),
-            BackgroundJob.status.in_(("pending", "running")),
-            BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
-        ).limit(1))
+        active_job = await session.scalar(
+            select(BackgroundJob.id)
+            .where(
+                BackgroundJob.tenant_id == tenant_id,
+                BackgroundJob.job_type.in_(("wildberries_cards_sync", "seller_wb_catalog_sync")),
+                BackgroundJob.status.in_(("pending", "running")),
+                BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
+            )
+            .limit(1)
+        )
         if active_job is not None:
             raise WildberriesSyncError("manual_sync_active")
         pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)

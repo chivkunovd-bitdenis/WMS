@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
 from app.models.inventory_movement import InventoryMovement
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services import wildberries_sync_service as wb_sync
 
 logger = logging.getLogger(__name__)
@@ -37,9 +39,11 @@ JOB_TYPE_FBS_LABEL_PRINT = "fbs_label_print"
 # is deliberately above the measured 55k-card runs, while still recovering a
 # row left RUNNING forever when a worker is killed without a final update.
 CATALOG_SYNC_JOB_LEASE = timedelta(hours=2)
-WB_CATALOG_JOB_TYPES = frozenset(
-    {JOB_TYPE_WILDBERRIES_CARDS_SYNC, JOB_TYPE_SELLER_WB_CATALOG_SYNC}
-)
+WB_CATALOG_JOB_TYPES = frozenset({JOB_TYPE_WILDBERRIES_CARDS_SYNC, JOB_TYPE_SELLER_WB_CATALOG_SYNC})
+
+
+class CatalogJobOwnershipLost(Exception):
+    """The worker's lease or credential generation is no longer current."""
 
 
 def _utc(value: datetime) -> datetime:
@@ -48,11 +52,171 @@ def _utc(value: datetime) -> datetime:
 
 def _catalog_job_is_stale(job: BackgroundJob, *, now: datetime) -> bool:
     lease_started_at = (
-        (job.started_at or job.created_at)
-        if job.status == JOB_STATUS_RUNNING
-        else job.created_at
+        (job.started_at or job.created_at) if job.status == JOB_STATUS_RUNNING else job.created_at
     )
     return _utc(lease_started_at) <= now - CATALOG_SYNC_JOB_LEASE
+
+
+def _generation_timestamp(value: datetime | None) -> str:
+    return _utc(value).isoformat() if value is not None else "none"
+
+
+async def _catalog_credentials_generation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    marketplace: str,
+) -> str:
+    """Return a non-secret version for the credentials used by a catalog job."""
+    if marketplace == "wildberries":
+        row = await session.scalar(
+            select(SellerWildberriesCredentials)
+            .where(SellerWildberriesCredentials.seller_id == seller_id)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return "wildberries:none:0"
+        return (
+            f"wildberries:{_generation_timestamp(row.updated_at)}:"
+            f"{int(bool(row.content_token_encrypted))}"
+        )
+    row = await session.scalar(
+        select(MarketplaceAccount)
+        .where(
+            MarketplaceAccount.tenant_id == tenant_id,
+            MarketplaceAccount.seller_id == seller_id,
+            MarketplaceAccount.marketplace == "ozon",
+            MarketplaceAccount.account_slot == "primary",
+        )
+        .execution_options(populate_existing=True)
+    )
+    if row is None:
+        return "ozon:none:none:0"
+    return f"ozon:{row.id}:{_generation_timestamp(row.credentials_updated_at)}:{int(row.is_active)}"
+
+
+async def _fence_catalog_job_commit(
+    session: AsyncSession,
+    *,
+    job_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    marketplace: str,
+    lease_started_at: datetime,
+    credentials_generation: str,
+) -> None:
+    """Lock and verify ownership immediately before committing catalog data.
+
+    The seller lock serialises this check with credential saves and replacement
+    job creation. The conditional job update is the fencing operation: after a
+    lease is expired or replaced, the former worker cannot cross another
+    durable commit boundary.
+    """
+    seller_lock = await session.execute(
+        update(Seller)
+        .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        .values(name=Seller.name)
+    )
+    if getattr(seller_lock, "rowcount", 0) != 1:
+        raise CatalogJobOwnershipLost
+    current_generation = await _catalog_credentials_generation(
+        session, tenant_id, seller_id, marketplace
+    )
+    if current_generation != credentials_generation:
+        raise CatalogJobOwnershipLost
+    fenced = await session.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job_id,
+            BackgroundJob.tenant_id == tenant_id,
+            BackgroundJob.status == JOB_STATUS_RUNNING,
+            BackgroundJob.started_at == lease_started_at,
+            BackgroundJob.payload_json["credentials_generation"].as_string()
+            == credentials_generation,
+        )
+        .values(started_at=BackgroundJob.started_at)
+    )
+    if getattr(fenced, "rowcount", 0) != 1:
+        raise CatalogJobOwnershipLost
+
+
+async def _finish_catalog_job_if_owned(
+    session: AsyncSession,
+    *,
+    job_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    marketplace: str,
+    lease_started_at: datetime,
+    credentials_generation: str,
+    status: str,
+    result_json: dict[str, Any] | None,
+    error_message: str | None,
+) -> bool:
+    try:
+        await _fence_catalog_job_commit(
+            session,
+            job_id=job_id,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            marketplace=marketplace,
+            lease_started_at=lease_started_at,
+            credentials_generation=credentials_generation,
+        )
+    except CatalogJobOwnershipLost:
+        await session.rollback()
+        logger.info("catalog job ownership lost before finish: %s", job_id)
+        return False
+    finished = await session.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job_id,
+            BackgroundJob.tenant_id == tenant_id,
+            BackgroundJob.status == JOB_STATUS_RUNNING,
+            BackgroundJob.started_at == lease_started_at,
+        )
+        .values(
+            status=status,
+            result_json=result_json,
+            error_message=error_message,
+            finished_at=datetime.now(UTC),
+        )
+    )
+    if getattr(finished, "rowcount", 0) != 1:
+        await session.rollback()
+        return False
+    await session.commit()
+    return True
+
+
+async def _finish_claimed_job_by_lease(
+    session: AsyncSession,
+    *,
+    job_id: uuid.UUID,
+    lease_started_at: datetime,
+    status: str,
+    result_json: dict[str, Any] | None,
+    error_message: str | None,
+) -> bool:
+    finished = await session.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job_id,
+            BackgroundJob.status == JOB_STATUS_RUNNING,
+            BackgroundJob.started_at == lease_started_at,
+        )
+        .values(
+            status=status,
+            result_json=result_json,
+            error_message=error_message,
+            finished_at=datetime.now(UTC),
+        )
+    )
+    if getattr(finished, "rowcount", 0) != 1:
+        await session.rollback()
+        return False
+    await session.commit()
+    return True
 
 
 async def _claim_catalog_sync_job(
@@ -132,6 +296,9 @@ async def create_or_get_seller_catalog_sync_job(
     )
     if getattr(locked, "rowcount", 0) != 1:
         raise ValueError("seller_not_found")
+    credentials_generation = await _catalog_credentials_generation(
+        session, tenant_id, seller_id, marketplace
+    )
     compatible_types = (
         WB_CATALOG_JOB_TYPES if marketplace == "wildberries" else frozenset({job_type})
     )
@@ -148,18 +315,27 @@ async def create_or_get_seller_catalog_sync_job(
     )
     if active is not None:
         now = datetime.now(UTC)
-        if not _catalog_job_is_stale(active, now=now):
+        active_is_stale = _catalog_job_is_stale(active, now=now)
+        active_payload = active.payload_json or {}
+        active_generation = active_payload.get("credentials_generation")
+        if active_generation == credentials_generation and not active_is_stale:
             await session.commit()
             return active, False
         active.status = JOB_STATUS_FAILED
         active.result_json = None
-        active.error_message = "catalog_job_lease_expired"
+        active.error_message = (
+            "catalog_job_lease_expired" if active_is_stale else "catalog_job_credentials_changed"
+        )
         active.finished_at = now
     job = BackgroundJob(
         tenant_id=tenant_id,
         job_type=job_type,
         status=JOB_STATUS_PENDING,
-        payload_json={"seller_id": str(seller_id), "marketplace": marketplace},
+        payload_json={
+            "seller_id": str(seller_id),
+            "marketplace": marketplace,
+            "credentials_generation": credentials_generation,
+        },
     )
     session.add(job)
     await session.commit()
@@ -202,9 +378,11 @@ async def run_movements_digest_job(job_id: uuid.UUID) -> None:
         await session.commit()
         try:
             await asyncio.sleep(0.35)
-            stmt = select(InventoryMovement.movement_type, func.count(InventoryMovement.id)).where(
-                InventoryMovement.tenant_id == job.tenant_id
-            ).group_by(InventoryMovement.movement_type)
+            stmt = (
+                select(InventoryMovement.movement_type, func.count(InventoryMovement.id))
+                .where(InventoryMovement.tenant_id == job.tenant_id)
+                .group_by(InventoryMovement.movement_type)
+            )
             res = await session.execute(stmt)
             by_type = {str(mt): int(count) for mt, count in res.all()}
             job.status = JOB_STATUS_DONE
@@ -225,6 +403,7 @@ async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
     from datetime import date
 
     from app.services.storage_measurement_service import rebuild_storage_measurements
+
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
@@ -236,9 +415,7 @@ async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
             payload = job.payload_json or {}
             year, month = payload.get("year"), payload.get("month")
             period_start = (
-                date(year, month, 1)
-                if isinstance(year, int) and isinstance(month, int)
-                else None
+                date(year, month, 1) if isinstance(year, int) and isinstance(month, int) else None
             )
             raw_warehouse = payload.get("warehouse_id")
             warehouse_id = uuid.UUID(raw_warehouse) if isinstance(raw_warehouse, str) else None
@@ -277,25 +454,59 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
         if job is None:
             logger.info("WB catalog job already claimed or unavailable: %s", job_id)
             return
+        assert job.started_at is not None
+        lease_started_at = job.started_at
+        tenant_id = job.tenant_id
         payload = job.payload_json or {}
         sid_raw = payload.get("seller_id")
         if not sid_raw or not isinstance(sid_raw, str):
-            job.status = JOB_STATUS_FAILED
-            job.started_at = datetime.now(UTC)
-            job.finished_at = datetime.now(UTC)
-            job.error_message = "missing_job_seller_id"
-            await session.commit()
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="missing_job_seller_id",
+            )
             return
         try:
             seller_uuid = uuid.UUID(sid_raw)
         except ValueError:
-            job.status = JOB_STATUS_FAILED
-            job.started_at = datetime.now(UTC)
-            job.finished_at = datetime.now(UTC)
-            job.error_message = "invalid_job_seller_id"
-            await session.commit()
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="invalid_job_seller_id",
+            )
+            return
+        credentials_generation = payload.get("credentials_generation")
+        if not isinstance(credentials_generation, str):
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="catalog_job_generation_missing",
+            )
             return
 
+        async def before_commit(commit_session: AsyncSession) -> None:
+            await _fence_catalog_job_commit(
+                commit_session,
+                job_id=job_id,
+                tenant_id=tenant_id,
+                seller_id=seller_uuid,
+                marketplace="wildberries",
+                lease_started_at=lease_started_at,
+                credentials_generation=credentials_generation,
+            )
+
+        status = JOB_STATUS_DONE
+        result_json: dict[str, Any] | None = None
+        error_message: str | None = None
         try:
             async with httpx.AsyncClient() as http_client:
                 # The legacy entrypoint and the seller entrypoint now perform
@@ -307,27 +518,42 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
                 )
 
                 result = await sync_wb_products_for_seller(
-                    session, job.tenant_id, seller_uuid, http_client
+                    session,
+                    tenant_id,
+                    seller_uuid,
+                    http_client,
+                    before_commit=before_commit,
                 )
-            job.status = JOB_STATUS_DONE
-            job.result_json = result
-            job.error_message = None
+            result_json = result
+        except CatalogJobOwnershipLost:
+            await session.rollback()
+            logger.info("WB catalog job ownership lost: %s", job_id)
+            return
         except wb_sync.WildberriesSyncError as exc:
             logger.warning("wildberries sync job failed: %s", exc.code)
-            job.status = JOB_STATUS_FAILED
-            job.result_json = None
-            job.error_message = exc.code
+            status = JOB_STATUS_FAILED
+            error_message = exc.code
         except Exception as exc:
+            await session.rollback()
             logger.exception(
                 "wildberries sync job failed job=%s exception_type=%s",
                 job_id,
                 type(exc).__name__,
             )
-            job.status = JOB_STATUS_FAILED
-            job.result_json = None
-            job.error_message = "wildberries_catalog_failed"
-        job.finished_at = datetime.now(UTC)
-        await session.commit()
+            status = JOB_STATUS_FAILED
+            error_message = "wildberries_catalog_failed"
+        await _finish_catalog_job_if_owned(
+            session,
+            job_id=job_id,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            marketplace="wildberries",
+            lease_started_at=lease_started_at,
+            credentials_generation=credentials_generation,
+            status=status,
+            result_json=result_json,
+            error_message=error_message,
+        )
 
 
 def _safe_ozon_catalog_error(exc: Exception) -> str:
@@ -374,6 +600,8 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
         if job is None:
             logger.info("Ozon catalog job already claimed or unavailable: %s", job_id)
             return
+        assert job.started_at is not None
+        lease_started_at = job.started_at
         tenant_id = job.tenant_id
         payload = job.payload_json or {}
         raw_seller_id = payload.get("seller_id")
@@ -382,20 +610,32 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
         except ValueError:
             seller_id = None
         if seller_id is None:
-            job.status = JOB_STATUS_FAILED
-            job.started_at = datetime.now(UTC)
-            job.finished_at = datetime.now(UTC)
-            job.error_message = "invalid_job_seller_id"
-            await session.commit()
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="invalid_job_seller_id",
+            )
+            return
+        credentials_generation = payload.get("credentials_generation")
+        if not isinstance(credentials_generation, str):
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="catalog_job_generation_missing",
+            )
             return
 
         account_service = MarketplaceAccountService(session)
         error: Exception | None = None
         result: Any = None
         try:
-            client_id, api_key = await account_service.stored_credentials(
-                tenant_id, seller_id
-            )
+            client_id, api_key = await account_service.stored_credentials(tenant_id, seller_id)
             for attempt in range(3):
                 try:
                     result = await import_ozon_product_cards(
@@ -405,6 +645,7 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
                         build_ozon_provider(),
                         client_id=client_id,
                         api_key=api_key,
+                        commit=False,
                     )
                     error = None
                     break
@@ -417,54 +658,97 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
             if error is not None:
                 raise error
             assert result is not None
-            await account_service.mark_catalog_sync_succeeded(tenant_id, seller_id)
-            job = await session.get(BackgroundJob, job_id)
-            if job is None:
-                return
-            job.status = JOB_STATUS_DONE
-            job.result_json = {
-                "tenant_id": str(tenant_id),
-                "seller_id": str(seller_id),
-                "marketplace": "ozon",
-                "cards_received": result.cards_read,
-                "cards_saved": result.cards_saved,
-                "links_created": result.links_created,
-                "products_created": result.products_created,
-            }
-            job.error_message = None
+            await _fence_catalog_job_commit(
+                session,
+                job_id=job_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                marketplace="ozon",
+                lease_started_at=lease_started_at,
+                credentials_generation=credentials_generation,
+            )
+            await account_service.mark_catalog_sync_succeeded(tenant_id, seller_id, commit=False)
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_DONE,
+                result_json={
+                    "tenant_id": str(tenant_id),
+                    "seller_id": str(seller_id),
+                    "marketplace": "ozon",
+                    "cards_received": result.cards_read,
+                    "cards_saved": result.cards_saved,
+                    "links_created": result.links_created,
+                    "products_created": result.products_created,
+                },
+                error_message=None,
+            )
+            return
+        except CatalogJobOwnershipLost:
+            await session.rollback()
+            logger.info("Ozon catalog job ownership lost: %s", job_id)
+            return
         except (SellerNotFound, MarketplaceAccountError) as exc:
             await session.rollback()
             code = exc.code
             try:
-                await MarketplaceAccountService(session).mark_catalog_sync_failed(
-                    tenant_id, seller_id, code
+                await _fence_catalog_job_commit(
+                    session,
+                    job_id=job_id,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    marketplace="ozon",
+                    lease_started_at=lease_started_at,
+                    credentials_generation=credentials_generation,
                 )
+                await MarketplaceAccountService(session).mark_catalog_sync_failed(
+                    tenant_id, seller_id, code, commit=False
+                )
+            except CatalogJobOwnershipLost:
+                await session.rollback()
+                return
             except MarketplaceAccountError:
                 await session.rollback()
-            job = await session.get(BackgroundJob, job_id)
-            if job is None:
-                return
-            job.status = JOB_STATUS_FAILED
-            job.result_json = None
-            job.error_message = code
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message=code,
+            )
+            return
         except Exception as exc:
             await session.rollback()
             code = _safe_ozon_catalog_error(exc)
             logger.warning("ozon catalog sync failed job=%s code=%s", job_id, code)
             try:
-                await MarketplaceAccountService(session).mark_catalog_sync_failed(
-                    tenant_id, seller_id, code
+                await _fence_catalog_job_commit(
+                    session,
+                    job_id=job_id,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    marketplace="ozon",
+                    lease_started_at=lease_started_at,
+                    credentials_generation=credentials_generation,
                 )
+                await MarketplaceAccountService(session).mark_catalog_sync_failed(
+                    tenant_id, seller_id, code, commit=False
+                )
+            except CatalogJobOwnershipLost:
+                await session.rollback()
+                return
             except MarketplaceAccountError:
                 await session.rollback()
-            job = await session.get(BackgroundJob, job_id)
-            if job is None:
-                return
-            job.status = JOB_STATUS_FAILED
-            job.result_json = None
-            job.error_message = code
-        job.finished_at = datetime.now(UTC)
-        await session.commit()
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message=code,
+            )
 
 
 async def run_wildberries_supplies_sync_job(job_id: uuid.UUID) -> None:
@@ -639,7 +923,10 @@ async def run_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
             async with (
                 AsyncSession(bind=session.bind) as lock_session,
                 marketplace_seller_lock(
-                    lock_session, seller_uuid, "wb", wait_timeout_sec=30,
+                    lock_session,
+                    seller_uuid,
+                    "wb",
+                    wait_timeout_sec=30,
                 ) as acquired,
             ):
                 if not acquired:

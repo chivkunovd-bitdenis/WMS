@@ -77,10 +77,9 @@ async def test_wb_cards_sync_job_happy_path(
         assert r.status_code == 200
         body = r.json()
         assert "payload_json" in body
-        assert body["payload_json"] == {
-            "seller_id": sid,
-            "marketplace": "wildberries",
-        }
+        assert body["payload_json"]["seller_id"] == sid
+        assert body["payload_json"]["marketplace"] == "wildberries"
+        assert isinstance(body["payload_json"]["credentials_generation"], str)
         if body["status"] in ("done", "failed"):
             assert body["status"] == "done"
             assert body["result_json"]["cards_received"] == card_count
@@ -98,12 +97,14 @@ async def test_wb_cards_sync_job_happy_path(
             assert cursors == [None, *range(100, card_count + 1, 100)]
             # A second run updates the same snapshots; it must not duplicate cards.
             repeated = await async_client.post(
-                "/operations/background-jobs", headers=h,
+                "/operations/background-jobs",
+                headers=h,
                 json={"job_type": JOB_TYPE_WILDBERRIES_CARDS_SYNC, "seller_id": sid},
             )
             assert repeated.status_code == 202
             reread = await async_client.get(
-                f"/integrations/wildberries/sellers/{sid}/imported-cards", headers=h,
+                f"/integrations/wildberries/sellers/{sid}/imported-cards",
+                headers=h,
             )
             assert len(reread.json()) == card_count
             return
@@ -202,7 +203,10 @@ async def test_wb_cards_sync_start_validation(async_client: AsyncClient) -> None
     ],
 )
 async def test_wb_full_import_does_not_save_incomplete_fetch(
-    monkeypatch: pytest.MonkeyPatch, kind: str, failure: str, error: str,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    failure: str,
+    error: str,
 ) -> None:
     from unittest.mock import AsyncMock
 
@@ -220,20 +224,30 @@ async def test_wb_full_import_does_not_save_incomplete_fetch(
         if kind == "supplies":
             return httpx.Response(200, json=[{"supplyID": i} for i in range(100)])
         cursor = {"updatedAt": "2026-09-08T10:00:00Z", "nmID": 100, "total": 100}
-        return httpx.Response(200, json={
-            "cards": [{"nmID": i} for i in range(100)],
-            "cursor": None if failure == "missing_cursor" else cursor,
-        })
+        return httpx.Response(
+            200,
+            json={
+                "cards": [{"nmID": i} for i in range(100)],
+                "cursor": None if failure == "missing_cursor" else cursor,
+            },
+        )
 
-    monkeypatch.setattr(sync, "get_decrypted_tokens_for_seller", AsyncMock(
-        return_value=("synthetic-content", "synthetic-supplies"),
-    ))
+    monkeypatch.setattr(
+        sync,
+        "get_decrypted_tokens_for_seller",
+        AsyncMock(
+            return_value=("synthetic-content", "synthetic-supplies"),
+        ),
+    )
     save = AsyncMock()
     monkeypatch.setattr(sync, f"upsert_imported_{kind}", save)
     async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
         with pytest.raises(sync.WildberriesSyncError) as exc:
             await getattr(sync, f"sync_{kind}_list")(
-                object(), uuid.uuid4(), uuid.uuid4(), client,
+                object(),
+                uuid.uuid4(),
+                uuid.uuid4(),
+                client,
             )
     assert exc.value.code == error
     assert requests == (1 if failure == "missing_cursor" else 2)
