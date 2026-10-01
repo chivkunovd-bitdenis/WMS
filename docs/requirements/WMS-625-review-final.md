@@ -120,3 +120,31 @@ Runtime/combined review, проверка исправлений F1–F3, explic
 Native старые записи .3/.4 возвращает как `legacy:true`, `context:{}`, без изображения и размеров. Frontend `24c3cbf5` считал пустой context несовпадением заказа и отвергал такой ответ. Разработчику передана необходимость явного безопасного legacy контракта: не выдумывать отсутствующие tenant/order/размеры и не выдавать неизвестную запись за новое задание. Окончательный вывод откладывается до новой версии frontend, которая сейчас исправляет F1–F3.
 
 **Итог этого прохода:** существенные прежние разрывы исправлены и положительные тесты воспроизведены. Native PASS и общий PASS пока не выданы: N1/N2, финальный контракт linked-child, изменённый frontend и объединённая миграция требуют адресной повторной проверки.
+
+## Адресное повторное native-ревью 53507d82
+
+Проверен commit `53507d82b4c3b687dfd45af9959e71776bc549d3`. Сверка рабочего дерева подтвердила, что исполняемые Swift/Python и Python regression tests совпадают с этим SHA. Продуктовый код ревьюер не менял. Прочитан изменённый native diff от `044fb731`, а также новые требования R14–R16 об обычном WB QR после товарного скана; реализация этих требований ещё ожидается на frontend.
+
+**N1 закрыт.** `DefaultWindowsAdapter.submit_default` теперь отмечает пересечение внешней границы непосредственно перед вызовом StartDoc. Ошибки подготовки изображения/DC/страницы до этой границы возвращаются как `BeforeSubmitError`; начиная с входа в StartDoc ошибка любого проверенного класса сохраняет неизвестный исход. Ошибка DeleteDC после успешного EndDoc не уничтожает полученную квитанцию. Настоящие `native_operation` и метод adapter независимо исполнены с подменёнными GDI-зависимостями: этапы prepare, validate, StartDoc, StartPage, EndDoc, cleanup × OSError/ValueError. Первые два этапа дали beforeSubmit=true без вызова StartDoc; три этапа отправки дали beforeSubmit=false; cleanup сохранил windows-17. Это 12 адресных сценариев на macOS с fake GDI, а не испытание настоящего Windows-драйвера.
+
+**N2 закрыт в обоих native runtime.** Связь parent→child долговечно хранится в `reprintIntentKeys`. Child сначала сохраняется без запуска worker; parent intent сохраняется до разрешения отправки. После аварии worker ещё раз обеспечивает эту связь перед статусом submitting и внешним submit. Если запись уже отправленного child утрачена, parent показывает unknown placeholder без выдуманной квитанции. Запрещены parent retry, повтор того же child через reprint и обход через обычный `/print`/enqueue с этим ключом: проверка сохранённых intent применяется ко всем новым ключам. Другую осознанную копию по новому ключу с явным подтверждением контракт по-прежнему допускает.
+
+Адресный Python тест создал parent с отказом до передачи, отправил child один раз, удалил child row из временной SQLite DB, перезапустил runtime и проверил все три пути повтора. Внешний fake submit остался ровно один. Скомпилированный Swift self-test удалил обе child PNG/JSON, перезапустил Printer и также проверил unknown placeholder и запрет трёх путей повторной отправки.
+
+**Замечание о stale observer закрыто.** Swift `StoredJob`/`ContextValue` теперь Equatable, reconcile сравнивает весь сохранённый снимок перед записью результата наблюдения. Python делает то же с исходной строкой metadata, без вычисленных children. Тест задерживает observer, сохраняет новый child intent, затем возвращает старое наблюдение canceled. Python намеренно фиксирует одинаковый updatedAt: intent остаётся, status остаётся accepted. Swift скомпилированный сценарий также сохраняет связь после задержанного observer. Одного равенства времени/статуса больше недостаточно, чтобы затереть intent старой записью.
+
+Независимо выполнена команда из `tools/print-agent`:
+
+```sh
+python3 -m unittest \
+  test_wms_print_direct.DirectPrintTest.test_missing_child_metadata_keeps_parent_and_same_child_protected \
+  test_wms_print_direct.DirectPrintTest.test_stale_observation_cannot_erase_reprint_intent_even_with_equal_timestamp \
+  test_wms_print_direct.DirectPrintTest.test_windows_boundary_classifies_errors_by_phase_not_python_exception_type \
+  test_macos_native.NativeRuntimeTest.test_compiled_store_crash_faults_and_retry_self_test -v
+```
+
+Фактический результат: **4 tests / OK, 19.186s**. Последний тест заново компилирует текущий Swift+C и запускает встроенный self-test, содержащий новые сценарии child loss/observer. Полный ранее пройденный набор из 32 тестов не повторялся. Ни один тест не обращался к production или настоящему системному принтеру.
+
+**Вердикт native-кода на 53507d82:** подтверждённые N1/N2 исправлены; в адресно проверенном native diff новых подтверждённых дефектов не найдено. Это положительный технический вердикт в пределах изученного кода и fake-queue проверок. Он не подтверждает Windows package на реальной Windows, физическую этикетку, подпись/содержимое финального дистрибутива или установку на складе. Эти виды доказательств учитываются отдельно.
+
+**Общий WMS-625 PASS всё ещё не выдан.** Остаются финальное исправление F1–F3, браузерный контракт explicit linked child и legacy, новая интеграция обычной сборки по R14–R16, объединённая проверка и приёмка аналитика. Ранее прочитанный frontend без изменений заново не гонялся.
