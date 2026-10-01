@@ -47,6 +47,28 @@ describe('WMS-611 FBS print availability', () => {
     expect(document.querySelector('[data-testid="marking-print-error"]')?.textContent).toContain('Не хватает 2 КМ')
     expect(button().disabled).toBe(false)
   })
+  it('prints the screenshot case: 12 orders, ЧЗ=0, ШК=1, QR, empty pool', async () => {
+    const ctx = context()
+    ctx.qtyNeedPack = 12
+    ctx.fbsTape!.markingShortage = 12
+    ctx.fbsTape!.orders = Array.from({ length: 12 }, (_, i) => ({ ...ctx.fbsTape!.orders[0], orderId: `order-${i}`, wbOrderId: 611 + i }))
+    await render(ctx)
+    const setQuantity = async (testId: string, value: string) => {
+      const input = document.querySelector<HTMLInputElement>(`[data-testid="${testId}"] input`)!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await setQuantity('marking-print-wb-qty', '1')
+    await setQuantity('marking-print-cz-qty', '0')
+    expect(document.querySelector('[data-testid="marking-print-shortage-banner"]')).toBeNull()
+    expect(document.querySelector('[data-testid="marking-print-preview-tape-count"]')?.textContent).toContain('12')
+    expect(button().disabled).toBe(false)
+    print.mockResolvedValue({ orders: [], order_errors: [{ message: 'test stop before physical print' }], shortage: 0 })
+    await act(async () => button().click())
+    expect(print.mock.calls[0][0].layout.units).toEqual([{ block: 'label', copies: 1 }])
+  })
   it('allows an assigned-code batch even when no free codes remain', async () => {
     const ctx = context(); ctx.fbsTape!.markingShortage = 0
     await render(ctx)
