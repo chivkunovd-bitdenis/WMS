@@ -26,6 +26,7 @@ from wms_print_direct import (
     ThreadingHTTPServer,
     default_printer,
     main,
+    native_operation,
     observe_windows,
 )
 
@@ -520,6 +521,122 @@ p.process(body['idempotencyKey'])
         run.return_value.stdout = "system default destination: Label_Printer\n"
         self.assertEqual(default_printer(), "Label_Printer")
         self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
+
+    def test_missing_child_metadata_keeps_parent_and_same_child_protected(self):
+        printer = self.printer(queue=lambda: "")
+        printer.enqueue(job())
+        printer.process("scan-1")
+        printer.queue = lambda: "printer"
+        body = {"idempotencyKey": "child", "acknowledgeDuplicateRisk": True}
+        printer.reprint("scan-1", body)
+        printer.process("child")
+        self.submit.assert_called_once()
+        with closing(printer.connect()) as db:
+            db.execute("DELETE FROM jobs WHERE id='child'")
+            db.commit()
+        printer = self.restart()
+        source = printer.get("scan-1")
+        self.assertEqual(source["status"], "failed_before_submit")
+        self.assertEqual(source["reprints"][0]["status"], "unknown")
+        self.assertNotIn("receipt", source["reprints"][0])
+        with self.assertRaises(ValueError):
+            printer.retry("scan-1")
+        with self.assertRaisesRegex(ValueError, "утрачено"):
+            printer.reprint("scan-1", body)
+        with self.assertRaisesRegex(ValueError, "утрачено"):
+            printer.enqueue(job("child"))
+        self.submit.assert_called_once()
+
+    def test_stale_observation_cannot_erase_reprint_intent_even_with_equal_timestamp(
+        self,
+    ):
+        entered, release = threading.Event(), threading.Event()
+
+        def observe(value):
+            entered.set()
+            release.wait(3)
+            return dict(matches=1, receipt="printer-123", status="canceled")
+
+        printer = self.printer(observe=observe)
+        printer.enqueue(job())
+        printer.process("scan-1")
+        fixed = printer.get("scan-1")["updatedAt"]
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(printer.reconcile, "scan-1")
+            self.assertTrue(entered.wait(1))
+            with patch("wms_print_direct.timestamp", return_value=fixed):
+                printer.reprint(
+                    "scan-1",
+                    dict(idempotencyKey="child", acknowledgeDuplicateRisk=True),
+                )
+            release.set()
+            pending.result(timeout=2)
+        original = printer.get("scan-1")
+        self.assertEqual(original["reprintIntentKeys"], ["child"])
+        self.assertEqual(original["status"], "accepted")
+
+    def test_windows_boundary_classifies_errors_by_phase_not_python_exception_type(
+        self,
+    ):
+        printer = self.printer()
+        printer.enqueue(job())
+        with closing(printer.connect()) as db:
+            stored = printer._read(db, "scan-1")
+            stored.update(status="submitting", queue="printer")
+            printer._save(db, stored)
+        for phase in (
+            "prepare",
+            "validate",
+            "StartDoc",
+            "StartPage",
+            "EndDoc",
+            "cleanup",
+        ):
+            for error_type in (OSError, ValueError):
+                with self.subTest(phase=phase, error_type=error_type):
+                    image = Mock(width=2, height=2)
+                    image.convert.return_value = image
+                    dc = Mock()
+                    dc.GetDeviceCaps.return_value = 100
+                    dc.StartDoc.return_value = 17
+                    adapter = object.__new__(DefaultWindowsAdapter)
+                    adapter.modules = {
+                        "Image": Mock(open=Mock(return_value=image)),
+                        "ImageWin": Mock(),
+                    }
+                    adapter._create_sized_printer_dc = Mock(return_value=dc)
+                    adapter._validate_page_size = Mock()
+                    if phase == "prepare":
+                        adapter._create_sized_printer_dc.side_effect = error_type(
+                            "before StartDoc"
+                        )
+                    elif phase == "validate":
+                        adapter._validate_page_size.side_effect = error_type(
+                            "before StartDoc"
+                        )
+                    elif phase == "cleanup":
+                        dc.DeleteDC.side_effect = error_type("cleanup")
+                    else:
+                        getattr(dc, phase).side_effect = error_type(
+                            "after entering StartDoc"
+                        )
+                    with (
+                        patch(
+                            "wms_print_direct.DefaultWindowsAdapter",
+                            return_value=adapter,
+                        ),
+                        patch("wms_print_direct.sys.platform", "win32"),
+                    ):
+                        result = native_operation(
+                            ["--submit-job", str(printer.db), "scan-1"]
+                        )
+                    if phase in ("prepare", "validate"):
+                        self.assertTrue(result["beforeSubmit"])
+                        dc.StartDoc.assert_not_called()
+                    elif phase == "cleanup":
+                        self.assertEqual(result["receipt"], "windows-17")
+                    else:
+                        self.assertFalse(result["beforeSubmit"])
 
     def test_windows_observes_unique_title_and_real_queue_flags(self):
         handle = object()

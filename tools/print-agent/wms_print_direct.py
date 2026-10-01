@@ -167,39 +167,48 @@ class DefaultWindowsAdapter(WindowsAdapter):
             )
 
     def submit_default(self, data, queue, width_mm, height_mm, title="WMS QR"):
-        image = self.modules["Image"].open(io.BytesIO(data)).convert("RGB")
-        dc = self._create_sized_printer_dc(queue, width_mm, height_mm)
+        dc = None
+        started = False
         try:
+            image = self.modules["Image"].open(io.BytesIO(data)).convert("RGB")
+            dc = self._create_sized_printer_dc(queue, width_mm, height_mm)
             self._validate_page_size(dc, width_mm, height_mm)
             width, height = dc.GetDeviceCaps(8), dc.GetDeviceCaps(10)
-            # Image aspect ratio is preserved; white margins cannot stretch QR.
             ratio = min(width / image.width, height / image.height)
             w, h = (
                 max(1, round(image.width * ratio)),
                 max(1, round(image.height * ratio)),
             )
             x, y = (width - w) // 2, (height - h) // 2
+            # Before entering StartDoc no external job exists. From this line onward
+            # any exception type is ambiguous unless a receipt is retained.
+            started = True
             receipt = dc.StartDoc(title)
             if not isinstance(receipt, int) or receipt <= 0:
                 raise agent.UnknownPrintOutcome("Windows не вернула номер задания")
-            try:
-                dc.StartPage()
-                self.modules["ImageWin"].Dib(image).draw(
-                    dc.GetHandleOutput(), (x, y, x + w, y + h)
-                )
-                dc.EndPage()
-                dc.EndDoc()
-            except BaseException:
+            dc.StartPage()
+            self.modules["ImageWin"].Dib(image).draw(
+                dc.GetHandleOutput(), (x, y, x + w, y + h)
+            )
+            dc.EndPage()
+            dc.EndDoc()
+            return f"windows-{receipt}"
+        except Exception as exc:
+            if started:
                 try:
                     dc.AbortDoc()
-                except BaseException:
+                except Exception:
                     pass
                 raise agent.UnknownPrintOutcome(
-                    "Исход печати неизвестен. Проверьте принтер."
-                ) from None
-            return f"windows-{receipt}"
+                    f"Исход печати неизвестен. {exc}"
+                ) from exc
+            raise BeforeSubmitError(str(exc)) from exc
         finally:
-            dc.DeleteDC()
+            if dc is not None:
+                try:
+                    dc.DeleteDC()
+                except Exception:
+                    pass  # Cleanup cannot turn a known pre-submit failure into ambiguity.
 
 
 def default_printer():
@@ -519,6 +528,21 @@ class Printer:
                             children.append({**child, "paperStatus": "unconfirmed"})
                     except (ValueError, KeyError, TypeError):
                         continue
+                found = {child["idempotencyKey"] for child in children}
+                for child in job.get("reprintIntentKeys", []):
+                    if child not in found:
+                        children.append(
+                            dict(
+                                idempotencyKey=child,
+                                parentKey=key,
+                                hash=job["hash"],
+                                status="unknown",
+                                reason="Сохранено намерение повторной печати, но описание дочернего задания недоступно; автоматического повтора нет",
+                                paperStatus="unconfirmed",
+                                imageAvailable=False,
+                                legacy=False,
+                            )
+                        )
                 result["reprints"] = children
             return result
 
@@ -560,7 +584,7 @@ class Printer:
                 raise ValueError("Сохранённое изображение повреждено; повтор запрещён")
             return row[0]
 
-    def enqueue(self, body, parent=None):
+    def enqueue(self, body, parent=None, schedule_now=True):
         key, image = body.get("idempotencyKey"), body.get("imageDataUrl")
         if (
             not isinstance(key, str)
@@ -600,6 +624,19 @@ class Printer:
                 if old.get("parentKey") != parent:
                     raise ValueError("Ключ принадлежит другой операции восстановления")
                 return self.get(key)
+            # A parent's durable intent still reserves a lost child's key across
+            # every entry point, including a plain POST /print.
+            for (parent_metadata,) in db.execute(
+                "SELECT metadata FROM jobs WHERE instr(metadata, '\"reprintIntentKeys\"') > 0"
+            ):
+                try:
+                    reserved = json.loads(parent_metadata).get("reprintIntentKeys", [])
+                except (ValueError, AttributeError, TypeError):
+                    continue
+                if key in reserved:
+                    raise ValueError(
+                        "Исход повторной операции неизвестен: её описание утрачено. Прежний ключ повторно не отправлен"
+                    )
             context = {}
             supplied = body.get("context", {})
             if isinstance(supplied, dict):
@@ -649,7 +686,7 @@ class Printer:
                 (key, digest, data, json.dumps(job, ensure_ascii=False)),
             )
             db.commit()
-            if self.auto_work:
+            if self.auto_work and schedule_now:
                 self._schedule(key)
             return self.get(key)
 
@@ -669,6 +706,22 @@ class Printer:
                 if not self.storage_error and self.get(key)["status"] == "saved":
                     self._schedule(key)
 
+    def _ensure_parent_intent(self, db, job):
+        parent_key = job.get("parentKey")
+        if not parent_key:
+            return
+        parent = self._read(db, parent_key)
+        if not parent:
+            raise BeforeSubmitError("Исходное задание восстановления недоступно")
+        key = job["idempotencyKey"]
+        if key not in parent.get("reprintIntentKeys", []):
+            parent["reprintIntentKeys"] = parent.get("reprintIntentKeys", []) + [key]
+            parent["updatedAt"] = timestamp()
+            parent["observations"] = parent.get("observations", []) + [
+                f"{parent['updatedAt']} explicit-reprint: {key}; оператор подтвердил риск дубликата"
+            ]
+            self._save(db, parent)
+
     def process(self, key):
         with self.lock, closing(self.connect()) as db:
             self._writable()
@@ -681,6 +734,7 @@ class Printer:
             if not job["queue"]:
                 raise BeforeSubmitError("В системе не выбран принтер по умолчанию")
             with self.lock, closing(self.connect()) as db:
+                self._ensure_parent_intent(db, job)
                 job = self._change(
                     job, "submitting", "Начата передача в системную очередь"
                 )
@@ -745,14 +799,16 @@ class Printer:
             return self.get(key)
 
     def reprint(self, key, body):
-        with self.lock:
-            job = self.get(key)
+        with self.lock, closing(self.connect()) as db:
+            self._writable()
+            job = self._read(db, key)
             child = body.get("idempotencyKey")
             if (
                 not job
                 or job.get("legacy")
                 or body.get("acknowledgeDuplicateRisk") is not True
-                or not child
+                or not isinstance(child, str)
+                or not 1 <= len(child) <= 200
                 or child == key
             ):
                 raise ValueError(
@@ -762,21 +818,35 @@ class Printer:
                 raise ValueError(
                     "Передача ещё выполняется; дождитесь результата и сверьте очередь"
                 )
-            return self.enqueue(
+            data = self.image(key)
+            existing = self._read(db, child)
+            if existing and existing.get("parentKey") != key:
+                raise ValueError("Ключ принадлежит другой операции восстановления")
+            if not existing and child in job.get("reprintIntentKeys", []):
+                raise ValueError(
+                    "Исход повторной операции неизвестен: её описание утрачено. Прежний ключ повторно не отправлен"
+                )
+            self.enqueue(
                 dict(
                     idempotencyKey=child,
                     imageDataUrl="data:image/png;base64,"
-                    + base64.b64encode(self.image(key)).decode(),
+                    + base64.b64encode(data).decode(),
                     widthMm=job["widthMm"],
                     heightMm=job["heightMm"],
                     context=job["context"],
                 ),
                 parent=key,
+                schedule_now=False,
             )
+            saved_child = self._read(db, child)
+            self._ensure_parent_intent(db, saved_child)
+            if self.auto_work and saved_child["status"] == "saved":
+                self._schedule(child)
+            return self.get(child)
 
     def reconcile(self, key):
-        with self.lock:
-            job = self.get(key)
+        with self.lock, closing(self.connect()) as db:
+            job = self._read(db, key)
             if not job:
                 raise ValueError("Задание не найдено")
             if (
@@ -784,7 +854,7 @@ class Printer:
                 or key in self.observing
                 or job["status"] in ("saved", "failed_before_submit")
             ):
-                return job
+                return self.get(key)
             self.observing.add(key)
         try:
             try:
@@ -793,10 +863,7 @@ class Printer:
                 observation = {"error": str(exc)}
             with self.lock, closing(self.connect()) as db:
                 current = self._read(db, key)
-                if (
-                    current["updatedAt"] != job["updatedAt"]
-                    or current["status"] != job["status"]
-                ):
+                if current != job:
                     return self.get(key)
                 if (
                     observation.get("matches") == 1
@@ -986,6 +1053,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def native_operation(args):
+    entered_submit = False
     try:
         if args[0] == "--system-default":
             return {"queue": default_printer()}
@@ -1001,15 +1069,16 @@ def native_operation(args):
                 else {"error": "Use native macOS package for CUPS observation"}
             )
         adapter = DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()
+        entered_submit = True
         return {
             "receipt": adapter.submit_default(
                 row[0], job["queue"], job["widthMm"], job["heightMm"], job["title"]
             )
         }
-    except ValueError as exc:
+    except BeforeSubmitError as exc:
         return {"error": str(exc), "beforeSubmit": True}
     except Exception as exc:
-        return {"error": str(exc)}
+        return {"error": str(exc), "beforeSubmit": not entered_submit}
 
 
 def main():

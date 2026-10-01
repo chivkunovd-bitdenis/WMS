@@ -105,7 +105,7 @@ private func parseReceipt(_ output:String,queue:String) -> String? {
     let values=Set(matches.compactMap { Range($0.range,in:output).map { String(output[$0]) } })
     return values.count==1 ? values.first : nil
 }
-private enum ContextValue: Codable {
+private enum ContextValue: Codable, Equatable {
     case string(String), number(Double)
     init(from decoder: Decoder) throws {
         let c=try decoder.singleValueContainer()
@@ -116,7 +116,7 @@ private enum ContextValue: Codable {
         switch self { case .string(let s):try c.encode(s);case .number(let n):try c.encode(n) }
     }
 }
-private struct StoredJob: Codable {
+private struct StoredJob: Codable, Equatable {
     var idempotencyKey:String
     var hash:String
     var receipt:String?
@@ -132,6 +132,7 @@ private struct StoredJob: Codable {
     var legacy:Bool = false
     var parentKey:String?
     var duplicateRiskAcknowledged:Bool?
+    var reprintIntentKeys:[String]?
     var observations:[String] = []
     var queueObservation:[String:String] = [:]
 }
@@ -248,7 +249,12 @@ private final class Printer {
         guard let job=jobs[key] else { if let e=storageError { throw PrintError.message(e) };return nil }
         var value=try publicValue(job)
         if includeReprints {
-            value["reprints"]=try jobs.values.filter { $0.parentKey==key && !blocked.contains(digest(Data($0.idempotencyKey.utf8))) }.sorted { $0.createdAt<$1.createdAt }.map { try publicValue($0) }
+            var children=try jobs.values.filter { $0.parentKey==key && !blocked.contains(digest(Data($0.idempotencyKey.utf8))) }.sorted { $0.createdAt<$1.createdAt }.map { try publicValue($0) }
+            let found=Set(children.compactMap { $0["idempotencyKey"] as? String })
+            for child in job.reprintIntentKeys ?? [] where !found.contains(child) {
+                children.append(["idempotencyKey":child,"parentKey":key,"hash":job.hash,"status":"unknown","reason":"Сохранено намерение повторной печати, но описание дочернего задания недоступно; автоматического повтора нет","paperStatus":"unconfirmed","imageAvailable":false,"legacy":false])
+            }
+            value["reprints"]=children
         }
         return value
     }
@@ -265,7 +271,7 @@ private final class Printer {
         guard digest(identity)==job.hash else { throw PrintError.message("Сохранённое изображение повреждено; повтор запрещён") }
         return data
     }
-    func printJob(_ body:[String:Any],parent:String?=nil) throws -> [String:Any] {
+    func printJob(_ body:[String:Any],parent:String?=nil,scheduleNow:Bool=true) throws -> [String:Any] {
         guard let key=body["idempotencyKey"] as? String,(1...200).contains(key.count),let image=body["imageDataUrl"] as? String,image.hasPrefix("data:image/png;base64,"),let data=Data(base64Encoded:String(image.dropFirst(22))),data.count<=4_000_000,data.starts(with:pngPrefix),
               let source=CGImageSourceCreateWithData(data as CFData,nil),
               let properties=CGImageSourceCopyPropertiesAtIndex(source,0,nil) as? [CFString:Any],
@@ -279,6 +285,9 @@ private final class Printer {
             guard old.parentKey==parent else { throw PrintError.message("Ключ принадлежит другой операции восстановления") }
             return try detail(key)!
         }
+        guard !jobs.values.contains(where: { ($0.reprintIntentKeys ?? []).contains(key) }) else {
+            throw PrintError.message("Исход повторной операции неизвестен: её описание утрачено. Прежний ключ повторно не отправлен")
+        }
         var context:[String:ContextValue]=[:]
         if let supplied=body["context"] as? [String:Any] {
             for name in ["tenantId","userId","wbOrderId","scanId","orderId","supplyId","marketplace","productId","barcode","orderNumber","sellerId","sellerName","scan_id","order_id","supply_id"] {
@@ -289,13 +298,24 @@ private final class Printer {
         let timestamp=now()
         let job=StoredJob(idempotencyKey:key,hash:hash,widthMm:w,heightMm:h,context:context,createdAt:timestamp,updatedAt:timestamp,status:"saved",reason:"Изображение сохранено; ожидает передачи в системную очередь",title:"WMS-"+digest(Data((key+"|"+hash).utf8)),parentKey:parent,duplicateRiskAcknowledged:parent == nil ? nil:true,observations:["\(timestamp) saved" + (parent == nil ? "":"; оператор явно подтвердил риск повторной этикетки")])
         try write(data,imageURL(key));try persist(job)
-        if autoWork { schedule(key) }
+        if autoWork && scheduleNow { schedule(key) }
         return try detail(key)!
     }
     private func schedule(_ key:String) {
         lock.lock();defer{lock.unlock()}
         guard !active.contains(key) else { return };active.insert(key)
         worker.async { self.process(key);self.beforeRelease();self.lock.lock();self.active.remove(key);if self.jobs[key]?.status == "saved" && self.storageError == nil { self.schedule(key) };self.lock.unlock() }
+    }
+    private func ensureParentIntent(_ job:StoredJob) throws {
+        guard let parentKey=job.parentKey else { return }
+        try writable(parentKey)
+        guard var parent=jobs[parentKey] else { throw PrintError.beforeSubmit("Исходное задание восстановления недоступно") }
+        if !(parent.reprintIntentKeys ?? []).contains(job.idempotencyKey) {
+            parent.reprintIntentKeys=(parent.reprintIntentKeys ?? [])+[job.idempotencyKey]
+            parent.updatedAt=now()
+            parent.observations.append("\(parent.updatedAt) explicit-reprint: \(job.idempotencyKey); оператор подтвердил риск дубликата")
+            try persist(parent)
+        }
     }
     func process(_ key:String) {
         lock.lock()
@@ -305,7 +325,7 @@ private final class Printer {
             // Nothing external has started yet: failures here remain safely retryable.
             _=try image(key);job.queue=try queue()
             lock.lock()
-            do { job=change(job,status:"submitting",reason:"Начата передача в системную очередь");try persist(job) } catch { lock.unlock();throw PrintError.beforeSubmit(String(describing:error)) }
+            do { try ensureParentIntent(job);job=change(job,status:"submitting",reason:"Начата передача в системную очередь");try persist(job) } catch { lock.unlock();throw PrintError.beforeSubmit(String(describing:error)) }
             lock.unlock()
             do {
                 let receipt=try submit(job,imageURL(key))
@@ -325,16 +345,22 @@ private final class Printer {
     }
     func retry(_ key:String) throws -> [String:Any] {
         lock.lock();defer{lock.unlock()};try writable(key)
-        guard let job=jobs[key],["saved","failed_before_submit"].contains(job.status),!job.legacy,!jobs.values.contains(where:{$0.parentKey==key}) else { throw PrintError.message("Исход может быть неизвестен; сначала сверьте очередь. Автоматического повтора нет") }
+        guard let job=jobs[key],["saved","failed_before_submit"].contains(job.status),!job.legacy,(job.reprintIntentKeys ?? []).isEmpty,!jobs.values.contains(where:{$0.parentKey==key}) else { throw PrintError.message("Исход может быть неизвестен; сначала сверьте очередь. Автоматического повтора нет") }
         _=try image(key);try persist(change(job,status:"saved",reason:"Оператор повторил доказанно неотправленное задание"))
         if autoWork { schedule(key) };return try detail(key)!
     }
     func reprint(_ key:String,body:[String:Any]) throws -> [String:Any] {
         lock.lock();defer{lock.unlock()};try writable(key)
-        guard let original=jobs[key],!original.legacy,body["acknowledgeDuplicateRisk"] as? Bool == true,let child=body["idempotencyKey"] as? String,child != key else { throw PrintError.message("Нужны новый ключ и явное подтверждение риска второй этикетки") }
+        guard let original=jobs[key],!original.legacy,body["acknowledgeDuplicateRisk"] as? Bool == true,let child=body["idempotencyKey"] as? String,(1...200).contains(child.count),child != key else { throw PrintError.message("Нужны новый ключ и явное подтверждение риска второй этикетки") }
         guard !active.contains(key),original.status != "submitting" else { throw PrintError.message("Передача ещё выполняется; дождитесь результата и сверьте очередь") }
         let data=try image(key)
-        let result=try printJob(["idempotencyKey":child,"imageDataUrl":"data:image/png;base64,"+data.base64EncodedString(),"widthMm":original.widthMm!,"heightMm":original.heightMm!,"context":try JSONSerialization.jsonObject(with:JSONEncoder().encode(original.context))],parent:key)
+        try writable(child)
+        if let existing=jobs[child],existing.parentKey != key { throw PrintError.message("Ключ принадлежит другой операции восстановления") }
+        if jobs[child]==nil && (original.reprintIntentKeys ?? []).contains(child) { throw PrintError.message("Исход повторной операции неизвестен: её описание утрачено. Прежний ключ повторно не отправлен") }
+        _=try printJob(["idempotencyKey":child,"imageDataUrl":"data:image/png;base64,"+data.base64EncodedString(),"widthMm":original.widthMm!,"heightMm":original.heightMm!,"context":try JSONSerialization.jsonObject(with:JSONEncoder().encode(original.context))],parent:key,scheduleNow:false)
+        try ensureParentIntent(jobs[child]!)
+        if autoWork && jobs[child]?.status=="saved" { schedule(child) }
+        let result=try detail(child)!
         return result
     }
     func reconcile(_ key:String) throws -> [String:Any] {
@@ -344,7 +370,7 @@ private final class Printer {
         let observation:[String:Any]
         do { observation=try observe(job) } catch { observation=["error":String(describing:error)] }
         lock.lock();defer{observing.remove(key);lock.unlock()}
-        guard let current=jobs[key],current.updatedAt==job.updatedAt,current.status==job.status else { return try detail(key)! }
+        guard let current=jobs[key],current==job else { return try detail(key)! }
         var updated=job
         if let receipt=observation["receipt"] as? String,let state=observation["jobState"] as? Int,observation["matches"] as? Int == 1 {
             updated.receipt=receipt
@@ -635,6 +661,30 @@ private func runSelfTest() throws {
         try check(job["legacy"] as? Bool == true && job["imageAvailable"] as? Bool == false && job["widthMm"]==nil,"legacy provenance preserved")
     }
     try check(try Data(contentsOf:oldFile)==oldData,"old journal untouched")
+    let missingPath=root.appendingPathComponent("missing-child")
+    var available=false
+    var missing:Printer?=try Printer(directory:missingPath,autoWork:false,submit:{_,_ in "test-printer-8"},queue:{if !available { throw PrintError.beforeSubmit("no printer") };return "test-printer"})
+    _=try missing!.printJob(body("source"));missing!.process("source");available=true
+    let missingBody:[String:Any] = ["idempotencyKey":"lost-child","acknowledgeDuplicateRisk":true]
+    _=try missing!.reprint("source",body:missingBody);missing!.process("lost-child");missing=nil
+    for ext in ["json","png"] { try FileManager.default.removeItem(at:missingPath.appendingPathComponent("jobs-v2/"+digest(Data("lost-child".utf8))+"."+ext)) }
+    missing=try Printer(directory:missingPath,autoWork:false)
+    let unknownChildren=try missing!.detail("source")!["reprints"] as! [[String:Any]]
+    try check(unknownChildren.count==1 && unknownChildren[0]["status"] as? String == "unknown" && unknownChildren[0]["receipt"]==nil,"missing linked record stays unknown")
+    do { _=try missing!.retry("source");throw PrintError.message("parent repeated") } catch PrintError.message(let message) {try check(message.contains("неизвестен"),"parent retry blocked by durable child intent")}
+    do { _=try missing!.reprint("source",body:missingBody);throw PrintError.message("child repeated") } catch PrintError.message(let message) {try check(message.contains("утрачено"),"same lost child cannot be recreated")}
+    do { _=try missing!.printJob(body("lost-child"));throw PrintError.message("child repeated through print") } catch PrintError.message(let message) {try check(message.contains("утрачено"),"plain print cannot recreate lost child")}
+    let observationEntered=DispatchSemaphore(value:0),observationRelease=DispatchSemaphore(value:0),observationDone=DispatchSemaphore(value:0)
+    let stale=try Printer(directory:root.appendingPathComponent("stale-observe"),autoWork:false,submit:{_,_ in "test-printer-9"},queue:{"test-printer"},observe:{_ in
+        observationEntered.signal();_=observationRelease.wait(timeout:.now()+3)
+        return ["matches":1,"receipt":"test-printer-9","jobState":7]
+    })
+    _=try stale.printJob(body("source"));stale.process("source")
+    DispatchQueue.global().async { _=try? stale.reconcile("source");observationDone.signal() }
+    try check(observationEntered.wait(timeout:.now()+1) == .success,"observer entered")
+    _=try stale.reprint("source",body:["idempotencyKey":"stale-child","acknowledgeDuplicateRisk":true])
+    observationRelease.signal();try check(observationDone.wait(timeout:.now()+1) == .success,"observer finished")
+    try check(try stale.detail("source")?["reprintIntentKeys"] as? [String] == ["stale-child"],"stale observer cannot erase link even within same timestamp second")
     print("WMS Print Direct macOS: package OK; durable 350 jobs, abrupt process exits, disk faults, lost receipt, reconciliation, explicit copies, retry race, dimensions, process timeout")
 }
 private func runServer(testDirectory:URL?=nil) throws {

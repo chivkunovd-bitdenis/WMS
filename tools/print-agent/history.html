@@ -17,7 +17,7 @@ function render(){root.replaceChildren();const q=document.querySelector('#filter
 if(job.imageAvailable){const a=el('a','Открыть исходную PNG',el('p','',card));a.href=path+'/image';a.target='_blank';a.rel='noopener';}
 const actions=el('div','',card);function action(label,fn){const b=el('button',label,actions);b.onclick=async()=>{b.disabled=true;try{await fn();await refresh()}catch(e){error.textContent=e.message}finally{b.disabled=false}}}
 action('Сверить с очередью',()=>request(path+'/reconcile',{}));
-if(['saved','failed_before_submit'].includes(job.status)&&job.imageAvailable)action('Отправить сохранённое задание',()=>request(path+'/retry',{}));
+if(['saved','failed_before_submit'].includes(job.status)&&job.imageAvailable&&!(job.reprintIntentKeys||[]).length)action('Отправить сохранённое задание',()=>request(path+'/retry',{}));
 if(!['saved','submitting'].includes(job.status)&&job.imageAvailable)action('Создать повторную этикетку',async()=>{await request(path+'/reconcile',{});if(!confirm('Сначала проверьте принтер и системную очередь. Исходная этикетка могла уже выйти или ещё выйти позднее. Создать ОДНУ новую связанную копию, осознавая риск дубликата?'))return;const slot='wms-reprint:'+job.idempotencyKey;let child=localStorage.getItem(slot);if(!child){child=crypto.randomUUID();localStorage.setItem(slot,child)}await request(path+'/reprint',{idempotencyKey:child,acknowledgeDuplicateRisk:true});localStorage.removeItem(slot)});
 const details=el('details','',card);el('summary','Полные сведения и история',details);el('pre',JSON.stringify(job,null,2),details)}}
 document.querySelector('#refresh').onclick=refresh;document.querySelector('#filter').oninput=render;refresh();
