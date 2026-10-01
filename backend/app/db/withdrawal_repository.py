@@ -18,8 +18,6 @@ from app.models.marking_code import MarkingCode
 from app.models.marking_withdrawal import WithdrawalDocument, WithdrawalItem, WithdrawalOperation
 from app.models.product import Product
 from app.models.seller import Seller
-from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
-from app.services.wb_order_price_service import WbPriceDataError, product_cost_from_snapshot
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -234,17 +232,6 @@ async def registry(
     if only_not_withdrawn:
         query = query.where(or_(WithdrawalItem.id.is_(None), WithdrawalItem.state != "succeeded"))
     total = int(await session.scalar(select(func.count()).select_from(query.subquery())) or 0)
-    latest_price_id = (
-        select(WbOrderPriceSnapshot.id)
-        .where(
-            WbOrderPriceSnapshot.order_id == FbsOrder.id,
-        )
-        .order_by(WbOrderPriceSnapshot.revision.desc())
-        .limit(1)
-        .correlate(FbsOrder)
-        .scalar_subquery()
-    )
-    query = query.outerjoin(WbOrderPriceSnapshot, WbOrderPriceSnapshot.id == latest_price_id)
     # WithdrawalDocument is joined via WithdrawalItem.document_id only; scope columns
     # (tenant/seller) are already enforced upstream on the item.
     # Do not hydrate the ORM document — its exact_payload and signature can be up to
@@ -267,7 +254,6 @@ async def registry(
         query.add_columns(
             Product,
             WithdrawalItem,
-            WbOrderPriceSnapshot,
             doc_state,
             doc_signed,
             op_token_expires_at,
@@ -286,29 +272,15 @@ async def registry(
         supply,
         product,
         item,
-        price,
         doc_state_value,
         doc_signed_value,
         token_expires_at,
     ) in rows:
         error = item.error if item and item.state == "failed" else None
-        if item is None:
-            try:
-                if price is None:
-                    raise WbPriceDataError(
-                        "missing_price_snapshot", "WB: снимок финальной цены отсутствует"
-                    )
-                product_cost_from_snapshot(price)
-            except WbPriceDataError as exc:
-                error = {"source": "local", "code": exc.code, "message": str(exc)}
-        status = (
-            "error"
-            if item is None and error is not None
-            else project_item_status(
-                item.state if item else None,
-                doc_state_value,
-                bool(doc_signed_value),
-            )
+        status = project_item_status(
+            item.state if item else None,
+            doc_state_value,
+            bool(doc_signed_value),
         )
         # An in-flight row invites a duplicate create by default. Only surface it as
         # resumable when the same operation is stuck on token expiry — the existing

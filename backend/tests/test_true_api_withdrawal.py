@@ -684,7 +684,6 @@ async def test_invalid_or_missing_action_date_rejected_before_limiter_and_http(
         "invalid",
         1,
         {},
-        {"cis": CIS},
         {"cis": None, "product_cost": 0},
         {"cis": CIS, "product_cost": None},
         {"cis": CIS, "product_cost": True},
@@ -711,6 +710,29 @@ async def test_malformed_product_rows_or_invalid_cost_rejected_before_http(produ
                 detached_signature=SIGNATURE,
             )
     assert limiter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_product_cost_is_optional_for_lp_but_required_for_shoes() -> None:
+    data = json.loads(EXACT)
+    data["products"] = [{"cis": CIS}]
+    exact = json.dumps(data).encode()
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(201, text=DOC_ID)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        assert await client(http, RecordingLimiter()).create_document(
+            session(), pg="lp", exact_payload=exact, detached_signature=SIGNATURE
+        ) == DOC_ID
+        with pytest.raises(ValueError, match="required for this product group"):
+            await client(http, RecordingLimiter()).create_document(
+                session(), pg="shoes", exact_payload=exact, detached_signature=SIGNATURE
+            )
+    assert calls == 1
 
 
 @pytest.mark.asyncio

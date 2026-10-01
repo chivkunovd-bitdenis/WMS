@@ -17,7 +17,7 @@ from app.services.true_api_withdrawal import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_CI
 class WithdrawalProduct:
     item_id: uuid.UUID
     cis: str = field(repr=False)
-    product_cost: int
+    product_cost: int | None
     pg: str
     fias_id: str | None = None
     kpp: str | None = None
@@ -53,7 +53,7 @@ def build_withdrawal_documents(
     for product in products:
         if not product.cis or not product.pg:
             raise ValueError("missing_withdrawal_identity")
-        if (
+        if product.product_cost is not None and (
             type(product.product_cost) is not int
             or not 0 <= product.product_cost <= 99999999999999999
         ):
@@ -94,8 +94,11 @@ def build_withdrawal_documents(
             )
 
         for product in sorted(group, key=lambda value: value.item_id):
+            product_payload: dict[str, str | int] = {"cis": product.cis}
+            if product.product_cost is not None:
+                product_payload["product_cost"] = product.product_cost
             chunk = json.dumps(
-                {"cis": product.cis, "product_cost": product.product_cost},
+                product_payload,
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode("utf-8")
