@@ -17,8 +17,14 @@ from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.developer_request_content import (
+    TRELLO_DESCRIPTION_MAX_LENGTH,
+    card_description,
+    description_length,
+    marker,
+)
 from app.services.developer_request_sync import sync_developer_requests, sync_request
-from app.services.developer_request_trello import TrelloClient, TrelloConfig, card_payload, marker
+from app.services.developer_request_trello import TrelloClient, TrelloConfig, card_payload
 from app.services.tokens import create_access_token
 
 
@@ -496,3 +502,165 @@ async def test_public_board_and_changed_board_never_receive_cards(async_client):
         await sync_request(request_id, TrelloClient(fake.config, http))
     assert (await _row(request_id)).last_error == "trello_board_config_changed"
     assert not fake.posts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["second_page", "duplicate", "partial_failure", "repeated_page"])
+async def test_recovery_scans_all_trello_pages_before_linking(async_client, mode):
+    _, headers = await _user()
+    request_id = await _create(async_client, headers)
+    row = await _row(request_id)
+    fake = FakeTrello()
+    first_page = [
+        {"id": f"{number:024x}", "idBoard": "board", "idList": "review", "desc": "Other task"}
+        for number in range(2000, 1000, -1)
+    ]
+    older_card = {
+        "id": f"{1000:024x}",
+        "idBoard": "board",
+        "idList": "work",
+        "desc": marker(row),
+        "closed": True,
+    }
+    if mode in {"duplicate", "partial_failure"}:
+        first_page[0]["desc"] = marker(row)
+    reads = []
+
+    async def paged_provider(request):
+        if request.url.path == "/1/boards/board/cards":
+            reads.append(dict(request.url.params))
+            assert request.url.params["filter"] == "all"
+            assert request.url.params["sort"] == "-id"
+            assert request.url.params["limit"] == "1000"
+            if "before" not in request.url.params:
+                return httpx.Response(200, json=first_page)
+            assert request.url.params["before"] == first_page[-1]["id"]
+            if mode == "partial_failure":
+                return httpx.Response(500)
+            if mode == "repeated_page":
+                return httpx.Response(200, json=first_page)
+            return httpx.Response(200, json=[older_card])
+        return await fake.handle(request)
+
+    async with SessionLocal() as session:
+        await session.execute(
+            update(DeveloperRequest)
+            .where(DeveloperRequest.id == request_id)
+            .values(
+                delivery_state="outcome_unknown",
+                trello_board_id="board",
+                create_attempts=1,
+            )
+        )
+        await session.commit()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(paged_provider)) as http:
+        await sync_request(request_id, TrelloClient(fake.config, http))
+    row = await _row(request_id)
+    assert len(reads) == 2 and not fake.posts
+    if mode == "second_page":
+        assert row.delivery_state == "linked" and row.trello_card_id == older_card["id"]
+        assert row.status == "in_progress"
+    else:
+        assert row.delivery_state == "outcome_unknown" and row.trello_card_id is None
+        assert (
+            row.last_error
+            == {
+                "duplicate": "trello_duplicate_marker",
+                "partial_failure": "trello_http_500",
+                "repeated_page": "trello_paging_not_advancing",
+            }[mode]
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("request_type", ["bug", "improvement"])
+@pytest.mark.parametrize("unicode_text", [False, True])
+async def test_description_limit_exact_boundary_and_replay(
+    async_client, request_type, unicode_text
+):
+    _, headers = await _user()
+    values = {
+        "type": request_type,
+        "description": "" if request_type == "bug" else None,
+        "screen": "Экран" if request_type == "improvement" else None,
+        "problem": "Проблема" if request_type == "improvement" else None,
+        "proposal": "" if request_type == "improvement" else None,
+    }
+    preview = DeveloperRequest(
+        id=uuid.uuid4(),
+        client_name="Клиент Alpha",
+        created_at=datetime.now(UTC),
+        page_url="/fbs",
+        **values,
+    )
+    available = TRELLO_DESCRIPTION_MAX_LENGTH - description_length(card_description(preview))
+    text = ("😀" * (available // 2) + "Я" * (available % 2)) if unicode_text else "Я" * available
+    text_field = "description" if request_type == "bug" else "proposal"
+    body = _body(**{**values, text_field: text, "page_url": "/fbs?ignored=yes#ignored"})
+    accepted = await async_client.post("/developer-requests", headers=headers, json=body)
+    assert accepted.status_code == 200, accepted.text
+    row = await _row(uuid.UUID(accepted.json()["id"]))
+    full_description = card_description(row)
+    assert description_length(full_description) == 16384
+    assert "😀" in full_description if unicode_text else "😀" not in full_description
+    fake = FakeTrello()
+    async with fake.http() as http:
+        await sync_request(row.id, TrelloClient(fake.config, http))
+    assert fake.posts[0]["desc"] == [full_description]  # Same persisted UUID/time and renderer.
+    async with SessionLocal() as session:
+        # Existing idempotent replies cannot be invalidated by a later client-name change.
+        await session.execute(
+            update(Tenant).where(Tenant.id == row.tenant_id).values(name="X" * 200)
+        )
+        await session.commit()
+    repeated = await async_client.post("/developer-requests", headers=headers, json=body)
+    assert repeated.status_code == 200 and repeated.json()["id"] == accepted.json()["id"]
+    async with SessionLocal() as session:
+        await session.execute(
+            update(Tenant).where(Tenant.id == row.tenant_id).values(name="Клиент Alpha")
+        )
+        await session.commit()
+    rejected = await async_client.post(
+        "/developer-requests",
+        headers=headers,
+        json={
+            **body,
+            "idempotency_key": str(uuid.uuid4()),
+            text_field: text + "Я",
+        },
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == {
+        "code": "developer_request_description_too_long",
+        "message": (
+            "Обращение слишком длинное для передачи разработчикам. "
+            "Сократите текст и отправьте ещё раз."
+        ),
+        "max_length": 16384,
+        "actual_length": 16385,
+    }
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(DeveloperRequest)) == 1
+    assert len(fake.posts) == 1
+
+
+@pytest.mark.asyncio
+async def test_combined_improvement_limit_rejects_without_trello_config(async_client, monkeypatch):
+    monkeypatch.setattr(settings, "trello_api_key", None)
+    _, headers = await _user()
+    result = await async_client.post(
+        "/developer-requests",
+        headers=headers,
+        json=_body(
+            type="improvement",
+            screen="Упаковка",
+            problem="П" * 9000,
+            proposal="Р" * 9000,
+        ),
+    )
+    assert result.status_code == 422
+    assert result.json()["detail"]["code"] == "developer_request_description_too_long"
+    assert result.json()["detail"]["actual_length"] > 18000
+    assert await sync_developer_requests() == 0
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(DeveloperRequest)) == 0

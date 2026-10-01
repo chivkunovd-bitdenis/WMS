@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.developer_request import DeveloperRequestCreate, DeveloperRequestOut
 from app.services import developer_request_service as service
+from app.services.developer_request_content import TRELLO_DESCRIPTION_MAX_LENGTH
 
 router = APIRouter(prefix="/developer-requests", tags=["developer-requests"])
 
@@ -24,6 +25,19 @@ async def create_developer_request(
 ) -> DeveloperRequestOut:
     try:
         row = await service.create_request(session, user, seller_id, body)
+    except service.DescriptionTooLong as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "developer_request_description_too_long",
+                "message": (
+                    "Обращение слишком длинное для передачи разработчикам. "
+                    "Сократите текст и отправьте ещё раз."
+                ),
+                "max_length": TRELLO_DESCRIPTION_MAX_LENGTH,
+                "actual_length": exc.actual_length,
+            },
+        ) from None
     except service.IdempotencyConflict:
         raise HTTPException(status_code=409, detail="idempotency_key_conflict") from None
     await session.commit()

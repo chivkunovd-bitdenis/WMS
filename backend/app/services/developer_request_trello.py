@@ -10,6 +10,7 @@ import httpx
 
 from app.core.settings import Settings
 from app.models.developer_request import DeveloperRequest
+from app.services.developer_request_content import card_description, marker
 
 
 class TrelloError(Exception):
@@ -57,26 +58,11 @@ class TrelloConfig:
         return next(key for key, value in self.lists.items() if value == "review")
 
 
-def marker(request: DeveloperRequest) -> str:
-    return f"WMS-REQUEST-ID: {request.id}"
-
-
 def card_payload(request: DeveloperRequest, config: TrelloConfig) -> dict[str, str]:
-    detail = (
-        f"Описание ошибки:\n{request.description}"
-        if request.type == "bug"
-        else f"Экран / процесс:\n{request.screen}\n\nВ чём сейчас проблема:\n{request.problem}"
-        f"\n\nКак можно улучшить:\n{request.proposal}"
-    )
     payload = {
         "idList": config.review_list_id,
         "name": f"Клиент: {request.client_name} — {request.title}",
-        "desc": (
-            f"Клиент: {request.client_name}\nДата поступления: {request.created_at.isoformat()}"
-            f"\nТип: {'Ошибка' if request.type == 'bug' else 'Улучшение / доработка'}"
-            f"\n\n{detail}\n\nИсходный экран: {request.page_url or '—'}"
-            f"\n\n{marker(request)}"
-        ),
+        "desc": card_description(request),
     }
     if config.client_label_id:
         payload["idLabels"] = config.client_label_id
@@ -172,21 +158,37 @@ class TrelloClient:
         )
 
     async def find_card(self, request: DeveloperRequest) -> dict[str, Any] | None:
-        # Include archived cards. No match NEVER authorizes another create after ambiguity.
-        cards = await self._request(
-            "GET",
-            f"boards/{quote(self.config.board_id, safe='')}/cards",
-            params={"filter": "all", "fields": "id,idList,idBoard,desc"},
-        )
-        if not isinstance(cards, list):
-            raise TrelloError("trello_invalid_response")
-        matches = [
-            card
-            for card in cards
-            if isinstance(card, dict)
-            and isinstance(card.get("desc"), str)
-            and marker(request) in card["desc"].splitlines()
-        ]
-        if len(matches) > 1:
-            raise TrelloError("trello_duplicate_marker")
-        return self._card(matches[0]) if matches else None
+        # Scan every page, including archived cards, before accepting a unique match.
+        # Failure on a later page must not turn a partial match into a confirmed link.
+        page_size = 1000
+        params = {
+            "filter": "all",
+            "fields": "id,idList,idBoard,desc",
+            "limit": str(page_size),
+            "sort": "-id",
+        }
+        cursors: set[str] = set()
+        match: dict[str, Any] | None = None
+        while True:
+            cards = await self._request(
+                "GET",
+                f"boards/{quote(self.config.board_id, safe='')}/cards",
+                params=params,
+            )
+            if not isinstance(cards, list):
+                raise TrelloError("trello_invalid_response")
+            for value in cards:
+                card = self._card(value)
+                if not isinstance(card.get("desc"), str):
+                    raise TrelloError("trello_invalid_response")
+                if marker(request) in card["desc"].splitlines():
+                    if match is not None and match["id"] != card["id"]:
+                        raise TrelloError("trello_duplicate_marker")
+                    match = card
+            if len(cards) < page_size:
+                return match
+            cursor = self._card(cards[-1])["id"]
+            if cursor in cursors:
+                raise TrelloError("trello_paging_not_advancing")
+            cursors.add(cursor)
+            params["before"] = cursor

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -13,10 +14,21 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.developer_request import DeveloperRequestCreate
+from app.services.developer_request_content import (
+    TRELLO_DESCRIPTION_MAX_LENGTH,
+    card_description,
+    description_length,
+)
 
 
 class IdempotencyConflict(Exception):
     pass
+
+
+class DescriptionTooLong(Exception):
+    def __init__(self, actual_length: int) -> None:
+        self.actual_length = actual_length
+        super().__init__("developer_request_description_too_long")
 
 
 async def create_request(
@@ -43,7 +55,11 @@ async def create_request(
         client_name = tenant.name if tenant else str(user.tenant_id)
         if seller is not None and seller.tenant_id == user.tenant_id:
             client_name += f" / {seller.name}"
+        created_at = datetime.now(UTC)
         row = DeveloperRequest(
+            id=uuid.uuid4(),
+            created_at=created_at,
+            updated_at=created_at,
             tenant_id=user.tenant_id,
             created_by_user_id=user.id,
             seller_id=seller_id,
@@ -53,6 +69,9 @@ async def create_request(
             title=" ".join((body.description or body.screen or "").split())[:160],
             **values,
         )
+        actual_length = description_length(card_description(row))
+        if actual_length > TRELLO_DESCRIPTION_MAX_LENGTH:
+            raise DescriptionTooLong(actual_length)
         try:
             async with session.begin_nested():
                 session.add(row)
