@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeveloperRequests } from './DeveloperRequests'
 import { draftStorageKey } from './draft'
@@ -57,7 +57,7 @@ beforeEach(() => {
   fetcher = vi.fn(async (_url, init) => init?.method === 'POST' ? response(record(JSON.parse(init.body))) : response([]))
   vi.stubGlobal('fetch', fetcher)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals() })
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); window.history.replaceState(null, '', '/'); vi.unstubAllGlobals() })
 
 describe('WMS-624 developer requests', () => {
   it('restores both forms on close/remount and isolates clearing by tenant, user and effective seller', async () => {
@@ -85,6 +85,16 @@ describe('WMS-624 developer requests', () => {
     expect(payloads()[0]).not.toHaveProperty('description')
     expect(document.body.textContent).toContain('Спасибо, ваше обращение зафиксировано')
     expect(localStorage.getItem(draftStorageKey(identity))).toBeNull()
+  })
+  it.each([
+    { basename: '/seller', path: '/seller/products' },
+    { basename: '/', path: '/app/ff/fbs' },
+  ])('sends the complete browser pathname with basename $basename, excluding query and hash', async ({ basename, path }) => {
+    window.history.replaceState(null, '', `${path}?private=do-not-send#private-fragment`)
+    await act(async () => root.render(<BrowserRouter basename={basename}><DeveloperRequests me={identity} token="fixture-token" /></BrowserRouter>))
+    await click('Задача разработчикам'); await fill('Описание ошибки', 'Контекст экрана'); await click('Отправить')
+    expect(payloads()).toHaveLength(1)
+    expect(payloads()[0].page_url).toBe(path)
   })
   it('retains the same UUID across 500, lost response and remount; a later intentional request uses a new UUID', async () => {
     fetcher.mockImplementationOnce(async () => response({}, 500))

@@ -3,7 +3,7 @@ import { Alert, Box, Button, CircularProgress, Fab, IconButton, List, ListItemBu
 import Close from '@mui/icons-material/Close'
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutlineOutlined'
 import ArrowBack from '@mui/icons-material/ArrowBack'
-import { useLocation } from 'react-router-dom'
+import { useHref, useLocation } from 'react-router-dom'
 import { useHelpButtonBottom } from './useHelpButtonBottom'
 import { apiUrl } from '../../api'
 import { AppDialog, PrimaryAction, SecondaryAction, SelectInput, StatusChip, TextInput } from '../../ui-kit'
@@ -20,7 +20,9 @@ export function DeveloperRequests({ me, token }: DeveloperRequestsProps) {
 }
 
 function ScopedDeveloperRequests({ scope, token }: { scope: string; token: string }) {
-  const { pathname } = useLocation()
+  const location = useLocation()
+  // Restore the portal basename while keeping query and hash out of the request.
+  const pathname = useHref({ pathname: location.pathname })
   const helpBottom = useHelpButtonBottom()
   const [draft, setDraft] = useState<Draft>(() => { try { return readDraft(scope) } catch { return emptyDraft() } })
   const [storageError, setStorageError] = useState(false)
