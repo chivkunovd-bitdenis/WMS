@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,6 +74,18 @@ class _AllocationRollback:
 class _BoxReduction:
     unknown_removed: int
     boxed_remaining: int
+
+
+async def allocated_qty_for_product(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    value = await session.scalar(
+        select(func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity), 0)).where(
+            MarketplaceUnloadPickAllocation.request_id == request_id,
+            MarketplaceUnloadPickAllocation.product_id == product_id,
+        )
+    )
+    return int(value or 0)
 
 
 async def picked_qty_by_product(
@@ -352,13 +365,14 @@ async def collect_into_box(
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:
-        packed_quantity = await inventory_service.apply_marketplace_unload_pick(
+        # WMS-632 R5: подбор — только расположение (перенос на сортировку),
+        # остаток и резерв документа не меняются до «Завершить».
+        packed_quantity = await inventory_service.stage_marketplace_unload_pick(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
             storage_location_id=effective_location_id,
             quantity=quantity,
-            marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
             container_kind=container_kind,
             container_id=container_id,
@@ -367,10 +381,6 @@ async def collect_into_box(
         if str(exc) == "insufficient stock":
             raise MarketplaceUnloadPickError("insufficient_available") from exc
         raise
-
-    await mu_svc.reduce_reservation_for_collect(
-        session, request_id, product_id, quantity
-    )
 
     if alloc is None:
         alloc = MarketplaceUnloadPickAllocation(
@@ -535,13 +545,14 @@ async def record_pick_allocation(
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:
-        packed_quantity = await inventory_service.apply_marketplace_unload_pick(
+        # WMS-632 R5: подбор — только расположение (перенос на сортировку),
+        # остаток и резерв документа не меняются до «Завершить».
+        packed_quantity = await inventory_service.stage_marketplace_unload_pick(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
             storage_location_id=effective_location_id,
             quantity=quantity,
-            marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
             container_kind=container_kind,
             container_id=container_id,
@@ -550,10 +561,6 @@ async def record_pick_allocation(
         if str(exc) == "insufficient stock":
             raise MarketplaceUnloadPickError("insufficient_available") from exc
         raise
-
-    await mu_svc.reduce_reservation_for_collect(
-        session, request_id, product_id, quantity
-    )
 
     if alloc is None:
         alloc = MarketplaceUnloadPickAllocation(
@@ -730,11 +737,12 @@ async def set_pick_allocation(
         session, request_id, product_id
     )
 
-    await inventory_service.reverse_marketplace_unload_pick(
+    await inventory_service.return_marketplace_unload_units(
         session,
         tenant_id=tenant_id,
         product_id=product_id,
         storage_location_id=storage_location_id,
+        allocated_after=await allocated_qty_for_product(session, request_id, product_id),
         quantity=remove_qty,
         marketplace_unload_request_id=request_id,
         actor_user_id=actor_user_id,
@@ -1150,12 +1158,14 @@ async def remove_from_box(
         packed_removed,
         source_known_removed,
     )
+    allocated_after = await allocated_qty_for_product(session, request_id, line.product_id)
     for loc_id, chunk_qty, packed_qty in location_chunks:
-        await inventory_service.reverse_marketplace_unload_pick(
+        await inventory_service.return_marketplace_unload_units(
             session,
             tenant_id=tenant_id,
             product_id=line.product_id,
             storage_location_id=loc_id,
+            allocated_after=allocated_after,
             quantity=chunk_qty,
             marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
@@ -1239,35 +1249,39 @@ async def rollback_all_collected_for_cancel(
     alloc_stmt = (
         select(MarketplaceUnloadPickAllocation)
         .where(MarketplaceUnloadPickAllocation.request_id == request_id)
+        .order_by(MarketplaceUnloadPickAllocation.created_at)
         .with_for_update()
     )
     alloc_res = await session.execute(alloc_stmt)
-    product_qty: dict[uuid.UUID, tuple[int, int]] = {}
-    for alloc in alloc_res.scalars().all():
+    # WMS-632 R5/R9: штуки документа лежат на сортировке (расположение) — отмена
+    # возвращает их в ячейку/тару, откуда сняли; остаток не меняется. Для
+    # документов, начатых до выкладки, списанная при подборе часть возвращается
+    # прежним движением (return_marketplace_unload_units).
+    allocations = list(alloc_res.scalars().all())
+    remaining_by_product: dict[uuid.UUID, int] = {}
+    for alloc in allocations:
+        remaining_by_product[alloc.product_id] = remaining_by_product.get(
+            alloc.product_id, 0
+        ) + int(alloc.quantity)
+    for alloc in allocations:
         qty = int(alloc.quantity)
         if qty > 0:
-            prior_qty, prior_packed = product_qty.get(alloc.product_id, (0, 0))
-            product_qty[alloc.product_id] = (
-                prior_qty + qty,
-                prior_packed + int(alloc.quantity_packed or 0),
-            )
-        await session.delete(alloc)
-
-    if product_qty:
-        sorting_loc = await sort_loc_svc.get_or_create_sorting_location(
-            session, tenant_id, warehouse_id
-        )
-        for product_id, (qty, packed_qty) in product_qty.items():
-            await inventory_service.reverse_marketplace_unload_pick(
+            remaining_by_product[alloc.product_id] -= qty
+            await inventory_service.return_marketplace_unload_units(
                 session,
                 tenant_id=tenant_id,
-                product_id=product_id,
-                storage_location_id=sorting_loc.id,
+                product_id=alloc.product_id,
+                storage_location_id=alloc.storage_location_id,
                 quantity=qty,
                 marketplace_unload_request_id=request_id,
                 actor_user_id=actor_user_id,
-                quantity_packed=packed_qty,
+                container_kind=cast(ContainerKind | None, alloc.container_kind),
+                container_id=alloc.container_id,
+                allocated_after=remaining_by_product[alloc.product_id],
+                quantity_packed=int(alloc.quantity_packed or 0),
+                allow_negative_sorting=True,
             )
+        await session.delete(alloc)
 
     box_line_stmt = (
         select(MarketplaceUnloadBoxLine)

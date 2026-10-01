@@ -215,12 +215,10 @@ async def update_fbs_order_reservation(
                     # Правило поштучного режима задаётся существованием pool.
                     order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
-            else:
-                if order.marketplace == "wb" and (
-                    not product.fbs_stock_sync_enabled or product.fbs_percent is None
-                ):
-                    order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
-                    return
+            # WMS-632 R7: резерв заказа не зависит от того, включена ли у товара
+            # публикация остатка в кабинет WB: заказ уже принят, товар под него
+            # должен быть зарезервирован. Публикуемое число остаётся
+            # min(лимит, свободный) и от резерва не зависит.
             totals = await organization_stock_totals_by_product(
                 session,
                 order.tenant_id,
@@ -1626,7 +1624,92 @@ async def apply_fbs_supply_write_off(
     )
 
 
-async def apply_marketplace_unload_pick(
+async def marketplace_unload_written_off(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    """Сколько штук этот документ уже списал движениями marketplace_unload.
+
+    Нужно для перехода (WMS-632 R8): документы, начатые до выкладки, списывали
+    остаток при подборе; при «Завершить» добираем только разницу с фактом.
+    """
+    total = await session.scalar(
+        select(func.coalesce(func.sum(InventoryMovement.quantity_delta), 0)).where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.marketplace_unload_request_id == request_id,
+            InventoryMovement.product_id == product_id,
+            InventoryMovement.movement_type == MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+        )
+    )
+    return max(0, -int(total or 0))
+
+
+async def stage_marketplace_unload_pick(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
+) -> int:
+    """WMS-632 R5: подбор FBO только переносит штуку на сортировку, остаток цел.
+
+    Списание — при «Завершить» (complete_unload). Возвращает, сколько из
+    снятых штук были упакованы (учёт упакованного сохраняется переносом).
+    """
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    bal = await _lock_inventory_balance(
+        session, tenant_id, product_id, storage_location_id, container_kind, container_id
+    )
+    if bal is None or int(bal.quantity) < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
+    packed_quantity = min(int(bal.quantity_packed), quantity)
+    location = await session.get(StorageLocation, storage_location_id)
+    if location is None or location.tenant_id != tenant_id:
+        msg = "storage location not found"
+        raise ValueError(msg)
+    sorting = await get_or_create_sorting_location(session, tenant_id, location.warehouse_id)
+    if sorting.id == storage_location_id:
+        return packed_quantity
+    group_id = uuid.uuid4()
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
+        deduct_prefer="packed",
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=sorting.id,
+        quantity_delta=quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
+        transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
+        quantity_packed_delta=packed_quantity,
+    )
+    return packed_quantity
+
+
+async def return_marketplace_unload_units(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
@@ -1637,36 +1720,85 @@ async def apply_marketplace_unload_pick(
     actor_user_id: uuid.UUID | None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
-) -> int:
+    allocated_after: int,
+    quantity_packed: int = 0,
+    allow_negative_sorting: bool = False,
+) -> None:
+    """Вернуть штуки документа FBO на место, откуда их сняли.
+
+    Новые документы держат штуки на сортировке: возвращаем переносом, остаток
+    не меняется. Если документ начат до WMS-632 и уже списал остаток при подборе
+    (сумма движений marketplace_unload), эта часть возвращается прежним
+    движением marketplace_unload — иначе списанное бы не вернулось.
+
+    allocated_after — сколько штук этого товара останется в подборе документа
+    после возврата. Списанное при подборе не может быть больше оставшегося
+    подбора: превышение возвращается кредитом, остальное — переносом.
+    """
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
-    bal = await _lock_inventory_balance(
-        session,
-        tenant_id,
-        product_id,
-        storage_location_id,
-        container_kind,
-        container_id,
+    written_off = await marketplace_unload_written_off(
+        session, tenant_id, marketplace_unload_request_id, product_id
     )
-    if bal is None or int(bal.quantity) < quantity:
-        msg = "insufficient stock"
+    legacy = min(quantity, max(0, written_off - max(0, allocated_after)))
+    if legacy > 0:
+        legacy_packed = min(quantity_packed, legacy)
+        await reverse_marketplace_unload_pick(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_location_id,
+            quantity=legacy,
+            marketplace_unload_request_id=marketplace_unload_request_id,
+            actor_user_id=actor_user_id,
+            container_kind=container_kind,
+            container_id=container_id,
+            quantity_packed=legacy_packed,
+        )
+        quantity_packed -= legacy_packed
+    staged = quantity - legacy
+    if staged < 1:
+        return
+    location = await session.get(StorageLocation, storage_location_id)
+    if location is None or location.tenant_id != tenant_id:
+        msg = "storage location not found"
         raise ValueError(msg)
-    packed_quantity = min(int(bal.quantity_packed), quantity)
+    sorting = await get_or_create_sorting_location(session, tenant_id, location.warehouse_id)
+    if sorting.id == storage_location_id:
+        return
+    group_id = uuid.uuid4()
+    packed_part = min(quantity_packed, staged)
+    for leg_qty, prefer in ((packed_part, "packed"), (staged - packed_part, "unpacked")):
+        if leg_qty < 1:
+            continue
+        await record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=-leg_qty,
+            movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+            transfer_group_id=group_id,
+            actor_user_id=actor_user_id,
+            deduct_prefer=cast(DeductPrefer, prefer),
+            allow_negative=allow_negative_sorting,
+        )
     await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
         product_id=product_id,
         storage_location_id=storage_location_id,
-        quantity_delta=-quantity,
-        movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
-        marketplace_unload_request_id=marketplace_unload_request_id,
+        quantity_delta=staged,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
+        transfer_group_id=group_id,
         actor_user_id=actor_user_id,
-        deduct_prefer="packed",
         container_kind=container_kind,
         container_id=container_id,
+        quantity_packed_delta=packed_part,
     )
-    return packed_quantity
 
 
 async def reverse_marketplace_unload_pick(

@@ -546,20 +546,21 @@ async def test_marketplace_unload_box_add_and_remove_record_actor(
     line_id = uuid.UUID(added.json()["id"])
 
     async with SessionLocal() as session:
-        negative = (
+        # WMS-632 R5: укладка в короб — только расположение (перенос на сортировку).
+        staged = (
             await session.execute(
                 select(InventoryMovement).where(
-                    InventoryMovement.marketplace_unload_request_id
-                    == uuid.UUID(request_id),
+                    InventoryMovement.product_id == uuid.UUID(product_id),
+                    InventoryMovement.movement_type == "stock_transfer_out",
                     InventoryMovement.quantity_delta == -2,
                 )
             )
         ).scalar_one()
-        assert negative.actor_user_id == actor_id
+        assert staged.actor_user_id == actor_id
         removed = await remove_from_box(
             session,
             actor_user_id=actor_id,
-            tenant_id=negative.tenant_id,
+            tenant_id=staged.tenant_id,
             request_id=uuid.UUID(request_id),
             box_id=uuid.UUID(box_id),
             line_id=line_id,
@@ -574,12 +575,18 @@ async def test_marketplace_unload_box_add_and_remove_record_actor(
             (
                 await session.execute(
                     select(InventoryMovement).where(
-                        InventoryMovement.marketplace_unload_request_id == request.id
+                        InventoryMovement.product_id == uuid.UUID(product_id),
+                        InventoryMovement.movement_type.in_(
+                            ("stock_transfer_out", "stock_transfer_in")
+                        ),
                     )
                 )
             ).scalars()
         )
-        assert sorted(row.quantity_delta for row in movements) == [-2, 2]
+        # перенос на сортировку и обратный перенос при выемке из короба
+        assert sorted(row.quantity_delta for row in movements if abs(row.quantity_delta) == 2) == [
+            -2, -2, 2, 2,
+        ]
         assert {row.actor_user_id for row in movements} == {actor_id}
         movement_ids = {row.id for row in movements}
     await _assert_general_api_actors(
