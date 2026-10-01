@@ -232,6 +232,10 @@ class DocumentOutcome(StrEnum):
     UNKNOWN = "unknown"
 
 
+# LK_RECEIPT v731: DISTANCE requires product_cost only for these groups.
+DISTANCE_PRICE_REQUIRED_GROUPS = frozenset({"shoes", "radio"})
+
+
 def document_outcome(status: str | None) -> DocumentOutcome:
     if status == "CHECKED_OK":
         return DocumentOutcome.SUCCEEDED
@@ -563,13 +567,17 @@ class TrueApiWithdrawalClient:
         for product in products:
             if not isinstance(product, dict):
                 raise ValueError("Each document product must be an object")
-            if set(product) != {"cis", "product_cost"}:
+            if set(product) - {"cis", "product_cost"}:
                 raise ValueError("Unsupported DISTANCE product fields")
             code = product.get("cis")
             if not isinstance(code, str) or not code:
                 raise ValueError("Document CIS is required")
             cost = product.get("product_cost")
-            if type(cost) is not int or not 0 <= cost <= 99_999_999_999_999_999:
+            if pg in DISTANCE_PRICE_REQUIRED_GROUPS and "product_cost" not in product:
+                raise ValueError("product_cost is required for this product group")
+            if "product_cost" in product and (
+                type(cost) is not int or not 0 <= cost <= 99_999_999_999_999_999
+            ):
                 raise ValueError("product_cost must be integer kopecks in 0..99999999999999999")
             codes.append(code)
         if len(set(codes)) != len(codes):
