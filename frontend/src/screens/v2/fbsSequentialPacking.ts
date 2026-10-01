@@ -27,7 +27,7 @@ export type PackingScanDeps = {
   active?: () => boolean
   select: (barcode: string, key: string, orderId?: string) => Promise<FbsScanAutoPrintResult>
   preload: (result: FbsScanAutoPrintResult) => Promise<string>
-  bind: (result: FbsScanAutoPrintResult, raw: string) => Promise<void>
+  bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<void>
   print: (result: FbsScanAutoPrintResult, image: string) => Promise<void>
   pack: (result: FbsScanAutoPrintResult) => Promise<void>
   claim: (raw: string) => string
@@ -95,22 +95,30 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         // Its durable product selection can still be resumed by its barcode.
         pending = null
       }
-      if (!pending) {
-        const barcode = `order:${orderId}`
-        const result = await deps.select(barcode, deps.claim(barcode), orderId)
-        if (result.order_id !== orderId) throw new Error('Сервер вернул другой заказ.')
-        deps.remember(barcode, result)
-        pending = { barcode, result, image: deps.preload(result), needsKiz: true }
-        void pending.image.catch(() => undefined)
+      const barcode = `order:${orderId}`
+      try {
+        if (!pending) {
+          const result = await deps.select(barcode, deps.claim(barcode), orderId)
+          if (result.order_id !== orderId) throw new Error('Сервер вернул другой заказ.')
+          deps.remember(barcode, result)
+          pending = { barcode, result, image: deps.preload(result), needsKiz: true }
+          void pending.image.catch(() => undefined)
+          deps.changed()
+        }
+        if (pending.needsKiz) {
+          await deps.bind(pending.result, raw, true)
+          pending.needsKiz = false
+          deps.changed()
+        }
+        pending.image = pending.image.catch(() => deps.preload(pending!.result))
+        await finish()
+      } catch (cause) {
+        // A failed row scan never captures the following ordinary scans.
+        if (pending?.barcode === barcode) pending = null
+        deps.complete(barcode)
         deps.changed()
+        throw cause
       }
-      if (pending.needsKiz) {
-        await deps.bind(pending.result, raw)
-        pending.needsKiz = false
-        deps.changed()
-      }
-      pending.image = pending.image.catch(() => deps.preload(pending!.result))
-      await finish()
     },
     async scan(raw) {
       if (deps.active?.() === false) return
@@ -244,7 +252,7 @@ export function makePackingScanDeps(
         reader.readAsDataURL(blob)
       })
     },
-    bind: async (result, raw) => {
+    bind: async (result, raw, replace = false) => {
       await validateFbsKiz(token, authHeaders, result.order_id, raw)
       // The ordinary supply screen starts work before KIZ binding. The unified
       // screen has no Start button, so preserve the same server prerequisite here.
@@ -254,7 +262,8 @@ export function makePackingScanDeps(
       const commit = (confirmed: boolean) => commitFbsKiz(token, authHeaders, [{
         order_id: result.order_id, value: raw, confirmed, scan_auto_print_id: result.scan_id,
       }], `${result.scan_id}:${codeKey}:${confirmed ? 'replace' : 'bind'}`)
-      let outcomes = await commit(false)
+      // A KIZ scanned into the order's row replaces its code at once.
+      let outcomes = await commit(replace)
       let outcome = outcomes.find((item) => item.order_id === result.order_id)
       if (outcome?.code === 'needs_confirmation' && window.confirm('У заказа уже есть Честный знак. Заменить его отсканированным кодом?')) {
         outcomes = await commit(true)
