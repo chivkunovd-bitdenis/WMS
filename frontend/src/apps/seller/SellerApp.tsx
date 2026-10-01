@@ -19,6 +19,7 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerKizWithdrawalScreen } from '../../screens/v2/SellerKizWithdrawalScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
+import { SellerFbsOrdersScreen } from '../../screens/v2/SellerFbsOrdersScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
 import { FfBillingScreen } from '../../screens/ff/FfBillingScreen'
@@ -545,6 +546,20 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
                   }
+                />
+              ) : (
+                accessDenied
+              )}</SectionErrorBoundary>
+            }
+          />
+          <Route
+            path="/fbs"
+            element={
+              <SectionErrorBoundary component="route" portal="seller">{token && sellerPermissions.documents ? (
+                <SellerFbsOrdersScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  authHeaders={authHeaders}
                 />
               ) : (
                 accessDenied

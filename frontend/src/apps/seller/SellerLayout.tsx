@@ -36,6 +36,10 @@ export function visibleSellerNavItems(base: string, permissions: SellerPermissio
   const items: SellerNavItem[] = []
   if (permissions.documents) {
     items.push({ key: 'documents', label: 'Документы', to: `${base}/documents`, testId: 'nav-seller-documents' })
+    // WMS-616 D1: «FBS» — отдельный read-only раздел селлера, доступен по тому
+    // же праву «Документы» (новое право не создаётся). Стоит сразу после
+    // «Документов» — заказы FBS селлер видит как собственные документы.
+    items.push({ key: 'fbs', label: 'FBS', to: `${base}/fbs`, testId: 'nav-seller-fbs' })
   }
   if (permissions.products) {
     items.push({ key: 'products', label: 'Товары', to: `${base}/products`, testId: 'nav-seller-products' })

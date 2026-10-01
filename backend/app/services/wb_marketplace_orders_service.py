@@ -106,6 +106,8 @@ CANCEL_LIKE_WB_STATUSES = frozenset(
 )
 
 DEFECT_WB_STATUS = "defect"
+SOLD_WB_STATUS = "sold"
+SORTED_WB_STATUS = "sorted"
 
 NO_RESERVE_WB_STATUSES = CANCEL_LIKE_WB_STATUSES | {DEFECT_WB_STATUS}
 
@@ -198,9 +200,9 @@ def _local_status_from_wb_statuses(
 ) -> str:
     if _is_cancel_like_wb_status(wb_status) or _is_cancel_like_wb_status(supplier_status):
         return FBS_ORDER_STATUS_CANCELLED
-    if wb_status == "sold":
+    if wb_status == SOLD_WB_STATUS:
         return FBS_ORDER_STATUS_DONE
-    if wb_status == "sorted":
+    if wb_status == SORTED_WB_STATUS:
         return FBS_ORDER_STATUS_SORTED
     if wb_status == DEFECT_WB_STATUS:
         return FBS_ORDER_STATUS_DEFECT
@@ -775,7 +777,7 @@ async def _apply_wb_status_to_order(
         )
         await _release_reservation(session, order)
         return
-    if normalized_wb == "sold":
+    if normalized_wb == SOLD_WB_STATUS:
         order.status = FBS_ORDER_STATUS_DONE
         # Склад здесь не трогаем ничем. Остаток снимает только наша передача
         # поставки маркетплейсу — правило владельца OWN-20.
@@ -783,7 +785,7 @@ async def _apply_wb_status_to_order(
         await _release_reservation(session, order)
         await _charge_confirmed_order(session, order)
         return
-    if normalized_wb == "sorted":
+    if normalized_wb == SORTED_WB_STATUS:
         order.status = FBS_ORDER_STATUS_SORTED
         await _charge_confirmed_order(session, order)
         return

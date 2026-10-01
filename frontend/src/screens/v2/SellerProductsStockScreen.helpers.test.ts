@@ -5,6 +5,7 @@ import {
   itemMarketplaces,
   itemPrimaryBarcode,
   itemSizeLabel,
+  marketplaceFilterParam,
   outcomeEntryLabel,
   outcomeEntryMarketplace,
   type AddToFulfillmentOutcomeEntry,
@@ -190,6 +191,20 @@ describe('outcomeEntryMarketplace', () => {
 
   it('reads ozon', () => {
     expect(outcomeEntryMarketplace(outcomeEntry({ marketplace: 'ozon' }))).toBe('ozon')
+  })
+})
+
+describe('marketplaceFilterParam — WMS-614 R1/R3', () => {
+  it('returns null for "all" so the request stays identical to the no-filter baseline', () => {
+    expect(marketplaceFilterParam('all')).toBeNull()
+  })
+
+  it('passes "wildberries" through unchanged so /page and /keys get the same marketplace key', () => {
+    expect(marketplaceFilterParam('wildberries')).toBe('wildberries')
+  })
+
+  it('passes "ozon" through unchanged so /page and /keys get the same marketplace key', () => {
+    expect(marketplaceFilterParam('ozon')).toBe('ozon')
   })
 })
 

@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.seller import Seller
@@ -86,8 +86,10 @@ async def list_public_marketplace_statuses(
         .join(credentials, credentials.seller_id == Seller.id)
         .where(Seller.tenant_id == tenant_id, Seller.id.in_(seller_ids))
     )
-    return {seller_id: (bool(has_key), scope_ok, checked_at)
-            for seller_id, has_key, scope_ok, checked_at in rows.all()}
+    return {
+        seller_id: (bool(has_key), scope_ok, checked_at)
+        for seller_id, has_key, scope_ok, checked_at in rows.all()
+    }
 
 
 async def patch_seller_tokens(
@@ -122,7 +124,12 @@ async def patch_seller_tokens(
     the real outcome via ``marketplace_scope_ok`` so the UI can honestly tell the
     seller when their key currently lacks Marketplace rights.
     """
-    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+    locked = await session.execute(
+        update(Seller)
+        .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        .values(name=Seller.name)
+    )
+    if getattr(locked, "rowcount", 0) != 1:
         return None
 
     if (

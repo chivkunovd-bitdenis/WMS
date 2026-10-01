@@ -21,11 +21,14 @@ from app.db.session import get_db
 from app.models.background_job import BackgroundJob
 from app.models.seller import Seller
 from app.models.user import User
+from app.schemas.catalog_sync import CatalogSyncState, catalog_sync_state
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import (
     JOB_TYPE_FBS_LABEL_PRINT,
     JOB_TYPE_FBS_STOCK_SYNC,
     JOB_TYPE_MOVEMENTS_DIGEST,
+    JOB_TYPE_OZON_CATALOG_SYNC,
+    JOB_TYPE_SELLER_WB_CATALOG_SYNC,
     JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
     JOB_TYPE_WILDBERRIES_CARDS_SYNC,
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
@@ -53,6 +56,7 @@ class BackgroundJobOut(BaseModel):
     id: str
     job_type: str
     status: str
+    state: CatalogSyncState
     payload_json: dict[str, Any] | None
     result_json: dict[str, Any] | None
     error_message: str | None
@@ -66,6 +70,7 @@ def _job_out(job: BackgroundJob) -> BackgroundJobOut:
         id=str(job.id),
         job_type=job.job_type,
         status=job.status,
+        state=catalog_sync_state(job.status),
         payload_json=job.payload_json,
         result_json=job.result_json,
         error_message=job.error_message,
@@ -115,18 +120,20 @@ async def start_background_job(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="seller_not_found",
             )
-        job = await job_svc.create_pending_job(
+        job, created = await job_svc.create_or_get_seller_catalog_sync_job(
             session,
             user.tenant_id,
+            body.seller_id,
             job_type=body.job_type,
-            payload_json={"seller_id": str(body.seller_id)},
+            marketplace="wildberries",
         )
-        if settings.celery_broker_url:
-            from app.tasks.background_jobs import run_wildberries_cards_sync_task
+        if created:
+            if settings.celery_broker_url:
+                from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
-            run_wildberries_cards_sync_task.delay(str(job.id))
-        else:
-            background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+                run_wildberries_cards_sync_task.delay(str(job.id))
+            else:
+                background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
     elif body.job_type == JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC:
         if body.seller_id is None:
             raise HTTPException(
@@ -206,18 +213,20 @@ async def start_wildberries_cards_sync_self(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="seller_not_found",
         )
-    job = await job_svc.create_pending_job(
+    job, created = await job_svc.create_or_get_seller_catalog_sync_job(
         session,
         user.tenant_id,
+        effective_seller_id,
         job_type=JOB_TYPE_WILDBERRIES_CARDS_SYNC,
-        payload_json={"seller_id": str(effective_seller_id)},
+        marketplace="wildberries",
     )
-    if settings.celery_broker_url:
-        from app.tasks.background_jobs import run_wildberries_cards_sync_task
+    if created:
+        if settings.celery_broker_url:
+            from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
-        run_wildberries_cards_sync_task.delay(str(job.id))
-    else:
-        background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+            run_wildberries_cards_sync_task.delay(str(job.id))
+        else:
+            background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
     return BackgroundJobStartOut(id=str(job.id), status=job.status)
 
 
@@ -254,6 +263,8 @@ async def get_background_job(
         # Unknown/general workers cannot establish ownership from an arbitrary field.
         seller_job_types = {
             JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+            JOB_TYPE_SELLER_WB_CATALOG_SYNC,
+            JOB_TYPE_OZON_CATALOG_SYNC,
             JOB_TYPE_STORAGE_MEASUREMENT_REBUILD,
             JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
             JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
