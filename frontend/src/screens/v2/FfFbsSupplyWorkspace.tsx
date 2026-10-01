@@ -675,9 +675,8 @@ export function FfFbsSupplyWorkspace({
         kizRowInputRef.current?.blur()
         // The same bind -> native WMS Print -> pack sequence as product scans.
         await controller.scanOrder!(target.order_id, raw)
-        kizRowInputRef.current = null
-        kizRowTargetRef.current = null
-        setKizScanActive(null)
+        // Blur already released the explicit selection. A later focus belongs
+        // to the next scan and must not be cleared by this completed request.
         sequentialFrameRef.current?.onScanChange?.()
       },
     }
@@ -3337,11 +3336,11 @@ export function FfFbsSupplyWorkspace({
                                   }}
                                   onChange={(event) => setKizScanValue(event.target.value)}
                                   onBlur={(event) => {
-                                    // Другая строка (в том числе другой поставки) становится
-                                    // единственной целью; обычная очередь упаковки сохраняется.
-                                    if (event.relatedTarget instanceof HTMLInputElement
+                                    // В единой упаковке выбор строки действует только
+                                    // пока курсор в поле. Принятый скан уже держит свой target.
+                                    if (useSequentialPacking || (event.relatedTarget instanceof HTMLInputElement
                                       && (event.relatedTarget.dataset.testid === 'fbs-kiz-row-input'
-                                        || event.relatedTarget.dataset.packingScan === 'true')) {
+                                        || event.relatedTarget.dataset.packingScan === 'true'))) {
                                       kizRowInputRef.current = null
                                       kizRowTargetRef.current = null
                                       setKizScanActive(null)
