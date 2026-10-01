@@ -57,6 +57,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "scan_selection_corrupt": "Сохранённый выбор заказа повреждён. Печать не запущена.",
     "scan_selection_not_found": "Сохранённая попытка сканирования не найдена.",
     "scan_selection_packed": "Заказ по этому скану уже упакован; выбор не снят.",
+    "scan_undo_task_closed": "Задание упаковки завершено — этот скан уже не отменить.",
+    "box_assignment_not_found": "Заказ уже не в этом коробе.",
     "scan_selection_not_saved": "Не удалось закрепить заказ за сканированием. Печать не запущена.",
     "scan_print_target_invalid": "Неизвестный вид автоматической печати.",
     "scan_print_target_disabled": "Этот вид печати не включён в сохранённой попытке.",

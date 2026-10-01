@@ -8,7 +8,7 @@ import {
   updateFbsPendingProductScan, type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
 import {
-  assignFbsPackingBoxOrders, cancelFbsScanAutoPrintSelection, claimFbsDirectKizPrint,
+  assignFbsPackingBoxOrders, cancelFbsScanAutoPrintSelection, rollbackFbsOrderScanKiz, undoFbsPackingScan, claimFbsDirectKizPrint,
   claimFbsScanAutoPrintReprint, claimFbsScanAutoPrintTarget, commitFbsKiz, createFbsIdempotencyKey,
   lookupFbsOrderBySticker, markFbsDirectKizPrintStarted, markFbsScanAutoPrintTargetStarted,
   releaseFbsDirectKizPrintClaim, releaseFbsScanAutoPrintTargetClaim,
@@ -18,14 +18,29 @@ import {
 import type { PackagingTask } from '../ff/FfPackagingPage'
 
 export type PackingScanView = { orderId: string; name: string; needsKiz: boolean; target?: FbsKizLookup | null } | null
-/** One operator scan and what it changed; kept for the step-back history (WMS-631). */
-export type PackingScanAction = {
-  kind: 'selected' | 'bound' | 'packed'
-  orderId: string
-  scanId: string
+/**
+ * One operator scan and everything it saved (WMS-631 R19, Д14): a selection by
+ * product barcode or sticker, a KIZ scan, or a KIZ scanned into the row field.
+ */
+export type PackingScanStep = {
+  seq: number
+  kind: 'select' | 'kiz' | 'row'
+  result: FbsScanAutoPrintResult
   barcode: string
-  /** Selected by sticker or by the row field rather than by a product barcode. */
   explicit: boolean
+  preferences: FbsScanPrintPreferences
+  /** The KIZ this scan wrote to the order (scanned and newly bound, or from the pool). */
+  kiz: string | null
+  /** Set when this scan packed the unit. */
+  packKey: string | null
+  /** The box this scan put the order in. */
+  boxId: string | null
+}
+export type PackingPackOutcome = { packed: boolean; boxId: string | null }
+let packingStepSeq = 0
+
+export function packingScanPackKey(result: FbsScanAutoPrintResult): string {
+  return `${result.scan_id}:packed`
 }
 export type PackingScanController = {
   hasSelectedRow?: () => boolean
@@ -35,6 +50,10 @@ export type PackingScanController = {
   cancel?: () => Promise<boolean>
   /** Synchronous: Escape has something to drop (a selection waiting for KIZ or in flight). */
   canCancel?: () => boolean
+  /** R19: order number of the newest step that can be undone, or null. */
+  lastStep?: () => number | null
+  /** R19: undo the newest step; on failure it stays in the history. */
+  undo?: () => Promise<void>
   hasPending: () => boolean
   hasSavedAttempt: (raw: string) => boolean
   view: () => PackingScanView
@@ -49,17 +68,19 @@ export type PackingScanDeps = {
   directReprint: (raw: string) => Promise<void>
   release: (result: FbsScanAutoPrintResult) => Promise<void>
   preload: (result: FbsScanAutoPrintResult) => Promise<string>
-  bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<void>
+  /** Resolves true when the scanned code was newly bound (not already the order's KIZ). */
+  bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<boolean | void>
   print: (result: FbsScanAutoPrintResult, image: string) => Promise<void>
   printChz: (result: FbsScanAutoPrintResult) => Promise<void>
   printCopy: (result: FbsScanAutoPrintResult) => Promise<void>
-  pack: (result: FbsScanAutoPrintResult, explicit: boolean, barcode: string) => Promise<void>
+  pack: (result: FbsScanAutoPrintResult, explicit: boolean, barcode: string) => Promise<PackingPackOutcome | void>
+  /** R19: server undo of one step (unpack, box, selection, KIZ). */
+  undo: (step: PackingScanStep) => Promise<void>
   claim: (raw: string, preferences: FbsScanPrintPreferences) => { key: string; preferences: FbsScanPrintPreferences }
   saved: (raw: string) => boolean
   remember: (raw: string, result: FbsScanAutoPrintResult) => void
   complete: (raw: string) => void
   changed: () => void
-  record?: (action: PackingScanAction) => void
 }
 
 const NOT_FOUND_CODES = ['scan_product_not_found', 'scan_product_exhausted', 'sticker_not_found']
@@ -134,6 +155,8 @@ type Pending = {
   bound: boolean
   /** The pool had no KIZ; a repeated scan asks the server again (R7). */
   refresh: boolean
+  /** The history step a later packing belongs to. */
+  step: PackingScanStep | null
 }
 
 /** One selected order survives binding/printing failures; only success releases it. */
@@ -141,10 +164,16 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
   let pending: Pending | null = null
   let selecting = false
   let cancelAfterSelect = false
-  const action = (kind: PackingScanAction['kind'], current: Pending) => deps.record?.({
-    kind, orderId: current.result.order_id, scanId: current.result.scan_id,
-    barcode: current.barcode, explicit: current.explicit,
-  })
+  let undoing = false
+  const history: PackingScanStep[] = []
+  const pushStep = (kind: PackingScanStep['kind'], current: Pending, kiz: string | null) => {
+    const step: PackingScanStep = {
+      seq: ++packingStepSeq, kind, result: current.result, barcode: current.barcode,
+      explicit: current.explicit, preferences: current.preferences, kiz, packKey: null, boxId: null,
+    }
+    history.push(step)
+    current.step = step
+  }
   const preload = (current: Pending) => {
     if (!current.preferences.printQr) return null
     const image = deps.preload(current.result)
@@ -168,8 +197,11 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
     }
     if (poolKiz) await deps.printChz(current.result)
     if (current.preferences.reprintChz && current.bound) await deps.printCopy(current.result)
-    await deps.pack(current.result, current.explicit, current.barcode)
-    action('packed', current)
+    const outcome = await deps.pack(current.result, current.explicit, current.barcode)
+    if (outcome?.packed && current.step) {
+      current.step.packKey = packingScanPackKey(current.result)
+      current.step.boxId = outcome.boxId
+    }
     deps.complete(current.barcode)
     pending = null
     deps.changed()
@@ -231,6 +263,35 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       target: pending.result.binding_target,
     } : null,
     canCancel: () => selecting || Boolean(pending?.needsKiz),
+    lastStep: () => history.at(-1)?.seq ?? null,
+    async undo() {
+      if (undoing || selecting) throw new Error('Дождитесь окончания текущего скана.')
+      const step = history.at(-1)
+      if (!step) return
+      undoing = true
+      try {
+        await deps.undo(step)
+        history.pop()
+        const same = pending?.result.scan_id === step.result.scan_id
+        if (step.kind === 'kiz') {
+          // The KIZ scan is undone: its order waits for the KIZ again, the selection stays.
+          if (!pending || same) {
+            pending = {
+              barcode: step.barcode, result: step.result, preferences: step.preferences,
+              explicit: step.explicit, image: null, needsKiz: true, bound: false, refresh: false,
+              step: history.findLast((one) => one.result.scan_id === step.result.scan_id) ?? null,
+            }
+            pending.image = preload(pending)
+          }
+        } else {
+          if (same) pending = null
+          deps.complete(step.barcode)
+        }
+        deps.changed()
+      } finally {
+        undoing = false
+      }
+    },
     async cancel() {
       if (selecting) { cancelAfterSelect = true; return true }
       if (!pending || !pending.needsKiz) return false
@@ -264,18 +325,17 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
           deps.remember(barcode, result)
           pending = {
             barcode, result, preferences: attempt.preferences, explicit: true,
-            image: null, needsKiz: true, bound: false, refresh: false,
+            image: null, needsKiz: true, bound: false, refresh: false, step: null,
           }
           pending.image = preload(pending)
-          action('selected', pending)
           deps.changed()
         }
         if (pending.needsKiz) {
           // R10, R18: the row's KIZ replaces its code at once, without any dialog.
-          await deps.bind(pending.result, raw, true)
+          const newly = await deps.bind(pending.result, raw, true)
           pending.needsKiz = false
           pending.bound = true
-          action('bound', pending)
+          pushStep('row', pending, newly === true ? raw : null)
           deps.changed()
         }
         retryImage(pending)
@@ -311,10 +371,10 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
           deps.changed()
         } else if (current.needsKiz) {
           // R18: an existing KIZ of the selected order is replaced without a dialog.
-          await deps.bind(current.result, raw)
+          const newly = await deps.bind(current.result, raw)
           current.needsKiz = false
           current.bound = true
-          action('bound', current)
+          pushStep('kiz', current, newly === true ? raw : null)
           deps.changed()
         } else if (current.refresh) {
           // The same scan id asks the server for the pool KIZ again.
@@ -349,9 +409,11 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       const bound = result.reprint_recovery?.status === 'available'
       // «Печатать ЧЗ» takes the KIZ from the pool; otherwise a KIZ product waits for its scan.
       const needsKiz = !(preferences.printChz && !explicit) && requiresKiz(result) && !bound
-      pending = { barcode: raw, result, preferences, explicit, image: null, needsKiz, bound, refresh: false }
+      pending = { barcode: raw, result, preferences, explicit, image: null, needsKiz, bound, refresh: false, step: null }
       pending.image = preload(pending)
-      action('selected', pending)
+      // A pool KIZ is bound by the server together with this selection (R7).
+      const poolKiz = preferences.printChz && !explicit ? result.printed_codes[0]?.cis_code ?? null : null
+      pushStep('select', pending, poolKiz)
       deps.changed()
       if (!pending.needsKiz) await finish()
     },
@@ -503,6 +565,7 @@ export function makePackingScanDeps(
       if (outcome?.status !== 'ok') throw new Error(outcome?.message ?? 'Честный знак не сохранён.')
       onBound(result.order_id, outcome.bound_kiz ?? raw)
       refreshed()
+      return outcome.newly_bound === true
     },
     print: async (result, imageDataUrl) => {
       await startClaimedAutomaticPrint(result.scan_id,
@@ -546,7 +609,9 @@ export function makePackingScanDeps(
     pack: async (result, explicit, barcode) => {
       const current = await ensureSupplyStarted()
       // A sticker or row scan of an already packed order must not pack a second unit.
-      if (explicit && current.orders.some((order) => order.id === result.order_id && order.pack.status === 'packed')) return
+      if (explicit && current.orders.some((order) => order.id === result.order_id && order.pack.status === 'packed')) {
+        return { packed: false, boxId: null }
+      }
       const taskId = current.supply.packaging_task_id
       if (!taskId) throw new Error('Задание упаковки ещё не создано.')
       const task = await request(`/operations/packaging-tasks/${taskId}`) as PackagingTask
@@ -554,12 +619,29 @@ export function makePackingScanDeps(
       const line = task.lines.find((row) => row.product_id === order?.product.id)
       if (!line) throw new Error('Не найдена строка упаковки выбранного заказа.')
       await request(`/operations/packaging-tasks/${taskId}/lines/${line.id}/pack`, { method: 'POST', body: JSON.stringify({
-        quantity: 1, order_id: result.order_id, idempotency_key: `${result.scan_id}:packed`,
+        quantity: 1, order_id: result.order_id, idempotency_key: packingScanPackKey(result),
       }) })
       const boxId = scanBoxes.get(result.scan_id) ?? peekFbsPendingProductScan(token, storageId, barcode)?.packingBoxId ?? null
       if (boxId && !current.boxes.some((box) => box.assigned_order_ids.includes(result.order_id))) {
         await assignFbsPackingBoxOrders(token, authHeaders, supplyId, boxId, [result.order_id])
+        return { packed: true, boxId }
       }
+      return { packed: true, boxId: null }
+    },
+    undo: async (step) => {
+      const local = isLocalPackingSelection(step.result)
+      const release = step.kind !== 'kiz' && !local
+      if (step.packKey || step.boxId || release) {
+        await undoFbsPackingScan(token, authHeaders, supplyId, {
+          order_id: step.result.order_id,
+          scan_id: local ? null : step.result.scan_id,
+          pack_idempotency_key: step.packKey,
+          box_id: step.boxId,
+          release_selection: release,
+        })
+      }
+      if (step.kiz) await rollbackFbsOrderScanKiz(token, authHeaders, step.result.order_id, step.kiz)
+      refreshed()
     },
   }
 }

@@ -1606,6 +1606,46 @@ export async function commitFbsKiz(
   return jsonOrThrow<FbsKizCommitResult[]>(res)
 }
 
+/** WMS-631 R19: undo the KIZ one packing scan wrote; a replaced code comes back. */
+export async function rollbackFbsOrderScanKiz(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  orderId: string,
+  value: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/kiz/rollback`), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  })
+  if (res.ok) return
+  await jsonOrThrow<unknown>(res)
+}
+
+export type FbsScanUndoRequest = {
+  order_id: string
+  scan_id?: string | null
+  pack_idempotency_key?: string | null
+  box_id?: string | null
+  release_selection: boolean
+}
+
+/** WMS-631 R19: unpack this scan's unit, take it out of its box, free its selection. */
+export async function undoFbsPackingScan(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  supplyId: string,
+  body: FbsScanUndoRequest,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-undo`), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.ok) return
+  await jsonOrThrow<unknown>(res)
+}
+
 export async function deleteFbsOrderKiz(
   token: string,
   ah: (t: string) => Record<string, string>,

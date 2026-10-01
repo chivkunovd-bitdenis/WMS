@@ -100,6 +100,7 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
         "cross_seller_code",
         "code_product_mismatch",
         "needs_confirmation",
+        "kiz_rollback_changed",
         "meta_validation_fail",
         "packaging_line_not_found",
         "product_mapping_missing",
@@ -223,6 +224,32 @@ async def commit_fbs_order_kiz(
             http_client,
         )
     return [_commit_row_out(row) for row in rows]
+
+
+class FbsKizRollbackBody(BaseModel):
+    value: str = Field(min_length=1, max_length=512)
+
+
+@router.post("/{order_id}/kiz/rollback", status_code=status.HTTP_204_NO_CONTENT)
+async def rollback_fbs_order_scan_kiz(
+    order_id: uuid.UUID,
+    body: FbsKizRollbackBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """WMS-631 R19: undo the KIZ one packing scan wrote; the replaced code comes back."""
+    try:
+        async with httpx.AsyncClient() as http_client:
+            await kiz_svc.rollback_scan_kiz(
+                session,
+                user.tenant_id,
+                user.id,
+                order_id,
+                body.value,
+                http_client,
+            )
+    except kiz_svc.FbsKizError as exc:
+        _raise_from_service(exc)
 
 
 @router.delete("/{order_id}/kiz", status_code=status.HTTP_204_NO_CONTENT)

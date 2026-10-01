@@ -14,7 +14,7 @@ function fixture(requiresKiz = true) {
     select: vi.fn().mockResolvedValueOnce(result('1')).mockResolvedValueOnce(result('2')),
     lookupSticker: vi.fn().mockRejectedValue(new FbsApiError('sticker_not_found', 'sticker_not_found', null, false, 404)),
     directReprint: vi.fn().mockRejectedValue(new FbsApiError('not_a_kiz', 'not_a_kiz', null, false, 422)),
-    release: vi.fn().mockResolvedValue(undefined),
+    release: vi.fn().mockResolvedValue(undefined), undo: vi.fn().mockResolvedValue(undefined),
     preload: vi.fn().mockResolvedValue('png'), bind: vi.fn().mockResolvedValue(undefined),
     print: vi.fn().mockResolvedValue(undefined), printChz: vi.fn().mockResolvedValue(undefined),
     printCopy: vi.fn().mockResolvedValue(undefined), pack: vi.fn().mockResolvedValue(undefined),
@@ -259,5 +259,44 @@ describe('WMS-631 one mechanism with the supply checkboxes', () => {
     expect(deps.release).toHaveBeenCalledWith(expect.objectContaining({ scan_id: 'scan-1' }))
     expect(scanner.hasPending()).toBe(false)
     expect(deps.print).not.toHaveBeenCalled()
+  })
+})
+
+describe('WMS-631 R19 step back', () => {
+  it('U1/U2: the KIZ scan is undone first (order waits for KIZ again), then the selection', async () => {
+    const { deps, scanner } = fixture()
+    vi.mocked(deps.bind).mockResolvedValue(true)
+    vi.mocked(deps.pack).mockResolvedValue({ packed: true, boxId: 'box-1' })
+    await scanner.scan('barcode')
+    await scanner.scan('kiz-1')
+    expect(scanner.hasPending()).toBe(false)
+    await scanner.undo?.()
+    expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: 'kiz', kiz: 'kiz-1', packKey: 'scan-1:packed', boxId: 'box-1',
+    }))
+    expect(scanner.view()).toMatchObject({ orderId: '1', needsKiz: true })
+    await scanner.undo?.()
+    expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'select', packKey: null, kiz: null }))
+    expect(scanner.hasPending()).toBe(false)
+    expect(scanner.lastStep?.()).toBeNull()
+    expect(deps.print).toHaveBeenCalledTimes(1)
+  })
+  it('U8: a failed undo keeps the step for the next press', async () => {
+    const { deps, scanner } = fixture(false)
+    await scanner.scan('barcode')
+    const step = scanner.lastStep?.()
+    vi.mocked(deps.undo).mockRejectedValueOnce(new Error('WB не ответил'))
+    await expect(scanner.undo?.()).rejects.toThrow('WB не ответил')
+    expect(scanner.lastStep?.()).toBe(step)
+    await scanner.undo?.()
+    expect(scanner.lastStep?.()).toBeNull()
+  })
+  it('does not record a KIZ that was already the order code', async () => {
+    const { deps, scanner } = fixture()
+    vi.mocked(deps.bind).mockResolvedValue(false)
+    await scanner.scan('barcode')
+    await scanner.scan('kiz-1')
+    await scanner.undo?.()
+    expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'kiz', kiz: null }))
   })
 })

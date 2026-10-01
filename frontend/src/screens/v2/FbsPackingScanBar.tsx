@@ -17,6 +17,23 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
   // WMS-631 R1, R3: the same saved checkboxes as the ordinary supply.
   const [printPreferences, setPrintPreferences] = useState(() => loadFbsScanPrintPreferences(token))
   const [error, setError] = useState<string | null>(null)
+  const [undoing, setUndoing] = useState(false)
+  // R19: the newest undoable scan across the supplies of this assembly.
+  const undoTarget = controllers.reduce<PackingScanController | null>((best, one) => {
+    const seq = one.lastStep?.() ?? null
+    return seq !== null && (best === null || seq > (best.lastStep?.() ?? -1)) ? one : best
+  }, null)
+  const undoLast = () => {
+    if (!undoTarget?.undo) return
+    setUndoing(true)
+    setError(null)
+    void undoTarget.undo()
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.')
+        playScanError()
+      })
+      .finally(() => setUndoing(false))
+  }
   const active = (controllers.find((one) => one.hasSelectedRow?.()) ?? controllers.find((one) => one.hasPending()))?.view()
   const intake = useScanIntake({
     enabled,
@@ -68,7 +85,7 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
       <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
         setPrintPreferences(next)
         saveFbsScanPrintPreferences(token, next)
-      }} />
+      }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} />
       <LabelSizeSelect value={labelSizeId} onChange={(size) => setLabelSizeId(size.id)} />
       {active ? <Typography variant="body2" sx={{ minWidth: 160 }}>
         {active.name}{active.needsKiz ? ' · сканируйте ЧЗ' : ' · завершение упаковки'}

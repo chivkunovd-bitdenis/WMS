@@ -1,10 +1,13 @@
-import { Checkbox, FormControlLabel } from '@mui/material'
+import { Checkbox, FormControlLabel, IconButton, Tooltip } from '@mui/material'
+import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined'
 import type { FbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 /** The three scan-print checkboxes of WB packing, shared by the supply and the assembly (WMS-631 R1). */
-export function FbsScanPrintToggles({ value, onChange }: {
+export function FbsScanPrintToggles({ value, onChange, undo }: {
   value: FbsScanPrintPreferences
   onChange: (next: FbsScanPrintPreferences) => void
+  /** R19: «Назад» right after the checkboxes; absent where scans are not undoable. */
+  undo?: { disabled: boolean; onClick: () => void }
 }) {
   return <>
     <FormControlLabel
@@ -45,5 +48,15 @@ export function FbsScanPrintToggles({ value, onChange }: {
       }
       label="Перепечатывать ЧЗ"
     />
+    {undo ? (
+      <Tooltip title="Отменить последний скан">
+        <span>
+          <IconButton size="small" aria-label="Отменить последний скан" disabled={undo.disabled}
+            onClick={undo.onClick} data-testid="fbs-scan-undo">
+            <UndoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    ) : null}
   </>
 }

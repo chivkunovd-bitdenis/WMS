@@ -33,6 +33,7 @@ from app.services import fbs_supply_service as supply_svc
 from app.services import fbs_supply_transfer_service as transfer_svc
 from app.services import kiz_reprint_service as kiz_reprint_svc
 from app.services import ozon_box_assembly_service as ozon_assembly_svc
+from app.services import packaging_task_service as packaging_task_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_order_history_service import FbsOrderHistoryError, supply_history
 from app.services.fbs_print_asset_service import (
@@ -434,6 +435,16 @@ class FbsScanAutoPrintOut(BaseModel):
     printed_codes: list[FbsOrderTapePrintedCodeOut]
     shortage: int
     order_errors: list[FbsPrintOrderErrorOut]
+
+
+class FbsScanUndoBody(BaseModel):
+    """WMS-631 R19: what one packing scan did and must be undone."""
+
+    order_id: uuid.UUID
+    scan_id: uuid.UUID | None = None
+    pack_idempotency_key: str | None = Field(default=None, max_length=128)
+    box_id: uuid.UUID | None = None
+    release_selection: bool = False
 
 
 class FbsScanAutoPrintTargetBody(BaseModel):
@@ -2716,6 +2727,32 @@ async def cancel_fbs_scan_auto_print_selection(
     except scan_print_svc.FbsScanAutoPrintError as exc:
         _raise_from_scan_auto_print(exc)
     await session.commit()
+
+
+@router.post("/{supply_id}/scan-undo", status_code=status.HTTP_204_NO_CONTENT)
+async def undo_fbs_packing_scan(
+    supply_id: uuid.UUID,
+    body: FbsScanUndoBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """WMS-631 R19: unpack this scan's unit, take it out of its box, free the selection."""
+    try:
+        await packaging_task_svc.undo_fbs_scan_unit(
+            session,
+            user.tenant_id,
+            supply_id,
+            order_id=body.order_id,
+            pack_idempotency_key=body.pack_idempotency_key,
+            box_id=body.box_id,
+            scan_id=body.scan_id,
+            release_selection=body.release_selection,
+            acting_user_id=user.id,
+        )
+    except packaging_task_svc.PackagingTaskServiceError as exc:
+        if exc.code in {"supply_not_found", "order_not_found", "scan_selection_not_found"}:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
 
 
 @router.post(

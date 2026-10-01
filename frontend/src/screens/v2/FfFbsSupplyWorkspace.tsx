@@ -707,6 +707,7 @@ export function FfFbsSupplyWorkspace({
   ordinaryWbPackingRef.current = ordinaryWbPacking
   const runUnifiedScanRef = useRef<(raw: string) => Promise<void>>(async () => undefined)
   const cancelUnifiedScanRef = useRef<() => Promise<void>>(async () => undefined)
+  const undoUnifiedScanRef = useRef<() => Promise<void>>(async () => undefined)
   // The supply bar shows the row field target or the selection waiting for its KIZ.
   const unifiedView = ordinaryWbPacking ? sequentialScanner?.view() ?? null : null
   const shownKizTarget = kizScanActive ?? (unifiedView?.needsKiz ? unifiedView.target ?? null : null)
@@ -1915,6 +1916,21 @@ export function FfFbsSupplyWorkspace({
     } finally {
       setKizScanBusy(false)
       refocusKizInput()
+    }
+  }
+  // R19: «Назад» undoes the newest scan; a failure stays in the history.
+  undoUnifiedScanRef.current = async () => {
+    if (!sequentialScanner?.undo) return
+    setKizScanBusy(true)
+    setKizScanError(null)
+    try {
+      await sequentialScanner.undo()
+    } catch (cause) {
+      setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.', debug: null })
+      playScanError()
+    } finally {
+      setKizScanBusy(false)
+      refocusKizInput(true)
     }
   }
   // R20: Escape (or «Сбросить») drops the started scan and frees its order.
@@ -3645,7 +3661,10 @@ export function FfFbsSupplyWorkspace({
                           <FbsScanPrintToggles value={scanPrintPreferences} onChange={(next) => {
                             setScanPrintPreferences(next)
                             saveFbsScanPrintPreferences(token, next)
-                          }} />
+                          }} undo={ordinaryWbPacking ? {
+                            disabled: kizScanBusy || sequentialScanner?.lastStep?.() == null,
+                            onClick: () => void undoUnifiedScanRef.current(),
+                          } : undefined} />
                         ) : null}
                         {shownKizTarget ? (
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">

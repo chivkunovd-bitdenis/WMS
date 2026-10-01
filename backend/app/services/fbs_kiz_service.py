@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_DATA_CHANGED,
+    SOURCE_USER,
+    DocumentEvent,
+)
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
@@ -54,6 +60,7 @@ from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
+from app.services.document_event_service import record_document_event
 from app.services.marketplace_scope import is_wildberries
 from app.services.ozon_kiz_service import OzonKizCommitOutcome, OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
@@ -71,6 +78,8 @@ _POOL_MARKING_SOURCE = "pool"
 _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
+# WMS-631 R19: which code a scan's replacement voided, so the scan can be undone.
+KIZ_REPLACED_EVENT_KIND = "wms631_kiz_replaced"
 _VOID_OPERATOR_CANCEL_REASON = marking_code_svc.MARKING_OPERATOR_CANCEL_REASON
 _REPLACEMENT_RESTORE_FAILED = "wb_replacement_restore_failed"
 _GS = "\x1d"
@@ -1545,6 +1554,23 @@ async def _commit_one_kiz_pair(
             ) from restore_error
         raise new_error
     if current is not None:
+        if current.marking_code_id is not None and order.supply_id is not None:
+            await record_document_event(
+                session,
+                tenant_id=tenant_id,
+                document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+                document_id=order.supply_id,
+                event_type=EVENT_DATA_CHANGED,
+                source=SOURCE_USER,
+                actor_user_id=actor_user_id,
+                payload_json={
+                    "kind": KIZ_REPLACED_EVENT_KIND,
+                    "order_id": str(order.id),
+                    "previous_code_id": str(current.marking_code_id),
+                    "new_code_id": str(code.id),
+                },
+                idempotency_key=f"wms631-kiz-replaced:{marking.id}",
+            )
         await _void_existing_sgtin_marking_locally(
             session,
             current,
@@ -1671,3 +1697,92 @@ async def commit_kiz_pairs(
             )
 
     return rows
+
+
+async def rollback_scan_kiz(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    order_id: uuid.UUID,
+    value: str,
+    http_client: httpx.AsyncClient,
+) -> None:
+    """WMS-631 R19: undo one KIZ written by a packing scan.
+
+    The scanned code is removed from WB and the order exactly like the existing
+    KIZ cancellation.  When that scan replaced an earlier code, the code voided
+    by the replacement (found by its replacement event) is bound again through
+    the ordinary commit, including its WB write and lost-response rules.
+    Repeating the call after a partial failure continues from the current state.
+    """
+    await session.rollback()
+    order = await _get_order_for_kiz(session, tenant_id, order_id)
+    new_code = await _get_marking_code_by_cis(session, tenant_id, value)
+    replaced: DocumentEvent | None = None
+    previous_code: MarkingCode | None = None
+    if new_code is not None and order.supply_id is not None:
+        events = (
+            await session.scalars(
+                select(DocumentEvent)
+                .where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+                    DocumentEvent.document_id == order.supply_id,
+                    DocumentEvent.event_type == EVENT_DATA_CHANGED,
+                )
+                .order_by(DocumentEvent.occurred_at.desc(), DocumentEvent.id.desc())
+            )
+        ).all()
+        for event in events:
+            payload = event.payload_json or {}
+            if (
+                payload.get("kind") == KIZ_REPLACED_EVENT_KIND
+                and payload.get("order_id") == str(order.id)
+                and payload.get("new_code_id") == str(new_code.id)
+            ):
+                replaced = event
+                previous_code = await session.get(
+                    MarkingCode, uuid.UUID(str(payload["previous_code_id"]))
+                )
+                break
+    current = await _current_sgtin_marking_for_update(session, order.id)
+    current_value = current.value if current is not None else None
+    previous_value = previous_code.cis_code if previous_code is not None else None
+    if current_value == value:
+        await cancel_order_kiz(session, tenant_id, actor_user_id, order_id, http_client)
+    elif current_value is not None and current_value != previous_value:
+        raise FbsKizError(
+            "kiz_rollback_changed",
+            message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
+        )
+    if previous_code is None or replaced is None or current_value == previous_value:
+        await session.commit()
+        return
+    await session.rollback()
+    locked = await session.scalar(
+        select(MarkingCode)
+        .where(MarkingCode.id == previous_code.id, MarkingCode.tenant_id == tenant_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None:
+        raise FbsKizError("kiz_not_found", context={"order_id": str(order_id)})
+    if locked.status == STATUS_VOID:
+        # Voided only by this replacement: it is still the physical label on the unit.
+        locked.status = STATUS_AVAILABLE
+    restore_value = locked.cis_code
+    await session.commit()
+    rows = await commit_kiz_pairs(
+        session,
+        tenant_id,
+        actor_user_id,
+        [FbsKizCommitPair(order_id=order_id, value=restore_value, confirmed=True)],
+        f"wms631-kiz-rollback:{replaced.id}",
+        http_client,
+    )
+    row = rows[0] if rows else None
+    if row is None or row.status != "ok":
+        raise FbsKizError(
+            row.code if row is not None else "kiz_rollback_failed",
+            message=row.message if row is not None else None,
+        )
