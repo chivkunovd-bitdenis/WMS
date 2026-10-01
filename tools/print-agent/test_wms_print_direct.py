@@ -1,10 +1,25 @@
 import base64
+import io
+import json
 from pathlib import Path
+import sqlite3
+import threading
 import tempfile
+import time
 import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import Mock, patch
 
-from wms_print_direct import Handler, Printer, default_printer, main
+import wms_print_agent as agent
+import wms_print_direct
+from wms_print_direct import (
+    DefaultWindowsAdapter, DirectServer, Handler, PrintNotSent, Printer,
+    acquire_instance, default_printer, fit_layout, flatten_png, main, running_instance)
+
+try:
+    from PIL import Image
+except ImportError:  # the Windows package always has Pillow
+    Image = None
 
 PNG = b'\x89PNG\r\n\x1a\n' + b'test'
 
@@ -56,13 +71,15 @@ class DirectPrintTest(unittest.TestCase):
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
     @patch('wms_print_direct.subprocess.Popen')
     @patch('wms_print_direct.subprocess.run')
+    @patch('wms_print_direct.running_instance', return_value=True)
+    @patch('wms_print_direct.acquire_instance', return_value=True)
     @patch('wms_print_direct.Printer')
-    @patch('wms_print_direct.ThreadingHTTPServer')
-    def test_start_and_reopen_never_launch_browser(self, server, printer, run, popen):
+    @patch('wms_print_direct.DirectServer')
+    def test_start_and_reopen_never_launch_browser(self, server, printer, acquire, running, run, popen):
         main()
         server.return_value.serve_forever.assert_called_once()
         server.side_effect = OSError('already running')
-        main()
+        main()  # the port belongs to a live WMS Print: quiet success
         run.assert_not_called()
         popen.assert_not_called()
 
@@ -72,6 +89,291 @@ class DirectPrintTest(unittest.TestCase):
         run.return_value.stdout = 'system default destination: Label_Printer\n'
         self.assertEqual(default_printer(), 'Label_Printer')
         self.assertEqual(run.call_args.kwargs['env']['LC_ALL'], 'C')
+
+
+def png(color=(0, 0, 0, 255), size=(8, 4), mode='RGBA'):
+    out = io.BytesIO()
+    Image.new(mode, size, color).save(out, 'PNG')
+    return out.getvalue()
+
+
+class FakeAdapter:
+    """Stands in for the OS adapter: fails before or after the boundary."""
+    def __init__(self, before=None, after=None):
+        self.before, self.after, self.calls = before, after, 0
+
+    def default(self):
+        return 'Label'
+
+    def submit_default(self, data, queue, mark):
+        self.calls += 1
+        if self.before:
+            raise self.before
+        mark()
+        if self.after:
+            raise self.after
+        return 'Label-7'
+
+
+class RetryBoundaryTest(unittest.TestCase):
+    def printer(self, root, adapter):
+        with patch('wms_print_direct.MacPrinter'), patch('wms_print_direct.DefaultWindowsAdapter'):
+            printer = Printer(Path(root), print_timeout=2, slot_wait=1)
+        printer.adapter = adapter
+        return printer
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_failure_before_the_os_boundary_allows_retry_of_same_key(self):
+        with tempfile.TemporaryDirectory() as root:
+            adapter = FakeAdapter(before=ValueError('cannot prepare'))
+            printer = self.printer(root, adapter)
+            with self.assertRaises(ValueError):
+                printer.print(job())
+            adapter.before = None
+            self.assertEqual(printer.print(job()), 'Label-7')
+            self.assertEqual(adapter.calls, 2)
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_proven_not_sent_after_mark_removes_the_mark(self):
+        with tempfile.TemporaryDirectory() as root:
+            printer = self.printer(root, FakeAdapter())
+            printer.submit = Mock(side_effect=[PrintNotSent('lp did not start'), 'Label-9'])
+            with self.assertRaises(PrintNotSent):
+                printer.print(job())
+            self.assertEqual(printer.print(job()), 'Label-9')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_failure_after_the_boundary_is_never_repeated(self):
+        with tempfile.TemporaryDirectory() as root:
+            adapter = FakeAdapter(after=agent.UnknownPrintOutcome('lost'))
+            printer = self.printer(root, adapter)
+            for _ in range(2):
+                with self.assertRaises(agent.UnknownPrintOutcome):
+                    printer.print(job())
+            self.assertEqual(adapter.calls, 1)
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_hung_driver_answers_in_time_and_does_not_block_forever(self):
+        release = threading.Event()
+        entered = Mock()
+
+        def hang(data):
+            entered()
+            release.wait(10)
+            return 'late-1'
+
+        with tempfile.TemporaryDirectory() as root:
+            printer = Printer(Path(root), hang, print_timeout=0.3, slot_wait=0.3)
+            started = time.monotonic()
+            with self.assertRaises(agent.UnknownPrintOutcome):
+                printer.print(job('a'))
+            # the next job is refused fast, unmarked and not sent
+            with self.assertRaises(PrintNotSent):
+                printer.print(job('b', PNG + b'2'))
+            self.assertLess(time.monotonic() - started, 3)
+            entered.assert_called_once()
+            release.set()
+            for _ in range(50):  # the late receipt is recorded for the same key
+                try:
+                    if printer.print(job('a')) == 'late-1':
+                        break
+                except agent.UnknownPrintOutcome:
+                    time.sleep(0.05)
+            self.assertEqual(printer.print(job('a')), 'late-1')
+            printer.submit = Mock(return_value='b-1')
+            self.assertEqual(printer.print(job('b', PNG + b'2')), 'b-1')
+
+
+class FakeDC:
+    def __init__(self, area=(464, 320), dpi=(203, 203), events=None):
+        self.area, self.dpi, self.events = area, dpi, events if events is not None else []
+
+    def GetDeviceCaps(self, index):
+        return {8: self.area[0], 10: self.area[1], 88: self.dpi[0], 90: self.dpi[1]}[index]
+
+    def StartDoc(self, name):
+        self.events.append('StartDoc')
+        return 5
+
+    def StartPage(self): self.events.append('StartPage')
+    def EndPage(self): self.events.append('EndPage')
+    def EndDoc(self): self.events.append('EndDoc')
+    def AbortDoc(self): self.events.append('AbortDoc')
+    def DeleteDC(self): self.events.append('DeleteDC')
+    def GetHandleOutput(self): return 1
+
+
+@unittest.skipIf(Image is None, 'Pillow is required')
+class WindowsAdapterTest(unittest.TestCase):
+    def adapter(self, dc=None, dc_error=None):
+        drawn = []
+
+        class Dib:
+            def __init__(self, image): self.image = image
+            def draw(self, handle, box): drawn.append((self.image.size, box))
+
+        adapter = DefaultWindowsAdapter(modules={'Image': Image, 'ImageWin': Mock(Dib=Dib)})
+        adapter._create_printer_dc = Mock(side_effect=dc_error, return_value=dc)
+        return adapter, drawn
+
+    def test_undecodable_png_fails_before_mark(self):
+        mark = Mock()
+        adapter, _ = self.adapter(FakeDC())
+        with self.assertRaises(Exception):
+            adapter.submit_default(b'\x89PNG\r\n\x1a\ntest', 'Q', mark)
+        mark.assert_not_called()
+
+    def test_driver_failure_fails_before_mark(self):
+        mark = Mock()
+        adapter, _ = self.adapter(dc_error=ValueError('driver refused'))
+        with self.assertRaises(ValueError):
+            adapter.submit_default(png(), 'Q', mark)
+        mark.assert_not_called()
+
+    def test_mark_is_set_right_before_start_doc(self):
+        events = []
+        adapter, drawn = self.adapter(FakeDC(events=events))
+        self.assertEqual(adapter.submit_default(png(size=(58, 40)), 'Q', lambda: events.append('mark')), 'windows-5')
+        self.assertEqual(events[:2], ['mark', 'StartDoc'])
+        self.assertEqual(drawn[0][1], (0, 0, 464, 320))  # unchanged landscape-on-landscape fit
+
+    def test_landscape_label_on_portrait_page_is_turned_and_larger(self):
+        adapter, drawn = self.adapter(FakeDC(area=(320, 464)))
+        adapter.submit_default(png(size=(580, 400)), 'Q', lambda: None)
+        size, box = drawn[0]
+        self.assertEqual(size, (400, 580))  # turned by 90 degrees
+        self.assertEqual(box, (0, 0, 320, 464))
+
+    def test_failure_after_start_doc_is_unknown_outcome(self):
+        dc = FakeDC()
+        dc.EndPage = Mock(side_effect=OSError('spooler'))
+        adapter, _ = self.adapter(dc)
+        with self.assertRaises(agent.UnknownPrintOutcome):
+            adapter.submit_default(png(), 'Q', lambda: None)
+        self.assertIn('AbortDoc', dc.events)
+
+
+@unittest.skipIf(Image is None, 'Pillow is required')
+class TransparencyTest(unittest.TestCase):
+    def test_transparent_background_becomes_white_not_black(self):
+        flat = flatten_png(Image, png((0, 0, 0, 0)))
+        self.assertEqual(flat.mode, 'RGB')
+        self.assertEqual(flat.getpixel((0, 0)), (255, 255, 255))
+
+    def test_opaque_and_half_transparent_pixels(self):
+        self.assertEqual(flatten_png(Image, png((0, 0, 0, 255))).getpixel((0, 0)), (0, 0, 0))
+        gray = flatten_png(Image, png((0, 0, 0, 128))).getpixel((0, 0))
+        self.assertTrue(120 <= gray[0] <= 135)
+
+    def test_palette_transparency_and_plain_rgb(self):
+        out = io.BytesIO()
+        Image.new('P', (2, 2), 0).save(out, 'PNG', transparency=0)
+        self.assertEqual(flatten_png(Image, out.getvalue()).getpixel((0, 0)), (255, 255, 255))
+        self.assertEqual(flatten_png(Image, png((1, 2, 3), mode='RGB')).getpixel((0, 0)), (1, 2, 3))
+
+    def test_truncated_png_is_rejected(self):
+        with self.assertRaises(Exception):
+            flatten_png(Image, png()[:40])
+
+
+class LayoutTest(unittest.TestCase):
+    def test_square_pixels_keep_the_old_fit(self):
+        self.assertEqual(fit_layout(580, 400, 464, 320, 203, 203), (False, 0, 0, 464, 320))
+        self.assertEqual(fit_layout(300, 300, 464, 320, 203, 203), (False, 72, 0, 320, 320))
+
+    def test_different_dpi_keeps_physical_proportions(self):
+        rotate, x, y, w, h = fit_layout(100, 100, 406, 600, 203, 600)
+        self.assertFalse(rotate)
+        self.assertEqual((w, h), (203, 600))  # one inch by one inch, not a stretched shape
+
+    def test_turned_only_when_clearly_larger(self):
+        self.assertTrue(fit_layout(580, 400, 320, 464, 203, 203)[0])
+        self.assertFalse(fit_layout(580, 400, 320, 330, 203, 203)[0])
+        self.assertFalse(fit_layout(400, 400, 320, 464, 203, 203)[0])
+
+    def test_bad_dpi_falls_back_to_square_pixels(self):
+        self.assertEqual(fit_layout(580, 400, 464, 320, 0, None), (False, 0, 0, 464, 320))
+
+
+class SingleInstanceTest(unittest.TestCase):
+    def test_second_lock_is_refused_and_released_with_the_first(self):
+        with tempfile.TemporaryDirectory() as root:
+            held = list(wms_print_direct._instance_guard)
+            try:
+                self.assertTrue(acquire_instance(Path(root)))
+                self.assertFalse(acquire_instance(Path(root)))
+                wms_print_direct._instance_guard.pop().close()
+                self.assertTrue(acquire_instance(Path(root)))
+            finally:
+                for lock in wms_print_direct._instance_guard[len(held):]:
+                    lock.close()
+                wms_print_direct._instance_guard[:] = held
+
+    def test_windows_named_mutex(self):
+        kernel32 = Mock()
+        kernel32.CreateMutexW.return_value = 99
+        with tempfile.TemporaryDirectory() as root, \
+                patch('wms_print_direct.sys.platform', 'win32'), \
+                patch('wms_print_direct.ctypes.WinDLL', create=True, return_value=kernel32), \
+                patch('wms_print_direct.ctypes.get_last_error', create=True, return_value=183):
+            self.assertFalse(acquire_instance(Path(root)))  # ERROR_ALREADY_EXISTS
+            kernel32.CloseHandle.assert_called_once()
+        with tempfile.TemporaryDirectory() as root, \
+                patch('wms_print_direct.sys.platform', 'win32'), \
+                patch('wms_print_direct.ctypes.WinDLL', create=True, return_value=kernel32), \
+                patch('wms_print_direct.ctypes.get_last_error', create=True, return_value=0):
+            held = list(wms_print_direct._instance_guard)
+            self.assertTrue(acquire_instance(Path(root)))
+            wms_print_direct._instance_guard[:] = held
+
+    def test_port_cannot_be_shared_and_live_copy_is_recognised(self):
+        first = DirectServer(('127.0.0.1', 0), Handler)
+        port = first.server_port
+        threading.Thread(target=first.serve_forever, daemon=True).start()
+        try:
+            with self.assertRaises(OSError):
+                DirectServer(('127.0.0.1', port), Handler)
+            self.assertTrue(running_instance(port))
+        finally:
+            first.shutdown()
+            first.server_close()
+
+    def test_foreign_program_on_the_port_is_not_taken_for_ours(self):
+        class Other(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps({'app': 'something else'}).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args): pass
+
+        other = HTTPServer(('127.0.0.1', 0), Other)
+        threading.Thread(target=other.serve_forever, daemon=True).start()
+        try:
+            self.assertFalse(running_instance(other.server_port))
+        finally:
+            other.shutdown()
+            other.server_close()
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.running_instance', return_value=False)
+    @patch('wms_print_direct.acquire_instance', return_value=True)
+    @patch('wms_print_direct.DirectServer', side_effect=OSError('busy'))
+    def test_foreign_port_owner_gives_a_clear_error_and_is_left_alone(self, server, acquire, running):
+        with self.assertRaises(SystemExit) as stop:
+            main()
+        self.assertEqual(stop.exception.code, 1)
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.running_instance', return_value=True)
+    @patch('wms_print_direct.acquire_instance', return_value=False)
+    @patch('wms_print_direct.DirectServer')
+    def test_second_copy_quietly_succeeds_when_first_is_alive(self, server, acquire, running):
+        main()
+        server.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
