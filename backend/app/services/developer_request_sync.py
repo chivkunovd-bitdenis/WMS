@@ -91,13 +91,17 @@ async def sync_request(request_id: uuid.UUID, client: TrelloClient) -> bool:
             changes["last_error"] = exc.code
         # Compare-and-set fences late replies from expired workers. They can be
         # reconciled on the next run using the durable board/UUID marker.
-        interval = settings.trello_sync_interval_sec
+        # Beat already spaces successful polls. Adding another interval after HTTP
+        # completion skips the next tick; completion time also preserves queue fairness.
+        next_sync_at = datetime.now(UTC)
         if changes.get("last_error"):
+            interval = settings.trello_sync_interval_sec
             interval = min(3600, interval * (2 ** min(row.create_attempts, 6)))
+            next_sync_at += timedelta(seconds=interval)
         changes.update(
             lease_token=None,
             lease_until=None,
-            next_sync_at=datetime.now(UTC) + timedelta(seconds=interval),
+            next_sync_at=next_sync_at,
         )
         await session.execute(
             update(DeveloperRequest)

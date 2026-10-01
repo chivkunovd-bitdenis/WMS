@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from urllib.parse import parse_qs
 
 import httpx
@@ -17,6 +18,7 @@ from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services import developer_request_sync as sync_service
 from app.services.developer_request_content import (
     TRELLO_DESCRIPTION_MAX_LENGTH,
     card_description,
@@ -664,3 +666,133 @@ async def test_combined_improvement_limit_rejects_without_trello_config(async_cl
     assert await sync_developer_requests() == 0
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(DeveloperRequest)) == 0
+
+
+async def _scheduler_fixture(monkeypatch, count, *, uncertain=False):
+    user, _ = await _user()
+    start = datetime.now(UTC) + timedelta(days=1)
+    state = SimpleNamespace(now=start, fail=False, reads=[], list_id="work")
+    fake = FakeTrello()
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return state.now if tz is not None else state.now.replace(tzinfo=None)
+
+    async def provider(request):
+        state.now += timedelta(milliseconds=100)  # Nonzero HTTP time; no wall-clock sleep.
+        if request.url.path.startswith("/1/cards/"):
+            card_id = request.url.path.rsplit("/", 1)[-1]
+            state.reads.append(card_id)
+            if state.fail:
+                return httpx.Response(500)
+            return httpx.Response(
+                200,
+                json={
+                    "id": card_id,
+                    "idList": state.list_id,
+                    "idBoard": "board",
+                    "desc": "test",
+                },
+            )
+        assert request.method == "GET"
+        if uncertain and request.url.path == "/1/boards/board/cards":
+            if state.fail:
+                return httpx.Response(500)
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "recovered-card",
+                        "idList": state.list_id,
+                        "idBoard": "board",
+                        "desc": state.request_marker,
+                    }
+                ],
+            )
+        return await fake.handle(request)
+
+    monkeypatch.setattr(sync_service, "datetime", Clock)
+    monkeypatch.setattr(
+        sync_service,
+        "httpx",
+        SimpleNamespace(
+            AsyncClient=lambda: httpx.AsyncClient(transport=httpx.MockTransport(provider)),
+        ),
+    )
+    monkeypatch.setattr(TrelloConfig, "from_settings", classmethod(lambda cls, config: fake.config))
+    monkeypatch.setattr(settings, "trello_sync_interval_sec", 60)
+    async with SessionLocal() as session:
+        rows = [
+            DeveloperRequest(
+                tenant_id=user.tenant_id,
+                created_by_user_id=user.id,
+                client_name="Client",
+                idempotency_key=uuid.uuid4(),
+                payload_hash="test",
+                type="bug",
+                title="Bug",
+                description="Bug",
+                trello_card_id=None if uncertain else f"card-{i}",
+                trello_board_id="board",
+                delivery_state="outcome_unknown" if uncertain else "linked",
+                create_attempts=1,
+                next_sync_at=start - timedelta(seconds=count - i),
+            )
+            for i in range(count)
+        ]
+        session.add_all(rows)
+        await session.commit()
+    state.request_marker = marker(rows[0])
+    return start, state, [row.id for row in rows]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [1, 51])
+async def test_consecutive_scheduled_passes_ignore_http_delay_and_preserve_batch_fairness(
+    async_client,
+    monkeypatch,
+    count,
+):
+    start, state, ids = await _scheduler_fixture(monkeypatch, count)
+    assert await sync_developer_requests() == min(count, 50)
+    assert state.now > start
+    assert len(state.reads) == min(count, 50)
+    assert (await _row(ids[0])).status == "in_progress"
+    if count > 50:
+        assert (await _row(ids[50])).status == "review"
+
+    # The real scheduler scans next_sync_at itself; do not force rows due between runs.
+    state.now = start + timedelta(seconds=60)
+    state.list_id = "done"
+    state.reads.clear()
+    assert await sync_developer_requests() == min(count, 50)
+    assert (await _row(ids[0])).status == "completed"
+    if count > 50:
+        assert state.reads[0] == "card-50"  # Old waiting work precedes already-polled rows.
+        assert (await _row(ids[50])).status == "completed"
+        assert (await _row(ids[49])).status == "in_progress"  # Batch cap is still fifty.
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("uncertain", [False, True])
+async def test_scheduled_error_keeps_completion_based_backoff(async_client, monkeypatch, uncertain):
+    start, state, ids = await _scheduler_fixture(monkeypatch, 1, uncertain=uncertain)
+    state.fail = True
+    assert await sync_developer_requests() == 1
+    completed_at = state.now
+    row = await _row(ids[0])
+    assert row.status == "review" and row.last_error == "trello_http_500"
+    deadline = row.next_sync_at
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    assert deadline == completed_at + timedelta(seconds=120)
+
+    state.fail = False
+    state.now = start + timedelta(seconds=60)
+    assert await sync_developer_requests() == 0
+    state.now = start + timedelta(seconds=120)
+    assert await sync_developer_requests() == 0  # Backoff includes failed HTTP request time.
+    state.now = deadline
+    assert await sync_developer_requests() == 1
+    assert (await _row(ids[0])).status == "in_progress"
