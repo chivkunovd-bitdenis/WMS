@@ -572,18 +572,41 @@ export type FbsDeliveryCheckRow = {
   order_id: string | null
 }
 
+export type FbsDeliveryCheckGroup = {
+  key: string
+  title: string
+  description: string | null
+  orderIds: number[]
+}
+
 export type FbsDeliveryCheckSummary = {
-  blockers: string[]
-  warnings: string[]
+  blockers: FbsDeliveryCheckGroup[]
+  warnings: FbsDeliveryCheckGroup[]
+}
+
+function deliveryCheckPresentation(check: FbsDeliveryCheckRow) {
+  if (check.code === 'marking_required') {
+    return {
+      key: 'marking_required',
+      title: 'Не нанесён Честный знак',
+      description: 'Передаче не мешает; нанести можно и после неё.',
+    }
+  }
+  return {
+    key: `${check.code}:${check.message}`,
+    title: fbsErrorText(check.message),
+    description: null,
+  }
 }
 
 /**
  * Готовит текст предполётной проверки для оператора.
  *
- * Сервер отдаёт по одной строке на заказ, поэтому «Честный знак не нанесён»
- * приходило три раза подряд без единого номера заказа — понять, какие именно
- * заказы виноваты, было нельзя. Здесь одинаковые причины схлопываются в одну
- * строку, а номера заказов WB собираются в её конце.
+ * Сервер отдаёт по одной строке на заказ. Здесь одинаковые причины
+ * схлопываются в одну строку, а номера заказов WB остаются отдельным списком,
+ * который интерфейс раскрывает по запросу оператора. Устаревшие проверки
+ * коробов отбрасываются: наличие и распределение коробов передаче не мешает
+ * и владельцу не нужно даже как предупреждение.
  *
  * Запреты и предупреждения разводятся по уровню, а не по полю `ok`: уход
  * остатка в минус и отменённый заказ WB приходят с `ok = false`, но передачу
@@ -594,21 +617,30 @@ export function summarizeDeliveryChecks(
   wbOrderIdByOrderId: Map<string, number>,
 ): FbsDeliveryCheckSummary {
   const collect = (severity: 'blocker' | 'warning') => {
-    const byMessage = new Map<string, number[]>()
+    const groups = new Map<string, FbsDeliveryCheckGroup>()
     for (const check of checks) {
       if (check.severity !== severity) continue
-      const orders = byMessage.get(check.message) ?? []
+      if (check.code === 'physical_boxes_required' || check.code === 'packed_order_unassigned') {
+        continue
+      }
+      const presentation = deliveryCheckPresentation(check)
+      const group = groups.get(presentation.key) ?? {
+        key: presentation.key,
+        title: presentation.title,
+        description: presentation.description,
+        orderIds: [],
+      }
       const wbOrderId = check.order_id ? wbOrderIdByOrderId.get(check.order_id) : undefined
-      if (wbOrderId !== undefined && !orders.includes(wbOrderId)) orders.push(wbOrderId)
-      byMessage.set(check.message, orders)
+      if (wbOrderId !== undefined && !group.orderIds.includes(wbOrderId)) {
+        group.orderIds.push(wbOrderId)
+      }
+      groups.set(presentation.key, group)
     }
-    return [...byMessage.entries()].map(([message, orders]) => {
-      const text = fbsErrorText(message)
-      if (orders.length === 0) return text
-      const sorted = [...orders].sort((a, b) => a - b)
-      const label = sorted.length === 1 ? 'заказ' : 'заказы'
-      return `${text} (${label} ${sorted.join(', ')})`
-    })
+    return [...groups.values()]
+      .map((group) => ({
+        ...group,
+        orderIds: [...group.orderIds].sort((a, b) => a - b),
+      }))
   }
   return { blockers: collect('blocker'), warnings: collect('warning') }
 }

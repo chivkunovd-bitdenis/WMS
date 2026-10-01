@@ -3020,6 +3020,7 @@ export default function App() {
         meRole={me.role}
         ffPermissions={ffPermissions}
         portal={portal} addressStorageEnabled={me.address_storage_enabled !== false}
+        assistantProfile={me}
       >
         <>
         <Routes>
@@ -3801,6 +3802,10 @@ export default function App() {
           open={ffDocModal !== null}
           onClose={closeFfDocument}
           fullScreen
+          // WMS-433: окно помощника живёт в каркасе поверх этого диалога; без
+          // этого флага диалог возвращает себе фокус и в поле помощника нельзя
+          // печатать. Обход по Tab внутри документа флаг не меняет.
+          disableEnforceFocus
           data-testid="ff-doc-dialog"
         >
           <MuiAppBar position="sticky" color="inherit" elevation={1}>

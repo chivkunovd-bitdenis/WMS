@@ -110,6 +110,20 @@ def test_put_meta_kiz_ok_and_get(client: TestClient) -> None:
     assert meta["sgtins"] == [{"value": kiz, "checkStatus": "ok"}]
 
 
+@pytest.mark.parametrize("suffix,decision", [("TEST0001", "accepted"), ("ERR-BAD", "rejected")])
+def test_batch_meta_echoes_stored_kiz_and_verdict(client: TestClient, suffix: str, decision: str) -> None:
+    order_id = 555101
+    kiz = f"010460000000000021{suffix}"
+    empty = client.post("/api/marketplace/v3/orders/meta", headers=AUTH_HEADERS, json={"orders": [order_id]})
+    assert empty.json()["orders"][0]["metaDetails"] == []
+    client.put(f"/api/v3/orders/{order_id}/meta/sgtin", headers=AUTH_HEADERS, json={"sgtins": [kiz]})
+    response = client.post("/api/marketplace/v3/orders/meta", headers=AUTH_HEADERS, json={"orders": [order_id]})
+    assert response.status_code == 200
+    assert response.json()["orders"][0]["metaDetails"] == [
+        {"key": "sgtin", "value": kiz, "decision": decision},
+    ]
+
+
 def test_put_meta_kiz_err_sets_error_check_status(client: TestClient) -> None:
     order_id = 555002
     kiz = "010460000000000021ERR-BAD-KIZ"

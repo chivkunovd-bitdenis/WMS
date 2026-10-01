@@ -1,0 +1,33 @@
+{
+  "source_commit": "d4ab82d6f6b95da0a45a1f6274e769c8c5e49f0b",
+  "final_compatibility_commit": "643c30883bab9c4c65bdc47e15d61ed6db3cf3bf",
+  "browser": "Chrome via installed browser connector",
+  "transport": "HTTP loopback -> native CUPS -> OS default queue",
+  "queue": "WMS604_Proof",
+  "virtual_printer": true,
+  "physical_print_verified": false,
+  "source_scan_to_receipt_ms": [
+    126,
+    65,
+    18,
+    17,
+    16,
+    15
+  ],
+  "packaged_mac_scan_to_receipt_ms": [
+    74,
+    74,
+    19
+  ],
+  "window_print_used": false,
+  "focus_preserved": true,
+  "qr_pdf_decoded": "WMS-PRINT-TEST-07",
+  "cross_platform_build_run": 36735511732,
+  "final_compatibility_build_run": 36736000072,
+  "final_packaged_mac_scan_to_receipt_ms": 56,
+  "final_package_builds": {
+    "Windows-x64": "success",
+    "Mac-arm64": "success",
+    "Mac-x86_64": "success"
+  }
+}

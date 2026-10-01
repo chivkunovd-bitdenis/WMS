@@ -827,15 +827,9 @@ def _build_delivery_checks(
                 )
             )
 
-    if boxes_required and not has_physical_boxes:
-        checks.append(
-            DeliveryCheck(
-                code="physical_boxes_required",
-                message="В поставке пока нет коробов.",
-                ok=False,
-                severity=soft,
-            )
-        )
+    # Короба и распределение по ним не относятся к готовности передачи.
+    # Оператор может передать поставку без коробов; предупреждение здесь только
+    # раздувало подтверждение сотнями одинаковых строк и не помогало действию.
     if boxes_required and without_distribution and has_physical_boxes:
         checks.append(
             DeliveryCheck(
@@ -845,17 +839,9 @@ def _build_delivery_checks(
                 severity=CHECK_INFO,
             )
         )
-    else:
-        for order_id in sorted(unassigned_packed_order_ids):
-            checks.append(
-                DeliveryCheck(
-                    code="packed_order_unassigned",
-                    message="Для заказа не указан короб.",
-                    ok=False,
-                    severity=soft,
-                    order_id=order_id,
-                )
-            )
+    # Состав распределения остаётся в версии предпроверки для защиты от гонки,
+    # но отдельного предупреждения при передаче больше нет.
+    del unassigned_packed_order_ids
 
     if source_plan is not None:
         for resolution in source_plan.resolutions:

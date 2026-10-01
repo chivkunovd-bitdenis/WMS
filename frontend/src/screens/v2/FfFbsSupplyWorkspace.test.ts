@@ -245,7 +245,7 @@ describe('summarizeDeliveryChecks', () => {
     orderId: string | null = null,
   ) => ({ code, message, ok: severity === 'info', severity, order_id: orderId })
 
-  it('схлопывает одинаковые причины и подписывает номера заказов WB', () => {
+  it('схлопывает одинаковые причины и сохраняет номера заказов отдельным списком', () => {
     const summary = summarizeDeliveryChecks(
       [
         check('marking_required', 'Честный знак не нанесён.', 'warning', 'a'),
@@ -255,9 +255,24 @@ describe('summarizeDeliveryChecks', () => {
       new Map([['a', 530009], ['b', 530011], ['c', 530015]]),
     )
     expect(summary.blockers).toEqual([])
-    expect(summary.warnings).toEqual([
-      'Честный знак не нанесён. (заказы 530009, 530011, 530015)',
-    ])
+    expect(summary.warnings).toEqual([{
+      key: 'marking_required',
+      title: 'Не нанесён Честный знак',
+      description: 'Передаче не мешает; нанести можно и после неё.',
+      orderIds: [530009, 530011, 530015],
+    }])
+  })
+
+  it('не показывает отсутствие коробов и распределения в проверке передачи', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('physical_boxes_required', 'В поставке пока нет коробов.', 'warning'),
+        check('packed_order_unassigned', 'Для заказа не указан короб.', 'warning', 'a'),
+        check('packed_order_unassigned', 'Для заказа не указан короб.', 'warning', 'b'),
+      ],
+      new Map([['a', 530015], ['b', 530009]]),
+    )
+    expect(summary.warnings).toEqual([])
   })
 
   it('разводит запреты и предупреждения по уровню, а не по признаку ok', () => {
@@ -269,7 +284,17 @@ describe('summarizeDeliveryChecks', () => {
       ],
       new Map([['a', 777]]),
     )
-    expect(summary.blockers).toEqual(['Поставка уже передана или закрыта.'])
-    expect(summary.warnings).toEqual(['Остаток уйдёт в минус. (заказ 777)'])
+    expect(summary.blockers).toEqual([{
+      key: 'supply_bad_status:Поставка уже передана или закрыта.',
+      title: 'Поставка уже передана или закрыта.',
+      description: null,
+      orderIds: [],
+    }])
+    expect(summary.warnings).toEqual([{
+      key: 'negative_stock:Остаток уйдёт в минус.',
+      title: 'Остаток уйдёт в минус.',
+      description: null,
+      orderIds: [777],
+    }])
   })
 })

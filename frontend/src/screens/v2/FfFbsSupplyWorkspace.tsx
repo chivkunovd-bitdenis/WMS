@@ -21,6 +21,9 @@ import {
   InputAdornment,
   LinearProgress,
   Link,
+  List,
+  ListItemButton,
+  ListItemText,
   Menu,
   MenuItem,
   Paper,
@@ -58,6 +61,7 @@ import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsSupplyTrackingCard } from './FbsSupplyTrackingCard'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
@@ -90,6 +94,7 @@ import {
   fbsStageAfterWorkspaceRefresh,
   ordersWord,
   summarizeDeliveryChecks,
+  type FbsDeliveryCheckGroup,
 } from './fbsUx'
 import {
   confirmFbsPrintApplied,
@@ -174,6 +179,81 @@ type Props = {
    * карточка поставки, всё как было.
    */
   assemblyFrame?: FbsAssemblyFrameControl
+}
+
+function DeliveryCheckGroupList({ groups }: { groups: FbsDeliveryCheckGroup[] }) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set())
+
+  return (
+    <List disablePadding sx={{ mt: 0.5 }}>
+      {groups.map((group) => {
+        const expanded = expandedKeys.has(group.key)
+        const hasOrders = group.orderIds.length > 0
+        return (
+          <Box
+            component="li"
+            key={group.key}
+            sx={{ listStyle: 'none', borderTop: 1, borderColor: 'divider' }}
+          >
+            <ListItemButton
+              disabled={!hasOrders}
+              onClick={() => {
+                setExpandedKeys((current) => {
+                  const next = new Set(current)
+                  if (expanded) next.delete(group.key)
+                  else next.add(group.key)
+                  return next
+                })
+              }}
+              sx={{ px: 0, py: 0.75, '&.Mui-disabled': { opacity: 1 } }}
+              data-testid={`fbs-delivery-check-${group.key}`}
+            >
+              <ListItemText
+                primary={group.title}
+                secondary={group.description}
+                slotProps={{
+                  primary: { variant: 'body2', sx: { fontWeight: 600 } },
+                  secondary: { variant: 'caption' },
+                }}
+                sx={{ my: 0 }}
+              />
+              {hasOrders ? (
+                <Stack direction="row" spacing={0.5} sx={{ ml: 1, alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                    {group.orderIds.length} {ordersWord(group.orderIds.length)}
+                  </Typography>
+                  <ExpandMoreIcon
+                    fontSize="small"
+                    sx={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}
+                  />
+                </Stack>
+              ) : null}
+            </ListItemButton>
+            <Collapse in={expanded} unmountOnExit>
+              <Stack
+                spacing={0}
+                sx={{
+                  maxHeight: 220,
+                  overflowY: 'auto',
+                  mb: 0.75,
+                  pl: 1.5,
+                  pr: 0.5,
+                  '& > :not(:last-child)': { borderBottom: 1, borderColor: 'divider' },
+                }}
+                data-testid={`fbs-delivery-check-orders-${group.key}`}
+              >
+                {group.orderIds.map((orderId) => (
+                  <Typography key={orderId} variant="body2" sx={{ py: 0.35 }}>
+                    Заказ WB №{orderId}
+                  </Typography>
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
+        )
+      })}
+    </List>
+  )
 }
 
 const STAGES = [
@@ -4085,17 +4165,13 @@ export function FfFbsSupplyWorkspace({
             {deliveryChecks.blockers.length > 0 ? (
               <Alert severity="error">
                 <Typography variant="subtitle2">Мешает передаче</Typography>
-                {deliveryChecks.blockers.map((line) => (
-                  <Typography key={line} variant="body2">{line}</Typography>
-                ))}
+                <DeliveryCheckGroupList groups={deliveryChecks.blockers} />
               </Alert>
             ) : null}
             {deliveryChecks.warnings.length > 0 ? (
               <Alert severity="warning">
                 <Typography variant="subtitle2">Можно передать с этими предупреждениями</Typography>
-                {deliveryChecks.warnings.map((line) => (
-                  <Typography key={line} variant="body2">{line}</Typography>
-                ))}
+                <DeliveryCheckGroupList groups={deliveryChecks.warnings} />
                 <Typography variant="caption" color="text.secondary">
                   Проверьте список. Чтобы продолжить, нажмите «{deliveryConfirmLabel}».
                   {isOzonSupply
