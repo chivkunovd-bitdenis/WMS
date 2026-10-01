@@ -13,7 +13,7 @@ export function FbsPackingScanBar({ controllers, enabled }: {
   const [value, setValue] = useState('')
   const [labelSizeId, setLabelSizeId] = useState(loadLabelSizeId)
   const [error, setError] = useState<string | null>(null)
-  const active = controllers.find((one) => one.hasPending())?.view()
+  const active = (controllers.find((one) => one.hasSelectedRow?.()) ?? controllers.find((one) => one.hasPending()))?.view()
   const intake = useScanIntake({
     enabled,
     emitRaw: true,

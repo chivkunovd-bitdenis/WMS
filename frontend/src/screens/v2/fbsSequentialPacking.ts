@@ -16,6 +16,7 @@ import type { PackagingTask } from '../ff/FfPackagingPage'
 
 export type PackingScanView = { orderId: string; name: string; needsKiz: boolean } | null
 export type PackingScanController = {
+  hasSelectedRow?: () => boolean
   scan: (raw: string) => Promise<void>
   hasPending: () => boolean
   hasSavedAttempt: (raw: string) => boolean
@@ -37,10 +38,23 @@ export type PackingScanDeps = {
 
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
 export async function routePackingScan(controllers: PackingScanController[], raw: string): Promise<void> {
-  const pending = controllers.find((one) => one.hasPending())
+  const selectedRow = controllers.find((one) => one.hasSelectedRow?.())
+  let remaining = controllers
+  if (selectedRow) {
+    try { await selectedRow.scan(raw); return }
+    catch (cause) {
+      if (selectedRow.hasSelectedRow?.() || selectedRow.hasPending()
+        || !(cause instanceof FbsApiError)
+        || !['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) throw cause
+      // Замена завершилась, и следующий товар оказался из другой поставки.
+      // Уже проверенную поставку не вызываем второй раз.
+      remaining = controllers.filter((one) => one !== selectedRow)
+    }
+  }
+  const pending = remaining.find((one) => one.hasPending())
   if (pending) return pending.scan(raw)
-  const saved = controllers.find((one) => one.hasSavedAttempt(raw))
-  const ordered = saved ? [saved, ...controllers.filter((one) => one !== saved)] : controllers
+  const saved = remaining.find((one) => one.hasSavedAttempt(raw))
+  const ordered = saved ? [saved, ...remaining.filter((one) => one !== saved)] : remaining
   for (const controller of ordered) {
     try { await controller.scan(raw); return }
     catch (cause) {

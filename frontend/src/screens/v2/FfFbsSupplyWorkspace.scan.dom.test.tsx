@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useCallback, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+import { FbsPackingScanBar } from './FbsPackingScanBar'
+import type { PackingScanController } from './fbsSequentialPacking'
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -103,6 +105,9 @@ type Call = { method: string; path: string; body: unknown }
 let calls: Call[]
 let delays: Record<string, number>
 let committedTails: Record<string, string | null>
+let validationFailure = false
+let deleteFailure = false
+let commitGate: Promise<void> | null = null
 const originalFetch = globalThis.fetch
 
 function json(body: unknown, status = 200) {
@@ -120,6 +125,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const path = url.pathname.replace(/^\/api/, '')
   calls.push({ method, path: `${path}${url.search}`, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
+  if (path === `/operations/fbs-supplies/${SUPPLY_ID}/start-work`) return json(workspace(committedTails))
   if (path === '/operations/fbs-orders/kiz/lookup') {
     await wait(delays.lookup ?? 0)
     const sticker = url.searchParams.get('sticker')
@@ -135,10 +141,17 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path === '/operations/fbs-orders/kiz/validate') {
     await wait(delays.validate ?? 0)
+    if (validationFailure) return json({ detail: { code: 'duplicate_kiz', message: 'КИЗ уже занят' } }, 409)
     return json({ ok: true, hints: [] })
+  }
+  if (method === 'DELETE' && path.endsWith('/kiz')) {
+    if (deleteFailure) return json({ detail: { code: 'wb_error', message: 'WB отказал' } }, 502)
+    committedTails[path.split('/').at(-2)!] = null
+    return new Response(null, { status: 204 })
   }
   if (path === '/operations/fbs-orders/kiz/commit') {
     await wait(delays.commit ?? 0)
+    await commitGate
     const pair = (body as { pairs: Array<{ order_id: string; value: string }> }).pairs[0]!
     committedTails[pair.order_id] = pair.value.slice(-8)
     return json([{ order_id: pair.order_id, status: 'ok', code: 'ok', message: 'ok', newly_bound: true, bound_kiz: pair.value }])
@@ -146,6 +159,9 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/workspace`) {
     await wait(delays.workspace ?? 0)
     return json(workspace(committedTails))
+  }
+  if (path === `/operations/fbs-supplies/${SUPPLY_ID}/scan-auto-print`) {
+    return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
   }
   return json(null)
 }
@@ -157,6 +173,9 @@ beforeEach(() => {
   calls = []
   delays = {}
   committedTails = {}
+  validationFailure = false
+  deleteFailure = false
+  commitGate = null
   window.sessionStorage.clear()
   window.localStorage.clear()
   globalThis.fetch = server as typeof fetch
@@ -188,6 +207,10 @@ function scan(code: string) {
   act(() => {
     for (const key of code) {
       target.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'KeyA', bubbles: true, cancelable: true }))
+      if (target instanceof HTMLInputElement && !target.disabled) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(target, target.value + key)
+        target.dispatchEvent(new Event('input', { bubbles: true }))
+      }
     }
     enter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })
     target.dispatchEvent(enter)
@@ -402,6 +425,166 @@ describe('WMS-575 · исправления по ревью ночного ка�
     scan(KIZ_A)
     await settle(400)
     expect(bodyOf('/operations/fbs-orders/kiz/validate')).toMatchObject({ order_id: 'order-a', value: KIZ_A })
+  })
+})
+
+describe('WMS-630 · КИЗ в строке точного заказа', () => {
+  const input = (id: string) => document.querySelector<HTMLInputElement>(`[data-order-id="${id}"] [data-testid="fbs-kiz-row-input"]`)!
+  const focus = (id: string) => act(() => input(id).focus())
+  const confirm = async () => {
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="fbs-kiz-confirm-replace"]')!.click())
+    await settle(60)
+  }
+
+  it('выбирает второй заказ того же товара и заменяет только его через подтверждённый commit', async () => {
+    committedTails = { 'order-a': 'OLD0000A', 'order-b': 'OLD0000B' }
+    await openPackingTab(workspace(committedTails))
+    focus('order-b')
+    expect(activeRow()).toBe('order-b')
+    // Настоящий capture-слушатель принимает scanner burst ровно один раз.
+    expect(scan(KIZ_A).defaultPrevented).toBe(true)
+    await settle(30)
+    expect(rowTail('order-b')).toBe('OLD0000B')
+    expect(kizCalls()).toHaveLength(0)
+    await confirm()
+    expect(kizCalls().map((call) => call.path)).toEqual([
+      '/operations/fbs-orders/kiz/validate', '/operations/fbs-orders/kiz/commit',
+    ])
+    expect(kizCalls()[0].body).toMatchObject({ order_id: 'order-b', value: KIZ_A })
+    expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: true }] })
+    expect(rowTail('order-a')).toBe('OLD0000A')
+    expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
+    expect(activeRow()).toBeNull()
+    await settle(250) // Штатное окно подтверждения закончило анимацию закрытия.
+    scan(STICKER_A)
+    await settle(40)
+    expect(activeRow()).toBe('order-a')
+  })
+
+  it('при смене поля и ручном вводе с Enter берёт последнюю выбранную строку', async () => {
+    await openPackingTab()
+    focus('order-a')
+    focus('order-b')
+    const field = input('order-b')
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, KIZ_A)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })))
+    await settle(60)
+    expect(kizCalls()).toHaveLength(2)
+    expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: false }] })
+    expect(rowTail('order-a')).toBe('')
+  })
+
+  it('ошибка валидации сохраняет старый КИЗ; Escape освобождает выбор', async () => {
+    committedTails = { 'order-b': 'OLD0000B' }
+    validationFailure = true
+    await openPackingTab(workspace(committedTails))
+    focus('order-b')
+    scan(KIZ_A)
+    await settle(30)
+    await confirm()
+    expect(rowTail('order-b')).toBe('OLD0000B')
+    expect(kizCalls().filter((call) => call.path.endsWith('/commit'))).toHaveLength(0)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).not.toBeNull()
+    focus('order-b')
+    act(() => input('order-b').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+    await settle(20)
+    expect(activeRow()).toBeNull()
+  })
+
+  it('отмена подтверждения не пишет код и освобождает выбранный заказ', async () => {
+    committedTails = { 'order-b': 'OLD0000B' }
+    await openPackingTab(workspace(committedTails))
+    focus('order-b')
+    scan(KIZ_A)
+    await settle(30)
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === 'Отмена')!
+    act(() => cancel.click())
+    await settle(20)
+    expect(activeRow()).toBeNull()
+    expect(kizCalls()).toHaveLength(0)
+    expect(rowTail('order-b')).toBe('OLD0000B')
+  })
+
+  it.each([false, true])('крестик сохраняет отдельное удаление, отказ WB=%s', async (failure) => {
+    committedTails = { 'order-b': 'OLD0000B' }
+    deleteFailure = failure
+    await openPackingTab(workspace(committedTails))
+    act(() => document.querySelector<HTMLButtonElement>('[data-order-id="order-b"] [data-testid="fbs-kiz-undo-inline"]')!.click())
+    await settle(20)
+    const remove = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === 'Отменить КИЗ')!
+    act(() => remove.click())
+    await settle(60)
+    expect(calls.filter((call) => call.method === 'DELETE')).toEqual([{ method: 'DELETE', path: '/operations/fbs-orders/order-b/kiz', body: null }])
+    expect(rowTail('order-b')).toBe(failure ? 'OLD0000B' : '')
+    expect(kizCalls()).toHaveLength(0)
+  })
+
+  it('не добавляет поля Ozon', async () => {
+    const initial = workspace()
+    initial.supply.marketplace = 'ozon'
+    initial.orders.forEach((order) => { order.marketplace = 'ozon' })
+    await openPackingTab(initial)
+    expect(document.querySelector('[data-testid="fbs-kiz-row-input"]')).toBeNull()
+  })
+
+  it.each([false, true])('unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=%s', async (delayed) => {
+    let releaseCommit: () => void = () => undefined
+    if (delayed) commitGate = new Promise<void>((resolve) => { releaseCommit = resolve })
+    committedTails = { 'order-a': 'OLD0000A', 'order-b': 'OLD0000B' }
+    const initial = workspace(committedTails)
+    initial.supply.packaging_task_id = null
+    const packingHost = document.createElement('div')
+    document.body.appendChild(packingHost)
+    const noop = () => undefined
+    const headers = () => ({ Authorization: 'Bearer t-575' })
+    function Unified() {
+      const [controller, setController] = useState<PackingScanController | null>(null)
+      const [, changed] = useState(0)
+      const registerScanner = useCallback((_id: string, scanner: PackingScanController | null) => setController(scanner), [])
+      const onScanChange = useCallback(() => changed((value) => value + 1), [])
+      return <>
+        <FbsPackingScanBar enabled={Boolean(controller)} controllers={controller ? [controller] : []} />
+        <FfFbsSupplyWorkspace token="t-575" authHeaders={headers} supplyId={SUPPLY_ID}
+          initialWorkspace={initial} open onClose={noop}
+          assemblyFrame={{ packingHost, registerScanner, onScanChange, active: false, expanded: false,
+            visible: true, onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
+            onWorkspaceChange: noop, registerEscape: noop }} />
+      </>
+    }
+    await act(async () => root.render(<Unified />))
+    await settle(50)
+    expect(input('order-b')).not.toBeNull()
+    focus('order-b')
+    expect(activeRow()).toBe('order-b')
+    scan(KIZ_A)
+    await settle(30)
+    expect(rowTail('order-b')).toBe('OLD0000B')
+    await confirm()
+    if (delayed) {
+      await settle(250) // Модальное подтверждение закрылось, commit ещё ждёт ответ сервера.
+      scan(STICKER_A)
+      await settle(30)
+      expect(rowTail('order-b')).toBe('OLD0000B')
+      expect(kizCalls()).toHaveLength(2)
+      expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(0)
+      act(() => releaseCommit())
+      await settle(80)
+    }
+    expect(kizCalls().map((call) => call.path)).toEqual([
+      '/operations/fbs-orders/kiz/validate', '/operations/fbs-orders/kiz/commit',
+    ])
+    expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: true }] })
+    expect(rowTail('order-a')).toBe('OLD0000A')
+    expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
+    expect(activeRow()).toBeNull()
+    expect(calls.filter((call) => call.path.endsWith('/start-work'))).toHaveLength(1)
+    expect(calls.some((call) => call.path.includes('/assign'))).toBe(false)
+    const productScans = calls.filter((call) => call.path.endsWith('/scan-auto-print'))
+    expect(productScans).toHaveLength(delayed ? 1 : 0)
+    if (delayed) expect(productScans[0].body).toMatchObject({ barcode: STICKER_A })
   })
 })
 
