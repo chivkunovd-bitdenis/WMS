@@ -15,6 +15,7 @@ import {
 import type { SellerPermissions } from '../utils/sellerPermissions'
 
 export type Me = {
+  tenant_id: string
   id: string
   email: string | null
   full_name?: string | null
