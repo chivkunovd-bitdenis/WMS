@@ -20,6 +20,12 @@ import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
 
 function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
+  // Drivers can expose a printable page slightly shorter than the selected stock.
+  // Keep a physical allowance instead of relying on viewport units or an
+  // exact page-height box at a browser/driver rounding boundary.
+  const pageAllowanceMm = 1.5
+  const topPaddingMm = Math.max(0, 1.4 * k.uniform - pageAllowanceMm)
+  const bottomPaddingMm = Math.max(0, k.uniform - Math.max(0, pageAllowanceMm - 1.4 * k.uniform))
   // Вытянутая вертикально этикетка (60×80, 70×120): DataMatrix сверху, поля под ним —
   // иначе матрица упирается в ширину и низ наклейки остаётся пустым.
   const tall = size.heightMm / size.widthMm >= 1.2
@@ -33,13 +39,14 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
   .label {
     width: ${size.widthMm}mm;
-    height: ${size.heightMm}mm;
-    max-height: 100vh;
+    height: ${labelMm(size.heightMm - pageAllowanceMm)};
     overflow: hidden;
     page-break-inside: avoid;
     break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
   }
-  .label + .label { page-break-before: always; break-before: page; }
+  .label:last-child { page-break-after: auto; break-after: auto; }
   .label--cz {
     padding: ${labelMm(1.5 * k.uniform)};
     display: flex;
@@ -157,10 +164,8 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     text-align: center;
   }
   .label:not(.label--cz):not(.label--wb-qr) {
-    /* Absorb a slightly shorter printable page in the top whitespace,
-       keeping product text and footer inside the same label. */
-    padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
-    padding-top: max(0mm, calc(${labelMm(1.4 * k.uniform)} - max(0mm, ${size.heightMm}mm - 100vh)));
+    /* Take the allowance from whitespace, preserving the barcode/text area. */
+    padding: ${labelMm(topPaddingMm)} ${labelMm(1.8 * k.uniform)} ${labelMm(bottomPaddingMm)};
     display: flex;
     flex-direction: column;
   }
