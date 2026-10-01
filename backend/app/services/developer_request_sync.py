@@ -15,7 +15,6 @@ from app.models.developer_request import DeveloperRequest
 from app.services.developer_request_trello import TrelloClient, TrelloConfig, TrelloError
 
 LEASE_SECONDS = 300
-MAX_CREATE_ATTEMPTS = 5
 
 
 async def sync_request(request_id: uuid.UUID, client: TrelloClient) -> bool:
@@ -49,8 +48,6 @@ async def sync_request(request_id: uuid.UUID, client: TrelloClient) -> bool:
                 card = await client.find_card(row)
                 if card is None:
                     raise TrelloError("trello_create_outcome_unknown")
-            elif row.create_attempts >= MAX_CREATE_ATTEMPTS:
-                raise TrelloError("trello_create_retry_exhausted")
             else:
                 # Persist uncertainty BEFORE the request. A killed worker cannot lead
                 # a successor to blindly repeat POST. Fence a worker whose lease expired.
@@ -96,7 +93,7 @@ async def sync_request(request_id: uuid.UUID, client: TrelloClient) -> bool:
         # reconciled on the next run using the durable board/UUID marker.
         interval = settings.trello_sync_interval_sec
         if changes.get("last_error"):
-            interval = min(3600, interval * (2 ** min(row.create_attempts, 5)))
+            interval = min(3600, interval * (2 ** min(row.create_attempts, 6)))
         changes.update(
             lease_token=None,
             lease_until=None,

@@ -390,7 +390,7 @@ async def test_expired_worker_lease_recovers_by_marker(async_client):
 
 
 @pytest.mark.asyncio
-async def test_explicit_rejection_retry_is_bounded(async_client):
+async def test_explicit_rejection_backoff_recovers_after_many_rejections(async_client):
     _, headers = await _user()
     request_id = await _create(async_client, headers)
     fake = FakeTrello()
@@ -400,10 +400,20 @@ async def test_explicit_rejection_retry_is_bounded(async_client):
         for _ in range(7):
             await _due(request_id)
             await sync_request(request_id, client)
+        row = await _row(request_id)
+        assert row.delivery_state == "pending" and row.create_attempts == 7
+        assert row.last_error == "trello_http_429" and len(fake.posts) == 7
+        deadline = row.next_sync_at
+        if deadline.tzinfo is None:  # SQLite stores UTC without tzinfo.
+            deadline = deadline.replace(tzinfo=UTC)
+        delay = (deadline - datetime.now(UTC)).total_seconds()
+        assert 3500 <= delay <= 3600
+        fake.mode = "ok"
+        await _due(request_id)
+        await sync_request(request_id, client)
     row = await _row(request_id)
-    assert row.delivery_state == "pending" and row.create_attempts == 5
-    assert row.last_error == "trello_create_retry_exhausted" and len(fake.posts) == 5
-    assert row.status == "review"
+    assert row.delivery_state == "linked" and len(fake.cards) == 1
+    assert row.create_attempts == 8 and row.status == "review"
 
 
 @pytest.mark.asyncio

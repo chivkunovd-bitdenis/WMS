@@ -1,13 +1,13 @@
 """WMS-624: durable developer requests and recoverable Trello delivery.
 
 Revision ID: 20261001_2301
-Revises: 20260906_2300
+Revises: 20260929_0565
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "20261001_2301"
-down_revision = "20260906_2300"
+down_revision = "20260929_0565"
 branch_labels = None
 depends_on = None
 
