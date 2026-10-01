@@ -6,12 +6,16 @@ import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { fbsErrorText } from './fbsUx'
 import { routePackingScan, type PackingScanController } from './fbsSequentialPacking'
+import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
-export function FbsPackingScanBar({ controllers, enabled }: {
-  controllers: PackingScanController[]; enabled: boolean
+export function FbsPackingScanBar({ controllers, enabled, token }: {
+  controllers: PackingScanController[]; enabled: boolean; token: string
 }) {
   const [value, setValue] = useState('')
   const [labelSizeId, setLabelSizeId] = useState(loadLabelSizeId)
+  // WMS-631 R1, R3: the same saved checkboxes as the ordinary supply.
+  const [printPreferences, setPrintPreferences] = useState(() => loadFbsScanPrintPreferences(token))
   const [error, setError] = useState<string | null>(null)
   const active = (controllers.find((one) => one.hasSelectedRow?.()) ?? controllers.find((one) => one.hasPending()))?.view()
   const intake = useScanIntake({
@@ -36,6 +40,24 @@ export function FbsPackingScanBar({ controllers, enabled }: {
     document.addEventListener('fbs-packing-row-scan', acceptRow)
     return () => document.removeEventListener('fbs-packing-row-scan', acceptRow)
   }, [intake.listening, intake.submit])
+  // R20: Escape drops a started scan before the window's own Escape handling.
+  useEffect(() => {
+    if (!enabled) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const waiting = controllers.find((one) => one.canCancel?.())
+      if (!waiting?.cancel) return
+      event.preventDefault()
+      event.stopPropagation()
+      setError(null)
+      void waiting.cancel().catch((cause: unknown) => {
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять выбор.')
+        playScanError()
+      })
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [enabled, controllers])
   return <Box ref={intake.bindRoot} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }} data-testid="fbs-unified-scan">
     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
       <TextField size="small" fullWidth autoFocus value={value} disabled={!enabled} autoComplete="off"
@@ -43,6 +65,10 @@ export function FbsPackingScanBar({ controllers, enabled }: {
         onChange={(event) => setValue(event.target.value)}
         slotProps={{ htmlInput: { 'data-packing-scan': 'true' } }}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); intake.submit(value); setValue('') } }} />
+      <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
+        setPrintPreferences(next)
+        saveFbsScanPrintPreferences(token, next)
+      }} />
       <LabelSizeSelect value={labelSizeId} onChange={(size) => setLabelSizeId(size.id)} />
       {active ? <Typography variant="body2" sx={{ minWidth: 160 }}>
         {active.name}{active.needsKiz ? ' · сканируйте ЧЗ' : ' · завершение упаковки'}

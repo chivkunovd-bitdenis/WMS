@@ -199,6 +199,8 @@ class FbsKizLookup:
     block_reason: str | None
     marketplace: str = "wb"
     external_order_id: str | None = None
+    # WMS-631: the same rule that decides a KIZ for the order tape.
+    requires_honest_sign: bool = False
 
 
 @dataclass(frozen=True)
@@ -676,6 +678,8 @@ async def _binding_lookup_for_order(
         else None
     )
     image_url = await _image_url_for_order(session, order)
+    from app.services.fbs_order_tape_print_service import order_requires_sgtin
+
     return FbsKizLookup(
         order_id=order.id,
         wb_order_id=int(order.wb_order_id),
@@ -687,6 +691,7 @@ async def _binding_lookup_for_order(
         block_reason=None,
         marketplace=order.marketplace or "wb",
         external_order_id=order.external_order_id,
+        requires_honest_sign=order_requires_sgtin(order),
     )
 
 

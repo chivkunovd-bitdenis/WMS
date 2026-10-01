@@ -1157,6 +1157,21 @@ export function markFbsScanAutoPrintTargetStarted(
   )
 }
 
+/** WMS-631 R20: release one unfinished product-scan selection (Escape). */
+export async function cancelFbsScanAutoPrintSelection(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/cancel`), {
+    method: 'POST',
+    headers: jsonHeaders(token, ah),
+  })
+  if (res.status === 204) return
+  await jsonOrThrow<unknown>(res)
+}
+
 export function releaseFbsScanAutoPrintTargetClaim(
   token: string,
   ah: AuthHeaders,
@@ -1522,6 +1537,8 @@ export type FbsKizLookup = {
   needs_confirmation: boolean
   can_bind: boolean
   block_reason: string | null
+  /** WMS-631: the server's order-tape KIZ rule for this order. */
+  requires_honest_sign?: boolean
 }
 
 export type FbsKizPair = {

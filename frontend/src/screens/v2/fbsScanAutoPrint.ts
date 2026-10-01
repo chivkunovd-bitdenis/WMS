@@ -199,10 +199,17 @@ export function mergeFbsBufferedHardwareScan(prefix: string, current: string): s
   return `${prefix}${current}`
 }
 
+/** WMS-631 Д2: without a saved choice packing prints the order QR, as the assembly did. */
+export const DEFAULT_FBS_SCAN_PRINT_PREFERENCES: FbsScanPrintPreferences = {
+  printQr: true,
+  printChz: false,
+  reprintChz: false,
+}
+
 export function loadFbsScanPrintPreferences(token: string): FbsScanPrintPreferences {
   try {
     const raw = window.localStorage.getItem(fbsScanPrintPreferencesStorageKey(token))
-    if (!raw) return { printQr: false, printChz: false, reprintChz: false }
+    if (!raw) return { ...DEFAULT_FBS_SCAN_PRINT_PREFERENCES }
     const saved = JSON.parse(raw) as Partial<FbsScanPrintPreferences>
     const printChz = saved.printChz === true
     return {

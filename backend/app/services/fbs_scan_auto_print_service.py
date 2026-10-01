@@ -39,6 +39,8 @@ from app.services.fbs_picking_order_service import picking_list_order_key
 _EVENT_KIND = "wms514_scan_auto_print"
 _TARGET_EVENT_KIND = "wms514_scan_auto_print_target"
 _BOUND_TARGET_EVENT_KIND = "wms514_scan_auto_print_bound_target"
+# WMS-631 R20: Escape releases one unfinished selection; the order is a candidate again.
+_CANCEL_EVENT_KIND = "wms631_scan_auto_print_cancelled"
 _PRINT_TARGETS = frozenset({"qr", "chz"})
 
 
@@ -82,9 +84,12 @@ def _scan_request_digest(supply_id: uuid.UUID, key: str) -> str:
     return hashlib.sha256(f"{supply_id}:{key}".encode()).hexdigest()
 
 
-def _order_reservation_key(supply_id: uuid.UUID, order_id: uuid.UUID) -> str:
+def _order_reservation_key(
+    supply_id: uuid.UUID, order_id: uuid.UUID, generation: int = 0
+) -> str:
     digest = hashlib.sha256(f"{supply_id}:{order_id}".encode()).hexdigest()
-    return f"wms514-order:{digest}"
+    # Generation 0 keeps the historical key; a cancelled reservation opens the next one.
+    return f"wms514-order:{digest}" if generation == 0 else f"wms514-order:{digest}:{generation}"
 
 
 def _selection_payload(
@@ -243,9 +248,24 @@ async def select_order_for_product_scan(
             ).all()
         )
         served_order_ids: set[uuid.UUID] = set()
+        cancelled_scan_ids = {
+            str((event.payload_json or {}).get("scan_id"))
+            for event in scan_events
+            if (event.payload_json or {}).get("kind") == _CANCEL_EVENT_KIND
+        }
+        cancelled_per_order: dict[str, int] = {}
         for event in scan_events:
             payload = event.payload_json or {}
             if payload.get("kind") != _EVENT_KIND:
+                continue
+            if (
+                str(event.id) in cancelled_scan_ids
+                and payload.get("request_digest") != request_digest
+                and not str(payload.get("barcode", "")).startswith("order:")
+            ):
+                # A cancelled selection no longer reserves its order (WMS-631 R20).
+                order_key = str(payload.get("order_id"))
+                cancelled_per_order[order_key] = cancelled_per_order.get(order_key, 0) + 1
                 continue
             if payload.get("request_digest") == request_digest:
                 if order_id is not None and payload.get("order_id") != str(order_id):
@@ -278,7 +298,9 @@ async def select_order_for_product_scan(
         if not candidates:
             raise FbsScanAutoPrintError("scan_product_exhausted")
         selected = min(candidates, key=picking_list_order_key)
-        reservation_key = _order_reservation_key(supply_id, selected.id)
+        reservation_key = _order_reservation_key(
+            supply_id, selected.id, cancelled_per_order.get(str(selected.id), 0)
+        )
         if order_id is not None:
             # An explicit row scan may replace a code on an already packed order.
             # Its retries reuse one selection and the ordinary print receipt.
@@ -323,6 +345,53 @@ async def select_order_for_product_scan(
             wb_order_id=int(selected.wb_order_id),
             replayed=False,
         )
+
+
+async def cancel_selection(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID,
+) -> None:
+    """Release one unfinished product-scan selection (WMS-631 R20, Escape).
+
+    Idempotent: the cancellation is one event per scan id.  The released order
+    becomes a candidate for the next ordinary scan of the same barcode.  A
+    selection whose order this scan already packed is not released here.
+    """
+    selection_event = await _locked_selection_event(session, tenant_id, supply_id, scan_id)
+    if selection_event.actor_user_id != actor_user_id:
+        raise FbsScanAutoPrintError("scan_selection_not_found")
+    payload = selection_event.payload_json or {}
+    try:
+        order_id = uuid.UUID(str(payload["order_id"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise FbsScanAutoPrintError("scan_selection_corrupt") from exc
+    order = await session.scalar(
+        select(FbsOrder).where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.supply_id == supply_id,
+        )
+    )
+    if order is not None and order.pack_status == "packed" and not str(
+        payload.get("barcode", "")
+    ).startswith("order:"):
+        raise FbsScanAutoPrintError("scan_selection_packed")
+    await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        product_id=selection_event.product_id,
+        payload_json={"kind": _CANCEL_EVENT_KIND, "scan_id": str(scan_id)},
+        idempotency_key=f"wms631-cancel:{scan_id}",
+    )
 
 
 def _target_attempt_digest(scan_id: uuid.UUID, target: str, attempt_key: str) -> str:

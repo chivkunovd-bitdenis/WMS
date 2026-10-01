@@ -941,6 +941,11 @@ def _order_requires_sgtin(order: FbsOrder) -> bool:
     )
 
 
+def order_requires_sgtin(order: FbsOrder) -> bool:
+    """Public form of the order-tape KIZ rule (WMS-631 packing scan)."""
+    return _order_requires_sgtin(order)
+
+
 async def _mark_printed_sgtin_not_sent(
     session: AsyncSession,
     order: FbsOrder,

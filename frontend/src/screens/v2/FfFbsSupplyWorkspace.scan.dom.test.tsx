@@ -546,7 +546,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
       const registerScanner = useCallback((_id: string, scanner: PackingScanController | null) => setController(scanner), [])
       const onScanChange = useCallback(() => changed((value) => value + 1), [])
       return <>
-        <FbsPackingScanBar enabled={Boolean(controller)} controllers={controller ? [controller] : []} />
+        <FbsPackingScanBar token="t-575" enabled={Boolean(controller)} controllers={controller ? [controller] : []} />
         <FfFbsSupplyWorkspace token="t-575" authHeaders={headers} supplyId={SUPPLY_ID}
           initialWorkspace={initial} open onClose={noop}
           assemblyFrame={{ packingHost, registerScanner, onScanChange, active: false, expanded: false,

@@ -414,6 +414,7 @@ class FbsScanAutoPrintBindingTargetOut(BaseModel):
     block_reason: str | None
     marketplace: Literal["wb"] = "wb"
     external_order_id: str | None = None
+    requires_honest_sign: bool = False
 
 
 class FbsScanAutoPrintReprintRecoveryOut(BaseModel):
@@ -1191,6 +1192,7 @@ def _raise_from_scan_auto_print(exc: scan_print_svc.FbsScanAutoPrintError) -> No
         "scan_print_claim_not_owned",
         "scan_print_target_disabled",
         "scan_reprint_claim_requires_atomic",
+        "scan_selection_packed",
     }:
         raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
     if exc.code in {
@@ -1232,6 +1234,7 @@ def _scan_binding_target_out(
         block_reason=target.block_reason,
         marketplace="wb",
         external_order_id=target.external_order_id,
+        requires_honest_sign=target.requires_honest_sign,
     )
 
 
@@ -2689,6 +2692,30 @@ async def release_fbs_scan_auto_print_target_claim(
         claimed=result.claimed,
         started=result.started,
     )
+
+
+@router.post(
+    "/{supply_id}/scan-auto-print/{scan_id}/cancel",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def cancel_fbs_scan_auto_print_selection(
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """WMS-631 R20: Escape releases one unfinished selection of this operator."""
+    try:
+        await scan_print_svc.cancel_selection(
+            session,
+            user.tenant_id,
+            supply_id,
+            scan_id,
+            actor_user_id=user.id,
+        )
+    except scan_print_svc.FbsScanAutoPrintError as exc:
+        _raise_from_scan_auto_print(exc)
+    await session.commit()
 
 
 @router.post(

@@ -28,7 +28,7 @@ it.each([null, 'task-1'])('binds KIZ with initial supply preparation %s', async 
   const deps = makePackingScanDeps('token', () => ({}), () => workspace, () => undefined, () => undefined, () => true, () => null, bound)
   const result = { scan_id: 'scan-1', order_id: 'order-1' } as FbsScanAutoPrintResult
   await deps.bind(result, 'kiz')
-  await deps.pack(result)
+  await deps.pack(result, false, 'barcode')
   expect(bound).toHaveBeenCalledWith('order-1', 'kiz')
   expect(calls.filter((path) => path.endsWith('/start-work'))).toHaveLength(initialTask ? 0 : 1)
   if (!initialTask) expect(calls.findIndex((path) => path.endsWith('/start-work'))).toBeLessThan(calls.findIndex((path) => path.endsWith('/kiz/commit')))
