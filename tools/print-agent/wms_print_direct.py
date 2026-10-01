@@ -30,12 +30,30 @@ ORIGIN = f"http://127.0.0.1:{PORT}"
 ALLOWED_ORIGINS = {ORIGIN, "https://sellerfocus.pro", "https://www.sellerfocus.pro", "https://wms.sellerfocus.pro", "https://web-production-9e7c1.up.railway.app"}
 ASSETS = Path(__file__).resolve().parent / "direct-web"
 APP_NAME = "WMS Print Direct"
-# The browser gives up after 30 s.  The program must answer before that, so a
-# hung driver never leaves the operator without a clear message.
+# The browser gives up after 30 s.  One deadline per request, counted from its
+# start, covers waiting for the queue, the default printer lookup, preparation
+# and the OS call, so the operator always gets an answer in time.
 PRINT_TIMEOUT = 25
-# How long a new job waits for the previous one to leave the OS print call.
-SLOT_WAIT = 10
+# A job is never started when less than this is left of the budget.
+MINIMUM_TO_START = 6
 MAX_PIXELS = 40_000_000
+UNKNOWN_TEXT = "Исход печати неизвестен: задание уже отправлялось на принтер. Проверьте принтер; повтор автоматически не отправлен."
+HUNG_TEXT = "Принтер не отвечает. Перезапустите WMS Print и проверьте принтер."
+
+
+def build_id():
+    """Source commit from build.json next to the program, "dev" outside a package."""
+    for base in (Path(sys.executable).parent, Path(__file__).resolve().parent):
+        try:
+            value = json.loads((base / "build.json").read_text(encoding="utf-8")).get("source_commit")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(value, str) and value:
+            return value
+    return "dev"
+
+
+BUILD = build_id()
 
 
 class PrintNotSent(ValueError):
@@ -167,13 +185,14 @@ def default_printer():
 
 
 class Printer:
-    def __init__(self, directory, submit=None, print_timeout=PRINT_TIMEOUT, slot_wait=SLOT_WAIT):
+    def __init__(self, directory, submit=None, print_timeout=PRINT_TIMEOUT, minimum_to_start=MINIMUM_TO_START):
         directory.mkdir(parents=True, exist_ok=True)
         self.db = directory / "direct-jobs.sqlite3"
         self.lock = threading.Lock()   # short database sections only
         self.slot = threading.Lock()   # one OS print call at a time
+        self.hung = False              # a worker outlived its deadline and still holds the slot
         self.print_timeout = print_timeout
-        self.slot_wait = slot_wait
+        self.minimum_to_start = minimum_to_start
         self.submit = submit
         self.adapter = (DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()) if submit is None else None
         with closing(sqlite3.connect(self.db)) as db:
@@ -191,24 +210,44 @@ class Printer:
         with self.lock, closing(sqlite3.connect(self.db, timeout=10)) as db:
             return db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
 
-    def _work(self, key, digest, data, queue, outcome):
-        """Runs the blocking OS call; owns the slot until the call really ends."""
-        marked = []
+    def _known(self, key, digest):
+        """Stored receipt, an error for a possibly sent job, or None for a new key."""
+        old = self._lookup(key)
+        if not old:
+            return None
+        if old[0] != digest:
+            raise ValueError("Содержимое этого задания изменилось")
+        if old[1] is None:
+            raise agent.UnknownPrintOutcome(UNKNOWN_TEXT)
+        return old[1]
 
-        def mark():
-            self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest))
-            marked.append(True)
+    def _work(self, key, digest, data, deadline, gate, outcome):
+        """Runs the blocking OS call; owns the slot until the call really ends.
 
+        ``gate`` guards the point of no return: once the request has timed out
+        no job may be started, and the answer given to the browser stays true.
+        """
         try:
+            def mark():
+                with gate["lock"]:
+                    if gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start:
+                        raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
+                    self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest))
+                    gate["marked"] = True
+
             try:
                 if self.submit:
                     mark()
                     receipt = self.submit(data)
                 else:
+                    queue = self.adapter.default() if sys.platform == "darwin" else default_printer()
+                    if not queue:
+                        raise ValueError("В системе не выбран принтер по умолчанию")
                     receipt = self._submit(data, queue, mark)
             except PrintNotSent:
-                if marked:  # proven: the OS never received the job
+                if gate["marked"]:  # proven: the OS never received the job
                     self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,))
+                    gate["marked"] = False
                 raise
             try:
                 self._execute("UPDATE jobs SET receipt=? WHERE id=?", (receipt, key))
@@ -218,9 +257,11 @@ class Printer:
         except BaseException as exc:
             outcome["error"] = exc
         finally:
+            self.hung = False
             self.slot.release()
 
-    def print(self, body):
+    def print(self, body, started=None):
+        deadline = (time.monotonic() if started is None else started) + self.print_timeout
         key = body.get("idempotencyKey")
         image = body.get("imageDataUrl", "")
         if not isinstance(key, str) or not 1 <= len(key) <= 200 or not isinstance(image, str):
@@ -231,33 +272,38 @@ class Printer:
         if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 4_000_000:
             raise ValueError("Некорректная PNG-этикетка")
         digest = hashlib.sha256(data).hexdigest()
-        if not self.slot.acquire(timeout=self.slot_wait):
-            raise PrintNotSent("Принтер ещё занят предыдущим заданием. Это задание не отправлялось; повторите через минуту.")
-        started = False
+        # The key's own history is answered first, never behind the print queue.
+        known = self._known(key, digest)
+        if known is not None:
+            return known
+        if not self.slot.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            if self.hung:
+                raise PrintNotSent(HUNG_TEXT + " Это задание не отправлялось.")
+            raise PrintNotSent("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
+        started_worker = False
         try:
-            old = self._lookup(key)  # after the slot: a parallel twin has finished
-            if old:
-                if old[0] != digest:
-                    raise ValueError("Содержимое этого задания изменилось")
-                if old[1] is None:
-                    raise agent.UnknownPrintOutcome("Задание уже передавалось. Проверьте очередь принтера; повтор автоматически не отправлен.")
-                return old[1]
-            # Validate before crossing the irreversible OS-print boundary.
-            queue = (self.adapter.default() if sys.platform == "darwin" else default_printer()) if self.submit is None else None
-            if self.submit is None and not queue:
-                raise ValueError("В системе не выбран принтер по умолчанию")
+            known = self._known(key, digest)  # a twin may have been sent while this one waited
+            if known is not None:
+                return known
+            if deadline - time.monotonic() < self.minimum_to_start:
+                raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
             outcome = {}
-            worker = threading.Thread(target=self._work, args=(key, digest, data, queue, outcome), daemon=True)
+            gate = {"lock": threading.Lock(), "cancelled": False, "marked": False}
+            worker = threading.Thread(target=self._work, args=(key, digest, data, deadline, gate, outcome), daemon=True)
             worker.start()
-            started = True  # the worker releases the slot
+            started_worker = True  # the worker releases the slot
         finally:
-            if not started:
+            if not started_worker:
                 self.slot.release()
-        worker.join(self.print_timeout)
+        worker.join(max(0.0, deadline - time.monotonic()))
         if worker.is_alive():
-            raise agent.UnknownPrintOutcome(
-                f"Принтер не ответил за {self.print_timeout} с. Задание могло уйти в печать; "
-                "проверьте очередь принтера. Повтор автоматически не отправлен.")
+            with gate["lock"]:
+                gate["cancelled"] = True  # a worker still before its mark can no longer start the job
+                marked = gate["marked"]
+            self.hung = True
+            if marked:
+                raise agent.UnknownPrintOutcome(HUNG_TEXT + " Задание могло уйти в печать; повтор автоматически не отправлен.")
+            raise PrintNotSent(HUNG_TEXT + " Это задание не отправлялось.")
         if "error" in outcome:
             raise outcome["error"]
         return outcome["receipt"]
@@ -291,6 +337,7 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(200 if self.allowed() else 403, {})
 
     def do_POST(self):
+        started = time.monotonic()
         if not self.allowed() or self.headers.get("X-WMS-Print") != "1":
             self.respond(403, {"error": "Источник печати не разрешён"})
             return
@@ -305,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Некорректное задание")
-            receipt = self.server.printer.print(body)
+            receipt = self.server.printer.print(body, started)
             self.respond(200, {"receipt": receipt})
         except Exception as exc:
             self.respond(409, {"error": str(exc)})
@@ -316,9 +363,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/health":
             try:
-                self.respond(200, {"app": APP_NAME, "printer": default_printer()})
+                self.respond(200, {"app": APP_NAME, "build": BUILD, "printer": default_printer()})
             except Exception as exc:
-                self.respond(503, {"app": APP_NAME, "error": str(exc)})
+                self.respond(503, {"app": APP_NAME, "build": BUILD, "error": str(exc)})
             return
         relative = urlsplit(self.path).path.lstrip("/") or "packing-scan-check.html"
         target = (ASSETS / relative).resolve()
@@ -380,7 +427,7 @@ def acquire_instance(directory):
 
 
 def running_instance(port=PORT, attempts=1, delay=0.3):
-    """True when a live WMS Print answers on the port (never touches the process)."""
+    """Build id of a live WMS Print answering on the port, else None (never touches the process)."""
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for attempt in range(attempts):
         try:
@@ -389,13 +436,27 @@ def running_instance(port=PORT, attempts=1, delay=0.3):
                     body = response.read()
             except urllib.error.HTTPError as error:  # 503 still names the program
                 body = error.read()
-            if json.loads(body).get("app") == APP_NAME:
-                return True
+            value = json.loads(body)
+            if value.get("app") == APP_NAME:
+                return str(value.get("build", ""))
         except (OSError, ValueError, AttributeError):
             pass
         if attempt + 1 < attempts:
             time.sleep(delay)
-    return False
+    return None
+
+
+def existing_copy_is_current(attempts):
+    """True: the running copy is this very build (quiet exit).  False: nothing answers.
+    Another build: SystemExit with an instruction, the running copy is never touched."""
+    running = running_instance(attempts=attempts)
+    if running is None:
+        return False
+    if running != BUILD:
+        print("Запущена другая версия WMS Print. Закройте её и откройте эту снова.", file=sys.stderr, flush=True)
+        sys.exit(1)
+    print("WMS Print уже запущена и работает. Это окно можно закрыть.", flush=True)
+    return True
 
 
 def main():
@@ -417,16 +478,14 @@ def main():
     directory = state_directory() / "direct"
     if not acquire_instance(directory):
         # Opened twice: the first copy is working, so stay quiet and succeed.
-        if running_instance(attempts=10):
-            print("WMS Print уже запущена и работает. Это окно можно закрыть.", flush=True)
+        if existing_copy_is_current(10):
             return
         print("WMS Print уже открыта, но не отвечает. Закройте её окно и откройте программу снова.", file=sys.stderr, flush=True)
         sys.exit(1)
     try:
         server = DirectServer(("127.0.0.1", PORT), Handler)
     except OSError:
-        if running_instance(attempts=3):  # an older copy without the lock
-            print("WMS Print уже запущена и работает. Это окно можно закрыть.", flush=True)
+        if existing_copy_is_current(3):  # an older copy without the lock is another build
             return
         print(f"Порт {PORT} занят другой программой. WMS Print её не закрывает: "
               "закройте эту программу или перезагрузите компьютер.", file=sys.stderr, flush=True)

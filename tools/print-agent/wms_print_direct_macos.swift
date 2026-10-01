@@ -20,6 +20,22 @@ private let maxPixels: UInt64 = 40_000_000
 // The browser gives up after 30 s; the answer must come earlier.  lp itself
 // normally returns at once, 20 s + SIGKILL grace stays below the browser limit.
 private let lpTimeout: TimeInterval = 20
+/// One deadline per request, shorter than the 30 s the browser waits.
+private let requestBudget: TimeInterval = 25
+/// A job is never started when less than this is left of the budget.
+private let minimumToStart: TimeInterval = 6
+private var legacyBusyMs: Int32 = 2000
+private let unknownOutcomeText = "Исход печати неизвестен: задание уже отправлялось на принтер. Проверьте принтер; повтор автоматически не отправлен."
+private let closeOldText = "Закройте старую версию WMS Print и повторите."
+
+/// Build id shown by /health; a second start compares it with the running copy.
+private let buildID: String = {
+    guard let executable = Bundle.main.executableURL,
+          let data = try? Data(contentsOf: executable.deletingLastPathComponent().appendingPathComponent("build.json")),
+          let value = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let commit = value["source_commit"] as? String, !commit.isEmpty else { return "dev" }
+    return commit
+}()
 
 private enum PrintError: Error, CustomStringConvertible {
     case message(String)
@@ -93,8 +109,8 @@ private func run(_ executable: String, _ arguments: [String], timeout: TimeInter
                          output: buffer.text, timedOut: timedOut)
 }
 
-private func defaultPrinter() throws -> String {
-    let result = try run("/usr/bin/lpstat", ["-d"], timeout: 10)
+private func defaultPrinter(timeout: TimeInterval = 10) throws -> String {
+    let result = try run("/usr/bin/lpstat", ["-d"], timeout: max(1, min(10, timeout)))
     guard !result.timedOut, result.status == 0, let separator = result.output.firstIndex(of: ":") else {
         throw PrintError.message("В системе не выбран принтер по умолчанию")
     }
@@ -113,33 +129,6 @@ private func parseReceipt(_ output: String, queue: String) -> String? {
           ),
           let range = Range(match.range, in: output) else { return nil }
     return String(output[range])
-}
-
-/// Exact queue media for the label size, e.g. "58x40mm" or "58x40mm.Borderless".
-/// No exact match means no media option: the queue keeps its own default.
-private func matchMedia(_ listing: String, width: Double, height: Double) -> String? {
-    guard let expression = try? NSRegularExpression(
-        pattern: "^([0-9]+(?:\\.[0-9]+)?)x([0-9]+(?:\\.[0-9]+)?)mm(\\.Borderless)?$") else { return nil }
-    var plain: String?
-    var borderless: String?
-    for line in listing.components(separatedBy: .newlines) where line.hasPrefix("PageSize/") || line.hasPrefix("PageSize:") {
-        guard let colon = line.firstIndex(of: ":") else { continue }
-        for raw in line[line.index(after: colon)...].split(whereSeparator: { $0 == " " || $0 == "\t" }) {
-            let name = raw.hasPrefix("*") ? String(raw.dropFirst()) : String(raw)
-            guard let match = expression.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
-                  let w = Range(match.range(at: 1), in: name).flatMap({ Double(name[$0]) }),
-                  let h = Range(match.range(at: 2), in: name).flatMap({ Double(name[$0]) }),
-                  abs(w - width) < 0.05, abs(h - height) < 0.05 else { continue }
-            if match.range(at: 3).location == NSNotFound { plain = plain ?? name } else { borderless = borderless ?? name }
-        }
-    }
-    return plain ?? borderless
-}
-
-private func queueMedia(_ queue: String, size: (Double, Double)?) -> String? {
-    guard let size, let result = try? run("/usr/bin/lpoptions", ["-p", queue, "-l"], timeout: 5),
-          !result.timedOut, result.status == 0 else { return nil }
-    return matchMedia(result.output, width: size.0, height: size.1)
 }
 
 private func readUInt32(_ data: Data, _ offset: Int) -> UInt64 {
@@ -179,18 +168,25 @@ private func preparePNG(_ data: Data) throws -> Data {
     guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
                                   bytesPerRow: 0, space: space, bitmapInfo: info) else { throw invalid }
     let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    context.interpolationQuality = .none  // 1:1, no resampling
     context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
     context.fill(rect)
     context.draw(image, in: rect)
     let output = NSMutableData()
     guard let flat = context.makeImage(),
           let destination = CGImageDestinationCreateWithData(output, "public.png" as CFString, 1, nil) else { throw invalid }
-    CGImageDestinationAddImage(destination, flat, nil)
+    // Keep the resolution of the source label (the new context has no DPI of its own).
+    var properties: [CFString: Any] = [:]
+    if let source = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+        if let x = source[kCGImagePropertyDPIWidth] { properties[kCGImagePropertyDPIWidth] = x }
+        if let y = source[kCGImagePropertyDPIHeight] { properties[kCGImagePropertyDPIHeight] = y }
+    }
+    CGImageDestinationAddImage(destination, flat, properties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { throw invalid }
     return output as Data
 }
 
-private func submitToDefaultPrinter(_ data: Data, queue: String, size: (Double, Double)?,
+private func submitToDefaultPrinter(_ data: Data, queue: String, deadline: Date,
                                     mark: () throws -> Void) throws -> String {
     // Everything before mark() may fail without any job in the OS.
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wms-qr-\(UUID().uuidString)")
@@ -202,14 +198,11 @@ private func submitToDefaultPrinter(_ data: Data, queue: String, size: (Double, 
     do { try data.write(to: label, options: .atomic) } catch {
         throw PrintError.notSent("Не удалось подготовить файл этикетки: \(error.localizedDescription)")
     }
-    var arguments = ["-d", queue, "-o", "fit-to-page", "-o", "copies=1"]
-    if let media = queueMedia(queue, size: size) { arguments += ["-o", "media=\(media)", "-o", "number-up=1"] }
-    arguments += ["--", label.path]
     try mark()  // the next step is the first one that can reach the OS queue
-    let result = try run("/usr/bin/lp", arguments, timeout: lpTimeout)
-    guard !result.timedOut, result.status == 0 else {
-        throw PrintError.message("Исход печати неизвестен. Проверьте очередь принтера.")
-    }
+    let limit = max(2, min(lpTimeout, deadline.timeIntervalSinceNow - 4))
+    let result = try run("/usr/bin/lp", ["-d", queue, "-o", "fit-to-page", "-o", "copies=1", "--", label.path],
+                         timeout: limit, grace: 1.5)
+    guard !result.timedOut, result.status == 0 else { throw PrintError.message(unknownOutcomeText) }
     // CUPS localizes the surrounding text even with LC_ALL=C (for example,
     // "id запроса queue-123").  The queue receipt itself has a stable form.
     guard let receipt = parseReceipt(result.output, queue: queue) else {
@@ -218,45 +211,81 @@ private func submitToDefaultPrinter(_ data: Data, queue: String, size: (Double, 
     return receipt
 }
 
-/// Jobs of the previous (Python) release lived in direct-jobs.sqlite3.
-private func legacyJobs(at url: URL) -> [String: StoredJob] {
+private enum LegacyResult {
+    case ok([String: StoredJob])
+    case busy
+    case unreadable(String)
+}
+
+private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+private func sqliteBusy(_ code: Int32) -> Bool { [SQLITE_BUSY, SQLITE_LOCKED].contains(code & 0xff) }
+
+/// Jobs of the previous (Python) release lived in direct-jobs.sqlite3.  Every
+/// step is checked: a partial read is never taken for the whole history.
+private func legacyJobs(at url: URL) -> LegacyResult {
     var db: OpaquePointer?
-    guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
-        sqlite3_close(db)
-        fputs("Старый журнал \(url.lastPathComponent) не открыт; импорт пропущен\n", stderr)
-        return [:]
-    }
     defer { sqlite3_close(db) }
+    let opened = sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil)
+    guard opened == SQLITE_OK else { return sqliteBusy(opened) ? .busy : .unreadable("open \(opened)") }
+    sqlite3_busy_timeout(db, legacyBusyMs)
     var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(db, "SELECT id, hash, receipt FROM jobs", -1, &statement, nil) == SQLITE_OK else {
-        fputs("Старый журнал \(url.lastPathComponent) не прочитан; импорт пропущен\n", stderr)
-        return [:]
-    }
     defer { sqlite3_finalize(statement) }
+    let prepared = sqlite3_prepare_v2(db, "SELECT id, hash, receipt FROM jobs", -1, &statement, nil)
+    guard prepared == SQLITE_OK else { return sqliteBusy(prepared) ? .busy : .unreadable("prepare \(prepared)") }
     var result: [String: StoredJob] = [:]
-    while sqlite3_step(statement) == SQLITE_ROW {
-        guard let id = sqlite3_column_text(statement, 0), let hash = sqlite3_column_text(statement, 1) else { continue }
+    var step = sqlite3_step(statement)
+    while step == SQLITE_ROW {
+        guard let id = sqlite3_column_text(statement, 0), let hash = sqlite3_column_text(statement, 1) else {
+            return .unreadable("row")
+        }
         let receipt = sqlite3_column_text(statement, 2).map { String(cString: $0) }
         result[String(cString: id)] = StoredJob(hash: String(cString: hash), receipt: receipt)
+        step = sqlite3_step(statement)
     }
-    return result
+    guard step == SQLITE_DONE else { return sqliteBusy(step) ? .busy : .unreadable("step \(step)") }
+    return .ok(result)
+}
+
+/// Writes one statement into the old journal (same schema) so that going back
+/// to the previous program still sees the history.
+private func legacyExecute(_ url: URL, _ sql: String, _ arguments: [String?]) throws {
+    var db: OpaquePointer?
+    defer { sqlite3_close(db) }
+    guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
+        throw PrintError.message(closeOldText)
+    }
+    sqlite3_busy_timeout(db, legacyBusyMs)
+    var statement: OpaquePointer?
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { throw PrintError.message(closeOldText) }
+    for (index, value) in arguments.enumerated() {
+        if let value { sqlite3_bind_text(statement, Int32(index + 1), value, -1, sqliteTransient) }
+        else { sqlite3_bind_null(statement, Int32(index + 1)) }
+    }
+    guard sqlite3_step(statement) == SQLITE_DONE else { throw PrintError.message(closeOldText) }
 }
 
 private final class Printer {
-    private let lock = NSLock()
+    private let state = NSLock()      // journals only, held for short sections
+    private let printLock = NSLock()  // one OS print call at a time
     private let storeURL: URL
-    private let submit: (Data, String, (Double, Double)?, () throws -> Void) throws -> String
-    private let queue: () throws -> String
+    private let legacyURL: URL
+    private let submit: (Data, String, Date, () throws -> Void) throws -> String
+    private let queue: (TimeInterval) throws -> String
     private var jobs: [String: StoredJob]
+    private var legacyChecked = false  // the old sqlite journal was read (or is not usable)
+    private var mirror = false         // marks and receipts are copied into the old journal
 
     init(
         directory: URL,
-        submit: @escaping (Data, String, (Double, Double)?, () throws -> Void) throws -> String = submitToDefaultPrinter,
-        queue: @escaping () throws -> String = defaultPrinter
+        submit: @escaping (Data, String, Date, () throws -> Void) throws -> String = submitToDefaultPrinter,
+        queue: @escaping (TimeInterval) throws -> String = { try defaultPrinter(timeout: $0) }
     ) throws {
         self.submit = submit
         self.queue = queue
         self.storeURL = directory.appendingPathComponent("direct-jobs.json")
+        self.legacyURL = directory.appendingPathComponent("direct-jobs.sqlite3")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: storeURL.path) {
             let data = try Data(contentsOf: storeURL)
@@ -268,25 +297,41 @@ private final class Printer {
         } else {
             self.jobs = [:]
         }
-        // Keys written by the earlier Python release must still protect against repeats.
-        let legacy = directory.appendingPathComponent("direct-jobs.sqlite3")
-        if FileManager.default.fileExists(atPath: legacy.path) {
-            var added = false
-            for (key, job) in legacyJobs(at: legacy) where jobs[key] == nil {
-                jobs[key] = job
-                added = true
-            }
-            if added {
-                do { try persist() } catch { fputs("Журнал после импорта не сохранён: \(error)\n", stderr) }
-            }
-        }
+        // A locked old journal must not stop the program; it stops printing instead
+        // (see printJob) until the old copy is closed and the journal can be read.
+        do { try importLegacy() } catch { fputs("\(error)\n", stderr) }
     }
 
     private func persist() throws {
         try JSONEncoder().encode(jobs).write(to: storeURL, options: .atomic)
     }
 
-    func printJob(_ body: [String: Any]) throws -> String {
+    /// Keys of the earlier Python release keep protecting against repeats.
+    /// Locked file: error, nothing is printed.  Damaged file: warning, work goes on.
+    private func importLegacy() throws {
+        guard !legacyChecked else { return }
+        guard FileManager.default.fileExists(atPath: legacyURL.path) else { legacyChecked = true; return }
+        switch legacyJobs(at: legacyURL) {
+        case .busy:
+            throw PrintError.message(closeOldText)
+        case .unreadable(let reason):
+            fputs("Старый журнал direct-jobs.sqlite3 не читается (\(reason)); импорт пропущен\n", stderr)
+            legacyChecked = true
+        case .ok(let old):
+            let fresh = old.keys.filter { jobs[$0] == nil }
+            for key in fresh { jobs[key] = old[key] }
+            if !fresh.isEmpty {
+                do { try persist() } catch {
+                    for key in fresh { jobs[key] = nil }
+                    throw PrintError.message("Не удалось сохранить журнал WMS Print: \(error.localizedDescription)")
+                }
+            }
+            legacyChecked = true
+            mirror = true
+        }
+    }
+
+    func printJob(_ body: [String: Any], deadline: Date = Date().addingTimeInterval(requestBudget)) throws -> String {
         guard let key = body["idempotencyKey"] as? String, (1...200).contains(key.count),
               let image = body["imageDataUrl"] as? String else {
             throw PrintError.message("Некорректное задание печати")
@@ -297,47 +342,74 @@ private final class Printer {
             throw PrintError.message("Ожидается корректная PNG-этикетка")
         }
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        var size: (Double, Double)?
-        if let width = (body["widthMm"] as? NSNumber)?.doubleValue, let height = (body["heightMm"] as? NSNumber)?.doubleValue,
-           (1...1000).contains(width), (1...1000).contains(height) {
-            size = (width, height)
-        }
 
-        lock.lock()
-        defer { lock.unlock() }
-        if let old = jobs[key] {
-            guard old.hash == digest else { throw PrintError.message("Содержимое этого задания изменилось") }
-            guard let receipt = old.receipt else {
-                throw PrintError.message("Задание уже передавалось. Проверьте очередь принтера; повтор автоматически не отправлен.")
-            }
-            return receipt
+        // The key's own history is answered first, never behind the print queue.
+        if let known = try knownResult(key, digest) { return known }
+        guard printLock.lock(before: deadline) else {
+            throw PrintError.message("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
+        }
+        defer { printLock.unlock() }
+        // The same key may have been sent while this request waited.
+        if let known = try knownResult(key, digest) { return known }
+        guard deadline.timeIntervalSinceNow > minimumToStart else {
+            throw PrintError.message("Время ожидания истекло. Это задание не отправлялось; повторите.")
         }
 
         // Anything below that fails before mark() leaves no trace: the key can be retried.
         let ready = try preparePNG(data)
-        let queue = try queue()
+        let queue = try queue(deadline.timeIntervalSinceNow)
         var marked = false
         let mark = { [self] in
+            state.lock()
+            defer { state.unlock() }
+            guard deadline.timeIntervalSinceNow > minimumToStart else {
+                throw PrintError.notSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
+            }
             jobs[key] = StoredJob(hash: digest, receipt: nil)
-            do { try persist() } catch {
-                jobs[key] = nil  // not written, not sent: roll the memory back too
+            do {
+                try persist()
+                if mirror { try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digest]) }
+            } catch {
+                jobs[key] = nil  // not recorded everywhere, not sent: roll back
+                try? persist()
+                if error is PrintError { throw PrintError.notSent("\(error). Задание не отправлялось.") }
                 throw PrintError.notSent("Не удалось записать журнал печати; задание не отправлялось")
             }
             marked = true
         }
         let receipt: String
         do {
-            receipt = try submit(ready, queue, size, mark)
+            receipt = try submit(ready, queue, deadline, mark)
         } catch PrintError.notSent(let reason) {
             if marked {
+                state.lock()
                 jobs[key] = nil
                 try? persist()
+                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key]) }
+                state.unlock()
             }
             throw PrintError.message(reason)
         }
+        state.lock()
+        defer { state.unlock() }
         jobs[key] = StoredJob(hash: digest, receipt: receipt)
         // The job is already in the OS queue; a failed write must not report it as lost.
         do { try persist() } catch { fputs("Квитанция не записана в журнал: \(error)\n", stderr) }
+        if mirror {
+            do { try legacyExecute(legacyURL, "UPDATE jobs SET receipt=? WHERE id=?", [receipt, key]) }
+            catch { fputs("Квитанция не записана в старый журнал: \(error)\n", stderr) }
+        }
+        return receipt
+    }
+
+    /// A stored receipt, an error for a possibly-sent job, or nil for a new key.
+    private func knownResult(_ key: String, _ digest: String) throws -> String? {
+        state.lock()
+        defer { state.unlock() }
+        try importLegacy()  // retried until the old journal has been read
+        guard let old = jobs[key] else { return nil }
+        guard old.hash == digest else { throw PrintError.message("Содержимое этого задания изменилось") }
+        guard let receipt = old.receipt else { throw PrintError.message(unknownOutcomeText) }
         return receipt
     }
 }
@@ -442,6 +514,7 @@ private func respond(_ descriptor: Int32, status: Int, value: [String: Any], ori
 
 private func handle(_ descriptor: Int32, printer: Printer) {
     defer { Darwin.close(descriptor) }
+    let deadline = Date().addingTimeInterval(requestBudget)
     var timeout = timeval(tv_sec: 15, tv_usec: 0)
     setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout.size(ofValue: timeout)))
     do {
@@ -454,16 +527,16 @@ private func handle(_ descriptor: Int32, printer: Printer) {
             respond(descriptor, status: 200, value: [:], origin: origin)
         } else if request.method == "GET" && request.path == "/health" {
             do {
-                respond(descriptor, status: 200, value: ["app": appName, "printer": try defaultPrinter()], origin: origin)
+                respond(descriptor, status: 200, value: ["app": appName, "build": buildID, "printer": try defaultPrinter()], origin: origin)
             } catch {
-                respond(descriptor, status: 503, value: ["app": appName, "error": String(describing: error)], origin: origin)
+                respond(descriptor, status: 503, value: ["app": appName, "build": buildID, "error": String(describing: error)], origin: origin)
             }
         } else if request.method == "POST" && request.path == "/print" && request.headers["x-wms-print"] == "1" {
             do {
                 guard let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
                     throw PrintError.message("Некорректное задание печати")
                 }
-                respond(descriptor, status: 200, value: ["receipt": try printer.printJob(body)], origin: origin)
+                respond(descriptor, status: 200, value: ["receipt": try printer.printJob(body, deadline: deadline)], origin: origin)
             } catch {
                 respond(descriptor, status: 409, value: ["error": String(describing: error)], origin: origin)
             }
@@ -475,7 +548,7 @@ private func handle(_ descriptor: Int32, printer: Printer) {
     }
 }
 
-private func testPNG(width: Int, height: Int, alpha: UInt8, hasAlphaChannel: Bool = true) -> Data {
+private func testPNG(width: Int, height: Int, alpha: UInt8, hasAlphaChannel: Bool = true, dpi: Double? = nil) -> Data {
     let space = CGColorSpace(name: CGColorSpace.sRGB)!
     let info = hasAlphaChannel ? CGImageAlphaInfo.premultipliedLast : CGImageAlphaInfo.noneSkipLast
     let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -491,7 +564,9 @@ private func testPNG(width: Int, height: Int, alpha: UInt8, hasAlphaChannel: Boo
     }
     let output = NSMutableData()
     let destination = CGImageDestinationCreateWithData(output, "public.png" as CFString, 1, nil)!
-    CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+    var properties: [CFString: Any] = [:]
+    if let dpi { properties[kCGImagePropertyDPIWidth] = dpi; properties[kCGImagePropertyDPIHeight] = dpi }
+    CGImageDestinationAddImage(destination, context.makeImage()!, properties as CFDictionary)
     CGImageDestinationFinalize(destination)
     return output as Data
 }
@@ -507,19 +582,44 @@ private func firstPixel(_ png: Data, row: Int) -> [UInt8] {
     return Array(pixels[row * image.width * 4..<row * image.width * 4 + 4])
 }
 
+private func pngDPI(_ png: Data) -> Double? {
+    let source = CGImageSourceCreateWithData(png as CFData, nil)!
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    return (properties?[kCGImagePropertyDPIWidth] as? NSNumber)?.doubleValue
+}
+
+private func legacyRows(_ url: URL) -> [String: String] {
+    var db: OpaquePointer?
+    var statement: OpaquePointer?
+    defer { sqlite3_finalize(statement); sqlite3_close(db) }
+    guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
+          sqlite3_prepare_v2(db, "SELECT id, COALESCE(receipt, '-') FROM jobs", -1, &statement, nil) == SQLITE_OK else { return [:] }
+    var rows: [String: String] = [:]
+    while sqlite3_step(statement) == SQLITE_ROW {
+        rows[String(cString: sqlite3_column_text(statement, 0))] = String(cString: sqlite3_column_text(statement, 1))
+    }
+    return rows
+}
+
 private func runSelfTest() throws {
     func fail(_ text: String) -> PrintError { PrintError.message("Самопроверка не пройдена: \(text)") }
+    func refused(_ body: () throws -> String) -> String? {
+        do { _ = try body(); return nil } catch { return String(describing: error) }
+    }
+    func says(_ body: () throws -> String, _ part: String) -> Bool { (refused(body) ?? "").lowercased().contains(part.lowercased()) }
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wms-print-self-test-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: directory) }
     var submissions = 0
     let printer = try Printer(
         directory: directory,
         submit: { _, _, _, mark in try mark(); submissions += 1; return "test-1" },
-        queue: { "test-printer" }
+        queue: { _ in "test-printer" }
     )
     let opaque = testPNG(width: 4, height: 4, alpha: 255, hasAlphaChannel: false)
-    let image = "data:image/png;base64," + opaque.base64EncodedString()
-    let body: [String: Any] = ["idempotencyKey": "self-test", "imageDataUrl": image]
+    func jobBody(_ key: String, _ png: Data) -> [String: Any] {
+        ["idempotencyKey": key, "imageDataUrl": "data:image/png;base64," + png.base64EncodedString()]
+    }
+    let body = jobBody("self-test", opaque)
     guard try printer.printJob(body) == "test-1", try printer.printJob(body) == "test-1", submissions == 1 else {
         throw PrintError.message("Проверка защиты от повторной печати не пройдена")
     }
@@ -533,9 +633,6 @@ private func runSelfTest() throws {
     }
 
     // A failure before the OS boundary, or a failed journal write, leaves the key retryable.
-    func jobBody(_ key: String, _ png: Data) -> [String: Any] {
-        ["idempotencyKey": key, "imageDataUrl": "data:image/png;base64," + png.base64EncodedString()]
-    }
     var attempt = 0
     let retry = try Printer(
         directory: directory.appendingPathComponent("retry"),
@@ -545,68 +642,114 @@ private func runSelfTest() throws {
             if attempt == 1 { throw PrintError.notSent("lp did not start") }
             return "retry-\(attempt)"
         },
-        queue: { "test-printer" }
+        queue: { _ in "test-printer" }
     )
-    var refused = false
-    do { _ = try retry.printJob(jobBody("k1", opaque)) } catch PrintError.message { refused = true }
-    guard refused else { throw fail("proven failure was not reported") }
+    guard refused({ try retry.printJob(jobBody("k1", opaque)) }) != nil else { throw fail("proven failure was not reported") }
     guard try retry.printJob(jobBody("k1", opaque)) == "retry-2" else { throw fail("retry after notSent") }
-    guard (try? retry.printJob(jobBody("broken", Data(pngPrefix) + Data("x".utf8)))) == nil, attempt == 2,
-          (try? retry.printJob(jobBody("broken", Data(pngPrefix) + Data("x".utf8)))) == nil, attempt == 2 else {
+    let broken = Data(pngPrefix) + Data("x".utf8)
+    guard refused({ try retry.printJob(jobBody("broken", broken)) }) != nil, attempt == 2,
+          refused({ try retry.printJob(jobBody("broken", broken)) }) != nil, attempt == 2 else {
         throw fail("undecodable PNG reached the printer")
     }
     // Memory rollback when the first journal write fails.
     var sent = 0
     let writes = try Printer(
         directory: directory.appendingPathComponent("writes"),
-        submit: { _, _, _, mark in try mark(); sent += 1; return "w-\(sent)" }, queue: { "test-printer" })
+        submit: { _, _, _, mark in try mark(); sent += 1; return "w-\(sent)" }, queue: { _ in "test-printer" })
     let store = directory.appendingPathComponent("writes/direct-jobs.json")
     try? FileManager.default.removeItem(at: store)
     try FileManager.default.createDirectory(at: store, withIntermediateDirectories: false)
-    if (try? writes.printJob(jobBody("w1", opaque))) != nil || sent != 0 { throw fail("write failure") }
+    if refused({ try writes.printJob(jobBody("w1", opaque)) }) == nil || sent != 0 { throw fail("write failure") }
     try FileManager.default.removeItem(at: store)
     guard try writes.printJob(jobBody("w1", opaque)) == "w-1", sent == 1 else { throw fail("rollback of memory state") }
 
-    // The journal of the previous Python release keeps protecting its keys.
+    // The journal of the previous Python release keeps protecting its keys and is kept up to date.
     let legacyDirectory = directory.appendingPathComponent("legacy")
     try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+    let legacyFile = legacyDirectory.appendingPathComponent("direct-jobs.sqlite3")
     var database: OpaquePointer?
     let hash = SHA256.hash(data: opaque).map { String(format: "%02x", $0) }.joined()
-    guard sqlite3_open(legacyDirectory.appendingPathComponent("direct-jobs.sqlite3").path, &database) == SQLITE_OK,
+    guard sqlite3_open(legacyFile.path, &database) == SQLITE_OK,
           sqlite3_exec(database, "CREATE TABLE jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT);"
                        + "INSERT INTO jobs VALUES ('old-key', '\(hash)', 'Old-5');"
                        + "INSERT INTO jobs VALUES ('old-open', '\(hash)', NULL);", nil, nil, nil) == SQLITE_OK else {
         throw fail("legacy fixture")
     }
     sqlite3_close(database)
+    legacyBusyMs = 100
     var legacySent = 0
-    let migrated = try Printer(directory: legacyDirectory,
-                               submit: { _, _, _, mark in try mark(); legacySent += 1; return "new" }, queue: { "test-printer" })
+    var legacyFail = false
+    let migrated = try Printer(directory: legacyDirectory, submit: { _, _, _, mark in
+        try mark(); legacySent += 1
+        if legacyFail { throw PrintError.notSent("no lp") }
+        return "new-\(legacySent)"
+    }, queue: { _ in "test-printer" })
     guard try migrated.printJob(jobBody("old-key", opaque)) == "Old-5", legacySent == 0,
-          (try? migrated.printJob(jobBody("old-open", opaque))) == nil, legacySent == 0,
-          try Printer(directory: legacyDirectory, submit: { _, _, _, _ in "x" }, queue: { "q" })
+          says({ try migrated.printJob(jobBody("old-open", opaque)) }, "проверьте принтер"),
+          legacySent == 0,
+          try Printer(directory: legacyDirectory, submit: { _, _, _, _ in "x" }, queue: { _ in "q" })
               .printJob(jobBody("old-key", opaque)) == "Old-5" else { throw fail("legacy import") }
+    // New marks and receipts are written into the old journal too (a way back to the Python build).
+    guard try migrated.printJob(jobBody("fresh", opaque)) == "new-1",
+          legacyRows(legacyFile)["fresh"] == "new-1" else { throw fail("legacy mirror receipt") }
+    legacyFail = true
+    guard refused({ try migrated.printJob(jobBody("lost", opaque)) }) != nil, legacyRows(legacyFile)["lost"] == nil else {
+        throw fail("legacy mirror rollback")
+    }
+
+    // A locked old journal: nothing is printed until it can be read; then the history is used.
+    let busyDirectory = directory.appendingPathComponent("busy")
+    try FileManager.default.createDirectory(at: busyDirectory, withIntermediateDirectories: true)
+    let busyFile = busyDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    try FileManager.default.copyItem(at: legacyFile, to: busyFile)
+    var holder: OpaquePointer?
+    guard sqlite3_open(busyFile.path, &holder) == SQLITE_OK,
+          sqlite3_exec(holder, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK else { throw fail("busy fixture") }
+    var busySent = 0
+    let blocked = try Printer(directory: busyDirectory, submit: { _, _, _, mark in try mark(); busySent += 1; return "b-1" },
+                              queue: { _ in "test-printer" })
+    guard says({ try blocked.printJob(jobBody("old-key", opaque)) }, "Закройте старую версию"),
+          says({ try blocked.printJob(jobBody("brand-new", opaque)) }, "Закройте старую версию"),
+          busySent == 0 else { throw fail("locked journal must stop printing") }
+    sqlite3_exec(holder, "COMMIT", nil, nil, nil)
+    sqlite3_close(holder)
+    guard try blocked.printJob(jobBody("old-key", opaque)) == "Old-5", busySent == 0,
+          try blocked.printJob(jobBody("brand-new", opaque)) == "b-1" else { throw fail("import after the lock was released") }
+
+    // A damaged old journal is a warning only: the warehouse keeps working.
+    let damagedDirectory = directory.appendingPathComponent("damaged")
+    try FileManager.default.createDirectory(at: damagedDirectory, withIntermediateDirectories: true)
+    try Data("this is not sqlite at all, only text".utf8).write(to: damagedDirectory.appendingPathComponent("direct-jobs.sqlite3"))
+    let damaged = try Printer(directory: damagedDirectory, submit: { _, _, _, mark in try mark(); return "d-1" },
+                              queue: { _ in "test-printer" })
+    guard try damaged.printJob(jobBody("any", opaque)) == "d-1" else { throw fail("damaged old journal stopped printing") }
+
+    // One deadline: waiting for the queue ends in time and is reported as "not sent";
+    // the key's own history is answered at once; too little time left never starts a job.
+    let slowDirectory = directory.appendingPathComponent("slow")
+    var slowSent = 0
+    let slow = try Printer(directory: slowDirectory, submit: { _, _, _, mark in
+        try mark(); slowSent += 1; Thread.sleep(forTimeInterval: 1.5); return "s-\(slowSent)"
+    }, queue: { _ in "test-printer" })
+    let worker = Thread { _ = try? slow.printJob(jobBody("inflight", opaque)) }
+    worker.start()
+    Thread.sleep(forTimeInterval: 0.4)
+    let started = Date()
+    guard says({ try slow.printJob(jobBody("inflight", opaque)) }, "проверьте принтер"),
+          Date().timeIntervalSince(started) < 1 else { throw fail("a known key waited for the print queue") }
+    Thread.sleep(forTimeInterval: 1.5)
+    guard says({ try slow.printJob(jobBody("late", opaque), deadline: Date().addingTimeInterval(3)) }, "не отправлялось"),
+          slowSent == 1 else { throw fail("deadline: a late job was started") }
 
     // A tool that ignores SIGTERM is killed; the output pipe is drained meanwhile.
-    let started = Date()
+    let hung = Date()
     let stuck = try run("/bin/sh", ["-c", "trap '' TERM; exec sleep 30"], timeout: 0.3, grace: 0.3)
-    guard stuck.timedOut, Date().timeIntervalSince(started) < 5 else { throw fail("hung process was not stopped") }
+    guard stuck.timedOut, Date().timeIntervalSince(hung) < 5 else { throw fail("hung process was not stopped") }
     let big = try run("/usr/bin/head", ["-c", "400000", "/dev/zero"], timeout: 10)
     guard !big.timedOut, big.status == 0, big.output.utf8.count == 400_000 else { throw fail("pipe draining") }
     do { _ = try run("/nonexistent/lp", [], timeout: 1); throw fail("launch error") } catch PrintError.notSent { }
 
-    // Exact queue media only; otherwise the queue keeps its own default.
-    let listing = "PageSize/Media Size: A4 Letter 58x80mm *58x40mm.Borderless 100x150mm\nDuplex/Sides: *None"
-    guard matchMedia(listing, width: 58, height: 40) == "58x40mm.Borderless",
-          matchMedia(listing.replacingOccurrences(of: "58x40mm.Borderless", with: "58x40mm 58x40mm.Borderless"),
-                     width: 58, height: 40) == "58x40mm",
-          matchMedia(listing, width: 40, height: 58) == nil,
-          matchMedia(listing, width: 100, height: 150) == "100x150mm",
-          matchMedia(listing, width: 58.0, height: 41) == nil,
-          matchMedia("PageSize/Media Size: 58x40mm.Borderless 60x40mm.Borderless 60x80mm.Borderless 70x120mm.Borderless",
-                     width: 58, height: 40) == "58x40mm.Borderless" else { throw fail("media match") }
-
-    // PNG checks: damaged data is refused, transparency is painted on white.
+    // PNG checks: damaged data is refused, transparency is painted on white, resolution is kept.
     guard (try? preparePNG(Data(opaque.prefix(opaque.count - 20)))) == nil,
           (try? preparePNG(Data(opaque.prefix(opaque.count / 2)))) == nil,
           (try? preparePNG(Data(pngPrefix))) == nil else { throw fail("damaged PNG accepted") }
@@ -615,11 +758,15 @@ private func runSelfTest() throws {
     let half = try preparePNG(testPNG(width: 4, height: 4, alpha: 255))
     guard firstPixel(glass, row: 0) == [255, 255, 255, 255], firstPixel(half, row: 0) == [0, 0, 0, 255] ||
           firstPixel(half, row: 3) == [0, 0, 0, 255] else { throw fail("transparent background") }
+    let sharp = try preparePNG(testPNG(width: 464, height: 320, alpha: 255, dpi: 203))
+    guard let dpi = pngDPI(sharp), abs(dpi - 203) < 0.5, firstPixel(sharp, row: 0).prefix(3) != [128, 128, 128] else {
+        throw fail("resolution of the label was lost")
+    }
     print("WMS Print Direct macOS: package OK")
 }
 
-/// Asks whatever listens on the port who it is.  True only for WMS Print itself.
-private func liveInstance(attempts: Int) -> Bool {
+/// Asks whatever listens on the port who it is: its build id when it is WMS Print, otherwise nil.
+private func liveInstance(attempts: Int) -> String? {
     for attempt in 0..<attempts {
         let descriptor = socket(AF_INET, SOCK_STREAM, 0)
         if descriptor >= 0 {
@@ -649,28 +796,41 @@ private func liveInstance(attempts: Int) -> Bool {
                 }
                 if let split = received.range(of: Data("\r\n\r\n".utf8)),
                    let value = try? JSONSerialization.jsonObject(with: received[split.upperBound...]) as? [String: Any],
-                   value["app"] as? String == appName { return true }
+                   value["app"] as? String == appName { return value["build"] as? String ?? "" }
             }
         }
         if attempt + 1 < attempts { Thread.sleep(forTimeInterval: 0.3) }
     }
-    return false
+    return nil
+}
+
+/// True when the running copy is this very build (quiet exit); throws for another build.
+private func existingCopyIsCurrent(attempts: Int) throws -> Bool {
+    guard let running = liveInstance(attempts: attempts) else { return false }
+    guard running == buildID else {
+        throw PrintError.message("Запущена другая версия WMS Print. Закройте её и откройте эту снова.")
+    }
+    print("WMS Print уже запущена и работает. Это окно можно закрыть.")
+    return true
 }
 
 private var instanceLock: Int32 = -1  // held until the process ends; the OS drops it on a crash too
 
 private func runServer() throws {
     signal(SIGPIPE, SIG_IGN)
-    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    let directory = appSupport.appendingPathComponent("WMS Print/direct")
+    // WMS_PRINT_STATE_DIR exists for tests, so they never touch the operator's journal.
+    let directory: URL
+    if let override = ProcessInfo.processInfo.environment["WMS_PRINT_STATE_DIR"], !override.isEmpty {
+        directory = URL(fileURLWithPath: override)
+    } else {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        directory = appSupport.appendingPathComponent("WMS Print/direct")
+    }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     instanceLock = open(directory.appendingPathComponent("instance.lock").path, O_CREAT | O_RDWR, 0o600)
     if instanceLock >= 0, flock(instanceLock, LOCK_EX | LOCK_NB) != 0 {
-        // Opened twice: the first copy is working, so stay quiet and succeed.
-        if liveInstance(attempts: 10) {
-            print("WMS Print уже запущена и работает. Это окно можно закрыть.")
-            return
-        }
+        // Opened twice: the first copy is working, so stay quiet and succeed (same build only).
+        if try existingCopyIsCurrent(attempts: 10) { return }
         throw PrintError.message("WMS Print уже открыта, но не отвечает. Закройте её окно и откройте программу снова.")
     }
     let descriptor = socket(AF_INET, SOCK_STREAM, 0)
@@ -689,10 +849,7 @@ private func runServer() throws {
     }
     guard bound == 0, Darwin.listen(descriptor, 128) == 0 else {
         Darwin.close(descriptor)
-        if liveInstance(attempts: 3) {  // an older copy that predates the lock file
-            print("WMS Print уже запущена и работает. Это окно можно закрыть.")
-            return
-        }
+        if try existingCopyIsCurrent(attempts: 3) { return }  // an older copy without a lock file is another build
         throw PrintError.message("Порт \(port) занят другой программой. WMS Print её не закрывает: закройте эту программу или перезагрузите компьютер.")
     }
     let printer = try Printer(directory: directory)

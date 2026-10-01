@@ -3,6 +3,7 @@ import io
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import threading
 import tempfile
 import time
@@ -71,7 +72,7 @@ class DirectPrintTest(unittest.TestCase):
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
     @patch('wms_print_direct.subprocess.Popen')
     @patch('wms_print_direct.subprocess.run')
-    @patch('wms_print_direct.running_instance', return_value=True)
+    @patch('wms_print_direct.running_instance', return_value=wms_print_direct.BUILD)
     @patch('wms_print_direct.acquire_instance', return_value=True)
     @patch('wms_print_direct.Printer')
     @patch('wms_print_direct.DirectServer')
@@ -118,7 +119,7 @@ class FakeAdapter:
 class RetryBoundaryTest(unittest.TestCase):
     def printer(self, root, adapter):
         with patch('wms_print_direct.MacPrinter'), patch('wms_print_direct.DefaultWindowsAdapter'):
-            printer = Printer(Path(root), print_timeout=2, slot_wait=1)
+            printer = Printer(Path(root), print_timeout=2, minimum_to_start=0)
         printer.adapter = adapter
         return printer
 
@@ -163,17 +164,27 @@ class RetryBoundaryTest(unittest.TestCase):
             return 'late-1'
 
         with tempfile.TemporaryDirectory() as root:
-            printer = Printer(Path(root), hang, print_timeout=0.3, slot_wait=0.3)
+            printer = Printer(Path(root), hang, print_timeout=0.4, minimum_to_start=0)
             started = time.monotonic()
-            with self.assertRaises(agent.UnknownPrintOutcome):
+            with self.assertRaises(agent.UnknownPrintOutcome) as unknown:
                 printer.print(job('a'))
-            # the next job is refused fast, unmarked and not sent
-            with self.assertRaises(PrintNotSent):
+            self.assertIn('Принтер не отвечает. Перезапустите WMS Print', str(unknown.exception))
+            # a new key is refused within its own deadline, unmarked and not sent
+            with self.assertRaises(PrintNotSent) as refused:
                 printer.print(job('b', PNG + b'2'))
+            self.assertIn('не отвечает', str(refused.exception))
+            self.assertIn('не отправлялось', str(refused.exception))
+            # the key that may be going out is never called "not sent": history is read first
+            asked = time.monotonic()
+            with self.assertRaises(agent.UnknownPrintOutcome) as again:
+                printer.print(job('a'))
+            self.assertLess(time.monotonic() - asked, 0.2)
+            self.assertIn('Проверьте принтер', str(again.exception))
+            self.assertNotIn('не отправлялось', str(again.exception))
             self.assertLess(time.monotonic() - started, 3)
             entered.assert_called_once()
             release.set()
-            for _ in range(50):  # the late receipt is recorded for the same key
+            for _ in range(100):  # the late receipt is recorded for the same key
                 try:
                     if printer.print(job('a')) == 'late-1':
                         break
@@ -182,6 +193,49 @@ class RetryBoundaryTest(unittest.TestCase):
             self.assertEqual(printer.print(job('a')), 'late-1')
             printer.submit = Mock(return_value='b-1')
             self.assertEqual(printer.print(job('b', PNG + b'2')), 'b-1')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_job_stuck_before_the_boundary_cannot_start_late(self):
+        release = threading.Event()
+        calls = []
+
+        class Slow(FakeAdapter):
+            def submit_default(self, data, queue, mark):
+                self.calls += 1
+                release.wait(10)      # e.g. a driver call that hangs while preparing
+                mark()                # too late: the browser has been told "not sent"
+                calls.append('sent')
+                return 'Label-1'
+
+        with tempfile.TemporaryDirectory() as root:
+            adapter = Slow()
+            printer = self.printer(root, adapter)
+            printer.print_timeout = 0.4
+            with self.assertRaises(PrintNotSent) as raised:
+                printer.print(job())
+            self.assertIn('не отправлялось', str(raised.exception))
+            release.set()
+            for _ in range(100):
+                if not printer.hung and printer.slot.acquire(blocking=False):
+                    printer.slot.release()
+                    break
+                time.sleep(0.05)
+            self.assertEqual(calls, [])  # nothing went out
+            self.assertIsNone(printer._lookup('scan-1'))  # key is free
+            printer.print_timeout = 5
+            release.set()
+            adapter.submit_default = lambda data, queue, mark: (mark(), 'Label-2')[1]
+            self.assertEqual(printer.print(job()), 'Label-2')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_too_little_time_left_never_starts_a_job(self):
+        with tempfile.TemporaryDirectory() as root:
+            adapter = FakeAdapter()
+            printer = self.printer(root, adapter)
+            printer.minimum_to_start = 100
+            with self.assertRaises(PrintNotSent):
+                printer.print(job())
+            self.assertEqual(adapter.calls, 0)
 
 
 class FakeDC:
@@ -296,6 +350,7 @@ class LayoutTest(unittest.TestCase):
 
 
 class SingleInstanceTest(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'file lock is the macOS/Linux path')
     def test_second_lock_is_refused_and_released_with_the_first(self):
         with tempfile.TemporaryDirectory() as root:
             held = list(wms_print_direct._instance_guard)
@@ -333,7 +388,7 @@ class SingleInstanceTest(unittest.TestCase):
         try:
             with self.assertRaises(OSError):
                 DirectServer(('127.0.0.1', port), Handler)
-            self.assertTrue(running_instance(port))
+            self.assertEqual(running_instance(port), wms_print_direct.BUILD)
         finally:
             first.shutdown()
             first.server_close()
@@ -352,13 +407,13 @@ class SingleInstanceTest(unittest.TestCase):
         other = HTTPServer(('127.0.0.1', 0), Other)
         threading.Thread(target=other.serve_forever, daemon=True).start()
         try:
-            self.assertFalse(running_instance(other.server_port))
+            self.assertIsNone(running_instance(other.server_port))
         finally:
             other.shutdown()
             other.server_close()
 
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
-    @patch('wms_print_direct.running_instance', return_value=False)
+    @patch('wms_print_direct.running_instance', return_value=None)
     @patch('wms_print_direct.acquire_instance', return_value=True)
     @patch('wms_print_direct.DirectServer', side_effect=OSError('busy'))
     def test_foreign_port_owner_gives_a_clear_error_and_is_left_alone(self, server, acquire, running):
@@ -367,12 +422,39 @@ class SingleInstanceTest(unittest.TestCase):
         self.assertEqual(stop.exception.code, 1)
 
     @patch('wms_print_direct.sys.argv', ['WMS Print'])
-    @patch('wms_print_direct.running_instance', return_value=True)
+    @patch('wms_print_direct.running_instance', return_value=wms_print_direct.BUILD)
     @patch('wms_print_direct.acquire_instance', return_value=False)
     @patch('wms_print_direct.DirectServer')
     def test_second_copy_quietly_succeeds_when_first_is_alive(self, server, acquire, running):
         main()
         server.assert_not_called()
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.running_instance', return_value='another-build')
+    @patch('wms_print_direct.acquire_instance', return_value=False)
+    @patch('wms_print_direct.DirectServer')
+    def test_other_build_is_reported_and_left_running(self, server, acquire, running):
+        with self.assertRaises(SystemExit) as stop:
+            main()
+        self.assertEqual(stop.exception.code, 1)
+        server.assert_not_called()
+
+    @patch('wms_print_direct.sys.argv', ['WMS Print'])
+    @patch('wms_print_direct.running_instance', return_value='')  # an older copy has no build id
+    @patch('wms_print_direct.acquire_instance', return_value=True)
+    @patch('wms_print_direct.DirectServer', side_effect=OSError('busy'))
+    def test_older_copy_without_lock_is_another_build(self, server, acquire, running):
+        with self.assertRaises(SystemExit):
+            main()
+
+    def test_build_id_comes_from_build_json_next_to_the_program(self):
+        with tempfile.TemporaryDirectory() as root:
+            Path(root, 'build.json').write_text(json.dumps({'source_commit': 'abc123'}))
+            with patch('wms_print_direct.sys.executable', str(Path(root, 'wms-print'))):
+                self.assertEqual(wms_print_direct.build_id(), 'abc123')
+            with patch('wms_print_direct.sys.executable', '/nonexistent/python'), \
+                    patch('wms_print_direct.__file__', str(Path(root, 'x.py'))):
+                self.assertEqual(wms_print_direct.build_id(), 'abc123')
 
 
 if __name__ == '__main__':
