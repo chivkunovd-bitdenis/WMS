@@ -563,7 +563,6 @@ export function FfFbsSupplyWorkspace({
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const kizRowInputRef = useRef<HTMLInputElement | null>(null)
   const kizRowTargetRef = useRef<FbsKizLookup | null>(null)
-  const scanKizRowRef = useRef<(raw: string) => Promise<void>>(async () => undefined)
   const kizRowCommitGateRef = useRef<Promise<void> | null>(null)
   const kizSelectedStickerRef = useRef('')
   const activeProductScanBarcodeRef = useRef<string | null>(null)
@@ -670,11 +669,16 @@ export function FfFbsSupplyWorkspace({
         ? { orderId: kizRowTargetRef.current.order_id, name: kizRowTargetRef.current.product.name, needsKiz: true }
         : controller.view(),
       scan: async (raw: string) => {
-        // Подтверждение запускает commit вне очереди сканера. Следующий код
-        // ждёт его исхода, затем заново выбирает уже актуальную цель.
-        await kizRowCommitGateRef.current
-        return kizRowInputRef.current && kizRowTargetRef.current
-          ? scanKizRowRef.current(raw) : controller.scan(raw)
+        const target = kizRowInputRef.current && kizRowTargetRef.current
+        if (!target) return controller.scan(raw)
+        setKizScanValue('')
+        kizRowInputRef.current?.blur()
+        // The same bind -> native WMS Print -> pack sequence as product scans.
+        await controller.scanOrder!(target.order_id, raw)
+        kizRowInputRef.current = null
+        kizRowTargetRef.current = null
+        setKizScanActive(null)
+        sequentialFrameRef.current?.onScanChange?.()
       },
     }
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
@@ -1795,12 +1799,7 @@ export function FfFbsSupplyWorkspace({
 
   useLayoutEffect(() => {
     kizRowTargetRef.current = kizScanActive
-    scanKizRowRef.current = async (raw) => {
-      setKizScanValue('')
-      kizRowInputRef.current?.blur()
-      await scanKizCode(raw)
-    }
-  }, [kizScanActive, scanKizCode])
+  }, [kizScanActive])
   useEffect(() => { sequentialFrameRef.current?.onScanChange?.() }, [kizScanActive])
 
   const dismissKizConfirmation = useCallback(() => {
@@ -1829,6 +1828,11 @@ export function FfFbsSupplyWorkspace({
       event.preventDefault()
       const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
       if (!raw) return
+      if (useSequentialPacking) {
+        document.dispatchEvent(new CustomEvent('fbs-packing-row-scan', { detail: raw }))
+        setKizScanValue('')
+        return
+      }
       // Detach the accepted hardware payload synchronously. No async branch is
       // allowed to clear this state later, otherwise a fast following scan is
       // concatenated with or erased by the previous request.
@@ -1848,7 +1852,7 @@ export function FfFbsSupplyWorkspace({
       }
       acceptPackingScanRef.current(raw)
     },
-    [kizScanValue, kizScanActive, dropKizScanActive],
+    [kizScanValue, kizScanActive, dropKizScanActive, useSequentialPacking],
   )
 
   // Один приём кода для поля скана и для слушателя всей вкладки (WMS-575):
@@ -3309,7 +3313,7 @@ export function FfFbsSupplyWorkspace({
                                   size="small"
                                   autoComplete="off"
                                   disabled={busy || kizScanBusy}
-                                  value={kizRowActive ? kizScanValue : tail ?? ''}
+                                  value={kizRowActive && kizRowInputRef.current === document.activeElement ? kizScanValue : tail ?? ''}
                                   placeholder={tail ?? '—'}
                                   onFocus={(event) => {
                                     const previousProduct = activeProductScanBarcodeRef.current
@@ -3336,14 +3340,16 @@ export function FfFbsSupplyWorkspace({
                                     // Другая строка (в том числе другой поставки) становится
                                     // единственной целью; обычная очередь упаковки сохраняется.
                                     if (event.relatedTarget instanceof HTMLInputElement
-                                      && event.relatedTarget.dataset.testid === 'fbs-kiz-row-input') {
+                                      && (event.relatedTarget.dataset.testid === 'fbs-kiz-row-input'
+                                        || event.relatedTarget.dataset.packingScan === 'true')) {
                                       kizRowInputRef.current = null
+                                      kizRowTargetRef.current = null
                                       setKizScanActive(null)
                                       setKizScanValue('')
                                     }
                                   }}
                                   onKeyDown={onKizScanEnter}
-                                  slotProps={{ htmlInput: { 'aria-label': `КИЗ заказа ${order.wb_order_id}`, 'data-testid': 'fbs-kiz-row-input' } }}
+                                  slotProps={{ htmlInput: { 'aria-label': `КИЗ заказа ${order.wb_order_id}`, 'data-testid': 'fbs-kiz-row-input', 'data-packing-scan': useSequentialPacking ? 'true' : undefined } }}
                                   sx={{ minWidth: 0, flex: 1, '& input': { fontFamily: 'monospace', fontWeight: 700, fontSize: 15, textAlign: 'right', color: markingColor } }}
                                 />
                               ) : tail ? (

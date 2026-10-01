@@ -18,13 +18,14 @@ export type PackingScanView = { orderId: string; name: string; needsKiz: boolean
 export type PackingScanController = {
   hasSelectedRow?: () => boolean
   scan: (raw: string) => Promise<void>
+  scanOrder?: (orderId: string, raw: string) => Promise<void>
   hasPending: () => boolean
   hasSavedAttempt: (raw: string) => boolean
   view: () => PackingScanView
 }
 export type PackingScanDeps = {
   active?: () => boolean
-  select: (barcode: string, key: string) => Promise<FbsScanAutoPrintResult>
+  select: (barcode: string, key: string, orderId?: string) => Promise<FbsScanAutoPrintResult>
   preload: (result: FbsScanAutoPrintResult) => Promise<string>
   bind: (result: FbsScanAutoPrintResult, raw: string) => Promise<void>
   print: (result: FbsScanAutoPrintResult, image: string) => Promise<void>
@@ -87,6 +88,30 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       name: pending.result.binding_target?.product.name ?? `WB № ${pending.result.wb_order_id}`,
       needsKiz: pending.needsKiz,
     } : null,
+    async scanOrder(orderId, raw) {
+      if (deps.active?.() === false) return
+      if (pending && pending.result.order_id !== orderId) {
+        if (!pending.needsKiz) throw new Error('Сначала завершите печать предыдущего заказа повторным сканом его штрихкода.')
+        // Its durable product selection can still be resumed by its barcode.
+        pending = null
+      }
+      if (!pending) {
+        const barcode = `order:${orderId}`
+        const result = await deps.select(barcode, deps.claim(barcode), orderId)
+        if (result.order_id !== orderId) throw new Error('Сервер вернул другой заказ.')
+        deps.remember(barcode, result)
+        pending = { barcode, result, image: deps.preload(result), needsKiz: true }
+        void pending.image.catch(() => undefined)
+        deps.changed()
+      }
+      if (pending.needsKiz) {
+        await deps.bind(pending.result, raw)
+        pending.needsKiz = false
+        deps.changed()
+      }
+      pending.image = pending.image.catch(() => deps.preload(pending!.result))
+      await finish()
+    },
     async scan(raw) {
       if (deps.active?.() === false) return
       if (pending) {
@@ -141,6 +166,7 @@ export function makePackingScanDeps(
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
+  const rowScanIds = new Set<string>()
   let startedWorkspace: FbsWorkspace | null = null
   const ensureSupplyStarted = async () => {
     const current = workspace()
@@ -189,13 +215,15 @@ export function makePackingScanDeps(
     },
     complete: (raw) => { completeFbsPendingProductScan(token, storageId, raw); refreshed() },
     changed,
-    select: async (barcode, idempotency_key) => {
+    select: async (barcode, idempotency_key, orderId) => {
       try {
         const boxId = peekFbsPendingProductScan(token, storageId, barcode)?.packingBoxId ?? null
         const selected = await scanFbsProductForAutoPrint(token, authHeaders, supplyId, {
           barcode, idempotency_key, print_qr: true, print_chz: false, reprint_chz: false, await_honest_sign: true,
+          ...(orderId ? { order_id: orderId } : {}),
         })
         scanBoxes.set(selected.scan_id, boxId)
+        if (orderId) rowScanIds.add(selected.scan_id)
         return selected
       } catch (cause) {
         if (cause instanceof FbsApiError && ['scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) {
@@ -250,6 +278,9 @@ export function makePackingScanDeps(
     },
     pack: async (result) => {
       const current = await ensureSupplyStarted()
+      // Replacing the label of an already packed order must not pack a second unit.
+      if (rowScanIds.has(result.scan_id)
+        && current.orders.some((order) => order.id === result.order_id && order.pack.status === 'packed')) return
       const taskId = current.supply.packaging_task_id
       if (!taskId) throw new Error('Задание упаковки ещё не создано.')
       const task = await request(`/operations/packaging-tasks/${taskId}`) as PackagingTask
