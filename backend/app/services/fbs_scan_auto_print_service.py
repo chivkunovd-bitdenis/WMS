@@ -157,6 +157,7 @@ async def select_order_for_product_scan(
     reprint_chz: bool,
     actor_user_id: uuid.UUID,
     await_honest_sign: bool = False,
+    order_id: uuid.UUID | None = None,
 ) -> FbsScanAutoPrintSelection:
     # Fail closed before even reading the supply.  The all-off workstation
     # state is deliberately not a selection mode: it must leave no durable
@@ -211,15 +212,14 @@ async def select_order_for_product_scan(
                 and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
             )
         )
-        and raw_barcode
-        in {
+        and (order.id == order_id if order_id is not None else raw_barcode in {
             value
             for value in (
                 order.wb_barcode,
                 order.product.wb_barcode if order.product is not None else None,
             )
             if value
-        }
+        })
     ]
     if not matching:
         raise FbsScanAutoPrintError("scan_product_not_found")
@@ -248,6 +248,8 @@ async def select_order_for_product_scan(
             if payload.get("kind") != _EVENT_KIND:
                 continue
             if payload.get("request_digest") == request_digest:
+                if order_id is not None and payload.get("order_id") != str(order_id):
+                    raise FbsScanAutoPrintError("scan_product_not_found")
                 return _selection_from_event(
                     event,
                     supply_id=supply_id,
@@ -257,6 +259,10 @@ async def select_order_for_product_scan(
                     reprint_chz=reprint_chz,
                     await_honest_sign=await_honest_sign,
                 )
+            # A row-field scan (WMS-630) never reserves the order for ordinary
+            # product scans: a failed row attempt must not hide the order.
+            if str(payload.get("barcode", "")).startswith("order:"):
+                continue
             try:
                 served_order_ids.add(uuid.UUID(str(payload["order_id"])))
             except (KeyError, TypeError, ValueError):
@@ -264,13 +270,19 @@ async def select_order_for_product_scan(
 
         candidates = [
             order for order in matching
-            if order.id not in served_order_ids
-            and (not await_honest_sign or order.pack_status != "packed")
+            if order_id is not None or (
+                order.id not in served_order_ids
+                and (not await_honest_sign or order.pack_status != "packed")
+            )
         ]
         if not candidates:
             raise FbsScanAutoPrintError("scan_product_exhausted")
         selected = min(candidates, key=picking_list_order_key)
         reservation_key = _order_reservation_key(supply_id, selected.id)
+        if order_id is not None:
+            # An explicit row scan may replace a code on an already packed order.
+            # Its retries reuse one selection and the ordinary print receipt.
+            reservation_key = f"wms630-row:{request_digest}"
         payload = _selection_payload(
             barcode=raw_barcode,
             order=selected,
