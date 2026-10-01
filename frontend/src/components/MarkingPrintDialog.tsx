@@ -1424,8 +1424,10 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       requiresHonestSign &&
       (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
     (!effectiveReprint && qtyNeed < 1) ||
-    (markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
-    (markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
+    // FBS checks the current pool and already bound codes on the server.
+    // A stale packaging-task snapshot must not prevent submitting the print.
+    (!fbsTapeMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
+    (!fbsTapeMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
     // L2 (21.08.2026): ноль этикеток ШК — не повод гасить кнопку, если в ленту всё равно
     // идут QR заказов. Гасим, только когда печатать действительно нечего. Считаем по
     // fbsLabelCopiesPerOrder: totalWbLabels проходит через clampPackUnits и никогда не
