@@ -243,13 +243,19 @@ async def test_seed_supports_cell_box_product_pick_and_inventory_source(db_sessi
 
 
 @pytest.mark.asyncio
-async def test_complete_legacy_dataset_is_reused_without_mutations(db_session, monkeypatch):
+@pytest.mark.parametrize("extraneous", [False, True])
+async def test_complete_legacy_dataset_is_reused_without_mutations(
+    db_session, monkeypatch, extraneous,
+):
     args = await prepare(db_session, monkeypatch)
     await demo.run(args)
     async with SessionLocal() as session:
         for n in range(1, 7):
             product = await session.get(Product, demo.demo_id(f"product/{n}"))
             product.sku_code = f"FBS-VIDEO-EXISTING-{n}"
+        if extraneous:
+            session.add(Product(tenant_id=demo.TENANT_ID, sku_code="EMU-INCOMPLETE-OTHER",
+                                name="Unrelated old fixture"))
         await session.commit()
     statements = []
 
@@ -266,13 +272,65 @@ async def test_complete_legacy_dataset_is_reused_without_mutations(db_session, m
     assert result["created"] is False
     assert not set(statements) & {"INSERT", "UPDATE", "DELETE"}
     assert all(legacy["local_readiness_checks"].values())
-    assert legacy["counts"]["products"] == 6
+    assert legacy["counts"]["products"] == (7 if extraneous else 6)
+    assert len(legacy["candidate"]["product_ids"]) == 6
+    assert len(legacy["excluded_product_ids"]) == (1 if extraneous else 0)
+    assert len(legacy["candidate"]["seller_ids"]) == 2
     assert legacy["counts"]["orders"] == 12
     assert sum(p["reserved"] for p in legacy["products"]) == 14
     assert len(legacy["intake_ids"]) == 3
     assert len(legacy["inventory_documents"]) == 2
     assert len(legacy["supplies"]) == 4
-    assert all(p["document_movements"] for p in legacy["products"])
+    assert all(p["document_movements"] for p in legacy["products"]
+               if p["id"] in legacy["candidate"]["product_ids"])
     assert all(o["wb_order_id"] for o in legacy["orders"] if o["marketplace"] == "wb")
     assert legacy["provider_verification"].startswith("unverified")
     assert result["after"]["legacy_audit"] == legacy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect,expected_gap", [
+    ("wrong_marking_sku", "marking_pool"),
+    ("one_seller_billing", "billing_each_seller"),
+    ("invoice_cross_seller", "billing_each_seller"),
+    ("rate_cross_seller", "billing_each_seller"),
+])
+async def test_legacy_relationship_gaps_prevent_reuse(
+    db_session, monkeypatch, defect, expected_gap,
+):
+    from app.models.billing import BillingInvoiceV2, BillingLedgerEntry
+    from app.models.marking_code import MarkingCode
+
+    args = await prepare(db_session, monkeypatch)
+    await demo.run(args)
+    async with SessionLocal() as session:
+        for n in range(1, 7):
+            product = await session.get(Product, demo.demo_id(f"product/{n}"))
+            product.sku_code = f"FBS-VIDEO-EXISTING-{n}"
+        if defect == "wrong_marking_sku":
+            for code in (await session.scalars(select(MarkingCode))).all():
+                code.product_id = demo.demo_id("product/1")
+        elif defect == "one_seller_billing":
+            charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
+            charge.seller_id = demo.demo_id("seller/1")
+        elif defect == "invoice_cross_seller":
+            invoice = await session.get(BillingInvoiceV2, demo.demo_id("invoice"))
+            invoice.seller_id = demo.demo_id("seller/2")
+        else:
+            charge = await session.get(BillingLedgerEntry, demo.demo_id("charge/3"))
+            charge.tariff_version_v2_id = demo.demo_id("rate/1")
+        await session.commit()
+    args.apply = False
+    result = await demo.run(args)
+    legacy = result["before"]["legacy_audit"]
+    assert result["decision"] == "additive_scope"
+    assert legacy["gaps"] == [expected_gap]
+    assert len(legacy["candidate"]["product_ids"]) == 6
+    if defect == "wrong_marking_sku":
+        assert legacy["counts"]["available_marking"] == 20
+        assert legacy["candidate"]["marking_by_product"] == {str(demo.demo_id("product/2")): 0}
+    elif defect in {"one_seller_billing", "rate_cross_seller"}:
+        second = legacy["candidate"]["billing_by_seller"][str(demo.demo_id("seller/2"))]
+        assert second["profile"] and second["rate_ids"] and not second["charge_ids"]
+    else:
+        assert legacy["candidate"]["invoice_ids"] == []
