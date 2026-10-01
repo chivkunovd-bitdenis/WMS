@@ -38,6 +38,7 @@ PRINT_TIMEOUT = 25
 MINIMUM_TO_START = 6
 MAX_PIXELS = 40_000_000
 UNKNOWN_TEXT = "Исход печати неизвестен: задание уже отправлялось на принтер. Проверьте принтер; повтор автоматически не отправлен."
+LATE_TEXT = "Время ожидания истекло. Это задание не отправлялось; повторите."
 IN_PROGRESS_TEXT = "Это задание уже в работе, исход пока неизвестен. Проверьте принтер; повтор автоматически не отправлен."
 HUNG_TEXT = "Принтер не отвечает. Перезапустите WMS Print и проверьте принтер."
 
@@ -284,20 +285,58 @@ class Printer:
     def _submit(self, data, queue, mark, width_mm, height_mm):
         return self.adapter.submit_default(data, queue, mark, width_mm, height_mm)
 
-    def _execute(self, sql, params=(), timeout=10):
-        with self.lock, closing(sqlite3.connect(self.db, timeout=max(0.05, timeout))) as db:
-            db.execute(sql, params)
-            db.commit()
+    def _locked(self, until):
+        """Take the journal lock within the rest of the request budget (``until`` is a
+        monotonic time) or raise "not sent"; the caller releases it."""
+        if not self.lock.acquire(timeout=max(0.0, until - time.monotonic())):
+            raise PrintNotSent(LATE_TEXT)
 
-    def _begin(self, key, digest, deadline):
+    def _execute(self, sql, params=(), until=None, timeout=10):
+        """One journal write.  With ``until`` the wait for the lock and for SQLite both
+        end with the request budget, the SQLite timeout being recomputed after the lock."""
+        if until is None:
+            self.lock.acquire()
+        else:
+            self._locked(until)
+        try:
+            wait = timeout if until is None else min(10, until - time.monotonic())
+            try:
+                with closing(sqlite3.connect(self.db, timeout=max(0.05, wait))) as db:
+                    db.execute(sql, params)
+                    db.commit()
+            except sqlite3.OperationalError:
+                if until is None:
+                    raise
+                raise PrintNotSent(LATE_TEXT) from None  # a locked journal used up the budget
+        finally:
+            self.lock.release()
+
+    def _begin(self, key, digests, deadline):
         """Stored receipt, an error for a possibly sent or in-progress job, or None for a
-        new key, which is registered as in progress under the same lock."""
-        with self.lock:
-            with closing(sqlite3.connect(self.db, timeout=max(0.05, min(10, deadline - time.monotonic())))) as db:
+        new key, which is registered as in progress under the same lock.  Any known
+        identity form is accepted and the row is rewritten in this program's own form,
+        so the previous version, if started again, recognises the key too."""
+        self._locked(deadline)
+        try:
+            db = None
+            try:
+                db = sqlite3.connect(self.db, timeout=max(0.05, min(10, deadline - time.monotonic())))
                 old = db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
+            except sqlite3.OperationalError:
+                if db is not None:
+                    db.close()
+                raise PrintNotSent(LATE_TEXT) from None  # a locked journal used up the budget
+            with closing(db):
+                if old:
+                    if old[0] not in digests:
+                        raise ValueError("Содержимое этого задания изменилось")
+                    if old[0] != digests[0]:
+                        try:
+                            db.execute("UPDATE jobs SET hash=? WHERE id=?", (digests[0], key))
+                            db.commit()
+                        except sqlite3.Error:
+                            pass  # best effort: the answer below does not depend on it
             if old:
-                if old[0] != digest:
-                    raise ValueError("Содержимое этого задания изменилось")
                 if old[1] is None:
                     raise agent.UnknownPrintOutcome(UNKNOWN_TEXT)
                 return old[1]
@@ -305,6 +344,8 @@ class Printer:
                 raise agent.UnknownPrintOutcome(IN_PROGRESS_TEXT)
             self.inflight.add(key)
             return None
+        finally:
+            self.lock.release()
 
     def _lookup(self, key):
         with self.lock, closing(sqlite3.connect(self.db, timeout=10)) as db:
@@ -318,17 +359,20 @@ class Printer:
         """
         try:
             def mark():
-                late = PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
-                with gate["lock"]:
+                late = PrintNotSent(LATE_TEXT)
+                with gate["flag"]:
                     if gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start:
                         raise late
-                    # The wait for a locked journal is part of the same budget.
-                    self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest),
-                                  timeout=deadline - time.monotonic())
-                    if gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start:
-                        self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
-                        raise late  # the budget went on the journal: not sent, mark removed
-                    gate["marked"] = True
+                # The waits for the journal lock and for SQLite are part of the same budget;
+                # no lock the request thread needs is held meanwhile.
+                self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest), until=deadline)
+                with gate["flag"]:
+                    too_late = gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start
+                    if not too_late:
+                        gate["marked"] = True
+                if too_late:
+                    self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
+                    raise late  # the budget went on the journal: not sent, mark removed
 
             try:
                 if self.submit:
@@ -342,7 +386,8 @@ class Printer:
             except PrintNotSent:
                 if gate["marked"]:  # proven: the OS never received the job
                     self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
-                    gate["marked"] = False
+                    with gate["flag"]:
+                        gate["marked"] = False
                 raise
             try:
                 self._execute("UPDATE jobs SET receipt=? WHERE id=?", (receipt, key))
@@ -371,10 +416,14 @@ class Printer:
         width_tenths, height_tenths = DefaultWindowsAdapter._label_size(body.get("widthMm"), body.get("heightMm"))
         # The size is part of the job identity (same formula as the installed 1bdd6cdf release).
         digest = hashlib.sha256(data + f"|{width_tenths}x{height_tenths}".encode()).hexdigest()
+        # Other forms of the same identity that other releases wrote: the Swift one
+        # (|58.0x40.0) and the oldest size-less one.
+        swift_form = hashlib.sha256(data + f"|{float(body['widthMm'])!r}x{float(body['heightMm'])!r}".encode()).hexdigest()
+        digests = (digest, swift_form, hashlib.sha256(data).hexdigest())
         size = (width_tenths, height_tenths)
         # The key's own history is answered first, never behind the print queue; a new
         # key is registered as in progress at once, so a parallel repeat hears "unknown".
-        known = self._begin(key, digest, deadline)
+        known = self._begin(key, digests, deadline)
         if known is not None:
             return known
         started_worker = False
@@ -385,9 +434,9 @@ class Printer:
                 raise PrintNotSent("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
             try:
                 if deadline - time.monotonic() < self.minimum_to_start:
-                    raise PrintNotSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
+                    raise PrintNotSent(LATE_TEXT)
                 outcome = {}
-                gate = {"lock": threading.Lock(), "cancelled": False, "marked": False}
+                gate = {"flag": threading.Lock(), "cancelled": False, "marked": False}
                 worker = threading.Thread(target=self._work, args=(key, digest, data, size, deadline, gate, outcome), daemon=True)
                 worker.start()
                 started_worker = True  # the worker releases the slot and the in-progress mark
@@ -400,7 +449,7 @@ class Printer:
                     self.inflight.discard(key)
         worker.join(max(0.0, deadline - time.monotonic()))
         if worker.is_alive():
-            with gate["lock"]:
+            with gate["flag"]:  # held only for these two reads/writes, never across the journal
                 gate["cancelled"] = True  # a worker still before its mark can no longer start the job
                 marked = gate["marked"]
             self.hung = True

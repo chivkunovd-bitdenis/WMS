@@ -333,6 +333,86 @@ class ParallelAndBudgetTest(unittest.TestCase):
             self.assertEqual(printer.print(job()), 'Label-1')
 
 
+class JournalBudgetAndIdentityTest(unittest.TestCase):
+    printer = RetryBoundaryTest.printer
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_two_requests_competing_for_a_locked_journal_still_answer_in_time(self):
+        with tempfile.TemporaryDirectory() as root:
+            events = {}
+
+            class Preparing(FakeAdapter):
+                def default(inner):
+                    if not events.get('a'):
+                        events['a'] = True
+                        time.sleep(1.0)   # preparation of request A, before its mark
+                    return 'Label'
+
+                def submit_default(inner, data, queue, mark, width_mm=None, height_mm=None):
+                    mark()
+                    return 'Label-1'
+
+            printer = self.printer(root, Preparing())
+            printer.print_timeout, printer.minimum_to_start = 2.0, 0.3
+            answers = {}
+
+            def request(name, key):
+                started = time.monotonic()
+                try:
+                    answers[name] = printer.print(job(key, PNG + key.encode()))
+                except Exception as exc:  # noqa: BLE001
+                    answers[name] = exc
+                answers[name + '_t'] = time.monotonic() - started
+
+            a = threading.Thread(target=request, args=('a', 'ka'))
+            a.start()
+            time.sleep(0.15)   # A has passed its history check and is preparing
+            blocker = sqlite3.connect(Path(root) / 'direct-jobs.sqlite3', timeout=1, check_same_thread=False)
+            blocker.execute('BEGIN EXCLUSIVE')
+            time.sleep(0.5)    # t = 0.65 s: B enters the journal and waits for SQLite
+            b = threading.Thread(target=request, args=('b', 'kb'))
+            b.start()
+            a.join(5)
+            b.join(5)
+            blocker.rollback()
+            blocker.close()
+            self.assertIsInstance(answers['a'], PrintNotSent)           # A mark: lock wait ended with its budget
+            self.assertLess(answers['a_t'], 2.0 + 0.4)                  # answered within its own deadline
+            self.assertIsInstance(answers['b'], PrintNotSent)
+            self.assertLess(answers['b_t'], 2.0 + 0.4)
+            self.assertIsNone(printer._lookup('ka'))                    # both keys are free
+            self.assertIsNone(printer._lookup('kb'))
+            printer.print_timeout = 5
+            self.assertEqual(printer.print(job('ka', PNG + b'ka')), 'Label-1')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_known_identity_forms_are_accepted_and_rewritten_for_the_previous_version(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as root:
+            printer = self.printer(root, FakeAdapter())
+            python_form = hashlib.sha256(PNG + b'|580x400').hexdigest()
+            rows = {
+                'swift-key': hashlib.sha256(PNG + b'|58.0x40.0').hexdigest(),
+                'oldest-key': hashlib.sha256(PNG).hexdigest(),
+                'python-key': python_form,
+            }
+            with closing_db(Path(root) / 'direct-jobs.sqlite3') as db:
+                for key, digest in rows.items():
+                    db.execute('INSERT INTO jobs VALUES (?, ?, ?)', (key, digest, 'R-' + key))
+                db.commit()
+            for key in rows:
+                self.assertEqual(printer.print(job(key)), 'R-' + key)
+                self.assertEqual(printer._lookup(key)[0], python_form)   # what 1bdd6cdf reads
+            self.assertEqual(printer.adapter.calls, 0)
+            with self.assertRaises(ValueError):
+                printer.print(job('swift-key', width=60))
+
+
+def closing_db(path):
+    from contextlib import closing
+    return closing(sqlite3.connect(path))
+
+
 class HealthTest(unittest.TestCase):
     def test_health_error_is_not_working(self):
         server = DirectServer(('127.0.0.1', 0), Handler)

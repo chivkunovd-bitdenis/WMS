@@ -339,6 +339,7 @@ private final class Printer {
     private let submit: (Data, String, LabelSize, Date, () throws -> Void) throws -> String
     private let queue: (TimeInterval) throws -> String
     private var jobs: [String: StoredJob]
+    private var normalized = Set<String>()  // keys whose hash was rewritten in both journals this run
     private var inflight = Set<String>()  // keys being processed right now, guarded by `state`
     private var legacyChecked = false  // the old sqlite journal was read and brought level with the json
     private var mirror = false         // marks and receipts are copied into the old journal
@@ -512,6 +513,20 @@ private final class Printer {
         try importLegacy(busyMs: busyBudget(deadline))  // retried until the old journal has been read
         if let old = jobs[key] {
             guard [digests.primary, digests.python, digests.legacy].contains(old.hash) else { throw PrintError.message("Содержимое этого задания изменилось") }
+            // The request is confirmed (same PNG and size), so each journal gets the hash in
+            // the form its own reader expects; the previous version then recognises the key.
+            if !normalized.contains(key) {
+                if old.hash != digests.primary {
+                    jobs[key] = StoredJob(hash: digests.primary, receipt: old.receipt)
+                    do { try persist() } catch { jobs[key] = old; fputs("Хэш задания не обновлён в журнале: \(error)\n", stderr) }
+                }
+                if mirror {
+                    do {
+                        try legacyExecute(legacyURL, "UPDATE jobs SET hash=? WHERE id=?", [digests.python, key], busyMs: busyBudget(deadline))
+                        normalized.insert(key)
+                    } catch { fputs("Хэш задания не обновлён в старом журнале: \(error)\n", stderr) }
+                } else if jobs[key]?.hash == digests.primary { normalized.insert(key) }
+            }
             guard let receipt = old.receipt else { throw PrintError.message(unknownOutcomeText) }
             return receipt
         }
@@ -948,6 +963,35 @@ private func runSelfTest() throws {
     }
     sqlite3_finalize(query)
     sqlite3_close(check)
+
+    // A confirmed repeat rewrites the hash of imported records in the form each reader expects.
+    let normDirectory = directory.appendingPathComponent("normalize")
+    try FileManager.default.createDirectory(at: normDirectory, withIntermediateDirectories: true)
+    let normForms = identityDigests(opaque, LabelSize(width: 58, height: 40))
+    try JSONEncoder().encode(["mac-key": StoredJob(hash: normForms.primary, receipt: "Mac-1")])
+        .write(to: normDirectory.appendingPathComponent("direct-jobs.json"))
+    var normDB: OpaquePointer?
+    guard sqlite3_open(normDirectory.appendingPathComponent("direct-jobs.sqlite3").path, &normDB) == SQLITE_OK,
+          sqlite3_exec(normDB, legacySchema + ";INSERT INTO jobs VALUES ('py-key', '\(normForms.python)', 'Py-2')", nil, nil, nil) == SQLITE_OK
+    else { throw fail("normalize fixture") }
+    sqlite3_close(normDB)
+    let normPrinter = try Printer(directory: normDirectory, submit: { _, _, _, _, _ in "never" }, queue: { _ in "q" })
+    func storedHash(_ file: URL, _ key: String) -> String? {
+        var db: OpaquePointer?
+        var query: OpaquePointer?
+        defer { sqlite3_finalize(query); sqlite3_close(db) }
+        guard sqlite3_open_v2(file.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
+              sqlite3_prepare_v2(db, "SELECT hash FROM jobs WHERE id='\(key)'", -1, &query, nil) == SQLITE_OK,
+              sqlite3_step(query) == SQLITE_ROW else { return nil }
+        return String(cString: sqlite3_column_text(query, 0))
+    }
+    let normFile = normDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    guard try normPrinter.printJob(jobBody("mac-key", opaque)) == "Mac-1", try normPrinter.printJob(jobBody("py-key", opaque)) == "Py-2",
+          storedHash(normFile, "mac-key") == normForms.python,   // the Python release reads this
+          storedHash(normFile, "py-key") == normForms.python,
+          let json = try? JSONDecoder().decode([String: StoredJob].self, from: Data(contentsOf: normDirectory.appendingPathComponent("direct-jobs.json"))),
+          json["py-key"]?.hash == normForms.primary, json["mac-key"]?.hash == normForms.primary   // the previous Swift reads this
+    else { throw fail("hash normalisation for the previous versions") }
 
     // A tool that ignores SIGTERM is killed; the output pipe is drained meanwhile.
     let hung = Date()
