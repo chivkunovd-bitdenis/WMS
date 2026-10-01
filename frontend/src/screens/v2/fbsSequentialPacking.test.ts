@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPackingScanController, routePackingScan, type PackingScanDeps } from './fbsSequentialPacking'
+import { createPackingScanController, routePackingScan, type PackingScanController, type PackingScanDeps } from './fbsSequentialPacking'
 import { FbsApiError, type FbsScanAutoPrintResult } from './fbsApi'
 
 function fixture(requiresKiz = true) {
@@ -100,6 +100,62 @@ describe('WMS-604 sequential packing', () => {
 
 
 describe('WMS-604 scan routing recovery', () => {
+  it.each(['scan_product_not_found', 'scan_product_exhausted'])('WMS-630: resumes routing to the other supply after the selected row gate completes with %s', async (code) => {
+    let selected = true
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const first: PackingScanController = {
+      hasSelectedRow: () => selected, hasPending: () => selected,
+      hasSavedAttempt: () => false, view: () => null,
+      scan: vi.fn(async () => {
+        await gate
+        selected = false
+        throw new FbsApiError(code, code, null, false, 404)
+      }),
+    }
+    const second = fixture()
+    const routed = routePackingScan([first, second.scanner], 'next-product')
+    expect(second.deps.select).not.toHaveBeenCalled()
+    release()
+    await routed
+    expect(first.scan).toHaveBeenCalledTimes(1)
+    expect(second.deps.select).toHaveBeenCalledWith('next-product', 'request')
+    expect(second.scanner.hasPending()).toBe(true)
+  })
+
+  it.each(['pending', 'saved'])('WMS-630: keeps %s priority among remaining supplies after a completed row', async (priority) => {
+    let selected = true
+    const first: PackingScanController = {
+      hasSelectedRow: () => selected, hasPending: () => false,
+      hasSavedAttempt: () => false, view: () => null,
+      scan: vi.fn(async () => {
+        selected = false
+        throw new FbsApiError('scan_product_not_found', 'not found', null, false, 404)
+      }),
+    }
+    const ordinary = fixture()
+    const preferred: PackingScanController = {
+      hasPending: () => priority === 'pending', hasSavedAttempt: () => priority === 'saved',
+      view: () => null, scan: vi.fn(async () => undefined),
+    }
+    await routePackingScan([first, ordinary.scanner, preferred], 'next-product')
+    expect(first.scan).toHaveBeenCalledTimes(1)
+    expect(ordinary.deps.select).not.toHaveBeenCalled()
+    expect(preferred.scan).toHaveBeenCalledWith('next-product')
+  })
+
+  it('WMS-630: does not route a still-selected row failure to another supply', async () => {
+    const failure = new FbsApiError('scan_product_not_found', 'bad KIZ', null, false, 404)
+    const first: PackingScanController = {
+      hasSelectedRow: () => true, hasPending: () => true,
+      hasSavedAttempt: () => false, view: () => null,
+      scan: vi.fn(async () => { throw failure }),
+    }
+    const second = fixture()
+    await expect(routePackingScan([first, second.scanner], 'kiz')).rejects.toBe(failure)
+    expect(second.deps.select).not.toHaveBeenCalled()
+  })
+
   it.each(['scan_product_not_found', 'scan_product_exhausted'])('continues to supply B on the same retry after saved supply A returns %s', async (code) => {
     const first = fixture()
     const second = fixture()
