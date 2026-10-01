@@ -1,0 +1,3 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+{"mode": "applied", "wb_order_counts": {"WB-GI-285910955": 358, "WB-GI-285911018": 23}, "writeoff_count": 381, "sources": {"legacy_sorting": 363, "manual_pick": 17, "forced_negative": 1}, "affected_products_total_before": 1941, "affected_products_total_after": 1560, "sorting_before": 363, "sorting_after": -1, "missing_initial_stock_order": 5916996766, "checked_at": "2026-10-01T16:54:34.412419+00:00"}
+
