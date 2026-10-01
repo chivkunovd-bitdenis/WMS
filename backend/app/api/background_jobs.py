@@ -120,18 +120,20 @@ async def start_background_job(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="seller_not_found",
             )
-        job = await job_svc.create_pending_job(
+        job, created = await job_svc.create_or_get_seller_catalog_sync_job(
             session,
             user.tenant_id,
+            body.seller_id,
             job_type=body.job_type,
-            payload_json={"seller_id": str(body.seller_id)},
+            marketplace="wildberries",
         )
-        if settings.celery_broker_url:
-            from app.tasks.background_jobs import run_wildberries_cards_sync_task
+        if created:
+            if settings.celery_broker_url:
+                from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
-            run_wildberries_cards_sync_task.delay(str(job.id))
-        else:
-            background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+                run_wildberries_cards_sync_task.delay(str(job.id))
+            else:
+                background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
     elif body.job_type == JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC:
         if body.seller_id is None:
             raise HTTPException(
@@ -211,18 +213,20 @@ async def start_wildberries_cards_sync_self(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="seller_not_found",
         )
-    job = await job_svc.create_pending_job(
+    job, created = await job_svc.create_or_get_seller_catalog_sync_job(
         session,
         user.tenant_id,
+        effective_seller_id,
         job_type=JOB_TYPE_WILDBERRIES_CARDS_SYNC,
-        payload_json={"seller_id": str(effective_seller_id)},
+        marketplace="wildberries",
     )
-    if settings.celery_broker_url:
-        from app.tasks.background_jobs import run_wildberries_cards_sync_task
+    if created:
+        if settings.celery_broker_url:
+            from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
-        run_wildberries_cards_sync_task.delay(str(job.id))
-    else:
-        background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+            run_wildberries_cards_sync_task.delay(str(job.id))
+        else:
+            background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
     return BackgroundJobStartOut(id=str(job.id), status=job.status)
 
 

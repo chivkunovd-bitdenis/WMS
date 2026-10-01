@@ -299,6 +299,66 @@ async def test_second_sync_of_an_unmatched_card_does_not_duplicate_the_snapshot(
     products = list((await db_session.execute(Product.__table__.select())).mappings().all())
     assert products == []
 
+
+async def test_empty_complete_catalog_clears_only_that_seller_snapshot(
+    db_session: AsyncSession,
+) -> None:
+    """An empty successful Ozon response is a snapshot, not an early no-op."""
+    from app.models.seller_ozon_imported_card import SellerOzonImportedCard
+
+    tenant, seller, _product = await _seed(db_session)
+    foreign_tenant, foreign_seller = await _seed_without_link(db_session)
+    await import_svc.import_ozon_product_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        _provider([GLASSES_CARD, BAG_CARD]),
+        client_id="c",
+        api_key="k",
+    )
+    await import_svc.import_ozon_product_cards(
+        db_session,
+        foreign_tenant.id,
+        foreign_seller.id,
+        _provider([BAG_CARD]),
+        client_id="c",
+        api_key="k",
+    )
+
+    result = await import_svc.import_ozon_product_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        _provider([]),
+        client_id="c",
+        api_key="k",
+    )
+
+    assert result.cards_read == result.cards_saved == 0
+    own = list(
+        (
+            await db_session.execute(
+                SellerOzonImportedCard.__table__.select().where(
+                    SellerOzonImportedCard.seller_id == seller.id
+                )
+            )
+        ).mappings()
+    )
+    foreign = list(
+        (
+            await db_session.execute(
+                SellerOzonImportedCard.__table__.select().where(
+                    SellerOzonImportedCard.seller_id == foreign_seller.id
+                )
+            )
+        ).mappings()
+    )
+    assert own == []
+    assert [row["ozon_product_id"] for row in foreign] == ["6149741392"]
+    # Snapshot cleanup never removes or creates WMS products.
+    products = list((await db_session.execute(Product.__table__.select())).mappings())
+    assert len(products) == 1
+
     from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 
     snapshot = list(

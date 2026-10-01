@@ -41,14 +41,16 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import String, cast, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.models.seller import Seller
 from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.services.catalog_service import OZON_PRIMARY_IMAGE_KEY, update_product_dimensions
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
@@ -511,13 +513,21 @@ async def upsert_ozon_imported_cards(
     seller_id: uuid.UUID,
     cards: Sequence[Mapping[str, Any]],
 ) -> int:
-    """Write/refresh the seller's Ozon card snapshot. Returns rows written.
+    """Atomically replace the seller's complete Ozon card snapshot.
 
     By the same reasoning as the WB snapshot (``wildberries_import_cards_service
     .upsert_imported_cards``): this always runs, whether or not any card ends
     up as a WMS product, so the seller can see and pick from the whole cabinet
     without a live API call each time (WMS-548 A6).
     """
+    seller = await session.scalar(
+        select(Seller)
+        .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if seller is None:
+        return 0
+    snapshot_at = datetime.now(UTC)
     n = 0
     for card in cards:
         product_id = _text_or_none(card.get("id"))
@@ -542,6 +552,7 @@ async def upsert_ozon_imported_cards(
                     offer_id=offer_id,
                     name=name,
                     raw_json=raw,
+                    updated_at=snapshot_at,
                 )
             )
         else:
@@ -549,8 +560,18 @@ async def upsert_ozon_imported_cards(
             row.offer_id = offer_id
             row.name = name
             row.raw_json = raw
+            row.updated_at = snapshot_at
         n += 1
-    await session.commit()
+    await session.flush()
+    # ``cards=[]`` is a valid complete snapshot and therefore removes stale
+    # rows.  The timestamp marker avoids a giant NOT IN list for 55k+ cards.
+    await session.execute(
+        delete(SellerOzonImportedCard).where(
+            SellerOzonImportedCard.tenant_id == tenant_id,
+            SellerOzonImportedCard.seller_id == seller_id,
+            SellerOzonImportedCard.updated_at != snapshot_at,
+        )
+    )
     return n
 
 
@@ -792,12 +813,15 @@ async def import_ozon_product_cards(
     """
     cards = await fetch_product_cards(provider, client_id=client_id, api_key=api_key)
     result = OzonProductImportResult(cards_read=len(cards))
-    if not cards:
-        return result
-
     result.cards_saved = await upsert_ozon_imported_cards(
         session, tenant_id, seller_id, cards
     )
+    if not cards:
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
+        return result
     context = await build_ozon_match_context(session, tenant_id, seller_id)
 
     for card in cards:

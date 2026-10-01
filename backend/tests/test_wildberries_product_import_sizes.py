@@ -6,7 +6,6 @@ import time
 import uuid
 
 import pytest
-from fastapi import BackgroundTasks
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -102,8 +101,15 @@ async def test_self_sync_creates_product_per_size(
         }])
 
     sync = await async_client.post("/integrations/wildberries/self/sync-products", headers=sh)
-    assert sync.status_code == 200, sync.text
-    body = sync.json()
+    assert sync.status_code == 202, sync.text
+    queued = sync.json()
+    assert queued["marketplace"] == "wildberries"
+    job = await async_client.get(
+        f"/operations/background-jobs/{queued['id']}", headers=sh
+    )
+    assert job.status_code == 200, job.text
+    assert job.json()["state"] == "succeeded"
+    body = job.json()["result_json"]
     # Размеры M и L карточки заведены заново, S — обновлён (уже существовал).
     assert body["products_created"] == 2
     assert body["products_updated"] == 1
@@ -257,7 +263,7 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
     async def noop_sync_task(*_args: object, **_kwargs: object) -> None:
         return None
 
-    def noop_add_task(self: BackgroundTasks, *args: object, **kwargs: object) -> None:
+    async def noop_requisites(*_args: object, **_kwargs: object) -> None:
         return None
 
     monkeypatch.setattr(
@@ -272,7 +278,10 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         "app.services.wb_mp_warehouse_service.run_wb_mp_warehouses_sync_task",
         noop_sync_task,
     )
-    monkeypatch.setattr(BackgroundTasks, "add_task", noop_add_task)
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.autofill_requisites_after_key_saved",
+        noop_requisites,
+    )
 
     first = await async_client.post(
         "/integrations/wildberries/self/content-token",
@@ -287,22 +296,26 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
 
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
-    expected = {
-        "ok": True,
-        "validation_ok": True,
-        "validation_error": None,
-        "cards_received": 1,
-        "cards_saved": 1,
-        "products_created": 0,
-        "products_updated": 0,
-        "products_skipped": 1,
-        "sizes_missing_chrt_id": 0,
-        "duplicate_chrt_id": 1,
-        "barcode_conflicts": 0,
-        "barcode_conflict_details": [],
-    }
-    assert first.json() == expected
-    assert second.json() == expected
+    for saved in (first, second):
+        body = saved.json()
+        assert body["ok"] is True
+        assert body["validation_ok"] is True
+        assert body["validation_error"] is None
+        # The credential request is deliberately short; final import counters
+        # belong to the durable job, not this response.
+        assert body["cards_received"] == body["cards_saved"] == 0
+        assert body["catalog_job"]["state"] == "queued"
+        polled = await async_client.get(
+            f"/operations/background-jobs/{body['catalog_job']['id']}", headers=sh
+        )
+        assert polled.status_code == 200, polled.text
+        assert polled.json()["state"] == "succeeded"
+        result = polled.json()["result_json"]
+        assert result["cards_received"] == result["cards_saved"] == 1
+        assert result["products_created"] == result["products_updated"] == 0
+        assert result["products_skipped"] == 1
+        assert result["duplicate_chrt_id"] == 1
+        assert result["barcode_conflicts"] == 0
 
     async with SessionLocal() as session:
         products = (await session.scalars(select(Product).where(

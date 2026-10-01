@@ -77,7 +77,10 @@ async def test_wb_cards_sync_job_happy_path(
         assert r.status_code == 200
         body = r.json()
         assert "payload_json" in body
-        assert body["payload_json"] == {"seller_id": sid}
+        assert body["payload_json"] == {
+            "seller_id": sid,
+            "marketplace": "wildberries",
+        }
         if body["status"] in ("done", "failed"):
             assert body["status"] == "done"
             assert body["result_json"]["cards_received"] == card_count

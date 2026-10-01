@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -32,6 +32,62 @@ JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_s
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
 JOB_TYPE_STORAGE_MEASUREMENT_REBUILD = "storage_measurement_rebuild"
 JOB_TYPE_FBS_LABEL_PRINT = "fbs_label_print"
+
+# A catalog import can legitimately take minutes for a large seller.  Two hours
+# is deliberately above the measured 55k-card runs, while still recovering a
+# row left RUNNING forever when a worker is killed without a final update.
+CATALOG_SYNC_JOB_LEASE = timedelta(hours=2)
+WB_CATALOG_JOB_TYPES = frozenset(
+    {JOB_TYPE_WILDBERRIES_CARDS_SYNC, JOB_TYPE_SELLER_WB_CATALOG_SYNC}
+)
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _catalog_job_is_stale(job: BackgroundJob, *, now: datetime) -> bool:
+    lease_started_at = (
+        (job.started_at or job.created_at)
+        if job.status == JOB_STATUS_RUNNING
+        else job.created_at
+    )
+    return _utc(lease_started_at) <= now - CATALOG_SYNC_JOB_LEASE
+
+
+async def _claim_catalog_sync_job(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+    *,
+    allowed_job_types: frozenset[str],
+) -> BackgroundJob | None:
+    """Atomically claim a pending delivery exactly once.
+
+    Celery may redeliver the same message.  A compare-and-swap UPDATE makes a
+    second delivery a no-op even across worker processes; a plain SELECT FOR
+    UPDATE would not protect the SQLite test environment and was easier to get
+    wrong when the lock scope changed.
+    """
+    now = datetime.now(UTC)
+    claimed = await session.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job_id,
+            BackgroundJob.job_type.in_(allowed_job_types),
+            BackgroundJob.status == JOB_STATUS_PENDING,
+        )
+        .values(
+            status=JOB_STATUS_RUNNING,
+            started_at=now,
+            finished_at=None,
+            result_json=None,
+            error_message=None,
+        )
+    )
+    await session.commit()
+    if getattr(claimed, "rowcount", 0) != 1:
+        return None
+    return await session.get(BackgroundJob, job_id)
 
 
 async def create_pending_job(
@@ -69,18 +125,21 @@ async def create_or_get_seller_catalog_sync_job(
     running receives that same job id and therefore cannot start a duplicate
     full-catalog import.
     """
-    seller = await session.scalar(
-        select(Seller)
+    locked = await session.execute(
+        update(Seller)
         .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
-        .with_for_update()
+        .values(name=Seller.name)
     )
-    if seller is None:
+    if getattr(locked, "rowcount", 0) != 1:
         raise ValueError("seller_not_found")
+    compatible_types = (
+        WB_CATALOG_JOB_TYPES if marketplace == "wildberries" else frozenset({job_type})
+    )
     active = await session.scalar(
         select(BackgroundJob)
         .where(
             BackgroundJob.tenant_id == tenant_id,
-            BackgroundJob.job_type == job_type,
+            BackgroundJob.job_type.in_(compatible_types),
             BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
             BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
         )
@@ -88,8 +147,14 @@ async def create_or_get_seller_catalog_sync_job(
         .limit(1)
     )
     if active is not None:
-        await session.commit()
-        return active, False
+        now = datetime.now(UTC)
+        if not _catalog_job_is_stale(active, now=now):
+            await session.commit()
+            return active, False
+        active.status = JOB_STATUS_FAILED
+        active.result_json = None
+        active.error_message = "catalog_job_lease_expired"
+        active.finished_at = now
     job = BackgroundJob(
         tenant_id=tenant_id,
         job_type=job_type,
@@ -204,9 +269,13 @@ async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
 async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
     """WB cards list (all pages) using seller token from DB; separate DB session."""
     async with SessionLocal() as session:
-        job = await session.get(BackgroundJob, job_id)
+        job = await _claim_catalog_sync_job(
+            session,
+            job_id,
+            allowed_job_types=WB_CATALOG_JOB_TYPES,
+        )
         if job is None:
-            logger.warning("background job missing: %s", job_id)
+            logger.info("WB catalog job already claimed or unavailable: %s", job_id)
             return
         payload = job.payload_json or {}
         sid_raw = payload.get("seller_id")
@@ -227,23 +296,19 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
             await session.commit()
             return
 
-        job.status = JOB_STATUS_RUNNING
-        job.started_at = datetime.now(UTC)
-        await session.commit()
         try:
             async with httpx.AsyncClient() as http_client:
-                if job.job_type == JOB_TYPE_SELLER_WB_CATALOG_SYNC:
-                    from app.services.wildberries_product_sync_service import (
-                        sync_wb_products_for_seller,
-                    )
+                # The legacy entrypoint and the seller entrypoint now perform
+                # the same full-snapshot operation.  Besides closing a
+                # cross-job-type collision, this preserves WMS-548 semantics:
+                # only already selected cards update Product rows.
+                from app.services.wildberries_product_sync_service import (
+                    sync_wb_products_for_seller,
+                )
 
-                    result = await sync_wb_products_for_seller(
-                        session, job.tenant_id, seller_uuid, http_client
-                    )
-                else:
-                    result = await wb_sync.sync_cards_list(
-                        session, job.tenant_id, seller_uuid, http_client
-                    )
+                result = await sync_wb_products_for_seller(
+                    session, job.tenant_id, seller_uuid, http_client
+                )
             job.status = JOB_STATUS_DONE
             job.result_json = result
             job.error_message = None
@@ -301,9 +366,13 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
     from app.services.ozon_provider_factory import build_ozon_provider
 
     async with SessionLocal() as session:
-        job = await session.get(BackgroundJob, job_id)
+        job = await _claim_catalog_sync_job(
+            session,
+            job_id,
+            allowed_job_types=frozenset({JOB_TYPE_OZON_CATALOG_SYNC}),
+        )
         if job is None:
-            logger.warning("background job missing: %s", job_id)
+            logger.info("Ozon catalog job already claimed or unavailable: %s", job_id)
             return
         tenant_id = job.tenant_id
         payload = job.payload_json or {}
@@ -319,12 +388,6 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
             job.error_message = "invalid_job_seller_id"
             await session.commit()
             return
-
-        job.status = JOB_STATUS_RUNNING
-        job.started_at = datetime.now(UTC)
-        job.finished_at = None
-        job.error_message = None
-        await session.commit()
 
         account_service = MarketplaceAccountService(session)
         error: Exception | None = None

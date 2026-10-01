@@ -106,11 +106,16 @@ async def sync_wb_products_for_seller(
     if not content_token:
         raise WildberriesSyncError("missing_content_token")
     try:
-        cards = await fetch_all_wb_cards(http_client, api_token=content_token)
+        raw_cards, cursor_present = await fetch_all_cards(
+            http_client, api_token=content_token
+        )
+        cards = [card for card in raw_cards if isinstance(card, dict)]
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
-    return await _save_wb_cards(session, tenant_id, seller_id, cards)
+    result = await _save_wb_cards(session, tenant_id, seller_id, cards)
+    result["cursor_present"] = cursor_present
+    return result
 
 
 async def _save_wb_cards(
