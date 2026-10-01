@@ -1,8 +1,10 @@
 """WMS-277: existing WB catalogue import scheduled without stock operations."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from functools import partial
 
 import httpx
@@ -20,8 +22,10 @@ from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.tenant import Tenant
+from app.services import background_job_service as jobs
 from app.services import wildberries_product_sync_service as sync
 from app.services.integration_fernet import encrypt_secret
+from app.services.wildberries_credentials_service import SKIP, patch_seller_tokens
 
 
 async def seller_with_token(
@@ -130,10 +134,18 @@ async def test_active_manual_job_skipped_then_terminal_job_allows_import(
     db_session.add(tenant)
     await db_session.commit()
     seller = await seller_with_token(db_session, tenant.id, "Manual", "synthetic")
-    job = BackgroundJob(tenant_id=tenant.id, job_type="wildberries_cards_sync",
-                        status=job_status, payload_json={"seller_id": str(seller.id)})
-    db_session.add(job)
-    await db_session.commit()
+    job, created = await jobs.create_or_get_seller_catalog_sync_job(
+        db_session,
+        tenant.id,
+        seller.id,
+        job_type=jobs.JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+        marketplace="wildberries",
+    )
+    assert created
+    if job_status == "running":
+        job.status = jobs.JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        await db_session.commit()
     calls = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
@@ -180,3 +192,126 @@ async def test_disconnect_during_http_discards_response(
     assert summary["skipped"][0]["reason"] == "content_token_changed"
     assert await db_session.scalar(select(func.count(Product.id))) == 0
     assert await db_session.scalar(select(func.count(SellerWildberriesImportedCard.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_scheduled_old_generation_cannot_overwrite_new_foreground_job(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant = Tenant(name="615 scheduled fence", slug="615-scheduled-fence")
+    db_session.add(tenant)
+    await db_session.commit()
+    seller = await seller_with_token(db_session, tenant.id, "Scheduled fence", "old-key")
+    await sync.upsert_products_from_wb_cards(
+        db_session,
+        tenant.id,
+        seller.id,
+        [
+            {
+                "nmID": 615,
+                "vendorCode": "WMS-615",
+                "title": "before-sync",
+                "sizes": [
+                    {"chrtID": 61500, "techSize": "M", "skus": ["barcode-615"]}
+                ],
+            }
+        ],
+    )
+
+    old_fetch_started = asyncio.Event()
+    release_old_fetch = asyncio.Event()
+
+    async def fetch_cards(_client: object, *, api_token: str):
+        if api_token == "old-key":
+            old_fetch_started.set()
+            await release_old_fetch.wait()
+            title = "stale-scheduled"
+        else:
+            assert api_token == "new-key"
+            title = "fresh-foreground"
+        return (
+            [
+                {
+                    "nmID": 615,
+                    "vendorCode": "WMS-615",
+                    "title": title,
+                    "sizes": [
+                        {
+                            "chrtID": 61500,
+                            "techSize": "M",
+                            "skus": ["barcode-615"],
+                        }
+                    ],
+                }
+            ],
+            False,
+        )
+
+    monkeypatch.setattr(sync, "fetch_all_cards", fetch_cards)
+    scheduled = asyncio.create_task(sync.run_wb_products_sync_all_sellers())
+    await old_fetch_started.wait()
+
+    async with SessionLocal() as session:
+        row = await patch_seller_tokens(
+            session,
+            tenant.id,
+            seller.id,
+            content_api_token="new-key",
+            supplies_api_token=SKIP,
+        )
+        assert row is not None
+        replacement, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant.id,
+            seller.id,
+            job_type=jobs.JOB_TYPE_SELLER_WB_CATALOG_SYNC,
+            marketplace="wildberries",
+        )
+        assert created
+        replacement_id = replacement.id
+
+    await jobs.run_wildberries_cards_sync_job(replacement_id)
+    release_old_fetch.set()
+    summary = await scheduled
+
+    assert summary["sellers_ok"] == 0
+    assert summary["sellers_skipped"] == 1
+    assert summary["skipped"][0]["reason"] == "content_token_changed"
+    async with SessionLocal() as session:
+        product = await session.scalar(
+            select(Product).where(
+                Product.tenant_id == tenant.id,
+                Product.seller_id == seller.id,
+                Product.wb_nm_id == 615,
+            )
+        )
+        imported = await session.scalar(
+            select(SellerWildberriesImportedCard).where(
+                SellerWildberriesImportedCard.seller_id == seller.id,
+                SellerWildberriesImportedCard.nm_id == 615,
+            )
+        )
+        catalog_jobs = list(
+            (
+                await session.scalars(
+                    select(BackgroundJob)
+                    .where(
+                        BackgroundJob.tenant_id == tenant.id,
+                        BackgroundJob.job_type.in_(jobs.WB_CATALOG_JOB_TYPES),
+                        BackgroundJob.payload_json["seller_id"].as_string()
+                        == str(seller.id),
+                    )
+                    .order_by(BackgroundJob.created_at)
+                )
+            ).all()
+        )
+        assert product is not None and product.name == "fresh-foreground"
+        assert imported is not None and imported.title == "fresh-foreground"
+        assert len(catalog_jobs) == 2
+        replacement_job = next(job for job in catalog_jobs if job.id == replacement_id)
+        old_job = next(job for job in catalog_jobs if job.id != replacement_id)
+        assert old_job.status == jobs.JOB_STATUS_FAILED
+        assert old_job.error_message == "catalog_job_credentials_changed"
+        assert old_job.result_json is None
+        assert replacement_job.status == jobs.JOB_STATUS_DONE

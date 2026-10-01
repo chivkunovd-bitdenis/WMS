@@ -341,6 +341,184 @@ async def test_wb_key_change_replaces_running_generation_and_discards_old_respon
 
 
 @pytest.mark.asyncio
+async def test_wb_supplies_only_change_does_not_invalidate_catalog_generation(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id, seller_id = await _seller()
+    await _save_wb_key(tenant_id, seller_id, "wb-content-key")
+    async with SessionLocal() as session:
+        job, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=jobs.JOB_TYPE_SELLER_WB_CATALOG_SYNC,
+            marketplace="wildberries",
+        )
+        assert created
+        job_id = job.id
+        generation = (job.payload_json or {})["credentials_generation"]
+
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+
+    async def fetch_cards(_client, *, api_token):
+        assert api_token == "wb-content-key"
+        fetch_started.set()
+        await release_fetch.wait()
+        return [_wb_card(401)], False
+
+    monkeypatch.setattr(wb_product_sync, "fetch_all_cards", fetch_cards)
+    worker = asyncio.create_task(jobs.run_wildberries_cards_sync_job(job_id))
+    await fetch_started.wait()
+    async with SessionLocal() as session:
+        row = await patch_seller_tokens(
+            session,
+            tenant_id,
+            seller_id,
+            content_api_token=SKIP,
+            supplies_api_token="wb-supplies-only",
+        )
+        assert row is not None
+        same, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=jobs.JOB_TYPE_SELLER_WB_CATALOG_SYNC,
+            marketplace="wildberries",
+        )
+        assert not created
+        assert same.id == job_id
+        assert (same.payload_json or {})["credentials_generation"] == generation
+    release_fetch.set()
+    await worker
+
+    async with SessionLocal() as session:
+        stored = await session.get(BackgroundJob, job_id)
+        imported = await session.scalar(
+            select(SellerWildberriesImportedCard).where(
+                SellerWildberriesImportedCard.seller_id == seller_id,
+                SellerWildberriesImportedCard.nm_id == 401,
+            )
+        )
+        assert stored is not None
+        assert stored.status == jobs.JOB_STATUS_DONE
+        assert stored.finished_at is not None
+        assert imported is not None
+
+
+@pytest.mark.asyncio
+async def test_ozon_disconnect_terminalizes_running_job_and_allows_immediate_restart(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id, seller_id = await _seller()
+    await _save_ozon_key(
+        tenant_id, seller_id, client_id="disconnect-client", api_key="disconnect-key"
+    )
+    async with SessionLocal() as session:
+        old_job, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=jobs.JOB_TYPE_OZON_CATALOG_SYNC,
+            marketplace="ozon",
+        )
+        assert created
+        old_job_id = old_job.id
+
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+    fetch_count = 0
+
+    async def fetch_cards(_provider, *, client_id, api_key):
+        nonlocal fetch_count
+        fetch_count += 1
+        if fetch_count == 1:
+            assert (client_id, api_key) == ("disconnect-client", "disconnect-key")
+            fetch_started.set()
+            await release_fetch.wait()
+            return [_ozon_card("stale-disconnected")]
+        assert (client_id, api_key) == ("reconnected-client", "reconnected-key")
+        return [_ozon_card("fresh-reconnected")]
+
+    monkeypatch.setattr(ozon_import, "fetch_product_cards", fetch_cards)
+    monkeypatch.setattr(ozon_provider_factory, "build_ozon_provider", lambda: object())
+    old_worker = asyncio.create_task(jobs.run_ozon_catalog_sync_job(old_job_id))
+    await fetch_started.wait()
+    async with SessionLocal() as session:
+        account = await session.scalar(
+            select(MarketplaceAccount).where(
+                MarketplaceAccount.tenant_id == tenant_id,
+                MarketplaceAccount.seller_id == seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+            )
+        )
+        assert account is not None
+        account.external_account_id = None
+        account.secret_encrypted = None
+        account.is_active = False
+        account.validation_status = "not_configured"
+        account.credentials_updated_at = None
+        await session.commit()
+    release_fetch.set()
+    await old_worker
+
+    async with SessionLocal() as session:
+        old = await session.get(BackgroundJob, old_job_id)
+        account = await session.scalar(
+            select(MarketplaceAccount).where(
+                MarketplaceAccount.tenant_id == tenant_id,
+                MarketplaceAccount.seller_id == seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+            )
+        )
+        stale_snapshot_count = await session.scalar(
+            select(func.count(SellerOzonImportedCard.id)).where(
+                SellerOzonImportedCard.seller_id == seller_id
+            )
+        )
+        assert old is not None
+        assert old.status == jobs.JOB_STATUS_FAILED
+        assert old.error_message == "catalog_job_credentials_changed"
+        assert old.finished_at is not None
+        assert old.result_json is None
+        assert account is not None and not account.is_active
+        assert stale_snapshot_count == 0
+
+    await _save_ozon_key(
+        tenant_id,
+        seller_id,
+        client_id="reconnected-client",
+        api_key="reconnected-key",
+    )
+    async with SessionLocal() as session:
+        replacement, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=jobs.JOB_TYPE_OZON_CATALOG_SYNC,
+            marketplace="ozon",
+        )
+        assert created
+        replacement_id = replacement.id
+    await jobs.run_ozon_catalog_sync_job(replacement_id)
+
+    async with SessionLocal() as session:
+        replacement = await session.get(BackgroundJob, replacement_id)
+        imported_ids = set(
+            await session.scalars(
+                select(SellerOzonImportedCard.ozon_product_id).where(
+                    SellerOzonImportedCard.seller_id == seller_id
+                )
+            )
+        )
+        assert replacement is not None
+        assert replacement.status == jobs.JOB_STATUS_DONE
+        assert imported_ids == {"fresh-reconnected"}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("replacement_reason", "expected_error"),
     [

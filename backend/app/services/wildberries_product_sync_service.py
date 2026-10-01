@@ -166,38 +166,36 @@ async def _save_wb_cards(
 async def _sync_scheduled_seller(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-    http_client: httpx.AsyncClient,
 ) -> dict[str, Any]:
-    # Own the read session: do not commit a caller's transaction to release its
-    # connection. No DB session/lock remains open while fetching all WB pages.
+    """Run the hourly import through the same durable fenced job as manual sync."""
+    from app.services import background_job_service as jobs
+
     async with SessionLocal() as session:
-        active_job = await session.scalar(
-            select(BackgroundJob.id)
-            .where(
-                BackgroundJob.tenant_id == tenant_id,
-                BackgroundJob.job_type.in_(("wildberries_cards_sync", "seller_wb_catalog_sync")),
-                BackgroundJob.status.in_(("pending", "running")),
-                BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
-            )
-            .limit(1)
+        job, created = await jobs.create_or_get_seller_catalog_sync_job(
+            session,
+            tenant_id,
+            seller_id,
+            job_type=jobs.JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+            marketplace="wildberries",
         )
-        if active_job is not None:
+        if not created:
             raise WildberriesSyncError("manual_sync_active")
-        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
-        if pair is None or not pair[0]:
-            raise WildberriesSyncError("missing_content_token")
-        content_token = pair[0]
-    try:
-        cards = await fetch_all_wb_cards(http_client, api_token=content_token)
-    except WildberriesClientError as exc:
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
+        job_id = job.id
+
+    await jobs.run_wildberries_cards_sync_job(job_id)
+
     async with SessionLocal() as session:
-        # A disconnect/change during HTTP must not persist that old response.
-        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
-        if pair is None or pair[0] != content_token:
+        completed = await session.get(BackgroundJob, job_id)
+        if completed is None:
+            raise WildberriesSyncError("catalog_job_missing")
+        if completed.status == jobs.JOB_STATUS_DONE and isinstance(
+            completed.result_json, dict
+        ):
+            return dict(completed.result_json)
+        error_code = completed.error_message or "catalog_job_incomplete"
+        if error_code == "catalog_job_credentials_changed":
             raise WildberriesSyncError("content_token_changed")
-        return await _save_wb_cards(session, tenant_id, seller_id, cards)
+        raise WildberriesSyncError(error_code)
 
 
 async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
@@ -222,66 +220,64 @@ async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
     failed: list[dict[str, str]] = []
     skipped: list[dict[str, str]] = []
 
-    async with httpx.AsyncClient() as http_client:
-        for seller_id, tenant_id, seller_name in sellers:
-            try:
-                result = await _sync_scheduled_seller(
-                    tenant_id,
-                    seller_id,
-                    http_client,
-                )
-            except WildberriesSyncError as exc:
-                code = exc.code
-                if code in ("missing_content_token", "manual_sync_active", "content_token_changed"):
-                    skipped.append(
-                        {
-                            "seller_id": str(seller_id),
-                            "seller_name": seller_name,
-                            "reason": code,
-                        }
-                    )
-                    logger.info(
-                        "wb products sync skipped seller=%s reason=%s",
-                        seller_id,
-                        code,
-                    )
-                    continue
-                failed.append(
+    for seller_id, tenant_id, seller_name in sellers:
+        try:
+            result = await _sync_scheduled_seller(
+                tenant_id,
+                seller_id,
+            )
+        except WildberriesSyncError as exc:
+            code = exc.code
+            if code in ("missing_content_token", "manual_sync_active", "content_token_changed"):
+                skipped.append(
                     {
                         "seller_id": str(seller_id),
                         "seller_name": seller_name,
-                        "error": code,
+                        "reason": code,
                     }
                 )
-                logger.warning(
-                    "wb products sync failed seller=%s error=%s",
+                logger.info(
+                    "wb products sync skipped seller=%s reason=%s",
                     seller_id,
                     code,
                 )
-            except Exception as exc:
-                failed.append(
-                    {
-                        "seller_id": str(seller_id),
-                        "seller_name": seller_name,
-                        "error": str(exc),
-                    }
-                )
-                logger.exception("wb products sync failed seller=%s", seller_id)
-            else:
-                ok.append(result)
-                logger.info(
-                    "wb products sync ok seller=%s cards=%s created=%s "
-                    "updated=%s legacy_old=%s barcode_conflicts=%s "
-                    "duplicate_chrt_id=%s missing_chrt_id=%s",
-                    seller_id,
-                    result.get("cards_received"),
-                    result.get("products_created"),
-                    result.get("products_updated"),
-                    result.get("legacy_marked_old"),
-                    result.get("barcode_conflicts"),
-                    result.get("duplicate_chrt_id"),
-                    result.get("sizes_missing_chrt_id"),
-                )
+                continue
+            failed.append(
+                {
+                    "seller_id": str(seller_id),
+                    "seller_name": seller_name,
+                    "error": code,
+                }
+            )
+            logger.warning(
+                "wb products sync failed seller=%s error=%s",
+                seller_id,
+                code,
+            )
+        except Exception as exc:
+            failed.append(
+                {
+                    "seller_id": str(seller_id),
+                    "seller_name": seller_name,
+                    "error": str(exc),
+                }
+            )
+            logger.exception("wb products sync failed seller=%s", seller_id)
+        else:
+            ok.append(result)
+            logger.info(
+                "wb products sync ok seller=%s cards=%s created=%s "
+                "updated=%s legacy_old=%s barcode_conflicts=%s "
+                "duplicate_chrt_id=%s missing_chrt_id=%s",
+                seller_id,
+                result.get("cards_received"),
+                result.get("products_created"),
+                result.get("products_updated"),
+                result.get("legacy_marked_old"),
+                result.get("barcode_conflicts"),
+                result.get("duplicate_chrt_id"),
+                result.get("sizes_missing_chrt_id"),
+            )
 
     summary = {
         "sellers_total": len(sellers),

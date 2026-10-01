@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -74,12 +75,14 @@ async def _catalog_credentials_generation(
             .where(SellerWildberriesCredentials.seller_id == seller_id)
             .execution_options(populate_existing=True)
         )
-        if row is None:
-            return "wildberries:none:0"
-        return (
-            f"wildberries:{_generation_timestamp(row.updated_at)}:"
-            f"{int(bool(row.content_token_encrypted))}"
-        )
+        if row is None or not row.content_token_encrypted:
+            return "wildberries:none"
+        # The digest versions the encrypted-at-rest content credential, not the
+        # secret itself. Supplies/Marketplace-only edits therefore do not abort
+        # an unrelated catalog import, while replacing the content credential
+        # always produces a new generation (Fernet ciphertext is randomized).
+        fingerprint = hashlib.sha256(row.content_token_encrypted.encode()).hexdigest()
+        return f"wildberries:{fingerprint}"
     row = await session.scalar(
         select(MarketplaceAccount)
         .where(
@@ -528,6 +531,14 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
         except CatalogJobOwnershipLost:
             await session.rollback()
             logger.info("WB catalog job ownership lost: %s", job_id)
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="catalog_job_credentials_changed",
+            )
             return
         except wb_sync.WildberriesSyncError as exc:
             logger.warning("wildberries sync job failed: %s", exc.code)
@@ -688,6 +699,14 @@ async def run_ozon_catalog_sync_job(job_id: uuid.UUID) -> None:
         except CatalogJobOwnershipLost:
             await session.rollback()
             logger.info("Ozon catalog job ownership lost: %s", job_id)
+            await _finish_claimed_job_by_lease(
+                session,
+                job_id=job_id,
+                lease_started_at=lease_started_at,
+                status=JOB_STATUS_FAILED,
+                result_json=None,
+                error_message="catalog_job_credentials_changed",
+            )
             return
         except (SellerNotFound, MarketplaceAccountError) as exc:
             await session.rollback()
