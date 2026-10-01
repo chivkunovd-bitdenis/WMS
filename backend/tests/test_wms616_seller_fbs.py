@@ -386,3 +386,22 @@ async def test_seller_fbs_batches_ozon_quantities_without_n_plus_one(
     assert {item["items_quantity"] for item in response.json()["items"]} == {2}
     product_queries = [sql for sql in statements if "fbs_order_products" in sql]
     assert len(product_queries) == 1
+    compact_sql = " ".join(product_queries[0].split())
+    assert (
+        "where fbs_order_products.order_id in (select seller_fbs_page.id"
+        in compact_sql
+    )
+    assert "limit ? offset ?" in compact_sql
+
+
+def test_seller_fbs_uses_master_marketplace_status_sets() -> None:
+    from app.services import ozon_fbs_sync_service as ozon_statuses
+    from app.services import seller_fbs_orders_service as seller_statuses
+    from app.services import wb_marketplace_orders_service as wb_statuses
+
+    assert seller_statuses.OZON_CANCELLED_STATUSES is ozon_statuses.OZON_CANCELLED_STATUSES
+    assert seller_statuses.OZON_DELIVERY_STATUSES is ozon_statuses.OZON_DELIVERY_STATUSES
+    assert seller_statuses.OZON_ACCEPTED_STATUSES is ozon_statuses.OZON_ACCEPTED_STATUSES
+    assert seller_statuses.OZON_DONE_STATUSES is ozon_statuses.OZON_DONE_STATUSES
+    assert seller_statuses.OZON_DONE_SUBSTATUSES is ozon_statuses.OZON_DONE_SUBSTATUSES
+    assert seller_statuses.CANCEL_LIKE_WB_STATUSES is wb_statuses.CANCEL_LIKE_WB_STATUSES

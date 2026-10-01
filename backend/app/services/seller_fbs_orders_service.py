@@ -29,6 +29,19 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderProduct,
 )
+from app.services.ozon_fbs_sync_service import (
+    OZON_ACCEPTED_STATUSES,
+    OZON_CANCELLED_STATUSES,
+    OZON_DELIVERY_STATUSES,
+    OZON_DONE_STATUSES,
+    OZON_DONE_SUBSTATUSES,
+)
+from app.services.wb_marketplace_orders_service import (
+    CANCEL_LIKE_WB_STATUSES,
+    DEFECT_WB_STATUS,
+    SOLD_WB_STATUS,
+    SORTED_WB_STATUS,
+)
 
 SellerFbsMarketplace = Literal["wb", "ozon"]
 SellerFbsStatusGroup = Literal[
@@ -41,23 +54,6 @@ SellerFbsStatusGroup = Literal[
     "cancelled",
     "defect",
 ]
-
-_WB_CANCELLED = frozenset(
-    {
-        "cancel",
-        "canceled",
-        "cancelled",
-        "canceled_by_client",
-        "canceled_by_carrier",
-        "declined_by_client",
-    }
-)
-_OZON_CANCELLED = frozenset({"cancelled", "canceled", "cancelled_from_split_pending"})
-_OZON_HANDED = frozenset({"delivering", "driver_pickup", "sent_by_seller"})
-_OZON_ACCEPTED = frozenset({"acceptance_in_progress"})
-_OZON_DONE = frozenset({"delivered", "done"})
-_OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
-
 
 @dataclass(frozen=True)
 class SellerFbsOrderRow:
@@ -87,28 +83,43 @@ def _status_group_expression() -> ColumnElement[str]:
     is_ozon = FbsOrder.marketplace == "ozon"
 
     provider_cancelled = or_(
-        and_(is_wb, or_(provider.in_(_WB_CANCELLED), provider_substatus.in_(_WB_CANCELLED))),
+        and_(
+            is_wb,
+            or_(
+                provider.in_(CANCEL_LIKE_WB_STATUSES),
+                provider_substatus.in_(CANCEL_LIKE_WB_STATUSES),
+            ),
+        ),
         and_(
             is_ozon,
-            or_(provider.in_(_OZON_CANCELLED), provider_substatus.in_(_OZON_CANCELLED)),
+            or_(
+                provider.in_(OZON_CANCELLED_STATUSES),
+                provider_substatus.in_(OZON_CANCELLED_STATUSES),
+            ),
         ),
     )
-    provider_defect = and_(is_wb, or_(provider == "defect", provider_substatus == "defect"))
+    provider_defect = and_(
+        is_wb,
+        or_(provider == DEFECT_WB_STATUS, provider_substatus == DEFECT_WB_STATUS),
+    )
     local_in_work = local.in_(
         (FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING, FBS_ORDER_STATUS_PACKED)
     )
     provider_done = or_(
-        and_(is_wb, provider == "sold"),
+        and_(is_wb, provider == SOLD_WB_STATUS),
         and_(
             is_ozon,
-            or_(provider.in_(_OZON_DONE), provider_substatus.in_(_OZON_DONE_SUBSTATUSES)),
+            or_(
+                provider.in_(OZON_DONE_STATUSES),
+                provider_substatus.in_(OZON_DONE_SUBSTATUSES),
+            ),
         ),
     )
     provider_accepted = or_(
-        and_(is_wb, provider == "sorted"),
-        and_(is_ozon, provider.in_(_OZON_ACCEPTED)),
+        and_(is_wb, provider == SORTED_WB_STATUS),
+        and_(is_ozon, provider.in_(OZON_ACCEPTED_STATUSES)),
     )
-    provider_handed = and_(is_ozon, provider.in_(_OZON_HANDED))
+    provider_handed = and_(is_ozon, provider.in_(OZON_DELIVERY_STATUSES))
 
     return case(
         (or_(local == FBS_ORDER_STATUS_CANCELLED, provider_cancelled), literal("cancelled")),
@@ -148,6 +159,22 @@ async def list_seller_fbs_orders(
         await session.scalar(select(func.count(FbsOrder.id)).where(*filters)) or 0
     )
 
+    page = (
+        select(
+            FbsOrder.id.label("id"),
+            FbsOrder.marketplace.label("marketplace"),
+            FbsOrder.external_order_id.label("external_order_id"),
+            FbsOrder.wb_order_id.label("wb_order_id"),
+            FbsOrder.created_at_wb.label("received_at"),
+            status_expr.label("status_group"),
+        )
+        .where(*filters)
+        .order_by(FbsOrder.created_at_wb.desc(), FbsOrder.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .subquery("seller_fbs_page")
+    )
+    page_ids = select(page.c.id)
     quantities = (
         select(
             FbsOrderProduct.order_id.label("order_id"),
@@ -155,11 +182,12 @@ async def list_seller_fbs_orders(
             func.sum(FbsOrderProduct.quantity).label("quantity_sum"),
             func.min(FbsOrderProduct.quantity).label("minimum_quantity"),
         )
+        .where(FbsOrderProduct.order_id.in_(page_ids))
         .group_by(FbsOrderProduct.order_id)
-        .subquery()
+        .subquery("seller_fbs_page_quantities")
     )
     item_quantity = case(
-        (FbsOrder.marketplace == "wb", literal(1)),
+        (page.c.marketplace == "wb", literal(1)),
         (
             and_(
                 quantities.c.position_count > 0,
@@ -173,19 +201,17 @@ async def list_seller_fbs_orders(
 
     statement = (
         select(
-            FbsOrder.id,
-            FbsOrder.marketplace,
-            FbsOrder.external_order_id,
-            FbsOrder.wb_order_id,
-            FbsOrder.created_at_wb,
-            status_expr.label("status_group"),
+            page.c.id,
+            page.c.marketplace,
+            page.c.external_order_id,
+            page.c.wb_order_id,
+            page.c.received_at,
+            page.c.status_group,
             item_quantity,
         )
-        .outerjoin(quantities, quantities.c.order_id == FbsOrder.id)
-        .where(*filters)
-        .order_by(FbsOrder.created_at_wb.desc(), FbsOrder.id.desc())
-        .limit(limit)
-        .offset(offset)
+        .select_from(page)
+        .outerjoin(quantities, quantities.c.order_id == page.c.id)
+        .order_by(page.c.received_at.desc(), page.c.id.desc())
     )
     records = (await session.execute(statement)).all()
     items: list[SellerFbsOrderRow] = []
@@ -207,7 +233,7 @@ async def list_seller_fbs_orders(
                 items_quantity=(
                     int(record.items_quantity) if record.items_quantity is not None else None
                 ),
-                received_at=record.created_at_wb,
+                received_at=record.received_at,
             )
         )
     return items, total
