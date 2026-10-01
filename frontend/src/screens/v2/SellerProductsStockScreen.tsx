@@ -37,6 +37,12 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import { MarketplaceChip, MarketplaceIcon, type MarketplaceKind } from '../../ui-kit'
 import { FbsStockDialogContainer } from '../ff/products-fbs/FbsStockDialogContainer'
+import {
+  describeImportStage,
+  observeImportJob,
+  parseCatalogSyncResponse,
+  type ImportJobStage,
+} from './sellerCatalogImportProgress'
 
 // WMS-548 D5: товар на фулфилменте (row сегодняшней строки /products/wb-catalog)
 // и карточка, ещё не заведённая товаром WMS ("не на фулфилменте"), в одной
@@ -260,9 +266,21 @@ export async function loadSellerCatalogPage(
   }
 }
 
+/**
+ * Astra P1: WB и Ozon sync-ручки теперь возвращают 202 + CatalogSyncJobOut,
+ * сам импорт идёт в фоне. Экран обязан дожидаться реальной готовности задачи
+ * и только тогда перечитывать каталог — поэтому результатом «старта
+ * синхронизации» теперь служит либо id фоновой задачи, либо отказ, а не
+ * финальная ошибка/успех.
+ */
+export type MarketplaceSyncStart =
+  | { kind: 'skipped' }
+  | { kind: 'job'; jobId: string; stage: ImportJobStage }
+  | { kind: 'failed'; message: string }
+
 export type SellerCatalogSyncOutcome = {
-  wbFailure: string | null
-  ozonFailure: string | null
+  wb: MarketplaceSyncStart
+  ozon: MarketplaceSyncStart
 }
 
 /**
@@ -329,73 +347,125 @@ async function checkPlatformConnected(
   }
 }
 
+async function startMarketplaceSync(
+  headers: Record<string, string>,
+  options: {
+    tokensUrl: string
+    syncUrl: string
+    isConnected: (body: unknown) => boolean
+    platformFallback: string
+    checkFallback: string
+  },
+): Promise<MarketplaceSyncStart> {
+  const check = await checkPlatformConnected(headers, options.tokensUrl, options.isConnected)
+  if (check.status === 'check_failed') {
+    return {
+      kind: 'failed',
+      message: humanSyncFailureMessage(check.message ?? '', options.checkFallback),
+    }
+  }
+  if (check.status === 'not_connected') {
+    return { kind: 'skipped' }
+  }
+  try {
+    const res = await fetch(apiUrl(options.syncUrl), { method: 'POST', headers })
+    if (!res.ok) {
+      return {
+        kind: 'failed',
+        message: humanSyncFailureMessage(
+          await readApiErrorMessage(res),
+          options.platformFallback,
+        ),
+      }
+    }
+    const parsed = parseCatalogSyncResponse(await res.json())
+    if (!parsed) {
+      return { kind: 'failed', message: options.platformFallback }
+    }
+    return { kind: 'job', jobId: parsed.jobId, stage: parsed.stage }
+  } catch (e) {
+    return {
+      kind: 'failed',
+      message: e instanceof Error ? e.message : options.platformFallback,
+    }
+  }
+}
+
 export async function syncSellerCatalogMarketplaces(
   headers: Record<string, string>,
 ): Promise<SellerCatalogSyncOutcome> {
-  // QA-дефект 2 (WMS-615, 01.10): раньше WB-синхронизация звалась всегда и
-  // у Ozon-only селлера возвращала `missing_content_token`, которое
-  // перекрывало честный успех Ozon на экране. Теперь WB предваряется той же
-  // проверкой подключения, что и Ozon: при отсутствии ключа — тихо
-  // пропускаем площадку, при отказе самой проверки — показываем ошибку.
-  const wbCheck = await checkPlatformConnected(
-    headers,
-    '/integrations/wildberries/self/tokens',
-    (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
-  )
+  // Astra P1: прежняя версия считала 2xx-ответ /sync-products готовым каталогом
+  // и сразу перечитывала /seller-catalog/page на пустых данных. Теперь мы
+  // возвращаем идентификатор job'а каждой подключённой площадки и даём
+  // наблюдателю (observeImportJob) решить, когда реально вызывать load().
+  const wb = await startMarketplaceSync(headers, {
+    tokensUrl: '/integrations/wildberries/self/tokens',
+    syncUrl: '/integrations/wildberries/self/sync-products',
+    isConnected: (body) => Boolean((body as { has_content_token?: boolean }).has_content_token),
+    platformFallback: 'Не удалось синхронизировать Wildberries.',
+    checkFallback: 'Не удалось проверить подключение Wildberries.',
+  })
+  const ozon = await startMarketplaceSync(headers, {
+    tokensUrl: '/integrations/ozon/self/account',
+    syncUrl: '/integrations/ozon/self/sync-products',
+    isConnected: (body) => Boolean((body as { connected?: boolean }).connected),
+    platformFallback: 'Не удалось синхронизировать Ozon.',
+    checkFallback: 'Не удалось проверить подключение Ozon.',
+  })
+  return { wb, ozon }
+}
 
-  let wbFailure: string | null = null
-  if (wbCheck.status === 'check_failed') {
-    wbFailure = humanSyncFailureMessage(
-      wbCheck.message ?? '',
-      'Не удалось проверить подключение Wildberries.',
+// Astra P1: компактная строка состояния фоновой WB/Ozon-синхронизации под
+// кнопкой «Синхронизировать по API». Та же роль, что у CatalogImportProgressRow
+// в настройках, только снаружи от селекшн-модалки: цикл показа ровно тот же —
+// queued/running → спиннер, failed → Alert с «Повторить», success → ряд
+// исчезает (прогресс сбрасывается в null извне).
+function SellerCatalogSyncRow({
+  marketplace,
+  progress,
+  onRetry,
+}: {
+  marketplace: 'wildberries' | 'ozon'
+  progress: { stage: ImportJobStage; error: string | null }
+  onRetry: () => void
+}) {
+  const label = marketplace === 'wildberries' ? 'Wildberries' : 'Ozon'
+  const testIdSuffix = marketplace === 'wildberries' ? 'wb' : 'ozon'
+  if (progress.stage === 'failed') {
+    return (
+      <Alert
+        severity="error"
+        sx={{ mt: 1.5 }}
+        data-testid={`seller-products-sync-${testIdSuffix}-failed`}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={onRetry}
+            data-testid={`seller-products-sync-${testIdSuffix}-retry`}
+          >
+            Повторить
+          </Button>
+        }
+      >
+        {`${label}: ${progress.error ?? describeImportStage('failed')}`}
+      </Alert>
     )
-  } else if (wbCheck.status === 'connected') {
-    try {
-      const wbRes = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
-        method: 'POST',
-        headers,
-      })
-      if (!wbRes.ok) {
-        wbFailure = humanSyncFailureMessage(
-          await readApiErrorMessage(wbRes),
-          'Не удалось синхронизировать Wildberries.',
-        )
-      }
-    } catch (e) {
-      wbFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать товары.'
-    }
   }
-
-  const ozonCheck = await checkPlatformConnected(
-    headers,
-    '/integrations/ozon/self/account',
-    (body) => Boolean((body as { connected?: boolean }).connected),
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: 'center', mt: 1.5 }}
+      data-testid={`seller-products-sync-${testIdSuffix}-progress`}
+      data-stage={progress.stage}
+    >
+      <CircularProgress size={16} />
+      <Typography variant="body2" color="text.secondary">
+        {`${label}: ${describeImportStage(progress.stage)}`}
+      </Typography>
+    </Stack>
   )
-
-  let ozonFailure: string | null = null
-  if (ozonCheck.status === 'check_failed') {
-    ozonFailure = humanSyncFailureMessage(
-      ozonCheck.message ?? '',
-      'Не удалось проверить подключение Ozon.',
-    )
-  } else if (ozonCheck.status === 'connected') {
-    try {
-      const ozonRes = await fetch(apiUrl('/integrations/ozon/self/sync-products'), {
-        method: 'POST',
-        headers,
-      })
-      if (!ozonRes.ok) {
-        ozonFailure = humanSyncFailureMessage(
-          await readApiErrorMessage(ozonRes),
-          'Не удалось синхронизировать Ozon.',
-        )
-      }
-    } catch (e) {
-      ozonFailure = e instanceof Error ? e.message : 'Не удалось синхронизировать Ozon.'
-    }
-  }
-
-  return { wbFailure, ozonFailure }
 }
 
 type Props = {
@@ -451,6 +521,21 @@ export function SellerProductsStockScreen({
   const [reservesProductId, setReservesProductId] = useState<string | null>(null)
   const [reserveDirections, setReserveDirections] = useState<Record<string, StockDirectionRow[]>>({})
   const [reserveBusy, setReserveBusy] = useState<Set<string>>(new Set())
+
+  // Astra P1: per-marketplace прогресс фоновых sync-job'ов. Один общий
+  // «busy» уже не честный — WB может ещё качаться, а Ozon — уже упал, и
+  // наоборот. Экран должен показать оба состояния независимо.
+  type SyncProgressState = { jobId: string; stage: ImportJobStage; error: string | null }
+  const [wbSyncProgress, setWbSyncProgress] = useState<SyncProgressState | null>(null)
+  const [ozonSyncProgress, setOzonSyncProgress] = useState<SyncProgressState | null>(null)
+  const syncAbortRef = useRef<Map<'wildberries' | 'ozon', AbortController>>(new Map())
+  useEffect(() => {
+    const aborts = syncAbortRef.current
+    return () => {
+      for (const controller of aborts.values()) controller.abort()
+      aborts.clear()
+    }
+  }, [])
 
   // Токен сессии, к которой относятся показанные строки. Держим в ref, чтобы
   // ответ, пришедший после смены сессии, было с чем сравнить (WMS-488).
@@ -702,28 +787,99 @@ export function SellerProductsStockScreen({
     [items, visibleKeys],
   )
 
+  const setMarketplaceSyncProgress = useCallback(
+    (marketplaceToUpdate: 'wildberries' | 'ozon', next: SyncProgressState | null) => {
+      if (marketplaceToUpdate === 'wildberries') setWbSyncProgress(next)
+      else setOzonSyncProgress(next)
+    },
+    [],
+  )
+
+  const watchMarketplaceSync = useCallback(
+    (marketplaceToWatch: 'wildberries' | 'ozon', jobId: string) => {
+      syncAbortRef.current.get(marketplaceToWatch)?.abort()
+      const controller = new AbortController()
+      syncAbortRef.current.set(marketplaceToWatch, controller)
+      void observeImportJob(
+        fetch,
+        jobId,
+        { ...authHeaders(token) },
+        {
+          onStage: (stage) =>
+            setMarketplaceSyncProgress(marketplaceToWatch, { jobId, stage, error: null }),
+          onSucceeded: async () => {
+            setMarketplaceSyncProgress(marketplaceToWatch, null)
+            // Astra P1: каталог перечитываем ТОЛЬКО после реального
+            // завершения этой площадки, а не сразу после 202.
+            await load()
+          },
+          onFailed: (message) =>
+            setMarketplaceSyncProgress(marketplaceToWatch, {
+              jobId,
+              stage: 'failed',
+              error: message,
+            }),
+        },
+        controller.signal,
+      )
+    },
+    [authHeaders, load, setMarketplaceSyncProgress, token],
+  )
+
   async function onSyncProducts() {
     setError(null)
     setNotice(null)
+    // Прежний общий busy заменён на per-mp прогресс; busy=true только пока
+    // стартуют запросы, после 202 он снимается — спиннер остаётся у строк
+    // прогресса каждой площадки.
     setBusy(true)
+    setWbSyncProgress(null)
+    setOzonSyncProgress(null)
     try {
-      // Каждая площадка синхронизируется независимо (R12; ревью Astra №1,
-      // WMS-548, F4) — отказ WB не отменяет Ozon и наоборот.
       const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
-      await load()
-      const failures = [
-        outcome.wbFailure,
-        outcome.ozonFailure ? `Ozon: ${outcome.ozonFailure}` : null,
-      ].filter((message): message is string => message != null)
-      if (failures.length > 0) {
-        setError(failures.join(' '))
-      }
+      ;(['wildberries', 'ozon'] as const).forEach((mp) => {
+        const start = mp === 'wildberries' ? outcome.wb : outcome.ozon
+        if (start.kind === 'skipped') return
+        if (start.kind === 'failed') {
+          setMarketplaceSyncProgress(mp, { jobId: '', stage: 'failed', error: start.message })
+          return
+        }
+        setMarketplaceSyncProgress(mp, { jobId: start.jobId, stage: start.stage, error: null })
+        watchMarketplaceSync(mp, start.jobId)
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось синхронизировать товары.')
     } finally {
       setBusy(false)
     }
   }
+
+  const retrySyncMarketplace = useCallback(
+    async (marketplaceToRetry: 'wildberries' | 'ozon') => {
+      setMarketplaceSyncProgress(marketplaceToRetry, { jobId: '', stage: 'queued', error: null })
+      const outcome = await syncSellerCatalogMarketplaces({ ...authHeaders(token) })
+      const start = marketplaceToRetry === 'wildberries' ? outcome.wb : outcome.ozon
+      if (start.kind === 'skipped') {
+        setMarketplaceSyncProgress(marketplaceToRetry, null)
+        return
+      }
+      if (start.kind === 'failed') {
+        setMarketplaceSyncProgress(marketplaceToRetry, {
+          jobId: '',
+          stage: 'failed',
+          error: start.message,
+        })
+        return
+      }
+      setMarketplaceSyncProgress(marketplaceToRetry, {
+        jobId: start.jobId,
+        stage: start.stage,
+        error: null,
+      })
+      watchMarketplaceSync(marketplaceToRetry, start.jobId)
+    },
+    [authHeaders, setMarketplaceSyncProgress, token, watchMarketplaceSync],
+  )
 
   async function addSelectedToFulfillment() {
     const cards = selectedCardItems
@@ -918,6 +1074,20 @@ export function SellerProductsStockScreen({
           {busy ? <CircularProgress size={18} /> : null}
           {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}
         </Stack>
+        {wbSyncProgress ? (
+          <SellerCatalogSyncRow
+            marketplace="wildberries"
+            progress={wbSyncProgress}
+            onRetry={() => void retrySyncMarketplace('wildberries')}
+          />
+        ) : null}
+        {ozonSyncProgress ? (
+          <SellerCatalogSyncRow
+            marketplace="ozon"
+            progress={ozonSyncProgress}
+            onRetry={() => void retrySyncMarketplace('ozon')}
+          />
+        ) : null}
       </Paper>
 
       {selectedTotalCount > 0 ? (

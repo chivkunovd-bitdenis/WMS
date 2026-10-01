@@ -4,6 +4,8 @@ import {
   extractCatalogJobId,
   extractCatalogJobInitialStage,
   mapBackgroundJobStatus,
+  observeImportJob,
+  parseCatalogSyncResponse,
   pollImportJob,
 } from './sellerCatalogImportProgress'
 
@@ -138,5 +140,131 @@ describe('pollImportJob — one round-trip, honest outcome', () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, { state: 'retrying' }))
     const result = await pollImportJob(fetchImpl, 'job-1', {})
     expect(result).toEqual({ outcome: 'in_progress', stage: 'running' })
+  })
+})
+
+describe('parseCatalogSyncResponse — Astra P1: 202 is a start, not a completion', () => {
+  it('reads a plain CatalogSyncJobOut body with id/state and returns the initial stage', () => {
+    expect(
+      parseCatalogSyncResponse({ id: 'job-1', marketplace: 'wildberries', state: 'running' }),
+    ).toEqual({ jobId: 'job-1', stage: 'running' })
+  })
+
+  it('defaults to "queued" when the state field is missing (common for a brand-new job)', () => {
+    expect(parseCatalogSyncResponse({ id: 'job-1' })).toEqual({ jobId: 'job-1', stage: 'queued' })
+  })
+
+  it('returns null when the id is missing — caller must not confuse this with a job', () => {
+    expect(parseCatalogSyncResponse({ marketplace: 'wildberries' })).toBeNull()
+    expect(parseCatalogSyncResponse({ id: '' })).toBeNull()
+    expect(parseCatalogSyncResponse(null)).toBeNull()
+    expect(parseCatalogSyncResponse('string body')).toBeNull()
+  })
+
+  it('trims whitespace off the id so URL interpolation never gets a space-padded id', () => {
+    expect(parseCatalogSyncResponse({ id: '  job-2  ', state: 'queued' })).toEqual({
+      jobId: 'job-2',
+      stage: 'queued',
+    })
+  })
+})
+
+describe('observeImportJob — Astra P1: reload only on real success', () => {
+  function fetchSequence(responses: Response[]) {
+    let i = 0
+    return vi.fn(async () => {
+      const next = responses[Math.min(i, responses.length - 1)]
+      i += 1
+      return next
+    })
+  }
+
+  it('invokes onSucceeded exactly once when the job reaches "done" after one or more polls', async () => {
+    const onStage = vi.fn()
+    const onSucceeded = vi.fn()
+    const onFailed = vi.fn()
+    const fetchImpl = fetchSequence([
+      jsonResponse(200, { state: 'running' }),
+      jsonResponse(200, { state: 'succeeded' }),
+    ])
+
+    await observeImportJob(
+      fetchImpl,
+      'job-1',
+      {},
+      { onStage, onSucceeded, onFailed },
+      new AbortController().signal,
+      0, // zero-delay polling for the test
+    )
+
+    expect(onStage).toHaveBeenCalledWith('running')
+    expect(onSucceeded).toHaveBeenCalledTimes(1)
+    expect(onFailed).not.toHaveBeenCalled()
+  })
+
+  it('invokes onFailed with the backend-provided error_message on failed state', async () => {
+    const onStage = vi.fn()
+    const onSucceeded = vi.fn()
+    const onFailed = vi.fn()
+    const fetchImpl = fetchSequence([
+      jsonResponse(200, { state: 'failed', error_message: 'ozon_rate_limited' }),
+    ])
+
+    await observeImportJob(
+      fetchImpl,
+      'job-1',
+      {},
+      { onStage, onSucceeded, onFailed },
+      new AbortController().signal,
+      0,
+    )
+
+    expect(onFailed).toHaveBeenCalledWith('ozon_rate_limited')
+    expect(onSucceeded).not.toHaveBeenCalled()
+  })
+
+  it('invokes onFailed instead of onSucceeded when the poll request itself errors — never a fake success', async () => {
+    const onStage = vi.fn()
+    const onSucceeded = vi.fn()
+    const onFailed = vi.fn()
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    await observeImportJob(
+      fetchImpl,
+      'job-1',
+      {},
+      { onStage, onSucceeded, onFailed },
+      new AbortController().signal,
+      0,
+    )
+
+    expect(onFailed).toHaveBeenCalledWith('Failed to fetch')
+    expect(onSucceeded).not.toHaveBeenCalled()
+  })
+
+  it('respects AbortSignal: no callbacks after the signal fires mid-polling', async () => {
+    const onStage = vi.fn()
+    const onSucceeded = vi.fn()
+    const onFailed = vi.fn()
+    const controller = new AbortController()
+    const fetchImpl = vi.fn(async () => {
+      controller.abort() // simulate "the component unmounted between poll ticks"
+      return jsonResponse(200, { state: 'running' })
+    })
+
+    await observeImportJob(
+      fetchImpl,
+      'job-1',
+      {},
+      { onStage, onSucceeded, onFailed },
+      controller.signal,
+      0,
+    )
+
+    expect(onStage).not.toHaveBeenCalled()
+    expect(onSucceeded).not.toHaveBeenCalled()
+    expect(onFailed).not.toHaveBeenCalled()
   })
 })

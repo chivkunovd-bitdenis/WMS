@@ -137,3 +137,88 @@ export function extractCatalogJobInitialStage(body: unknown): ImportJobStage {
   }
   return 'queued'
 }
+
+/**
+ * Разбор ответа `POST /integrations/{wb,ozon}/self/sync-products` — backend
+ * вернёт 202 + CatalogSyncJobOut {id, marketplace, state} (плоско, без
+ * обёртки `catalog_job`). Этот хелпер даёт id и начальный этап, не считая
+ * тело завершением (Astra P1: мы не имеем права перечитывать каталог сразу
+ * после 202 — импорт ещё не отработал).
+ */
+export function parseCatalogSyncResponse(body: unknown): { jobId: string; stage: ImportJobStage } | null {
+  if (!body || typeof body !== 'object') return null
+  const raw = (body as { id?: unknown }).id
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null
+  const stateRaw = (body as { state?: unknown }).state
+  const stage = typeof stateRaw === 'string' ? mapBackgroundJobStatus(stateRaw) : 'queued'
+  return { jobId: raw.trim(), stage }
+}
+
+export type ImportJobObserverCallbacks = {
+  onStage: (stage: 'queued' | 'running') => void
+  onSucceeded: () => void | Promise<void>
+  onFailed: (message: string) => void
+}
+
+/**
+ * Наблюдатель фоновой задачи импорта: опрашивает статус до «succeeded» или
+ * «failed» (или отмены по сигналу). Вынесен из SellerSettingsScreen, чтобы
+ * тем же циклом пользовался экран «Товары» (кнопка «Синхронизировать по API»)
+ * и регрессионные тесты.
+ *
+ * Контракт поведения:
+ * - при 'in_progress' → onStage(queued|running), пауза, следующий опрос;
+ * - при 'succeeded' → onSucceeded() один раз, цикл завершается;
+ * - при 'failed' или падении запроса → onFailed(message), цикл завершается;
+ * - при controller.signal.aborted — выход без вызова колбэков (это уже
+ *   прежняя сессия, её ответ больше никого не интересует).
+ */
+export async function observeImportJob(
+  fetchImpl: typeof fetch,
+  jobId: string,
+  headers: Record<string, string>,
+  callbacks: ImportJobObserverCallbacks,
+  signal: AbortSignal,
+  pollIntervalMs = 2000,
+): Promise<void> {
+  while (!signal.aborted) {
+    let observation: ImportJobObservation
+    try {
+      observation = await pollImportJob(fetchImpl, jobId, headers, signal)
+    } catch (e) {
+      if (signal.aborted) return
+      callbacks.onFailed(e instanceof Error ? e.message : describeImportStage('failed'))
+      return
+    }
+    if (signal.aborted) return
+    if (observation.outcome === 'in_progress') {
+      callbacks.onStage(observation.stage)
+      await delay(pollIntervalMs, signal)
+      continue
+    }
+    if (observation.outcome === 'succeeded') {
+      await callbacks.onSucceeded()
+      return
+    }
+    callbacks.onFailed(observation.message)
+    return
+  }
+}
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
