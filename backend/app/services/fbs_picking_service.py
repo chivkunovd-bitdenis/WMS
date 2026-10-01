@@ -1181,15 +1181,12 @@ async def pick_scan(
             )
         storage_location_id = container_location_id
 
-    product = (
-        await session.get(Product, product_id_hint)
-        if product_id_hint is not None
-        else await _resolve_product_for_supply(
-            session,
-            tenant_id,
-            supply,
-            product_barcode=raw,
-        )
+    product = await _resolve_product_for_supply(
+        session,
+        tenant_id,
+        supply,
+        product_barcode=raw,
+        product_id=product_id_hint,
     )
     if product is None or product.tenant_id != tenant_id:
         raise FbsPickingError(
@@ -1464,8 +1461,49 @@ async def scan_pick_product(
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    raw = product_barcode.strip()
+    if not raw:
+        raise FbsPickingError("barcode_empty", "Штрихкод не может быть пустым.", http_status=422)
+    return await _pick_product(
+        session,
+        tenant_id,
+        supply_id,
+        location_id=location_id,
+        product_barcode=raw,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        order_id=order_id,
+        product_id=product_id,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+
+
+async def _pick_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    location_id: uuid.UUID,
+    product_barcode: str | None,
+    idempotency_key: str,
+    actor: User,
+    order_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
+        if product_barcode is not None and (
+            existing.scanned_product_barcode != product_barcode
+            or (product_id is not None and existing.product_id != product_id)
+        ):
+            raise FbsPickingError(
+                "idempotency_key_reused",
+                "Ключ идемпотентности уже использован для другого подбора.",
+                context={"idempotency_key": idempotency_key},
+            )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
@@ -1484,7 +1522,7 @@ async def scan_pick_product(
             )
     if supply.marketplace == "ozon":
         existing_position_pick = await session.scalar(
-            select(FbsOrderProductPick.id).where(
+            select(FbsOrderProductPick).where(
                 FbsOrderProductPick.tenant_id == tenant_id,
                 FbsOrderProductPick.fbs_supply_id == supply_id,
                 FbsOrderProductPick.scan_idempotency_key == idempotency_key,
@@ -1492,6 +1530,24 @@ async def scan_pick_product(
             )
         )
         if existing_position_pick is not None:
+            if product_barcode is not None:
+                # Ozon picks retain product identity, but not the raw scan code.
+                # Validate against that identity even after all units are picked.
+                replay_product = await _resolve_product_for_supply(
+                    session,
+                    tenant_id,
+                    supply,
+                    product_barcode=product_barcode,
+                    product_id=existing_position_pick.product_id,
+                )
+                if replay_product is None or (
+                    product_id is not None and product_id != existing_position_pick.product_id
+                ):
+                    raise FbsPickingError(
+                        "idempotency_key_reused",
+                        "Ключ идемпотентности уже использован для другого подбора.",
+                        context={"idempotency_key": idempotency_key},
+                    )
             return await get_supply_workspace(session, tenant_id, supply_id)
     await _ensure_ozon_pick_editable(session, supply)
     location = await session.get(StorageLocation, location_id)
@@ -1506,12 +1562,13 @@ async def scan_pick_product(
         )
     product = (
         await session.get(Product, product_id)
-        if product_id is not None
+        if product_barcode is None and product_id is not None
         else await _resolve_product_for_supply(
             session,
             tenant_id,
             supply,
-            product_barcode=product_barcode,
+            product_barcode=product_barcode or "",
+            product_id=product_id,
         )
     )
     if product is None or product.tenant_id != tenant_id:
@@ -1708,7 +1765,7 @@ async def scan_pick_product(
         source_container_id=container_id,
         sorting_storage_location_id=sorting_location.id,
         product_id=product.id,
-        scanned_product_barcode=product_barcode,
+        scanned_product_barcode=product_barcode or "",
         picked_by_user_id=actor.id,
         picked_at=picked_at,
         inventory_movement_id=movement_id,
@@ -1780,12 +1837,12 @@ async def manual_pick_product(
                 context={"idempotency_key": idempotency_key},
             )
         return await get_supply_workspace(session, tenant_id, supply_id)
-    return await scan_pick_product(
+    return await _pick_product(
         session,
         tenant_id,
         supply_id,
         location_id=location_id,
-        product_barcode="",
+        product_barcode=None,
         product_id=product_id,
         order_id=order_id,
         idempotency_key=idempotency_key,
@@ -2201,6 +2258,7 @@ async def _resolve_product_for_supply(
     supply: FbsSupply,
     *,
     product_barcode: str,
+    product_id: uuid.UUID | None = None,
 ) -> Product | None:
     supply_product_ids = {
         position.product_id
@@ -2208,11 +2266,28 @@ async def _resolve_product_for_supply(
         for position in order.product_positions
         if position.product_id is not None
     } or {o.product_id for o in supply.orders if o.product_id is not None}
+    # A hint narrows every accepted code source to this exact supply product.
+    # Resolving the unrestricted code first would discard valid ambiguity hints.
+    if product_id is not None:
+        supply_product_ids.intersection_update({product_id})
     if not supply_product_ids:
         return None
 
+    if product_id is not None:
+        hinted_product = await session.get(Product, product_id)
+        if (
+            hinted_product is not None
+            and hinted_product.tenant_id == tenant_id
+            and hinted_product.seller_id == supply.seller_id
+            and hinted_product.sku_code.lower() == product_barcode.lower()
+        ):
+            # Both picking screens already recognize an explicitly selected SKU
+            # regardless of letter case. Barcode/alias matching stays exact.
+            return hinted_product
+
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
+        Product.seller_id == supply.seller_id,
         Product.id.in_(supply_product_ids),
         or_(
             Product.wb_barcode == product_barcode,
@@ -2246,13 +2321,17 @@ async def _resolve_product_for_supply(
             session,
             tenant_id,
             [product_barcode],
+            seller_id=supply.seller_id,
         )
         matched = supply_product_ids.intersection(linked_ids)
         if len(matched) == 1:
             return await session.get(Product, next(iter(matched)))
 
     order_match = next(
-        (o for o in supply.orders if o.wb_barcode == product_barcode and o.product_id is not None),
+        (
+            o for o in supply.orders
+            if o.wb_barcode == product_barcode and o.product_id in supply_product_ids
+        ),
         None,
     )
     if order_match is None:
