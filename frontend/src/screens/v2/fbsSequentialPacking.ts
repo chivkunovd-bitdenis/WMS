@@ -164,6 +164,12 @@ function requiresKiz(result: FbsScanAutoPrintResult): boolean {
   return result.binding_target?.requires_honest_sign ?? result.requires_honest_sign
 }
 
+/** Scanner noise aside, the scanned code is exactly this barcode. */
+function sameScannedCode(barcode: string | null | undefined, raw: string): boolean {
+  const clean = (value: string) => value.replace(/[\s\ufeff]/g, '')
+  return Boolean(barcode) && clean(barcode!) === clean(raw)
+}
+
 /** Sticker and row selections never take a pool KIZ (Д5, Д6). */
 function explicitServerModes(preferences: FbsScanPrintPreferences): boolean {
   return preferences.printQr || preferences.reprintChz
@@ -324,8 +330,13 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
     deps.remember(raw, result)
     return { result, attempt, explicit: false }
   }
-  const selectBySticker = async (raw: string, preferences: FbsScanPrintPreferences) => {
+  const selectBySticker = async (raw: string, preferences: FbsScanPrintPreferences, allOff = false) => {
     const target = await deps.lookupSticker(raw)
+    // WMS-631 M10, R9: the sticker lookup also matches an order by its product
+    // barcode; with every checkbox off a product barcode selects nothing.
+    if (allOff && sameScannedCode(target.product.barcode, raw)) {
+      throw new FbsApiError('sticker_not_found', 'Стикер не найден в этой поставке.', null, false, 404)
+    }
     if (!target.can_bind) throw new Error(target.block_reason ?? 'На этот заказ ЧЗ внести нельзя')
     const attempt = deps.claim(raw, preferences, true)
     const result = explicitServerModes(attempt.preferences)
@@ -358,7 +369,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         productMiss = cause
       }
     }
-    try { return await selectBySticker(raw, preferences) }
+    try { return await selectBySticker(raw, preferences, !anyMode) }
     catch (cause) {
       if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') throw cause
       if (preferences.reprintChz) {
