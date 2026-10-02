@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import MOVEMENT_TYPE_MARKETPLACE_UNLOAD, InventoryMovement
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
@@ -107,7 +108,20 @@ async def _historical_fixture(
         storage_location_id=location.id,
         quantity=2,
     )
-    db_session.add_all((task_line, historical_box, historical_allocation))
+    # Документ начат до WMS-632: 2 шт уже списаны при подборе движением
+    # marketplace_unload (иначе подбор считал бы их ещё лежащими на складе).
+    legacy_deduction = InventoryMovement(
+        tenant_id=tenant.id,
+        product_id=product.id,
+        seller_id=seller.id,
+        storage_location_id=location.id,
+        warehouse_id=warehouse.id,
+        quantity_delta=-2,
+        movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+        marketplace_unload_request_id=request.id,
+        actor_user_id=actor.id,
+    )
+    db_session.add_all((task_line, historical_box, historical_allocation, legacy_deduction))
     await db_session.commit()
     return (
         tenant,
@@ -723,6 +737,14 @@ async def test_pick_set_keeps_unknown_box_when_only_packed_source_is_removed(db_
         )
     ).scalar_one()
     allocation.quantity = 1
+    legacy_movement = (
+        await db_session.execute(
+            select(InventoryMovement).where(
+                InventoryMovement.marketplace_unload_request_id == request.id
+            )
+        )
+    ).scalar_one()
+    legacy_movement.quantity_delta = -1  # исторически списана одна штука, не две
     task_line.qty_confirmed_packed = 1
     task_line.qty_packed_in_task = 0
     await db_session.commit()
@@ -780,7 +802,8 @@ async def test_pick_set_keeps_unknown_box_when_only_packed_source_is_removed(db_
             ).where(InventoryBalance.product_id == product.id)
         )
     ).one()
-    assert tuple(map(int, balance)) == (2, 2)
+    # WMS-632: подбор остаток не списывает — одна штука лежит на сортировке, но не ушла.
+    assert tuple(map(int, balance)) == (3, 2)
 
 
 @pytest.mark.asyncio
