@@ -147,6 +147,33 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
     assert len(rows) >= 1
     assert all(r.get("seller_name") == "Other Shop" for r in rows)
 
+    # WMS-634: дата отгрузки сохраняется в магазине, куда переключился сотрудник.
+    request_id = created.json()["id"]
+    patched = await async_client.patch(
+        f"/operations/marketplace-unload-requests/{request_id}",
+        headers=switched_h,
+        json={"planned_shipment_date": "2026-10-02"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["planned_shipment_date"] == "2026-10-02"
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{request_id}",
+        headers=switched_h,
+    )
+    assert detail.json()["planned_shipment_date"] == "2026-10-02"
+
+    test_login = await async_client.post(
+        "/auth/login",
+        json={"email": f"e2e-{suffix}@example.com", "password": "password123"},
+    )
+    stranger_h = {"Authorization": f"Bearer {test_login.json()['access_token']}"}
+    stranger = await async_client.patch(
+        f"/operations/marketplace-unload-requests/{request_id}",
+        headers=stranger_h,
+        json={"planned_shipment_date": "2026-10-03"},
+    )
+    assert stranger.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_seller_cannot_switch_without_delegation(
