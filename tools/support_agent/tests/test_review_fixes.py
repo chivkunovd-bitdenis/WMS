@@ -363,3 +363,100 @@ def test_scrub_masks_json_and_keyvalue_secrets_and_split_tokens(env: Any) -> Non
                        "ABCDEFGHIJKLMNOPQRSTUV", "GHIJKLMNOPQRST", "BBBBBBBBBB", "hunter2hunter2"):
             assert needle not in out, (text, out)
     assert scrub(env.cfg, '{"count": 5, "name": "Иван"}') == '{"count": 5, "name": "Иван"}'  # лишнего не трогает
+
+
+# ------------------------------------------------------------------ приёмка аналитика: N2 и N4
+def test_analyst_prompt_forbids_inventing_prod_data() -> None:
+    from support_agent import prompts
+
+    rules = prompts.ANALYST_RULES
+    assert "ЖЁСТКИЙ ЗАПРЕТ выдумывать данные" in rules and "НЕТ доступа к данным прода" in rules
+    assert "answer_needs_data=true" in rules and "номера, коды, количества, статусы" in rules
+    assert "answer_needs_data" in prompts.ANALYSIS_SCHEMA
+
+
+def test_info_request_without_data_gets_no_client_answer_and_owner_is_told(env: Any) -> None:
+    """Модель-подделка помечает, что данных прода нет: никакого предпросмотра и ответа клиенту."""
+    analysis = dict(ANALYSIS_BUG, category="info", hotfix={}, info_answer="Не отданы коды 111, 222",
+                    answer_needs_data=True, missing_for_owner=["список непереданных кодов поставки"])
+    script(env, analysis, category="info")
+    env.say(CLIENT_CHAT, "какие QR мы не отдали?", msg_id="81")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    env.flush()
+    d = env.store.data(1)
+    assert d["needs_data"] is True and d["client_answer"] is None and d["preview_sha"] is None
+    owner = env.tg.to(OWNER_CHAT)
+    assert any("Данных для ответа нет: нужен доступ или проверка владельцем" in t
+               and "список непереданных кодов поставки" in t for t in owner)
+    assert not any(t.startswith("Предпросмотр") for t in owner) and "111" not in " ".join(owner)
+    assert env.tg.documents == [] and env.tg.to(CLIENT_CHAT) == []
+    script_owner(env, {"intent": "go", "ticket_ids": [1], "all": False})
+    env.say(OWNER_CHAT, "кати 1", user=OWNER_ID, name="Владелец", msg_id="o81")
+    env.flush()
+    assert env.tg.to(CLIENT_CHAT) == []  # клиенту нечего отправлять: придуманные значения не уйдут
+    assert any("отправлять клиенту нечего" in t for t in env.tg.to(OWNER_CHAT))
+
+
+def test_info_request_with_answer_from_the_text_still_works(env: Any) -> None:
+    analysis = dict(ANALYSIS_BUG, category="info", hotfix={}, info_answer="Пояснение по процессу",
+                    answer_needs_data=False)
+    script(env, analysis, category="info")
+    env.say(CLIENT_CHAT, "как оформить возврат?", msg_id="82")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    assert env.store.data(1)["client_answer"]["text"] == "Пояснение по процессу"
+
+
+def test_first_start_ignores_old_form_records_and_takes_only_new_ones(env: Any) -> None:
+    from datetime import UTC, datetime
+
+    from support_agent.pipeline import NIL_UUID  # noqa: F401
+
+    from .test_pipeline_chat import form_row
+
+    script(env)
+    start = datetime(2026, 10, 2, 12, 0, 0, tzinfo=UTC).timestamp()
+    env.clock.now = start
+    old1, old2 = form_row("r-1", "bug"), form_row("r-2", "bug")
+    old1["created_at"], old2["created_at"] = "2026-10-02T10:00:01+00:00", "2026-09-01T10:00:01+00:00"
+    env.wms.rows = [old2, old1]
+    env.pipe.poll_forms()
+    assert env.store.rows("SELECT * FROM tickets") == []  # старые записи не подобраны
+    assert env.store.kv_get("form_cursor")["created_at"] == "2026-10-02T12:00:00+00:00"
+    new = form_row("r-3", "bug")
+    new["created_at"] = "2026-10-02T13:00:01+00:00"
+    env.wms.rows = [old2, old1, new]
+    env.clock.now = start + 7200
+    env.pipe.poll_forms()
+    tickets = env.store.rows("SELECT * FROM tickets")
+    assert len(tickets) == 1 and env.store.data(tickets[0]["id"])["form"]["id"] == "r-3"
+    # перезапуск: сохранённый курсор не сбрасывается заново на «сейчас»
+    env.clock.now = start + 99999
+    env.pipe.poll_forms()
+    assert len(env.store.rows("SELECT * FROM tickets")) == 1
+    assert env.store.kv_get("form_cursor")["created_at"] == "2026-10-02T13:00:01+00:00"
+
+
+def test_backfill_since_enables_old_records_from_a_date(env: Any) -> None:
+    from datetime import UTC, datetime
+
+    from .test_pipeline_chat import form_row
+
+    script(env)
+    env.clock.now = datetime(2026, 10, 2, 12, 0, 0, tzinfo=UTC).timestamp()
+    env.cfg.wms.backfill_since = "2026-09-15T00:00:00+00:00"
+    rows = []
+    for rid, created in (("r-1", "2026-09-01T10:00:01+00:00"), ("r-2", "2026-09-20T10:00:01+00:00"),
+                         ("r-3", "2026-10-02T10:00:01+00:00")):
+        row = form_row(rid, "bug")
+        row["created_at"] = created
+        rows.append(row)
+    env.wms.rows = rows
+    env.pipe.poll_forms()
+    ids = sorted(env.store.data(t["id"])["form"]["id"] for t in env.store.rows("SELECT id FROM tickets"))
+    assert ids == ["r-2", "r-3"]  # с даты, но не раньше

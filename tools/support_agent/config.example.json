@@ -25,7 +25,8 @@
   "wms": {
     "base_url": "https://wms.sellerfocus.pro/api",
     "agent_key": "",
-    "poll_interval_sec": 60
+    "poll_interval_sec": 60,
+    "backfill_since": ""
   },
   "limits": {
     "max_parallel": 3,

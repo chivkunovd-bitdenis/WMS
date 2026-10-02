@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
 MAX_FILE_BYTES = 5_000_000
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
 ALLOWED_EXPORT_EXT = ("csv", "tsv", "txt", "json", "md")
 MAX_ANSWER_CHARS = 3000  # с запасом на служебный текст предпросмотра (лимит Telegram 4096)
 FORBIDDEN_IN_SUMMARY = re.compile(r"```|\b[\w/.-]+\.(py|tsx?|js|sql)\b|/app/|\b\d{9,}\b")
@@ -555,7 +556,12 @@ class Pipeline:
         if category == "improvement" or (category == "bug" and not urgent):
             card_note = self._card_for(tid, analysis)
         if category == "info" and t["kind"] == "chat":
-            self._prepare_client_answer(tid, analysis)
+            if analysis.get("answer_needs_data"):
+                # Данных прода у агента нет: клиенту ничего не готовим (R17), владельцу — пометка.
+                self.store.patch_data(tid, client_answer=None, preview_sha=None, needs_data=True)
+            else:
+                self.store.patch_data(tid, needs_data=False)
+                self._prepare_client_answer(tid, analysis)
         verdict = {"info": "info", "improvement": "trello"}.get(
             category, "hotfix" if safe else "bug_no_hotfix"
         )
@@ -718,7 +724,7 @@ class Pipeline:
         card_note: str,
     ) -> str:
         note = {
-            "info": "Это запрос данных, а не поломка. Готовый ответ клиенту ниже в материалах.",
+            "info": "Это запрос данных, а не поломка.",
             "trello": "Вердикт: это улучшение, ушло в Trello.",
         }.get(verdict, "")
         try:
@@ -736,7 +742,11 @@ class Pipeline:
             )
         lines = [body]
         d = self.store.data(tid)
-        if verdict == "info":
+        if verdict == "info" and d.get("needs_data"):
+            missing = "; ".join(str(x) for x in analysis.get("missing_for_owner") or []) or "—"
+            lines.append("Данных для ответа нет: нужен доступ или проверка владельцем. Что проверить: "
+                         f"{missing}. Клиенту ответ не готовлю, чтобы не выдумывать значения.")
+        elif verdict == "info":
             lines.append(
                 "Ответ клиенту покажу следующим сообщением дословно; отправлю только после вашего "
                 "подтверждения именно его." if d.get("client_answer")
@@ -1068,6 +1078,11 @@ class Pipeline:
         if not self.cfg.wms.agent_key:
             return
         cursor = self.store.kv_get("form_cursor")
+        if cursor is None:
+            # Первый запуск: старые записи формы не подбираем (N4). Курсор ставится на момент запуска
+            # либо на wms.backfill_since, если владелец явно включил разбор с даты.
+            cursor = self._initial_form_cursor()
+            self.store.kv_set("form_cursor", cursor)
         try:
             rows = self.wms.new_requests(cursor)
         except WmsError as exc:
@@ -1077,6 +1092,16 @@ class Pipeline:
             self.ingest_form(row)
             cursor = {"created_at": row["created_at"], "id": row["id"]}
             self.store.kv_set("form_cursor", cursor)
+
+    def _initial_form_cursor(self) -> dict[str, str]:
+        since = (self.cfg.wms.backfill_since or "").strip()
+        if since:
+            moment = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=UTC)
+        else:
+            moment = datetime.fromtimestamp(self.clock(), tz=UTC)
+        return {"created_at": moment.astimezone(UTC).isoformat(), "id": NIL_UUID}
 
     def ingest_form(self, row: dict[str, Any]) -> int | None:
         text = " ".join(str(row.get(k) or "") for k in ("description", "screen", "problem", "proposal"))

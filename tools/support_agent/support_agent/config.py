@@ -60,6 +60,9 @@ class WmsCfg:
     base_url: str = ""
     agent_key: str = field(default="", repr=False)
     poll_interval_sec: int = 60
+    # Пусто: при первом запуске берутся только новые записи формы. Дата/время ISO (например
+    # 2026-10-01T00:00:00+00:00) включает разбор старых записей начиная с неё.
+    backfill_since: str = ""
 
 
 @dataclass
