@@ -183,7 +183,12 @@ class FakeWms:
     def request(self, request_id: str) -> dict[str, Any]:
         if request_id in self.by_id:
             return self.by_id[request_id]
-        return next(r for r in self.rows if r["id"] == request_id)
+        for row in self.rows:
+            if row["id"] == request_id:
+                return row
+        from support_agent.wms import WmsError
+
+        raise WmsError("http_404")
 
 
 class FakeTranscriber:

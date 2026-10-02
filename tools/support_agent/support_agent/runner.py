@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import signal
 import time
+import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -31,17 +33,51 @@ log = logging.getLogger(__name__)
 DAY = 24 * 3600
 
 
+SECRET_PATTERNS = [
+    (re.compile(r"bot\d+:[\w-]{10,}"), "bot***"),
+    (re.compile(r"(?i)\b(key|token|api_key|access_token)=[^&\s\"']+"), r"\1=***"),
+    (re.compile(r"(?i)bearer\s+[\w.\-]+"), "Bearer ***"),
+    (re.compile(r"\bsk-[\w\-]{12,}"), "sk-***"),
+]
+
+
+def scrub(cfg: Config, text: str) -> str:
+    """Известные значения секретов и типовые формы токенов (URL Telegram, ключи Trello, Bearer)."""
+    text = cfg.redact(text)
+    for pattern, repl in SECRET_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
+
+
 class RedactFilter(logging.Filter):
-    """Секреты не попадают в логи (R37)."""
+    """Фильтр ОБРАБОТЧИКА (а не logger'а): применяется ко всем записям, в том числе дочерних
+    logger'ов (httpx и др.), и к тексту исключения (R37)."""
 
     def __init__(self, cfg: Config) -> None:
         super().__init__()
         self.cfg = cfg
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = self.cfg.redact(record.getMessage())
+        record.msg = scrub(self.cfg, record.getMessage())
         record.args = ()
+        if record.exc_info:
+            text = "".join(traceback.format_exception(*record.exc_info))
+            record.exc_text = scrub(self.cfg, text)
+            record.exc_info = None
+        elif record.exc_text:
+            record.exc_text = scrub(self.cfg, record.exc_text)
+        if record.stack_info:
+            record.stack_info = scrub(self.cfg, record.stack_info)
         return True
+
+
+def install_logging(cfg: Config) -> None:
+    """Маскировка на каждом обработчике корня + журналирование URL у httpx/httpcore выключено."""
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    flt = RedactFilter(cfg)
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(flt)
 
 
 class Agent:
@@ -139,7 +175,7 @@ class Agent:
 
 
 def build_agent(cfg: Config) -> Agent:
-    logging.getLogger().addFilter(RedactFilter(cfg))
+    install_logging(cfg)
     http = httpx.Client()
     store = Store(cfg.db_path)
     tg = TelegramClient(cfg.telegram.bot_token, http)

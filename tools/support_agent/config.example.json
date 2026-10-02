@@ -66,6 +66,10 @@
     "public_base_url": "https://wms.sellerfocus.pro",
     "allow_foreign_commits": false
   },
+  "sandbox": {
+    "enabled": true,
+    "extra_deny_read": []
+  },
   "mockups": {
     "publish_cmd": "",
     "base_url": ""

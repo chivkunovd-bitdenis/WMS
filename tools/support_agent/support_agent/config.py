@@ -105,6 +105,12 @@ class TranscribeCfg:
 
 
 @dataclass
+class SandboxCfg:
+    enabled: bool = True  # выключать нельзя без явного решения владельца
+    extra_deny_read: list[str] = field(default_factory=list)
+
+
+@dataclass
 class HotfixCfg:
     backend_bin: str = ""
     merge_method: str = "merge"
@@ -132,6 +138,7 @@ class Config:
     openai: OpenAiCfg = field(default_factory=OpenAiCfg)
     transcribe: TranscribeCfg = field(default_factory=TranscribeCfg)
     hotfix: HotfixCfg = field(default_factory=HotfixCfg)
+    sandbox: SandboxCfg = field(default_factory=SandboxCfg)
     mockups: MockupCfg = field(default_factory=MockupCfg)
 
     @property
@@ -194,5 +201,6 @@ def config_from_dict(data: dict[str, Any]) -> Config:
     cfg.openai = _build(OpenAiCfg, data.get("openai", {}))
     cfg.transcribe = _build(TranscribeCfg, data.get("transcribe", {}))
     cfg.hotfix = _build(HotfixCfg, data.get("hotfix", {}))
+    cfg.sandbox = _build(SandboxCfg, data.get("sandbox", {}))
     cfg.mockups = _build(MockupCfg, data.get("mockups", {}))
     return cfg

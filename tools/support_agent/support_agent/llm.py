@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import time
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import sandbox
 from .config import Config
 from .store import Store
 
@@ -33,6 +35,14 @@ READONLY_TOOLS = [
     "Bash(git grep:*)", "Bash(git status:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)",
     "Bash(rg:*)", "Bash(find:*)", "Bash(wc:*)",
 ]
+
+
+def secret_read_denies() -> list[str]:
+    """Запрет инструменту Read читать конфиг агента и учётные данные (аналитик и разработчик)."""
+    rules = ["Read(**/*.env)", "Read(**/.env*)"]
+    for rel in sandbox.DEFAULT_DENY_READ:
+        rules += [f"Read(~/{rel})", f"Read(~/{rel}/**)"]
+    return rules
 
 
 class LlmUnavailable(Exception):
@@ -54,9 +64,12 @@ ExecFn = Callable[[list[str], str | None, int, str | None], ExecResult]
 
 
 def default_exec(argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
+    # Ключи агента не передаются дочерним CLI и их процессам (проверка и модельные сессии).
+    env = {k: v for k, v in os.environ.items() if k not in sandbox.SENSITIVE_ENV}
     try:
         proc = subprocess.run(
-            argv, cwd=cwd, input=stdin or "", capture_output=True, text=True, timeout=timeout
+            argv, cwd=cwd, input=stdin or "", capture_output=True, text=True, timeout=timeout,
+            env=env,
         )
     except FileNotFoundError:
         return ExecResult(127, "", "command not found")
@@ -193,13 +206,20 @@ class LlmRouter:
             argv += ["--session-id", session[0]]
         if system:
             argv += ["--system-prompt", system]
+        if mode in ("readonly", "write") and self.cfg.sandbox.enabled:
+            # Встроенная песочница Bash Claude Code: запись только в cwd и tmp, без сети,
+            # чтение конфига агента и учётных данных закрыто (проверено вживую).
+            sandbox.require()
+            argv += ["--settings", sandbox.claude_settings(os.path.expanduser("~"),
+                                                           self.cfg.sandbox.extra_deny_read)]
         if mode == "text":
             argv += ["--tools", "", "--disable-slash-commands", "--setting-sources", ""]
         elif mode == "readonly":
             argv += ["--permission-mode", "dontAsk", "--allowedTools", *READONLY_TOOLS]
-            argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit"]
+            argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit", *secret_read_denies()]
         else:  # write: разработчик хотфикса / макетчик в своём worktree, без bypassPermissions
             allowed, denied = self.write_tools(cwd)
+            denied += [d for d in secret_read_denies() if d not in denied]
             argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
             argv += ["--disallowedTools", *denied]
         return argv
@@ -215,15 +235,19 @@ class LlmRouter:
         argv += ["-m", model]
         if effort:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
-        sandbox = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
-        if mode == "write":  # запись только в рабочий каталог, сети нет
+        # write при включённой песочнице: границу задаёт внешний Seatbelt (вложенный нельзя),
+        # внутри Codex без собственной; иначе собственная workspace-write без сети.
+        outer = mode == "write" and self.cfg.sandbox.enabled
+        sbx_mode = {"text": "read-only", "readonly": "read-only",
+                    "write": "danger-full-access" if outer else "workspace-write"}[mode]
+        if mode == "write" and not outer:
             argv += ["-c", "sandbox_workspace_write.network_access=false"]
         if not session_id:
-            argv += ["-s", sandbox, "--color", "never"]
+            argv += ["-s", sbx_mode, "--color", "never"]
             if cwd:
                 argv += ["-C", cwd]
         else:
-            argv += ["-c", f'sandbox_mode="{sandbox}"']
+            argv += ["-c", f'sandbox_mode="{sbx_mode}"']
         argv += ["--json", "--skip-git-repo-check", "-o", last_message_file, "-"]
         return argv
 
@@ -312,15 +336,23 @@ class LlmRouter:
                 raise _CallFailed(blob[:200])
             return LlmResult(text, "claude", model, new_id or (session[0] if session else None))
         # codex
-        out_file = str(self.scratch / f"codex-last-{uuid.uuid4().hex}.txt")
-        argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd, out_file)
-        res = self.exec(argv, cwd, timeout, prompt)
-        text = ""
-        try:
-            text = Path(out_file).read_text(encoding="utf-8")
-            Path(out_file).unlink()
-        except OSError:
-            pass
+        with sandbox.temp_dir() as tmp:
+            out_file = str(Path(tmp) / "last.txt")
+            argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
+                                    out_file)
+            if mode == "write" and self.cfg.sandbox.enabled:
+                home = os.path.expanduser("~")
+                deny = [p for p in sandbox.deny_read_paths(home, self.cfg.sandbox.extra_deny_read)
+                        if not p.endswith("/.codex/auth.json")]  # токен нужен самому Codex
+                prof = sandbox.profile([cwd, tmp, str(Path(home) / ".codex")], deny,
+                                       allow_network=True)  # Codex ходит в API; дети тоже (остаток риска)
+                argv = sandbox.wrap(argv, prof)
+            res = self.exec(argv, cwd, timeout, prompt)
+            text = ""
+            try:
+                text = Path(out_file).read_text(encoding="utf-8")
+            except OSError:
+                pass
         if res.rc != 0 or not text.strip():
             blob = f"{res.err}\n{res.out[-500:]}"
             if LIMIT_PATTERNS.search(blob) or res.rc == 127:

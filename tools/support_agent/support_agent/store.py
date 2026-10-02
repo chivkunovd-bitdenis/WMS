@@ -270,6 +270,12 @@ class Store:
         )
         return int(row["ticket_id"]) if row else None
 
+    def outbox_for_tg_message(self, chat_id: int, tg_message_id: str) -> sqlite3.Row | None:
+        return self.row(
+            "SELECT * FROM outbox WHERE chat_id=? AND tg_message_id=? AND ticket_id IS NOT NULL",
+            (chat_id, tg_message_id),
+        )
+
     def outbox_purpose_for_tg_message(self, chat_id: int, tg_message_id: str) -> str | None:
         row = self.row(
             "SELECT purpose FROM outbox WHERE chat_id=? AND tg_message_id=?",

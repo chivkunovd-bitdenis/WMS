@@ -10,18 +10,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from . import prompts
+from . import prompts, sandbox
 from .llm import ExecFn, ExecResult, LlmError, LlmUnavailable, default_exec
 from .pipeline import Pipeline
 
 log = logging.getLogger(__name__)
 MAX_FIX_ROUNDS = 2
+DEPLOY_LOOKUP_SEC = 120
 FORBIDDEN_PATHS = (".github/", "scripts/deploy/", "scripts/ci/", ".claude/", ".cursor/",
                    "docker-compose", "deploy/", "tools/support_agent/")
 HONEST_STATUS = "Статус: выложено в облегчённом режиме, приёмка аналитика не проводилась."
@@ -50,6 +52,19 @@ class HotfixRunner:
         if res.rc != 0:
             raise StepFailed(f"команда не удалась: {' '.join(argv[:3])}: {res.err.strip()[:200]}")
         return res.out
+
+    def run_untrusted(
+        self, argv: list[str], worktree: str | Path, cwd: str | Path, timeout: int = 900
+    ) -> ExecResult:
+        """Код из worktree (ruff, mypy, pytest) исполняется под Seatbelt: без сети, запись только
+        в worktree и временный каталог, конфиг агента и учётные данные владельца недоступны."""
+        if not self.cfg.sandbox.enabled:
+            return self.run(argv, cwd, timeout)
+        with sandbox.temp_dir() as tmp:
+            wrapped = sandbox.check_argv(
+                argv, str(worktree), tmp, os.path.expanduser("~"), self.cfg.sandbox.extra_deny_read
+            )
+            return self.run(wrapped, cwd, timeout)
 
     def git(self, *args: str, cwd: str | Path | None = None) -> str:
         return self.must(["git", *args], cwd)
@@ -108,6 +123,8 @@ class HotfixRunner:
             handler(tid, h)
         except StepFailed as exc:
             self.fail(tid, h, str(exc))
+        except sandbox.SandboxUnavailable as exc:
+            self.fail(tid, h, str(exc))
         except (LlmUnavailable, LlmError):
             raise  # очередь: стадия не меняется, повторится, когда модель вернётся
 
@@ -127,7 +144,7 @@ class HotfixRunner:
             done.append(f"pull request создан ({h['pr_url']})")
         if h.get("merged"):
             done.append("изменение влито в основную ветку")
-        if h.get("deploy_started"):
+        if h.get("deploy_intent"):
             done.append("выкладка запускалась")
         state = "; ".join(done) if done else "ничего не выложено"
         self.store.set_stage(tid, "failed", hotfix={**h, "step": "failed", "failure": reason})
@@ -143,20 +160,10 @@ class HotfixRunner:
     def _s_start(self, tid: int, h: dict[str, Any]) -> None:
         d = self.store.data(tid)
         # В1: форма — карточка «В работе» после «кати» (только карточка этого обращения).
-        if d.get("form") and d.get("card_id") and self.cfg.trello.in_progress_list_id:
-            self._move_form_card(tid, d, self.cfg.trello.in_progress_list_id)
+        if d.get("form"):
+            self.p.want_card(tid, "in_progress")
         number = h.get("number") or self.allocate_number(tid)
         self.save(tid, h, step="worktree", number=number)
-
-    def _move_form_card(self, tid: int, d: dict[str, Any], list_id: str) -> None:
-        from .trello import TrelloError
-
-        try:
-            card = self.p.trello.get_card(d["card_id"])
-            if f"WMS-REQUEST-ID: {d['form']['id']}" in str(card.get("desc", "")).splitlines():
-                self.p.trello.move_card(d["card_id"], list_id)
-        except TrelloError as exc:
-            log.warning("form card move failed: %s", exc.code)
 
     # -- worktree ----------------------------------------------------------------------
     def _s_worktree(self, tid: int, h: dict[str, Any]) -> None:
@@ -213,7 +220,8 @@ class HotfixRunner:
     def _s_checks(self, tid: int, h: dict[str, Any]) -> None:
         problems = self.verify_worktree(h)
         if not problems:
-            self.save(tid, h, step="review" if not h.get("reviewed") else "pr")
+            again = not h.get("reviewed") or bool(h.get("review_defects"))
+            self.save(tid, h, step="review" if again else "pr")
             return
         self.send_back(tid, h, "Проверка диспетчера нашла проблемы:\n- " + "\n- ".join(problems))
 
@@ -291,11 +299,14 @@ class HotfixRunner:
 
         problems = []
         for argv in ([tool("ruff"), "check", "."], [tool("mypy"), "."]):
-            res = self.run(argv, backend, 900)
+            res = self.run_untrusted(argv, path, backend, 900)
             if res.rc != 0:
                 problems.append(f"{Path(argv[0]).name} не проходит: {(res.out + res.err)[-400:]}")
         if backend_tests:
-            res = self.run([tool("pytest"), "-n", "auto", "-q", *backend_tests], backend, 1800)
+            res = self.run_untrusted(
+                [tool("pytest"), "-n", "auto", "-q", "-p", "no:cacheprovider", *backend_tests],
+                path, backend, 1800,
+            )
             if res.rc != 0:
                 problems.append(f"целевые тесты не проходят: {(res.out + res.err)[-500:]}")
             elif not self.test_fails_on_base(path, backend_tests):
@@ -313,28 +324,38 @@ class HotfixRunner:
                 dest.write_text((path / "backend" / rel).read_text(encoding="utf-8"), encoding="utf-8")
             bin_dir = self.cfg.hotfix.backend_bin
             pytest = str(Path(bin_dir) / "pytest") if bin_dir else "pytest"
-            res = self.run([pytest, "-q", *tests], base / "backend", 1800)
+            res = self.run_untrusted([pytest, "-q", "-p", "no:cacheprovider", *tests], base,
+                                     base / "backend", 1800)
             return res.rc != 0
         finally:
             self.run(["git", "worktree", "remove", "--force", str(base)])
 
     # -- одна перекрёстная проверка -------------------------------------------------------
     def _s_review(self, tid: int, h: dict[str, Any]) -> None:
+        """Обязательная проверка другой моделью. Недоступна — стоим в очереди (LlmUnavailable
+        уходит наверх, владелец получает уведомление), а не идём в PR без ревью (F6). Подтверждённые
+        дефекты после исправления перепроверяются именно по ним, до PR."""
         number = f"WMS-{h['number']}"
+        pending = list(h.get("review_defects") or [])
+        prompt = (
+            prompts.recheck_prompt(number, pending) if pending
+            else prompts.review_prompt(number, str((h.get("dev") or {}).get("summary", "")))
+        )
         try:
             res, result = self.p.llm.ask_json(
-                "review", prompts.review_prompt(number, str((h.get("dev") or {}).get("summary", ""))),
-                ticket_id=tid, mode="readonly", cwd=h["path"], exclude_cli=h.get("dev_cli"),
+                "review", prompt, ticket_id=tid, mode="readonly", cwd=h["path"],
+                exclude_cli=h.get("dev_cli"),
             )
-        except (LlmUnavailable, LlmError) as exc:
-            note = f"перекрёстная проверка не проведена: {exc}"
-            self.save(tid, h, step="pr", reviewed=True, review_note=note)
-            return
-        blockers = [x.get("text", "") for x in res.get("defects") or [] if x.get("severity") == "blocker"]
-        h = self.save(tid, h, reviewed=True, review_by=result.model)
+        except LlmError:
+            raise StepFailed(
+                "перекрёстная проверка вернула непонятный ответ: хотфикс без ревью не иду"
+            ) from None
+        blockers = [str(x.get("text", "")) for x in res.get("defects") or []
+                    if x.get("severity") == "blocker"]
+        h = self.save(tid, h, reviewed=True, review_by=result.model, review_defects=blockers)
         if blockers:
             self.send_back(tid, h, "Перекрёстная проверка нашла подтверждённые дефекты:\n- "
-                           + "\n- ".join(blockers))  # затем перепроверка тестами, без второго ревью
+                           + "\n- ".join(blockers))  # после правки — проверки и перепроверка этих дефектов
         else:
             self.save(tid, h, step="pr")
 
@@ -402,8 +423,8 @@ class HotfixRunner:
 
     def _s_merge(self, tid: int, h: dict[str, Any]) -> None:
         pr = str(h["pr"])
-        state = json.loads(self.must(["gh", "pr", "view", pr, "--json", "state"], h["path"]))
-        if state.get("state") != "MERGED":
+        view = json.loads(self.must(["gh", "pr", "view", pr, "--json", "state,mergeCommit"], h["path"]))
+        if view.get("state") != "MERGED":
             self.fetch()
             deployed = self.deployed_sha()
             extra = int(self.git("rev-list", "--count", f"{deployed}..origin/etalon").strip() or 0)
@@ -415,25 +436,52 @@ class HotfixRunner:
             if self.cfg.hotfix.preflight_cmd:
                 self.must(["bash", "-lc", self.cfg.hotfix.preflight_cmd], timeout=120)
             self.must(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
-        self.save(tid, h, step="deploy", merged=True, deploy_ts=self.p.clock())
+            view = json.loads(self.must(["gh", "pr", "view", pr, "--json", "state,mergeCommit"],
+                                        h["path"]))
+        oid = str((view.get("mergeCommit") or {}).get("oid") or "")
+        if not re.fullmatch(r"[0-9a-f]{40}", oid):
+            raise StepFailed("не удалось определить коммит слияния хотфикса")
+        self.save(tid, h, step="deploy", merged=True, merge_sha=oid)
 
     # -- deploy ---------------------------------------------------------------------------
     def _runs(self, path: str) -> list[dict[str, Any]]:
         res = self.run(["gh", "run", "list", "--workflow", "deploy.yml", "--branch", "etalon",
-                        "--limit", "5", "--json", "databaseId,status,conclusion,createdAt,event"],
+                        "--limit", "20", "--json", "databaseId,status,conclusion,createdAt,event"],
                        path)
         return json.loads(res.out) if res.rc == 0 and res.out.strip() else []
 
     def _s_deploy(self, tid: int, h: dict[str, Any]) -> None:
-        if not h.get("deploy_started"):
-            res = self.run(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon"], h["path"])
-            if res.rc != 0:
-                # исход неизвестен: сначала выясняем по списку запусков, повторно не запускаем
-                if not self._find_run(h):
-                    raise StepFailed("не удалось запустить выкладку, запуск не найден")
-            self.save(tid, h, deploy_started=True, deploy_wait_from=self.p.clock())
-        run = self._find_run(h)
+        """Штатный workflow выкатывает ТЕКУЩУЮ вершину etalon (deploy.yml без входных параметров),
+        поэтому: версия фиксируется как merge_sha; перед запуском вершина обязана совпасть с ним; намерение
+        записывается ДО запуска; свой запуск опознаётся по новому id, а не по времени; после
+        перезапуска запуск повторно не отправляется (F4, F5)."""
         now = self.p.clock()
+        if not h.get("deploy_intent"):
+            self.fetch()
+            etalon = self.git("rev-parse", "origin/etalon").strip()
+            if etalon != h["merge_sha"]:
+                raise StepFailed(
+                    f"после слияния хотфикса в etalon появились другие изменения ({etalon[:8]} вместо "
+                    f"{h['merge_sha'][:8]}): штатная выкладка выкатит и их, без вашего решения не запускаю"
+                )
+            before = [r["databaseId"] for r in self._runs(h["path"])]
+            self.save(tid, h, deploy_intent=True, runs_before=before, deploy_ts=now)  # до запуска
+            # Код выхода не важен: исход выясняется чтением списка запусков, повторно не запускаем.
+            self.run(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon"], h["path"])
+        if not h.get("deploy_run_id"):
+            new = [r for r in self._runs(h["path"])
+                   if r["databaseId"] not in h.get("runs_before", [])
+                   and r.get("event") == "workflow_dispatch"]
+            if len(new) > 1:
+                raise StepFailed("появилось несколько новых запусков выкладки, свой опознать нельзя")
+            if not new:
+                if now - float(h.get("deploy_ts", now)) > DEPLOY_LOOKUP_SEC:
+                    raise StepFailed("запуск выкладки не подтверждён (мог не уйти или уйти без ответа): "
+                                     "повторно не запускаю, проверьте Actions вручную")
+                self.save(tid, h, next_poll=now + 10)
+                return
+            self.save(tid, h, deploy_run_id=new[0]["databaseId"], deploy_wait_from=now)
+        run = next((r for r in self._runs(h["path"]) if r["databaseId"] == h["deploy_run_id"]), None)
         if run is None or run.get("status") != "completed":
             if now - float(h.get("deploy_wait_from", now)) > self.cfg.limits.deploy_timeout_sec:
                 raise StepFailed("выкладка не завершилась за отведённое время")
@@ -443,23 +491,15 @@ class HotfixRunner:
             raise StepFailed(f"выкладка завершилась неуспешно ({run.get('conclusion')})")
         self.save(tid, h, step="verify")
 
-    def _find_run(self, h: dict[str, Any]) -> dict[str, Any] | None:
-        started = float(h.get("deploy_ts", 0))
-        from datetime import datetime
-
-        for run in self._runs(h["path"]):
-            created = datetime.fromisoformat(run["createdAt"].replace("Z", "+00:00")).timestamp()
-            if run.get("event") == "workflow_dispatch" and created >= started - 60:
-                return run
-        return None
-
     # -- проверка версии ------------------------------------------------------------------
     def _s_verify(self, tid: int, h: dict[str, Any]) -> None:
-        self.fetch()
-        etalon = self.git("rev-parse", "origin/etalon").strip()
+        """На сервере должен быть именно разрешённый коммит слияния, а не «текущий etalon»."""
         deployed = self.deployed_sha()
-        if deployed != etalon:
-            raise StepFailed(f"версия на сервере ({deployed[:8]}) не совпадает с etalon ({etalon[:8]})")
+        if deployed != h["merge_sha"]:
+            raise StepFailed(
+                f"на сервере версия {deployed[:8]}, а разрешён хотфикс {h['merge_sha'][:8]}: выложено не "
+                "то, что вы разрешили (возможно, вместе с чужими изменениями). Успехом не считаю"
+            )
         base = self.cfg.hotfix.public_base_url.rstrip("/")
         for path in ("/", "/seller/", "/api/health"):
             try:
@@ -476,13 +516,12 @@ class HotfixRunner:
         dev = h.get("dev") or {}
         facts = (
             f"Что сделано: {dev.get('summary', '')}\n"
-            f"Как проверено: тест на дефект падал до правки и проходит после, проверки качества кода, "
-            f"CI зелёный, версия на сервере совпадает с основной веткой, главные адреса отвечают.\n"
+            "Как проверено: тест на дефект падал до правки и проходит после, проверки качества "
+            "кода, проверка другой моделью, CI зелёный, версия на сервере совпадает с разрешённым "
+            "коммитом слияния, главные адреса отвечают.\n"
             "Чего не проверено: сценарий клиента автоматически не повторялся "
             f"({dev.get('client_scenario', '')})."
         )
-        if h.get("review_note"):
-            facts += f"\n{h['review_note'][0].upper()}{h['review_note'][1:]}."
         try:
             body = self.p.llm.ask(
                 "routine",
@@ -492,16 +531,19 @@ class HotfixRunner:
             ).text.strip()
         except (LlmUnavailable, LlmError):
             body = facts
+        t = self.store.ticket(tid)
+        card_note = ""
+        if d.get("form"):  # В1: форма — карточка «Готово»; перенос доводится позже, если связи ещё нет
+            self.p.want_card(tid, "completed")
+            if self.store.data(tid).get("card_applied") != "completed":
+                card_note = ("\nКарточка формы в Trello пока не обновлена (связь ещё не появилась или "
+                             "Trello не ответил): «Готово» проставлю, как только получится.")
         self.p.say_owner(
             f"hotfix_report:{tid}",
-            f"Исправление по обращению №{tid} ({self.p.seller_of(tid)}) выложено.\n\n{body}\n\n"
-            f"{HONEST_STATUS}", tid, "report",
+            f"Исправление по обращению №{tid} ({self.p.seller_of(tid)}) выложено.\n\n{body}{card_note}"
+            f"\n\n{HONEST_STATUS}", tid, "report",
         )
-        t = self.store.ticket(tid)
-        if d.get("form"):  # В1: форма — карточка «Готово», клиенту писать некуда
-            if d.get("card_id") and self.cfg.trello.completed_list_id:
-                self._move_form_card(tid, d, self.cfg.trello.completed_list_id)
-        elif t["chat_id"]:
+        if not d.get("form") and t["chat_id"]:
             first = self.store.ticket_messages(tid)
             try:
                 text = self.p.llm.ask("routine", prompts.client_done_prompt(

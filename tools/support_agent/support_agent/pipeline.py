@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
 MAX_FILE_BYTES = 5_000_000
+MAX_ANSWER_CHARS = 3000  # с запасом на служебный текст предпросмотра (лимит Telegram 4096)
 FORBIDDEN_IN_SUMMARY = re.compile(r"```|\b[\w/.-]+\.(py|tsx?|js|sql)\b|/app/|\b\d{9,}\b")
 
 
@@ -294,6 +295,35 @@ class Pipeline:
         t = self.store.ticket(tid)
         if t["stage"] == "collecting":
             self.store.touch(tid, self.clock())
+        elif t["stage"] in ("await_owner", "postponed", "report_ready"):
+            # F11: уточнение после сводки возвращается аналитику, прежнее подтверждение не действует
+            self._reopen(tid, f"Клиент дописал уже после разбора: {prompts.wrap(m['text'])}")
+        elif t["stage"] == "analysis" and self.store.data(tid).get("analysis"):
+            d = self.store.data(tid)
+            note = f"{d.get('resume_note') or ''}\nКлиент дописал: {prompts.wrap(m['text'])}".strip()
+            self.store.patch_data(tid, resume_note=note)
+
+    @staticmethod
+    def _rev(d: dict[str, Any]) -> int:
+        return int(d.get("rev", 0))
+
+    def _key(self, base: str, tid: int, d: dict[str, Any]) -> str:
+        """Ключ исходящего сообщения с версией сводки: обновлённая сводка не склеивается со старой."""
+        rev = self._rev(d)
+        return f"{base}:{tid}" + (f":{rev}" if rev else "")
+
+    @staticmethod
+    def _key_rev(key: str) -> int:
+        parts = key.split(":")
+        return int(parts[2]) if len(parts) == 3 and parts[2].isdigit() else 0
+
+    def _reopen(self, tid: int, note: str) -> None:
+        """Возврат аналитику (та же сессия): новая версия сводки, старые подтверждения не действуют."""
+        d = self.store.data(tid)
+        self.store.set_stage(
+            tid, "analysis", rev=self._rev(d) + 1, resume_note=note, client_answer=None,
+            preview_sha=None, hotfix_ok=False, verdict=None,
+        )
 
     # ===== стадии =====================================================================
     def tick(self) -> None:
@@ -532,33 +562,41 @@ class Pipeline:
 
     # ----- ответ клиенту на информационный запрос: предпросмотр владельцу (R13, R17) ------
     @staticmethod
-    def answer_sha(text: str, file_path: str | None) -> str:
+    def answer_sha(text: str, files: list[str]) -> str:
         digest = hashlib.sha256(text.encode())
-        digest.update(b"\0")
-        if file_path and Path(file_path).is_file():
-            digest.update(Path(file_path).read_bytes())
+        for path in files:
+            digest.update(b"\0")
+            if Path(path).is_file():
+                digest.update(Path(path).read_bytes())
         return digest.hexdigest()
 
+    def _export_file(self, tid: int, filename: str, content: bytes) -> str:
+        name = re.sub(r"[^\w.\- ]", "_", Path(filename).name) or "export.txt"
+        folder = self.cfg.state_path / "exports" / str(tid) / str(self._rev(self.store.data(tid)))
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / name
+        target.write_bytes(content)
+        return str(target)
+
     def _prepare_client_answer(self, tid: int, analysis: dict[str, Any]) -> None:
-        """Замораживает ровно то, что уйдёт клиенту (текст и/или файл) и его отпечаток."""
+        """Замораживает ровно то, что уйдёт клиенту (текст и/или файлы) и отпечаток.
+
+        Длинный текст не обрезается молча: он уходит файлом, а предпросмотр показывает тот же файл."""
         text = str(analysis.get("info_answer") or "").strip()
-        file_path: str | None = None
+        files: list[str] = []
         info_file = analysis.get("info_file")
         if isinstance(info_file, dict) and info_file.get("content"):
-            name = re.sub(r"[^\w.\- ]", "_", Path(str(info_file.get("filename") or "export.csv")).name)
             content = str(info_file["content"]).encode()
             if len(content) <= MAX_FILE_BYTES:
-                folder = self.cfg.state_path / "exports" / str(tid)
-                folder.mkdir(parents=True, exist_ok=True)
-                target = folder / (name or "export.csv")
-                target.write_bytes(content)
-                file_path = str(target)
-        if not text and not file_path:
+                files.append(self._export_file(tid, str(info_file.get("filename") or "export.csv"), content))
+        if len(text) > MAX_ANSWER_CHARS:
+            files.insert(0, self._export_file(tid, "ответ.txt", text.encode()))
+            text = "Подробный ответ во вложении."
+        if not text and not files:
             self.store.patch_data(tid, client_answer=None)
             return
         self.store.patch_data(
-            tid, client_answer={"text": text, "file": file_path},
-            preview_sha=self.answer_sha(text, file_path),
+            tid, client_answer={"text": text, "files": files}, preview_sha=self.answer_sha(text, files),
         )
 
     def _queue_previews(self, tid: int, t: Any, d: dict[str, Any]) -> None:
@@ -567,20 +605,21 @@ class Pipeline:
         if not answer or not t["chat_id"]:
             return
         ask = "Ответьте «кати» на это сообщение — отправлю клиенту как есть; «нет» — не отправлять."
+        files = answer["files"]
         if answer["text"]:
             self.store.queue_message(
-                key=f"preview:{tid}", chat_id=self.cfg.telegram.owner_chat_id, ticket_id=tid,
-                purpose="info_preview", repeat_ok=True,
+                key=self._key("preview", tid, d), chat_id=self.cfg.telegram.owner_chat_id,
+                ticket_id=tid, purpose="info_preview", repeat_ok=True,
                 text=(
                     f"Предпросмотр для клиента «{t['seller']}» (обращение №{tid}). Дословно уйдёт "
-                    f"в его чат текст между линиями"
-                    f"{', затем файл' if answer['file'] else ''}:\n———\n{answer['text']}\n———\n{ask}"
+                    f"в его чат текст между линиями{', затем файлы' if files else ''}:\n———\n"
+                    f"{answer['text']}\n———\n{ask}"
                 ),
             )
-        if answer["file"]:
+        for i, path in enumerate(files):
             self.store.queue_message(
-                key=f"preview_file:{tid}", chat_id=self.cfg.telegram.owner_chat_id, ticket_id=tid,
-                purpose="info_preview", repeat_ok=True, file_path=answer["file"],
+                key=self._key(f"preview_file{i}", tid, d), chat_id=self.cfg.telegram.owner_chat_id,
+                ticket_id=tid, purpose="info_preview", repeat_ok=True, file_path=path,
                 text=f"Файл для клиента «{t['seller']}» (обращение №{tid}), уйдёт как есть. {ask}",
             )
 
@@ -590,9 +629,11 @@ class Pipeline:
         if not answer:
             self.say_owner(f"noanswer:{tid}", f"По обращению №{tid} отправлять клиенту нечего.", tid)
             return
-        keys = (["preview"] if answer["text"] else []) + (["preview_file"] if answer["file"] else [])
-        for key in keys:
-            row = self.store.outbox_by_key(f"{key}:{tid}")
+        keys = (["preview"] if answer["text"] else []) + [
+            f"preview_file{i}" for i in range(len(answer["files"]))
+        ]
+        for base in keys:
+            row = self.store.outbox_by_key(self._key(base, tid, d))
             if row is None or row["status"] != "sent":
                 self.say_owner(
                     f"preview_wait:{tid}",
@@ -600,7 +641,7 @@ class Pipeline:
                     "ничего не отправляю. Дождитесь предпросмотра и подтвердите его.", tid,
                 )
                 return
-        if self.answer_sha(answer["text"], answer["file"]) != d.get("preview_sha"):
+        if self.answer_sha(answer["text"], answer["files"]) != d.get("preview_sha"):
             self.say_owner(
                 f"preview_changed:{tid}",
                 f"По обращению №{tid} содержимое изменилось после предпросмотра, клиенту не "
@@ -610,11 +651,11 @@ class Pipeline:
         first = self.store.ticket_messages(tid)
         reply_to = first[0]["msg_id"] if first else None
         if answer["text"]:
-            self.say_client(f"t{tid}:info", t["chat_id"], answer["text"], reply_to, tid)
-        if answer["file"]:
+            self.say_client(self._key("t_info", tid, d), t["chat_id"], answer["text"], reply_to, tid)
+        for i, path in enumerate(answer["files"]):
             self.store.queue_message(
-                key=f"t{tid}:info_file", chat_id=t["chat_id"], text="", reply_to=reply_to,
-                ticket_id=tid, purpose="client", repeat_ok=False, file_path=answer["file"],
+                key=self._key(f"t_info_file{i}", tid, d), chat_id=t["chat_id"], text="",
+                reply_to=reply_to, ticket_id=tid, purpose="client", repeat_ok=False, file_path=path,
             )
         self.store.set_stage(tid, "done", answer_confirmed_at=self.clock())
 
@@ -758,13 +799,15 @@ class Pipeline:
                            f"Сверка хотфиксов между собой ({ids}):\n{recon}", purpose="batch")
         for t in ready:
             d = self.store.data(t["id"])
+            updated = " (обновлено после уточнения)" if self._rev(d) else ""
             text = (
-                f"Обращение №{t['id']} · Клиент: {self._client_label(t)}\n\n{d['report']['body']}"
+                f"Обращение №{t['id']} · Клиент: {self._client_label(t)}{updated}\n\n"
+                f"{d['report']['body']}"
             )
             footer = self.FOOTERS.get(d.get("verdict", "other"), "")
             if footer:
                 text += f"\n\n{footer}"
-            self.say_owner(f"report:{t['id']}", text, t["id"], "summary")
+            self.say_owner(self._key("report", t["id"], d), text, t["id"], "summary")
             if d.get("verdict") == "info":
                 self._queue_previews(t["id"], t, d)
             final = "done" if d.get("verdict") in ("trello",) else "await_owner"
@@ -775,34 +818,73 @@ class Pipeline:
         return str(d.get("form", {}).get("client_name") or t["seller"] or "—")
 
     # ===== команды владельца (R21) =====================================================
+    def _label(self, t: Any) -> str:
+        return f"№{t['id']} ({self._client_label(t)}, {self.store.data(t['id']).get('verdict') or 'разбор'})"
+
     def handle_owner_message(self, m: Any) -> None:
         awaiting_rows = self.store.tickets_in("await_owner", "postponed", "await_mockup")
-        awaiting = [{"id": str(t["id"]), "title": self.title_of(t["id"]),
+        # Модели передаются номера, клиент и вердикт; текст из клиентских сообщений полномочий не задаёт.
+        awaiting = [{"id": str(t["id"]), "client": self._client_label(t),
                      "kind": self.store.data(t["id"]).get("verdict", "")} for t in awaiting_rows]
-        target = (
-            self.store.ticket_for_tg_message(m["chat_id"], m["reply_to"]) if m["reply_to"] else None
-        )
+        target: int | None = None
+        target_rev = 0
+        if m["reply_to"]:
+            hit = self.store.outbox_for_tg_message(m["chat_id"], m["reply_to"])
+            if hit is not None and hit["ticket_id"] is not None:
+                target, target_rev = int(hit["ticket_id"]), self._key_rev(hit["key"])
         parsed, _ = self.llm.ask_json(
             "filter", prompts.owner_command_prompt(m["text"], awaiting, target),
             system="Ты разбираешь короткие ответы владельца склада.",
         )
         self.store.set_message(m["id"], status="handled")
         intent = str(parsed.get("intent", "other"))
-        if intent == "other":
-            return
         valid = {t["id"] for t in awaiting_rows}
-        ids = [int(i) for i in parsed.get("ticket_ids") or [] if isinstance(i, int) and i in valid]
-        if target is not None and target in valid and not ids:
+        if intent == "other":
+            if target in valid:  # F11: обычное уточнение владельца возвращается аналитику
+                self._reopen(int(target), f"Владелец уточнил: {prompts.wrap(m['text'])}")  # type: ignore[arg-type]
+            return
+        options = "; ".join(self._label(t) for t in awaiting_rows) or "ничего нет"
+        clarify = (
+            "Не понял, что именно и по какому обращению сделать. Ждут решения: "
+            f"{options}. Ответьте на нужную сводку словами «кати», «нет» или «позже»."
+        )
+        model_ids = [i for i in parsed.get("ticket_ids") or [] if isinstance(i, int)]
+        if intent == "unclear":
+            self.say_owner(f"clarify:{m['id']}", clarify)
+            return
+        if target is not None:
+            # F3: область фиксирует ответ на конкретную сводку или предпросмотр; код решает до модели.
+            if target not in valid:
+                self.say_owner(f"stale:{m['id']}", f"Обращение №{target} уже не ждёт решения. {clarify}")
+                return
+            if (model_ids and set(model_ids) != {target}) or parsed.get("all"):
+                self.say_owner(
+                    f"conflict:{m['id']}",
+                    f"Вы ответили на сводку по обращению №{target}, а в ответе названо другое или "
+                    f"«все». Ничего не запускаю. {clarify}",
+                )
+                return
+            if target_rev != self._rev(self.store.data(target)):
+                self.say_owner(f"outdated:{m['id']}",
+                               f"Это устаревшая версия сводки по обращению №{target}: после неё пришло "
+                               "уточнение. Ответьте на новую сводку.")
+                return
             ids = [target]
-        if parsed.get("all"):
-            ids = [t["id"] for t in awaiting_rows if self._fits(t, intent)]
-        if not ids and len(awaiting_rows) == 1:
-            ids = [awaiting_rows[0]["id"]]
-        if intent == "unclear" or (intent in DECISION_INTENTS and not ids):
-            options = "; ".join(f"№{a['id']} — {a['title']}" for a in awaiting) or "ничего нет"
-            self.say_owner(f"clarify:{m['id']}",
-                           f"Не понял, что именно и по какому обращению сделать. Ждут решения: "
-                           f"{options}. Ответьте на нужную сводку словами «кати», «нет» или «позже».")
+        else:
+            named = {int(n) for n in re.findall(r"\d+", m["text"])}
+            if any(i not in valid or i not in named for i in model_ids):
+                self.say_owner(f"unnamed:{m['id']}", clarify)  # номера не из слов владельца
+                return
+            ids = list(model_ids)
+            if parsed.get("all"):
+                if not re.search(r"\b(все|всё|всех|all)\b", m["text"], re.IGNORECASE):
+                    self.say_owner(f"unnamed:{m['id']}", clarify)
+                    return
+                ids = [t["id"] for t in awaiting_rows if self._fits(t, intent)]
+            if not ids and len(awaiting_rows) == 1 and not model_ids:
+                ids = [awaiting_rows[0]["id"]]
+        if not ids:
+            self.say_owner(f"clarify:{m['id']}", clarify)
             return
         for tid in ids:
             self._apply_decision(tid, intent)
@@ -857,7 +939,12 @@ class Pipeline:
 
     # ===== партнёрский чат (R28-R30) ===================================================
     def handle_partner_message(self, m: Any) -> None:
+        """Сообщение считается обработанным только ПОСЛЕ сохранения результата (F8): при недоступной
+        модели оно остаётся 'new' и обрабатывается после возврата, без второй задачи."""
+        self._partner(m)
         self.store.set_message(m["id"], status="handled")
+
+    def _partner(self, m: Any) -> None:
         waiting = [
             t for t in self.store.tickets_in("task_await_confirm")
             if t["chat_id"] == m["chat_id"] and t["author_id"] == m["author_id"]
@@ -873,11 +960,19 @@ class Pipeline:
                 self.store.set_stage(tid, "task_create")
                 return
             if intent == "edit":
+                if d.get("last_edit_msg") == m["msg_id"]:
+                    return  # повтор обработки того же сообщения
                 edits = list(d.get("edits", [])) + [str(res.get("edit") or m["text"])]
-                self.store.set_stage(tid, "task_draft", edits=edits, version=int(d.get("version", 1)) + 1)
+                self.store.set_stage(tid, "task_draft", edits=edits, last_edit_msg=m["msg_id"],
+                                     version=int(d.get("version", 1)) + 1)
                 return
         if not re.search(r"trello|трелло", m["text"], re.IGNORECASE):
             return
+        if self.store.row(
+            "SELECT id FROM tickets WHERE kind='partner_task' AND chat_id=? "
+            "AND json_extract(data,'$.msg_id')=?", (m["chat_id"], m["msg_id"]),
+        ):
+            return  # задача по этому сообщению уже создана
         res, _ = self.llm.ask_json("filter", prompts.partner_trigger_prompt(m["text"]))
         if res.get("is_task_request") is True:
             chat = self.cfg.telegram.chats[m["chat_id"]]
@@ -995,10 +1090,45 @@ class Pipeline:
                 raise
         return tid
 
+    def want_card(self, tid: int, target: str) -> None:
+        """Желаемое положение карточки формы (В1): сохраняется и доводится, пока не применится (F9)."""
+        self.store.patch_data(tid, card_want=target)
+        self.apply_card_want(tid)
+
+    def apply_card_want(self, tid: int) -> None:
+        d = self.store.data(tid)
+        want = d.get("card_want")
+        if not want or d.get("card_applied") == want or not d.get("form"):
+            return
+        list_id = {"in_progress": self.cfg.trello.in_progress_list_id,
+                   "completed": self.cfg.trello.completed_list_id}.get(str(want), "")
+        if not list_id:
+            return
+        card_id = d.get("card_id")
+        if not card_id:
+            try:
+                card_id = self.wms.request(d["form"]["id"]).get("trello_card_id")
+            except WmsError:
+                return
+            if not card_id:
+                return  # связи ещё нет: перенос повторится, когда она появится
+            self.store.patch_data(tid, card_id=card_id)
+        try:
+            card = self.trello.get_card(card_id)
+            if f"WMS-REQUEST-ID: {d['form']['id']}" not in str(card.get("desc", "")).splitlines():
+                return  # только карточка этого обращения
+            if card.get("idList") != list_id:
+                self.trello.move_card(card_id, list_id)
+            self.store.patch_data(tid, card_applied=want)
+        except TrelloError as exc:
+            log.warning("form card move deferred: %s", exc.code)
+
     def sync_form_cards(self) -> None:
-        """R5: карточку формы создаёт WMS-624; агент ждёт связь и добавляет один комментарий."""
+        """R5: карточку формы создаёт WMS-624; агент ждёт связь, добавляет один комментарий и
+        доводит перенос карточки (В1), если связи или Trello не было в нужный момент."""
         for t in self.store.rows("SELECT * FROM tickets WHERE kind='form' AND stage NOT IN "
                                  "('failed','closed','rejected')"):
+            self.apply_card_want(t["id"])
             d = self.store.data(t["id"])
             if not d.get("report") and not d.get("analysis"):
                 continue

@@ -21,10 +21,13 @@ class ExecScript:
         self.claude_limit = False
         self.codex_limit = False
         self.stdin: list[str | None] = []
+        self.full: list[list[str]] = []
 
     def __call__(self, argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
         self.calls.append(argv)
         self.stdin.append(stdin)
+        self.full.append(argv)
+        argv = argv[next(i for i, a in enumerate(argv) if a in ("claude", "codex")):]
         if argv[0] == "claude":
             if self.claude_limit:
                 return ExecResult(1, json.dumps({"is_error": True, "result": "You've hit your usage limit"}), "")
@@ -154,21 +157,80 @@ def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
         assert blocked in denied
 
 
-def test_codex_dev_runs_in_workspace_write_without_network(tmp_path: Path) -> None:
+def test_codex_dev_runs_under_seatbelt_without_secret_reads(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="hotfix")
     wt = str(tmp_path / "wt")
     llm.ask("routine", "x", mode="write", cwd=wt, ticket_id=tid, session_key="dev")
-    argv = script.calls[-1]
-    assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
-    assert "sandbox_workspace_write.network_access=false" in argv
+    full = script.full[-1]
+    assert full[0] == "/usr/bin/sandbox-exec" and full[1] == "-p"
+    prof = full[2]
+    assert "(deny file-write*)" in prof and f'(allow file-write* (subpath "{Path(wt).resolve()}"))' in prof
+    assert "/.wms-support-agent" in prof and "/.ssh" in prof and "/.config/gh" in prof
+    assert "/.codex/auth.json" not in prof  # токен нужен самому Codex (остаток риска описан)
+    assert "(deny network*)" not in prof  # Codex ходит в API
+    inner = full[3:]
+    assert inner[inner.index("-s") + 1] == "danger-full-access"  # вложенный Seatbelt невозможен
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
-    resume = script.calls[-1]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and "danger-full-access" not in resume
-    assert 'sandbox_mode="workspace-write"' in resume
-    assert "sandbox_workspace_write.network_access=false" in resume
+    resume = script.full[-1][3:]
+    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and 'sandbox_mode="danger-full-access"' in resume
+
+
+def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    llm.cfg.sandbox.enabled = False
+    store.kv_set("cooldown:claude", time.time() + 999)
+    llm.ask("routine", "x", mode="write", cwd=str(tmp_path / "wt"))
+    argv = script.full[-1]
+    assert argv[0] == "codex" and argv[argv.index("-s") + 1] == "workspace-write"
+    assert "sandbox_workspace_write.network_access=false" in argv
+
+
+def test_codex_readonly_stays_native_read_only(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
+    argv = script.full[-1]
+    assert argv[0] == "codex" and argv[argv.index("-s") + 1] == "read-only"
+
+
+def test_claude_write_and_readonly_get_builtin_sandbox_and_secret_read_denies(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    llm.ask("routine", "x", mode="write", cwd=str(tmp_path))
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
+    for argv in script.full[-2:]:
+        settings = json.loads(argv[argv.index("--settings") + 1])["sandbox"]
+        assert settings["enabled"] is True and settings["allowUnsandboxedCommands"] is False
+        deny = settings["filesystem"]["denyRead"]
+        assert any(p.endswith("/.wms-support-agent") for p in deny) and any(p.endswith("/.ssh") for p in deny)
+        assert any(p.endswith("/.config/gh") for p in deny) and any("insurance-benchmark" in p for p in deny)
+        denied_tools = argv[argv.index("--disallowedTools") + 1:]
+        assert "Read(~/.wms-support-agent/**)" in denied_tools and "Read(**/*.env)" in denied_tools
+
+
+def test_sandbox_unavailable_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from support_agent import sandbox
+
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    monkeypatch.setattr(sandbox, "available", lambda: False)
+    with pytest.raises(sandbox.SandboxUnavailable):
+        llm.ask("routine", "x", mode="write", cwd=str(tmp_path))
+    assert script.calls == []
+
+
+def test_sensitive_env_is_not_passed_to_children(monkeypatch: pytest.MonkeyPatch) -> None:
+    from support_agent.llm import default_exec
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-should-not-leak")
+    monkeypatch.setenv("GH_TOKEN", "gh-should-not-leak")
+    res = default_exec(["/usr/bin/env"], None, 20, None)
+    assert "should-not-leak" not in res.out and "PATH=" in res.out
 
 
 def test_real_codex_json_stream_gives_session_id() -> None:

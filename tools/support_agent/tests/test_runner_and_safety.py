@@ -327,3 +327,47 @@ def test_send_document_uploads_file_and_classifies_errors(tmp_path: Path) -> Non
         bad.send_document(5, str(f))
     except TelegramError as exc:
         assert exc.outcome == "unknown"
+
+
+def test_full_http_path_to_log_handler_has_no_secrets(env: Any) -> None:
+    """F1: настоящие клиенты httpx -> logging -> обработчик; секретов в журнале нет."""
+    import io
+
+    from support_agent.runner import install_logging
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(name)s %(levelname)s %(message)s"))
+    root = logging.getLogger()
+    old_level, old_handlers = root.level, list(root.handlers)
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+    try:
+        install_logging(env.cfg)
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            if "telegram" in request.url.host:
+                return httpx.Response(200, json={"ok": True, "result": []})
+            return httpx.Response(200, json={"id": "c"})
+
+        http = httpx.Client(transport=httpx.MockTransport(answer))
+        TelegramClient(env.cfg.telegram.bot_token, http).get_updates(0, 1)
+        TrelloClient(env.cfg.trello, http).get_card("c1")
+        # даже если кто-то поднимет httpx до INFO, URL с токенами маскируется обработчиком
+        logging.getLogger("httpx").setLevel(logging.INFO)
+        http.get(f"https://api.telegram.org/bot{env.cfg.telegram.bot_token}/getMe")
+        http.get(f"https://api.trello.com/1/cards/c?key={env.cfg.trello.api_key}&token={env.cfg.trello.token}")
+        try:
+            raise RuntimeError(f"падение с {env.cfg.trello.token} и bot{env.cfg.telegram.bot_token}")
+        except RuntimeError:
+            logging.getLogger("support_agent.test").exception("ошибка %s", env.cfg.wms.agent_key)
+        logging.getLogger("support_agent.test").warning("Bearer sk-abcdefghijklmnop1234 token=zzzzzzzzz")
+    finally:
+        root.handlers = old_handlers
+        root.setLevel(old_level)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+    out = stream.getvalue()
+    assert out  # запись действительно дошла до обработчика
+    for secret in (*env.cfg.secrets(), "SECRET-BOT-TOKEN", "abcdefghijklmnop1234", "zzzzzzzzz"):
+        assert secret not in out, secret
+    assert "bot***" in out and "Traceback" in out

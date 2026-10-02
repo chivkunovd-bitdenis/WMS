@@ -370,11 +370,11 @@ def test_info_answer_is_previewed_verbatim_and_sent_only_after_confirmation(env:
     assert "———\nНе переданы короба 3 и 5\n———" in preview  # ровно то, что уйдёт клиенту
     assert not any("Не переданы короба" in t for t in owner if t is not preview)  # не в сводке
     script_owner(env, {"intent": "go", "ticket_ids": [1], "all": False})
-    env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец")
+    env.say(OWNER_CHAT, "кати 1", user=OWNER_ID, name="Владелец")
     env.pipe.tick()
     env.flush()
     assert env.tg.to(CLIENT_CHAT) == ["Не переданы короба 3 и 5"]
-    env.say(OWNER_CHAT, "кати ещё раз", user=OWNER_ID, name="Владелец")
+    env.say(OWNER_CHAT, "кати 1 ещё раз", user=OWNER_ID, name="Владелец")
     env.flush()
     assert env.tg.to(CLIENT_CHAT) == ["Не переданы короба 3 и 5"]  # второй раз не уходит
 
@@ -410,13 +410,13 @@ def test_no_send_before_preview_is_delivered_or_after_it_changed(env: Any) -> No
     env.clock.advance(100)
     env.pipe.tick()  # сводка и предпросмотр поставлены в очередь, но не отправлены (нет flush)
     script_owner(env, {"intent": "go", "ticket_ids": [1], "all": False})
-    env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец")
+    env.say(OWNER_CHAT, "кати 1", user=OWNER_ID, name="Владелец")
     env.flush()
     assert env.tg.to(CLIENT_CHAT) == []  # до доставки предпросмотра клиенту не уходит
     env.flush()
     data = env.store.data(1)
     env.store.patch_data(1, client_answer={**data["client_answer"], "text": "подменённый текст"})
-    env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец", msg_id="again")
+    env.say(OWNER_CHAT, "кати 1", user=OWNER_ID, name="Владелец", msg_id="again")
     env.flush()
     assert env.tg.to(CLIENT_CHAT) == []
     assert any("изменилось после предпросмотра" in t for t in env.tg.to(OWNER_CHAT))
@@ -430,7 +430,7 @@ def test_file_export_is_previewed_as_document_and_sent_only_after_confirmation(e
     path = Path(env.tg.documents[0][1])
     assert path.read_text(encoding="utf-8") == "qr;box\n1;A\n2;B\n" and path.name == "short.csv"
     assert any(t.startswith("Предпросмотр") and "Выгрузка во вложении" in t for t in env.tg.to(OWNER_CHAT))
-    preview_file = env.store.outbox_by_key("preview_file:1")["tg_message_id"]
+    preview_file = env.store.outbox_by_key("preview_file0:1")["tg_message_id"]
     script_owner(env, {"intent": "go", "ticket_ids": [], "all": False})
     env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец", reply_to=preview_file)
     env.flush()
@@ -443,9 +443,9 @@ def test_file_changed_after_preview_is_not_sent(env: Any) -> None:
     script(env)
     info_ticket(env, "Выгрузка", "92", file="a;b\n")
     finish_reports(env)
-    Path(env.store.data(1)["client_answer"]["file"]).write_text("подмена", encoding="utf-8")
+    Path(env.store.data(1)["client_answer"]["files"][0]).write_text("подмена", encoding="utf-8")
     script_owner(env, {"intent": "go", "ticket_ids": [1], "all": False})
-    env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец")
+    env.say(OWNER_CHAT, "кати 1", user=OWNER_ID, name="Владелец")
     env.flush()
     assert env.tg.to(CLIENT_CHAT) == [] and [d[0] for d in env.tg.documents] == [OWNER_CHAT]
 

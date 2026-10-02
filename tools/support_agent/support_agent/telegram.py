@@ -15,6 +15,7 @@ from .store import Store
 log = logging.getLogger(__name__)
 API = "https://api.telegram.org"
 MAX_SEND_ATTEMPTS = 5
+MAX_TEXT = 4096
 
 
 class TelegramError(Exception):
@@ -67,7 +68,9 @@ class TelegramClient:
         return result
 
     def send_message(self, chat_id: int, text: str, reply_to: str | None = None) -> str:
-        payload: dict[str, Any] = {"chat_id": chat_id, "text": text[:4000]}
+        if len(text) > MAX_TEXT:  # молча не обрезаем: клиент и владелец должны видеть одно и то же
+            raise TelegramError("rejected", "too_long")
+        payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if reply_to:
             payload["reply_to_message_id"] = int(reply_to)
             payload["allow_sending_without_reply"] = True
@@ -165,6 +168,16 @@ def flush_outbox(store: Store, tg: TelegramClient, cfg: Config) -> int:
             if item["file_path"]:
                 message_id = tg.send_document(
                     item["chat_id"], item["file_path"], item["text"], item["reply_to"]
+                )
+            elif len(item["text"]) > MAX_TEXT:
+                # Длинное служебное сообщение уходит целиком файлом, а не обрезанным текстом.
+                folder = cfg.state_path / "outbox-long"
+                folder.mkdir(parents=True, exist_ok=True)
+                path = folder / f"message-{item['id']}.txt"
+                path.write_text(item["text"], encoding="utf-8")
+                message_id = tg.send_document(
+                    item["chat_id"], str(path), item["text"][:900] + "…\n(полный текст в файле)",
+                    item["reply_to"],
                 )
             else:
                 message_id = tg.send_message(item["chat_id"], item["text"], item["reply_to"])

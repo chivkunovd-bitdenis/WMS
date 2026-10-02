@@ -138,7 +138,7 @@ def reconcile_prompt(items: str) -> str:
 
 
 def owner_command_prompt(text: str, awaiting: list[dict[str, str]], target: int | None) -> str:
-    lines = "\n".join(f"- {t['id']}: {t['title']} ({t['kind']})" for t in awaiting) or "(нет)"
+    lines = "\n".join(f"- {t['id']}: клиент {t['client']} ({t['kind']})" for t in awaiting) or "(нет)"
     return (
         "Владелец склада ответил в канале сводок. Определи, какое решение он принял.\n"
         f"Ожидают решения:\n{lines}\n"
@@ -232,6 +232,17 @@ def review_prompt(number: str, summary: str) -> str:
         f"Контекст хотфикса: {summary}\n"
         'Верни {"verdict": "ok|defects", "defects": [{"severity": "blocker|minor", '
         '"text": "что именно и где"}]}. blocker — только подтверждённый дефект. ' + JSON_ONLY
+    )
+
+
+def recheck_prompt(number: str, defects: list[str]) -> str:
+    listing = "\n".join(f"- {d}" for d in defects)
+    return (
+        f"Разработчик исправил дефекты, найденные при проверке хотфикса {number}. Посмотри diff "
+        "(git diff origin/etalon...HEAD) и убедись, что именно ЭТИ дефекты устранены и не появилось "
+        f"новых побочных поломок. Ничего не изменяй.\nДефекты:\n{listing}\n"
+        'Верни {"verdict": "ok|defects", "defects": [{"severity": "blocker|minor", "text": "..."}]}. '
+        "blocker — только подтверждённый дефект. " + JSON_ONLY
     )
 
 

@@ -10,7 +10,7 @@ APP="$STATE/app"
 LABEL="pro.sellerfocus.wms-support-agent"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
-mkdir -p "$APP" "$STATE/models" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+mkdir -p "$APP" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 rsync -a --delete --exclude .venv --exclude tests --exclude __pycache__ --exclude '.*cache' \
   "$SRC/" "$APP/"
 [ -d "$APP/.venv" ] || python3 -m venv "$APP/.venv"
@@ -23,12 +23,16 @@ if [ ! -f "$STATE/config.json" ]; then
   exit 0
 fi
 chmod 600 "$STATE/config.json"
-"$APP/.venv/bin/python" -m support_agent check-config --config "$STATE/config.json" || {
+# Модуль лежит в $APP, поэтому проверку выполняем оттуда, а не из текущего каталога (F10).
+(cd "$APP" && "$APP/.venv/bin/python" -m support_agent check-config --config "$STATE/config.json") || {
   echo "Конфигурация неполная (см. выше). Служба не запущена."; exit 1; }
 
 sed -e "s#__APP__#$APP#g" -e "s#__HOME__#$HOME#g" \
   "$SRC/launchd/$LABEL.plist.template" > "$PLIST"
 plutil -lint "$PLIST"
+if [ -n "${WMS_AGENT_SKIP_LAUNCHD:-}" ]; then
+  echo "Проверка пройдена, launchd пропущен (WMS_AGENT_SKIP_LAUNCHD)."; exit 0
+fi
 launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
