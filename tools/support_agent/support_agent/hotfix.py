@@ -178,7 +178,7 @@ class HotfixRunner:
         prompt = prompts.dev_prompt(number, self.cfg.hotfix.backend_bin, self._request_text(tid),
                                     json.dumps(analysis, ensure_ascii=False)[:6000])
         res, result = self.p.llm.ask_json(
-            "mockup" if frontend else "routine", prompt, ticket_id=tid, session_key="dev",
+            "frontend" if frontend else "routine", prompt, ticket_id=tid, session_key="dev",
             mode="write", cwd=h["path"], timeout=3600, cli_only="claude" if frontend else None,
         )
         self.save(tid, h, step="checks", dev=res, dev_cli=result.cli, frontend=frontend)
@@ -206,7 +206,7 @@ class HotfixRunner:
             raise StepFailed("не удалось быстро устранить замечания проверки: " + feedback[:300])
         self.save(tid, h, **{counter: rounds + 1})
         dev, _ = self.p.llm.ask_json(
-            "mockup" if h.get("frontend") else "routine",
+            "frontend" if h.get("frontend") else "routine",
             feedback + "\nИсправь, повтори проверки, закоммить (с номером WMS в сообщении). "
             'Верни ТОЛЬКО JSON {"summary": "...", "test_files": ["путь"], "migration": false, '
             '"frontend": true|false, "client_scenario": "..."}',

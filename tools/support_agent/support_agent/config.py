@@ -72,6 +72,7 @@ class LlmCfg:
                 "analyst": "opus",
                 "review": "opus",
                 "mockup": "opus",
+                "frontend": "opus",
             },
             "codex": {
                 "filter": "gpt-5.6-sol",

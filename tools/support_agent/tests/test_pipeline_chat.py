@@ -441,3 +441,17 @@ def test_outbox_key_makes_message_once(env: Any) -> None:
     assert len(env.tg.sent) == 1
     flush_outbox(env.store, env.tg, env.cfg)
     assert len(env.tg.sent) == 1
+
+
+def test_message_that_keeps_failing_is_reported_not_looped(env: Any) -> None:
+    def boom(prompt: str, kw: Any) -> Any:
+        raise KeyError("unexpected")
+
+    env.llm.on("filter", "Новое сообщение из клиентского чата", boom)
+    env.say(CLIENT_CHAT, "не работает передача")
+    for _ in range(4):
+        env.pipe.tick()
+    env.flush()
+    assert env.store.messages_with_status("error")
+    assert sum("обработать не получилось" in t for t in env.tg.to(OWNER_CHAT)) == 1
+    assert env.tg.to(CLIENT_CHAT) == []

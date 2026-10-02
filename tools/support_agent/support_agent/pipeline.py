@@ -240,6 +240,17 @@ class Pipeline:
                 return  # сообщение остаётся 'new': обработается, когда модель вернётся
             except LlmError:
                 self.store.set_message(m["id"], status="attached" if m["ticket_id"] else "dropped")
+            except Exception as exc:
+                log.exception("message %s failed", m["id"])
+                attempts = m["attempts"] + 1
+                self.store.set_message(m["id"], attempts=attempts)
+                if attempts >= 3:
+                    self.store.set_message(m["id"], status="error")
+                    self.say_owner(
+                        f"msg_error:{m['id']}",
+                        f"Сообщение из чата ({self._seller_for_chat(m['chat_id'], m['role'])}) "
+                        f"обработать не получилось ({type(exc).__name__}). Посмотрите его вручную.",
+                    )
 
     # ----- клиентский чат ------------------------------------------------------------
     def handle_client_message(self, m: Any) -> None:
@@ -651,7 +662,7 @@ class Pipeline:
             except (LlmUnavailable, LlmError):
                 recon = "Сверка хотфиксов между собой не проведена: модель недоступна."
             ids = ", ".join(str(t["id"]) for t in hotfixes)
-            self.say_owner(f"reconcile:{ids}:{int(now)}",
+            self.say_owner(f"reconcile:{ids}",
                            f"Порция: {len(ready)} обращений, из них хотфиксов {len(hotfixes)}. "
                            f"Сверка хотфиксов между собой ({ids}):\n{recon}", purpose="batch")
         for t in ready:
