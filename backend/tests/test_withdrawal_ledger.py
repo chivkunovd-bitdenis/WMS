@@ -100,6 +100,7 @@ async def seed(
         seller_id=seller.id,
         warehouse_id=warehouse.id,
         wb_order_id=uuid.uuid4().int % 1_000_000_000,
+        wb_rid=uuid.uuid4().hex,
         supply_id=supply.id,
         product_id=product.id,
         marketplace="wb",
@@ -159,12 +160,13 @@ async def document(
     op.token_expires_at = datetime.now(UTC) + timedelta(hours=1)
     op.state = state
     item = (await current_items(session, scope, op.id))[0]
+    item.product_cost = 99_999_999_999_999_999
     payload = json.dumps(
         {
             "inn": INN,
             "action": "DISTANCE",
             "action_date": "2026-09-23",
-            "products": [{"cis": item.cis, "product_cost": int(item.product_cost)}],
+            "products": [{"cis": item.cis, "product_cost": item.product_cost}],
         },
         separators=(",", ":"),
     ).encode()
@@ -262,8 +264,8 @@ async def test_create_reload_and_overlap_resume_without_duplicate(db_session: As
     assert await db_session.scalar(select(func.count()).select_from(WithdrawalOperation)) == 1
     assert await db_session.scalar(select(func.count()).select_from(WithdrawalItem)) == 1
     item = (await current_items(db_session, scope, op.id))[0]
-    assert item.cis == marking.value and item.product_cost == 99999999999999999
-    assert item.price_snapshot_id is not None
+    assert item.cis == marking.value and item.product_cost is None
+    assert item.price_snapshot_id is None
     with pytest.raises(WithdrawalError, match="idempotency_selection_mismatch"):
         await create_operation(
             db_session, scope, row_ids=[uuid.uuid4()], client_request_id=request_id
@@ -284,7 +286,9 @@ async def test_unshipped_and_forged_selection_is_rejected(db_session: AsyncSessi
         )
 
 
-async def test_registry_missing_price_is_an_actual_local_error(db_session: AsyncSession) -> None:
+async def test_registry_does_not_require_price_before_group_is_known(
+    db_session: AsyncSession,
+) -> None:
     scope, _, order, _ = await seed(db_session)
     await capture_wb_price_snapshot(
         db_session,
@@ -294,8 +298,8 @@ async def test_registry_missing_price_is_an_actual_local_error(db_session: Async
         row={"currencyCode": 840, "finalPrice": 100},
     )
     rows, _ = await registry(db_session, scope)
-    assert rows[0]["status"] == "error"
-    assert rows[0]["error"]["code"] == "missing_rub_final_price"
+    assert rows[0]["status"] == "not_withdrawn"
+    assert rows[0]["error"] is None
 
 
 async def test_partial_success_survives_neighbour_failure_and_retry(
@@ -390,7 +394,9 @@ async def test_possible_duplicate_incident_cannot_disappear_on_later_read(
     assert doc.gis_document_id is None and set(doc.reconciliation_ids) == set(ids)
 
 
-async def test_retry_retains_old_price_error_and_new_attempt(db_session: AsyncSession) -> None:
+async def test_operation_defers_invalid_price_until_group_is_known(
+    db_session: AsyncSession,
+) -> None:
     scope, marking, order, _ = await seed(db_session)
     await capture_wb_price_snapshot(
         db_session,
@@ -403,23 +409,10 @@ async def test_retry_retains_old_price_error_and_new_attempt(db_session: AsyncSe
         db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
     )
     await db_session.commit()
-    old = (await current_items(db_session, scope, op.id))[0]
-    assert op.state == "failed" and old.error["code"] == "missing_rub_final_price"
-    await capture_wb_price_snapshot(
-        db_session,
-        tenant_id=scope.tenant_id,
-        seller_id=scope.seller_id,
-        order_id=order.id,
-        row={"finalPrice": 12345, "currencyCode": 643},
-    )
-    await db_session.commit()
-    await retry_operation(db_session, scope, op.id, expected_attempt=1)
-    await db_session.commit()
-    new = (await current_items(db_session, scope, op.id))[0]
-    assert new.attempt == 2 and new.product_cost == 12345 and new.document_id is None
-    assert old.state == "failed" and old.error["code"] == "missing_rub_final_price"
-    assert not old.holds_claim and old.price_snapshot_id != new.price_snapshot_id
-    assert (await retry_operation(db_session, scope, op.id, expected_attempt=1)).attempt == 2
+    item = (await current_items(db_session, scope, op.id))[0]
+    assert op.state == "created"
+    assert item.state == "pending" and item.error is None
+    assert item.product_cost is None and item.price_snapshot_id is None
 
 
 @pytest.mark.parametrize(
