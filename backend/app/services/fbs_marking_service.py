@@ -70,6 +70,7 @@ from app.services.ozon_fbs_process_service import (
 from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wildberries_client import (
     WildberriesClientError,
+    kiz_scan_skips_wb_readback,
     put_marketplace_order_meta,
 )
 from app.services.wildberries_credentials_service import (
@@ -1187,6 +1188,11 @@ async def attach_order_meta_to_wb_and_sync(
 
     # WMS-579: from here on WB has answered the PUT, so every failure below is
     # an unknown result of an accepted write, not a refusal of it.
+    if kiz_scan_skips_wb_readback():
+        # WMS-639: the packing scan never waits for WB's verdict; the accepted
+        # write is pending and the background reconciliation reads WB later.
+        await session.flush()
+        raise FbsMarkingWriteAcceptedError("wb_pending_confirmation")
     try:
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
     except WildberriesClientError as exc:
