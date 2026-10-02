@@ -181,7 +181,7 @@ def ensure_seller(seller: str, env: dict[str, str] | None = None) -> str:
     rows = list(csv.reader(io.StringIO(pre.stdout)))[1:]
     catalog = sa.parse_preflight([r for r in rows if len(r) == 3])
     count = len(sa.included_tables({k: set(v) for k, v in catalog.columns.items()}))
-    if sa.is_current(catalog):
+    if sa.is_current(catalog, seller):
         _apply(sa.render_role_sql(seller), env)
         state = "unchanged"
     else:

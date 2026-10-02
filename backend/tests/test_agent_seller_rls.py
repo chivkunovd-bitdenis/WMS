@@ -1046,3 +1046,82 @@ def test_enable_rls_and_policies_are_emitted_only_where_missing() -> None:
     old = sa.Catalog(columns=cat.columns, rls_enabled={"products"}, policies={("products", pol)},
                      role_version="wms-agent:other:xxxx")
     assert f'DROP POLICY "{pol}" ON public."products"' in sa.render_sql(seller, old)
+
+
+# ------------------------------------------------------------------------------ круг 11: метка версии не доказывает состояние
+def own_product_count_matches(cluster: Cluster, world: World, tag: str) -> None:
+    role = world.role(tag)
+    sid = world.sellers[tag][0]
+    own = cluster.q("postgres", f"SELECT count(*) FROM products WHERE seller_id = '{sid}'").stdout.strip()
+    seen = cluster.q(role, "SELECT count(*), count(*) FILTER (WHERE seller_id = '" + sid + "') FROM products").stdout.strip()
+    assert seen == f"{own}|{own}", (seen, own)  # видны только свои строки
+
+
+def test_current_label_with_disabled_rls_is_repaired_not_reported_unchanged(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+    cluster.q("postgres", "ALTER TABLE public.products DISABLE ROW LEVEL SECURITY")
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert cluster.q("postgres", "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.products'::regclass").stdout.strip() == "t"
+    own_product_count_matches(cluster, world, "S2")
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+
+
+def test_current_label_with_a_deleted_own_policy_is_repaired(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    pol = "agent_" + sid.replace("-", "")
+    cluster.q("postgres", f'DROP POLICY "{pol}" ON public.products')
+    # без политики роль не видит ничего (fail closed), метка при этом прежняя
+    assert cluster.q(world.role("S2"), "SELECT count(*) FROM products").stdout.strip() == "0"
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    own_product_count_matches(cluster, world, "S2")
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+
+
+def test_current_label_with_a_deleted_shared_policy_is_repaired(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S3"][0]
+    cluster.q("postgres", 'DROP POLICY agent_ro_all ON public.products')
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert cluster.q("postgres", "SELECT count(*) FROM pg_policy WHERE polname = 'agent_ro_all' AND polrelid = 'public.products'::regclass"
+                     ).stdout.strip() == "1"
+
+
+def test_current_branch_still_does_not_wait_for_a_held_lock_when_everything_is_in_place(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = world.sellers["S2"][0]
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert res.returncode == 0 and "state=unchanged" in res.stdout and elapsed < 1.5
+
+
+def test_widening_the_secret_rule_revokes_a_previously_granted_column(cluster: Cluster, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    sid = world.sellers["S2"][0]
+    role = world.role("S2")
+    env = {**cluster.gateway_env()}
+    cluster.q("postgres", "ALTER TABLE public.products ADD COLUMN access_key text")
+    try:
+        gateway.ensure_seller(sid, env)
+        assert cluster.q(role, "SELECT access_key FROM products LIMIT 1").returncode == 0  # правило её не знает: выдана
+        policies_before = role_policies(cluster, role)
+        monkeypatch.setattr(sa, "SECRET_NAME_RE", re.compile(sa.SECRET_NAME_RE.pattern[:-1] + "|access_key)", re.IGNORECASE))
+        assert sa.is_secret("products", "access_key")
+        out = gateway.ensure_seller(sid, env)
+        assert "state=applied" in out  # раньше: unchanged и колонка оставалась
+        denied = cluster.q(role, "SELECT access_key FROM products LIMIT 1")
+        assert denied.returncode != 0 and "permission denied" in denied.stderr
+        assert cluster.q(role, "SELECT id FROM products LIMIT 1").returncode == 0
+        assert role_policies(cluster, role) == policies_before  # политики не пересоздавались
+    finally:
+        monkeypatch.undo()
+        cluster.q("postgres", "ALTER TABLE public.products DROP COLUMN access_key")
+        gateway.ensure_seller(sid, env)

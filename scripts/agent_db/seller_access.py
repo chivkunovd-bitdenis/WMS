@@ -254,10 +254,13 @@ POLICY_VERSION = hashlib.sha256(repr([(t.name, t.kind, t.hops, t.seller_col) for
 
 def grant_version(catalog: Catalog) -> str:
     tables = included_tables({k: set(v) for k, v in catalog.columns.items()})
+    # фактически выдаваемые колонки (после правил секретов): расширение SECRET_NAME_RE или SECRET_COLUMNS
+    # меняет список и тем самым отзывает ранее выданную колонку
     blob = repr([
-        sorted((t.name, sorted(catalog.columns[t.name])) for t in tables),
+        sorted((t.name, allowed_columns(t.name, sorted(catalog.columns[t.name]), _required_columns(t)))
+               for t in tables),
         sorted(catalog.secdef_functions), catalog.shared_ro_exists, SESSION_SETTINGS,
-        sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items()),
+        sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items()), SECRET_NAME_RE.pattern,
     ])
     return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
@@ -271,9 +274,19 @@ def stored_policy_version(catalog: Catalog) -> str | None:
     return parts[1] if len(parts) == 3 and parts[0] + ":" == VERSION_PREFIX else None
 
 
-def is_current(catalog: Catalog) -> bool:
-    """Роль уже на текущей версии: тяжёлую часть (политики, права) повторять не нужно."""
-    return catalog.role_version == target_version(catalog)
+def is_current(catalog: Catalog, seller_id: str) -> bool:
+    """Короткая ветка (тяжёлую часть не повторять) только если метка версии совпала И по уже прочитанному
+    состоянию на каждой таблице списка включён RLS и есть собственная политика роли (и общая agent_ro_all,
+    где положено). Метка одна не доказывает состояние: RLS могли выключить, политику удалить, таблицу пересоздать."""
+    if catalog.role_version != target_version(catalog):
+        return False
+    polname = "agent_" + seller_id.strip().lower().replace("-", "")
+    for t in included_tables({k: set(v) for k, v in catalog.columns.items()}):
+        if t.name not in catalog.rls_enabled or (t.name, polname) not in catalog.policies:
+            return False
+        if catalog.shared_ro_exists and (t.name, "agent_ro_all") not in catalog.policies:
+            return False
+    return True
 
 
 def _role_statements(role: str) -> list[str]:
