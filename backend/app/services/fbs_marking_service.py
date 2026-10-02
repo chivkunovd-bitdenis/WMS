@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -1163,6 +1164,12 @@ async def attach_order_meta_to_wb_and_sync(
         return await list_order_markings(session, tenant_id, order.id)
 
     token = api_token or await require_marketplace_token(session, tenant_id, order.seller_id)
+    if kiz_scan_skips_wb_readback():
+        # WMS-640: the packing scan never calls WB. The code stays bound in WMS and
+        # takes the existing «no answer» way: the pending reconciliation reads WB
+        # and sends it (right after the scan's answer and on every autopoll).
+        marking.meta_status = META_STATUS_ASSIGNED
+        raise FbsMarkingError("wb_transport_error")
     try:
         await put_marketplace_order_meta(
             http_client,
@@ -1270,6 +1277,36 @@ def _kiz_write_failed_before_wb(error_code: str | None) -> bool:
     return code in {
         "wb_upstream_error_429", "wb_upstream_error_408", "wb_transport_error",
     } or code.startswith("wb_upstream_error_5")
+
+
+# WMS-640: the background send starts once the operator has moved on from this
+# order; the existing resend holds the order's locks while it talks to WB.
+SCAN_KIZ_RESEND_DELAY_SEC = 15.0
+
+
+async def resend_scan_kiz_after_answer(
+    tenant_id: uuid.UUID, order_ids: list[uuid.UUID]
+) -> None:
+    """WMS-640: send the scan's deferred KIZ to WB shortly after the operator's answer.
+
+    The same ``resend_pending_kiz_bindings`` the autopoll runs; a failure here is
+    left to the next autopoll, the operator never waits for it.
+    """
+    from app.db.session import SessionLocal
+
+    await asyncio.sleep(SCAN_KIZ_RESEND_DELAY_SEC)
+    for order_id in order_ids:
+        try:
+            async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+                order = await session.get(FbsOrder, order_id)
+                if order is None or order.tenant_id != tenant_id or order.marketplace != "wb":
+                    continue
+                token = await require_marketplace_token(session, tenant_id, order.seller_id)
+                await resend_pending_kiz_bindings(
+                    session, [(order_id, tenant_id)], http_client, token
+                )
+        except Exception:
+            logger.exception("WMS-640: background KIZ send failed for order %s", order_id)
 
 
 async def resend_pending_kiz_bindings(

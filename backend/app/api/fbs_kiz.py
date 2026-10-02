@@ -5,7 +5,7 @@ import uuid
 from typing import Annotated, Literal, cast
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.user import User
 from app.services import fbs_kiz_service as kiz_svc
+from app.services import fbs_marking_service as marking_svc
 from app.services.wildberries_client import short_kiz_write_timeout
 
 router = APIRouter(
@@ -207,6 +208,7 @@ async def commit_fbs_order_kiz(
     body: FbsKizCommitBody,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> list[FbsKizCommitRowOut]:
     pairs = [
         kiz_svc.FbsKizCommitPair(
@@ -217,6 +219,7 @@ async def commit_fbs_order_kiz(
         )
         for item in body.pairs
     ]
+    tenant_id = user.tenant_id
     wait = short_kiz_write_timeout() if body.scan_no_wb_wait else contextlib.nullcontext()
     async with httpx.AsyncClient() as http_client:
         with wait:
@@ -228,6 +231,13 @@ async def commit_fbs_order_kiz(
                 body.idempotency_key,
                 http_client,
             )
+    if body.scan_no_wb_wait:
+        # WMS-640: WB gets the scan's code in the background, never in the request.
+        background_tasks.add_task(
+            marking_svc.resend_scan_kiz_after_answer,
+            tenant_id,
+            [pair.order_id for pair in pairs],
+        )
     return [_commit_row_out(row) for row in rows]
 
 

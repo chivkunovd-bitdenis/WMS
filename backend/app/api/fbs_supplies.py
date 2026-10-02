@@ -6,7 +6,16 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -2442,6 +2451,7 @@ async def scan_fbs_supply_product_for_auto_print(
     body: FbsScanAutoPrintBody,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> FbsScanAutoPrintOut:
     """Select one WB order for a physical product scan and prepare its labels.
 
@@ -2552,6 +2562,11 @@ async def scan_fbs_supply_product_for_auto_print(
     # independently durable phase so a lost response can recover exactly this
     # order and these targets on the same scan id.
     await session.commit()
+    if body.print_chz:
+        # WMS-640: the pool KIZ reaches WB in the background, never in the request.
+        background_tasks.add_task(
+            marking_svc.resend_scan_kiz_after_answer, tenant_id, [selected.order_id]
+        )
 
     order_result = next(
         (order for order in result.orders if order.order_id == selected.order_id),

@@ -245,7 +245,10 @@ async def test_d1_wb_takes_the_write_but_reads_back_a_refusal(
         return None
 
     async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
-        reads.append(1)
+        from app.services import wildberries_client as wb_client
+
+        if wb_client.kiz_scan_skips_wb_readback():
+            reads.append(1)
         return _wb_row(order.wb_order_id, value, "sgtinApplied")
 
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
@@ -264,8 +267,8 @@ async def test_d1_wb_takes_the_write_but_reads_back_a_refusal(
         marking = await session.scalar(
             select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
         )
+        # Still bound; WB's refusal arrives through the background reconciliation.
         assert marking is not None and marking.value == value
-        assert marking.meta_status != META_STATUS_REJECTED
 
 
 async def test_wms639_commit_outside_scan_still_reads_wb_verdict(
@@ -302,19 +305,23 @@ async def test_q1_scan_write_waits_for_wb_only_briefly(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Q1: the scan's KIZ write runs with the short timeout; a timeout is «pending»."""
+    """WMS-640: the scan's request never calls WB; WB gets the code in the background."""
     from app.services import wildberries_client as wb_client
 
     seed = await _seed(async_client, 635_602)
     order, value = seed["order"], seed["value"]
-    seen: list[float] = []
+    in_scan: list[str] = []
+    sent: list[str] = []
 
-    async def fake_put(*_args: Any, **_kwargs: Any) -> None:
-        seen.append(wb_client._KIZ_WRITE_TIMEOUT.get())
-        raise WildberriesClientError("transport_error")
+    async def fake_put(*_args: Any, **kwargs: Any) -> None:
+        if wb_client.kiz_scan_skips_wb_readback():
+            in_scan.append("put")
+        sent.append(kwargs["value"])
 
     async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
-        return _wb_row(order.wb_order_id, None, "required")
+        if wb_client.kiz_scan_skips_wb_readback():
+            in_scan.append("get")
+        return _wb_row(order.wb_order_id, value if sent else None, "required")
 
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
     monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
@@ -326,8 +333,10 @@ async def test_q1_scan_write_waits_for_wb_only_briefly(
         ]},
     )
     assert response.json()[0]["code"] == "wb_pending_confirmation"
-    assert seen == [wb_client.KIZ_WRITE_TIMEOUT_SCAN_SEC]
-    assert wb_client._KIZ_WRITE_TIMEOUT.get() == 60.0
+    assert in_scan == [], "the operator's scan request must not call WB"
+    # The background send (run by the test client after the answer) wrote the code once.
+    assert sent == [value]
+    assert wb_client.kiz_scan_skips_wb_readback() is False
 
 
 async def test_d3_operator_kiz_is_usable_again_after_step_back(
