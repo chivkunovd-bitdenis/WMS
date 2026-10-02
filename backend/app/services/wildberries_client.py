@@ -72,15 +72,26 @@ _mock_marketplace_supply_add_error_once: str | None = None
 # operation, whose reconciliation reads WB before any repeat.
 KIZ_WRITE_TIMEOUT_SCAN_SEC = 4.0
 _KIZ_WRITE_TIMEOUT: ContextVar[float] = ContextVar("wb_kiz_write_timeout", default=60.0)
+# WMS-639: the packing scan does not read WB's verdict after its KIZ write either;
+# the accepted write goes to the pending operation that the background reconciles.
+_KIZ_SCAN_SKIPS_READBACK: ContextVar[bool] = ContextVar(
+    "wb_kiz_scan_skips_readback", default=False
+)
 
 
 @contextmanager
 def short_kiz_write_timeout(seconds: float = KIZ_WRITE_TIMEOUT_SCAN_SEC) -> Iterator[None]:
     token = _KIZ_WRITE_TIMEOUT.set(seconds)
+    readback_token = _KIZ_SCAN_SKIPS_READBACK.set(True)
     try:
         yield
     finally:
+        _KIZ_SCAN_SKIPS_READBACK.reset(readback_token)
         _KIZ_WRITE_TIMEOUT.reset(token)
+
+
+def kiz_scan_skips_wb_readback() -> bool:
+    return _KIZ_SCAN_SKIPS_READBACK.get()
 
 
 def reset_mock_marketplace_order_meta() -> None:

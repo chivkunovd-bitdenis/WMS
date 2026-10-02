@@ -232,14 +232,20 @@ async def test_d1_wb_takes_the_write_but_reads_back_a_refusal(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Д1: PUT answered 200, the read-back already says «rejected» — kept bound, red."""
+    """Д1 + WMS-639: PUT answered 200; the scan does not read WB's verdict at all.
+
+    The code stays bound and pending; WB's refusal turns the row red after the
+    background reconciliation. Outside the scan the read-back stays as before.
+    """
     seed = await _seed(async_client, 635_601)
     order, value = seed["order"], seed["value"]
+    reads: list[int] = []
 
     async def fake_put(*_args: Any, **_kwargs: Any) -> None:
         return None
 
     async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        reads.append(1)
         return _wb_row(order.wb_order_id, value, "sgtinApplied")
 
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
@@ -252,8 +258,39 @@ async def test_d1_wb_takes_the_write_but_reads_back_a_refusal(
         ]},
     )
     row = response.json()[0]
-    assert row["code"] == "wb_rejected_kept", row
-    assert row["message"].startswith("WB не принял ЧЗ:")
+    assert row["code"] == "wb_pending_confirmation", row
+    assert reads == [], "the packing scan must not wait for WB's read-back"
+    async with SessionLocal() as session:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert marking is not None and marking.value == value
+        assert marking.meta_status != META_STATUS_REJECTED
+
+
+async def test_wms639_commit_outside_scan_still_reads_wb_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WMS-639: only the packing scan skips the read-back; a plain commit reads it."""
+    seed = await _seed(async_client, 639_601)
+    order, value = seed["order"], seed["value"]
+
+    async def fake_put(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(order.wb_order_id, value, "sgtinApplied")
+
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=seed["headers"],
+        json={"idempotency_key": "w639-plain", "pairs": [
+            {"order_id": str(order.order_id), "value": value, "confirmed": False},
+        ]},
+    )
     async with SessionLocal() as session:
         marking = await session.scalar(
             select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
