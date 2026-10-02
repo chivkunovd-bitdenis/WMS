@@ -14,7 +14,7 @@ from app.api.deps import get_effective_seller_id, require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
-from app.models.fbs_order import FbsOrder
+from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.kiz_reprint import KizReprint
@@ -447,8 +447,8 @@ class FbsScanUndoBody(BaseModel):
     pack_idempotency_key: str | None = Field(default=None, max_length=128)
     box_id: uuid.UUID | None = None
     release_selection: bool = False
-    # The KIZ this scan bound (canonical value from the bind answer).
-    kiz: str | None = Field(default=None, max_length=512)
+    # Identities of the scan's KIZ actions (commit keys / scan:<id> for a pool code).
+    kiz_keys: list[str] = Field(default_factory=list, max_length=10)
 
 
 class FbsScanAutoPrintTargetBody(BaseModel):
@@ -2514,6 +2514,15 @@ async def scan_fbs_supply_product_for_auto_print(
     layout: dict[str, object] = (
         {"units": [{"block": "cz", "copies": 1}]} if body.print_chz else {"units": []}
     )
+    tenant_id, actor_id, scan_id = user.tenant_id, user.id, selected.scan_id
+
+    async def _note_pool_kiz(order: FbsOrder, marking: FbsOrderMarking) -> None:
+        # WMS-631 R19 (N9): the receipt is written in the binding's own transaction.
+        if not had_kiz_before and order.id == selected.order_id:
+            await kiz_svc.note_pool_kiz_issued(
+                session, tenant_id, actor_id, scan_id=scan_id, order=order, marking=marking
+            )
+
     async with httpx.AsyncClient() as http_client:
         try:
             result = await order_tape_svc.print_fbs_order_tape(
@@ -2527,6 +2536,7 @@ async def scan_fbs_supply_product_for_auto_print(
                 reprint=False,
                 actor_user_id=user.id,
                 http_client=http_client,
+                on_new_binding=_note_pool_kiz if body.print_chz else None,
             )
         except order_tape_svc.FbsOrderTapePrintError as exc:
             _raise_from_order_tape_service(exc)
@@ -2540,20 +2550,9 @@ async def scan_fbs_supply_product_for_auto_print(
         (order for order in result.orders if order.order_id == selected.order_id),
         None,
     )
-    chz_issued = False
-    if body.print_chz and order_result is not None and order_result.printed_codes:
-        printed = order_result.printed_codes[0]
-        chz_issued = await kiz_svc.note_pool_kiz_issued(
-            session,
-            user.tenant_id,
-            user.id,
-            scan_id=selected.scan_id,
-            order_id=selected.order_id,
-            code_id=printed.id,
-            value=printed.cis_code,
-            had_kiz_before=had_kiz_before,
-        )
-        await session.commit()
+    chz_issued = body.print_chz and await kiz_svc.pool_kiz_issued_by_scan(
+        session, tenant_id, scan_id
+    )
     qr_asset_model = next(
         (
             asset
@@ -2770,7 +2769,24 @@ async def undo_fbs_packing_scan(
     # The KIZ stage commits on its own; keep plain ids, not expiring ORM attributes.
     tenant_id, user_id = user.tenant_id, user.id
     warning: str | None = None
-    if body.kiz:
+    try:
+        # N6: every reference and state is checked before any irreversible part.
+        await packaging_task_svc.check_scan_undo(
+            session,
+            tenant_id,
+            supply_id,
+            order_id=body.order_id,
+            scan_id=body.scan_id if body.release_selection else None,
+            box_id=body.box_id,
+            acting_user_id=user_id,
+        )
+    except packaging_task_svc.PackagingTaskServiceError as exc:
+        await session.rollback()
+        if exc.code in {"supply_not_found", "order_not_found"}:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code, message=exc.message)
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, message=exc.message)
+    await session.rollback()
+    if body.kiz_keys:
         try:
             async with httpx.AsyncClient() as http_client:
                 warning = await kiz_svc.rollback_scan_kiz(
@@ -2779,7 +2795,7 @@ async def undo_fbs_packing_scan(
                     user_id,
                     supply_id,
                     body.order_id,
-                    body.kiz,
+                    body.kiz_keys,
                     http_client,
                 )
         except kiz_svc.FbsKizError as exc:

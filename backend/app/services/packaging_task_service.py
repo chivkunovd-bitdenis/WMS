@@ -1529,6 +1529,78 @@ async def assert_unload_marking_done(
         return
 
 
+async def check_scan_undo(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    order_id: uuid.UUID,
+    scan_id: uuid.UUID | None,
+    box_id: uuid.UUID | None,
+    acting_user_id: uuid.UUID,
+) -> None:
+    """WMS-631 R19/Д20: refuse a step back before any part of it is changed."""
+    from app.models.document_event import DocumentEvent
+    from app.models.fbs_order import FBS_ORDER_MARKING_FROZEN_STATUSES, FbsOrder
+    from app.models.fbs_packing_box import FbsPackingBox
+    from app.models.fbs_supply import FbsSupply
+
+    supply = await session.scalar(
+        select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+    )
+    if supply is None or supply.marketplace != "wb":
+        raise PackagingTaskServiceError("supply_not_found")
+    order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
+    )
+    if order is None:
+        raise PackagingTaskServiceError("order_not_found")
+    if order.supply_id != supply_id:
+        raise PackagingTaskServiceError(
+            "scan_undo_order_moved",
+            message="Заказ перенесён в другую поставку — этот скан не отменить.",
+        )
+    if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
+        raise PackagingTaskServiceError(
+            "order_frozen", message="Заказ уже передан — этот скан не отменить."
+        )
+    if supply.packaging_task_id is not None:
+        task_status = await session.scalar(
+            select(PackagingTask.status).where(PackagingTask.id == supply.packaging_task_id)
+        )
+        if task_status in (STATUS_DONE, STATUS_CANCELLED):
+            raise PackagingTaskServiceError(
+                "scan_undo_task_closed",
+                message="Задание упаковки завершено — этот скан уже не отменить.",
+            )
+    if scan_id is not None:
+        selection = await session.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.id == scan_id,
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.document_id == supply_id,
+            )
+        )
+        payload = selection.payload_json or {} if selection is not None else {}
+        if (
+            selection is None
+            or payload.get("kind") != "wms514_scan_auto_print"
+            or payload.get("order_id") != str(order_id)
+            or selection.actor_user_id != acting_user_id
+        ):
+            raise PackagingTaskServiceError("scan_selection_not_found")
+    if box_id is not None:
+        box = await session.scalar(
+            select(FbsPackingBox.id).where(
+                FbsPackingBox.id == box_id,
+                FbsPackingBox.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+            )
+        )
+        if box is None:
+            raise PackagingTaskServiceError("box_assignment_not_found")
+
+
 async def undo_fbs_scan_unit(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1573,6 +1645,12 @@ async def undo_fbs_scan_unit(
             raise PackagingTaskServiceError(
                 "scan_undo_order_moved",
                 message="Заказ перенесён в другую поставку — этот скан не отменить.",
+            )
+        from app.models.fbs_order import FBS_ORDER_MARKING_FROZEN_STATUSES
+
+        if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
+            raise PackagingTaskServiceError(
+                "order_frozen", message="Заказ уже передан — этот скан не отменить."
             )
         if supply.packaging_task_id is not None:
             supply_task = await session.get(PackagingTask, supply.packaging_task_id)

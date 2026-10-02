@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { createPackingScanController, makePackingScanDeps, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
+import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
@@ -639,8 +639,10 @@ export function FfFbsSupplyWorkspace({
 
   // WMS-631 R4: WB packing scans go through one mechanism in the supply and in the assembly.
   const useSequentialPacking = workspace?.supply.marketplace === 'wb'
+    && (Boolean(assemblyFrame?.registerScanner) || !assemblyFrame)
   const assemblyWbPacking = useSequentialPacking && Boolean(assemblyFrame?.registerScanner)
-  const ordinaryWbPacking = useSequentialPacking && !assemblyFrame?.registerScanner
+  // The ordinary supply card (no assembly frame at all); the assembly always registers its scanner.
+  const ordinaryWbPacking = useSequentialPacking && !assemblyFrame
   const sequentialOpenRef = useRef(false)
   sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing'
     && (assemblyFrame?.registerScanner ? Boolean(assemblyFrame.visible) : true)
@@ -692,7 +694,13 @@ export function FfFbsSupplyWorkspace({
         const target = kizRowInputRef.current && kizRowTargetRef.current
         if (!target) return controller.scan(raw)
         setKizScanValue('')
-        kizRowInputRef.current?.blur()
+        const field = kizRowInputRef.current
+        // The accepted scan releases the row at once, even when the field is
+        // already disabled by the busy scan and its blur event does not fire.
+        kizRowInputRef.current = null
+        kizRowTargetRef.current = null
+        setKizScanActive(null)
+        field?.blur()
         // The same bind -> native WMS Print -> pack sequence as product scans.
         await controller.scanOrder!(target.order_id, raw, target)
         // Blur already released the explicit selection. A later focus belongs
@@ -1846,7 +1854,7 @@ export function FfFbsSupplyWorkspace({
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape' && ordinaryWbPacking) {
-        if (sequentialScanner?.canCancel?.()) {
+        if (packingSerialBusy() || sequentialScanner?.canCancel?.()) {
           event.preventDefault()
           event.stopPropagation()
           void cancelUnifiedScanRef.current()
@@ -1953,7 +1961,7 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     if (!ordinaryWbPacking || !open || stage !== 'packing') return
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || !sequentialScanner?.canCancel?.()) return
+      if (event.key !== 'Escape' || !(packingSerialBusy() || sequentialScanner?.canCancel?.())) return
       event.preventDefault()
       event.stopPropagation()
       void cancelUnifiedScanRef.current()
@@ -1968,13 +1976,14 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScan = useCallback(
     (raw: string) => {
       const preferences = { ...scanPrintPreferences }
+      if (ordinaryWbPacking) {
+        // N4: straight into the one packing queue, in reading order.
+        void runUnifiedScanRef.current(raw)
+        return
+      }
       if (kizScanBusy) {
         queuedPackingScansRef.current.push({ raw, preferences })
         setQueuedPackingScanVersion((current) => current + 1)
-        return
-      }
-      if (ordinaryWbPacking) {
-        void runUnifiedScanRef.current(raw)
         return
       }
       if (kizScanActive && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) {

@@ -1614,8 +1614,8 @@ export type FbsScanUndoRequest = {
   pack_idempotency_key?: string | null
   box_id?: string | null
   release_selection: boolean
-  /** The KIZ this scan bound (canonical); the server returns the replaced one. */
-  kiz?: string | null
+  /** Identities of this scan's KIZ actions; the server returns the replaced code. */
+  kiz_keys?: string[]
 }
 
 /** WMS-631 R19: undo one packing scan — KIZ first, then unit, box and selection. */

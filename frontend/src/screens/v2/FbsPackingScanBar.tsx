@@ -5,7 +5,7 @@ import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { fbsErrorText } from './fbsUx'
-import { routePackingScan, runPackingSerial, type PackingScanController } from './fbsSequentialPacking'
+import { packingSerialBusy, routePackingScan, runPackingSerial, type PackingScanController } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
@@ -19,16 +19,21 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
   const [error, setError] = useState<string | null>(null)
   const [undoing, setUndoing] = useState(false)
   // R19: the newest undoable scan across the supplies of this assembly.
-  const undoTarget = controllers.reduce<PackingScanController | null>((best, one) => {
+  const newestStep = (list: PackingScanController[]) => list.reduce<PackingScanController | null>((best, one) => {
     const seq = one.lastStep?.() ?? null
     return seq !== null && (best === null || seq > (best.lastStep?.() ?? -1)) ? one : best
   }, null)
+  const undoTarget = newestStep(controllers)
   const undoLast = () => {
     if (!undoTarget?.undo) return
     setUndoing(true)
     setError(null)
-    const target = undoTarget
-    void runPackingSerial(() => target.undo!())
+    const list = controllers
+    // N4: the newest step is chosen when its turn comes, after the scans before it.
+    void runPackingSerial(async () => {
+      const target = newestStep(list)
+      return target?.undo ? target.undo() : null
+    })
       .then((warning) => { if (warning) setError(warning) })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.')
@@ -40,15 +45,16 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
   const intake = useScanIntake({
     enabled,
     emitRaw: true,
-    onScan: async (raw) => {
+    onScan: (raw) => {
       setError(null)
-      try {
-        await routePackingScan(controllers, raw)
-        playScanSuccess()
-      } catch (cause) {
-        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось обработать скан.')
-        playScanError()
-      }
+      // N4: the scan joins the one packing queue at once, in the order it was read,
+      // so a later Escape or «Назад» never overtakes it.
+      void routePackingScan(controllers, raw)
+        .then(() => playScanSuccess())
+        .catch((cause: unknown) => {
+          setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось обработать скан.')
+          playScanError()
+        })
     },
     onReceived: () => setValue(''),
     isScanOnlyField: (element) => element instanceof HTMLInputElement && element.dataset.packingScan === 'true',
@@ -64,12 +70,16 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
     if (!enabled) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      const waiting = controllers.find((one) => one.canCancel?.())
-      if (!waiting?.cancel) return
+      if (!packingSerialBusy() && !controllers.some((one) => one.canCancel?.())) return
       event.preventDefault()
       event.stopPropagation()
       setError(null)
-      void runPackingSerial(() => waiting.cancel!()).catch((cause: unknown) => {
+      const list = controllers
+      // N4: Escape acts on the supply whose scan is in work when its turn comes.
+      void runPackingSerial(async () => {
+        const waiting = list.find((one) => one.canCancel?.())
+        return waiting?.cancel ? waiting.cancel() : false
+      }).catch((cause: unknown) => {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять выбор.')
         playScanError()
       })

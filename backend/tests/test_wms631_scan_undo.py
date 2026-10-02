@@ -175,13 +175,14 @@ async def test_kiz_rollback_refuses_a_code_changed_by_another_action(
             new_value="0104600000000001215ScannedCode",
             previous=None,
             idempotency_key=f"test-bound:{order.id}",
+            commit_key="scan-1:abc:bind",
         )
         await session.commit()
         order_id = order.id
     response = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/scan-undo",
         headers=headers,
-        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
+        json={"order_id": str(order_id), "kiz_keys": ["scan-1:abc:bind"]},
     )
     assert response.status_code == 409, response.text
     assert response.json()["detail"]["code"] == "kiz_rollback_changed"
@@ -203,7 +204,7 @@ async def test_kiz_rollback_without_a_binding_receipt_is_a_no_op(
     response = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/scan-undo",
         headers=headers,
-        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
+        json={"order_id": str(order_id), "kiz_keys": ["scan-1:abc:bind"]},
     )
     assert response.status_code == 200, response.text
     assert response.json() == {"warning": None}
@@ -215,12 +216,26 @@ async def test_kiz_rollback_refuses_an_order_moved_to_another_supply(
     headers, supply_id, _barcode = await _seed_wb_supply(async_client, order_count=1)
     async with SessionLocal() as session:
         order = await session.scalar(select(FbsOrder).where(FbsOrder.supply_id == supply_id))
-        assert order is not None
+        source = await session.get(FbsSupply, supply_id)
+        assert order is not None and source is not None
         order_id = order.id
+        target = FbsSupply(
+            tenant_id=source.tenant_id,
+            seller_id=source.seller_id,
+            warehouse_id=source.warehouse_id,
+            marketplace="wb",
+            wb_supply_id=f"{source.wb_supply_id}-moved",
+            name="moved",
+            delivery_type=source.delivery_type,
+        )
+        session.add(target)
+        await session.flush()
+        order.supply_id = target.id
+        await session.commit()
     other = await async_client.post(
-        f"/operations/fbs-supplies/{uuid.uuid4()}/scan-undo",
+        f"/operations/fbs-supplies/{supply_id}/scan-undo",
         headers=headers,
-        json={"order_id": str(order_id), "kiz": "0104600000000001215ScannedCode"},
+        json={"order_id": str(order_id), "kiz_keys": ["scan-1:abc:bind"]},
     )
     assert other.status_code == 409, other.text
     assert other.json()["detail"]["code"] == "scan_undo_order_moved"
@@ -264,3 +279,91 @@ async def test_honest_sign_skip_means_no_kiz_is_awaited(async_client: AsyncClien
     )
     assert selected.status_code == 200, selected.text
     assert selected.json()["binding_target"]["requires_honest_sign"] is False
+
+
+async def test_undo_refuses_a_foreign_scan_before_touching_the_kiz(
+    async_client: AsyncClient,
+) -> None:
+    """N6: a wrong scan id is refused before any KIZ part of the undo."""
+    headers, supply_id, barcode = await _seed_wb_supply(async_client)
+    url = f"/operations/fbs-supplies/{supply_id}/scan-auto-print"
+    first = await async_client.post(url, headers=headers, json=_select_body(barcode, "n6-1"))
+    second = await async_client.post(url, headers=headers, json=_select_body(barcode, "n6-2"))
+    assert first.status_code == 200 and second.status_code == 200
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, uuid.UUID(first.json()["order_id"]))
+        assert order is not None
+        session.add(
+            FbsOrderMarking(
+                order_id=order.id,
+                tenant_id=order.tenant_id,
+                kind=MARKING_KIND_SGTIN,
+                value="0104600000000001215Kept",
+                source="operator",
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ASSIGNED,
+            )
+        )
+        actor = await session.scalar(select(User.id).where(User.tenant_id == order.tenant_id))
+        await kiz_svc.record_kiz_bound_event(
+            session,
+            tenant_id=order.tenant_id,
+            actor_user_id=actor,
+            order=order,
+            new_code_id=None,
+            new_value="0104600000000001215Kept",
+            previous=None,
+            idempotency_key=f"test-n6:{order.id}",
+            commit_key="n6:bind",
+        )
+        await session.commit()
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/scan-undo",
+        headers=headers,
+        json={
+            "order_id": first.json()["order_id"],
+            # The neighbour's scan: it does not belong to this order.
+            "scan_id": second.json()["scan_id"],
+            "release_selection": True,
+            "kiz_keys": ["n6:bind"],
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "scan_selection_not_found"
+    async with SessionLocal() as session:
+        kept = await session.scalar(
+            select(FbsOrderMarking.value).where(
+                FbsOrderMarking.order_id == uuid.UUID(first.json()["order_id"])
+            )
+        )
+    assert kept == "0104600000000001215Kept"
+
+
+async def test_wb_read_without_this_order_is_never_proof_of_deletion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N1: an empty or foreign WB answer leaves the delete outcome unknown."""
+    from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
+
+    order = FbsOrder(wb_order_id=514_000)
+    answers: list[list[MarketplaceOrderMetaRow]] = [
+        [],
+        [MarketplaceOrderMetaRow(order_id=999)],
+        [MarketplaceOrderMetaRow(order_id=514_000)],
+        [MarketplaceOrderMetaRow(order_id=514_000, meta_details=(
+            MarketplaceMetaDetail(key="sgtin", value="K2", decision="required"),
+        ))],
+        [MarketplaceOrderMetaRow(order_id=514_000, meta_details=(
+            MarketplaceMetaDetail(key="sgtin", value="K3", decision="required"),
+        ))],
+    ]
+
+    async def fake_fetch(*_args: object, **_kwargs: object) -> list[MarketplaceOrderMetaRow]:
+        return answers.pop(0)
+
+    monkeypatch.setattr(kiz_svc, "fetch_marketplace_orders_meta_batch", fake_fetch)
+    states = [
+        await kiz_svc._wb_sgtin_state(order, None, "token", "K2")  # type: ignore[arg-type]
+        for _ in range(5)
+    ]
+    assert states == ["unknown", "unknown", "absent", "same", "other"]

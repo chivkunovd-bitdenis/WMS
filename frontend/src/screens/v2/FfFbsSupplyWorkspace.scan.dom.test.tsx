@@ -6,6 +6,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
+import { saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -137,6 +138,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       order_id: orderId, wb_order_id: orderId === 'order-a' ? 5001 : 5002,
       product: { name: 'Футболка', image_url: null, barcode: null, seller_article: null },
       current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
+      requires_honest_sign: true,
     })
   }
   if (path === '/operations/fbs-orders/kiz/validate') {
@@ -178,6 +180,9 @@ beforeEach(() => {
   commitGate = null
   window.sessionStorage.clear()
   window.localStorage.clear()
+  // WMS-631: these scenarios are the sticker → KIZ path with every print checkbox off (R9);
+  // printing paths are covered by fbsSequentialPacking tests.
+  saveFbsScanPrintPreferences('t-575', { printQr: false, printChz: false, reprintChz: false })
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -404,7 +409,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
     expect(bodyOf('/operations/fbs-orders/kiz/commit')?.pairs?.[0]).toMatchObject({ order_id: 'order-a', value: KIZ_SYMBOLS })
   })
 
-  it('P2: сканер дважды прочитал стикер, пока шёл поиск, — второй снимает выбор, а не уходит как ЧЗ', async () => {
+  it('P2: сканер дважды прочитал стикер, пока шёл поиск, — второй не уходит как ЧЗ (механизм сборки, R4)', async () => {
     delays = { lookup: 150 }
     await openPackingTab()
     act(() => (document.activeElement as HTMLElement | null)?.blur())
@@ -413,8 +418,8 @@ describe('WMS-575 · исправления по ревью ночного ка�
     await settle(400)
 
     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
-    expect(activeRow()).toBeNull()
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).toBeNull()
+    expect(activeRow()).toBe('order-a')
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent).toContain('Сканируйте его Честный знак')
   })
 
   it('P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {
@@ -431,22 +436,16 @@ describe('WMS-575 · исправления по ревью ночного ка�
 describe('WMS-630 · КИЗ в строке точного заказа', () => {
   const input = (id: string) => document.querySelector<HTMLInputElement>(`[data-order-id="${id}"] [data-testid="fbs-kiz-row-input"]`)!
   const focus = (id: string) => act(() => input(id).focus())
-  const confirm = async () => {
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="fbs-kiz-confirm-replace"]')!.click())
-    await settle(60)
-  }
 
-  it('выбирает второй заказ того же товара и заменяет только его через подтверждённый commit', async () => {
+  it('выбирает второй заказ того же товара и сразу, без окна, заменяет только его (R18)', async () => {
     committedTails = { 'order-a': 'OLD0000A', 'order-b': 'OLD0000B' }
     await openPackingTab(workspace(committedTails))
     focus('order-b')
     expect(activeRow()).toBe('order-b')
     // Настоящий capture-слушатель принимает scanner burst ровно один раз.
     expect(scan(KIZ_A).defaultPrevented).toBe(true)
-    await settle(30)
-    expect(rowTail('order-b')).toBe('OLD0000B')
-    expect(kizCalls()).toHaveLength(0)
-    await confirm()
+    await settle(80)
+    expect(document.querySelector('[data-testid="fbs-kiz-confirm-replace"]')).toBeNull()
     expect(kizCalls().map((call) => call.path)).toEqual([
       '/operations/fbs-orders/kiz/validate', '/operations/fbs-orders/kiz/commit',
     ])
@@ -455,9 +454,8 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(rowTail('order-a')).toBe('OLD0000A')
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
-    await settle(250) // Штатное окно подтверждения закончило анимацию закрытия.
     scan(STICKER_A)
-    await settle(40)
+    await settle(300)
     expect(activeRow()).toBe('order-a')
   })
 
@@ -473,7 +471,8 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     act(() => field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })))
     await settle(60)
     expect(kizCalls()).toHaveLength(2)
-    expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: false }] })
+    // R10/R18: the row's KIZ replaces at once.
+    expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: true }] })
     expect(rowTail('order-a')).toBe('')
   })
 
@@ -483,8 +482,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     await openPackingTab(workspace(committedTails))
     focus('order-b')
     scan(KIZ_A)
-    await settle(30)
-    await confirm()
+    await settle(60)
     expect(rowTail('order-b')).toBe('OLD0000B')
     expect(kizCalls().filter((call) => call.path.endsWith('/commit'))).toHaveLength(0)
     expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).not.toBeNull()
@@ -494,18 +492,18 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(activeRow()).toBeNull()
   })
 
-  it('отмена подтверждения не пишет код и освобождает выбранный заказ', async () => {
+  it('R18: ни окна подтверждения, ни window.confirm при замене КИЗ строкой', async () => {
     committedTails = { 'order-b': 'OLD0000B' }
+    const confirmSpy = vi.spyOn(window, 'confirm')
     await openPackingTab(workspace(committedTails))
     focus('order-b')
     scan(KIZ_A)
-    await settle(30)
-    const cancel = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === 'Отмена')!
-    act(() => cancel.click())
-    await settle(20)
+    await settle(80)
+    expect(document.querySelector('[data-testid="fbs-kiz-confirm-replace"]')).toBeNull()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
-    expect(kizCalls()).toHaveLength(0)
-    expect(rowTail('order-b')).toBe('OLD0000B')
+    confirmSpy.mockRestore()
   })
 
   it.each([false, true])('крестик сохраняет отдельное удаление, отказ WB=%s', async (failure) => {
@@ -561,30 +559,29 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(activeRow()).toBe('order-b')
     scan(KIZ_A)
     await settle(30)
-    expect(rowTail('order-b')).toBe('OLD0000B')
-    await confirm()
     if (delayed) {
-      await settle(250) // Модальное подтверждение закрылось, commit ещё ждёт ответ сервера.
+      // The commit still waits for the server; the next scan is accepted and queued.
       scan(STICKER_A)
       await settle(30)
       expect(rowTail('order-b')).toBe('OLD0000B')
       expect(kizCalls()).toHaveLength(2)
-      expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(0)
       act(() => releaseCommit())
       await settle(80)
     }
-    expect(kizCalls().map((call) => call.path)).toEqual([
+    // The queued sticker is looked up only after the row commit finished (one queue).
+    expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual([
       '/operations/fbs-orders/kiz/validate', '/operations/fbs-orders/kiz/commit',
+      ...(delayed ? ['/operations/fbs-orders/kiz/lookup'] : []),
     ])
     expect(kizCalls()[1].body).toMatchObject({ pairs: [{ order_id: 'order-b', value: KIZ_A, confirmed: true }] })
     expect(rowTail('order-a')).toBe('OLD0000A')
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
-    expect(activeRow()).toBeNull()
+    expect(activeRow()).toBe(delayed ? 'order-a' : null)
     expect(calls.filter((call) => call.path.endsWith('/start-work'))).toHaveLength(1)
     expect(calls.some((call) => call.path.includes('/assign'))).toBe(false)
-    const productScans = calls.filter((call) => call.path.endsWith('/scan-auto-print'))
-    expect(productScans).toHaveLength(delayed ? 1 : 0)
-    if (delayed) expect(productScans[0].body).toMatchObject({ barcode: STICKER_A })
+    // All checkboxes off: the queued sticker is looked up after the commit, no product scan (R9).
+    expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(0)
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup'))).toHaveLength(delayed ? 1 : 0)
   })
 })
 

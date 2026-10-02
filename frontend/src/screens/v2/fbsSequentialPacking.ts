@@ -33,8 +33,11 @@ export type PackingScanStep = {
   explicit: boolean
   preferences: FbsScanPrintPreferences
   labelSizeId: LabelSizeId
-  /** The KIZ this scan bound (canonical value), or the pool KIZ this scan was given. */
-  kiz: string | null
+  /**
+   * Identities of the KIZ actions of this scan: its commit keys, or scan:<id>
+   * for a pool code. The server undoes only a binding with such a receipt (N7, N8).
+   */
+  kizKeys: string[]
   /** Set before the pack request of this scan. */
   packKey: string | null
   /** Set before this scan puts the order into a box. */
@@ -45,6 +48,16 @@ let packingStepSeq = 0
 export function packingScanPackKey(result: FbsScanAutoPrintResult): string {
   return `${result.scan_id}:packed`
 }
+
+/** The keys deps.bind commits a scanned KIZ with (plain and replacing). */
+export async function packingCommitKeys(result: FbsScanAutoPrintResult, raw: string): Promise<string[]> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
+  const codeKey = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
+  return [`${result.scan_id}:${codeKey}:bind`, `${result.scan_id}:${codeKey}:replace`]
+}
+
+/** The order QR print intent: its key survives Escape, «Назад» and reloads (N2, N3). */
+export type PackingQrIntent = { scanId: string; done: boolean }
 
 /** A bind the server definitely refused: nothing of it was saved. */
 export class PackingBindRejectedError extends Error {}
@@ -87,7 +100,6 @@ export type PackingAttempt = {
   labelSizeId: LabelSizeId
   explicit: boolean
   orderId?: string
-  qrDone: boolean
 }
 export type PackingScanDeps = {
   active?: () => boolean
@@ -101,7 +113,8 @@ export type PackingScanDeps = {
   preload: (result: FbsScanAutoPrintResult) => Promise<string>
   /** Resolves the canonical KIZ bound to the order. Throws PackingBindRejectedError when nothing was saved. */
   bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<string | void>
-  print: (result: FbsScanAutoPrintResult, image: string, size: LabelSizeId) => Promise<void>
+  /** Prints the order QR under the key (and server claim) of the scan that first intended it. */
+  print: (result: FbsScanAutoPrintResult, image: string, size: LabelSizeId, keyScanId: string) => Promise<void>
   printChz: (result: FbsScanAutoPrintResult, size: LabelSizeId) => Promise<void>
   printCopy: (result: FbsScanAutoPrintResult, size: LabelSizeId) => Promise<void>
   /** Packs one unit; notes the pack key and box on the step before each request. */
@@ -110,7 +123,8 @@ export type PackingScanDeps = {
   undo: (step: PackingScanStep, releaseSelection: boolean) => Promise<string | null>
   claim: (raw: string, preferences: FbsScanPrintPreferences, explicit?: boolean) => PackingAttempt
   attempt?: (raw: string) => PackingAttempt | null
-  markQrDone?: (raw: string) => void
+  qrIntent?: (orderId: string) => PackingQrIntent | null
+  saveQrIntent?: (orderId: string, intent: PackingQrIntent) => void
   saved: (raw: string) => boolean
   remember: (raw: string, result: FbsScanAutoPrintResult) => void
   complete: (raw: string) => void
@@ -145,8 +159,8 @@ function explicitServerModes(preferences: FbsScanPrintPreferences): boolean {
   return preferences.printQr || preferences.reprintChz
 }
 
-function poolKizOf(result: FbsScanAutoPrintResult): string | null {
-  return result.chz_issued_by_scan ? result.printed_codes[0]?.cis_code ?? null : null
+function poolKizKeys(result: FbsScanAutoPrintResult): string[] {
+  return result.chz_issued_by_scan ? [`scan:${result.scan_id}`] : []
 }
 
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
@@ -198,8 +212,6 @@ type Pending = {
   needsKiz: boolean
   /** A KIZ was bound for this selection: an exact copy may be printed (R8). */
   bound: boolean
-  /** The QR of this order was already handed to WMS Print by an earlier attempt. */
-  qrDone: boolean
   /** The pool had no KIZ; a repeated scan asks the server again (R7). */
   refresh: boolean
   /** The history step a later packing belongs to. */
@@ -210,11 +222,17 @@ type Pending = {
 export function createPackingScanController(deps: PackingScanDeps): PackingScanController {
   let pending: Pending | null = null
   const history: PackingScanStep[] = []
-  const pushStep = (kind: PackingScanStep['kind'], current: Pending, kiz: string | null) => {
+  const memoryQr = new Map<string, PackingQrIntent>()
+  const qrIntent = (orderId: string) => deps.qrIntent ? deps.qrIntent(orderId) : memoryQr.get(orderId) ?? null
+  const saveQrIntent = (orderId: string, intent: PackingQrIntent) => {
+    if (deps.saveQrIntent) deps.saveQrIntent(orderId, intent)
+    else memoryQr.set(orderId, intent)
+  }
+  const pushStep = (kind: PackingScanStep['kind'], current: Pending, kizKeys: string[]) => {
     const step: PackingScanStep = {
       seq: ++packingStepSeq, kind, result: current.result, barcode: current.barcode,
       explicit: current.explicit, preferences: current.preferences, labelSizeId: current.labelSizeId,
-      kiz, packKey: null, boxId: null,
+      kizKeys, packKey: null, boxId: null,
     }
     history.push(step)
     current.step = step
@@ -225,7 +243,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
     if (index >= 0) history.splice(index, 1)
   }
   const preload = (current: Pending) => {
-    if (!current.preferences.printQr || current.qrDone) return null
+    if (!current.preferences.printQr || qrIntent(current.result.order_id)?.done) return null
     const image = deps.preload(current.result)
     // Preload runs while the operator scans KIZ; consume rejection until finish.
     void image.catch(() => undefined)
@@ -241,11 +259,15 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       throw new Error(current.result.shortage > 0 ? 'Не хватает ЧЗ для выбранной единицы.' : 'ЧЗ выбранной единицы не подготовлен.')
     }
     // Д10: QR first, then the KIZ label or its exact copy.
-    if (current.preferences.printQr && !current.qrDone) {
-      if (!current.image) current.image = deps.preload(current.result)
-      await deps.print(current.result, await current.image, current.labelSizeId)
-      current.qrDone = true
-      deps.markQrDone?.(current.barcode)
+    if (current.preferences.printQr) {
+      // One QR per order: an earlier intent keeps its key; a printed one is never repeated.
+      const intent = qrIntent(current.result.order_id) ?? { scanId: current.result.scan_id, done: false }
+      if (!intent.done) {
+        saveQrIntent(current.result.order_id, intent)
+        if (!current.image) current.image = deps.preload(current.result)
+        await deps.print(current.result, await current.image, current.labelSizeId, intent.scanId)
+        saveQrIntent(current.result.order_id, { ...intent, done: true })
+      }
     }
     if (poolKiz) await deps.printChz(current.result, current.labelSizeId)
     if (current.preferences.reprintChz && current.bound) await deps.printCopy(current.result, current.labelSizeId)
@@ -256,24 +278,23 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
   }
   const retryImage = (current: Pending) => {
     // Recover a failed preload on the same order; never reserve its neighbour.
-    if (current.preferences.printQr && !current.qrDone) {
+    if (current.preferences.printQr && !qrIntent(current.result.order_id)?.done) {
       current.image = (current.image ?? Promise.reject(new Error('preload'))).catch(() => deps.preload(current.result))
     }
   }
   const startPending = (barcode: string, result: FbsScanAutoPrintResult, attempt: PackingAttempt, explicit: boolean, needsKiz: boolean, bound: boolean): Pending => {
     const next: Pending = {
       barcode, result, preferences: attempt.preferences, labelSizeId: attempt.labelSizeId, explicit,
-      image: null, needsKiz, bound, qrDone: attempt.qrDone, refresh: false, step: null,
+      image: null, needsKiz, bound, refresh: false, step: null,
     }
     next.image = preload(next)
     return next
   }
   const bindKiz = async (current: Pending, raw: string, replace: boolean, kind: 'kiz' | 'row') => {
     // The intent is recorded first: a lost answer may still have saved the KIZ.
-    const step = kind === 'row' ? pushStep('row', current, raw) : pushStep('kiz', current, raw)
+    const step = pushStep(kind, current, await packingCommitKeys(current.result, raw))
     try {
-      const canonical = await deps.bind(current.result, raw, replace)
-      if (typeof canonical === 'string') step.kiz = canonical
+      await deps.bind(current.result, raw, replace)
     } catch (cause) {
       if (cause instanceof PackingBindRejectedError || cause instanceof FbsApiError) {
         dropStep(step)
@@ -347,9 +368,8 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       ? localSelection(attempt.key, step.result.binding_target!)
       : await deps.select(step.barcode, attempt.key, attempt.preferences, step.result.order_id)
     deps.remember(step.barcode, result)
-    // The QR of this order is already on paper; the next KIZ scan does not print it again.
-    deps.markQrDone?.(step.barcode)
-    pending = startPending(step.barcode, result, { ...attempt, qrDone: true }, true, true, false)
+    // The order QR keeps its own intent: printed — not again; not printed — the same key.
+    pending = startPending(step.barcode, result, attempt, true, true, false)
     pending.step = selectStep
     selectStep.result = result
     selectStep.explicit = true
@@ -363,7 +383,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       needsKiz: pending.needsKiz,
       target: pending.result.binding_target,
     } : null,
-    canCancel: () => packingSerialBusy() || pending !== null,
+    canCancel: () => pending !== null,
     lastStep: () => history.at(-1)?.seq ?? null,
     async undo() {
       const step = history.at(-1)
@@ -457,7 +477,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
           if (recovered.scan_id !== current.result.scan_id || recovered.order_id !== current.result.order_id) {
             throw new Error('Сервер вернул другой заказ для незавершённого скана.')
           }
-          if (!['available', 'started'].includes(recovered.reprint_recovery?.status ?? '')) {
+          if (!['available', 'started', 'outcome_unknown'].includes(recovered.reprint_recovery?.status ?? '')) {
             throw new Error('Товар уже выбран. Сканируйте его Честный знак.')
           }
           current.needsKiz = false
@@ -477,7 +497,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
           current.refresh = false
           if (current.step) {
             current.step.result = refreshed
-            current.step.kiz = poolKizOf(refreshed) ?? current.step.kiz
+            current.step.kizKeys = [...new Set([...current.step.kizKeys, ...poolKizKeys(refreshed)])]
           }
         }
         retryImage(current)
@@ -489,12 +509,13 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       const { result, attempt, explicit } = selected
       if (deps.active?.() === false) return
       const recoveryStatus = result.reprint_recovery?.status
-      const bound = recoveryStatus === 'available' || recoveryStatus === 'started'
+      // The KIZ of this scan is bound whatever the state of its copy (P1-01).
+      const bound = recoveryStatus === 'available' || recoveryStatus === 'started' || recoveryStatus === 'outcome_unknown'
       // «Печатать ЧЗ» takes the KIZ from the pool; otherwise a KIZ product waits for its scan.
       const needsKiz = !(attempt.preferences.printChz && !explicit) && requiresKiz(result) && !bound
       pending = startPending(raw, result, attempt, explicit, needsKiz, bound)
       // A pool KIZ is bound by the server together with this selection (R7).
-      pushStep('select', pending, explicit ? null : poolKizOf(result))
+      pushStep('select', pending, explicit ? [] : poolKizKeys(result))
       deps.changed()
       if (!pending.needsKiz) await finish()
     },
@@ -545,7 +566,7 @@ export function makePackingScanDeps(
     return saved ? {
       key: saved.idempotencyKey, preferences: saved.preferences,
       labelSizeId: resolveLabelSize(saved.labelSizeId as LabelSizeId | undefined).id,
-      explicit: saved.explicit === true, orderId: saved.orderId, qrDone: saved.qrStarted,
+      explicit: saved.explicit === true, orderId: saved.orderId,
     } : null
   }
   return {
@@ -564,10 +585,16 @@ export function makePackingScanDeps(
       return toAttempt(raw)!
     },
     attempt: toAttempt,
-    markQrDone: (raw) => {
-      const saved = peekFbsPendingProductScan(token, storageId, raw)
-      if (!saved || saved.qrStarted) return
-      saved.qrStarted = true
+    qrIntent: (orderId) => {
+      const saved = peekFbsPendingProductScan(token, storageId, `qr:${orderId}`)
+      return saved?.scanId ? { scanId: saved.scanId, done: saved.qrStarted } : null
+    },
+    saveQrIntent: (orderId, intent) => {
+      const saved = claimFbsPendingProductScan(token, storageId, `qr:${orderId}`,
+        { printQr: true, printChz: false, reprintChz: false }, createFbsIdempotencyKey)
+      saved.scanId = intent.scanId
+      saved.orderId = orderId
+      saved.qrStarted = intent.done
       updateFbsPendingProductScan(token, storageId, saved)
     },
     saved: (raw) => Boolean(peekFbsPendingProductScan(token, storageId, raw)),
@@ -620,7 +647,8 @@ export function makePackingScanDeps(
       }
       const printKey = `kiz-copy:${row.id}`
       const sizeId = resolveLabelSize(saved.labelSizeId as LabelSizeId).id
-      await startClaimedAutomaticPrint(createFbsIdempotencyKey(), async () => {
+      // The claim key is the label key: a lost claim answer is re-claimed by the same attempt (N10).
+      await startClaimedAutomaticPrint(printKey, async () => {
         await send(await renderCzLabelPng({ cis: row.kiz }, resolveLabelSize(sizeId)), printKey, sizeId)
       }, {
         claim: async (attemptKey) => {
@@ -652,12 +680,11 @@ export function makePackingScanDeps(
       // The ordinary supply screen starts work before KIZ binding. The unified
       // screen has no Start button, so preserve the same server prerequisite here.
       await ensureSupplyStarted()
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
-      const codeKey = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
+      const [bindKey, replaceKey] = await packingCommitKeys(result, raw)
       const commit = (confirmed: boolean) => commitFbsKiz(token, authHeaders, [{
         order_id: result.order_id, value: raw, confirmed,
         ...(isLocalPackingSelection(result) ? {} : { scan_auto_print_id: result.scan_id }),
-      }], `${result.scan_id}:${codeKey}:${confirmed ? 'replace' : 'bind'}`)
+      }], confirmed ? replaceKey : bindKey)
       let outcomes = await commit(replace)
       let outcome = outcomes.find((item) => item.order_id === result.order_id)
       // R18: an order that already has a KIZ gets the scanned one at once, without a dialog.
@@ -675,11 +702,11 @@ export function makePackingScanDeps(
       refreshed()
       return bound
     },
-    print: async (result, imageDataUrl, sizeId) => {
-      await startClaimedAutomaticPrint(result.scan_id,
-        () => send(imageDataUrl, result.scan_id, sizeId), {
-          claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, result.scan_id, 'qr', key),
-          markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'qr', key),
+    print: async (_result, imageDataUrl, sizeId, keyScanId) => {
+      await startClaimedAutomaticPrint(keyScanId,
+        () => send(imageDataUrl, keyScanId, sizeId), {
+          claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, keyScanId, 'qr', key),
+          markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, keyScanId, 'qr', key),
           // Preserve ownership after an uncertain print dispatch. The exact same
           // scan UUID lets the print transport reconcile a retry; it must never
           // create a new print intent or give this order to another scan.
@@ -739,14 +766,14 @@ export function makePackingScanDeps(
       const local = isLocalPackingSelection(step.result)
       const release = releaseSelection && !local
       let warning: string | null = null
-      if (step.kiz || step.packKey || step.boxId || release) {
+      if (step.kizKeys.length || step.packKey || step.boxId || release) {
         const answer = await undoFbsPackingScan(token, authHeaders, supplyId, {
           order_id: step.result.order_id,
           scan_id: local ? null : step.result.scan_id,
           pack_idempotency_key: step.packKey,
           box_id: step.boxId,
           release_selection: release,
-          kiz: step.kiz,
+          kiz_keys: step.kizKeys,
         })
         warning = answer.warning
       }

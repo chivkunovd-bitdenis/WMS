@@ -6,7 +6,7 @@ import {
 import type { FbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 const att = (key: string, preferences: FbsScanPrintPreferences, explicit = false) => ({
-  key, preferences, labelSizeId: '58x40' as const, explicit, qrDone: false,
+  key, preferences, labelSizeId: '58x40' as const, explicit,
 })
 import { FbsApiError, type FbsScanAutoPrintResult } from './fbsApi'
 
@@ -41,7 +41,7 @@ describe('WMS-604 sequential packing', () => {
     expect(scanner.view()).toMatchObject({ orderId: '1', needsKiz: true })
     await scanner.scan('kiz-1')
     expect(deps.bind).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), 'kiz-1', false)
-    expect(deps.print).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), 'png', '58x40')
+    expect(deps.print).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), 'png', '58x40', 'scan-1')
     expect(deps.pack).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), false, 'barcode', expect.anything())
     expect(scanner.hasPending()).toBe(false)
     await scanner.scan('barcode')
@@ -88,7 +88,7 @@ describe('WMS-604 sequential packing', () => {
     vi.mocked(deps.select).mockReset().mockResolvedValue({ ...original, reprint_recovery: { status: 'available' } })
     await scanner.scan('barcode')
     expect(deps.bind).toHaveBeenCalledTimes(1)
-    expect(deps.print).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), 'png', '58x40')
+    expect(deps.print).toHaveBeenCalledWith(expect.objectContaining({ order_id: '1' }), 'png', '58x40', 'scan-1')
   })
   it('does not use a different product scan to finish the previous failed print', async () => {
     const { deps, scanner } = fixture()
@@ -289,14 +289,15 @@ describe('WMS-631 R19 step back', () => {
     expect(scanner.hasPending()).toBe(false)
     await scanner.undo?.()
     expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: 'kiz', kiz: 'kiz-1', packKey: 'scan-1:packed', boxId: 'box-1',
+      kind: 'kiz', kizKeys: [expect.stringMatching(/^scan-1:.+:bind$/), expect.stringMatching(/^scan-1:.+:replace$/)],
+      packKey: 'scan-1:packed', boxId: 'box-1',
     }), true)
     // A new scan id: the next KIZ scan packs and copies under new keys (P1-1, P0-05).
     expect(deps.select).toHaveBeenLastCalledWith('barcode', 'request', expect.anything(), '1')
     expect(scanner.view()).toMatchObject({ orderId: '1', needsKiz: true })
     await scanner.undo?.()
     expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: 'select', kiz: null, result: expect.objectContaining({ scan_id: 'scan-1b' }),
+      kind: 'select', kizKeys: [], result: expect.objectContaining({ scan_id: 'scan-1b' }),
     }), true)
     expect(scanner.hasPending()).toBe(false)
     expect(scanner.lastStep?.()).toBeNull()
@@ -368,5 +369,51 @@ describe('WMS-631 R19 step back', () => {
     await expect(scanner.scanOrder!('1', 'kiz')).rejects.toThrow('printer offline')
     expect(deps.complete).not.toHaveBeenCalledWith('order:1')
     expect(scanner.hasPending()).toBe(false)
+  })
+})
+
+describe('WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4)', () => {
+  it('N2: «Назад» after an unsent QR prints it with the same key on the next KIZ', async () => {
+    const { deps, scanner } = fixture()
+    const first = { scan_id: 's1', order_id: '1', wb_order_id: 1, requires_honest_sign: true,
+      binding_target: null, reprint_recovery: null, qr_asset: null, replayed: false, codes: [],
+      printed_codes: [], shortage: 0, order_errors: [] } as FbsScanAutoPrintResult
+    vi.mocked(deps.select).mockReset().mockResolvedValueOnce(first).mockResolvedValueOnce({ ...first, scan_id: 's2' })
+    vi.mocked(deps.print).mockRejectedValueOnce(new Error('WMS Print offline'))
+    await scanner.scan('barcode')
+    await expect(scanner.scan('K1')).rejects.toThrow('WMS Print offline')
+    await scanner.undo?.()
+    await scanner.scan('K2')
+    expect(deps.print).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(deps.print).mock.calls.map((call) => call[3])).toEqual(['s1', 's1'])
+    expect(deps.pack).toHaveBeenCalledWith(expect.objectContaining({ scan_id: 's2' }), true, 'barcode', expect.anything())
+  })
+  it('N3: Escape after a print failure keeps the QR key; a printed QR is never repeated', async () => {
+    const { deps, scanner } = fixture(false)
+    const first = { scan_id: 's1', order_id: '1', wb_order_id: 1, requires_honest_sign: false,
+      binding_target: null, reprint_recovery: null, qr_asset: null, replayed: false, codes: [],
+      printed_codes: [], shortage: 0, order_errors: [] } as FbsScanAutoPrintResult
+    vi.mocked(deps.select).mockReset().mockResolvedValueOnce(first).mockResolvedValueOnce({ ...first, scan_id: 's2' })
+    vi.mocked(deps.pack).mockRejectedValueOnce(new Error('pack lost'))
+    await expect(scanner.scan('barcode')).rejects.toThrow('pack lost')
+    await scanner.cancel?.()
+    await scanner.scan('barcode')
+    expect(deps.print).toHaveBeenCalledTimes(1)
+    expect(deps.pack).toHaveBeenLastCalledWith(expect.objectContaining({ scan_id: 's2' }), false, 'barcode', expect.anything())
+  })
+  it('N4: Escape in an assembly drops the selection of the supply that scanned', async () => {
+    const a = fixture()
+    const b = fixture()
+    vi.mocked(a.deps.select).mockReset().mockRejectedValue(new FbsApiError('scan_product_not_found', 'nf', null, false, 404))
+    const scanning = routePackingScan([a.scanner, b.scanner], 'barcode')
+    const escaping = runPackingSerial(async () => {
+      const waiting = [a.scanner, b.scanner].find((one) => one.canCancel?.())
+      return waiting?.cancel ? waiting.cancel() : false
+    })
+    await scanning
+    await expect(escaping).resolves.toBe(true)
+    expect(b.deps.release).toHaveBeenCalledTimes(1)
+    expect(a.deps.release).not.toHaveBeenCalled()
+    expect(b.scanner.hasPending()).toBe(false)
   })
 })
