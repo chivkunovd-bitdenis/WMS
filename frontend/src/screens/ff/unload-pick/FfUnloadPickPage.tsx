@@ -583,6 +583,9 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         onNote={() => undefined}
         hideHeader={hideHeader}
         hideFooterActions={source === 'fbs'}
+        // WMS-637: подбор поставки FBS — по ячейкам, как в окне «Сборка».
+        // Подбор отгрузки FBO остаётся «от товара».
+        groupByCell={source === 'fbs'}
         document={screenData.document}
         seller={screenData.seller}
         products={screenData.products}
