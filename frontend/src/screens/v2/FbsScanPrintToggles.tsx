@@ -1,29 +1,38 @@
-import { Checkbox, FormControlLabel, IconButton, TextField, Tooltip } from '@mui/material'
+import type { MouseEvent } from 'react'
+import { Box, Checkbox, FormControlLabel, IconButton, Tooltip, Typography } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import RemoveIcon from '@mui/icons-material/Remove'
 import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined'
 import {
   FBS_CHZ_COPIES_MAX, FBS_CHZ_COPIES_MIN, normalizeFbsChzCopies, type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
 
-/** WMS-633: number of KIZ labels printed by one scan, shown next to its checkbox. */
+/**
+ * WMS-633: number of KIZ labels printed by one scan, «− N +» next to its checkbox.
+ * Nothing here takes focus: a scanner burst and its Enter always reach the scan field.
+ */
 function CopiesField({ value, onChange, label, testId }: {
   value: number | undefined
   onChange: (next: number) => void
   label: string
   testId: string
 }) {
+  const count = normalizeFbsChzCopies(value)
+  const keepFocus = (event: MouseEvent) => event.preventDefault()
   return (
-    <TextField
-      type="number"
-      size="small"
-      value={normalizeFbsChzCopies(value)}
-      onChange={(event) => {
-        // An emptied field keeps the last count; arrows and typing give 1…10.
-        if (event.target.value.trim() === '') return
-        onChange(normalizeFbsChzCopies(event.target.value))
-      }}
-      slotProps={{ htmlInput: { min: FBS_CHZ_COPIES_MIN, max: FBS_CHZ_COPIES_MAX, step: 1, 'aria-label': label, 'data-testid': testId } }}
-      sx={{ width: 56, flexShrink: 0, '& input': { px: 1 } }}
-    />
+    <Box data-testid={testId} aria-label={label} sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      <IconButton size="small" tabIndex={-1} aria-label={`${label}: меньше`} disabled={count <= FBS_CHZ_COPIES_MIN}
+        onMouseDown={keepFocus} onClick={() => onChange(normalizeFbsChzCopies(count - 1))}
+        data-testid={`${testId}-minus`} sx={{ p: 0.25 }}>
+        <RemoveIcon fontSize="small" />
+      </IconButton>
+      <Typography variant="body2" data-testid={`${testId}-value`} sx={{ minWidth: 18, textAlign: 'center' }}>{count}</Typography>
+      <IconButton size="small" tabIndex={-1} aria-label={`${label}: больше`} disabled={count >= FBS_CHZ_COPIES_MAX}
+        onMouseDown={keepFocus} onClick={() => onChange(normalizeFbsChzCopies(count + 1))}
+        data-testid={`${testId}-plus`} sx={{ p: 0.25 }}>
+        <AddIcon fontSize="small" />
+      </IconButton>
+    </Box>
   )
 }
 
