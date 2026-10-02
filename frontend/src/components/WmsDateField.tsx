@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { Box } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
@@ -42,9 +42,15 @@ export function WmsDateField({
   slotProps,
 }: Props) {
   const [draft, setDraft] = useState<Dayjs | null>(() => parseIso(value))
+  // Черновик и его ошибка проверки в ref: blur и Enter читают последнее значение без ожидания рендера.
+  const draftRef = useRef<{ date: Dayjs | null; invalid: boolean }>({
+    date: parseIso(value),
+    invalid: false,
+  })
 
   useEffect(() => {
     setDraft(parseIso(value))
+    draftRef.current = { date: parseIso(value), invalid: false }
   }, [value])
 
   const commitDraft = (next: Dayjs | null) => {
@@ -57,18 +63,33 @@ export function WmsDateField({
     }
   }
 
+  // Набор с клавиатуры сохраняем только по окончании ввода, а не на промежуточной цифре года.
+  const commitTyped = () => {
+    if (draftRef.current.invalid) {
+      return
+    }
+    commitDraft(draftRef.current.date)
+  }
+
   const picker = (
     <DatePicker
       label={label}
       value={draft}
       disabled={disabled}
       minDate={minDate ? parseIso(minDate) ?? undefined : undefined}
-      onChange={(next) => {
+      onChange={(next, context) => {
         // Локальный черновик при наборе секций; не шлём null в родителя (MUI даёт null при закрытии).
         setDraft(next)
+        draftRef.current = { date: next, invalid: context.validationError != null }
       }}
-      onAccept={(next) => {
+      onAccept={(next, context) => {
+        // Набор в поле MUI подтверждает на каждой полной дате (в т. ч. 0202 на середине года),
+        // поэтому сразу сохраняем только выбор в календаре.
+        if (context.source !== 'view') {
+          return
+        }
         setDraft(next)
+        draftRef.current = { date: next, invalid: false }
         commitDraft(next)
       }}
       slotProps={{
@@ -78,15 +99,15 @@ export function WmsDateField({
           required,
           sx: slotProps?.textField?.sx,
           onBlur: (event) => {
-            const target = event.target as HTMLInputElement
-            const raw = target.value?.trim() ?? ''
-            if (!raw) {
+            const nextFocus = event.relatedTarget as Node | null
+            if (nextFocus && event.currentTarget.contains(nextFocus)) {
               return
             }
-            const parsed = dayjs(raw, ['DD.MM.YYYY', 'YYYY-MM-DD', 'D.M.YYYY'], true)
-            if (parsed.isValid()) {
-              setDraft(parsed)
-              commitDraft(parsed)
+            commitTyped()
+          },
+          onKeyDown: (event) => {
+            if (event.key === 'Enter') {
+              commitTyped()
             }
           },
         },

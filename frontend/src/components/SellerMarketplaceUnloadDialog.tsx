@@ -475,8 +475,10 @@ function SellerMarketplaceUnloadDialogContent({
         body: JSON.stringify({ planned_shipment_date: iso }),
       })
       if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
+        const message = await readApiErrorMessage(res)
+        // loadDetail сбрасывает ошибку окна — показываем её после перечитывания.
         await loadDetail()
+        setModalError(message)
         return
       }
       await loadDetail()
