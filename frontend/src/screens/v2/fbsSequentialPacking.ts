@@ -4,7 +4,7 @@ import { renderCzLabelPng } from '../../utils/czLabelPng'
 import { loadLabelSizeId, resolveLabelSize, type LabelSizeId } from '../../utils/labelSize'
 import { startClaimedAutomaticPrint } from './fbsKizAutoReprint'
 import {
-  claimFbsPendingProductScan, completeFbsPendingProductScan, peekFbsPendingProductScan,
+  claimFbsPendingProductScan, completeFbsPendingProductScan, normalizeFbsChzCopies, peekFbsPendingProductScan,
   updateFbsPendingProductScan, type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
 import {
@@ -54,6 +54,15 @@ export async function packingCommitKeys(result: FbsScanAutoPrintResult, raw: str
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
   const codeKey = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
   return [`${result.scan_id}:${codeKey}:bind`, `${result.scan_id}:${codeKey}:replace`]
+}
+
+/**
+ * WMS-633: WMS Print keys of the N copies of one KIZ label. The first copy keeps
+ * the key it always had, so a label printed before the release is never repeated;
+ * every further copy has its own stable key, so a retry adds only the missing ones.
+ */
+export function packingLabelCopyKeys(key: string, copies: number): string[] {
+  return Array.from({ length: normalizeFbsChzCopies(copies) }, (_, index) => index === 0 ? key : `${key}:c${index + 1}`)
 }
 
 /** The order QR print intent: its key survives Escape, «Назад» and reloads (N2, N3). */
@@ -115,8 +124,9 @@ export type PackingScanDeps = {
   bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<string | void>
   /** Prints the order QR under the key (and server claim) of the scan that first intended it. */
   print: (result: FbsScanAutoPrintResult, image: string, size: LabelSizeId, keyScanId: string) => Promise<void>
-  printChz: (result: FbsScanAutoPrintResult, size: LabelSizeId) => Promise<void>
-  printCopy: (result: FbsScanAutoPrintResult, size: LabelSizeId) => Promise<void>
+  /** WMS-633: `copies` labels of the pool KIZ, frozen with the scan's checkbox snapshot. */
+  printChz: (result: FbsScanAutoPrintResult, size: LabelSizeId, copies: number) => Promise<void>
+  printCopy: (result: FbsScanAutoPrintResult, size: LabelSizeId, copies: number) => Promise<void>
   /** Packs one unit; notes the pack key and box on the step before each request. */
   pack: (result: FbsScanAutoPrintResult, explicit: boolean, barcode: string, step: PackingScanStep | null) => Promise<void>
   /** R19: server undo of one step (KIZ, unit, box, selection); resolves a warning or null. */
@@ -269,8 +279,10 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         saveQrIntent(current.result.order_id, { ...intent, done: true })
       }
     }
-    if (poolKiz) await deps.printChz(current.result, current.labelSizeId)
-    if (current.preferences.reprintChz && current.bound) await deps.printCopy(current.result, current.labelSizeId)
+    if (poolKiz) await deps.printChz(current.result, current.labelSizeId, normalizeFbsChzCopies(current.preferences.printChzCopies))
+    if (current.preferences.reprintChz && current.bound) {
+      await deps.printCopy(current.result, current.labelSizeId, normalizeFbsChzCopies(current.preferences.reprintChzCopies))
+    }
     await deps.pack(current.result, current.explicit, current.barcode, current.step)
     deps.complete(current.barcode)
     if (pending === current) pending = null
@@ -561,6 +573,11 @@ export function makePackingScanDeps(
     const size = resolveLabelSize(sizeId)
     return dispatchPreparedQrInKiosk({ imageDataUrl, idempotencyKey, widthMm: size.widthMm, heightMm: size.heightMm })
   }
+  // WMS-633: one job per copy, one after another; WMS Print returns the saved
+  // receipt for a copy it already accepted, so a retry prints only the rest.
+  const sendCopies = async (imageDataUrl: string, key: string, sizeId: LabelSizeId, copies: number) => {
+    for (const copyKey of packingLabelCopyKeys(key, copies)) await send(imageDataUrl, copyKey, sizeId)
+  }
   const toAttempt = (raw: string): PackingAttempt | null => {
     const saved = peekFbsPendingProductScan(token, storageId, raw)
     return saved ? {
@@ -713,14 +730,14 @@ export function makePackingScanDeps(
           releaseClaim: async () => undefined,
         })
     },
-    printChz: async (result, sizeId) => {
+    printChz: async (result, sizeId, copies) => {
       const code = result.printed_codes[0]
       if (!code) throw new Error('ЧЗ выбранной единицы не подготовлен.')
       const key = `${result.scan_id}:chz`
       await startClaimedAutomaticPrint(key, async () => {
         const image = await renderCzLabelPng(
           { cis: code.cis_code, codeId: code.id, hasLabelArtifact: code.has_label_artifact }, resolveLabelSize(sizeId), token)
-        await send(image, key, sizeId)
+        await sendCopies(image, key, sizeId, copies)
       }, {
         claim: (attemptKey) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),
         markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),
@@ -728,11 +745,11 @@ export function makePackingScanDeps(
         releaseClaim: async () => undefined,
       })
     },
-    printCopy: async (result, sizeId) => {
+    printCopy: async (result, sizeId, copies) => {
       const key = `${result.scan_id}:copy`
       await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(key, async (claim) => {
         if (!claim.kiz) throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
-        await send(await renderCzLabelPng({ cis: claim.kiz }, resolveLabelSize(sizeId)), key, sizeId)
+        await sendCopies(await renderCzLabelPng({ cis: claim.kiz }, resolveLabelSize(sizeId)), key, sizeId, copies)
       }, {
         claim: (attemptKey) => claimFbsScanAutoPrintReprint(token, authHeaders, supplyId, result.scan_id, attemptKey),
         markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),

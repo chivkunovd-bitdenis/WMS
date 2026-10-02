@@ -8,6 +8,28 @@ export type FbsScanPrintPreferences = {
   printQr: boolean
   printChz: boolean
   reprintChz: boolean
+  /** WMS-633: copies of the pool KIZ label per scan; absent = 1. */
+  printChzCopies?: number
+  /** WMS-633: copies of the exact KIZ reprint per scan; absent = 1. */
+  reprintChzCopies?: number
+}
+
+export const FBS_CHZ_COPIES_MIN = 1
+export const FBS_CHZ_COPIES_MAX = 10
+
+/** WMS-633: a saved or typed copy count, clamped to 1…10; anything else is 1. */
+export function normalizeFbsChzCopies(value: unknown): number {
+  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  if (!Number.isFinite(number)) return FBS_CHZ_COPIES_MIN
+  return Math.min(FBS_CHZ_COPIES_MAX, Math.max(FBS_CHZ_COPIES_MIN, Math.trunc(number)))
+}
+
+/** Copy counts are kept only when saved; an old value without them means one copy. */
+function copiesFields(saved: Partial<FbsScanPrintPreferences>): Pick<FbsScanPrintPreferences, 'printChzCopies' | 'reprintChzCopies'> {
+  return {
+    ...(saved.printChzCopies !== undefined ? { printChzCopies: normalizeFbsChzCopies(saved.printChzCopies) } : {}),
+    ...(saved.reprintChzCopies !== undefined ? { reprintChzCopies: normalizeFbsChzCopies(saved.reprintChzCopies) } : {}),
+  }
 }
 
 export type FbsProductScanPrintPlan = {
@@ -70,6 +92,7 @@ function normalizePreferences(value: unknown): FbsScanPrintPreferences | null {
     printQr: saved.printQr === true,
     printChz,
     reprintChz: !printChz && saved.reprintChz === true,
+    ...copiesFields(saved),
   }
 }
 
@@ -223,6 +246,7 @@ export function loadFbsScanPrintPreferences(token: string): FbsScanPrintPreferen
       printChz,
       // Fail closed if an old/corrupt value has both mutually exclusive modes.
       reprintChz: !printChz && saved.reprintChz === true,
+      ...copiesFields(saved),
     }
   } catch {
     return { printQr: false, printChz: false, reprintChz: false }
@@ -237,6 +261,7 @@ export function saveFbsScanPrintPreferences(
     printQr: preferences.printQr,
     printChz: preferences.printChz,
     reprintChz: !preferences.printChz && preferences.reprintChz,
+    ...copiesFields(preferences),
   }
   try {
     window.localStorage.setItem(
