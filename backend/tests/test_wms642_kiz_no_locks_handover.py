@@ -191,50 +191,34 @@ async def test_accepted_write_is_not_sent_twice(
     assert sent == [seed["value"]]
 
 
-async def test_supply_is_not_handed_over_before_its_kiz_reached_wb(
+async def test_queued_kiz_reach_wb_before_the_handover(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seed = await _seed(async_client, 642_005)
-    wb: dict[str, Any] = {"value": None, "down": True}
-    delivered: list[str] = []
+    wb: dict[str, Any] = {"value": None}
+    seen_by_deliver: list[str | None] = []
 
     async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
-        if wb["down"]:
-            raise WildberriesClientError("upstream_error", status_code=500)
         return _wb_row(seed["order"].wb_order_id, wb["value"], "sgtinIntroduced")
 
     async def fake_put(*_args: Any, **kwargs: Any) -> None:
-        if wb["down"]:
-            raise WildberriesClientError("transport_error")
         wb["value"] = kwargs["value"]
 
     async def fake_deliver(*_args: Any, **_kwargs: Any) -> Any:
-        delivered.append(str(wb["value"]))
+        seen_by_deliver.append(wb["value"])
         raise shipment_svc.FbsShipmentError("stale_preflight", http_status=409)
 
     monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
     monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
     monkeypatch.setattr(shipment_svc, "deliver_supply", fake_deliver)
     await _scan(async_client, seed, "w642-f")
-    preflight = await async_client.post(
-        f"/operations/fbs-supplies/{seed['supply_id']}/delivery-preflight", headers=seed["headers"]
+    reply = await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/deliver",
+        headers=seed["headers"],
+        json={"idempotency_key": "w642-deliver-1"},
     )
-    assert preflight.status_code != 500, preflight.text
-    url = f"/operations/fbs-supplies/{seed['supply_id']}/deliver"
-    refused = await async_client.post(
-        url, headers=seed["headers"], json={"idempotency_key": "w642-deliver-1"}
-    )
-    assert refused.status_code == 409, refused.text
-    detail = refused.json()["detail"]
-    assert detail["code"] == "kiz_not_sent_to_wb"
-    assert str(seed["order"].wb_order_id) in detail["message"]
-    assert delivered == []
-    wb["down"] = False
-    sent_first = await async_client.post(
-        url, headers=seed["headers"], json={"idempotency_key": "w642-deliver-2"}
-    )
-    assert sent_first.json()["detail"]["code"] == "stale_preflight"
-    assert delivered == [seed["value"]]
+    assert reply.json()["detail"]["code"] == "stale_preflight"
+    assert seen_by_deliver == [seed["value"]]
 
 
 # Astra review rounds 1-2: the worker writes only into an empty WB field and never
@@ -410,3 +394,222 @@ async def test_only_a_refusal_of_the_code_turns_red(
             assert marking.meta_status == "rejected" and operation.state == "failed"
         else:
             assert marking.meta_status != "rejected" and operation.state == "pending_confirmation"
+
+
+# Astra review round 3: the gate runs inside the handover after its final WB sync,
+# and a code bound to a supply already handed over is still sent by the worker.
+
+
+async def _deliverable_supply(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, wb_order_id: int
+) -> Any:
+    import uuid
+
+    from app.core.settings import settings
+    from app.models.fbs_supply import FbsSupply
+    from app.models.packaging_task import PackagingTask, PackagingTaskLine
+    from app.models.storage_location import StorageLocation
+    from tests.test_fbs_shipment_warehouse_sc import (
+        _mock_actual_composition_from_local_links,
+        _prepare_supply_with_orders,
+        _register_ff_admin,
+        _setup_seller_with_token,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    _mock_actual_composition_from_local_links(monkeypatch)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller, warehouse, tenant = await _setup_seller_with_token(async_client, headers, suffix)
+    supply, ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller,
+        warehouse,
+        tenant,
+        wb_order_ids=[wb_order_id],
+        supply_name=f"W642 {wb_order_id}",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, ids[0])
+        assert order is not None
+        order.required_meta_json = []
+        task = PackagingTask(
+            tenant_id=tenant,
+            warehouse_id=uuid.UUID(warehouse),
+            status="done",
+            document_number=f"PKG-{wb_order_id}",
+        )
+        location = StorageLocation(
+            tenant_id=tenant,
+            warehouse_id=uuid.UUID(warehouse),
+            code=f"L{wb_order_id}",
+            barcode=f"L{wb_order_id}",
+        )
+        session.add_all([task, location])
+        await session.flush()
+        session.add(
+            PackagingTaskLine(
+                task_id=task.id,
+                product_id=order.product_id,
+                storage_location_id=location.id,
+                qty_total=1,
+                qty_suggested_packed=0,
+                qty_confirmed_packed=0,
+                qty_packed_in_task=1,
+                qty_marking_printed=0,
+                qty_marking_external=0,
+            )
+        )
+        db_supply = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert db_supply is not None
+        db_supply.packaging_task_id = task.id
+        await session.commit()
+    return headers, tenant, seller, supply, ids[0]
+
+
+async def test_other_code_first_seen_by_the_handover_keeps_the_supply(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.test_fbs_shipment_warehouse_sc import _delivery_preflight
+
+    headers, tenant, _seller, supply, order_id = await _deliverable_supply(
+        async_client, monkeypatch, 642_991
+    )
+    wb = {"value": "own-A"}
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(642_991, wb["value"], "sgtinIntroduced")
+
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                tenant_id=tenant,
+                order_id=order_id,
+                kind="sgtin",
+                value="own-A",
+                source="operator",
+                meta_status="accepted",
+                check_status="ok",
+            )
+        )
+        await session.commit()
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"]
+    wb["value"] = "other-B"
+    reply = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/deliver",
+        headers=headers,
+        json={
+            "idempotency_key": "w642-r3-other",
+            "confirmed_preflight_version": preflight["version"],
+        },
+    )
+    assert reply.status_code == 409, reply.text
+    assert reply.json()["detail"]["code"] == "kiz_not_sent_to_wb"
+    assert "другой код" in reply.json()["detail"]["message"]
+    async with SessionLocal() as session:
+        from app.models.fbs_supply import FbsSupply
+
+        db_supply = await session.get(FbsSupply, __import__("uuid").UUID(supply["id"]))
+        assert db_supply is not None and db_supply.status != "in_delivery"
+
+
+async def test_scan_right_before_the_handover_keeps_the_supply(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import fbs_supplies as api
+    from tests.test_fbs_kiz import _cis
+    from tests.test_fbs_shipment_warehouse_sc import _delivery_preflight
+
+    headers, _tenant, _seller, supply, order_id = await _deliverable_supply(
+        async_client, monkeypatch, 642_994
+    )
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(642_994, None, "optional")
+
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    real_send = api._send_queued_kiz
+
+    async def send_then_operator_scans(*args: Any, **kwargs: Any) -> Any:
+        result = await real_send(*args, **kwargs)
+        reply = await async_client.post(
+            "/operations/fbs-orders/kiz/commit",
+            headers=headers,
+            json={
+                "idempotency_key": "w642-r3-late-scan",
+                "scan_no_wb_wait": True,
+                "pairs": [
+                    {"order_id": str(order_id), "value": _cis("R3642994"), "confirmed": False}
+                ],
+            },
+        )
+        assert reply.json()[0]["code"] == "wb_pending_confirmation", reply.text
+        return result
+
+    monkeypatch.setattr(api, "_send_queued_kiz", send_then_operator_scans)
+    reply = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/deliver",
+        headers=headers,
+        json={
+            "idempotency_key": "w642-r3-late",
+            "confirmed_preflight_version": preflight["version"],
+        },
+    )
+    assert reply.status_code == 409, reply.text
+    assert "ещё не ушёл" in reply.json()["detail"]["message"]
+
+
+async def test_code_of_a_handed_over_supply_is_still_sent(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
+    from app.services.fbs_autopoll_service import SellerPollTarget, sync_marking_verdicts_for_seller
+
+    seed = await _seed(async_client, 642_995)
+    wb: dict[str, str | None] = {"value": None}
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(seed["order"].wb_order_id, wb["value"], "sgtinIntroduced")
+
+    async def fake_put(*_args: Any, **kwargs: Any) -> None:
+        wb["value"] = kwargs["value"]
+
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+    await _scan(async_client, seed, "w642-r3-after")
+    async with SessionLocal() as session:
+        db_supply = await session.get(FbsSupply, seed["supply_id"])
+        order = await session.get(FbsOrder, seed["order"].order_id)
+        assert db_supply is not None and order is not None
+        db_supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
+        target = SellerPollTarget(tenant_id=order.tenant_id, seller_id=order.seller_id)
+        await session.commit()
+    async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+        await sync_marking_verdicts_for_seller(session, target, http_client)
+        await session.commit()
+    assert wb["value"] == seed["value"]
+    async with SessionLocal() as session:
+        operation = await session.scalar(select(FbsWbOperation))
+        assert operation is not None and operation.state == "confirmed"
+
+
+@pytest.mark.parametrize("state", ["confirmed", "failed", "pending_confirmation"])
+async def test_saved_other_code_keeps_the_supply_whatever_the_operation(
+    async_client: AsyncClient, state: str
+) -> None:
+    seed = await _seed(async_client, 642_992)
+    await _scan(async_client, seed, "w642-r3-states")
+    async with SessionLocal() as session:
+        marking = await session.scalar(select(FbsOrderMarking))
+        operation = await session.scalar(select(FbsWbOperation))
+        assert marking is not None and operation is not None
+        marking.meta_status = "replacement_required"
+        operation.state = state
+        operation.error_code = "wb_pending_confirmation"
+        await session.commit()
+    assert await _check_supply(seed) == fbs_marking_svc.QueuedKizCheck(
+        [], [seed["order"].wb_order_id]
+    )

@@ -3248,34 +3248,8 @@ async def deliver_fbs_supply(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     async with httpx.AsyncClient() as http_client:
-        # WMS-642: a supply never leaves while a scanned KIZ has not reached WB.
-        queued = await _send_queued_kiz(user.tenant_id, supply_id, http_client)
-        if queued.not_sent or queued.other_code_in_wb:
-            reasons = []
-            if queued.not_sent:
-                reasons.append(
-                    "Честный знак ещё не ушёл в WB по заказам "
-                    f"{', '.join(map(str, queued.not_sent))}: WB не ответил. "
-                    "Повторите передачу через минуту."
-                )
-            if queued.other_code_in_wb:
-                reasons.append(
-                    "В WB по заказам "
-                    f"{', '.join(map(str, queued.other_code_in_wb))} записан другой код "
-                    "Честного знака. Снимите ЧЗ крестиком и отсканируйте заново."
-                )
-            _raise_from_shipment_service(
-                shipment_svc.FbsShipmentError(
-                    "kiz_not_sent_to_wb",
-                    message=" ".join(reasons),
-                    context={
-                        "wb_order_ids": queued.not_sent,
-                        "other_code_wb_order_ids": queued.other_code_in_wb,
-                    },
-                    retryable=True,
-                    http_status=status.HTTP_409_CONFLICT,
-                )
-            )
+        # WMS-642: queued KIZ go to WB first; deliver_supply refuses if any is not there.
+        await _send_queued_kiz(user.tenant_id, supply_id, http_client)
         try:
             supply = await shipment_svc.deliver_supply(
                 session,

@@ -2453,6 +2453,21 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             actor_user_id=actor_user_id,
         )
+        # WMS-642: after the final WB sync and before the delivery is journaled,
+        # a supply never leaves with a current KIZ WB has not got.
+        kiz_check = await marking_svc.queued_kiz_check(session, tenant_id, supply.id)
+        kiz_message = marking_svc.queued_kiz_message(kiz_check)
+        if kiz_message is not None:
+            raise FbsShipmentError(
+                "kiz_not_sent_to_wb",
+                message=kiz_message,
+                context={
+                    "wb_order_ids": kiz_check.not_sent,
+                    "other_code_wb_order_ids": kiz_check.other_code_in_wb,
+                },
+                retryable=True,
+                http_status=409,
+            )
         from app.services.fbs_cancelled_after_pack_service import exclude_cancelled_delivery_orders
 
         await exclude_cancelled_delivery_orders(session, supply)

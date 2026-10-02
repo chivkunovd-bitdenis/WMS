@@ -1399,13 +1399,37 @@ async def send_queued_kiz_of_supply(
         except FbsMarkingError:
             continue
         await resend_pending_kiz_bindings(session, keys, http_client, token)
-    return await _queued_kiz_check(session, tenant_id, supply_id)
+    check = await queued_kiz_check(session, tenant_id, supply_id)
+    await session.commit()
+    return check
 
 
-async def _queued_kiz_check(
+def queued_kiz_message(check: QueuedKizCheck) -> str | None:
+    """The handover refusal for ``check``; None when the supply may leave."""
+    reasons = []
+    if check.not_sent:
+        reasons.append(
+            "Честный знак ещё не ушёл в WB по заказам "
+            f"{', '.join(map(str, check.not_sent))}: WB не ответил. "
+            "Повторите передачу через минуту."
+        )
+    if check.other_code_in_wb:
+        reasons.append(
+            "В WB по заказам "
+            f"{', '.join(map(str, check.other_code_in_wb))} записан другой код "
+            "Честного знака. Снимите ЧЗ крестиком и отсканируйте заново."
+        )
+    return " ".join(reasons) or None
+
+
+async def queued_kiz_check(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
 ) -> QueuedKizCheck:
-    """Each WB order's current KIZ: never received by WB, or next to another code in WB."""
+    """Each WB order's current KIZ: never received by WB, or next to another code in WB.
+
+    Reads only; the handover calls it under its own supply lock after its final
+    WB sync, right before the delivery is journaled.
+    """
     markings = (
         await session.execute(
             select(FbsOrderMarking, FbsOrder.wb_order_id)
@@ -1434,7 +1458,6 @@ async def _queued_kiz_check(
             )
         )
     ).all() if current else []
-    await session.commit()
     unsent_ids = {
         marking_id for marking_id, error_code in pending if _kiz_write_failed_before_wb(error_code)
     }
