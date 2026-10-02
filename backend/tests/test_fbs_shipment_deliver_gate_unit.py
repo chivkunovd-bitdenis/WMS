@@ -181,12 +181,8 @@ def test_warehouse_route_has_no_cargo_checks() -> None:
     assert "cargo_place_qr_not_ready" not in codes
 
 
-def test_boxes_and_distribution_are_warnings_not_gates() -> None:
-    """Ни отсутствие коробов, ни нераспределённый заказ не останавливают склад.
-
-    Именно эта пара кодов гасила кнопку у оператора 01.09.2026, хотя короба
-    физически стояли, а раскладывать по ним товар склад никогда и не начинал.
-    """
+def test_boxes_and_distribution_are_not_delivery_checks() -> None:
+    """Короба не относятся к готовности передачи и не засоряют подтверждение."""
     order_id = uuid.uuid4()
     checks = _build_delivery_checks(
         _mock_supply(),
@@ -195,11 +191,9 @@ def test_boxes_and_distribution_are_warnings_not_gates() -> None:
         has_physical_boxes=False,
         unassigned_packed_order_ids=frozenset({order_id}),
     )
-    warned = {check.code: check for check in checks if not check.ok}
-    assert warned["physical_boxes_required"].order_id is None
-    assert warned["physical_boxes_required"].severity == "warning"
-    assert warned["packed_order_unassigned"].order_id == order_id
-    assert warned["packed_order_unassigned"].severity == "warning"
+    codes = {check.code for check in checks}
+    assert "physical_boxes_required" not in codes
+    assert "packed_order_unassigned" not in codes
     assert _checks_allow_delivery(checks) is True
     _validate_checks_pass(checks)
 
@@ -318,7 +312,8 @@ def test_wb_supply_with_nothing_prepared_is_still_deliverable() -> None:
     _validate_checks_pass(checks)
 
     warned = {check.code for check in checks if check.severity == "warning"}
-    assert {"order_sticker_not_ready", "marking_required", "physical_boxes_required"} <= warned
+    assert {"order_sticker_not_ready", "marking_required"} <= warned
+    assert "physical_boxes_required" not in warned
 
 
 def test_wb_preflight_version_ignores_every_advisory_packaging_fact() -> None:
