@@ -3872,18 +3872,11 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
             headers=headers,
             json=scan_auto_print_body,
         )
+        # WMS-635 (owner: the scan never waits for WB): the binding written while
+        # WB's answer is unknown already serves its exact copy; WB is reconciled
+        # in the background. Previously this stage reported not_attempted.
         assert unresolved.json()["reprint_recovery"] == {
-            "status": "not_attempted"
-        }
-        blocked_claim = await async_client.post(
-            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
-            headers=headers,
-            json={"attempt_key": "still-unknown"},
-        )
-        assert blocked_claim.json() == {
-            "claimed": False,
-            "started": False,
-            "kiz": None,
+            "status": "available"
         }
     async with SessionLocal() as session:
         marking = (

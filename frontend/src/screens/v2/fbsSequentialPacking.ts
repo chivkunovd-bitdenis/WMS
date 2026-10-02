@@ -720,12 +720,15 @@ export function makePackingScanDeps(
         outcomes = await commit(true)
         outcome = outcomes.find((item) => item.order_id === result.order_id)
       }
-      if (outcome?.status !== 'ok') {
-        // The server answered: an outcome other than «pending confirmation» saved nothing.
-        if (outcome?.code === 'wb_pending_confirmation') throw new Error(outcome.message ?? 'Честный знак ждёт подтверждения WB.')
+      // WMS-635: the scan never waits for WB. «Pending confirmation» means the
+      // code is bound in WMS and WB's answer is reconciled in the background;
+      // the order goes on to print and pack exactly as after «ok».
+      const pendingWb = outcome?.code === 'wb_pending_confirmation'
+      if (outcome?.status !== 'ok' && !pendingWb) {
+        // The server answered: any other outcome saved nothing.
         throw new PackingBindRejectedError(outcome?.message ?? 'Честный знак не сохранён.')
       }
-      const bound = outcome.bound_kiz ?? raw
+      const bound = outcome?.bound_kiz ?? raw
       onBound(result.order_id, bound)
       refreshed()
       return bound

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import uuid
 from dataclasses import dataclass
@@ -1546,6 +1547,15 @@ async def _commit_one_kiz_pair(
             actor_user_id=actor_user_id, idempotency_key=idempotency_key,
             scan_auto_print_id=pair.scan_auto_print_id,
         )
+        if pair.scan_auto_print_id is not None and actor_user_id is not None:
+            # WMS-635: the packing scan does not wait for WB; its exact copy is
+            # printed from this binding while WB's answer is reconciled later.
+            # Without the receipt only the exact copy is unavailable; the binding stays.
+            with contextlib.suppress(scan_print_svc.FbsScanAutoPrintError):
+                await scan_print_svc.record_bound_reprint_target(
+                    session, tenant_id, actor_user_id, pair.scan_auto_print_id, order.id,
+                    marking.id,
+                )
         pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
     elif new_error is not None and current is not None:
         try:
