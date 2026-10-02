@@ -617,7 +617,7 @@ def test_generator_validates_inputs_and_hides_secret_names() -> None:
     assert sa.seller_from_role(sa.role_name(sid)) == sid
     cols = ["id", "seller_id", "password_hash", "api_key", "x_token", "name", "signature", "auth_challenge",
             "marker_enc", "title"]
-    assert sa.allowed_columns("anything", cols, {"id", "seller_id"}) == ["id", "seller_id", "name", "title"]
+    assert sa.allowed_columns("anything", cols, {"id", "seller_id"}) == ["id", "name", "seller_id", "title"]  # порядок детерминирован (сортировка)
     cat = sa.Catalog(columns={"products": cols}, secdef_functions=["public.f(); DROP TABLE x"])
     with pytest.raises(sa.SpecError):
         sa.render_sql(sid, cat)

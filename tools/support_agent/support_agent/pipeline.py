@@ -19,13 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from . import prompts
-from .config import Config
+from .config import ChatCfg, Config
 from .llm import LlmError, LlmRouter, LlmUnavailable, extract_json
 from .prod_sql import SELLER_RE
 from .redact import scrub
 from .seller_directory import DirectoryError, SellerDirectory
 from .store import Store
-from .telegram import Inbound, TelegramError, as_bots
+from .telegram import BIND_RE, Inbound, TelegramError, as_bots
 from .transcribe import TranscribeError, Transcriber
 from .trello import TrelloClient, TrelloError, ensure_card
 from .wms import WmsClient, WmsError
@@ -36,8 +36,6 @@ CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
 MAX_FILE_BYTES = 5_000_000
 TRANSCRIPT_PREFIX = "(расшифровка голосового) "
-BIND_RE = re.compile(r"^\s*(?:пере)?привяж\w*\s+(?:(?:этот|данный|наш)\s+чат\s+)?(?:к|на)\s+(.+?)\s*$",
-                     re.IGNORECASE | re.DOTALL)
 CONFIRM_RE = re.compile(
     r"^\s*(?:да|ага|угу|верно|подтверждаю|ок|окей|yes)\b[\s,.!)]*(?:этот|он|она)?[\s.!]*$", re.IGNORECASE)
 DECLINE_RE = re.compile(r"^\s*(?:нет|не он|не тот|отмена|отбой)\b", re.IGNORECASE)
@@ -109,6 +107,8 @@ class Pipeline:
         self.clock = clock
         store.scrubber = lambda text: scrub(cfg, text)
         self.directory: SellerDirectory | None = None  # поиск селлеров через шлюз; подключает runner
+        self.dynamic_chats: set[int] = set()  # чаты, добавленные привязкой, а не конфигом
+        self.register_bound_chats()
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
         self.mockups: Any = None
         self.stages: dict[str, Callable[[int], None]] = {
@@ -202,6 +202,8 @@ class Pipeline:
     # ===== приём ======================================================================
     def ingest(self, inb: Inbound) -> int | None:
         """Единый вид (R1): сохраняем; повтор того же сообщения игнорируется (R35)."""
+        if inb.chat_title:
+            self.store.kv_set(f"chat_title:{inb.chat_id}", inb.chat_title)
         return self.store.add_message(
             source=inb.source, chat_id=inb.chat_id, msg_id=inb.msg_id, role=inb.role,
             author_id=inb.author_id, author_name=inb.author_name, ts=inb.ts, kind=inb.kind,
@@ -240,6 +242,8 @@ class Pipeline:
         chat = self.cfg.telegram.chats.get(chat_id)
         if role == "owner":
             return "владельца"
+        if role == "bind":
+            return f"чата «{self._chat_label(chat_id)}» (привязка)"
         return chat.seller if chat and chat.seller else "партнёрского чата"
 
     # ===== маршрутизация сообщений =====================================================
@@ -255,6 +259,8 @@ class Pipeline:
                     self.handle_owner_message(m)
                 elif m["role"] == "partner":
                     self.handle_partner_message(m)
+                elif m["role"] == "bind":
+                    self.handle_bind_command(m)
                 else:
                     self.handle_client_message(m)
             except LlmUnavailable as exc:
@@ -276,76 +282,110 @@ class Pipeline:
 
     # ----- клиентский чат ------------------------------------------------------------
     # ----- привязка чата к селлеру (R39, R40) -------------------------------------------
+    # Всё общение по привязке идёт ТОЛЬКО с владельцем, ботом владельца, в его чате. В клиентский чат
+    # (и в любой чат, где команду дали) бот приёма не пишет ничего ни при каком исходе: там могут быть
+    # названия чужих селлеров и фулфилментов. Решает код, модель не участвует.
+    def _chat_label(self, chat_id: int) -> str:
+        title = str(self.store.kv_get(f"chat_title:{chat_id}", "") or "")
+        cfg = self.cfg.telegram.chats.get(chat_id)
+        return title or (cfg.seller if cfg and cfg.seller else "") or f"№{chat_id}"
+
+    def register_bound_chats(self) -> None:
+        """Привязанные чаты обслуживаются как клиентские без правки config.json (после перезапуска тоже)."""
+        for row in self.store.bindings():
+            chat_id = int(row["chat_id"])
+            known = self.cfg.telegram.chats.get(chat_id)
+            if known is None or chat_id in self.dynamic_chats:
+                self.cfg.telegram.chats[chat_id] = ChatCfg(role="client", seller=str(row["seller_name"]))
+                self.dynamic_chats.add(chat_id)
+
+    def handle_bind_command(self, m: Any) -> None:
+        """Команда «привяжи к ИП …» от владельца в групповом чате (текст пришёл через нормализацию)."""
+        match = BIND_RE.match(m["text"])
+        if match:
+            self._propose_binding(m, match.group(1))
+        else:
+            self.store.set_message(m["id"], status="handled")
+
+    def _binding_from_voice(self, m: Any) -> bool:
+        """Голосовая команда владельца в уже обслуживаемом клиентском чате (после расшифровки)."""
+        if not self._is_owner_author(m):
+            return False
+        text = m["text"]
+        if text.startswith(TRANSCRIPT_PREFIX):
+            text = text[len(TRANSCRIPT_PREFIX):]
+        match = BIND_RE.match(text)
+        if not match:
+            return False
+        self._propose_binding(m, match.group(1))
+        return True
+
     def _is_owner_author(self, m: Any) -> bool:
         owner = self.cfg.telegram.owner_user_id
         return bool(owner) and str(m["author_id"]) == str(owner)
 
-    def _binding_flow(self, m: Any) -> bool:
-        """Команда привязки и её подтверждение. Решает только код: ни модель, ни текст клиента не задают
-        селлера. Привязывает только владелец (owner_user_id) в клиентском чате через бота приёма;
-        подтверждение действует только ответом владельца на наше сообщение с кандидатами."""
-        text = m["text"]
-        if text.startswith(TRANSCRIPT_PREFIX):
-            text = text[len(TRANSCRIPT_PREFIX):]
-        if m["reply_to"]:
-            hit = self.store.outbox_by_tg(m["chat_id"], m["reply_to"])
-            if hit is not None and str(hit["key"]).startswith("bind:"):
-                if self._is_owner_author(m):
-                    self._confirm_binding(m, text, int(str(hit["key"]).split(":")[1]))
-                else:
-                    self.store.set_message(m["id"], status="dropped")  # чужой ответ на служебное сообщение
-                return True
-        match = BIND_RE.match(text)
-        if not match or not self._is_owner_author(m):
-            return False  # у не-владельца команда силы не имеет: обычное сообщение
-        self._propose_binding(m, match.group(1))
-        return True
-
-    def _bind_reply(self, m: Any, key: str, text: str) -> None:
-        self.store.queue_message(key=key, chat_id=m["chat_id"], text=text, reply_to=m["msg_id"],
-                                 purpose="bind", repeat_ok=False)
-
     def _propose_binding(self, m: Any, name: str) -> None:
         self.store.set_message(m["id"], status="handled")
+        chat_id = int(m["chat_id"])
+        label = self._chat_label(chat_id)
+        where = f"чат «{label}»"
         if self.directory is None:
-            self._bind_reply(m, f"bindoff:{m['id']}", "Привязка недоступна: доступ к базе не настроен.")
+            self.say_owner(f"bindoff:{m['id']}", f"Привязка ({where}) недоступна: доступ к базе не настроен.",
+                           purpose="bind")
             return
         try:
             found = self.directory.find(name)
         except DirectoryError as exc:
             log.warning("seller search failed: %s", exc)
-            self._bind_reply(m, f"binderr:{m['id']}", "Поиск селлера сейчас недоступен, попробуйте позже.")
+            self.say_owner(f"binderr:{m['id']}",
+                           f"Привязка ({where}): поиск селлера сейчас недоступен, повторите команду позже.",
+                           purpose="bind")
             return
         if not found:
-            self._bind_reply(m, f"bindnf:{m['id']}",
-                             f"Селлера «{name[:60]}» не нашёл. Проверьте название и повторите команду.")
+            self.say_owner(f"bindnf:{m['id']}",
+                           f"Привязка ({where}): селлера «{name[:60]}» не нашёл. Проверьте название и "
+                           "повторите команду в том чате.", purpose="bind")
             return
-        cands = [c.__dict__ for c in found]
-        pid = self.store.add_proposal(m["chat_id"], cands, str(m["author_id"]))
-        current = self.store.binding(m["chat_id"])
+        pid = self.store.add_proposal(chat_id, [c.__dict__ for c in found], str(m["author_id"]), label)
+        current = self.store.binding(chat_id)
         replace = f" Сейчас чат привязан к «{current['seller_name']}»; привязка заменится." if current else ""
         if len(found) == 1:
             c = found[0]
-            body = (f"Нашёл селлера «{c.seller_name}» в фулфилменте «{c.tenant_name}». Если это он, "
-                    f"ответьте на это сообщение словом «да».{replace}")
+            body = (f"Привязка: селлер «{c.seller_name}» в фулфилменте «{c.tenant_name}», {where}. "
+                    f"Если это он, ответьте на это сообщение словом «да».{replace}")
         else:
-            lines = [f"{i}. «{c.seller_name}» в фулфилменте «{c.tenant_name}»"
+            lines = [f"{i}. селлер «{c.seller_name}» в фулфилменте «{c.tenant_name}»"
                      for i, c in enumerate(found, 1)]
-            body = ("Нашёл несколько селлеров с таким названием:\n" + "\n".join(lines)
+            body = (f"Привязка, {where}: нашёл несколько селлеров с таким названием:\n" + "\n".join(lines)
                     + f"\nОтветьте на это сообщение номером нужного.{replace}")
-        self._bind_reply(m, f"bind:{pid}", body)
+        self.say_owner(f"bind:{pid}", body, purpose="bind")
 
-    def _confirm_binding(self, m: Any, text: str, pid: int) -> None:
+    def _is_bind_reply(self, m: Any) -> int | None:
+        """Номер предложения привязки, если владелец ответил на наше сообщение с кандидатами."""
+        if not m["reply_to"]:
+            return None
+        hit = self.store.outbox_by_tg(m["chat_id"], m["reply_to"])
+        if hit is not None and str(hit["key"]).startswith("bind:"):
+            return int(str(hit["key"]).split(":")[1])
+        return None
+
+    def _confirm_binding(self, m: Any, pid: int) -> None:
         self.store.set_message(m["id"], status="handled")
+        text = m["text"]
+        if text.startswith(TRANSCRIPT_PREFIX):
+            text = text[len(TRANSCRIPT_PREFIX):]
         prop = self.store.proposal(pid)
-        if prop is None or prop["chat_id"] != m["chat_id"] or prop["status"] != "open":
-            self._bind_reply(m, f"bindold:{m['id']}",
-                             "Это предложение уже неактуально. Повторите команду «привяжи к …».")
+        if prop is None or prop["status"] != "open":
+            self.say_owner(f"bindold:{m['id']}",
+                           "Это предложение уже неактуально. Повторите команду «привяжи к …» в нужном чате.",
+                           purpose="bind")
             return
+        # чат берётся из предложения (его фиксировал код при команде), а не из слов ответа
+        chat_id, title = int(prop["chat_id"]), str(prop["chat_title"] or f"№{prop['chat_id']}")
         cands = json.loads(prop["candidates"])
         if DECLINE_RE.match(text):
             self.store.close_proposal(pid, "declined")
-            self._bind_reply(m, f"binddecl:{m['id']}", "Хорошо, привязку не меняю.")
+            self.say_owner(f"binddecl:{m['id']}", f"Хорошо, чат «{title}» не привязываю.", purpose="bind")
             return
         choice = CHOICE_RE.match(text)
         if choice and 1 <= int(choice.group(1)) <= len(cands):
@@ -353,13 +393,15 @@ class Pipeline:
         elif len(cands) == 1 and CONFIRM_RE.match(text):
             picked = cands[0]
         else:
-            self._bind_reply(m, f"bindask:{m['id']}",
-                             "Не понял. Ответьте на сообщение со списком номером селлера или «нет».")
+            self.say_owner(f"bindask:{m['id']}",
+                           "Не понял. Ответьте на сообщение со списком номером селлера или «нет».",
+                           purpose="bind")
             return
         if not SELLER_RE.match(picked["seller_id"]):
             return
-        self.store.set_binding(m["chat_id"], picked, str(m["author_id"]))
+        self.store.set_binding(chat_id, picked, str(m["author_id"]), title)
         self.store.close_proposal(pid, "confirmed")
+        self.register_bound_chats()
         note = ""
         if self.directory is not None:
             try:
@@ -367,12 +409,13 @@ class Pipeline:
             except DirectoryError as exc:
                 log.warning("ensure failed after binding: %s", exc)
                 note = " Доступ к данным пока не подготовлен, я повторю при разборе обращения."
-        self._bind_reply(m, f"bindok:{m['id']}",
-                         f"Готово: чат привязан к селлеру «{picked['seller_name']}» "
-                         f"(фулфилмент «{picked['tenant_name']}»).{note}")
+        self.say_owner(f"bindok:{m['id']}",
+                       f"Чат «{title}» привязан к селлеру «{picked['seller_name']}» "
+                       f"(фулфилмент «{picked['tenant_name']}»). Теперь сообщения этого чата обслуживаются "
+                       f"как клиентские.{note}", purpose="bind")
 
     def handle_client_message(self, m: Any) -> None:
-        if self._binding_flow(m):
+        if self._binding_from_voice(m):
             return
         # Ответ на наш вопрос (reply) — сразу к своему обращению, без фильтра.
         if m["reply_to"]:
@@ -1026,6 +1069,10 @@ class Pipeline:
         return f"№{t['id']} ({self._client_label(t)}, {self.store.data(t['id']).get('verdict') or 'разбор'})"
 
     def handle_owner_message(self, m: Any) -> None:
+        pid = self._is_bind_reply(m)
+        if pid is not None:
+            self._confirm_binding(m, pid)  # ответ на предложение привязки: только код, без модели
+            return
         awaiting_rows = self.store.tickets_in("await_owner", "postponed", "await_mockup",
                                               "await_owner_msg")
         # Модели передаются номера, клиент и вердикт; текст из клиентских сообщений полномочий не задаёт.

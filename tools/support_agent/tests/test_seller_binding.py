@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,10 +16,12 @@ from support_agent import prod_sql, prompts
 from support_agent.llm import ExecResult
 from support_agent.prod_sql import ProdSqlSettings, SqlRefused, role_for_seller, run_query
 from support_agent.seller_directory import Candidate, DirectoryError, SellerDirectory, clean_name
+from support_agent.telegram import Bots, flush_outbox
 
-from .conftest import CLIENT_CHAT, OWNER_CHAT, OWNER_ID
+from .conftest import CLIENT_CHAT, OWNER_CHAT, OWNER_ID, PARTNER_CHAT
 from .test_pipeline_chat import ANALYSIS_BUG, form_row, script
 from .test_prod_sql import ROLE, SELLER, make_router, settings
+from .test_two_bots import two_bot_env
 
 S2 = "99999999-8888-7777-6666-555555555555"
 ROLE2 = "wms_agent_s_99999999888877776666555555555555"
@@ -58,98 +61,226 @@ def bind(env: Any) -> SimpleNamespace:
     return env
 
 
-def reply_id(env: Any, key: str) -> str:
-    row = env.store.outbox_by_key(key)
-    assert row is not None and row["tg_message_id"], key
+NEW_CHAT = -100777  # групповой чат, которого нет в config.chats
+NEW_TITLE = "Чат Ромашки"
+BOT = "@wms_korob_support_bot"
+_uid = itertools.count(1)
+
+
+def gupd(chat: int, user: int, text: str, *, reply_to: int | None = None, title: str = "",
+         voice: str | None = None) -> dict[str, Any]:
+    uid = next(_uid)
+    message: dict[str, Any] = {"message_id": 5000 + uid, "chat": {"id": chat, "title": title}, "date": 1,
+                               "from": {"id": user, "first_name": "Имя"}}
+    if voice:
+        message["voice"] = {"file_id": voice}
+    else:
+        message["text"] = text
+    if reply_to:
+        message["reply_to_message"] = {"message_id": reply_to}
+    return {"update_id": uid, "message": message}
+
+
+@pytest.fixture
+def be(tmp_path: Path) -> SimpleNamespace:
+    """Два бота: приёма (клиентские чаты) и владельца; шлюз подменён."""
+    e = two_bot_env(tmp_path)
+    e.fd = FakeDirectory([A, B, C])
+    e.pipe.directory = e.fd
+    e.tmp = tmp_path
+    return e
+
+
+def step(e: Any) -> None:
+    e.agent.poll_telegram(1)
+    e.pipe.tick()
+    flush_outbox(e.store, Bots(e.intake, e.owner, OWNER_CHAT), e.cfg)
+
+
+def owner_says_in_group(e: Any, text: str, chat: int = NEW_CHAT, title: str = NEW_TITLE) -> None:
+    e.intake.updates.append(gupd(chat, OWNER_ID, text, title=title))
+    step(e)
+
+
+def owner_replies(e: Any, text: str, to: int | str) -> None:
+    e.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, text, reply_to=int(to)))
+    step(e)
+
+
+def proposal_msg_id(e: Any, pid: int = 1) -> str:
+    row = e.store.outbox_by_key(f"bind:{pid}")
+    assert row is not None and row["tg_message_id"]
     return str(row["tg_message_id"])
 
 
-def client_texts(env: Any) -> list[str]:
-    return env.tg.to(CLIENT_CHAT)
+def assert_intake_bot_said_nothing(e: Any) -> None:
+    """Бот приёма не отправил ни одного сообщения и документа никуда: названий селлеров в чатах нет."""
+    assert e.intake.sent == [] and e.intake.documents == []
 
 
-# --------------------------------------------------------------- C36: привязка только владельцем
-def test_owner_binds_chat_by_confirmed_candidate_without_any_model_call(bind: Any) -> None:
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="10")
-    bind.flush()
-    assert bind.llm.calls == []  # поиск и подтверждение решает код, модель не участвует
-    assert bind.fd.finds == ["Василёк"] and bind.store.binding(CLIENT_CHAT) is None
-    text = client_texts(bind)[-1]
-    assert "«ИП Василёк» в фулфилменте «ФФ Север»" in text and "00000000" not in text  # без идентификаторов
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, reply_to=reply_id(bind, "bind:1"), msg_id="11")
-    row = bind.store.binding(CLIENT_CHAT)
-    assert row["seller_id"] == C.seller_id and row["tenant_id"] == "t-1" and row["bound_by"] == str(OWNER_ID)
-    assert bind.fd.ensures == [C.seller_id] and bind.llm.calls == []
-    bind.flush()
-    assert "чат привязан к селлеру «ИП Василёк»" in client_texts(bind)[-1]
+# --------------------------------------------------------------- C36: привязка только владельцем, только ботом владельца
+def test_owner_command_in_a_group_outside_config_goes_to_the_owner_only(be: Any) -> None:
+    assert NEW_CHAT not in be.cfg.telegram.chats
+    owner_says_in_group(be, f"{BOT} привяжи к ИП Василёк")
+    assert_intake_bot_said_nothing(be)  # в самом чате тишина
+    text = be.owner.to(OWNER_CHAT)[-1]
+    assert "селлер «ИП Василёк» в фулфилменте «ФФ Север»" in text and f"чат «{NEW_TITLE}»" in text
+    assert "00000000" not in text  # без идентификаторов
+    assert be.llm.calls == [] and be.fd.finds == ["Василёк"]  # поиск решает код, модель не участвует
+    assert be.store.binding(NEW_CHAT) is None and NEW_CHAT not in be.cfg.telegram.chats  # ещё не привязан
 
 
-def test_two_sellers_with_the_same_name_need_a_number_and_yes_is_not_enough(bind: Any) -> None:
-    bind.say(CLIENT_CHAT, "Привяжи этот чат к ИП Ромашка", user=OWNER_ID, msg_id="10")
-    bind.flush()
-    listing = client_texts(bind)[-1]
-    assert "1. «ИП Ромашка» в фулфилменте «ФФ Север»" in listing and "2. «ИП Ромашка» в фулфилменте «ФФ Юг»" in listing
-    rid = reply_id(bind, "bind:1")
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, reply_to=rid, msg_id="11")
-    assert bind.store.binding(CLIENT_CHAT) is None  # «да» при двух кандидатах ничего не выбирает
-    bind.say(CLIENT_CHAT, "3", user=OWNER_ID, reply_to=rid, msg_id="12")
-    assert bind.store.binding(CLIENT_CHAT) is None  # номера нет в списке
-    bind.say(CLIENT_CHAT, "2", user=OWNER_ID, reply_to=rid, msg_id="13")
-    assert bind.store.binding(CLIENT_CHAT)["seller_id"] == S2 and bind.llm.calls == []
+def test_owner_confirms_in_his_chat_and_the_group_becomes_a_served_client_chat(be: Any) -> None:
+    from .test_pipeline_chat import script
+
+    script(be)
+    owner_says_in_group(be, f"{BOT} привяжи к ИП Василёк")
+    owner_replies(be, "да", proposal_msg_id(be))
+    row = be.store.binding(NEW_CHAT)
+    assert row["seller_id"] == C.seller_id and row["tenant_id"] == "t-1" and row["chat_title"] == NEW_TITLE
+    assert be.fd.ensures == [C.seller_id] and be.llm.calls == []
+    done = be.owner.to(OWNER_CHAT)[-1]
+    assert f"Чат «{NEW_TITLE}» привязан к селлеру «ИП Василёк»" in done
+    assert_intake_bot_said_nothing(be)  # и после привязки в клиентский чат ничего
+    # без правки config.json чат обслуживается как клиентский: сообщение клиента даёт обращение с селлером
+    assert be.cfg.telegram.chats[NEW_CHAT].role == "client"
+    be.intake.updates.append(gupd(NEW_CHAT, 5, "[новая] не передаётся поставка"))
+    step(be)
+    ticket = be.store.ticket(1)
+    assert ticket["chat_id"] == NEW_CHAT and be.store.data(1)["seller_id"] == C.seller_id
 
 
-def test_confirmation_without_reply_to_our_message_does_nothing(bind: Any) -> None:
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="10")
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, msg_id="11")  # не ответом на сообщение бота
-    assert bind.store.binding(CLIENT_CHAT) is None
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, reply_to="777", msg_id="12")  # ответ на чужое сообщение
-    assert bind.store.binding(CLIENT_CHAT) is None
+def test_group_messages_before_binding_are_neither_saved_nor_processed(be: Any) -> None:
+    be.intake.updates += [
+        gupd(NEW_CHAT, 5, "[новая] не передаётся поставка", title=NEW_TITLE),   # клиент
+        gupd(NEW_CHAT, OWNER_ID, "просто разговор", title=NEW_TITLE),            # владелец без команды
+        gupd(NEW_CHAT, 5, f"{BOT} привяжи к ИП Василёк", title=NEW_TITLE),       # команда не от владельца
+        gupd(NEW_CHAT, OWNER_ID, "", voice="f1", title=NEW_TITLE),               # голос в неизвестном чате
+        gupd(NEW_CHAT, 5, "привяжи к ИП Василёк", title=NEW_TITLE),
+    ]
+    step(be)
+    assert be.store.rows("SELECT * FROM messages") == []  # ничего не сохранено
+    assert be.store.rows("SELECT * FROM tickets") == [] and be.llm.calls == [] and be.fd.finds == []
+    assert_intake_bot_said_nothing(be) and be.owner.sent == []
+    last = max(u["update_id"] for u in be.intake.updates)
+    assert be.store.kv_get("tg_offset:intake") == last + 1  # обновления прочитаны и позиция продвинута
 
 
-def test_non_owner_cannot_bind_or_confirm(bind: Any) -> None:
-    script(bind)
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=5, msg_id="10")
-    assert bind.fd.finds == [] and bind.store.binding(CLIENT_CHAT) is None  # у чужой команды силы нет
-    before = len(bind.llm.calls)  # обычное сообщение клиента прошло обычный путь (фильтр), как и должно
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="11")
-    bind.flush()
-    rid = reply_id(bind, "bind:1")
-    bind.say(CLIENT_CHAT, "да", user=5, reply_to=rid, msg_id="12")  # клиент отвечает «да» вместо владельца
-    bind.say(CLIENT_CHAT, "1", user=77, reply_to=rid, msg_id="13")
-    assert bind.store.binding(CLIENT_CHAT) is None and bind.fd.ensures == []
-    assert bind.store.proposal(1)["status"] == "open"
-    assert len(bind.llm.calls) == before  # ответы клиента на служебное сообщение отброшены без модели
+def test_command_works_only_in_group_chats_not_in_private_owner_or_partner_chats(be: Any, tmp_path: Path) -> None:
+    from support_agent.telegram import normalize_update
+
+    cfg = be.cfg
+    mk = lambda chat, bot="intake": normalize_update(  # noqa: E731
+        gupd(chat, OWNER_ID, f"{BOT} привяжи к ИП Василёк"), cfg, bot)
+    assert mk(NEW_CHAT).role == "bind"  # type: ignore[union-attr]
+    assert mk(CLIENT_CHAT).role == "bind"  # type: ignore[union-attr]  # уже обслуживаемый клиентский чат: перепривязка
+    assert mk(NEW_CHAT, "owner") is None  # через бота владельца в группах команды нет
+    assert mk(PARTNER_CHAT).role == "partner"  # type: ignore[union-attr]  # в партнёрском чате это обычный текст
+    assert mk(OWNER_CHAT, "owner").role == "owner"  # type: ignore[union-attr]  # в чате владельца это его обычная реплика
+    assert mk(OWNER_CHAT) is None
+    assert mk(12345) is None  # личный чат (положительный id)
+    other = normalize_update(gupd(NEW_CHAT, 5, f"{BOT} привяжи к ИП Василёк"), cfg, "intake")
+    assert other is None  # не владелец в неизвестном чате
 
 
-def test_owner_binding_is_rejected_in_partner_and_owner_chats(bind: Any) -> None:
-    from .conftest import PARTNER_CHAT
-
-    script(bind)
-    bind.say(PARTNER_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="10")
-    assert bind.fd.finds == [] and bind.store.binding(PARTNER_CHAT) is None
-
-
-def test_seller_not_found_and_gateway_failure_are_reported_to_the_chat(bind: Any) -> None:
-    bind.say(CLIENT_CHAT, "привяжи к ИП Нету", user=OWNER_ID, msg_id="10")
-    bind.flush()
-    assert "не нашёл" in client_texts(bind)[-1] and bind.store.binding(CLIENT_CHAT) is None
-
-    def broken(name: str) -> list[Candidate]:
-        raise DirectoryError("шлюз")
-
-    bind.fd.find = broken
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="11")
-    bind.flush()
-    assert "недоступен" in client_texts(bind)[-1] and bind.store.binding(CLIENT_CHAT) is None
+def test_several_same_name_sellers_need_a_number_in_the_owner_chat(be: Any) -> None:
+    owner_says_in_group(be, "привяжи этот чат к ИП Ромашка")
+    listing = be.owner.to(OWNER_CHAT)[-1]
+    assert "1. селлер «ИП Ромашка» в фулфилменте «ФФ Север»" in listing
+    assert "2. селлер «ИП Ромашка» в фулфилменте «ФФ Юг»" in listing and f"чат «{NEW_TITLE}»" in listing
+    pid = proposal_msg_id(be)
+    owner_replies(be, "да", pid)
+    owner_replies(be, "3", pid)
+    assert be.store.binding(NEW_CHAT) is None  # «да» при двух не выбирает, номера 3 нет
+    owner_replies(be, "2", pid)
+    assert be.store.binding(NEW_CHAT)["seller_id"] == S2
+    assert_intake_bot_said_nothing(be) and be.llm.calls == []
 
 
-def test_voice_command_with_latin_ip_prefix_is_recognised_and_cleaned(bind: Any) -> None:
-    bind.tr.text = "привяжи к IP Василёк"
-    bind.tg.files["f1"] = b"audio"
-    bind.say(CLIENT_CHAT, "", user=OWNER_ID, voice=True, msg_id="10")
-    bind.pipe.transcribe_pending()
-    bind.pipe.route_messages()
-    assert bind.fd.finds == ["Василёк"] and bind.llm.calls == []
+def test_the_chat_comes_from_the_proposal_not_from_the_reply_words(be: Any) -> None:
+    owner_says_in_group(be, "привяжи к ИП Василёк", chat=-100501, title="Первый чат")
+    owner_says_in_group(be, "привяжи к ИП Ромашка", chat=-100502, title="Второй чат")
+    owner_replies(be, "да", proposal_msg_id(be, 1))  # ответ на первое предложение при открытом втором
+    assert be.store.binding(-100501)["seller_id"] == C.seller_id and be.store.binding(-100502) is None
+    owner_replies(be, "1", proposal_msg_id(be, 2))
+    assert be.store.binding(-100502)["seller_id"] == SELLER
+
+
+def test_confirmation_must_be_a_reply_of_the_owner_to_our_message(be: Any) -> None:
+    owner_says_in_group(be, "привяжи к ИП Василёк")
+    be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да"))  # не ответом
+    be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да", reply_to=777))  # ответ на чужое
+    step(be)
+    be.intake.updates.append(gupd(NEW_CHAT, 5, "да", reply_to=int(proposal_msg_id(be))))  # клиент в группе
+    be.intake.updates.append(gupd(NEW_CHAT, OWNER_ID, "да", reply_to=int(proposal_msg_id(be))))  # не в чате владельца
+    step(be)
+    assert be.store.binding(NEW_CHAT) is None and be.fd.ensures == []
+    assert be.store.proposal(1)["status"] == "open"
+
+
+@pytest.mark.parametrize("outcome", ["none", "error", "off", "declined", "stale", "unclear", "ensure_failed"])
+def test_no_outcome_ever_sends_names_through_the_intake_bot(be: Any, outcome: str) -> None:
+    if outcome == "none":
+        owner_says_in_group(be, "привяжи к ИП Нету")
+        assert "не нашёл" in be.owner.to(OWNER_CHAT)[-1] and f"чат «{NEW_TITLE}»" in be.owner.to(OWNER_CHAT)[-1]
+    elif outcome == "error":
+        def broken(name: str) -> list[Candidate]:
+            raise DirectoryError("шлюз")
+
+        be.fd.find = broken
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        assert "недоступен" in be.owner.to(OWNER_CHAT)[-1]
+    elif outcome == "off":
+        be.pipe.directory = None
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        assert "недоступна" in be.owner.to(OWNER_CHAT)[-1]
+    elif outcome == "declined":
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        owner_replies(be, "нет", proposal_msg_id(be))
+        assert "не привязываю" in be.owner.to(OWNER_CHAT)[-1] and be.store.binding(NEW_CHAT) is None
+    elif outcome == "stale":
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        first = proposal_msg_id(be, 1)
+        owner_says_in_group(be, "привяжи к ИП Ромашка")
+        owner_replies(be, "да", first)
+        assert "неактуально" in be.owner.to(OWNER_CHAT)[-1] and be.store.binding(NEW_CHAT) is None
+    elif outcome == "unclear":
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        owner_replies(be, "может быть", proposal_msg_id(be))
+        assert "Не понял" in be.owner.to(OWNER_CHAT)[-1]
+    else:
+        be.fd.fail_ensure = True
+        owner_says_in_group(be, "привяжи к ИП Василёк")
+        owner_replies(be, "да", proposal_msg_id(be))
+        assert "Доступ к данным пока не подготовлен" in be.owner.to(OWNER_CHAT)[-1]
+        assert be.store.binding(NEW_CHAT) is not None
+    assert_intake_bot_said_nothing(be)
+    assert not any(n in t for t in be.owner.to(NEW_CHAT) for n in ("Василёк", "Ромашка"))  # и бот владельца в чат не пишет
+    assert be.owner.to(NEW_CHAT) == []
+    assert all(c == OWNER_CHAT for c, _, _ in be.owner.sent)
+
+
+def test_voice_command_in_a_served_client_chat_also_goes_to_the_owner_only(be: Any) -> None:
+    be.pipe.transcriber.text = "привяжи к IP Василёк"
+    be.intake.files["f1"] = b"audio"
+    be.intake.updates.append(gupd(CLIENT_CHAT, OWNER_ID, "", voice="f1"))
+    step(be)
+    step(be)
+    assert be.fd.finds == ["Василёк"] and be.llm.calls == []
+    assert_intake_bot_said_nothing(be)
+    assert "селлер «ИП Василёк»" in be.owner.to(OWNER_CHAT)[-1] and "ИП Тест" in be.owner.to(OWNER_CHAT)[-1]
+
+
+def test_non_owner_voice_in_a_served_chat_is_an_ordinary_message(be: Any) -> None:
+    from .test_pipeline_chat import script
+
+    script(be)
+    be.pipe.transcriber.text = "привяжи к IP Василёк"
+    be.intake.files["f1"] = b"audio"
+    be.intake.updates.append(gupd(CLIENT_CHAT, 5, "", voice="f1"))
+    step(be)
+    step(be)
+    assert be.fd.finds == [] and be.store.binding(CLIENT_CHAT) is None
 
 
 @pytest.mark.parametrize("raw, clean", [("ИП Ромашка", "Ромашка"), ("ip «Ромашка»", "Ромашка"),
@@ -159,22 +290,26 @@ def test_clean_name(raw: str, clean: str) -> None:
     assert clean_name(raw) == clean
 
 
-def test_binding_survives_restart_and_rebinding_replaces_it(bind: Any) -> None:
-    from support_agent.store import Store
+def test_binding_survives_restart_and_serves_the_chat_again(be: Any, tmp_path: Path) -> None:
+    owner_says_in_group(be, "привяжи к ИП Василёк")
+    owner_replies(be, "да", proposal_msg_id(be))
+    again = two_bot_env(tmp_path)  # тот же файл состояния, новый конфиг без этого чата
+    assert again.cfg.telegram.chats[NEW_CHAT].role == "client"
+    assert again.store.binding(NEW_CHAT)["seller_id"] == C.seller_id
 
-    bind.say(CLIENT_CHAT, "привяжи к ИП Василёк", user=OWNER_ID, msg_id="10")
-    bind.flush()
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, reply_to=reply_id(bind, "bind:1"), msg_id="11")
-    assert Store(bind.cfg.db_path).binding(CLIENT_CHAT)["seller_id"] == C.seller_id  # после перезапуска
-    bind.say(CLIENT_CHAT, "перепривяжи к ИП Ромашка", user=OWNER_ID, msg_id="12")
-    bind.flush()
-    assert "Сейчас чат привязан к «ИП Василёк»" in client_texts(bind)[-1]
-    bind.say(CLIENT_CHAT, "1", user=OWNER_ID, reply_to=reply_id(bind, "bind:2"), msg_id="13")
-    assert Store(bind.cfg.db_path).binding(CLIENT_CHAT)["seller_id"] == SELLER
-    old = bind.store.proposal(1)
-    assert old["status"] == "confirmed"
-    bind.say(CLIENT_CHAT, "да", user=OWNER_ID, reply_to=reply_id(bind, "bind:1"), msg_id="14")  # старое предложение
-    assert bind.store.binding(CLIENT_CHAT)["seller_id"] == SELLER  # устаревшее подтверждение не действует
+
+def test_rebinding_replaces_the_binding_and_old_confirmations_are_stale(be: Any) -> None:
+    owner_says_in_group(be, "привяжи к ИП Василёк")
+    first = proposal_msg_id(be, 1)
+    owner_replies(be, "да", first)
+    owner_says_in_group(be, "перепривяжи к ИП Ромашка")
+    assert "Сейчас чат привязан к «ИП Василёк»" in be.owner.to(OWNER_CHAT)[-1]
+    owner_replies(be, "1", proposal_msg_id(be, 2))
+    assert be.store.binding(NEW_CHAT)["seller_id"] == SELLER
+    assert be.cfg.telegram.chats[NEW_CHAT].seller == "ИП Ромашка"
+    owner_replies(be, "да", first)  # старое предложение
+    assert be.store.binding(NEW_CHAT)["seller_id"] == SELLER
+    assert_intake_bot_said_nothing(be)
 
 
 def test_ticket_keeps_the_seller_it_was_created_with_after_rebinding(bind: Any) -> None:

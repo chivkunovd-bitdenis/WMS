@@ -132,7 +132,7 @@ SECRET_NAME_RE = re.compile(
     r"_enc$|_encrypted$|^auth_|hash$|challenge)", re.IGNORECASE)
 
 SPEC_VERSION = hashlib.sha256(repr([(t.name, t.kind, t.hops, t.seller_col) for t in TABLES]).encode()
-                              + repr(sorted(SECRET_COLUMNS.items())).encode()).hexdigest()[:12]
+                              + repr(sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items())).encode()).hexdigest()[:12]
 
 
 class SpecError(Exception):
@@ -214,7 +214,7 @@ def policy_expression(table: Table, seller: str) -> str:
 
 def allowed_columns(table: str, columns: list[str], required: set[str]) -> list[str]:
     """Несекретные колонки; колонки пути нужны политике родителей и таблицы, их секретными не считаем."""
-    return [c for c in columns if c in required or not is_secret(table, c)]
+    return sorted(c for c in columns if c in required or not is_secret(table, c))
 
 
 def _required_columns(table: Table) -> set[str]:

@@ -26,7 +26,7 @@ def check_config(path: str | None) -> int:
     if not t.owner_user_id or not t.owner_chat_id:
         critical.append("telegram.owner_user_id / owner_chat_id не заданы")
     if not t.chats:
-        critical.append("telegram.chats пуст (нет обслуживаемых чатов)")
+        warnings.append("telegram.chats пуст: чаты добавляются командой владельца «привяжи к ИП …»")
     if not cfg.repo:
         critical.append("repo не задан")
     if not (cfg.trello.api_key and cfg.trello.token and cfg.trello.board_id):
