@@ -114,6 +114,51 @@ describe('WMS-604 sequential packing', () => {
 })
 
 
+describe('WMS-643 an unchecked box never prints', () => {
+  it('packs an order selected with QR on after the operator unchecks QR, without WMS Print', async () => {
+    const { deps, scanner } = fixture()
+    let live: FbsScanPrintPreferences = { printQr: true, printChz: false, reprintChz: false }
+    deps.preferences = () => live
+    vi.mocked(deps.print).mockRejectedValueOnce(new Error('Нет ответа WMS Print. Запустите программу.'))
+    await scanner.scan('barcode')
+    await expect(scanner.scan('kiz')).rejects.toThrow('Нет ответа WMS Print')
+    expect(deps.pack).not.toHaveBeenCalled()
+    live = { printQr: false, printChz: false, reprintChz: false }
+    await scanner.scan('barcode')
+    expect(deps.print).toHaveBeenCalledTimes(1)
+    expect(deps.bind).toHaveBeenCalledTimes(1)
+    expect(deps.pack).toHaveBeenCalledTimes(1)
+    expect(scanner.hasPending()).toBe(false)
+  })
+  it('skips a pool KIZ label and a KIZ copy once their boxes are unchecked', async () => {
+    const { deps, scanner } = fixture()
+    const all: FbsScanPrintPreferences = { printQr: false, printChz: true, reprintChz: true }
+    let live: FbsScanPrintPreferences = all
+    deps.preferences = () => live
+    vi.mocked(deps.claim).mockReturnValue(att('request', all))
+    vi.mocked(deps.select).mockReset().mockResolvedValue({
+      scan_id: 'scan-1', order_id: '1', wb_order_id: 1, requires_honest_sign: true,
+      binding_target: null, reprint_recovery: null, qr_asset: null, replayed: false,
+      codes: [], printed_codes: [{ id: 'code-1', cis_code: 'cis-1', has_label_artifact: false }],
+      shortage: 0, order_errors: [],
+    } as unknown as FbsScanAutoPrintResult)
+    vi.mocked(deps.printChz).mockRejectedValueOnce(new Error('Нет ответа WMS Print. Запустите программу.'))
+    await expect(scanner.scan('barcode')).rejects.toThrow('Нет ответа WMS Print')
+    expect(deps.pack).not.toHaveBeenCalled()
+    live = { printQr: false, printChz: false, reprintChz: false }
+    await scanner.scan('barcode')
+    expect(deps.printChz).toHaveBeenCalledTimes(1)
+    expect(deps.printCopy).not.toHaveBeenCalled()
+    expect(deps.pack).toHaveBeenCalledTimes(1)
+  })
+  it('still prints while the box stays checked', async () => {
+    const { deps, scanner } = fixture()
+    await scanner.scan('barcode')
+    await scanner.scan('kiz')
+    expect(deps.print).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('WMS-604 scan routing recovery', () => {
   it.each(['scan_product_not_found', 'scan_product_exhausted'])('WMS-630: resumes routing to the other supply after the selected row gate completes with %s', async (code) => {
     let selected = true

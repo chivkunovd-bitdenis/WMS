@@ -280,13 +280,17 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
     if (!pending) return
     const current = pending
     if (deps.active?.() === false) throw new Error('Упаковка закрыта. Откройте её и повторите скан товара для продолжения.')
-    const poolKiz = !current.explicit && current.preferences.printChz && requiresKiz(current.result)
+    // WMS-643: a box unchecked now never sends a label, even for an order selected
+    // while it was checked; without labels the scan does not need WMS Print.
+    const live = deps.preferences()
+    const printQr = current.preferences.printQr && live.printQr
+    const poolKiz = !current.explicit && current.preferences.printChz && live.printChz && requiresKiz(current.result)
     if (poolKiz && !current.result.printed_codes[0]) {
       current.refresh = true
       throw new Error(current.result.shortage > 0 ? 'Не хватает ЧЗ для выбранной единицы.' : 'ЧЗ выбранной единицы не подготовлен.')
     }
     // Д10: QR first, then the KIZ label or its exact copy.
-    if (current.preferences.printQr) {
+    if (printQr) {
       // One QR per order: an earlier intent keeps its key; a printed one is never repeated.
       const intent = qrIntent(current.result.order_id) ?? { scanId: current.result.scan_id, done: false }
       if (!intent.done) {
@@ -297,7 +301,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       }
     }
     if (poolKiz) await deps.printChz(current.result, current.labelSizeId, normalizeFbsChzCopies(current.preferences.printChzCopies))
-    if (current.preferences.reprintChz && current.bound) {
+    if (current.preferences.reprintChz && live.reprintChz && current.bound) {
       await deps.printCopy(current.result, current.labelSizeId, normalizeFbsChzCopies(current.preferences.reprintChzCopies))
     }
     await deps.pack(current.result, current.explicit, current.barcode, current.step)
