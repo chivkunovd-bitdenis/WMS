@@ -897,3 +897,152 @@ def test_gateway_session_guard_uses_a_connection_string_not_the_environment() ->
     assert "-e" not in argv and "PGOPTIONS" not in " ".join(argv)  # не зависит от передачи окружения в docker exec
     with pytest.raises(ValueError):
         gateway.psql_argv("x", None, {"AGENT_DB_NAME": "wms options='-c x'"}, session_guard=True)
+
+
+# ------------------------------------------------------------------------------ блокировки ensure-seller
+class Holder:
+    """Параллельная сессия с открытой транзакцией, держащей ACCESS EXCLUSIVE на таблице."""
+
+    def __init__(self, cluster: Cluster, table: str = "products") -> None:
+        import psycopg
+
+        self.conn = psycopg.connect(f"host={cluster.sock} port={cluster.port} dbname=wms user=postgres")
+        self.conn.execute(f"LOCK TABLE public.{table} IN ACCESS EXCLUSIVE MODE")
+
+    def release(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
+
+def new_seller(world: World) -> str:
+    return world.seed.insert("sellers", tenant_id=world.tenants["T1"], name="ИП Новый")
+
+
+def role_policies(cluster: Cluster, role: str) -> list[str]:
+    out = cluster.q("postgres", f"SELECT p.oid::text FROM pg_policy p WHERE '{role}'::regrole = ANY (p.polroles) ORDER BY p.oid")
+    return [x for x in out.stdout.split() if x]
+
+
+def role_comment(cluster: Cluster, role: str) -> str:
+    return cluster.q("postgres", f"SELECT coalesce(shobj_description(oid, 'pg_authid'), '') FROM pg_roles WHERE rolname = '{role}'").stdout.strip()
+
+
+def test_repeat_ensure_on_the_current_version_takes_no_table_locks(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = world.sellers["S1"][0]
+    role = world.role("S1")
+    first = run_gateway(cluster, f"ensure-seller {sid}")
+    assert first.returncode == 0 and "state=unchanged" in first.stdout  # фикстура уже применила эту версию
+    assert role_comment(cluster, role).startswith("wms-agent:")
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        again = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert again.returncode == 0 and "state=unchanged" in again.stdout
+    assert elapsed < 1.5, elapsed  # без ожидания блокировки, которую держит другая транзакция
+
+
+def test_first_ensure_waits_about_two_seconds_then_rolls_back_without_partial_policies(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = new_seller(world)
+    role = sa.role_name(sid)
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert res.returncode == 3 and "lock timeout" in res.stderr and "retry later" in res.stderr
+    assert 1.5 < elapsed < 15, elapsed  # lock_timeout 2 с, а не бесконечное ожидание
+    assert cluster.q("postgres", f"SELECT count(*) FROM pg_roles WHERE rolname = '{role}'").stdout.strip() == "0"
+    assert cluster.q("postgres", "SELECT count(*) FROM pg_policy WHERE polname = 'agent_" + sid.replace("-", "") + "'").stdout.strip() == "0"
+    # после снятия блокировки повтор проходит
+    ok = run_gateway(cluster, f"ensure-seller {sid}")
+    assert ok.returncode == 0 and "state=applied" in ok.stdout
+    n = int(re.search(r"tables=(\d+)", ok.stdout).group(1))  # type: ignore[union-attr]
+    assert len(role_policies(cluster, role)) == n and n > 80
+    assert role_comment(cluster, role) != ""
+
+
+def test_other_queries_are_not_queued_behind_a_blocked_ensure(cluster: Cluster, world: World) -> None:
+    """ACCESS EXCLUSIVE, ожидающий за долгой транзакцией, вешал бы очередь обычных запросов: теперь он снимается за 2 с."""
+    import subprocess as sp
+    import time
+
+    sid = new_seller(world)
+    reader = Holder(cluster)
+    reader.conn.rollback()
+    reader.conn.execute("SELECT count(*) FROM public.products")  # долгая транзакция читателя (ACCESS SHARE)
+    try:
+        proc = sp.Popen([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")],
+                        env={**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"ensure-seller {sid}"},
+                        stdout=sp.PIPE, stderr=sp.PIPE, text=True)
+        time.sleep(1.0)
+        started = time.time()
+        other = cluster.q("postgres", "SELECT count(*) FROM products")  # обычный запрос не должен зависнуть
+        waited = time.time() - started
+        proc.communicate(timeout=30)
+    finally:
+        reader.release()
+    assert other.returncode == 0 and waited < 1.5, waited
+    assert proc.returncode == 3  # ensure не дождался и откатился
+
+
+def test_policies_are_recreated_only_when_the_policy_version_changes(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    role = world.role("S2")
+    before = role_policies(cluster, role)
+    pv, gv = sa.POLICY_VERSION, role_comment(cluster, role).split(":")[2]
+    # изменилась только версия прав (миграция добавила колонку): политики те же, права пересчитаны
+    cluster.q("postgres", f"COMMENT ON ROLE {role} IS 'wms-agent:{pv}:000000000000'")
+    holder = Holder(cluster)  # любая табличная блокировка не мешает: политик и ENABLE RLS не трогаем
+    try:
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+    finally:
+        holder.release()
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert role_policies(cluster, role) == before and role_comment(cluster, role) == f"wms-agent:{pv}:{gv}"
+    # изменилась версия политик (новый список путей): политики пересоздаются
+    cluster.q("postgres", f"COMMENT ON ROLE {role} IS 'wms-agent:oldpolicy000:{gv}'")
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    after = role_policies(cluster, role)
+    assert len(after) == len(before) and after != before  # другие oid: пересозданы
+    assert role_comment(cluster, role) == f"wms-agent:{pv}:{gv}"
+
+
+def test_role_settings_are_reapplied_on_every_ensure_even_when_current(cluster: Cluster, world: World) -> None:
+    role = world.role("S3")
+    cluster.q("postgres", f"ALTER ROLE {role} SET statement_timeout = 0")
+    res = run_gateway(cluster, f"ensure-seller {world.sellers['S3'][0]}")
+    assert res.returncode == 0 and "state=unchanged" in res.stdout
+    assert cluster.q(role, "SELECT current_setting('statement_timeout')").stdout.strip() == "20s"
+
+
+def test_rendered_script_has_lock_and_statement_timeouts_first() -> None:
+    sql = sa.render_sql("11111111-2222-3333-4444-555555555555", sa.Catalog(columns={"products": ["id", "seller_id"]}))
+    lines = sql.splitlines()
+    begin = lines.index("BEGIN;")
+    assert lines[begin + 1] == "SET LOCAL lock_timeout = '2s';" and lines[begin + 2] == "SET LOCAL statement_timeout = '60s';"
+    role_only = sa.render_role_sql("11111111-2222-3333-4444-555555555555")
+    assert "ENABLE ROW LEVEL SECURITY" not in role_only and "POLICY" not in role_only and "SET LOCAL lock_timeout" in role_only
+
+
+def test_enable_rls_and_policies_are_emitted_only_where_missing() -> None:
+    seller = "11111111-2222-3333-4444-555555555555"
+    pol = "agent_" + seller.replace("-", "")
+    cat = sa.Catalog(columns={"products": ["id", "seller_id"], "fbs_orders": ["id", "seller_id"]},
+                     rls_enabled={"products"}, policies={("products", pol)})
+    sql = sa.render_sql(seller, cat)
+    assert 'ALTER TABLE public."products" ENABLE' not in sql and 'ALTER TABLE public."fbs_orders" ENABLE' in sql
+    assert f'CREATE POLICY "{pol}" ON public."products"' not in sql and f'CREATE POLICY "{pol}" ON public."fbs_orders"' in sql
+    assert "DROP POLICY" not in sql
+    old = sa.Catalog(columns=cat.columns, rls_enabled={"products"}, policies={("products", pol)},
+                     role_version="wms-agent:other:xxxx")
+    assert f'DROP POLICY "{pol}" ON public."products"' in sa.render_sql(seller, old)

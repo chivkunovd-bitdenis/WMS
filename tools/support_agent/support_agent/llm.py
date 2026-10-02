@@ -150,6 +150,8 @@ class LlmRouter:
         # Подготовка роли селлера на сервере (шлюз ensure-seller); подключает runner. Без неё
         # (в тестах) роль считается готовой.
         self.role_ensurer: Callable[[str], None] | None = None
+        # Сообщение владельцу, когда подготовка роли не удалась несколько раз подряд; подключает runner.
+        self.role_alert: Callable[[str, int, str], None] | None = None
 
     # -- выбор CLI и модели ----------------------------------------------------------
     def cooling(self, cli: str) -> bool:
@@ -321,20 +323,35 @@ class LlmRouter:
         return role
 
     ROLE_TTL_SEC = 6 * 3600
+    ROLE_RETRY_BASE_SEC = 600  # пауза после неудачи удваивается: 10 мин, 20 мин, 40 мин ... до 6 ч
+    ROLE_ALERT_AFTER = 3
 
     def _role_ready(self, role: str, seller_id: str) -> bool:
-        """Роль и политики на сервере (идемпотентно); успех помнится несколько часов, чтобы новый
-        релиз перечня таблиц подхватывался."""
-        key = f"role_ready:{role}"
-        if time.time() - float(self.store.kv_get(key, 0)) < self.ROLE_TTL_SEC:
+        """Роль и политики на сервере (идемпотентно). Успех помнится 6 часов; на текущей версии сервер
+        отвечает дёшево (без блокировок таблиц). Сбой: пауза с нарастанием (не крутимся в цикле), после
+        ROLE_ALERT_AFTER неудач подряд один раз сообщается владельцу. Если роль уже готовилась раньше,
+        сбой повторной проверки доступ не отнимает; если ни разу не удалось, у вызова базы нет."""
+        key, fail_key = f"role_ready:{role}", f"role_fail:{role}"
+        now = time.time()
+        last_ok = float(self.store.kv_get(key, 0))
+        if now - last_ok < self.ROLE_TTL_SEC:
             return True
+        state = self.store.kv_get(fail_key) or {"n": 0, "next": 0}
+        if now < float(state["next"]):
+            return last_ok > 0  # пауза после неудачи: сервер не дёргаем
         try:
             assert self.role_ensurer is not None
             self.role_ensurer(seller_id)
-        except Exception as exc:  # noqa: BLE001 - любой сбой шлюза = доступа нет, обращение идёт без базы
-            log.warning("seller role not prepared (%s): %s", role, type(exc).__name__)
-            return False
-        self.store.kv_set(key, time.time())
+        except Exception as exc:  # noqa: BLE001 - любой сбой шлюза: роль не подтверждена
+            attempts = int(state["n"]) + 1
+            pause = min(self.ROLE_RETRY_BASE_SEC * 2 ** (attempts - 1), self.ROLE_TTL_SEC)
+            self.store.kv_set(fail_key, {"n": attempts, "next": now + pause})
+            log.warning("seller role not prepared (%s), attempt %s: %s", role, attempts, type(exc).__name__)
+            if attempts == self.ROLE_ALERT_AFTER and self.role_alert is not None:
+                self.role_alert(seller_id, attempts, str(exc)[:200])
+            return last_ok > 0
+        self.store.kv_set(key, now)
+        self.store.kv_set(fail_key, None)
         return True
 
     def mcp_args(self, root: str, with_db: bool = False, db_log: str | None = None,

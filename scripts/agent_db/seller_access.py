@@ -237,18 +237,48 @@ class Catalog:
     columns: dict[str, list[str]]
     secdef_functions: list[str] = field(default_factory=list)  # oid::regprocedure
     shared_ro_exists: bool = False
+    rls_enabled: set[str] = field(default_factory=set)  # таблицы списка, где relrowsecurity уже включён
+    policies: set[tuple[str, str]] = field(default_factory=set)  # (таблица, политика) этого селлера и общая
+    role_version: str = ""  # COMMENT ON ROLE: «wms-agent:<версия политик>:<версия прав>» или пусто
 
 
-def render_sql(seller_id: str, catalog: Catalog) -> str:
-    seller = seller_id.strip().lower()
-    role = role_name(seller)
-    r = _ident(role)
+LOCK_TIMEOUT = "2s"
+STATEMENT_TIMEOUT = "60s"
+VERSION_PREFIX = "wms-agent:"
+# Версия ПОЛИТИК зависит только от спецификации путей (меняется при выкладке нового списка): политики
+# пересоздаются только тогда. Версия ПРАВ зависит ещё от колонок и функций в базе (миграции): меняются
+# только гранты (они не берут блокировок таблиц) и создаются политики там, где их ещё нет.
+POLICY_VERSION = hashlib.sha256(repr([(t.name, t.kind, t.hops, t.seller_col) for t in TABLES]).encode()
+                                ).hexdigest()[:12]
+
+
+def grant_version(catalog: Catalog) -> str:
     tables = included_tables({k: set(v) for k, v in catalog.columns.items()})
-    suffix = seller.replace("-", "")
-    pol = _ident("agent_" + suffix)
-    out = [
-        f"-- WMS-641: доступ селлера {seller} (версия списка {SPEC_VERSION}); идемпотентно",
-        "BEGIN;",
+    blob = repr([
+        sorted((t.name, sorted(catalog.columns[t.name])) for t in tables),
+        sorted(catalog.secdef_functions), catalog.shared_ro_exists, SESSION_SETTINGS,
+        sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items()),
+    ])
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def target_version(catalog: Catalog) -> str:
+    return f"{VERSION_PREFIX}{POLICY_VERSION}:{grant_version(catalog)}"
+
+
+def stored_policy_version(catalog: Catalog) -> str | None:
+    parts = catalog.role_version.split(":")
+    return parts[1] if len(parts) == 3 and parts[0] + ":" == VERSION_PREFIX else None
+
+
+def is_current(catalog: Catalog) -> bool:
+    """Роль уже на текущей версии: тяжёлую часть (политики, права) повторять не нужно."""
+    return catalog.role_version == target_version(catalog)
+
+
+def _role_statements(role: str) -> list[str]:
+    r = _ident(role)
+    return [
         "DO $do$ BEGIN",
         f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN",
         f"    CREATE ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;",
@@ -257,6 +287,37 @@ def render_sql(seller_id: str, catalog: Catalog) -> str:
         f"ALTER ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT "
         "CONNECTION LIMIT 8;",
         *[f"ALTER ROLE {r} SET {name} = {value};" for name, value in SESSION_SETTINGS],
+    ]
+
+
+def _begin() -> list[str]:
+    # БЕЗ ожидания: ACCESS EXCLUSIVE не должен вставать в очередь за долгой транзакцией и вешать обычные
+    # запросы WMS; при таймауте вся транзакция откатывается (одна транзакция), повтор позже.
+    return ["BEGIN;", f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';",
+            f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}';"]
+
+
+def render_role_sql(seller_id: str) -> str:
+    """Лёгкая часть: роль и её настройки (ALTER ROLE не берёт табличных блокировок). Выполняется при каждом
+    ensure, в том числе когда роль уже на текущей версии."""
+    seller = seller_id.strip().lower()
+    return "\n".join([*_begin(), *_role_statements(role_name(seller)), "COMMIT;"]) + "\n"
+
+
+def render_sql(seller_id: str, catalog: Catalog) -> str:
+    seller = seller_id.strip().lower()
+    role = role_name(seller)
+    r = _ident(role)
+    tables = included_tables({k: set(v) for k, v in catalog.columns.items()})
+    suffix = seller.replace("-", "")
+    polname = "agent_" + suffix
+    pol = _ident(polname)
+    stored_pv = stored_policy_version(catalog)
+    recreate = stored_pv is not None and stored_pv != POLICY_VERSION
+    out = [
+        f"-- WMS-641: доступ селлера {seller} (версия списка {SPEC_VERSION}); идемпотентно",
+        *_begin(),
+        *_role_statements(role),
         f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM {r};",
@@ -271,16 +332,20 @@ def render_sql(seller_id: str, catalog: Catalog) -> str:
         tb = f"public.{_ident(t.name)}"
         cols = allowed_columns(t.name, catalog.columns[t.name], _required_columns(t))
         cols = [c for c in cols if c in catalog.columns[t.name]]
-        out += [
-            f"ALTER TABLE {tb} ENABLE ROW LEVEL SECURITY;",
-            f"DROP POLICY IF EXISTS {pol} ON {tb};",
-            f"CREATE POLICY {pol} ON {tb} AS PERMISSIVE FOR SELECT TO {r} USING ({policy_expression(t, seller)});",
-            f"GRANT SELECT ({', '.join(_ident(c) for c in cols)}) ON {tb} TO {r};",
-        ]
-        if catalog.shared_ro_exists:
-            ro = _ident("agent_ro_all")
-            out += [f"DROP POLICY IF EXISTS {ro} ON {tb};",
-                    f"CREATE POLICY {ro} ON {tb} AS PERMISSIVE FOR SELECT TO {_ident(SHARED_RO_ROLE)} USING (true);"]
+        # ACCESS EXCLUSIVE (ENABLE RLS, CREATE/DROP POLICY) только там, где это действительно нужно
+        if t.name not in catalog.rls_enabled:
+            out.append(f"ALTER TABLE {tb} ENABLE ROW LEVEL SECURITY;")
+        has_policy = (t.name, polname) in catalog.policies
+        if has_policy and recreate:
+            out.append(f"DROP POLICY {pol} ON {tb};")
+        if not has_policy or recreate:
+            out.append(f"CREATE POLICY {pol} ON {tb} AS PERMISSIVE FOR SELECT TO {r} "
+                       f"USING ({policy_expression(t, seller)});")
+        out.append(f"GRANT SELECT ({', '.join(_ident(c) for c in cols)}) ON {tb} TO {r};")
+        if catalog.shared_ro_exists and (t.name, "agent_ro_all") not in catalog.policies:
+            out.append(f"CREATE POLICY {_ident('agent_ro_all')} ON {tb} AS PERMISSIVE FOR SELECT "
+                       f"TO {_ident(SHARED_RO_ROLE)} USING (true);")
+    out.append(f"COMMENT ON ROLE {r} IS '{target_version(catalog)}';")
     out.append("COMMIT;")
     return "\n".join(out) + "\n"
 
@@ -293,13 +358,30 @@ SELECT 'secdef', p.oid::regprocedure::text, '' FROM pg_proc p JOIN pg_namespace 
  WHERE p.prosecdef AND n.nspname NOT IN ('pg_catalog', 'information_schema')
 UNION ALL
 SELECT 'ro', rolname, '' FROM pg_roles WHERE rolname = '{ro}'
-ORDER BY 1, 2, 3;
+UNION ALL
+SELECT 'rls', c.relname, '' FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity
+   AND c.relname = ANY (ARRAY[{tables}])
+UNION ALL
+SELECT 'pol', c.relname, p.polname FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
+ JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public' AND p.polname IN ('agent_ro_all'{own_policy})
+{role_version}ORDER BY 1, 2, 3;
 """
 
 
-def preflight_sql() -> str:
+def preflight_sql(seller_id: str | None = None) -> str:
+    """Состояние для решения «что делать»: колонки, функции, уже включённый RLS, уже созданные политики
+    (общая и этого селлера) и версия роли. Только чтение каталога, табличных блокировок нет."""
     names = ", ".join(f"'{t.name}'" for t in TABLES)
-    return PREFLIGHT_SQL.format(tables=names, ro=SHARED_RO_ROLE)
+    own, version = "", ""
+    if seller_id is not None:
+        seller = seller_id.strip().lower()
+        role = role_name(seller)
+        own = f", 'agent_{seller.replace('-', '')}'"
+        version = (f"UNION ALL\nSELECT 'ver', coalesce(shobj_description(oid, 'pg_authid'), ''), '' "
+                   f"FROM pg_roles WHERE rolname = '{role}'\n")
+    return PREFLIGHT_SQL.format(tables=names, ro=SHARED_RO_ROLE, own_policy=own, role_version=version)
 
 
 def parse_preflight(rows: list[list[str]]) -> Catalog:
@@ -311,4 +393,10 @@ def parse_preflight(rows: list[list[str]]) -> Catalog:
             cat.secdef_functions.append(a)
         elif kind == "ro":
             cat.shared_ro_exists = True
+        elif kind == "rls":
+            cat.rls_enabled.add(a)
+        elif kind == "pol":
+            cat.policies.add((a, b))
+        elif kind == "ver":
+            cat.role_version = a
     return cat

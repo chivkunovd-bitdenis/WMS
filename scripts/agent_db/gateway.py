@@ -156,22 +156,38 @@ def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _apply(sql: str, env: dict[str, str] | None) -> None:
+    """Транзакция DDL под postgres: любой сбой (в том числе lock_timeout) откатывает её целиком."""
+    applied = run_psql("postgres", sql, ["-q"], env)
+    if applied.returncode != 0:
+        err = applied.stderr
+        if "lock timeout" in err or "55P03" in err:
+            raise Refused("busy: lock timeout, nothing was changed, retry later")
+        if "statement timeout" in err or "57014" in err:
+            raise Refused("busy: statement timeout, nothing was changed, retry later")
+        raise Refused("apply failed: " + err.strip().splitlines()[0][:200] if err.strip() else "apply failed")
+
+
 def ensure_seller(seller: str, env: dict[str, str] | None = None) -> str:
+    """Идемпотентно. Роль уже на текущей версии: только дешёвая проверка и ALTER ROLE SET (без табличных
+    блокировок). Версия сменилась или роли нет: одна транзакция с lock_timeout 2 с, откат целиком при сбое."""
     seller = seller.lower()
     res = run_psql("postgres", f"SELECT 1 FROM sellers WHERE id = '{seller}'::uuid;\n", ["-tA"], env)
     if res.returncode != 0 or res.stdout.strip() != "1":
         raise Refused("seller not found")
-    pre = run_psql("postgres", sa.preflight_sql(), ["--csv"], env)
+    pre = run_psql("postgres", sa.preflight_sql(seller), ["--csv"], env)
     if pre.returncode != 0:
         raise Refused("preflight failed")
     rows = list(csv.reader(io.StringIO(pre.stdout)))[1:]
     catalog = sa.parse_preflight([r for r in rows if len(r) == 3])
-    sql = sa.render_sql(seller, catalog)
-    applied = run_psql("postgres", sql, ["-q"], env)
-    if applied.returncode != 0:
-        raise Refused("apply failed: " + applied.stderr.strip()[:300])
     count = len(sa.included_tables({k: set(v) for k, v in catalog.columns.items()}))
-    return f"ok role={sa.role_name(seller)} tables={count} spec={sa.SPEC_VERSION}"
+    if sa.is_current(catalog):
+        _apply(sa.render_role_sql(seller), env)
+        state = "unchanged"
+    else:
+        _apply(sa.render_sql(seller, catalog), env)
+        state = "applied"
+    return f"ok role={sa.role_name(seller)} tables={count} spec={sa.SPEC_VERSION} state={state}"
 
 
 def find_seller(query: str, env: dict[str, str] | None = None) -> str:

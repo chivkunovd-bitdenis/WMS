@@ -299,6 +299,16 @@ class Pipeline:
                 self.cfg.telegram.chats[chat_id] = ChatCfg(role="client", seller=str(row["seller_name"]))
                 self.dynamic_chats.add(chat_id)
 
+    def on_role_failure(self, seller_id: str, attempts: int, reason: str) -> None:
+        """Доступ к данным селлера не подготовлен несколько раз подряд (сервер занят блокировкой и т. п.)."""
+        row = self.store.row("SELECT seller_name FROM chat_bindings WHERE seller_id=? LIMIT 1", (seller_id,))
+        who = f"«{row['seller_name']}»" if row else "селлера обращения"
+        self.say_owner(f"role_fail:{seller_id}:{attempts}",
+                       f"Доступ агента к данным {who} не подготовлен {attempts} раза подряд ({reason}). "
+                       "Обращения этого селлера разбираются без базы, пока шлюз не ответит; "
+                       "повторю с паузой.",
+                       purpose="notice")
+
     def handle_bind_command(self, m: Any) -> None:
         """Команда «привяжи к ИП …» от владельца в групповом чате (текст пришёл через нормализацию)."""
         match = BIND_RE.match(m["text"])

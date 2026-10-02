@@ -430,10 +430,49 @@ def test_role_is_prepared_once_and_failure_means_no_tool(tmp_path: Path) -> None
                                data={"seller_id": SELLER})
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
     assert db_args(cap.argvs[-1]) is None  # доступ не подготовлен: без базы, а не с общей ролью
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
+    assert calls == [SELLER]  # после неудачи пауза: сервер не дёргаем на каждый вызов
     state["fail"] = False
+    llm.store.kv_set(f"role_fail:{ROLE}", {"n": 1, "next": 0})  # пауза истекла
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
     assert db_args(cap.argvs[-1]) is not None and calls == [SELLER] * 2  # успех запомнен, повторно не зовём
+
+
+def test_failed_prepare_backs_off_alerts_the_owner_once_and_keeps_an_already_working_role(tmp_path: Path) -> None:
+    import time
+
+    llm = make_router(tmp_path)
+    llm.exec = Capture()
+    alerts: list[tuple[str, int, str]] = []
+    llm.role_alert = lambda seller, n, why: alerts.append((seller, n, why))
+    calls: list[str] = []
+
+    def busy(seller: str) -> None:
+        calls.append(seller)
+        raise DirectoryError("busy: lock timeout, nothing was changed, retry later")
+
+    llm.role_ensurer = busy
+    for attempt in range(1, 5):
+        assert llm._role_ready(ROLE, SELLER) is False  # ни разу не готовилась: базы нет
+        state = llm.store.kv_get(f"role_fail:{ROLE}")
+        assert state["n"] == attempt and state["next"] - time.time() >= llm.ROLE_RETRY_BASE_SEC * 2 ** (attempt - 1) - 5
+        assert llm._role_ready(ROLE, SELLER) is False and len(calls) == attempt  # в паузе: без вызова
+        llm.store.kv_set(f"role_fail:{ROLE}", {"n": attempt, "next": 0})
+    assert [a[1] for a in alerts] == [3] and "lock timeout" in alerts[0][2]  # владельцу ровно один раз, на 3-й неудаче
+    # роль уже работала: сбой повторной проверки доступ не отнимает
+    llm.store.kv_set(f"role_ready:{ROLE}", time.time() - llm.ROLE_TTL_SEC - 10)
+    llm.store.kv_set(f"role_fail:{ROLE}", {"n": 0, "next": 0})
+    assert llm._role_ready(ROLE, SELLER) is True
+
+
+def test_owner_is_told_about_repeated_prepare_failures(env: Any) -> None:
+    env.store.set_binding(CLIENT_CHAT, {"seller_id": SELLER, "seller_name": "ИП Ромашка", "tenant_id": "t",
+                                        "tenant_name": "ФФ"}, "1")
+    env.pipe.on_role_failure(SELLER, 3, "busy: lock timeout")
+    env.flush()
+    text = env.tg.to(OWNER_CHAT)[-1]
+    assert "«ИП Ромашка»" in text and "3 раза" in text and "lock timeout" in text
 
 
 def test_mcp_server_cannot_start_without_a_role(tmp_path: Path) -> None:
