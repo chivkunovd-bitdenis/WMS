@@ -226,11 +226,20 @@ class HotfixRunner:
         subjects = self.git("log", "origin/etalon..HEAD", "--format=%s", cwd=path).splitlines()
         if not all(number in s for s in subjects):
             problems.append(f"в каждом сообщении коммита должен быть номер {number}")
-        backlog = (path / "docs" / "KANONICHESKIY_BACKLOG.md")
-        if not backlog.exists() or number not in backlog.read_text(encoding="utf-8"):
-            problems.append(f"нет записи {number} в docs/KANONICHESKIY_BACKLOG.md")
-        if f"docs/requirements/{number}.md" not in names:
+        backlog = path / "docs" / "KANONICHESKIY_BACKLOG.md"
+        if not backlog.exists() or not re.search(
+            rf"^## {number} ", backlog.read_text(encoding="utf-8"), re.MULTILINE
+        ):
+            problems.append(f"в docs/KANONICHESKIY_BACKLOG.md нет заголовка «## {number} · название»")
+        doc = path / "docs" / "requirements" / f"{number}.md"
+        if f"docs/requirements/{number}.md" not in names or not doc.exists():
             problems.append(f"нет документа docs/requirements/{number}.md")
+        else:
+            text = doc.read_text(encoding="utf-8")
+            if "Вердикт" not in text or "Заключение" not in text:
+                problems.append(
+                    f"в {number}.md нужны таблица проверок со столбцом «Вердикт» и раздел «Заключение»"
+                )
         tests = [n for n in names if re.search(r"(^|/)(tests?/|test_|.*\.test\.|.*\.spec\.)", n)]
         if not tests:
             problems.append("нет теста, воспроизводящего дефект")
@@ -327,8 +336,12 @@ class HotfixRunner:
 
     # -- CI -------------------------------------------------------------------------------
     def _s_ci(self, tid: int, h: dict[str, Any]) -> None:
-        res = self.must(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
-        checks = json.loads(res or "[]")
+        # gh pr checks возвращает код 8 (ждём) и 1 (упало) и при --json: разбираем вывод, не код.
+        res = self.run(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
+        try:
+            checks = json.loads(res.out or "[]")
+        except ValueError:
+            raise StepFailed("не удалось прочитать состояние CI") from None
         buckets = {c["bucket"] for c in checks}
         now = self.p.clock()
         if checks and "fail" in buckets:

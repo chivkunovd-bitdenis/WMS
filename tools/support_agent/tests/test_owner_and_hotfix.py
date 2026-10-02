@@ -164,7 +164,9 @@ def hotfix_env(env: Any, tmp_path: Path, *, ci: str = "pass", foreign: int = 0,
     shell.on("git log origin/etalon..HEAD --format=%s", ok(out="WMS-651: fix\nWMS-651: tests"))
     shell.on("gh pr list", pr_list)
     shell.on("gh pr create", pr_create)
-    shell.on("gh pr checks", lambda a: ok(out=json.dumps([{"name": "ci", "bucket": state["ci"]}])))
+    shell.on("gh pr checks", lambda a: ExecResult(
+        {"pass": 0, "pending": 8, "fail": 1}[state["ci"]],
+        json.dumps([{"name": "ci", "bucket": state["ci"]}]), ""))
     shell.on("gh pr view", lambda a: ok(out=json.dumps({"state": "MERGED" if state["merged"] else "OPEN"})))
     shell.on("gh pr merge", pr_merge)
     shell.on("rev-list --count", ok(out=str(foreign)))
@@ -187,7 +189,9 @@ def hotfix_env(env: Any, tmp_path: Path, *, ci: str = "pass", foreign: int = 0,
         (path / "docs" / "requirements").mkdir(parents=True, exist_ok=True)
         (path / "backend" / "tests").mkdir(parents=True, exist_ok=True)
         (path / "docs" / "KANONICHESKIY_BACKLOG.md").write_text("## WMS-651 · фикс", encoding="utf-8")
-        (path / "docs" / "requirements" / "WMS-651.md").write_text("doc", encoding="utf-8")
+        (path / "docs" / "requirements" / "WMS-651.md").write_text(
+            "| ID | Проверка | Вердикт |\n| C1 | тест | пройдено |\n## Заключение\nОблегчённый режим.",
+            encoding="utf-8")
         (path / "backend" / "tests" / "test_x.py").write_text("def test_x(): assert 1", encoding="utf-8")
         return {"summary": "поправили проверку", "test_files": ["backend/tests/test_x.py"],
                 "migration": False, "frontend": False, "client_scenario": "передать поставку"}
@@ -383,3 +387,48 @@ def test_no_work_without_go(env: Any, tmp_path: Path, verdict: str) -> None:
     for _ in range(5):
         env.pipe.tick()
     assert hf.shell.calls == [] and env.store.ticket(tid)["stage"] == "await_owner"
+
+
+def test_pending_ci_waits_without_failing_and_nonzero_exit_codes_are_ok(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path, ci="pending")
+    tid = start_hotfix(env)
+    drive(env, tid, 8)
+    h = env.store.data(tid)["hotfix"]
+    assert env.store.ticket(tid)["stage"] == "hotfix" and h["step"] == "ci"
+    assert hf.shell.ran("gh pr merge") == 0
+    hf.state["ci"] = "pass"
+    drive(env, tid, 8)
+    assert env.store.ticket(tid)["stage"] == "done"
+
+
+def test_ci_timeout_stops_and_tells_owner(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path, ci="pending")
+    tid = start_hotfix(env)
+    drive(env, tid, 4)
+    env.clock.advance(5000)
+    drive(env, tid, 3)
+    assert env.store.ticket(tid)["stage"] == "failed" and hf.shell.ran("gh pr merge") == 0
+    assert "CI не завершился" in env.store.data(tid)["hotfix"]["failure"]
+
+
+def test_missing_backlog_heading_or_verdict_table_is_sent_back(env: Any, tmp_path: Path) -> None:
+    hotfix_env(env, tmp_path)
+
+    def bad_dev(prompt: str, kw: Any) -> dict[str, Any]:
+        path = Path(kw["cwd"])
+        (path / "docs" / "requirements").mkdir(parents=True, exist_ok=True)
+        (path / "backend" / "tests").mkdir(parents=True, exist_ok=True)
+        (path / "docs" / "KANONICHESKIY_BACKLOG.md").write_text("упомянут WMS-651 в тексте", encoding="utf-8")
+        (path / "docs" / "requirements" / "WMS-651.md").write_text("пусто", encoding="utf-8")
+        (path / "backend" / "tests" / "test_x.py").write_text("x", encoding="utf-8")
+        return {"summary": "s", "test_files": [], "migration": False, "frontend": False,
+                "client_scenario": "s"}
+
+    env.llm.on("routine", "исполнитель облегчённого хотфикса", bad_dev)
+    env.llm.on("routine", "Проверка диспетчера нашла проблемы", bad_dev)
+    tid = start_hotfix(env)
+    drive(env, tid, 12)
+    assert env.store.ticket(tid)["stage"] == "failed"
+    env.flush()
+    owner = env.tg.to(OWNER_CHAT)[-1]
+    assert "## WMS-651" in owner and "Вердикт" in owner
