@@ -32,6 +32,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -1025,13 +1029,23 @@ async def sync_marking_verdicts_for_seller(
             FbsSupply.status.in_(
                 {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
             ),
-            exists(
-                select(FbsOrderMarking.id).where(
-                    FbsOrderMarking.order_id == FbsOrder.id,
-                    FbsOrderMarking.meta_status.in_(
-                        {META_STATUS_PENDING, META_STATUS_SENDING, META_STATUS_UNKNOWN}
-                    ),
-                )
+            or_(
+                exists(
+                    select(FbsOrderMarking.id).where(
+                        FbsOrderMarking.order_id == FbsOrder.id,
+                        FbsOrderMarking.meta_status.in_(
+                            {META_STATUS_PENDING, META_STATUS_SENDING, META_STATUS_UNKNOWN}
+                        ),
+                    )
+                ),
+                # WMS-641: a queued KIZ removal still to be done in WB.
+                exists(
+                    select(FbsWbOperation.id).where(
+                        FbsWbOperation.local_entity_id == FbsOrder.id,
+                        FbsWbOperation.operation_kind == "order_kiz_unbind",
+                        FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                    )
+                ),
             ),
         )
         .order_by(FbsOrder.id.asc())

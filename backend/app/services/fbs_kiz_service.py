@@ -1149,10 +1149,10 @@ async def void_existing_sgtin_marking(
     api_token: str | None = None,
     reason: str = _VOID_REPLACED_REASON,
 ) -> None:
-    token = api_token or await marking_svc.require_marketplace_token(
-        session, tenant_id, order.seller_id
+    # WMS-641: the WB delete is done by the minute worker; the operator never waits.
+    await marking_svc.queue_kiz_wb_delete(
+        session, order, marking.value, actor_user_id=actor_user_id
     )
-    await _delete_sgtin_from_wb(order, http_client, token)
     await _void_existing_sgtin_marking_locally(
         session,
         marking,
@@ -1337,10 +1337,10 @@ async def cancel_order_kiz(
                 reason=_VOID_OPERATOR_CANCEL_REASON,
             )
         else:
-            token = await marking_svc.require_marketplace_token(
-                session, tenant_id, order.seller_id
+            saved_value = saved_sgtin.get("value") if isinstance(saved_sgtin, dict) else None
+            await marking_svc.queue_kiz_wb_delete(
+                session, order, str(saved_value or ""), actor_user_id=actor_user_id
             )
-            await _delete_sgtin_from_wb(order, http_client, token)
         if line is not None:
             # Cancelled labels no longer cover a unit. Re-read the existing codes
             # under the same line lock as printing; pool-to-external replacement
@@ -1512,7 +1512,13 @@ async def _commit_one_kiz_pair(
     new_write_accepted = False
     try:
         if current is not None:
-            await _delete_sgtin_from_wb(order, http_client, token)
+            if kiz_scan_skips_wb_readback():
+                # WMS-641: the scan's replacement removes the old code in the background.
+                await marking_svc.queue_kiz_wb_delete(
+                    session, order, current.value, actor_user_id=actor_user_id
+                )
+            else:
+                await _delete_sgtin_from_wb(order, http_client, token)
         await marking_svc.attach_order_meta_to_wb_and_sync(
             session,
             tenant_id,
@@ -2046,8 +2052,9 @@ async def rollback_scan_kiz(
         # Stage 1: remove this scan's code from WB and from the order.
         if current.meta_status != META_STATUS_REJECTED:
             # WB refused this code, so WB holds nothing of it to delete.
-            await _delete_scan_kiz_from_wb(
-                session, order, http_client, token, value, f"wms631-kiz-undo-delete:{receipt_id}"
+            # WMS-641: the WB delete is done by the minute worker; «Назад» never waits.
+            await marking_svc.queue_kiz_wb_delete(
+                session, order, value, actor_user_id=actor_user_id
             )
         line: PackagingTaskLine | None = None
         if current.marking_code is not None and current.marking_code.packaging_task_line_id:
@@ -2178,8 +2185,9 @@ async def rollback_scan_kiz(
         )
     await _recount_line_markings(session, tenant_id, line_ref.line)
     await session.commit()
-    if restore_error is not None:
+    if restore_error is not None and not kiz_scan_skips_wb_readback():
         raise FbsKizError("wb_pending_confirmation")
+    # WMS-641: in the scan the restored code is sent by the minute worker.
     return None
 
 

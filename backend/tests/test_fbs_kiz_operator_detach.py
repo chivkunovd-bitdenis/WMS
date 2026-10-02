@@ -25,7 +25,6 @@ from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_kiz_service as kiz
 from app.services import fbs_marking_service as marking
-from app.services.wildberries_errors import WildberriesClientError
 
 
 async def seed(client, monkeypatch, *, source="external_fbs", status="applied"):
@@ -118,7 +117,8 @@ async def test_cancel_rescan_and_replay_preserve_code_and_move_line_counts(
         f"/operations/fbs-orders/{orders[0].order_id}/kiz", headers=headers
     )
     assert response.status_code == 204, response.text
-    deleted.assert_awaited_once()
+    # WMS-641: the WB delete is queued for the minute worker, not done in the request.
+    deleted.assert_not_awaited()
     async with SessionLocal() as session:
         code = await session.get(MarkingCode, code_id)
         assert code.status == status and code.packaging_task_line_id is None
@@ -181,24 +181,14 @@ async def test_remote_failure_and_final_order_do_not_release_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, orders, code_id, deleted, _ = await seed(async_client, monkeypatch)
-    deleted.side_effect = WildberriesClientError("transport_error")
-    response = await async_client.delete(
-        f"/operations/fbs-orders/{orders[0].order_id}/kiz", headers=headers
-    )
-    assert response.status_code >= 400
+    # WMS-641: a WB failure can no longer fail the cross (WB is called by the worker);
+    # a code of an order already handed over is still never released.
     async with SessionLocal() as session:
         code = await session.get(MarkingCode, code_id)
-        assert (
-            code.status == "applied"
-            and code.packaging_task_line_id == orders[0].packaging_task_line_id
-        )
-        assert await session.scalar(select(func.count(FbsOrderMarking.id))) == 1
-        assert await session.scalar(select(func.count(MarkingCodeEvent.id))) == 0
         order = await session.get(FbsOrder, orders[0].order_id)
         order.status = "in_delivery"
         code.status = "shipped"
         await session.commit()
-    deleted.reset_mock()
     response = await async_client.delete(
         f"/operations/fbs-orders/{orders[0].order_id}/kiz", headers=headers
     )

@@ -36,6 +36,7 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_REPRINTED,
@@ -1484,28 +1485,25 @@ async def test_fbs_kiz_delete_wb_error_does_not_change_records(
         headers=headers,
     )
 
-    assert response.status_code == 502, response.text
-    assert response.json()["detail"]["code"] == "wb_delete_failed_503"
+    # WMS-641: the cross never waits for WB and never fails because of it;
+    # the WB delete is queued for the minute worker.
+    assert response.status_code == 204, response.text
     async with SessionLocal() as session:
+        queued = await session.scalar(
+            select(func.count(FbsWbOperation.id)).where(
+                FbsWbOperation.local_entity_id == order.order_id,
+                FbsWbOperation.operation_kind == "order_kiz_unbind",
+                FbsWbOperation.state == "pending_confirmation",
+            )
+        )
+        assert int(queued or 0) == 1
         marking_count = await session.scalar(
             select(func.count(FbsOrderMarking.id)).where(
                 FbsOrderMarking.order_id == order.order_id
             )
         )
-        assert int(marking_count or 0) == 1
-        code = await session.get(MarkingCode, code_id)
-        assert code is not None
-        assert code.status == STATUS_APPLIED
-        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
-        assert line is not None
-        assert line.qty_marking_external == 1
-        voided_count = await session.scalar(
-            select(func.count(MarkingCodeEvent.id)).where(
-                MarkingCodeEvent.code_id == code_id,
-                MarkingCodeEvent.event_type == EVENT_VOIDED,
-            )
-        )
-        assert int(voided_count or 0) == 0
+        assert int(marking_count or 0) == 0
+        assert code_id is not None
 
 
 @pytest.mark.asyncio

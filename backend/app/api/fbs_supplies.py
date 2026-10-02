@@ -2795,16 +2795,18 @@ async def undo_fbs_packing_scan(
     await session.rollback()
     if body.kiz_keys:
         try:
+            # WMS-641: «Назад» never waits for WB; the worker sends the changes.
             async with httpx.AsyncClient() as http_client:
-                warning = await kiz_svc.rollback_scan_kiz(
-                    session,
-                    tenant_id,
-                    user_id,
-                    supply_id,
-                    body.order_id,
-                    body.kiz_keys,
-                    http_client,
-                )
+                with short_kiz_write_timeout():
+                    warning = await kiz_svc.rollback_scan_kiz(
+                        session,
+                        tenant_id,
+                        user_id,
+                        supply_id,
+                        body.order_id,
+                        body.kiz_keys,
+                        http_client,
+                    )
         except kiz_svc.FbsKizError as exc:
             await session.rollback()
             status_code = (

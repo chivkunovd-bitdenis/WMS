@@ -81,6 +81,7 @@ from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
     MarketplaceOrderMetaRow,
+    delete_marketplace_order_meta,
     fetch_marketplace_orders_meta_batch,
     split_marketplace_order_id_batches,
 )
@@ -88,6 +89,8 @@ from app.services.wildberries_fbs_client import (
 logger = logging.getLogger(__name__)
 
 OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
+# WMS-641: «remove exactly this KIZ from this order in WB», done by the minute worker.
+OPERATION_KIND_ORDER_KIZ_UNBIND = "order_kiz_unbind"
 
 _META_KIND_FROM_PLURAL: dict[str, str] = {
     "sgtins": MARKING_KIND_SGTIN,
@@ -1278,6 +1281,91 @@ def _kiz_write_failed_before_wb(error_code: str | None) -> bool:
     } or code.startswith("wb_upstream_error_5")
 
 
+async def queue_kiz_wb_delete(
+    session: AsyncSession,
+    order: FbsOrder,
+    value: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """WMS-641: the operator's KIZ removal reaches WB in the background, never in the request."""
+    if order.marketplace != "wb" or not value:
+        return
+    session.add(FbsWbOperation(
+        tenant_id=order.tenant_id, seller_id=order.seller_id,
+        operation_kind=OPERATION_KIND_ORDER_KIZ_UNBIND,
+        idempotency_key=f"kiz-unbind:{order.id}:{uuid.uuid4()}",
+        request_hash=hashlib.sha256(value.encode()).hexdigest(),
+        local_entity_type="fbs_order", local_entity_id=order.id,
+        wb_object_kind="order", wb_object_id=str(order.wb_order_id),
+        created_by_user_id=actor_user_id,
+        request_summary_json={"value": value},
+        state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        error_code="wb_delete_deferred",
+    ))
+    await session.flush()
+
+
+async def _send_pending_kiz_deletes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    token: str,
+) -> bool:
+    """WMS-641: delete queued KIZ in WB without holding any lock; True when none is left.
+
+    A code is deleted only while WB still holds exactly that code, so a newer
+    code of the order is never removed.
+    """
+    operations = list((await session.scalars(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_UNBIND,
+            FbsWbOperation.local_entity_id == order_id,
+            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        )
+        .order_by(FbsWbOperation.created_at, FbsWbOperation.id)
+    )).all())
+    if not operations:
+        return True
+    wb_order_id = await session.scalar(select(FbsOrder.wb_order_id).where(FbsOrder.id == order_id))
+    pending = [
+        (operation.id, str((operation.request_summary_json or {}).get("value") or ""))
+        for operation in operations
+    ]
+    await session.commit()
+    if wb_order_id is None:
+        return False
+    for operation_id, value in pending:
+        try:
+            rows = await fetch_marketplace_orders_meta_batch(
+                http_client, api_token=token, order_ids=[int(wb_order_id)]
+            )
+            row = next((one for one in rows if one.order_id == int(wb_order_id)), None)
+            if row is None:
+                return False
+            bound = [
+                detail.value for detail in row.meta_details
+                if detail.key == MARKING_KIND_SGTIN and detail.value
+            ]
+            if value and value in bound:
+                await delete_marketplace_order_meta(
+                    http_client, api_token=token, order_id=int(wb_order_id),
+                    key=MARKING_KIND_SGTIN,
+                )
+        except WildberriesClientError as exc:
+            logger.info("queued KIZ delete for order %s not finished yet: %s", order_id, exc)
+            return False
+        operation = await session.get(FbsWbOperation, operation_id)
+        if operation is not None and operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+            operation.state = WB_OPERATION_STATE_CONFIRMED
+            operation.confirmed_at = datetime.now(tz=UTC)
+        await session.commit()
+    return True
+
+
 async def resend_pending_kiz_bindings(
     session: AsyncSession,
     order_keys: list[tuple[uuid.UUID, uuid.UUID]],
@@ -1297,6 +1385,10 @@ async def resend_pending_kiz_bindings(
     handled = 0
     # Plain ids: every step commits on its own and ORM rows expire on commit.
     for order_id, tenant_id in order_keys:
+        if not await _send_pending_kiz_deletes(session, tenant_id, order_id, http_client, token):
+            # WB may still hold a removed code: never write over it.
+            await session.commit()
+            continue
         target = await _pending_kiz_resend_target(session, tenant_id, order_id)
         if target is None:
             await session.commit()
