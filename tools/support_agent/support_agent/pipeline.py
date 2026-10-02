@@ -479,7 +479,8 @@ class Pipeline:
     # ----- разбор --------------------------------------------------------------------
     def stage_analysis(self, tid: int) -> None:
         d = self.store.data(tid)
-        context = prompts.analysis_context(self.ticket_context(tid), self.cfg.llm.analyst_data_hint)
+        context = prompts.analysis_context(self.ticket_context(tid), self.cfg.llm.analyst_data_hint,
+                                          prod_db=self.cfg.prod_db.enabled)
         analysis, result = self.llm.ask_json(
             "analyst", prompts.analysis_ask(d.get("resume_note")), ticket_id=tid,
             session_key="analyst", mode="readonly", cwd=self._analysis_cwd(), context=context,

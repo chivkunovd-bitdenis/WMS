@@ -68,6 +68,15 @@
     "public_base_url": "https://wms.sellerfocus.pro",
     "allow_foreign_commits": false
   },
+  "prod_db": {
+    "enabled": false,
+    "ssh_host": "sellerfocus.pro",
+    "ssh_user": "root",
+    "ssh_key_path": "~/.wms-support-agent/prod_ro_ed25519",
+    "known_hosts": "",
+    "row_limit": 200,
+    "timeout_sec": 30
+  },
   "sandbox": {
     "enabled": true,
     "extra_deny_read": []

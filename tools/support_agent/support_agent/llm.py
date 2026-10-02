@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import readonly_mcp, sandbox
+from . import prod_sql_mcp, readonly_mcp, sandbox
 from .config import Config
 from .store import Store
 
@@ -207,7 +207,7 @@ class LlmRouter:
 
     def build_claude(
         self, model: str, mode: str, session: tuple[str, bool] | None, system: str | None,
-        cwd: str = "",
+        cwd: str = "", with_db: bool = False,
     ) -> list[str]:
         argv = [self.cfg.llm.claude_bin, "-p", "--model", model, "--output-format", "json"]
         if session is None:
@@ -228,7 +228,14 @@ class LlmRouter:
         if mode == "text":
             argv += ["--tools", "", "--disable-slash-commands", "--setting-sources", ""]
         elif mode == "readonly":
-            argv += ["--permission-mode", "dontAsk", "--allowedTools", *READONLY_TOOLS]
+            allowed = list(READONLY_TOOLS)
+            if with_db:
+                # Чтение боевой базы: единственный MCP-сервер, только его инструмент разрешён.
+                command, args = self.prod_sql_server()
+                argv += ["--mcp-config", json.dumps({"mcpServers": {"proddb": {
+                    "command": command, "args": args}}}, ensure_ascii=False), "--strict-mcp-config"]
+                allowed.append("mcp__proddb__sql_query")
+            argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
             argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit", *secret_read_denies()]
         else:  # write: разработчик хотфикса / макетчик в своём worktree, без bypassPermissions
             allowed, denied = self.write_tools(cwd)
@@ -264,7 +271,32 @@ class LlmRouter:
                 dirs.append(real)
         return dirs
 
-    def mcp_args(self, root: str) -> list[str]:
+    def prod_sql_server(self) -> tuple[str, list[str]]:
+        """Команда MCP-сервера sql_query: доверенный процесс с ключом ssh, под sandbox-exec (чтение только
+        ключа, known_hosts и кода агента; сеть только на порт 22). Модель ключа не видит."""
+        c = self.cfg.prod_db
+        script = Path(prod_sql_mcp.__file__).resolve()
+        key = os.path.expanduser(c.ssh_key_path)
+        known = os.path.expanduser(c.known_hosts) if c.known_hosts else ""
+        args = [str(script), "--ssh-host", c.ssh_host, "--ssh-user", c.ssh_user, "--key", key,
+                "--row-limit", str(c.row_limit), "--timeout", str(c.timeout_sec),
+                "--max-bytes", str(c.max_bytes), "--ssh-bin", c.ssh_bin]
+        if known:
+            args += ["--known-hosts", known]
+        # без -I: каталог скрипта нужен в sys.path (рядом лежит prod_sql); -E -s -S изолируют окружение
+        command, full = sys.executable, ["-E", "-s", "-S", *args]
+        if self.cfg.sandbox.enabled:
+            sandbox.require()
+            readable = [str(script.parent), sys.prefix, sys.base_prefix, key,
+                        known or os.path.expanduser("~/.ssh/known_hosts")]
+            command, full = sandbox.SANDBOX_EXEC, ["-p", sandbox.prod_sql_profile(readable), sys.executable,
+                                                    *full]
+        return command, full
+
+    def with_prod_db(self, role: str, mode: str) -> bool:
+        return bool(self.cfg.prod_db.enabled and mode == "readonly" and role in ("analyst", "review"))
+
+    def mcp_args(self, root: str, with_db: bool = False) -> list[str]:
         """Подключение читателя проекта: сервер запускает Codex, но под sandbox-exec (чтение только
         корня проекта и кода самого сервера, без сети и без записи)."""
         script = Path(readonly_mcp.__file__).resolve()
@@ -278,13 +310,20 @@ class LlmRouter:
         else:
             command, args = python, ["-I", "-S", str(script), "--root", root]
         toml_args = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in args) + "]"
+        extra: list[str] = []
+        if with_db:
+            db_command, db_args = self.prod_sql_server()
+            db_toml = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in db_args) + "]"
+            extra = ["-c", f"mcp_servers.proddb.command={json.dumps(db_command)}",
+                     "-c", f"mcp_servers.proddb.args={db_toml}",
+                     "-c", 'mcp_servers.proddb.default_tools_approval_mode="approve"']
         return ["-c", f"mcp_servers.wms.command={json.dumps(command)}",
                 "-c", f"mcp_servers.wms.args={toml_args}",
-                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"']
+                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"', *extra]
 
     def build_codex(
         self, model: str, effort: str | None, mode: str, session_id: str | None,
-        cwd: str | None, last_message_file: str,
+        cwd: str | None, last_message_file: str, role: str = "",
     ) -> list[str]:
         effort = check_effort(model, effort)
         argv = [self.cfg.llm.codex_bin, "exec"]
@@ -304,7 +343,7 @@ class LlmRouter:
         for setting in CODEX_EXTRA_CONFIG:
             argv += ["-c", setting]
         if mode == "readonly" and cwd:
-            argv += self.mcp_args(cwd)
+            argv += self.mcp_args(cwd, with_db=self.with_prod_db(role, mode))
         sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
         if mode == "write":
             argv += ["-c", "sandbox_workspace_write.network_access=false"]
@@ -392,7 +431,8 @@ class LlmRouter:
                 session = (session_id, True) if session_id else (str(uuid.uuid4()), False)
             else:
                 session = None
-            argv = self.build_claude(model, mode, session, system, cwd)
+            argv = self.build_claude(model, mode, session, system, cwd,
+                                     with_db=self.with_prod_db(role, mode))
             res = self.exec(argv, cwd, timeout, prompt)
             text, new_id, is_error = _parse_claude(res)
             if res.rc != 0 or is_error:
@@ -405,7 +445,7 @@ class LlmRouter:
         with sandbox.temp_dir() as tmp:
             out_file = str(Path(tmp) / "last.txt")
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
-                                    out_file)
+                                    out_file, role=role)
             res = self.exec(argv, cwd, timeout, prompt)
             text = ""
             try:

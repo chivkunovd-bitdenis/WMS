@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
 from .config import load_config
 from .runner import build_agent
@@ -34,6 +35,12 @@ def check_config(path: str | None) -> int:
         warnings.append("wms.agent_key не задан (форма «?» не опрашивается)")
     if not (cfg.openai.api_key or os.environ.get("OPENAI_API_KEY")):
         warnings.append("openai.api_key (или OPENAI_API_KEY) не задан: голос не расшифровывается")
+    if cfg.prod_db.enabled:
+        key = Path(os.path.expanduser(cfg.prod_db.ssh_key_path))
+        if not key.is_file():
+            warnings.append(f"prod_db включён, но ключа нет: {key}")
+        elif key.stat().st_mode & 0o077:
+            warnings.append("ключ prod_db доступен другим пользователям (нужны права 600)")
     if not cfg.hotfix.deployed_sha_cmd:
         warnings.append("hotfix.deployed_sha_cmd не задан (хотфикс не сможет проверить версию)")
     for line in critical:
