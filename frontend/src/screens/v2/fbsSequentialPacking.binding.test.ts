@@ -79,3 +79,29 @@ it('WMS-635 R1: any other refusal still saves nothing and keeps the order waitin
   await expect(deps.bind({ scan_id: 'scan-1', order_id: 'order-1' } as FbsScanAutoPrintResult, 'kiz'))
     .rejects.toBeInstanceOf(PackingBindRejectedError)
 })
+
+it('WMS-635 R4: a KIZ WB refused stays bound — QR printed, order packed, no exact copy', async () => {
+  stubCommit({ status: 'error', code: 'wb_rejected_kept', message: 'WB не принял ЧЗ: КИЗ не введён в оборот' })
+  const bound = vi.fn()
+  const deps = makePackingScanDeps('token', () => ({}), () => ws, () => undefined, () => undefined, () => true, () => null, bound)
+  const selected = { scan_id: 'scan-1', order_id: 'order-1', wb_order_id: 1, requires_honest_sign: true,
+    binding_target: null, reprint_recovery: null, qr_asset: null, replayed: false, codes: [],
+    printed_codes: [], shortage: 0, order_errors: [] } as FbsScanAutoPrintResult
+  const both = { printQr: true, printChz: false, reprintChz: true }
+  deps.preferences = () => both
+  deps.claim = () => ({ key: 'k', preferences: both, labelSizeId: '58x40', explicit: false })
+  deps.select = vi.fn().mockResolvedValue(selected)
+  deps.remember = vi.fn()
+  deps.complete = vi.fn()
+  deps.preload = vi.fn().mockResolvedValue('png')
+  deps.print = vi.fn().mockResolvedValue(undefined)
+  deps.printCopy = vi.fn().mockResolvedValue(undefined)
+  deps.pack = vi.fn().mockResolvedValue(undefined)
+  const scanner = createPackingScanController(deps)
+  await scanner.scan('barcode')
+  await scanner.scan('kiz-raw')
+  expect(bound).toHaveBeenCalledWith('order-1', 'kiz-raw')
+  expect(deps.print).toHaveBeenCalledTimes(1)
+  expect(deps.printCopy).not.toHaveBeenCalled()
+  expect(deps.pack).toHaveBeenCalledTimes(1)
+})
