@@ -794,7 +794,7 @@ async def _rollback_pick_allocations(
     quantity: int,
     quantity_packed: int,
     quantity_source_known: int,
-) -> list[tuple[uuid.UUID, int, int]]:
+) -> list[tuple[uuid.UUID, int, int, ContainerKind | None, uuid.UUID | None]]:
     if (
         quantity_packed < 0
         or quantity_source_known < quantity_packed
@@ -873,7 +873,7 @@ async def _rollback_pick_allocations(
     if remaining_unknown > 0:
         raise MarketplaceUnloadPickError("insufficient_picked")
 
-    result: list[tuple[uuid.UUID, int, int]] = []
+    result: list[tuple[uuid.UUID, int, int, ContainerKind | None, uuid.UUID | None]] = []
     for chunk in chunks.values():
         alloc = chunk.allocation
         alloc.quantity = int(alloc.quantity) - chunk.quantity
@@ -885,7 +885,16 @@ async def _rollback_pick_allocations(
             )
         if int(alloc.quantity) < 1:
             await session.delete(alloc)
-        result.append((alloc.storage_location_id, chunk.quantity, chunk.quantity_packed))
+        # Тара сохраняется: штука возвращается в тот же короб, из которого снята.
+        result.append(
+            (
+                alloc.storage_location_id,
+                chunk.quantity,
+                chunk.quantity_packed,
+                cast(ContainerKind | None, alloc.container_kind),
+                alloc.container_id,
+            )
+        )
     return result
 
 
@@ -1159,13 +1168,15 @@ async def remove_from_box(
         source_known_removed,
     )
     allocated_after = await allocated_qty_for_product(session, request_id, line.product_id)
-    for loc_id, chunk_qty, packed_qty in location_chunks:
+    for loc_id, chunk_qty, packed_qty, chunk_kind, chunk_container in location_chunks:
         await inventory_service.return_marketplace_unload_units(
             session,
             tenant_id=tenant_id,
             product_id=line.product_id,
             storage_location_id=loc_id,
             allocated_after=allocated_after,
+            container_kind=chunk_kind,
+            container_id=chunk_container,
             quantity=chunk_qty,
             marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,

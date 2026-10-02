@@ -9,10 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     RESERVE_STATUS_NO_STOCK,
-    RESERVE_STATUS_NOT_PUBLISHED,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
@@ -23,7 +21,6 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
@@ -69,28 +66,6 @@ async def lock_stock_product(
             select(Product)
             .where(Product.tenant_id == tenant_id, Product.id == product_id)
             .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-    ).one_or_none()
-
-
-async def _order_stock_pool(
-    session: AsyncSession,
-    order: FbsOrder,
-    product_id: uuid.UUID,
-) -> FbsBindingStockPool | None:
-    return (
-        await session.scalars(
-            select(FbsBindingStockPool)
-            .join(FbsWarehouseBinding, FbsWarehouseBinding.id == FbsBindingStockPool.binding_id)
-            .where(
-                FbsBindingStockPool.tenant_id == order.tenant_id,
-                FbsBindingStockPool.product_id == product_id,
-                FbsWarehouseBinding.tenant_id == order.tenant_id,
-                FbsWarehouseBinding.seller_id == order.seller_id,
-                FbsWarehouseBinding.marketplace == order.marketplace,
-                FbsWarehouseBinding.wb_warehouse_id == order.wb_warehouse_id,
-            )
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
@@ -209,16 +184,11 @@ async def update_fbs_order_reservation(
             if product is None:
                 order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
                 return
-            if product.fbs_units_mode:
-                pool = await _order_stock_pool(session, order, pid)
-                if pool is None:
-                    # Правило поштучного режима задаётся существованием pool.
-                    order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
-                    return
-            # WMS-632 R7: резерв заказа не зависит от того, включена ли у товара
-            # публикация остатка в кабинет WB: заказ уже принят, товар под него
-            # должен быть зарезервирован. Публикуемое число остаётся
-            # min(лимит, свободный) и от резерва не зависит.
+            # WMS-632 R7: резерв заказа не зависит от публикации остатка: ни от
+            # включённой синхронизации товара, ни от наличия лимита (pool) в
+            # поштучном режиме. Заказ уже принят, товар под него должен быть
+            # зарезервирован, если есть свободный. Публикуемое число остаётся
+            # min(лимит, свободный) и от резерва не зависит; pool не создаём.
             totals = await organization_stock_totals_by_product(
                 session,
                 order.tenant_id,

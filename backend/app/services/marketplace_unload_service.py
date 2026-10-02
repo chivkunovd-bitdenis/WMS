@@ -310,7 +310,24 @@ async def get_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    lock: bool = False,
 ) -> MarketplaceUnloadRequest | None:
+    """Загрузить документ. lock=True — взять замок строки и перечитать состояние.
+
+    «Завершить» и «Отменить» меняют остаток и конкурируют друг с другом: статус и
+    состав читаются только под замком (FOR UPDATE) и принудительно обновляются,
+    иначе одна операция действует по устаревшему статусу другой (WMS-632).
+    """
+    if lock:
+        await session.execute(
+            select(MarketplaceUnloadRequest.id)
+            .where(
+                MarketplaceUnloadRequest.id == request_id,
+                MarketplaceUnloadRequest.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
     stmt = (
         select(MarketplaceUnloadRequest)
         .where(MarketplaceUnloadRequest.id == request_id)
@@ -338,6 +355,8 @@ async def get_request(
             ),
         )
     )
+    if lock:
+        stmt = stmt.execution_options(populate_existing=True)
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -950,7 +969,7 @@ async def complete_unload(
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, lock=True)
     if req is None:
         raise MarketplaceUnloadError("not_found")
     if req.status not in EXECUTION_STATUSES:
@@ -1166,7 +1185,7 @@ async def cancel_request(
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Cancel before shipment, or reverse shipped billing without changing warehouse fact."""
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, lock=True)
     if req is None:
         raise MarketplaceUnloadError("not_found")
     if req.status == STATUS_CANCELLED:
