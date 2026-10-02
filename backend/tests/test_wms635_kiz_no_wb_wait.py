@@ -379,3 +379,56 @@ async def test_d2_print_chz_hands_out_the_pool_kiz_while_wb_is_slow(
     async with SessionLocal() as session:
         operation = await session.scalar(select(FbsWbOperation))
         assert operation is not None and operation.state == "pending_confirmation"
+
+
+async def test_r_a5c_empty_wb_read_keeps_the_refused_kiz_red(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R-A5c: after a final WB refusal an empty WB read does not turn the row into «не внесён»."""
+    seed = await _seed(async_client, 635_605)
+    order, value = seed["order"], seed["value"]
+    remote: dict[str, str | None] = {"value": None, "decision": "required"}
+    puts: list[str] = []
+
+    async def fake_put(*_args: Any, **_kwargs: Any) -> None:
+        puts.append("put")
+        raise WildberriesClientError("upstream_error", status_code=404)
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(order.wb_order_id, remote["value"], str(remote["decision"]))
+
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    committed = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=seed["headers"],
+        json={"idempotency_key": "w635-a5c", "pairs": [
+            {"order_id": str(order.order_id), "value": value, "confirmed": False},
+        ]},
+    )
+    assert committed.json()[0]["code"] == "wb_rejected_kept"
+
+    async def marking_state() -> tuple[str, str | None]:
+        async with SessionLocal() as session:
+            marking = await session.scalar(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+            assert marking is not None
+            return marking.meta_status, marking.reason
+
+    status_before, reason_before = await marking_state()
+    synced = await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/markings/sync", headers=seed["headers"]
+    )
+    assert synced.status_code == 200, synced.text
+    assert status_before == META_STATUS_REJECTED and reason_before
+    assert await marking_state() == (status_before, reason_before)
+    assert puts == ["put"]  # «Проверить в WB» never writes (WMS-546 R2)
+
+    # WB itself shows the code as accepted: the usual verdict applies.
+    remote.update(value=value, decision="sgtinIntroduced")
+    await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/markings/sync", headers=seed["headers"]
+    )
+    assert (await marking_state())[0] == META_STATUS_ACCEPTED

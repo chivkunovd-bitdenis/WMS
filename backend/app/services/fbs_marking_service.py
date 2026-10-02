@@ -1016,6 +1016,17 @@ async def _sync_order_meta_from_wb(
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
             continue
+        if (
+            meta_detail is not None and current is marking
+            and marking.kind == MARKING_KIND_SGTIN and not meta_detail.value
+            and marking.meta_status == META_STATUS_REJECTED
+            and await _kiz_write_refused_by_wb(session, marking)
+        ):
+            # WMS-635 R4.3: WB finally refused this KIZ, so its metadata stays
+            # empty. An empty read is no news: the red «WB не принял ЧЗ» verdict
+            # stays until the operator replaces or removes the code, or WB itself
+            # shows the code (a non-empty answer is applied below as usual).
+            continue
         if meta_detail is not None and current is marking:
             # Preserve every received WB detail, including unknown decisions, so a
             # later investigation sees the original remote answer rather than an
@@ -1229,6 +1240,22 @@ async def reconcile_pending_kiz_operation(
                 marking.check_status = CHECK_STATUS_ERROR
                 marking.reason = "Wildberries не подтвердил результат; нужна сверка."
             raise
+
+
+async def _kiz_write_refused_by_wb(session: AsyncSession, marking: FbsOrderMarking) -> bool:
+    """The KIZ write of this binding was finally refused by WB (failed operation, R4.3)."""
+    found = await session.scalar(
+        select(FbsWbOperation.id)
+        .where(
+            FbsWbOperation.tenant_id == marking.tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.state == WB_OPERATION_STATE_FAILED,
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 def _kiz_write_failed_before_wb(error_code: str | None) -> bool:
