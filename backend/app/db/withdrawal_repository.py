@@ -20,6 +20,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+SOLD_WB_STATUS = "sold"
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,9 @@ def eligible_rows(scope: WithdrawalScope) -> Select[tuple[FbsOrderMarking, FbsOr
             FbsOrder.tenant_id == scope.tenant_id,
             FbsOrder.seller_id == scope.seller_id,
             FbsOrder.marketplace == "wb",
+            # Код выводится только после выкупа: WB wbStatus "sold" — «заказ получен
+            # покупателем». Передача поставки сама по себе продажей не является.
+            FbsOrder.wb_status == SOLD_WB_STATUS,
             FbsOrder.status != "cancelled",
             FbsOrder.pick_status != "returned",
             ~returned,
