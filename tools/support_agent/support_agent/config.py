@@ -87,6 +87,7 @@ class LlmCfg:
         }
     )
     codex_effort: str = "high"
+    codex_auth_path: str = "~/.codex/auth.json"
     analyst_data_hint: str = ""
 
 

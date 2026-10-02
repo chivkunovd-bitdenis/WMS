@@ -195,6 +195,7 @@ def hotfix_env(env: Any, tmp_path: Path, *, ci: str = "pass", foreign: int = 0,
     shell.on("rev-parse --git-dir --git-common-dir", rev_parse_dirs)
     shell.on("git fetch", ok())
     shell.on("git show origin/etalon:.github/workflows/deploy.yml", ok(out="inputs: sha attempt_id"))
+    shell.on(":scripts/deploy/prod-update.sh", ok(out="WMS_DEPLOY_SHA support"))
     shell.on("git status --porcelain", ok(out=" M backend/app/services/x.py\n"))
     shell.on("git show origin/etalon:docs/KANONICHESKIY_BACKLOG.md", ok(out="WMS-639 WMS-648"))
     shell.on("git branch --all", ok(out="origin/etalon\nwms649-x"))

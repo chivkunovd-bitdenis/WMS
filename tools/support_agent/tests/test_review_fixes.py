@@ -299,3 +299,67 @@ def test_secrets_from_analyst_output_are_masked_in_every_outgoing_text(env: Any)
     client.add_comment("c1", blob)
     joined = b" ".join(sent_to_trello).decode()
     assert all(secret not in joined for secret in leaked)
+
+
+# ------------------------------------------------------------------ круг 3: N4 и маскировка
+def test_full_multipart_has_neutral_filename_and_no_secrets(env: Any) -> None:
+    import re as _re
+
+    token = "sk-proj-ABCDEFGHIJKLMNOPQRST"
+    analysis = dict(ANALYSIS_BUG, category="info", info_answer=f"ответ {token}", hotfix={},
+                    info_file={"filename": f"{token}.csv", "content": f"a;b\n{token};2\n"})
+    script(env, analysis, category="info")
+    env.say(CLIENT_CHAT, "выгрузка", msg_id="71")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    seen: list[bytes] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request.read())
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": len(seen) + 5000}})
+
+    real = TelegramClient("TOK", httpx.Client(transport=httpx.MockTransport(handle)))
+    flush_outbox(env.store, real, env.cfg)  # type: ignore[arg-type]
+    body = b"\n".join(seen).decode("utf-8", "replace")
+    assert token not in body and "ABCDEFGHIJKLMNOPQRST" not in body
+    names = _re.findall(r'filename="([^"]+)"', body)
+    assert names == ["export-1-0.csv"]  # нейтральное имя; расширение из списка разрешённых
+    assert "a;b" in body and "sk-***" in body  # содержимое и подпись замаскированы, не потеряны
+
+
+def test_unlisted_extension_falls_back_to_txt(env: Any) -> None:
+    analysis = dict(ANALYSIS_BUG, category="info", info_answer="x", hotfix={},
+                    info_file={"filename": "../../etc/passwd.exe", "content": "c"})
+    script(env, analysis, category="info")
+    env.say(CLIENT_CHAT, "выгрузка", msg_id="72")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    from pathlib import Path
+
+    assert [Path(f).name for f in env.store.data(1)["client_answer"]["files"]] == ["export-1-0.txt"]
+
+
+def test_scrub_masks_json_and_keyvalue_secrets_and_split_tokens(env: Any) -> None:
+    from support_agent.redact import scrub
+
+    samples = [
+        '{"password": "SYNTHETIC PASSWORD with spaces"}',
+        '{"api_key": "abc-def-ghi-jkl-mno", "other": 1}',
+        "authorization: Bearer abcdef.ghijkl.mnopqr",
+        "secret = TopSecretValue123456",
+        "token: AbCdEfGhIjKlMnOp",
+        "sk-proj- ABCDEFGHIJKLMNOPQRSTUV",
+        "sk-proj-ABCDEF\nGHIJKLMNOPQRST",
+        "github_pat_11AAAAAAA0\nBBBBBBBBBBBBBBBB",
+        "https://x.test/a?password=hunter2hunter2&x=1",
+    ]
+    for text in samples:
+        out = scrub(env.cfg, text)
+        for needle in ("SYNTHETIC PASSWORD", "abc-def-ghi", "abcdef.ghijkl", "TopSecretValue", "AbCdEfGh",
+                       "ABCDEFGHIJKLMNOPQRSTUV", "GHIJKLMNOPQRST", "BBBBBBBBBB", "hunter2hunter2"):
+            assert needle not in out, (text, out)
+    assert scrub(env.cfg, '{"count": 5, "name": "Иван"}') == '{"count": 5, "name": "Иван"}'  # лишнего не трогает

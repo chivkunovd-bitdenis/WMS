@@ -82,6 +82,13 @@ jobs:
               [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
               git cat-file -e "${DEPLOY_SHA}^{commit}"
               git merge-base --is-ancestor "$DEPLOY_SHA" origin/etalon
+              # An older commit may carry a deploy script that ignores WMS_DEPLOY_SHA and would
+              # silently deploy the head of etalon instead. Refuse BEFORE running it.
+              if ! git show "${DEPLOY_SHA}:scripts/deploy/prod-update.sh" | grep -q 'WMS_DEPLOY_SHA'; then
+                echo "ERROR: commit ${DEPLOY_SHA} has a deploy script without pinned-version support" >&2
+                echo "       (WMS_DEPLOY_SHA). Deploy a newer commit or run without sha." >&2
+                exit 1
+              fi
               script_ref="$DEPLOY_SHA"
             fi
             deploy_script="$(git show "${script_ref}:scripts/deploy/prod-update.sh")"

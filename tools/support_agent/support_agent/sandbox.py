@@ -22,9 +22,11 @@ SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 
 # Что никогда не должно читаться недоверенным кодом (относительно домашнего каталога).
 DEFAULT_DENY_READ = [
-    ".wms-support-agent", ".ssh", ".config/gh", ".codex/auth.json", ".claude", ".claude.json",
+    ".wms-support-agent", ".ssh", ".config", ".codex", ".claude", ".claude.json",
     "Downloads/insurance-benchmark", ".netrc", ".aws", ".docker", ".gnupg", ".kube",
-    "Library/Keychains", ".config/git", ".npmrc", ".pypirc",
+    "Library/Keychains", ".npmrc", ".pypirc", ".zsh_history", ".bash_history", ".zsh_sessions",
+    ".python_history", ".node_repl_history", "Library/Messages", "Library/Mail", "Library/Cookies",
+    "Library/Safari", "Library/Application Support/Google", "Library/Application Support/Claude",
 ]
 # Переменные окружения, которые не передаются дочерним процессам CLI и проверок.
 SENSITIVE_ENV = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GH_TOKEN", "GITHUB_TOKEN", "TELEGRAM_BOT_TOKEN",

@@ -52,6 +52,12 @@ fi
 echo "==> checkout deploy branch"
 git checkout -B "$DEPLOY_BRANCH" "$DEPLOY_TARGET_REF"
 
+# A pinned deploy must land exactly on the requested commit; stop before any build otherwise.
+if [[ -n "${WMS_DEPLOY_SHA:-}" && "$(git rev-parse HEAD)" != "${WMS_DEPLOY_SHA}" ]]; then
+  echo "ERROR: pinned deploy requested ${WMS_DEPLOY_SHA} but HEAD is $(git rev-parse HEAD)." >&2
+  exit 1
+fi
+
 DEPLOY_SHA="$(git rev-parse HEAD)"
 TRUNK_SHA="$(git rev-parse "$DEPLOY_TRUNK_REF")"
 

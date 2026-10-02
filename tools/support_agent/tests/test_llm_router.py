@@ -24,10 +24,10 @@ class ExecScript:
         self.full: list[list[str]] = []
 
     def __call__(self, argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
-        self.calls.append(argv)
         self.stdin.append(stdin)
         self.full.append(argv)
         argv = argv[next(i for i, a in enumerate(argv) if a in ("claude", "codex")):]
+        self.calls.append(argv)
         if argv[0] == "claude":
             if self.claude_limit:
                 return ExecResult(1, json.dumps({"is_error": True, "result": "You've hit your usage limit"}), "")
@@ -44,6 +44,11 @@ class ExecScript:
 
 def router(tmp_path: Path, script: ExecScript) -> tuple[LlmRouter, Store]:
     cfg = make_config(tmp_path)
+    auth = tmp_path / "fake-codex-auth.json"
+    auth.write_text(json.dumps({"auth_mode": "chatgpt", "OPENAI_API_KEY": None, "last_refresh": "t",
+                                "tokens": {"id_token": "i", "access_token": "a", "refresh_token": "r",
+                                           "account_id": "x"}}), encoding="utf-8")
+    cfg.llm.codex_auth_path = str(auth)
     store = Store(cfg.db_path)
     return LlmRouter(cfg, store, exec_fn=script), store
 
@@ -71,7 +76,7 @@ def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_
     assert result.cli == "codex" and llm.cooling("claude")
     before = len(script.calls)
     llm.ask("analyst", "y", mode="readonly")
-    assert all(c[0] == "codex" for c in script.calls[before:])  # claude в паузе: не дёргаем
+    assert all("claude" not in c[:6] for c in script.full[before:])  # claude в паузе: не дёргаем
     script.codex_limit = True
     store.kv_set("cooldown:claude", 0)
     with pytest.raises(LlmUnavailable):
@@ -186,7 +191,7 @@ def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Pat
     assert "shell_tool" in script.full[-1]
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
     argv = script.full[-1]
-    assert "shell_tool" not in argv and argv[argv.index("-s") + 1] == "read-only"
+    assert "shell_tool" not in argv  # аналитику shell нужен (читает проект), под внешним Seatbelt
 
 
 def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_path: Path) -> None:
@@ -200,9 +205,70 @@ def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_pat
     assert "sandbox_workspace_write.network_access=false" in argv
 
 
-def test_codex_readonly_stays_native_read_only(tmp_path: Path) -> None:
+def test_codex_analyst_runs_under_outer_seatbelt_with_own_codex_home(tmp_path: Path) -> None:
+    """Остаток F2: Sol-аналитик с shell, но под внешним профилем: секреты не читаются, запись только
+    в tmp и свой CODEX_HOME, в котором только копия auth.json."""
     script = ExecScript()
     llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)
+    tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
+    full = script.full[-1]
+    assert full[:2] == ["/usr/bin/sandbox-exec", "-p"]
+    prof = full[2]
+    for secret in ("/.wms-support-agent", "/.ssh", "/.config", "/.codex", "/.claude", "/.aws", "/.docker",
+                   "/.netrc", "insurance-benchmark", "/.zsh_history", "/.bash_history", "Library/Keychains"):
+        assert f"{secret}\"))" in prof, secret
+    assert "(deny network*)" not in prof  # Codex нужна сеть: остаток риска записан в разделе 11
+    homes = [a for a in full if a.startswith("CODEX_HOME=")]
+    assert len(homes) == 1
+    home = Path(homes[0].split("=", 1)[1])
+    assert home.parent.name == "codex-homes" and home.name == f"{tid}-analyst"  # свой каталог на обращение
+    assert f'(allow file-read* (subpath "{home.resolve()}"))' in prof  # единственное исключение из запрета
+    assert sorted(p.name for p in home.iterdir()) == ["auth.json"]  # без истории и конфига владельца
+    inner = full[full.index("codex"):]
+    assert inner[inner.index("-s") + 1] == "danger-full-access" and "shell_tool" not in inner
+    assert "--ignore-user-config" in inner
+
+
+def test_codex_analyst_sessions_of_different_tickets_do_not_share_a_home(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)
+    homes = []
+    for _ in range(2):
+        tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
+        llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
+        homes.append(next(a for a in script.full[-1] if a.startswith("CODEX_HOME=")))
+    assert homes[0] != homes[1]
+    llm.ask("review", "x", mode="readonly", cwd=str(tmp_path))  # без обращения: временный каталог
+    assert "codex-homes" not in next(a for a in script.full[-1] if a.startswith("CODEX_HOME="))
+
+
+def test_codex_refreshed_token_is_synced_back_only_if_valid(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    home = tmp_path / "h"
+    home.mkdir()
+    source = Path(llm.cfg.llm.codex_auth_path)
+    good = json.loads(source.read_text(encoding="utf-8"))
+    good["tokens"]["access_token"] = "refreshed"
+    (home / "auth.json").write_text(json.dumps(good), encoding="utf-8")
+    llm._sync_codex_auth(home)
+    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
+    assert oct(source.stat().st_mode)[-3:] == "600"
+    (home / "auth.json").write_text('{"tokens": {"access_token": "x"}, "evil": 1}', encoding="utf-8")
+    llm._sync_codex_auth(home)  # чужая форма: не переносится
+    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
+    (home / "auth.json").write_text("garbage", encoding="utf-8")
+    llm._sync_codex_auth(home)
+    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
+
+
+def test_codex_readonly_without_seatbelt_stays_native_read_only(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    llm.cfg.sandbox.enabled = False
     store.kv_set("cooldown:claude", time.time() + 999)
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
     argv = script.full[-1]
@@ -219,7 +285,7 @@ def test_claude_write_and_readonly_get_builtin_sandbox_and_secret_read_denies(tm
         assert settings["enabled"] is True and settings["allowUnsandboxedCommands"] is False
         deny = settings["filesystem"]["denyRead"]
         assert any(p.endswith("/.wms-support-agent") for p in deny) and any(p.endswith("/.ssh") for p in deny)
-        assert any(p.endswith("/.config/gh") for p in deny) and any("insurance-benchmark" in p for p in deny)
+        assert any(p.endswith("/.config") for p in deny) and any("insurance-benchmark" in p for p in deny)
         denied_tools = argv[argv.index("--disallowedTools") + 1:]
         assert "Read(~/.wms-support-agent/**)" in denied_tools and "Read(**/*.env)" in denied_tools
 

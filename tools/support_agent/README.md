@@ -97,9 +97,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
     через apply_patch в его worktree под собственной песочницей Codex (`workspace-write`, без сети, `.git`
     только для чтения). Проверено вживую: shell, запись вне каталога, правка `.git/config` и чтение
     произвольного файла недоступны. Проверки (ruff, mypy, pytest) выполняет диспетчер под Seatbelt и
-    возвращает результат разработчику. Codex-аналитик (read-only) читает проект через shell в read-only
-    песочнице: он видит домашний каталог, но не пишет и не имеет сети; всё, что он пишет наружу (Telegram,
-    Trello, файлы выгрузки), проходит маскировку секретов (OpenAI, Codex, Telegram, Trello, GitHub, JWT).
+    возвращает результат разработчику.
+  - Codex-аналитик (Sol): shell ему нужен для чтения проекта, поэтому он идёт под внешним Seatbelt (внутри
+    Codex без собственной песочницы: вложенная невозможна): чтение `~/.wms-support-agent`, `~/.ssh`, `~/.config`,
+    `~/.codex`, `~/.claude*`, `~/.aws`, `~/.docker`, `~/.netrc`, `~/Downloads/insurance-benchmark`, истории
+    shell, `Library/Keychains` и др. запрещено, запись только в tmp и свой CODEX_HOME. CODEX_HOME у каждого
+    обращения свой (`~/.wms-support-agent/codex-homes/<обращение>-analyst`) и содержит только копию
+    `auth.json` (без истории сессий и конфига владельца). Остаток риска: сеть нужна самому Codex, и
+    аналитик видит собственный токен Codex. Всё, что аналитик пишет наружу (Telegram, Trello, имена и
+    содержимое файлов), проходит маскировку секретов, имя файла выгрузки назначает агент
+    (`export-<обращение>-<версия>.<csv|tsv|txt|json|md>`).
   - Git-метаданные: `<worktree>/.git` защищён от записи в песочнице (Seatbelt и Claude `denyWrite`); перед
     каждой привилегированной git-командой диспетчер сверяет `.git` с доверенной записью в основном
     `.git/worktrees` и подтверждает пути через `git rev-parse`; git в рабочих копиях запускается с

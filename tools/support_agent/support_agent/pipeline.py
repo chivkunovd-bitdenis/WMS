@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
 MAX_FILE_BYTES = 5_000_000
+ALLOWED_EXPORT_EXT = ("csv", "tsv", "txt", "json", "md")
 MAX_ANSWER_CHARS = 3000  # с запасом на служебный текст предпросмотра (лимит Telegram 4096)
 FORBIDDEN_IN_SUMMARY = re.compile(r"```|\b[\w/.-]+\.(py|tsx?|js|sql)\b|/app/|\b\d{9,}\b")
 
@@ -575,7 +576,11 @@ class Pipeline:
     def _export_file(self, tid: int, kind: str, filename: str, content: bytes) -> str:
         """kind разводит служебный файл длинного ответа и вложение аналитика по разным папкам:
         одноимённые файлы не перезаписывают друг друга (N2)."""
-        name = re.sub(r"[^\w.\- ]", "_", Path(filename).name) or "export.txt"
+        # Имя файла — наш, нейтральное: имя от модели в Telegram не уходит (N4). От него берётся
+        # только расширение из короткого списка.
+        ext = Path(filename).suffix.lower().lstrip(".")
+        ext = ext if ext in ALLOWED_EXPORT_EXT else "txt"
+        name = f"{kind}-{tid}-{self._rev(self.store.data(tid))}.{ext}"
         folder = (self.cfg.state_path / "exports" / str(tid)
                   / str(self._rev(self.store.data(tid))) / kind)
         folder.mkdir(parents=True, exist_ok=True)
@@ -593,10 +598,9 @@ class Pipeline:
         if isinstance(info_file, dict) and info_file.get("content"):
             content = scrub(self.cfg, str(info_file["content"])).encode()
             if len(content) <= MAX_FILE_BYTES:
-                files.append(self._export_file(tid, "attachment",
-                                               str(info_file.get("filename") or "export.csv"), content))
+                files.append(self._export_file(tid, "export", str(info_file.get("filename") or ""), content))
         if len(text) > MAX_ANSWER_CHARS:
-            files.insert(0, self._export_file(tid, "answer", "ответ.txt", text.encode()))
+            files.insert(0, self._export_file(tid, "answer", "answer.txt", text.encode()))
             text = "Подробный ответ во вложении."
         if not text and not files:
             self.store.patch_data(tid, client_answer=None)

@@ -539,6 +539,10 @@ class HotfixRunner:
             if "attempt_id" not in workflow:
                 raise StepFailed("deploy.yml в etalon не принимает sha и attempt_id: закрепить версию "
                                  "выкладки нельзя, без вашего решения не запускаю")
+            script = self.run(["git", "show", f"{sha}:scripts/deploy/prod-update.sh"]).out
+            if "WMS_DEPLOY_SHA" not in script:
+                raise StepFailed("скрипт выкладки в коммите хотфикса не поддерживает закреплённую версию: "
+                                 "без вашего решения не запускаю")
             extra = self.foreign_commits(self.deployed_sha(), sha)
             if extra and not self.cfg.hotfix.allow_foreign_commits:
                 raise StepFailed(f"вместе с хотфиксом выложились бы ещё {len(extra)} чужих изменений: "

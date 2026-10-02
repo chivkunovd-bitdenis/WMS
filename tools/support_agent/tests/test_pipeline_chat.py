@@ -428,7 +428,7 @@ def test_file_export_is_previewed_as_document_and_sent_only_after_confirmation(e
     finish_reports(env)
     assert [d[0] for d in env.tg.documents] == [OWNER_CHAT]
     path = Path(env.tg.documents[0][1])
-    assert path.read_text(encoding="utf-8") == "qr;box\n1;A\n2;B\n" and path.name == "short.csv"
+    assert path.read_text(encoding="utf-8") == "qr;box\n1;A\n2;B\n" and path.name == "export-1-0.csv"
     assert any(t.startswith("Предпросмотр") and "Выгрузка во вложении" in t for t in env.tg.to(OWNER_CHAT))
     preview_file = env.store.outbox_by_key("preview_file0:1")["tg_message_id"]
     script_owner(env, {"intent": "go", "ticket_ids": [], "all": False})

@@ -80,11 +80,15 @@ def stub_script(tag: str) -> str:
     return f'#!/usr/bin/env bash\necho "STUB script={tag} pin=${{WMS_DEPLOY_SHA:-}} head=$(git rev-parse HEAD)"\n'
 
 
-def run_remote_part(clone: Path, tmp_path: Path, deploy_sha: str | None) -> subprocess.CompletedProcess[str]:
+def run_remote_part(
+    clone: Path, tmp_path: Path, deploy_sha: str | None, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     wf = load()
     deploy = next(s for s in wf["jobs"]["deploy"]["steps"] if s["name"].startswith("Deploy on server"))
-    env = {**os.environ, "WMS_REPO_DIR": str(clone), "HOME": str(tmp_path / "home"),
-           "GIT_CONFIG_GLOBAL": "/dev/null"}
+    env = {k: v for k, v in os.environ.items() if k != "GIT_CONFIG_GLOBAL"}
+    (tmp_path / "home").mkdir(exist_ok=True)
+    env.update({"WMS_REPO_DIR": str(clone), "HOME": str(tmp_path / "home")})
+    env.update(extra_env or {})
     if deploy_sha is not None:
         env["DEPLOY_SHA"] = deploy_sha
     return subprocess.run(["bash", "-c", deploy["with"]["script"]], env=env, capture_output=True, text=True,
@@ -154,3 +158,59 @@ def test_update_script_still_contains_backup_migration_and_health_steps() -> Non
     for needle in ("pg_dump", "pg_restore --list", "run --rm migrations", "verify public access settings",
                    "WMS_DEPLOY_GUARD_ONLY", "is-ancestor"):
         assert needle in text
+
+
+OLD_COMMIT = "549f7ba9"  # до закрепления версии: prod-update.sh не знает WMS_DEPLOY_SHA
+
+
+def old_script() -> str:
+    res = subprocess.run(["git", "show", f"{OLD_COMMIT}:scripts/deploy/prod-update.sh"], cwd=ROOT,
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        pytest.skip("исторический prod-update.sh недоступен")
+    assert "WMS_DEPLOY_SHA" not in res.stdout
+    return res.stdout
+
+
+def test_old_script_in_pinned_sha_is_refused_before_it_runs(tmp_path: Path) -> None:
+    """N3: старый скрипт игнорирует закрепление и выкатил бы вершину etalon: отказ ДО его исполнения."""
+    new = UPDATE.read_text(encoding="utf-8")
+    old = old_script()
+    origin, clone, shas = make_remote(tmp_path, lambda tag: old if tag == "c1" else new)
+    git("checkout", "-q", shas["c1"], cwd=clone)  # сервер сейчас на старом коммите
+    before = git("rev-parse", "HEAD", cwd=clone)
+    res = run_remote_part(clone, tmp_path, shas["c1"], {"WMS_DEPLOY_GUARD_ONLY": "1"})
+    assert res.returncode != 0
+    assert "without pinned-version support" in res.stderr
+    assert "Deploy guard passed" not in res.stdout and "checkout deploy branch" not in res.stdout
+    assert git("rev-parse", "HEAD", cwd=clone) == before  # ничего не переключалось
+    # коммит с новым скриптом проходит и выкатывается ровно закреплённый
+    ok = run_remote_part(clone, tmp_path, shas["c2"], {"WMS_DEPLOY_GUARD_ONLY": "1"})
+    assert ok.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c2"], ok.stderr
+
+
+def test_plain_deploy_without_inputs_still_works_even_if_target_has_old_script(tmp_path: Path) -> None:
+    new = UPDATE.read_text(encoding="utf-8")
+    origin, clone, shas = make_remote(tmp_path, lambda tag: old_script() if tag == "c1" else new)
+    res = run_remote_part(clone, tmp_path, None, {"WMS_DEPLOY_GUARD_ONLY": "1"})
+    assert res.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c3"], res.stderr
+
+
+def test_pinned_script_stops_before_build_if_head_is_not_the_pin(tmp_path: Path) -> None:
+    """Страховка внутри скрипта: если checkout оказался не на закреплённом коммите, сборки нет."""
+    origin, clone, shas = make_remote(tmp_path, prod_script(tmp_path))
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    real_git = shutil.which("git")
+    (shim_dir / "git").write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$*" == *"checkout -B"* ]]; then exec ' + str(real_git) + ' checkout -q -B etalon origin/etalon; fi\n'
+        'exec ' + str(real_git) + ' "$@"\n', encoding="utf-8")
+    (shim_dir / "git").chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    env = {**os.environ, "PATH": f"{shim_dir}:{os.environ['PATH']}", "HOME": str(home),
+           "WMS_REPO_DIR": str(clone), "WMS_DEPLOY_GUARD_ONLY": "1", "WMS_DEPLOY_SHA": shas["c2"]}
+    res = subprocess.run(["bash", str(UPDATE)], env=env, capture_output=True, text=True, cwd=clone)
+    assert res.returncode != 0 and "pinned deploy requested" in res.stderr
+    assert "deploy guard" not in res.stdout and "docker" not in res.stdout
