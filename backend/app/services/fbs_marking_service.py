@@ -1335,7 +1335,8 @@ async def resend_pending_kiz_bindings(
             write_error = exc
         still_bound = await _apply_kiz_resend_write(session, marking_id, write_error)
         await session.commit()
-        if write_error is None and not still_bound:
+        if not still_bound and (write_error is None or not _kiz_write_refused(write_error)):
+            # The write landed or its answer was lost after the operator removed the code.
             await _take_back_kiz_from_wb(http_client, token, wb_order_id, value)
         if write_error is None and still_bound:
             # WB's verdict for the code just written; on no answer the verdict cycle reads it.
