@@ -58,6 +58,11 @@ class TelegramClient:
             raise TelegramError("rejected", f"http_{response.status_code}")
         return body["result"]
 
+    def get_me(self) -> dict[str, Any]:
+        result = self._call("getMe", {}, timeout=20)
+        assert isinstance(result, dict)
+        return result
+
     def get_updates(self, offset: int, timeout: int = 25) -> list[dict[str, Any]]:
         result = self._call(
             "getUpdates",
@@ -118,8 +123,37 @@ class Inbound:
     reply_to: str | None = None
 
 
-def normalize_update(update: dict[str, Any], cfg: Config) -> Inbound | None:
-    """Сообщение только из настроенных чатов (R2); команды владельца — только от него (R21)."""
+class Bots:
+    """Два бота: приёма (intake) и владельца (owner). Один токен — один и тот же клиент."""
+
+    def __init__(self, intake: Any, owner: Any, owner_chat_id: int = 0) -> None:
+        self.intake, self.owner, self.owner_chat_id = intake, owner, owner_chat_id
+
+    @property
+    def single(self) -> bool:
+        return self.intake is self.owner
+
+    def named(self) -> dict[str, Any]:
+        return {"intake": self.intake} if self.single else {"intake": self.intake, "owner": self.owner}
+
+    def for_chat(self, chat_id: int) -> Any:
+        """Сводки и уведомления только через бота владельца; клиентам и партнёру только через бота приёма."""
+        return self.owner if chat_id == self.owner_chat_id and chat_id else self.intake
+
+    def for_role(self, role: str) -> Any:
+        return self.owner if role == "owner" else self.intake
+
+
+def as_bots(tg: Any, owner_chat_id: int = 0) -> Bots:
+    return tg if isinstance(tg, Bots) else Bots(tg, tg, owner_chat_id)
+
+
+def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -> Inbound | None:
+    """Сообщение только из настроенных чатов (R2).
+
+    Бот приёма принимает клиентские и партнёрский чаты; в них владелец обычный участник, команд он
+    там не отдаёт. Команды владельца (R21) принимаются ТОЛЬКО ботом владельца, в его чате и только
+    от owner_user_id. Если токен один (оба бота — один), действуют оба правила."""
     message = update.get("message")
     if not isinstance(message, dict):
         return None
@@ -127,11 +161,17 @@ def normalize_update(update: dict[str, Any], cfg: Config) -> Inbound | None:
     if sender.get("is_bot"):
         return None
     chat_id = int((message.get("chat") or {}).get("id", 0))
-    if chat_id == cfg.telegram.owner_chat_id and chat_id:
+    owner_chat = cfg.telegram.owner_chat_id
+    single = cfg.telegram.single_bot
+    if chat_id == owner_chat and chat_id:
+        if bot != "owner" and not single:
+            return None  # бот приёма в чате владельца ничего не принимает
         if int(sender.get("id", 0)) != cfg.telegram.owner_user_id:
             return None
         role = "owner"
     elif chat_id in cfg.telegram.chats:
+        if bot == "owner" and not single:
+            return None  # бот владельца клиентские и партнёрские чаты не читает
         role = cfg.telegram.chats[chat_id].role
     else:
         return None
@@ -158,12 +198,16 @@ def normalize_update(update: dict[str, Any], cfg: Config) -> Inbound | None:
     )
 
 
-def flush_outbox(store: Store, tg: TelegramClient, cfg: Config) -> int:
-    """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35)."""
+def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
+    """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
+
+    Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма."""
+    bots = as_bots(tg, cfg.telegram.owner_chat_id)
     sent = 0
     for item in store.outbox_pending():
         if not store.claim_outbox(item["id"]):
             continue
+        tg = bots.for_chat(item["chat_id"])
         try:
             if item["file_path"]:
                 message_id = tg.send_document(

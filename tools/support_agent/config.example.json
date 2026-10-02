@@ -3,7 +3,8 @@
   "state_dir": "~/.wms-support-agent",
   "repo": "/Users/deniscivkunov/Projects/WMS",
   "telegram": {
-    "bot_token": "",
+    "intake_bot_token": "",
+    "owner_bot_token": "",
     "owner_user_id": 0,
     "owner_chat_id": 0,
     "chats": {

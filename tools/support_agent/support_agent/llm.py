@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import time
 import uuid
 from collections.abc import Callable
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import sandbox
+from . import readonly_mcp, sandbox
 from .config import Config
 from .store import Store
 
@@ -227,9 +228,27 @@ class LlmRouter:
             argv += ["--disallowedTools", *denied]
         return argv
 
+    def mcp_args(self, root: str) -> list[str]:
+        """Подключение читателя проекта: сервер запускает Codex, но под sandbox-exec (чтение только
+        корня проекта и кода самого сервера, без сети и без записи)."""
+        script = Path(readonly_mcp.__file__).resolve()
+        python = sys.executable
+        if self.cfg.sandbox.enabled:
+            prof = sandbox.mcp_profile(root, [str(script.parent), sys.prefix, sys.base_prefix])
+            command, args = sandbox.SANDBOX_EXEC, ["-p", prof, python, "-I", "-S", str(script),
+                                                    "--root", root]
+            sandbox.require()
+        else:
+            command, args = python, ["-I", "-S", str(script), "--root", root]
+        toml_args = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in args) + "]"
+        return ["-c", f"mcp_servers.wms.command={json.dumps(command)}",
+                "-c", f"mcp_servers.wms.args={toml_args}",
+                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"',
+                "-c", 'approval_policy="never"']
+
     def build_codex(
         self, model: str, effort: str | None, mode: str, session_id: str | None,
-        cwd: str | None, last_message_file: str, outer: bool = False,
+        cwd: str | None, last_message_file: str,
     ) -> list[str]:
         effort = check_effort(model, effort)
         argv = [self.cfg.llm.codex_bin, "exec"]
@@ -238,20 +257,17 @@ class LlmRouter:
         argv += ["-m", model]
         if effort:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
-        # Пользовательские настройки Codex (MCP, хуки, плагины) не подгружаем. В режимах без
-        # необходимости читать проект (text) и записи (write) командная оболочка Codex ОТКЛЮЧЕНА
-        # (проверено вживую: правка файлов через apply_patch работает, shell, чтение произвольных
-        # файлов, запись вне каталога и в .git недоступны). Разработчик только правит файлы в
-        # worktree, а проверки делает диспетчер в строгой песочнице. Аналитику (readonly) shell
-        # нужен для чтения проекта: он идёт в read-only песочнице Codex.
+        # Пользовательские настройки Codex (MCP, хуки, плагины) не подгружаем. У Codex ВО ВСЕХ
+        # режимах отключены командная оболочка и внешние инструменты (проверено вживую). Разработчик
+        # (write) только правит файлы через apply_patch в worktree; аналитик (readonly) читает проект
+        # лишь через доверенный MCP-читатель readonly_mcp (только чтение внутри корня, под
+        # строгим sandbox-exec); проверки делает диспетчер. Модельных команд у Codex нет.
         argv += ["--ignore-user-config", "--ignore-rules"]
-        if mode in ("text", "write"):
-            for feature in CODEX_DISABLED_FEATURES:
-                argv += ["--disable", feature]
-        # outer: аналитик идёт под внешним Seatbelt (вложенный невозможен), поэтому внутри Codex
-        # без собственной песочницы; запись и чтение ограничивает внешний профиль.
-        sbx_mode = {"text": "read-only", "readonly": "danger-full-access" if outer else "read-only",
-                    "write": "workspace-write"}[mode]
+        for feature in CODEX_DISABLED_FEATURES:
+            argv += ["--disable", feature]
+        if mode == "readonly" and cwd:
+            argv += self.mcp_args(cwd)
+        sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
         if mode == "write":
             argv += ["-c", "sandbox_workspace_write.network_access=false"]
         if not session_id:
@@ -294,8 +310,7 @@ class LlmRouter:
                     result = self._run_once(
                         cli, model, role, full, mode=mode, cwd=work_cwd, system=system,
                         session_id=existing if resume else None, keep_session=bool(session_key),
-                        timeout=timeout, home_key=(f"{ticket_id}-{session_key}"
-                                                   if ticket_id is not None and session_key else None),
+                        timeout=timeout,
                     )
                 except _LimitHit as hit:
                     self.store.kv_set(
@@ -333,7 +348,6 @@ class LlmRouter:
     def _run_once(
         self, cli: str, model: str, role: str, prompt: str, *, mode: str, cwd: str,
         system: str | None, session_id: str | None, keep_session: bool, timeout: int,
-        home_key: str | None = None,
     ) -> LlmResult:
         if cli == "claude":
             if keep_session:
@@ -352,22 +366,9 @@ class LlmRouter:
         # codex
         with sandbox.temp_dir() as tmp:
             out_file = str(Path(tmp) / "last.txt")
-            outer = mode == "readonly" and self.cfg.sandbox.enabled
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
-                                    out_file, outer=outer)
-            codex_home: Path | None = None
-            if outer:
-                codex_home = self._prepare_codex_home(home_key, tmp)
-                home = os.path.expanduser("~")
-                prof = sandbox.profile(
-                    [tmp, str(codex_home)], sandbox.deny_read_paths(home, self.cfg.sandbox.extra_deny_read),
-                    allow_network=True,  # сеть нужна самому Codex (остаток риска записан)
-                    keep_readable=[str(codex_home)],
-                )
-                argv = sandbox.wrap(["/usr/bin/env", f"CODEX_HOME={codex_home}", *argv], prof)
+                                    out_file)
             res = self.exec(argv, cwd, timeout, prompt)
-            if codex_home is not None:
-                self._sync_codex_auth(codex_home)
             text = ""
             try:
                 text = Path(out_file).read_text(encoding="utf-8")
@@ -379,45 +380,6 @@ class LlmRouter:
                 raise _LimitHit(blob[:200])
             raise _CallFailed(blob[:200])
         return LlmResult(text, "codex", model, _codex_session_id(res.out))
-
-    # -- отдельный CODEX_HOME аналитика --------------------------------------------------
-    def _prepare_codex_home(self, key: str | None, tmp: str) -> Path:
-        """Свой CODEX_HOME только с копией auth.json: без истории сессий и конфига владельца.
-
-        Для обращения с сессией каталог постоянный (resume), иначе временный."""
-        home = (self.cfg.state_path / "codex-homes" / key) if key else Path(tmp) / "codex-home"
-        home.mkdir(parents=True, exist_ok=True)
-        os.chmod(home, 0o700)
-        source = Path(os.path.expanduser(self.cfg.llm.codex_auth_path))
-        if not source.is_file():
-            raise _LimitHit("codex auth.json not found")  # как «не залогинен»: уйдём на другой CLI
-        target = home / "auth.json"
-        target.write_bytes(source.read_bytes())
-        os.chmod(target, 0o600)
-        return home
-
-    def _sync_codex_auth(self, home: Path) -> None:
-        """Codex мог обновить токен в копии: переносим обратно, только если это валидный auth.json."""
-        copy = home / "auth.json"
-        source = Path(os.path.expanduser(self.cfg.llm.codex_auth_path))
-        try:
-            new, old = copy.read_bytes(), source.read_bytes()
-            if new == old:
-                return
-            new_json, old_json = json.loads(new), json.loads(old)
-            ok = (isinstance(new_json, dict) and set(new_json) == set(old_json)
-                  and isinstance(new_json.get("tokens"), dict)
-                  and set(new_json["tokens"]) == set(old_json.get("tokens", {}))
-                  and all(isinstance(v, str) and v for v in new_json["tokens"].values()))
-            if not ok:
-                log.warning("codex auth copy has unexpected shape, not synced back")
-                return
-            tmp_file = source.with_name(source.name + ".agent-tmp")
-            tmp_file.write_bytes(new)
-            os.chmod(tmp_file, 0o600)
-            os.replace(tmp_file, source)
-        except (OSError, ValueError):
-            return
 
     # -- JSON-ответы -------------------------------------------------------------------
     def ask_json(self, role: str, prompt: str, **kwargs: Any) -> tuple[dict[str, Any], LlmResult]:

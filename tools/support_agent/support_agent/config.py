@@ -20,10 +20,27 @@ class ChatCfg:
 
 @dataclass
 class TelegramCfg:
+    # Два бота: приёма (клиентские и партнёрский чаты) и владельца (сводки и команды).
+    # bot_token — прежнее поле одного бота: подставляется вместо незаданных.
+    intake_bot_token: str = field(default="", repr=False)
+    owner_bot_token: str = field(default="", repr=False)
     bot_token: str = field(default="", repr=False)
     owner_user_id: int = 0
     owner_chat_id: int = 0
     chats: dict[int, ChatCfg] = field(default_factory=dict)
+
+    @property
+    def intake_token(self) -> str:
+        return self.intake_bot_token or self.bot_token
+
+    @property
+    def owner_token(self) -> str:
+        return self.owner_bot_token or self.bot_token
+
+    @property
+    def single_bot(self) -> bool:
+        """Один токен на обоих ролях: один бот, один опрос."""
+        return self.intake_token == self.owner_token
 
 
 @dataclass
@@ -87,7 +104,6 @@ class LlmCfg:
         }
     )
     codex_effort: str = "high"
-    codex_auth_path: str = "~/.codex/auth.json"
     analyst_data_hint: str = ""
 
 
@@ -153,6 +169,8 @@ class Config:
     def secrets(self) -> list[str]:
         values = [
             self.telegram.bot_token,
+            self.telegram.intake_bot_token,
+            self.telegram.owner_bot_token,
             self.trello.api_key,
             self.trello.token,
             self.wms.agent_key,

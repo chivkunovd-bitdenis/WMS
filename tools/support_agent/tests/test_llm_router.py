@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -44,11 +45,6 @@ class ExecScript:
 
 def router(tmp_path: Path, script: ExecScript) -> tuple[LlmRouter, Store]:
     cfg = make_config(tmp_path)
-    auth = tmp_path / "fake-codex-auth.json"
-    auth.write_text(json.dumps({"auth_mode": "chatgpt", "OPENAI_API_KEY": None, "last_refresh": "t",
-                                "tokens": {"id_token": "i", "access_token": "a", "refresh_token": "r",
-                                           "account_id": "x"}}), encoding="utf-8")
-    cfg.llm.codex_auth_path = str(auth)
     store = Store(cfg.db_path)
     return LlmRouter(cfg, store, exec_fn=script), store
 
@@ -191,7 +187,7 @@ def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Pat
     assert "shell_tool" in script.full[-1]
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
     argv = script.full[-1]
-    assert "shell_tool" not in argv  # аналитику shell нужен (читает проект), под внешним Seatbelt
+    assert "shell_tool" in argv  # оболочка отключена и у аналитика (читает проект через MCP)
 
 
 def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_path: Path) -> None:
@@ -205,74 +201,61 @@ def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_pat
     assert "sandbox_workspace_write.network_access=false" in argv
 
 
-def test_codex_analyst_runs_under_outer_seatbelt_with_own_codex_home(tmp_path: Path) -> None:
-    """Остаток F2: Sol-аналитик с shell, но под внешним профилем: секреты не читаются, запись только
-    в tmp и свой CODEX_HOME, в котором только копия auth.json."""
+def test_codex_analyst_has_no_shell_and_reads_only_through_sandboxed_mcp(tmp_path: Path) -> None:
+    """Остаток F2 (круг 4): у Sol-аналитика нет модельных команд; проект читается доверенным MCP-читателем,
+    который запускается под sandbox-exec (чтение только корня и самого агента, без сети, без записи)."""
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)
+    root = tmp_path / "proj"
+    root.mkdir()
+    llm.ask("analyst", "x", mode="readonly", cwd=str(root))
+    argv = script.full[-1]
+    assert argv[0] == "codex"  # без внешней оболочки и без копии CODEX_HOME: штатный каталог владельца
+    assert not any(a.startswith("CODEX_HOME=") for a in argv)
+    disabled = {argv[i + 1] for i, a in enumerate(argv) if a == "--disable"}
+    assert {"shell_tool", "unified_exec", "browser_use", "computer_use", "apps"} <= disabled
+    assert argv[argv.index("-s") + 1] == "read-only" and "danger-full-access" not in argv
+    assert "--ignore-user-config" in argv and "--ignore-rules" in argv
+    assert 'mcp_servers.wms.default_tools_approval_mode="approve"' in argv
+    command = next(a for a in argv if a.startswith("mcp_servers.wms.command="))
+    args = json.loads(next(a for a in argv if a.startswith("mcp_servers.wms.args=")).split("=", 1)[1])
+    assert json.loads(command.split("=", 1)[1]) == "/usr/bin/sandbox-exec" and args[0] == "-p"
+    prof = args[1]
+    assert "(deny network*)" in prof and "(deny file-write*)" in prof and "(deny file-read-data (subpath" in prof
+    assert f'(allow file-read-data file-read-metadata (subpath "{root.resolve()}"))' in prof
+    assert args[-2:] == ["--root", str(root)] and args[2:5] == [sys.executable, "-I", "-S"]
+
+
+def test_codex_analyst_resume_keeps_mcp_and_disabled_tools(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
-    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
-    full = script.full[-1]
-    assert full[:2] == ["/usr/bin/sandbox-exec", "-p"]
-    prof = full[2]
-    for secret in ("/.wms-support-agent", "/.ssh", "/.config", "/.codex", "/.claude", "/.aws", "/.docker",
-                   "/.netrc", "insurance-benchmark", "/.zsh_history", "/.bash_history", "Library/Keychains"):
-        assert f"{secret}\"))" in prof, secret
-    assert "(deny network*)" not in prof  # Codex нужна сеть: остаток риска записан в разделе 11
-    homes = [a for a in full if a.startswith("CODEX_HOME=")]
-    assert len(homes) == 1
-    home = Path(homes[0].split("=", 1)[1])
-    assert home.parent.name == "codex-homes" and home.name == f"{tid}-analyst"  # свой каталог на обращение
-    assert f'(allow file-read* (subpath "{home.resolve()}"))' in prof  # единственное исключение из запрета
-    assert sorted(p.name for p in home.iterdir()) == ["auth.json"]  # без истории и конфига владельца
-    inner = full[full.index("codex"):]
-    assert inner[inner.index("-s") + 1] == "danger-full-access" and "shell_tool" not in inner
-    assert "--ignore-user-config" in inner
+    for text in ("a", "b"):
+        llm.ask("analyst", text, mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
+    resume = script.full[-1]
+    assert resume[:4] == ["codex", "exec", "resume", "T-1"]
+    assert "shell_tool" in resume and any(a.startswith("mcp_servers.wms.args=") for a in resume)
+    assert 'sandbox_mode="read-only"' in resume
 
 
-def test_codex_analyst_sessions_of_different_tickets_do_not_share_a_home(tmp_path: Path) -> None:
-    script = ExecScript()
-    llm, store = router(tmp_path, script)
-    store.kv_set("cooldown:claude", time.time() + 999)
-    homes = []
-    for _ in range(2):
-        tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
-        llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
-        homes.append(next(a for a in script.full[-1] if a.startswith("CODEX_HOME=")))
-    assert homes[0] != homes[1]
-    llm.ask("review", "x", mode="readonly", cwd=str(tmp_path))  # без обращения: временный каталог
-    assert "codex-homes" not in next(a for a in script.full[-1] if a.startswith("CODEX_HOME="))
+def test_no_codex_home_copy_or_auth_sync_code_exists() -> None:
+    """N5: механизма копии CODEX_HOME и переноса auth.json больше нет."""
+    source = Path(__file__).resolve().parents[1].joinpath("support_agent", "llm.py").read_text(encoding="utf-8")
+    for needle in ("_sync_codex_auth", "_prepare_codex_home", "CODEX_HOME", "codex_auth_path", "auth.json"):
+        assert needle not in source, needle
 
 
-def test_codex_refreshed_token_is_synced_back_only_if_valid(tmp_path: Path) -> None:
-    script = ExecScript()
-    llm, store = router(tmp_path, script)
-    home = tmp_path / "h"
-    home.mkdir()
-    source = Path(llm.cfg.llm.codex_auth_path)
-    good = json.loads(source.read_text(encoding="utf-8"))
-    good["tokens"]["access_token"] = "refreshed"
-    (home / "auth.json").write_text(json.dumps(good), encoding="utf-8")
-    llm._sync_codex_auth(home)
-    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
-    assert oct(source.stat().st_mode)[-3:] == "600"
-    (home / "auth.json").write_text('{"tokens": {"access_token": "x"}, "evil": 1}', encoding="utf-8")
-    llm._sync_codex_auth(home)  # чужая форма: не переносится
-    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
-    (home / "auth.json").write_text("garbage", encoding="utf-8")
-    llm._sync_codex_auth(home)
-    assert json.loads(source.read_text(encoding="utf-8"))["tokens"]["access_token"] == "refreshed"
-
-
-def test_codex_readonly_without_seatbelt_stays_native_read_only(tmp_path: Path) -> None:
+def test_codex_readonly_without_seatbelt_still_has_no_shell(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     llm.cfg.sandbox.enabled = False
     store.kv_set("cooldown:claude", time.time() + 999)
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
     argv = script.full[-1]
-    assert argv[0] == "codex" and argv[argv.index("-s") + 1] == "read-only"
+    assert argv[0] == "codex" and "shell_tool" in argv and argv[argv.index("-s") + 1] == "read-only"
+    assert json.loads(next(a for a in argv if a.startswith("mcp_servers.wms.command=")).split("=", 1)[1]) == sys.executable
 
 
 def test_claude_write_and_readonly_get_builtin_sandbox_and_secret_read_denies(tmp_path: Path) -> None:

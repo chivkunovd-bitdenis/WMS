@@ -88,7 +88,7 @@ def test_telegram_offset_is_saved_and_duplicates_are_ignored(env: Any) -> None:
     agent = make_agent(env)
     env.tg.updates = [update(5, "не работает передача")]
     agent.loop_once()
-    assert env.store.kv_get("tg_offset") == 6
+    assert env.store.kv_get("tg_offset:intake") == 6
     agent.loop_once()  # Telegram повторно отдал то же обновление (потерян ответ)
     env.store.kv_set("tg_offset", 0)
     agent.loop_once()

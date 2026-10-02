@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import signal
+import threading
 import time
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -19,8 +21,10 @@ from .pipeline import Pipeline, ThreadPool
 from .redact import scrub
 from .store import Store
 from .telegram import (
+    Bots,
     TelegramClient,
     TelegramError,
+    as_bots,
     flush_outbox,
     normalize_update,
     recover_after_restart,
@@ -69,11 +73,15 @@ class Agent:
         self,
         cfg: Config,
         store: Store,
-        tg: TelegramClient,
+        tg: Any,
         pipeline: Pipeline,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        self.cfg, self.store, self.tg, self.pipe, self.clock = cfg, store, tg, pipeline, clock
+        self.cfg, self.store, self.pipe, self.clock = cfg, store, pipeline, clock
+        self.bots = as_bots(tg, cfg.telegram.owner_chat_id)
+        self.tg = self.bots.intake
+        self.lock = threading.RLock()
+        self.drained: set[str] = set()
         self.stop = False
         self.catchup: dict[str, float] | None = None
         self.last_form_poll = 0.0
@@ -108,31 +116,61 @@ class Agent:
         self.pipe.say_owner(f"downtime:{int(c['from'])}", text, purpose="downtime")
         self.catchup = None
 
-    # ---- один оборот цикла -----------------------------------------------------------
-    def poll_telegram(self, timeout: int = 10) -> int:
-        offset = int(self.store.kv_get("tg_offset", 0))
-        updates = self.tg.get_updates(offset, timeout)
+    # ---- опрос ботов -----------------------------------------------------------------
+    def _offset_key(self, bot: str) -> str:
+        return f"tg_offset:{bot}"
+
+    def poll_bot(self, bot: str, timeout: int = 10) -> int:
+        """Один независимый long polling одного бота; у каждого бота свой offset в хранилище."""
+        client = self.bots.named()[bot]
+        key = self._offset_key(bot)
+        offset = int(self.store.kv_get(key, self.store.kv_get("tg_offset", 0) if bot == "intake" else 0))
+        updates = client.get_updates(offset, timeout)
         count = 0
         for update in updates:
-            inb = normalize_update(update, self.cfg)
+            inb = normalize_update(update, self.cfg, bot)
             if inb is not None and self.pipe.ingest(inb) is not None:
                 count += 1
             offset = max(offset, int(update["update_id"]) + 1)
         if updates:
-            self.store.kv_set("tg_offset", offset)  # после сохранения сообщений (R35)
-        if self.catchup is not None:
-            self.catchup["chats"] += count
-            if not updates:
-                self._finish_catchup()
+            self.store.kv_set(key, offset)  # после сохранения сообщений (R35)
+        with self.lock:
+            if self.catchup is not None:
+                self.catchup["chats"] += count
+                if updates:
+                    self.drained.discard(bot)
+                else:
+                    self.drained.add(bot)
+                    if self.drained >= set(self.bots.named()):
+                        self._finish_catchup()
         return count
 
-    def loop_once(self, tg_timeout: int = 10) -> None:
+    def poll_telegram(self, timeout: int = 10) -> int:
+        total = 0
+        for bot in self.bots.named():
+            total += self.poll_bot(bot, timeout)
+        return total
+
+    def _poll_forever(self, bot: str) -> None:
+        while not self.stop:
+            try:
+                self.poll_bot(bot, 25)
+            except TelegramError as exc:
+                log.warning("telegram poll (%s) failed: %s", bot, exc.code)
+                time.sleep(5)
+            except Exception:
+                log.exception("poll %s failed", bot)
+                time.sleep(5)
+
+    # ---- один оборот цикла -----------------------------------------------------------
+    def loop_once(self, tg_timeout: int = 10, poll: bool = True) -> None:
         now = self.clock()
-        try:
-            self.poll_telegram(tg_timeout)
-        except TelegramError as exc:
-            log.warning("telegram poll failed: %s", exc.code)
-            time.sleep(min(5, tg_timeout))
+        if poll:
+            try:
+                self.poll_telegram(tg_timeout)
+            except TelegramError as exc:
+                log.warning("telegram poll failed: %s", exc.code)
+                time.sleep(min(5, tg_timeout))
         if now - self.last_form_poll >= self.cfg.wms.poll_interval_sec:
             self.last_form_poll = now
             before = self.store.row("SELECT COUNT(*) AS n FROM tickets WHERE kind='form'")
@@ -141,17 +179,26 @@ class Agent:
             if self.catchup is not None and before and after:
                 self.catchup["forms"] += after["n"] - before["n"]
         self.pipe.tick()
-        flush_outbox(self.store, self.tg, self.cfg)
+        flush_outbox(self.store, self.bots, self.cfg)
         self.store.kv_set("heartbeat", self.clock())
 
     def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         signal.signal(signal.SIGINT, lambda *_: setattr(self, "stop", True))
         self.startup()
-        log.info("support agent started")
+        log.info("support agent started (%s)", "one bot" if self.bots.single else "intake and owner bots")
+        threads = []
+        if not self.bots.single:  # два бота опрашиваются независимо, каждый в своём потоке
+            for bot in self.bots.named():
+                thread = threading.Thread(target=self._poll_forever, args=(bot,), daemon=True,
+                                          name=f"poll-{bot}")
+                thread.start()
+                threads.append(thread)
         while not self.stop:
             try:
-                self.loop_once()
+                self.loop_once(poll=self.bots.single)
+                if threads:
+                    time.sleep(2)
             except Exception:
                 log.exception("loop failed")
                 time.sleep(5)
@@ -162,7 +209,9 @@ def build_agent(cfg: Config) -> Agent:
     install_logging(cfg)
     http = httpx.Client()
     store = Store(cfg.db_path)
-    tg = TelegramClient(cfg.telegram.bot_token, http)
+    intake = TelegramClient(cfg.telegram.intake_token, http)
+    owner = intake if cfg.telegram.single_bot else TelegramClient(cfg.telegram.owner_token, http)
+    tg = Bots(intake, owner, cfg.telegram.owner_chat_id)
     llm = LlmRouter(cfg, store)
     trello = TrelloClient(cfg.trello, http, redact=lambda t: scrub(cfg, t))
     pipe = Pipeline(

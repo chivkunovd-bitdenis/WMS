@@ -78,6 +78,17 @@ def profile(
     return "\n".join(rules)
 
 
+def mcp_profile(root: str, readable: list[str]) -> str:
+    """Профиль читателя проекта: без сети, без записи, чтение домашнего каталога закрыто целиком,
+    кроме корня проекта и самого агента (интерпретатор и код сервера)."""
+    home = os.path.realpath(os.path.expanduser("~"))
+    rules = ["(version 1)", "(allow default)", "(deny network*)", "(deny file-write*)",
+             '(allow file-write* (subpath "/dev"))', f"(deny file-read-data (subpath {_q(home)}))"]
+    for path in [root, *readable]:
+        rules.append(f"(allow file-read-data file-read-metadata (subpath {_q(path)}))")
+    return "\n".join(rules)
+
+
 def wrap(argv: list[str], prof: str) -> list[str]:
     require()
     return [SANDBOX_EXEC, "-p", prof, *argv]

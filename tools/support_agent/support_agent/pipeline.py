@@ -22,7 +22,7 @@ from .config import Config
 from .llm import LlmError, LlmRouter, LlmUnavailable, extract_json
 from .redact import scrub
 from .store import Store
-from .telegram import Inbound, TelegramClient, TelegramError
+from .telegram import Inbound, TelegramError, as_bots
 from .transcribe import TranscribeError, Transcriber
 from .trello import TrelloClient, TrelloError, ensure_card
 from .wms import WmsClient, WmsError
@@ -82,7 +82,7 @@ class Pipeline:
         self,
         cfg: Config,
         store: Store,
-        tg: TelegramClient,
+        tg: Any,
         llm: LlmRouter,
         trello: TrelloClient,
         wms: WmsClient,
@@ -90,7 +90,9 @@ class Pipeline:
         pool: InlinePool | ThreadPool | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        self.cfg, self.store, self.tg, self.llm = cfg, store, tg, llm
+        self.cfg, self.store, self.llm = cfg, store, llm
+        self.bots = as_bots(tg, cfg.telegram.owner_chat_id)
+        self.tg = self.bots.intake
         self.trello, self.wms, self.transcriber = trello, wms, transcriber
         self.pool = pool or ThreadPool(cfg.limits.max_parallel)
         self.clock = clock
@@ -203,7 +205,8 @@ class Pipeline:
 
     def _transcribe_one(self, m: Any) -> None:
         try:
-            audio = self.tg.download_file(m["file_id"])
+            # file_id принадлежит боту, получившему сообщение: owner для чата владельца, иначе приёма
+            audio = self.bots.for_role(m["role"]).download_file(m["file_id"])
             text = self.transcriber.transcribe(audio)
         except (TranscribeError, TelegramError) as exc:
             attempts = m["attempts"] + 1

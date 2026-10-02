@@ -40,7 +40,7 @@ jobs:
           INPUT_ATTEMPT_ID: ${{ inputs.attempt_id }}
         run: |
           set -euo pipefail
-          if [ -n "${INPUT_SHA}" ] && ! [[ "${INPUT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+          if [ -n "${INPUT_SHA}" ] && ! [[ "${INPUT_SHA}" =~ ^[0123456789abcdef]{40}$ ]]; then
             echo "sha must be a full 40-character lowercase hex commit id" >&2
             exit 1
           fi
@@ -79,7 +79,7 @@ jobs:
             if [ -n "${DEPLOY_SHA:-}" ]; then
               # Pinned deploy: the commit must exist and be etalon or its ancestor
               # BEFORE any of its code is executed; script and checkout use that commit.
-              [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$DEPLOY_SHA" =~ ^[0123456789abcdef]{40}$ ]]
               git cat-file -e "${DEPLOY_SHA}^{commit}"
               git merge-base --is-ancestor "$DEPLOY_SHA" origin/etalon
               # An older commit may carry a deploy script that ignores WMS_DEPLOY_SHA and would

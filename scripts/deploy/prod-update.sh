@@ -17,7 +17,7 @@ DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
 # Empty or unset keeps the previous behaviour. The trunk guard below still applies,
 # so the pinned commit must be contained in the trunk.
 if [[ -n "${WMS_DEPLOY_SHA:-}" ]]; then
-  if [[ ! "${WMS_DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+  if [[ ! "${WMS_DEPLOY_SHA}" =~ ^[0123456789abcdef]{40}$ ]]; then
     echo "ERROR: WMS_DEPLOY_SHA must be a full 40-character lowercase commit id." >&2
     exit 1
   fi
