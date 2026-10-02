@@ -1076,6 +1076,32 @@ async def _sync_and_validate_deliver(
     return orders, cargo_qr_ready, source_plan
 
 
+async def _refuse_if_kiz_not_in_wb(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> None:
+    """WMS-642: the handed-over orders never leave with a KIZ WB has not got."""
+    if supply.marketplace != "wb":
+        return
+    check = await marking_svc.queued_kiz_check(
+        session, tenant_id, supply.id, order_ids=[order.id for order in orders]
+    )
+    message = marking_svc.queued_kiz_message(check)
+    if message is not None:
+        raise FbsShipmentError(
+            "kiz_not_sent_to_wb",
+            message=message,
+            context={
+                "wb_order_ids": check.not_sent,
+                "other_code_wb_order_ids": check.other_code_in_wb,
+            },
+            retryable=True,
+            http_status=409,
+        )
+
+
 def _meta_validation_context(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
     return [
         {
@@ -2453,6 +2479,9 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             actor_user_id=actor_user_id,
         )
+        # WMS-642: after the final WB sync and before the delivery is journaled,
+        # a supply never leaves with a current KIZ WB has not got.
+        await _refuse_if_kiz_not_in_wb(session, tenant_id, supply, orders)
         from app.services.fbs_cancelled_after_pack_service import exclude_cancelled_delivery_orders
 
         await exclude_cancelled_delivery_orders(session, supply)
@@ -2472,6 +2501,14 @@ async def deliver_supply(
         if checkpointed is None:
             raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
         orders, source_plan = checkpointed
+        # WMS-642: a resumed delivery has not reached WB yet; its KIZ are read
+        # from WB and checked again before the WB call, like a new one.
+        for order in orders:
+            with suppress(marking_svc.FbsMarkingError):
+                await marking_svc.sync_order_marking_statuses(
+                    session, tenant_id, order.id, http_client, actor_user_id=actor_user_id
+                )
+        await _refuse_if_kiz_not_in_wb(session, tenant_id, supply, orders)
 
     # Сначала сохраняем операцию и точный план источников, затем выполняем
     # необратимый запрос WB. Если процесс умрёт после WB 2xx, повтор найдёт

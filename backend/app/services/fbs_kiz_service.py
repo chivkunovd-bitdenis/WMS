@@ -1422,6 +1422,9 @@ async def _commit_one_kiz_pair(
         and current.meta_status != META_STATUS_REJECTED
     ):
         operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None and kiz_scan_skips_wb_readback():
+            # WMS-642: a repeated scan of a queued code never calls WB; the worker sends it.
+            raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
