@@ -226,6 +226,36 @@ describe('WMS-631 one mechanism with the supply checkboxes', () => {
     expect(deps.select).not.toHaveBeenCalled()
     expect(scanner.hasPending()).toBe(false)
   })
+  it('M10: all off — a product barcode the sticker lookup matches by the order barcode selects and packs nothing', async () => {
+    const { deps } = fixture(false)
+    deps.preferences = () => off
+    deps.claim = vi.fn().mockReturnValue(att('k', off, true))
+    deps.lookupSticker = vi.fn().mockResolvedValue({ ...lookup, requires_honest_sign: false,
+      product: { ...lookup.product, barcode: '4606310300005' } })
+    const scanner = createPackingScanController(deps)
+    await expect(routePackingScan([scanner], '4606310300005')).rejects.toMatchObject({ code: 'sticker_not_found' })
+    expect(deps.select).not.toHaveBeenCalled()
+    expect(deps.claim).not.toHaveBeenCalled()
+    expect(deps.pack).not.toHaveBeenCalled()
+    expect(scanner.hasPending()).toBe(false)
+    // The order sticker itself still selects the same order (M9).
+    await scanner.scan('*STICKER')
+    expect(deps.pack).toHaveBeenCalledTimes(1)
+  })
+  it('M12: only «Печатать ЧЗ» — a product without KIZ is selected by the server and packed at once', async () => {
+    const { deps } = fixture(false)
+    const chz = { printQr: false, printChz: true, reprintChz: false }
+    deps.preferences = () => chz
+    deps.claim = vi.fn().mockReturnValue(att('k', chz))
+    const scanner = createPackingScanController(deps)
+    await scanner.scan('4606310300005')
+    expect(deps.select).toHaveBeenCalledWith('4606310300005', 'k', chz)
+    expect(deps.lookupSticker).not.toHaveBeenCalled()
+    expect(deps.print).not.toHaveBeenCalled()
+    expect(deps.printChz).not.toHaveBeenCalled()
+    expect(deps.pack).toHaveBeenCalledTimes(1)
+    expect(scanner.hasPending()).toBe(false)
+  })
   it('M4: QR + pool KIZ prints QR then the KIZ label and packs without a KIZ scan', async () => {
     const { deps } = fixture()
     const qrChz = { printQr: true, printChz: true, reprintChz: false }
