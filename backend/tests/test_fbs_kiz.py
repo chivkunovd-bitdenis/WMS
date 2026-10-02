@@ -1053,8 +1053,9 @@ async def test_fbs_kiz_commit_partial_success_keeps_other_transactions(
     assert response.status_code == 200, response.text
     body = response.json()
     assert [row["status"] for row in body] == ["ok", "error", "ok"]
-    assert body[1]["code"] == "meta_validation_fail"
-    assert body[1]["message"] == "bad kiz"
+    # WMS-635 R4.3: the KIZ WB refused stays bound, marked rejected with WB's reason.
+    assert body[1]["code"] == "wb_rejected_kept"
+    assert "bad kiz" in body[1]["message"]
 
     async with SessionLocal() as session:
         saved_markings = list(
@@ -1068,10 +1069,9 @@ async def test_fbs_kiz_commit_partial_success_keeps_other_transactions(
                 )
             ).scalars()
         )
-        assert {row.order_id for row in saved_markings} == {
-            orders[0].order_id,
-            orders[2].order_id,
-        }
+        assert {row.order_id for row in saved_markings} == {order.order_id for order in orders}
+        rejected = next(row for row in saved_markings if row.order_id == reject_order.order_id)
+        assert rejected.meta_status == META_STATUS_REJECTED
         saved_codes = list(
             (
                 await session.execute(
@@ -1079,7 +1079,7 @@ async def test_fbs_kiz_commit_partial_success_keeps_other_transactions(
                 )
             ).scalars()
         )
-        assert {code.cis_code for code in saved_codes} == {values[0], values[2]}
+        assert {code.cis_code for code in saved_codes} == set(values)
 
 
 @pytest.mark.asyncio
@@ -3858,11 +3858,17 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
     )
     assert response.status_code == 200, response.text
     if resolution == "refused":
-        assert response.json()[0]["code"] == "wb_upstream_error_403"
-        assert await _marking_row_counts(tenant_id) == (0, 1)
+        # WMS-635 R4.3: a final WB refusal keeps the scanned KIZ bound, marked
+        # «rejected» with the reason; the WB operation is closed as failed.
+        assert response.json()[0]["code"] == "wb_rejected_kept"
+        assert await _marking_row_counts(tenant_id) == (1, 1)
         async with SessionLocal() as session:
-            assert await session.scalar(select(func.count(FbsWbOperation.id))) == 0
-            assert await session.scalar(select(MarkingCode.status)) == STATUS_AVAILABLE
+            marking = await session.scalar(select(FbsOrderMarking))
+            assert marking is not None and marking.meta_status == META_STATUS_REJECTED
+            operation = await session.scalar(select(FbsWbOperation))
+            assert operation is not None and operation.state == "failed"
+            assert operation.error_code == "wb_upstream_error_403"
+        assert calls.count("put") == 1
         return
     assert response.json()[0]["code"] == "wb_pending_confirmation"
     assert "сверка" in response.json()[0]["message"]
@@ -3872,18 +3878,11 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
             headers=headers,
             json=scan_auto_print_body,
         )
+        # WMS-635 (owner: the scan never waits for WB): the binding written while
+        # WB's answer is unknown already serves its exact copy; WB is reconciled
+        # in the background. Previously this stage reported not_attempted.
         assert unresolved.json()["reprint_recovery"] == {
-            "status": "not_attempted"
-        }
-        blocked_claim = await async_client.post(
-            f"{scan_auto_print_url}/{scan_auto_print_id}/reprint-claim",
-            headers=headers,
-            json={"attempt_key": "still-unknown"},
-        )
-        assert blocked_claim.json() == {
-            "claimed": False,
-            "started": False,
-            "kiz": None,
+            "status": "available"
         }
     async with SessionLocal() as session:
         marking = (

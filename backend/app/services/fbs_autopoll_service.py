@@ -1010,6 +1010,7 @@ async def sync_marking_verdicts_for_seller(
     from app.services.fbs_marking_service import (
         MarkingVerdictsSyncResult,
         require_marketplace_token,
+        resend_pending_kiz_bindings,
         sync_marking_verdicts_batch,
     )
 
@@ -1039,13 +1040,19 @@ async def sync_marking_verdicts_for_seller(
     if not orders:
         return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
     token = await require_marketplace_token(session, target.tenant_id, target.seller_id)
-    return await sync_marking_verdicts_batch(
+    order_keys = [(order.id, order.tenant_id) for order in orders]
+    result = await sync_marking_verdicts_batch(
         session,
         orders,
         http_client,
         token,
         actor_user_id=None,
     )
+    await session.commit()
+    # WMS-635 R4.2: a KIZ write still pending (temporary WB answer or a lost
+    # one) is sent again here when WB has no code — read first, never blind.
+    await resend_pending_kiz_bindings(session, order_keys, http_client, token)
+    return result
 
 
 async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResult:

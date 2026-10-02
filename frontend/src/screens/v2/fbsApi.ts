@@ -1599,11 +1599,15 @@ export async function commitFbsKiz(
   ah: (t: string) => Record<string, string>,
   pairs: FbsKizPair[],
   idempotencyKey: string,
+  /** WMS-635 Q1: a packing scan waits for WB only briefly; the server reconciles later. */
+  scanNoWbWait = false,
 ): Promise<FbsKizCommitResult[]> {
   const res = await fetch(apiUrl('/operations/fbs-orders/kiz/commit'), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pairs, idempotency_key: idempotencyKey }),
+    body: JSON.stringify({
+      pairs, idempotency_key: idempotencyKey, ...(scanNoWbWait ? { scan_no_wb_wait: true } : {}),
+    }),
   })
   return jsonOrThrow<FbsKizCommitResult[]>(res)
 }

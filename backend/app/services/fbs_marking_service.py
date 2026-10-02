@@ -1016,6 +1016,17 @@ async def _sync_order_meta_from_wb(
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
             continue
+        if (
+            meta_detail is not None and current is marking
+            and marking.kind == MARKING_KIND_SGTIN and not meta_detail.value
+            and marking.meta_status == META_STATUS_REJECTED
+            and await _kiz_write_refused_by_wb(session, marking)
+        ):
+            # WMS-635 R4.3: WB finally refused this KIZ, so its metadata stays
+            # empty. An empty read is no news: the red «WB не принял ЧЗ» verdict
+            # stays until the operator replaces or removes the code, or WB itself
+            # shows the code (a non-empty answer is applied below as usual).
+            continue
         if meta_detail is not None and current is marking:
             # Preserve every received WB detail, including unknown decisions, so a
             # later investigation sees the original remote answer rather than an
@@ -1229,6 +1240,85 @@ async def reconcile_pending_kiz_operation(
                 marking.check_status = CHECK_STATUS_ERROR
                 marking.reason = "Wildberries не подтвердил результат; нужна сверка."
             raise
+
+
+async def _kiz_write_refused_by_wb(session: AsyncSession, marking: FbsOrderMarking) -> bool:
+    """The KIZ write of this binding was finally refused by WB (failed operation, R4.3)."""
+    found = await session.scalar(
+        select(FbsWbOperation.id)
+        .where(
+            FbsWbOperation.tenant_id == marking.tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.state == WB_OPERATION_STATE_FAILED,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+def _kiz_write_failed_before_wb(error_code: str | None) -> bool:
+    """The PUT itself got a temporary refusal or no answer (429, 408, 5xx, transport)."""
+    code = error_code or ""
+    return code in {
+        "wb_upstream_error_429", "wb_upstream_error_408", "wb_transport_error",
+    } or code.startswith("wb_upstream_error_5")
+
+
+async def resend_pending_kiz_bindings(
+    session: AsyncSession,
+    order_keys: list[tuple[uuid.UUID, uuid.UUID]],
+    http_client: httpx.AsyncClient,
+    token: str,
+) -> int:
+    """WMS-635 R4.2: finish KIZ writes whose WB answer was temporary or lost.
+
+    Each order is handled under its packaging/order locks by the existing
+    ``reconcile_pending_kiz_operation``: it reads WB first and sends the same
+    KIZ again only when WB holds no code for the order, so a lost answer is
+    never followed by a blind second write.  Every order commits on its own.
+    """
+    from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
+    handled = 0
+    # Plain ids: every order commits on its own and ORM rows expire on commit.
+    for order_id, tenant_id in order_keys:
+        await lock_order_packaging_rows(session, tenant_id, order_id)
+        locked = await session.scalar(
+            select(FbsOrder)
+            .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        marking = await session.scalar(
+            select(FbsOrderMarking)
+            .where(
+                FbsOrderMarking.order_id == order_id,
+                FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            )
+            .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        operation = await pending_kiz_operation(session, marking) if marking else None
+        if (
+            locked is None or marking is None or operation is None
+            or not _kiz_write_failed_before_wb(operation.error_code)
+        ):
+            # A write WB answered (empty read-back) stays read-only (WMS-546 R2).
+            await session.commit()
+            continue
+        try:
+            await reconcile_pending_kiz_operation(
+                session, locked, marking, operation, http_client, token, actor_user_id=None,
+            )
+        except (WildberriesClientError, FbsMarkingError) as exc:
+            logger.info("pending KIZ write for order %s not finished yet: %s", order_id, exc)
+        await session.commit()
+        handled += 1
+    return handled
 
 
 async def list_order_markings(
