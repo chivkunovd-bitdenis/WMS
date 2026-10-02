@@ -2,8 +2,28 @@ name: Deploy Production
 
 # Manual production deploy only. The server script refuses commits that are
 # not already contained in the configured trunk (default: origin/etalon).
+#
+# Optional inputs (WMS-641 support agent; a plain dispatch behaves exactly as before):
+#   sha         full 40-char commit to deploy instead of the current head of etalon.
+#               It must be etalon itself or an ancestor of it; the deploy script is
+#               taken from that same commit.
+#   attempt_id  caller-chosen id that is put into the run name, so the caller can
+#               recognise its own run among others.
 on:
   workflow_dispatch:
+    inputs:
+      sha:
+        description: "Optional full commit SHA to deploy (default: head of etalon)"
+        required: false
+        default: ""
+        type: string
+      attempt_id:
+        description: "Optional attempt id shown in the run name"
+        required: false
+        default: ""
+        type: string
+
+run-name: ${{ inputs.attempt_id != '' && format('Deploy Production [{0}]', inputs.attempt_id) || 'Deploy Production' }}
 
 concurrency:
   group: deploy-production
@@ -14,9 +34,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Validate optional inputs
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_ATTEMPT_ID: ${{ inputs.attempt_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_SHA}" ] && ! [[ "${INPUT_SHA}" =~ ^[0123456789abcdef]{40}$ ]]; then
+            echo "sha must be a full 40-character lowercase hex commit id" >&2
+            exit 1
+          fi
+          if [ -n "${INPUT_ATTEMPT_ID}" ] && ! [[ "${INPUT_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+            echo "attempt_id may contain only letters, digits, - and _" >&2
+            exit 1
+          fi
+
       - name: Deploy on server (trunk guard + docker compose)
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SHA: ${{ inputs.sha }}
         with:
+          envs: DEPLOY_SHA
           host: ${{ secrets.DEPLOY_SSH_HOST }}
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -37,8 +75,24 @@ jobs:
             git fetch --prune origin
             # Execute the current trunk script, not the previous deployment's
             # version. The script retains its branch/SHA guard before building.
-            deploy_script="$(git show origin/etalon:scripts/deploy/prod-update.sh)"
-            WMS_REPO_DIR="$PWD" bash -c "$deploy_script" </dev/null
+            script_ref=origin/etalon
+            if [ -n "${DEPLOY_SHA:-}" ]; then
+              # Pinned deploy: the commit must exist and be etalon or its ancestor
+              # BEFORE any of its code is executed; script and checkout use that commit.
+              [[ "$DEPLOY_SHA" =~ ^[0123456789abcdef]{40}$ ]]
+              git cat-file -e "${DEPLOY_SHA}^{commit}"
+              git merge-base --is-ancestor "$DEPLOY_SHA" origin/etalon
+              # An older commit may carry a deploy script that ignores WMS_DEPLOY_SHA and would
+              # silently deploy the head of etalon instead. Refuse BEFORE running it.
+              if ! git show "${DEPLOY_SHA}:scripts/deploy/prod-update.sh" | grep -q 'WMS_DEPLOY_SHA'; then
+                echo "ERROR: commit ${DEPLOY_SHA} has a deploy script without pinned-version support" >&2
+                echo "       (WMS_DEPLOY_SHA). Deploy a newer commit or run without sha." >&2
+                exit 1
+              fi
+              script_ref="$DEPLOY_SHA"
+            fi
+            deploy_script="$(git show "${script_ref}:scripts/deploy/prod-update.sh")"
+            WMS_DEPLOY_SHA="${DEPLOY_SHA:-}" WMS_REPO_DIR="$PWD" bash -c "$deploy_script" </dev/null
 
       - name: Smoke check (public HTTPS 200)
         run: |

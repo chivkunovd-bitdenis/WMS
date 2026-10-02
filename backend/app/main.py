@@ -59,6 +59,7 @@ from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
 from app.api.storage import router as storage_router
 from app.api.subscription import router as subscription_router
+from app.api.support_agent import router as support_agent_router
 from app.api.tenant_settings import router as tenant_settings_router
 from app.api.warehouse_print import router as warehouse_print_router
 from app.api.warehouses import router as warehouses_router
@@ -157,6 +158,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(developer_requests_router)
+    app.include_router(support_agent_router)
     app.include_router(client_errors_router)
     app.include_router(staff_accounts_router)
     app.include_router(seller_staff_accounts_router)
