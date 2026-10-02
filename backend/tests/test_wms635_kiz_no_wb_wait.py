@@ -165,10 +165,10 @@ async def test_background_reconciliation_resends_a_kiz_wb_does_not_have(
         assert marking is not None
         keys = [(order.order_id, marking.tenant_id)]
     async with SessionLocal() as session, httpx.AsyncClient() as http_client:
-        handled = await fbs_marking_svc.resend_pending_kiz_bindings(
+        not_sent = await fbs_marking_svc.resend_pending_kiz_bindings(
             session, keys, http_client, "token"
         )
-    assert handled == 1
+    assert not_sent == []
     # Read before the second write, never a blind resend.
     assert calls[calls.index("put") + 1:].index("get") < calls[calls.index("put") + 1:].index("put")
     assert calls.count("put") == 2

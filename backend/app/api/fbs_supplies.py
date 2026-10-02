@@ -3213,6 +3213,8 @@ async def preflight_fbs_delivery(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsDeliveryPreflightOut:
     async with httpx.AsyncClient() as http_client:
+        # WMS-642: queued KIZ go to WB as soon as the operator opens the handover.
+        await marking_svc.send_queued_kiz_of_supply(session, user.tenant_id, supply_id, http_client)
         try:
             result = await shipment_svc.preflight_delivery(
                 session,
@@ -3236,6 +3238,24 @@ async def deliver_fbs_supply(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     async with httpx.AsyncClient() as http_client:
+        # WMS-642: a supply never leaves while a scanned KIZ has not reached WB.
+        not_sent = await marking_svc.send_queued_kiz_of_supply(
+            session, user.tenant_id, supply_id, http_client
+        )
+        if not_sent:
+            _raise_from_shipment_service(
+                shipment_svc.FbsShipmentError(
+                    "kiz_not_sent_to_wb",
+                    message=(
+                        "Честный знак ещё не ушёл в WB по заказам "
+                        f"{', '.join(str(number) for number in not_sent)}: WB не ответил. "
+                        "Повторите передачу через минуту."
+                    ),
+                    context={"wb_order_ids": not_sent},
+                    retryable=True,
+                    http_status=status.HTTP_409_CONFLICT,
+                )
+            )
         try:
             supply = await shipment_svc.deliver_supply(
                 session,

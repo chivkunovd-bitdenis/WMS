@@ -46,6 +46,7 @@ from app.services.fbs_print_asset_service import (
     request_supply_print_batch,
 )
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
+from app.services.wildberries_client import kiz_scan_skips_wb_readback
 from app.services.wildberries_errors import WildberriesClientError
 
 
@@ -610,6 +611,9 @@ async def _send_or_reconcile_printed_marking(
     ordinary_print: bool,
 ) -> None:
     operation = await marking_svc.pending_kiz_operation(session, marking)
+    if operation is not None and kiz_scan_skips_wb_readback():
+        # WMS-642: the scan never calls WB for a queued code; the worker sends it.
+        raise marking_svc.FbsMarkingError("wb_pending_confirmation")
     if (order.marketplace == "wb" and operation is None
             and marking.meta_status in marking_svc._META_DELIVERY_OK):
         # Reprinting the same accepted binding does not change WB metadata.

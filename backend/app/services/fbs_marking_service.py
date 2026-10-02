@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import exists, select
+from sqlalchemy import and_, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -81,6 +81,7 @@ from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
     MarketplaceOrderMetaRow,
+    delete_marketplace_order_meta,
     fetch_marketplace_orders_meta_batch,
     split_marketplace_order_id_batches,
 )
@@ -810,18 +811,18 @@ async def confirmed_kiz_operation_for_scan_auto_print(
 async def pending_kiz_operation(
     session: AsyncSession,
     marking: FbsOrderMarking,
+    *,
+    lock: bool = True,
 ) -> FbsWbOperation | None:
-    result = await session.execute(
-        select(FbsWbOperation)
-        .where(
-            FbsWbOperation.tenant_id == marking.tenant_id,
-            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
-            FbsWbOperation.local_entity_type == "fbs_order_marking",
-            FbsWbOperation.local_entity_id == marking.id,
-            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
-        )
-        .with_for_update()
+    stmt = select(FbsWbOperation).where(
+        FbsWbOperation.tenant_id == marking.tenant_id,
+        FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+        FbsWbOperation.local_entity_type == "fbs_order_marking",
+        FbsWbOperation.local_entity_id == marking.id,
+        FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
     )
+    stmt = stmt.with_for_update() if lock else stmt.execution_options(populate_existing=True)
+    result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 
@@ -1283,68 +1284,202 @@ async def resend_pending_kiz_bindings(
     order_keys: list[tuple[uuid.UUID, uuid.UUID]],
     http_client: httpx.AsyncClient,
     token: str,
-) -> int:
+) -> list[uuid.UUID]:
     """WMS-635 R4.2: finish KIZ writes whose WB answer was temporary or lost.
 
     It reads WB first and sends the same KIZ again only when WB holds no code
     for the order, so a lost answer is never followed by a blind second write.
 
-    WMS-640: no order or packaging lock is held while WB is called. A packing
-    scan locks every order of its supply, so a lock held across a hanging WB
-    call would stop the whole supply. The read is committed before the write,
-    and the write is sent only if this code is still the order's bound KIZ.
+    WMS-642: no row is locked while WB is called. Every WB call runs after a
+    commit; its result is applied by a short transaction that re-reads the
+    binding. A write that landed for a code the operator removed meanwhile is
+    taken back from WB. Returns the orders whose code WB has not taken yet.
     """
-    handled = 0
-    # Plain ids: every step commits on its own and ORM rows expire on commit.
+    not_sent: list[uuid.UUID] = []
     for order_id, tenant_id in order_keys:
         target = await _pending_kiz_resend_target(session, tenant_id, order_id)
+        await session.commit()
         if target is None:
-            await session.commit()
             continue
         order, marking, _operation = target
-        marking_id = marking.id
+        marking_id, value, wb_order_id = marking.id, marking.value, int(order.wb_order_id)
         try:
             markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         except WildberriesClientError as exc:
             logger.info("pending KIZ read for order %s not finished yet: %s", order_id, exc)
             await session.rollback()
+            not_sent.append(order_id)
             continue
         detail = (order.meta_details_json or {}).get(MARKING_KIND_SGTIN)
         remote_empty = detail is None or (isinstance(detail, dict) and not detail.get("value"))
         applied = markings.applied
         await session.commit()
-        handled += 1
-        if not applied or not remote_empty:
+        if not applied:
+            # The operator changed the code during the read; the next cycle reads again.
+            not_sent.append(order_id)
+            continue
+        if not remote_empty:
             continue
         target = await _pending_kiz_resend_target(session, tenant_id, order_id)
+        await session.commit()
         if target is None or target[1].id != marking_id:
             # The operator replaced or removed this code meanwhile.
-            await session.commit()
             continue
-        order, marking, operation = target
+        write_error: WildberriesClientError | None = None
         try:
-            await attach_order_meta_to_wb_and_sync(
-                session, order.tenant_id, order, marking, http_client,
-                actor_user_id=None, api_token=token, notify_supply=False,
+            await put_marketplace_order_meta(
+                http_client, api_token=token, order_id=wb_order_id,
+                kind=MARKING_KIND_SGTIN, value=value,
             )
-        except (WildberriesClientError, FbsMarkingError) as exc:
-            if isinstance(exc, FbsMarkingError) and exc.code == "meta_validation_fail":
-                operation.state = WB_OPERATION_STATE_FAILED
-                operation.failed_at = datetime.now(tz=UTC)
-                operation.error_code = exc.code
-            else:
-                marking.meta_status = META_STATUS_UNKNOWN
-                marking.check_status = CHECK_STATUS_ERROR
-                marking.reason = "Wildberries не подтвердил результат; нужна сверка."
-            logger.info("pending KIZ write for order %s not finished yet: %s", order_id, exc)
+        except WildberriesClientError as exc:
+            write_error = exc
+        still_bound = await _apply_kiz_resend_write(session, marking_id, write_error)
         await session.commit()
-    return handled
+        if write_error is None and not still_bound:
+            await _take_back_kiz_from_wb(http_client, token, wb_order_id, value)
+        if write_error is None and still_bound:
+            # WB's verdict for the code just written; on no answer the verdict cycle reads it.
+            try:
+                await _sync_order_meta_from_wb(session, order, http_client, token)
+                await session.commit()
+            except (WildberriesClientError, FbsMarkingError):
+                await session.rollback()
+        if write_error is not None and still_bound and not _kiz_write_refused(write_error):
+            logger.info("pending KIZ write for order %s not finished: %s", order_id, write_error)
+            not_sent.append(order_id)
+    return not_sent
+
+
+async def send_queued_kiz_of_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> list[int]:
+    """WMS-642: queued KIZ of a WB supply go to WB before the supply itself.
+
+    The same background resend, run for this supply's orders. Returns WB order
+    numbers whose code WB has not taken yet; the caller must not hand the
+    supply over without them.
+    """
+    rows = (
+        await session.execute(
+            select(FbsOrder.id, FbsOrder.seller_id, FbsOrder.wb_order_id)
+            .join(FbsOrderMarking, FbsOrderMarking.order_id == FbsOrder.id)
+            .join(
+                FbsWbOperation,
+                and_(
+                    FbsWbOperation.local_entity_id == FbsOrderMarking.id,
+                    FbsWbOperation.local_entity_type == "fbs_order_marking",
+                    FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+                    FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                ),
+            )
+            .where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.supply_id == supply_id,
+                FbsOrder.marketplace == "wb",
+            )
+            .distinct()
+        )
+    ).all()
+    await session.commit()
+    if not rows:
+        return []
+    wb_numbers = {row.id: int(row.wb_order_id) for row in rows}
+    not_sent: list[int] = []
+    for seller_id in {row.seller_id for row in rows}:
+        keys = [(row.id, tenant_id) for row in rows if row.seller_id == seller_id]
+        try:
+            token = await require_marketplace_token(session, tenant_id, seller_id)
+        except FbsMarkingError:
+            not_sent.extend(wb_numbers[order_id] for order_id, _ in keys)
+            continue
+        failed = await resend_pending_kiz_bindings(session, keys, http_client, token)
+        not_sent.extend(wb_numbers[order_id] for order_id in failed)
+    return sorted(not_sent)
+
+
+def _kiz_write_refused(exc: WildberriesClientError) -> bool:
+    """WB finally refused the code itself; anything else is retried, never dropped."""
+    return isinstance(exc, WildberriesBusinessError) or exc.status_code == 400
+
+
+async def _apply_kiz_resend_write(
+    session: AsyncSession,
+    marking_id: uuid.UUID,
+    write_error: WildberriesClientError | None,
+) -> bool:
+    """Record one background KIZ write; False when the binding is gone meanwhile."""
+    marking = await session.scalar(
+        select(FbsOrderMarking)
+        .where(FbsOrderMarking.id == marking_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    operation = await pending_kiz_operation(session, marking) if marking is not None else None
+    if marking is None or operation is None:
+        return False
+    if write_error is None:
+        # WB took the write; the verdict cycle reads WB and confirms it. The
+        # operation no longer counts as unsent, so it is never written blindly again.
+        operation.error_code = "wb_pending_confirmation"
+        return True
+    if not _kiz_write_refused(write_error):
+        return True
+    # A final WB refusal of the code: the row turns red (WMS-635 R4.3).
+    code = _wb_error_code(write_error)
+    reasons: list[dict[str, Any]] = []
+    if isinstance(write_error, WildberriesBusinessError):
+        reasons = _meta_validation_reasons(write_error)
+        if write_error.meta_validation:
+            marking.reason = write_error.meta_validation[0].reason
+        code = "meta_validation_fail"
+    marking.meta_status = META_STATUS_REJECTED
+    marking.check_status = CHECK_STATUS_ERROR
+    marking.meta_details_json = {"meta_validation": reasons}
+    marking.reason = marking.reason or f"WB не принял код ({code})."
+    operation.state = WB_OPERATION_STATE_FAILED
+    operation.failed_at = datetime.now(tz=UTC)
+    operation.error_code = code
+    order = await session.get(FbsOrder, marking.order_id)
+    if order is not None:
+        order.metadata_delivery_allowed = False
+    return True
+
+
+async def _take_back_kiz_from_wb(
+    http_client: httpx.AsyncClient, token: str, wb_order_id: int, value: str
+) -> None:
+    """Remove from WB a code written after the operator had removed it locally."""
+    try:
+        rows = await fetch_marketplace_orders_meta_batch(
+            http_client, api_token=token, order_ids=[wb_order_id]
+        )
+        remote = next(
+            (
+                detail.value
+                for row in rows
+                if row.order_id == wb_order_id
+                for detail in row.meta_details
+                if detail.key.strip().lower() == MARKING_KIND_SGTIN
+            ),
+            None,
+        )
+        if remote and _same_marking_value(value, remote):
+            await delete_marketplace_order_meta(
+                http_client, api_token=token, order_id=wb_order_id, key=MARKING_KIND_SGTIN
+            )
+    except WildberriesClientError as exc:
+        logger.warning(
+            "KIZ of a removed binding may still be in WB for order %s: %s", wb_order_id, exc
+        )
 
 
 async def _pending_kiz_resend_target(
     session: AsyncSession, tenant_id: uuid.UUID, order_id: uuid.UUID
 ) -> tuple[FbsOrder, FbsOrderMarking, FbsWbOperation] | None:
-    """The order's current bound KIZ with a write not yet sent to WB; no order lock."""
+    """The order's current bound KIZ with a write not yet sent to WB; nothing is locked."""
     order = await session.scalar(
         select(FbsOrder)
         .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
@@ -1361,7 +1496,7 @@ async def _pending_kiz_resend_target(
         .limit(1)
         .execution_options(populate_existing=True)
     )
-    operation = await pending_kiz_operation(session, marking) if marking else None
+    operation = await pending_kiz_operation(session, marking, lock=False) if marking else None
     if (
         order is None or marking is None or operation is None
         or not _kiz_write_failed_before_wb(operation.error_code)
