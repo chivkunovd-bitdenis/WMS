@@ -24,6 +24,7 @@ from app.models.document_event import (
     DocumentEvent,
 )
 from app.models.fbs_order import (
+    CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
     FBS_ORDER_MARKING_WRITE_STATUSES,
@@ -83,6 +84,8 @@ _POOL_MARKING_SOURCE = "pool"
 _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
+# WMS-635 R4: the KIZ is bound in WMS although WB refused it (row marked red).
+KIZ_BOUND_WB_REJECTED = "wb_rejected_kept"
 # WMS-631 R19: what one binding replaced, so the scan that made it can be undone.
 KIZ_BOUND_EVENT_KIND = "wms631_kiz_bound"
 _KIZ_PREVIOUS_UNKNOWN = "Прежний КИЗ не восстановлен — отсканируйте его в поле строки."
@@ -1537,11 +1540,42 @@ async def _commit_one_kiz_pair(
             new_error.code == "wb_transport_error"
             or new_error.code == "wb_pending_confirmation"
             or new_error.code == "wb_upstream_error_408"
+            # WMS-635 R4.2: «too many requests» is temporary; the background
+            # reconciliation sends the same KIZ again once WB has no code.
+            or new_error.code == "wb_upstream_error_429"
             or new_error.code.startswith("wb_upstream_error_5")
             or marking.meta_status == META_STATUS_SENDING
         )
         if not ambiguous:
-            raise new_error
+            # WMS-635 R4.3: a final WB refusal never unbinds the scanned KIZ.
+            # The code stays bound with WB's verdict «rejected» and its reason,
+            # the WB operation is closed as failed, and nothing is resent.
+            wb_reason = marking.reason or _error_message(new_error)
+            await marking_svc.record_pending_kiz_operation(
+                session, order, marking, error_code=new_error.code,
+                actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+                scan_auto_print_id=pair.scan_auto_print_id,
+            )
+            operation = await marking_svc.pending_kiz_operation(session, marking)
+            if operation is not None:
+                operation.state = WB_OPERATION_STATE_FAILED
+                operation.failed_at = datetime.now(tz=UTC)
+                operation.error_code = new_error.code
+            marking.meta_status = META_STATUS_REJECTED
+            marking.check_status = CHECK_STATUS_ERROR
+            marking.reason = wb_reason
+            order.metadata_delivery_allowed = False
+            order.metadata_last_checked_at = datetime.now(tz=UTC)
+            pending_error = FbsKizError(
+                KIZ_BOUND_WB_REJECTED,
+                message=f"WB не принял ЧЗ: {marking.reason}",
+                persist_failure_state=True,
+            )
+    if (
+        new_error is not None
+        and (current is None or new_write_accepted)
+        and pending_error is None
+    ):
         await marking_svc.record_pending_kiz_operation(
             session, order, marking, error_code=new_error.code,
             actor_user_id=actor_user_id, idempotency_key=idempotency_key,
@@ -1968,7 +2002,8 @@ async def rollback_scan_kiz(
     await session.rollback()
     order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
     await assert_scan_undo_open(session, tenant_id, supply_id, order)
-    current = await _current_sgtin_marking_for_update(session, order.id)
+    # WMS-635 R4.3: a KIZ WB refused stays bound (rejected) and is undone too.
+    current = await _current_sgtin_marking_for_update(session, order.id, include_rejected=True)
     events = await _bound_events_for_order(session, tenant_id, order)
     keys = {key for key in commit_keys if key}
     ours_index = next(
@@ -1995,9 +2030,11 @@ async def rollback_scan_kiz(
     token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     if current is not None and current.value == value:
         # Stage 1: remove this scan's code from WB and from the order.
-        await _delete_scan_kiz_from_wb(
-            session, order, http_client, token, value, f"wms631-kiz-undo-delete:{receipt_id}"
-        )
+        if current.meta_status != META_STATUS_REJECTED:
+            # WB refused this code, so WB holds nothing of it to delete.
+            await _delete_scan_kiz_from_wb(
+                session, order, http_client, token, value, f"wms631-kiz-undo-delete:{receipt_id}"
+            )
         line: PackagingTaskLine | None = None
         if current.marking_code is not None and current.marking_code.packaging_task_line_id:
             line = await session.get(PackagingTaskLine, current.marking_code.packaging_task_line_id)
