@@ -230,13 +230,37 @@ def ssh_argv(cfg: ProdSqlSettings, remote_command: str | None = None) -> list[st
     return [*argv, target, remote_command] if remote_command else [*argv, target]
 
 
-def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None) -> str:
-    """Проверенный запрос -> CSV (с лимитами). Ошибки возвращаются исключением SqlRefused/RuntimeError."""
+_ERR_RE = re.compile(r"^(?:psql: )?(?:error|fatal):\s+([0-9A-Z]{5}):\s*(.*)$", re.IGNORECASE)
+_QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+
+
+def sanitize_error(text: str) -> str:
+    """Текст серверной ошибки без значений данных (повтор серверной очистки шлюза на случай старого шлюза):
+    только первая строка; для класса 42 сообщение остаётся, для остальных кавычечные фрагменты (там
+    сервер печатает прочитанные значения) заменяются на «…»."""
+    lines = [ln.strip() for ln in str(text).splitlines() if ln.strip()]
+    first = next((ln for ln in lines if re.match(r"^(psql: )?(error|fatal)", ln, re.IGNORECASE)),
+                 lines[0] if lines else "")
+    match = _ERR_RE.match(first)
+    if match:
+        state, message = match.group(1), match.group(2)
+        if not state.startswith("42"):
+            message = _QUOTED.sub("«…»", message)
+        return f"{state}: {message}"[:240]
+    return _QUOTED.sub("«…»", first)[:240]
+
+
+def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None,
+              on_send: Callable[[], None] | None = None) -> str:
+    """Проверенный запрос -> CSV (с лимитами). Ошибки возвращаются исключением SqlRefused/RuntimeError.
+    on_send вызывается ПОСЛЕ проверки и ДО отправки запроса на сервер (след обращения к базе, N1)."""
     if not ROLE_RE.match(cfg.db_role):
         raise SqlRefused("доступ к базе не выдан: у обращения нет привязанного селлера")
     query, first = validate_sql(sql)
     stdin = wrap_limit(query, first, cfg.row_limit) + "\n"
     budget = cfg.max_bytes * 2 + 4096
+    if on_send is not None:
+        on_send()  # если след записать нельзя, запрос не уходит (исключение)
 
     def default(argv: list[str], text: str, timeout: int) -> tuple[int, str, str]:
         return default_runner(argv, text, timeout, max_out=budget)
@@ -248,6 +272,6 @@ def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None) -> s
         cut = truncate_csv(out, cfg.row_limit, cfg.max_bytes)
         return cut + "\n# вывод оборван: ответ сервера слишком большой"
     if rc != 0:
-        # текст ошибки сервера (psql) полезен аналитику; секретов в нём нет, но длину ограничиваем
-        raise RuntimeError(f"ошибка запроса (код {rc}): {(err or out).strip()[:400]}")
+        # аналитику возвращается только очищенная первая строка ошибки: значения данных в ней не нужны
+        raise RuntimeError(f"ошибка запроса (код {rc}): {sanitize_error(err or out)}")
     return truncate_csv(out, cfg.row_limit, cfg.max_bytes)

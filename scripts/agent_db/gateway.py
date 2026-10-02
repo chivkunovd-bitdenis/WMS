@@ -4,7 +4,10 @@
 В authorized_keys ключ агента привязан к этой программе (no-pty, no-port-forwarding, ...). Из
 SSH_ORIGINAL_COMMAND принимается РОВНО одна из трёх форм, всё остальное отклоняется:
 
-  sql wms_agent_s_<32 hex>      psql под этой ролью, SQL из stdin, ответ CSV в stdout
+  sql wms_agent_s_<32 hex>      SQL из stdin, ответ CSV в stdout: до запуска psql SQL ПРОВЕРЯЕТСЯ здесь же
+                                (один SELECT/WITH/EXPLAIN, ни одного обратного слеша: метакоманды psql
+                                \\!, \\connect, \\copy, \\gexec невозможны), запрос передаётся ключом -c;
+                                вывод читается потоком с бюджетом, текст ошибки очищается от значений
   ensure-seller <uuid>          идемпотентно создать/обновить роль и политики селлера (под postgres)
   find-seller <строка>          кандидаты по названию (фиксированный запрос, строка — переменная psql)
 
@@ -21,9 +24,11 @@ import os
 import re
 import subprocess
 import sys
+import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import seller_access as sa  # noqa: E402
+import sql_contract as sc  # noqa: E402
 
 DEFAULT_BASE = ["docker", "exec", "-i", "wms_prod-db-1", "psql"]
 SQL_RE = re.compile(r"^sql (wms_agent_s_[0-9a-f]{32})$")
@@ -34,6 +39,14 @@ FIND_SQL = (
     "FROM sellers s JOIN tenants t ON t.id = s.tenant_id "
     "WHERE s.name ILIKE '%' || :'q' || '%' ORDER BY s.name, t.name LIMIT 10;\n"
 )
+
+
+MAX_STDOUT = 256 * 1024  # бюджеты вывода запроса sql: сверх этого psql останавливается
+MAX_STDERR = 8 * 1024
+SQL_TIMEOUT_SEC = 45
+MAX_STDIN_CHARS = sc.MAX_SQL_CHARS + 1
+OUTPUT_TRUNCATED_RC = 125  # то же значение, что у клиента агента: «вывод превысил бюджет, процесс остановлен»
+TIMEOUT_RC = 124
 
 
 class Refused(Exception):
@@ -50,6 +63,77 @@ def psql_argv(user: str, extra: list[str] | None = None, env: dict[str, str] | N
 def run_psql(user: str, stdin: str, extra: list[str] | None = None,
              env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(psql_argv(user, extra, env), input=stdin, capture_output=True, text=True, timeout=120)
+
+
+def run_bounded(argv: list[str], max_out: int = MAX_STDOUT, max_err: int = MAX_STDERR,
+                timeout: int = SQL_TIMEOUT_SEC) -> tuple[int, bytes, bytes]:
+    """Запускает команду, читая stdout/stderr потоком с бюджетом байтов. Превышение stdout останавливает
+    процесс: вывод усекается до бюджета, код выхода OUTPUT_TRUNCATED_RC. Лишний stderr отбрасывается
+    (канал вычитывается, процесс не зависает). Таймаут даёт код 124."""
+    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = bytearray(), bytearray()
+    over = threading.Event()
+
+    def pump(stream, buf: bytearray, limit: int, kill_on_overflow: bool) -> None:  # type: ignore[no-untyped-def]
+        while True:
+            chunk = stream.read1(8192)
+            if not chunk:
+                return
+            room = limit - len(buf)
+            if room > 0:
+                buf.extend(chunk[:room])
+            if len(chunk) > room and kill_on_overflow:
+                over.set()
+                proc.kill()
+                return
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, out, max_out, True), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, err, max_err, False), daemon=True)]
+    for t in threads:
+        t.start()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        return TIMEOUT_RC, b"", b"timeout"
+    for t in threads:
+        t.join(timeout=5)
+    return (OUTPUT_TRUNCATED_RC if over.is_set() else proc.returncode), bytes(out), bytes(err)
+
+
+def _emit(stream, text: str) -> None:  # type: ignore[no-untyped-def]
+    """Вывод в UTF-8 независимо от локали forced command."""
+    buffer = getattr(stream, "buffer", None)
+    if buffer is not None:
+        buffer.write(text.encode("utf-8"))
+        buffer.flush()
+    else:
+        stream.write(text)
+        stream.flush()
+
+
+def read_stdin_sql() -> str:
+    raw = sys.stdin.buffer.read(MAX_STDIN_CHARS * 4 + 1)
+    if len(raw) > MAX_STDIN_CHARS * 4:
+        raise sc.SqlRefused("query too long")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise sc.SqlRefused("query is not valid utf-8") from None
+
+
+def run_sql(role: str, data: str, env: dict[str, str] | None = None) -> int:
+    """Ветка sql: проверка контракта ДО psql; psql получает запрос ключом -c, не из ввода."""
+    query = sc.validate_sql(data)  # SqlRefused -> отказ (код 3), psql не запускается
+    argv = psql_argv(role, ["--csv", "-v", "VERBOSITY=verbose", "-c", query], env)
+    rc, out, err = run_bounded(argv)
+    if rc not in (0, OUTPUT_TRUNCATED_RC):
+        # ошибка запроса: модели уходит только очищенная первая строка, частичный вывод отбрасывается
+        _emit(sys.stderr, sc.sanitize_error(err.decode("utf-8", "replace")) + "\n")
+        return rc
+    _emit(sys.stdout, out.decode("utf-8", "ignore"))  # обрезка по границе символа, не по байту
+    return rc
 
 
 def escape_like(value: str) -> str:
@@ -86,17 +170,17 @@ def main(env: dict[str, str] | None = None, stdin: str | None = None) -> int:
     command = env.get("SSH_ORIGINAL_COMMAND", "")
     try:
         if (m := SQL_RE.match(command)):
-            data = stdin if stdin is not None else sys.stdin.read()
-            res = run_psql(m.group(1), data, ["--csv"], env)
-            sys.stdout.write(res.stdout)
-            sys.stderr.write(res.stderr)
-            return res.returncode
+            data = stdin if stdin is not None else read_stdin_sql()
+            return run_sql(m.group(1), data, env)
         if (m := ENSURE_RE.match(command)):
             print(ensure_seller(m.group(1), env))
             return 0
         if (m := FIND_RE.match(command)):
             sys.stdout.write(find_seller(m.group(1), env))
             return 0
+    except sc.SqlRefused as exc:
+        sys.stderr.write(f"refused: {exc}\n")
+        return 3
     except Refused as exc:
         sys.stderr.write(f"refused: {exc}\n")
         return 3

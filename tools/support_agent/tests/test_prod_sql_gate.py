@@ -91,7 +91,7 @@ def test_no_log_and_no_marking_without_the_tool(tmp_path: Path) -> None:
     assert not llm.store.data(tid).get("db_used") and not (tmp_path / "state" / "prod-sql-log").exists()
 
 
-def test_mcp_server_writes_the_trace_only_for_successful_queries(tmp_path: Path) -> None:
+def test_mcp_server_writes_the_trace_when_a_valid_query_is_sent_not_for_refused_ones(tmp_path: Path) -> None:
     stub, _ = stub_ssh(tmp_path)
     log = tmp_path / "trace.log"
     log.touch()
@@ -102,7 +102,7 @@ def test_mcp_server_writes_the_trace_only_for_successful_queries(tmp_path: Path)
     assert log.read_text(encoding="utf-8") == ""
     ok = {**CALL, "id": 2, "params": {"name": "sql_query", "arguments": {"sql": "select 1"}}}
     rpc(argv, [ok, ok])
-    assert log.read_text(encoding="utf-8") == "ok\nok\n"
+    assert log.read_text(encoding="utf-8") == "sent\nsent\n"  # на сервер ушло два проверенных запроса
 
 
 # ------------------------------------------------------------------ N1: need_data и «пробуйте» через предпросмотр
@@ -346,7 +346,7 @@ def test_handler_exceptions_become_errors_and_do_not_stop_serving(monkeypatch: p
 
     from support_agent import prod_sql_mcp
 
-    def boom(settings: Any, sql: str) -> str:
+    def boom(settings: Any, sql: str, **kw: Any) -> str:
         raise ValueError("unexpected parser failure")
 
     monkeypatch.setattr(prod_sql_mcp, "run_query", boom)
@@ -369,3 +369,114 @@ def test_prompt_tells_to_list_columns_and_not_repeat_star_after_permission_denie
     assert "users.password_hash" in flat and "permission denied" in flat
     assert "Всегда перечисляй нужные колонки явно" in flat and "не повторяй запрос со звёздочкой" in flat
     assert FakeSsh  # используется общими подделками
+
+
+# ------------------------------------------------------------------ круг 8, N1: ошибки сервера тоже след и без значений
+ERROR_WITH_VALUE = ('ERROR:  22P02: invalid input syntax for type integer: "SELLER_A_PRIVATE_VALUE_7319"\n'
+                    'LOCATION:  pg_strtoint32_safe, numutils.c:620\n')
+
+
+def failing_ssh(tmp_path: Path, stderr: str = ERROR_WITH_VALUE, rc: int = 3) -> Path:
+    stub = tmp_path / "fail-ssh"
+    stub.write_text("#!/bin/sh\ncat > /dev/null\ncat >&2 <<'EOF'\n" + stderr + "EOF\nexit " + str(rc) + "\n",
+                    encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | 0o100)
+    return stub
+
+
+def test_server_error_with_a_data_value_marks_the_trace_and_the_model_does_not_see_the_value(tmp_path: Path) -> None:
+    log = tmp_path / "trace.log"
+    log.touch()
+    argv = [sys.executable, "-E", "-s", "-S", str(SERVER), "--ssh-host", "h", "--ssh-user", "u", "--key", "k",
+            "--ssh-bin", str(failing_ssh(tmp_path)), "--log", str(log), "--db-role", ROLE]
+    call = {**CALL, "id": 1, "params": {"name": "sql_query", "arguments": {"sql": "select name::integer from sellers"}}}
+    reply = rpc(argv, [call])[0]["result"]
+    text = reply["content"][0]["text"]
+    assert reply["isError"] and "SELLER_A_PRIVATE_VALUE_7319" not in text and "22P02" in text
+    assert log.read_text(encoding="utf-8") == "sent\n"  # след есть, хотя успешного запроса не было
+
+
+def test_router_marks_the_ticket_after_a_failed_query_and_when_the_trace_is_unreadable(tmp_path: Path) -> None:
+    from support_agent.llm import ExecResult
+
+    llm = make_router(tmp_path)
+    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis",
+                               data={"seller_id": SELLER})
+    llm.exec = DbScript(write_log=True)  # след записан сервером; код psql значения не имеет
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
+    assert llm.store.data(tid)["db_used"] is True
+    # след пропал или нечитаем: fail closed
+    other = llm.store.add_ticket(kind="chat", source="t", chat_id=2, seller="s", stage="analysis",
+                                 data={"seller_id": SELLER})
+
+    def remove_log(argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> Any:
+        args = (json.loads(argv[argv.index("--mcp-config") + 1])["mcpServers"]["proddb"]["args"]
+                if argv[0] == "claude" else json.loads(next(
+                    a for a in argv if a.startswith("mcp_servers.proddb.args=")).split("=", 1)[1]))
+        Path(args[args.index("--log") + 1]).unlink()
+        if argv[0] == "claude":
+            return ExecResult(0, json.dumps({"result": "{}", "session_id": "s", "is_error": False}), "")
+        Path(argv[argv.index("-o") + 1]).write_text("{}", encoding="utf-8")
+        return ExecResult(0, "", "")
+
+    llm.exec = remove_log
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=other)
+    assert llm.store.data(other)["db_used"] is True
+
+
+def test_trace_write_failure_refuses_the_query_instead_of_sending_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from support_agent import prod_sql_mcp
+
+    monkeypatch.setattr(prod_sql_mcp, "LOG_PATH", str(tmp_path / "no-such-dir" / "trace.log"))
+    reply = prod_sql_mcp.handle(settings(), {**CALL, "id": 1, "params": {
+        "name": "sql_query", "arguments": {"sql": "select 1"}}})
+    assert reply is not None and reply["result"]["isError"] and "не записан" in reply["result"]["content"][0]["text"]
+
+
+def test_astra_scenario_failed_cast_with_no_success_sends_question_and_try_hint_via_owner_preview(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from support_agent import prod_sql_mcp
+    from support_agent.llm import LlmRouter
+
+    e = two_bot_env(tmp_path)
+    stub = failing_ssh(tmp_path)
+    router = LlmRouter(e.cfg, e.store)
+    log = tmp_path / "trace.log"
+
+    def analyst(prompt: str, kw: Any) -> dict[str, Any]:
+        log.write_text("", encoding="utf-8")
+        monkeypatch.setattr(prod_sql_mcp, "LOG_PATH", str(log))
+        cfg = settings(ssh_bin=str(stub))
+        reply = prod_sql_mcp.handle(cfg, {**CALL, "id": 1, "params": {
+            "name": "sql_query", "arguments": {"sql": "SELECT name::integer FROM sellers"}}})
+        assert reply is not None and reply["result"]["isError"]  # запрос упал, успешных чтений не было
+        router._note_db_use(kw["ticket_id"], str(log))  # как маршрутизатор после вызова модели
+        return NEED
+
+    script(e)
+    e.llm.on("analyst", "Разберись", analyst)
+    e.intake.updates = [upd(1, CLIENT_CHAT, 5, "не сходится остаток")]
+    e.agent.poll_telegram(1)
+    e.pipe.tick()
+    e.clock.advance(130)
+    e.pipe.tick()
+    e.clock.advance(1000)
+    e.pipe.tick()
+    flush_outbox(e.store, Bots(e.intake, e.owner, OWNER_CHAT), e.cfg)
+    assert e.store.data(1)["db_used"] is True and e.store.ticket(1)["stage"] == "await_owner_msg"
+    client_texts = e.intake.to(CLIENT_CHAT)
+    assert not any(MARKER in t for t in client_texts) and len(client_texts) == 1  # только вопрос о срочности
+    previews = [t for t in e.owner.to(OWNER_CHAT) if t.startswith("Предпросмотр сообщения клиенту")]
+    assert len(previews) == 1 and MARKER in previews[0]  # вопрос ушёл владельцу на подтверждение
+
+
+def test_server_side_error_text_is_sanitised_by_the_client_too() -> None:
+    from support_agent.prod_sql import sanitize_error
+
+    assert sanitize_error(ERROR_WITH_VALUE) == "22P02: invalid input syntax for type integer: «…»"
+    assert sanitize_error('ERROR:  42703: column "foo" does not exist\nLINE 1: select foo') == (
+        '42703: column "foo" does not exist')
+    assert "Key" not in sanitize_error('ERROR:  23505: duplicate key value\nDETAIL:  Key (a)=(Secret) exists.')
+    out = sanitize_error("ERROR:  XX000: x\n" * 1 + "y" * 5000)
+    assert len(out) <= 240

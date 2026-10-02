@@ -490,9 +490,12 @@ class LlmRouter:
             return
         try:
             used = bool(Path(db_log).read_text(encoding="utf-8").strip())
+        except OSError:
+            used = True  # след не прочитан или его нет: считаем, что база использовалась (fail closed)
+        try:
             Path(db_log).unlink(missing_ok=True)
         except OSError:
-            used = False
+            pass
         if used and ticket_id is not None:
             self.store.patch_data(ticket_id, db_used=True)
 

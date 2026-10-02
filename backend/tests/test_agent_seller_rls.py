@@ -670,3 +670,160 @@ def test_gateway_ensure_unknown_seller_is_refused(cluster: Cluster, world: World
     res = run_gateway(cluster, f"ensure-seller {uuid.uuid4()}")
     assert res.returncode == 3 and "seller not found" in res.stderr
     assert cluster.q("postgres", "SELECT count(*) FROM pg_roles WHERE rolname LIKE 'wms_agent_s_%'").stdout.strip() == "4"
+
+
+# ------------------------------------------------------------------------------ круг 8: N3 метакоманды psql
+def sql_via_gateway(cluster: Cluster, world: World, stdin: str, tag: str = "S1",
+                    extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    env = {**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"sql {world.role(tag)}", **(extra_env or {})}
+    return subprocess.run([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")], env=env, input=stdin,
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_psql_meta_commands_never_reach_psql_through_the_gateway(cluster: Cluster, world: World, tmp_path: Path) -> None:
+    marker = tmp_path / "SHELL_MARKER"
+    attempts = [
+        f"\\! touch {marker}",
+        f"\\! touch {marker}\n",
+        "\\connect wms postgres\nSELECT current_user, count(*) FROM sellers;",
+        "\\c wms postgres\nSELECT current_user;",
+        "SELECT 1\n\\gexec",
+        "SELECT 'touch " + str(marker) + "' AS c \\gexec",
+        "SELECT 1; \\! id",
+        f"\\copy (select 1) to program 'touch {marker}'",
+        "\\set VERBOSITY terse\nSELECT 1",
+        "\\o /tmp/agent_probe_out\nSELECT 1",
+        "SELECT E'\\n'",   # обратный слеш запрещён и в литерале
+        "SELECT '\\'",
+        "SELECT 1 \\g",
+        "\\\\! id",
+        "select 1\r\n\\! id",
+    ]
+    for stdin in attempts:
+        res = sql_via_gateway(cluster, world, stdin)
+        assert res.returncode == 3 and res.stderr.startswith("refused:"), (stdin, res.stderr)
+        assert res.stdout == "", stdin
+    assert not marker.exists()  # shell не запускался
+    assert not Path("/tmp/agent_probe_out").exists()
+
+
+def test_gateway_passes_the_query_by_dash_c_so_input_cannot_become_a_meta_command(cluster: Cluster, world: World) -> None:
+    """Даже 'второй слой' (psql -c) получает только проверенную строку: проверяем, что штатные запросы идут."""
+    ok = sql_via_gateway(cluster, world, "SELECT 1 AS n")
+    assert ok.returncode == 0 and ok.stdout.splitlines() == ["n", "1"]
+    multi = sql_via_gateway(cluster, world, "SELECT 1; SELECT 2")
+    assert multi.returncode == 3 and "only one statement" in multi.stderr
+    for bad in ("DELETE FROM products", "SET ROLE postgres", "SELECT pg_read_file('/etc/passwd')", "SELECT 1 -- x",
+                "COPY products TO PROGRAM 'id'", "EXPLAIN ANALYZE SELECT 1", "SELECT * FROM products FOR UPDATE",
+                "", "   ", "SELECT " + "x" * 9000):
+        res = sql_via_gateway(cluster, world, bad)
+        assert res.returncode == 3 and res.stdout == "", (bad[:40], res.stderr)
+
+
+def test_non_utf8_and_oversized_stdin_are_refused_without_running_psql(cluster: Cluster, world: World) -> None:
+    env = {**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"sql {world.role('S1')}"}
+    gw = str(ROOT / "scripts" / "agent_db" / "gateway.py")
+    bad = subprocess.run([sys.executable, gw], env=env, input=b"SELECT '\xff\xfe'", capture_output=True, timeout=60)
+    assert bad.returncode == 3 and bad.stdout == b""
+    big = subprocess.run([sys.executable, gw], env=env, input=b"SELECT " + b"1," * 200_000, capture_output=True, timeout=60)
+    assert big.returncode == 3 and big.stdout == b""
+
+
+def test_gateway_contract_matches_the_client_validator_on_one_corpus() -> None:
+    sys.path.insert(0, str(ROOT / "tools" / "support_agent"))
+    try:
+        from support_agent import prod_sql as client
+    finally:
+        sys.path.pop(0)
+    import sql_contract as server
+
+    corpus = [
+        "SELECT 1", "select * from t where a = 'x;y' and b = '--no'", "  SELECT 1;  ", "with a as (select 1) select * from a",
+        "EXPLAIN select 1", "(select 1) union all (select 2)", "select $$a;b$$", "select 'it''s'",
+        "insert into t values (1)", "update t set a=1", "delete from t", "drop table t", "copy t to '/tmp/x'",
+        "select 1; select 2", "select 1 -- c", "select 1 /* c */", "explain analyze select 1", "select 1 into t",
+        "select pg_read_file('/etc/passwd')", "select lo_import('x')", "select set_config('a','b',false)",
+        "select nextval('s')", "select * from t for update", "\\! id", "select '\\'", "select E'\\n'",
+        "\\connect wms postgres", "select 1\n\\gexec", "set role postgres", "", " ", "select 'a", 'select "a',
+        "select $a$ x", "select 1\x00", "do $$ begin end $$", "call p()", "select pg_sleep(1)", "select dblink('a','b')",
+        "with x as (delete from t returning *) select * from x", "values (1)", "table t", "show all",
+    ]
+    for sql in corpus:
+        try:
+            client.validate_sql(sql)
+            client_ok = True
+        except client.SqlRefused:
+            client_ok = False
+        try:
+            server.validate_sql(sql)
+            server_ok = True
+        except server.SqlRefused:
+            server_ok = False
+        assert client_ok == server_ok, sql
+    for text in ('ERROR:  22P02: invalid input syntax for type integer: "A"\nLOCATION: x', 'ERROR:  42703: column "f" does not exist',
+                 "ERROR:  23505: duplicate key\nDETAIL: Key (a)=(S)", "psql: error: connection failed", ""):
+        assert client.sanitize_error(text) == server.sanitize_error(text), text
+
+
+# ------------------------------------------------------------------------------ круг 8: N2 бюджет вывода
+def fake_psql(tmp_path: Path, body: str) -> dict[str, str]:
+    script = tmp_path / "fake_psql.py"
+    script.write_text("import sys\n" + body, encoding="utf-8")
+    return {"AGENT_DB_PSQL": json.dumps([sys.executable, str(script)])}
+
+
+def test_big_stdout_is_cut_by_budget_and_the_next_query_still_works(cluster: Cluster, world: World) -> None:
+    import time
+
+    started = time.time()
+    res = subprocess.run([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")],
+                         env={**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"sql {world.role('S1')}"},
+                         input=b"SELECT repeat('x', 8388608) AS big", capture_output=True, timeout=120)
+    assert res.returncode == 125  # тот же код, что клиент трактует как «вывод оборван»
+    assert 0 < len(res.stdout) <= 256 * 1024 and res.stdout.startswith(b"big\n")
+    assert time.time() - started < 60
+    nxt = sql_via_gateway(cluster, world, "SELECT 1 AS n")
+    assert nxt.returncode == 0 and nxt.stdout.splitlines() == ["n", "1"]
+
+
+def test_multibyte_field_is_cut_on_a_character_boundary(cluster: Cluster, world: World) -> None:
+    res = subprocess.run([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")],
+                         env={**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"sql {world.role('S1')}"},
+                         input="SELECT repeat('ю', 1000000) AS big".encode(), capture_output=True, timeout=120)
+    assert res.returncode == 125
+    text = res.stdout.decode("utf-8")  # не падает: ни одного разрезанного символа
+    assert set(text.splitlines()[1]) == {"ю"} and len(res.stdout) <= 256 * 1024
+
+
+def test_big_stderr_is_discarded_and_the_error_is_sanitised(tmp_path: Path, cluster: Cluster, world: World) -> None:
+    env = fake_psql(tmp_path, "sys.stderr.write('ERROR:  22P02: invalid input syntax for type integer: \"SECRET_VALUE\"\\n'"
+                              " + 'DETAIL: ' + 'y' * 3_000_000 + '\\n')\nsys.exit(3)\n")
+    res = sql_via_gateway(cluster, world, "SELECT 1", extra_env=env)
+    assert res.returncode == 3 and res.stdout == ""
+    assert "SECRET_VALUE" not in res.stderr and res.stderr.startswith("22P02:") and len(res.stderr) < 400
+
+
+def test_gateway_run_bounded_kills_a_silent_process_on_timeout() -> None:
+    import gateway
+
+    rc, out, _ = gateway.run_bounded([sys.executable, "-c", "import time; time.sleep(30)"], timeout=1)
+    assert rc == 124 and out == b""
+
+
+def test_gateway_run_bounded_does_not_hang_on_a_noisy_stderr_and_cuts_stdout() -> None:
+    import gateway
+
+    code = "import sys; sys.stderr.write('e' * 2000000); sys.stdout.write('o' * 2000000)"
+    rc, out, err = gateway.run_bounded([sys.executable, "-c", code], max_out=1000, max_err=500, timeout=30)
+    assert rc == 125 and len(out) == 1000 and len(err) <= 500
+
+
+# ------------------------------------------------------------------------------ круг 8: N1, текст ошибки без значений
+def test_error_text_returned_by_the_gateway_has_no_data_values(cluster: Cluster, world: World) -> None:
+    res = sql_via_gateway(cluster, world, "SELECT name::integer FROM sellers")
+    assert res.returncode == 1 and res.stdout == ""  # код psql при ошибке запроса
+    assert res.stderr.strip().startswith("22P02:") and "Иванов" not in res.stderr and "«…»" in res.stderr
+    syntax = sql_via_gateway(cluster, world, "SELECT 1 FROM")
+    assert syntax.stderr.startswith("42601:")
+    denied = sql_via_gateway(cluster, world, "SELECT * FROM users")
+    assert denied.stderr.startswith("42501:") and "permission denied for table users" in denied.stderr

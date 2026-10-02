@@ -28,15 +28,17 @@ TOOL = {
 LOG_PATH: str | None = None
 
 
-def record_success() -> None:
-    """Доверенный след успешного чтения базы: агент по нему (а не по словам модели) узнаёт, что
-    результаты SQL могли попасть в разбор обращения (N1)."""
+def record_send() -> None:
+    """Доверенный след обращения к базе: пишется в момент, когда ПРОВЕРЕННЫЙ запрос уходит на сервер, до
+    выдачи чего-либо модели и независимо от исхода (успех, ошибка с текстом сервера, обрыв). По нему (а не
+    по словам модели) агент узнаёт, что данные могли попасть в разбор обращения. Не удалось записать:
+    запрос не отправляется (а если файла следа потом нет, агент считает, что база использовалась)."""
     if LOG_PATH:
         try:
             with open(LOG_PATH, "a", encoding="utf-8") as fh:
-                fh.write("ok\n")
+                fh.write("sent\n")
         except OSError:
-            pass
+            raise SqlRefused("след обращения к базе не записан: запрос не отправлен") from None
 
 
 def handle(settings: ProdSqlSettings, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -55,8 +57,7 @@ def handle(settings: ProdSqlSettings, message: dict[str, Any]) -> dict[str, Any]
         else:
             try:
                 sql = str((params.get("arguments") or {}).get("sql", ""))
-                text, is_error = run_query(settings, sql), False
-                record_success()
+                text, is_error = run_query(settings, sql, on_send=record_send), False
             except SqlRefused as exc:
                 text, is_error = f"ОТКАЗ: {exc}", True
             except RuntimeError as exc:
