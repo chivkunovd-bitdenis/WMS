@@ -13,6 +13,17 @@ DEPLOY_BRANCH="${WMS_DEPLOY_BRANCH:-etalon}"
 DEPLOY_TRUNK_REF="${WMS_DEPLOY_TRUNK_REF:-${DEPLOY_REMOTE}/etalon}"
 DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
 
+# Optional pin (WMS-641): deploy exactly this commit instead of the branch head.
+# Empty or unset keeps the previous behaviour. The trunk guard below still applies,
+# so the pinned commit must be contained in the trunk.
+if [[ -n "${WMS_DEPLOY_SHA:-}" ]]; then
+  if [[ ! "${WMS_DEPLOY_SHA}" =~ ^[0123456789abcdef]{40}$ ]]; then
+    echo "ERROR: WMS_DEPLOY_SHA must be a full 40-character lowercase commit id." >&2
+    exit 1
+  fi
+  DEPLOY_TARGET_REF="${WMS_DEPLOY_SHA}"
+fi
+
 echo "==> git fetch"
 # Протокол v2 с боевого сервера ломается: GitHub отвечает 401, git просит логин
 # и падает с «expected flush after ref listing» — при том что репозиторий
@@ -40,6 +51,12 @@ fi
 
 echo "==> checkout deploy branch"
 git checkout -B "$DEPLOY_BRANCH" "$DEPLOY_TARGET_REF"
+
+# A pinned deploy must land exactly on the requested commit; stop before any build otherwise.
+if [[ -n "${WMS_DEPLOY_SHA:-}" && "$(git rev-parse HEAD)" != "${WMS_DEPLOY_SHA}" ]]; then
+  echo "ERROR: pinned deploy requested ${WMS_DEPLOY_SHA} but HEAD is $(git rev-parse HEAD)." >&2
+  exit 1
+fi
 
 DEPLOY_SHA="$(git rev-parse HEAD)"
 TRUNK_SHA="$(git rev-parse "$DEPLOY_TRUNK_REF")"

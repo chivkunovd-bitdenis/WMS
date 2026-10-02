@@ -64,6 +64,16 @@ class Settings(BaseSettings):
         default=None, description="Existing colored Клиент label on the private board.",
     )
     trello_sync_interval_sec: int = Field(default=60, ge=30)
+    support_agent_key: str | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices("WMS_SUPPORT_AGENT_KEY", "SUPPORT_AGENT_KEY"),
+        description=(
+            "WMS-641: machine key of the support dispatcher agent for READ-ONLY access to "
+            "developer requests (GET /support-agent/developer-requests). Unset or shorter "
+            "than 32 characters: the endpoints answer 404 and the access is switched off."
+        ),
+    )
 
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
