@@ -613,3 +613,197 @@ async def test_saved_other_code_keeps_the_supply_whatever_the_operation(
     assert await _check_supply(seed) == fbs_marking_svc.QueuedKizCheck(
         [], [seed["order"].wb_order_id]
     )
+
+
+# Astra review round 4: a resumed handover, the verdict after a handover, cancelled orders.
+
+
+@pytest.mark.parametrize("observed_before_retry", [False, True])
+async def test_resumed_handover_checks_kiz_again(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, observed_before_retry: bool
+) -> None:
+    from tests.test_fbs_shipment_warehouse_sc import _delivery_preflight
+
+    headers, tenant, _seller, supply, order_id = await _deliverable_supply(
+        async_client, monkeypatch, 642_941
+    )
+    wb = {"value": "own-A"}
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        return _wb_row(642_941, wb["value"], "sgtinIntroduced")
+
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                tenant_id=tenant,
+                order_id=order_id,
+                kind="sgtin",
+                value="own-A",
+                source="operator",
+                meta_status="accepted",
+                check_status="ok",
+            )
+        )
+        await session.commit()
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    body = {
+        "idempotency_key": "w642-r4-resume",
+        "confirmed_preflight_version": preflight["version"],
+    }
+    url = f"/operations/fbs-supplies/{supply['id']}/deliver"
+
+    async def crash(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("w642 crash before WB deliver")
+
+    monkeypatch.setattr(shipment_svc, "deliver_marketplace_supply", crash)
+    with pytest.raises(RuntimeError, match="w642 crash"):
+        await async_client.post(url, headers=headers, json=body)
+    wb["value"] = "foreign-B"
+    if observed_before_retry:
+        await _delivery_preflight(async_client, headers, supply["id"])
+    delivered: list[str] = []
+
+    async def not_delivered(*_args: Any, **_kwargs: Any) -> Any:
+        return shipment_svc.WB_RECONCILE_NOT_DELIVERED
+
+    async def deliver(*_args: Any, **_kwargs: Any) -> None:
+        delivered.append(wb["value"])
+
+    monkeypatch.setattr(shipment_svc, "reconcile_supply_delivered", not_delivered)
+    monkeypatch.setattr(shipment_svc, "deliver_marketplace_supply", deliver)
+    reply = await async_client.post(url, headers=headers, json=body)
+    assert reply.status_code == 409, reply.text
+    assert "другой код" in reply.json()["detail"]["message"]
+    assert delivered == []
+
+
+@pytest.mark.parametrize("supply_status", ["in_delivery", "done"])
+async def test_code_of_a_handed_over_supply_is_sent_and_read_once(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, supply_status: str
+) -> None:
+    """WMS-546 C10 stays: after the handover the verdict is not polled; the send reads back once."""
+    from app.models.fbs_supply import FbsSupply
+    from app.services.fbs_autopoll_service import SellerPollTarget, sync_marking_verdicts_for_seller
+
+    seed = await _seed(async_client, 642_942)
+    assert (await _scan(async_client, seed, "w642-r4-scan"))["code"] == "wb_pending_confirmation"
+    async with SessionLocal() as session:
+        db_supply = await session.get(FbsSupply, seed["supply_id"])
+        order = await session.get(FbsOrder, seed["order"].order_id)
+        assert db_supply is not None and order is not None
+        db_supply.status = supply_status
+        target = SellerPollTarget(tenant_id=order.tenant_id, seller_id=order.seller_id)
+        await session.commit()
+    calls: list[str] = []
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        calls.append("get")
+        return _wb_row(seed["order"].wb_order_id, None, "optional")
+
+    async def fake_put(*_args: Any, **_kwargs: Any) -> None:
+        calls.append("put")
+
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+
+    async def cycle() -> None:
+        async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+            await sync_marking_verdicts_for_seller(session, target, http_client)
+            await session.commit()
+
+    await cycle()
+    assert calls == ["get", "put", "get"]
+    calls.clear()
+    await cycle()
+    assert calls == []
+
+
+async def test_kiz_of_a_cancelled_order_does_not_keep_the_rest(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import uuid
+
+    from app.core.settings import settings
+    from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrderReservation
+    from app.models.inventory_balance import InventoryBalance
+    from app.services.sorting_location_service import get_or_create_sorting_location
+    from tests.test_fbs_shipment_delivery import _mock_actual_composition
+    from tests.test_fbs_shipment_warehouse_sc import (
+        _create_and_fill_physical_box,
+        _delivery_preflight,
+        _prepare_supply_with_orders,
+        _register_ff_admin,
+        _setup_seller_with_token,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    monkeypatch.setattr(
+        "app.services.inventory_service.schedule_seller_stock_publish", lambda *args: None
+    )
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[642_961, 642_962],
+        supply_name="W642 cancelled",
+    )
+    _mock_actual_composition(monkeypatch, {supply["wb_supply_id"]: [642_961, 642_962]})
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    async with SessionLocal() as session:
+        location = await get_or_create_sorting_location(session, tenant_id, uuid.UUID(warehouse_id))
+        for order_id in order_ids:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None and order.product_id is not None
+            session.add(
+                InventoryBalance(
+                    tenant_id=tenant_id,
+                    product_id=order.product_id,
+                    storage_location_id=location.id,
+                    quantity=1,
+                    quantity_unpacked=1,
+                    quantity_packed=0,
+                )
+            )
+            session.add(
+                FbsOrderReservation(
+                    tenant_id=tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=order.product_id,
+                    warehouse_id=uuid.UUID(warehouse_id),
+                    quantity=1,
+                )
+            )
+            if order.id == order_ids[0]:
+                order.status = FBS_ORDER_STATUS_CANCELLED
+                order.picked_at = order.packed_at = None
+                session.add(
+                    FbsOrderMarking(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        kind="sgtin",
+                        value="cancelled-own-A",
+                        source="operator",
+                        meta_status="replacement_required",
+                        check_status="error",
+                    )
+                )
+        await session.commit()
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    reply = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/deliver",
+        headers=headers,
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "confirmed_preflight_version": preflight["version"],
+        },
+    )
+    assert reply.status_code == 200, reply.text
+    assert reply.json()["supply"]["status"] == "in_delivery"

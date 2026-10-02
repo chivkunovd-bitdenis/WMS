@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -1423,12 +1424,15 @@ def queued_kiz_message(check: QueuedKizCheck) -> str | None:
 
 
 async def queued_kiz_check(
-    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    order_ids: Collection[uuid.UUID] | None = None,
 ) -> QueuedKizCheck:
     """Each WB order's current KIZ: never received by WB, or next to another code in WB.
 
     Reads only; the handover calls it under its own supply lock after its final
-    WB sync, right before the delivery is journaled.
+    WB sync, for the orders it actually hands over, right before the WB call.
     """
     markings = (
         await session.execute(
@@ -1440,6 +1444,7 @@ async def queued_kiz_check(
                 FbsOrder.marketplace == "wb",
                 FbsOrderMarking.kind == MARKING_KIND_SGTIN,
                 FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+                *([FbsOrder.id.in_(list(order_ids))] if order_ids is not None else []),
             )
             .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
             .execution_options(populate_existing=True)
