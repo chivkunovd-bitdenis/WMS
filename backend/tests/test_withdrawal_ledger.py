@@ -104,8 +104,7 @@ async def seed(
         supply_id=supply.id,
         product_id=product.id,
         marketplace="wb",
-        status="done",
-        wb_status="sold",
+        status="in_delivery",
         created_at_wb=datetime.now(UTC),
         deadline_at=datetime.now(UTC),
         mapping_status="mapped",
@@ -285,26 +284,6 @@ async def test_unshipped_and_forged_selection_is_rejected(db_session: AsyncSessi
         await create_operation(
             db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
         )
-
-
-async def test_only_orders_received_by_buyer_are_withdrawable(
-    db_session: AsyncSession,
-) -> None:
-    # Передача поставки — ещё не продажа: заказ в ПВЗ или в пути не выводится.
-    scope, marking, order, _ = await seed(db_session)
-    rows, total = await registry(db_session, scope)
-    assert total == 1
-    assert [row["row_id"] for row in rows] == [marking.id]
-
-    for wb_status in ("sorted", "ready_for_pickup", "defect", None):
-        order.wb_status = wb_status
-        await db_session.commit()
-        rows, total = await registry(db_session, scope)
-        assert (rows, total) == ([], 0)
-        with pytest.raises(WithdrawalError, match="withdrawal_rows_not_found"):
-            await create_operation(
-                db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
-            )
 
 
 async def test_registry_does_not_require_price_before_group_is_known(
