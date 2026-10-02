@@ -48,9 +48,9 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
     }
   })
 
-  it('defaults off and persists separately by tenant and operator', () => {
+  it('defaults to QR only (WMS-631 Д2) and persists separately by tenant and operator', () => {
     expect(loadFbsScanPrintPreferences(token())).toEqual({
-      printQr: false,
+      printQr: true,
       printChz: false,
       reprintChz: false,
     })
@@ -64,8 +64,8 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
       printChz: true,
       reprintChz: false,
     })
-    expect(loadFbsScanPrintPreferences(token('ff-a', 'operator-b')).printQr).toBe(false)
-    expect(loadFbsScanPrintPreferences(token('ff-b')).printQr).toBe(false)
+    expect(loadFbsScanPrintPreferences(token('ff-a', 'operator-b')).printChz).toBe(false)
+    expect(loadFbsScanPrintPreferences(token('ff-b')).printChz).toBe(false)
     expect(fbsScanPrintPreferencesStorageKey(token()))
       .not.toBe(fbsScanPrintPreferencesStorageKey(token('ff-a', 'operator-b')))
   })

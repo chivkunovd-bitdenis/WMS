@@ -9,14 +9,16 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
       source.indexOf('data-testid="fbs-kiz-scan-bar"'),
       source.indexOf('data-testid="fbs-kiz-scan-active"'),
     )
-    expect(scanBar.match(/<FormControlLabel/g)).toHaveLength(3)
-    expect(scanBar).toContain('label="Печатать QR"')
-    expect(scanBar).toContain('label="Печатать ЧЗ"')
-    expect(scanBar).toContain('label="Перепечатывать ЧЗ"')
-    expect(scanBar).toContain('disabled={scanPrintPreferences.reprintChz}')
-    expect(scanBar).toContain('disabled={scanPrintPreferences.printChz}')
+    // WMS-631 R1: the same component renders the checkboxes in the supply and the assembly.
+    const toggles = readFileSync(new URL('./FbsScanPrintToggles.tsx', import.meta.url), 'utf8')
+    expect(toggles.match(/<FormControlLabel/g)).toHaveLength(3)
+    expect(toggles).toContain('label="Печатать QR"')
+    expect(toggles).toContain('label="Печатать ЧЗ"')
+    expect(toggles).toContain('label="Перепечатывать ЧЗ"')
+    expect(toggles).toContain('disabled={value.reprintChz}')
+    expect(toggles).toContain('disabled={value.printChz}')
     expect(scanBar.indexOf('data-testid="fbs-kiz-scan-input"'))
-      .toBeLessThan(scanBar.indexOf('data-testid="fbs-scan-print-qr-toggle"'))
+      .toBeLessThan(scanBar.indexOf('<FbsScanPrintToggles'))
   })
 
   it('keeps lookup before direct KIZ reprint and product barcode selection', () => {
@@ -173,7 +175,8 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
 
   it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {
     const scanBar = source.indexOf('data-testid="fbs-kiz-scan-bar"')
-    expect(source.slice(scanBar - 500, scanBar)).toContain('{!useSequentialPacking && anyOrderNeedsHonestSign ? (')
+    // Д18: the WB supply always shows its scan bar; Ozon keeps the original guard.
+    expect(source.slice(scanBar - 700, scanBar)).toContain('{!assemblyWbPacking && (ordinaryWbPacking || anyOrderNeedsHonestSign) ? (')
     expect(source).not.toContain('fbs-kiz-auto-reprint-error')
   })
 })

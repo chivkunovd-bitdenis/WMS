@@ -45,6 +45,7 @@ class FbsKizLookupOut(BaseModel):
     # что TSD ждёт либо "wb", либо "ozon" — третьего варианта нет.
     marketplace: Literal["wb", "ozon"] = "wb"
     external_order_id: str | None = None
+    requires_honest_sign: bool = False
 
 
 class FbsKizValidateBody(BaseModel):
@@ -138,6 +139,7 @@ def _lookup_out(result: kiz_svc.FbsKizLookup) -> FbsKizLookupOut:
         # только "wb"/"ozon" (см. _order_out в fbs_orders.py).
         marketplace=cast(Literal["wb", "ozon"], result.marketplace),
         external_order_id=result.external_order_id,
+        requires_honest_sign=result.requires_honest_sign,
     )
 
 
