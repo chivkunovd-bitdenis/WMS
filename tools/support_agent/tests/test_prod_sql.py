@@ -24,6 +24,8 @@ from support_agent.prod_sql import (
     wrap_limit,
 )
 
+SELLER = "11111111-2222-3333-4444-555555555555"
+ROLE = "wms_agent_s_11111111222233334444555555555555"
 SERVER = Path(__file__).resolve().parents[1] / "support_agent" / "prod_sql_mcp.py"
 
 
@@ -91,7 +93,7 @@ def test_wrap_limit_and_csv_truncation_with_multiline_fields() -> None:
 
 def settings(**over: Any) -> ProdSqlSettings:
     base = dict(ssh_host="sellerfocus.pro", ssh_user="root", ssh_key_path="/keys/prod_ro_ed25519",
-                known_hosts="", row_limit=3, timeout_sec=7, max_bytes=10_000, ssh_bin="ssh")
+                known_hosts="", row_limit=3, timeout_sec=7, max_bytes=10_000, ssh_bin="ssh", db_role=ROLE)
     base.update(over)
     return ProdSqlSettings(**base)  # type: ignore[arg-type]
 
@@ -113,7 +115,7 @@ def test_ssh_command_and_stdin_format() -> None:
     assert argv == ["ssh", "-F", "/dev/null", "-i", "/keys/prod_ro_ed25519", "-o", "BatchMode=yes", "-o",
                     "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ClearAllForwardings=yes",
                     "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=2",
-                    "-T", "root@sellerfocus.pro"]
+                    "-T", "root@sellerfocus.pro", f"sql {ROLE}"]
     assert stdin == "SELECT * FROM (\nselect 1 as n\n) AS _agent_q LIMIT 4\n" and timeout == 7
     assert "-o" in ssh_argv(settings(known_hosts="/keys/known_hosts"))
     assert "UserKnownHostsFile=/keys/known_hosts" in ssh_argv(settings(known_hosts="/keys/known_hosts"))
@@ -172,7 +174,7 @@ CALL = {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "s
 def test_mcp_server_protocol_with_fake_ssh_binary(tmp_path: Path) -> None:
     stub, log = stub_ssh(tmp_path)
     argv = [sys.executable, "-E", "-s", "-S", str(SERVER), "--ssh-host", "h", "--ssh-user", "u", "--key",
-            str(tmp_path / "key"), "--ssh-bin", str(stub), "--row-limit", "5"]
+            str(tmp_path / "key"), "--ssh-bin", str(stub), "--row-limit", "5", "--db-role", ROLE]
     ok = {**CALL, "params": {"name": "sql_query", "arguments": {"sql": "select code from t"}}}
     bad = {**CALL, "id": 4, "params": {"name": "sql_query", "arguments": {"sql": "drop table t"}}}
     other = {**CALL, "id": 5, "params": {"name": "shell", "arguments": {}}}
@@ -202,7 +204,7 @@ def make_router(tmp_path: Path, enabled: bool = True) -> Any:
 
 def test_claude_analyst_gets_only_the_sql_mcp_tool_when_enabled(tmp_path: Path) -> None:
     llm = make_router(tmp_path)
-    argv = llm.build_claude("opus", "readonly", None, None, str(tmp_path), with_db=llm.with_prod_db("analyst", "readonly"))
+    argv = llm.build_claude("opus", "readonly", None, None, str(tmp_path), with_db=llm.with_prod_db("analyst", "readonly", ROLE), db_role=ROLE)
     assert "--strict-mcp-config" in argv
     config = json.loads(argv[argv.index("--mcp-config") + 1])
     assert list(config["mcpServers"]) == ["proddb"]
@@ -221,8 +223,9 @@ def test_claude_analyst_gets_only_the_sql_mcp_tool_when_enabled(tmp_path: Path) 
                                                    ("frontend", "write", False), ("analyst", "text", False)])
 def test_tool_is_given_only_to_read_only_analysis_roles(tmp_path: Path, role: str, mode: str, expected: bool) -> None:
     llm = make_router(tmp_path)
-    assert llm.with_prod_db(role, mode) is expected
-    argv = llm.build_claude("sonnet", mode, None, None, str(tmp_path), with_db=llm.with_prod_db(role, mode))
+    assert llm.with_prod_db(role, mode, ROLE) is expected
+    argv = llm.build_claude("sonnet", mode, None, None, str(tmp_path),
+                            with_db=llm.with_prod_db(role, mode, ROLE), db_role=ROLE)
     assert ("--mcp-config" in argv) is expected
 
 
@@ -237,7 +240,8 @@ def test_disabled_means_no_tool_for_either_analyst(tmp_path: Path) -> None:
 
 def test_codex_analyst_gets_second_mcp_server_next_to_the_project_reader(tmp_path: Path) -> None:
     llm = make_router(tmp_path)
-    argv = llm.build_codex("gpt-5.6-sol", "low", "readonly", None, str(tmp_path), "/tmp/o", role="analyst")
+    argv = llm.build_codex("gpt-5.6-sol", "low", "readonly", None, str(tmp_path), "/tmp/o", role="analyst",
+                           db_role=ROLE)
     assert any(a.startswith("mcp_servers.wms.command=") for a in argv)  # читатель проекта на месте
     command = json.loads(next(a for a in argv if a.startswith("mcp_servers.proddb.command=")).split("=", 1)[1])
     args = json.loads(next(a for a in argv if a.startswith("mcp_servers.proddb.args=")).split("=", 1)[1])
@@ -257,7 +261,7 @@ def test_prompts_switch_with_the_tool_and_keep_the_ban_on_inventing_and_client_b
     assert "sql_query" in on and "ЖЁСТКИЙ ЗАПРЕТ выдумывать данные остаётся" in on
     flat = " ".join(on.split())
     assert "answer_needs_data=true ставь, только если нужных данных нет ни в обращении, ни в коде, ни в базе" in flat
-    assert "ТОЛЬКО данные организации и селлера из этого обращения" in flat and "фильтруй по ним" in flat
+    assert "роль видит только данные селлера ЭТОГО обращения" in flat and "фильтруй по ним" not in flat
     assert "НЕТ доступа к данным прода" in off and "sql_query" not in off
     assert prompts.ANALYST_RULES == off
 
@@ -267,6 +271,8 @@ def test_pipeline_passes_the_right_rules_to_the_analyst(env: Any) -> None:
 
     for enabled in (False, True):
         env.cfg.prod_db.enabled = enabled
+        env.store.set_binding(-100111, {"seller_id": SELLER, "seller_name": "S", "tenant_id": "t",
+                                        "tenant_name": "T"}, "1")
         env.llm.calls.clear()
         script(env, dict(ANALYSIS_BUG))
         env.say(-100111, f"[новая] проблема {enabled}", msg_id=f"p{enabled}")
@@ -340,7 +346,7 @@ def test_full_sandboxed_server_command_works_with_fake_ssh(tmp_path: Path) -> No
     llm = make_router(tmp_path)
     stub, log = stub_ssh(tmp_path)
     llm.cfg.prod_db.ssh_bin = str(stub)
-    command, args = llm.prod_sql_server()
+    command, args = llm.prod_sql_server(None, ROLE)
     ok = {**CALL, "params": {"name": "sql_query", "arguments": {"sql": "select code from t"}}}
     out = rpc([command, *args], [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}, ok])
     assert out[1]["result"]["content"][0]["text"].startswith("code\n111\n222") and not out[1]["result"]["isError"]

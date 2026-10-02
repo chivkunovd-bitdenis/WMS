@@ -43,6 +43,14 @@ CREATE TABLE IF NOT EXISTS llm_calls (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, cli TEXT NOT NULL, model TEXT NOT NULL,
   effort TEXT, role TEXT NOT NULL, ticket_id INTEGER, ok INTEGER NOT NULL, error TEXT
 );
+CREATE TABLE IF NOT EXISTS chat_bindings (
+  chat_id INTEGER PRIMARY KEY, seller_id TEXT NOT NULL, seller_name TEXT NOT NULL,
+  tenant_id TEXT NOT NULL, tenant_name TEXT NOT NULL, bound_at REAL NOT NULL, bound_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS binding_proposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, candidates TEXT NOT NULL,
+  requested_by TEXT NOT NULL, created_at REAL NOT NULL, status TEXT NOT NULL DEFAULT 'open'
+);
 CREATE TABLE IF NOT EXISTS wms_numbers (
   number INTEGER PRIMARY KEY, ticket_id INTEGER, ts REAL NOT NULL
 );
@@ -285,6 +293,41 @@ class Store:
             (chat_id, tg_message_id),
         )
         return str(row["purpose"]) if row else None
+
+    # -- привязка чата к селлеру (R39, R40) -------------------------------------------
+    def binding(self, chat_id: int) -> sqlite3.Row | None:
+        return self.row("SELECT * FROM chat_bindings WHERE chat_id=?", (chat_id,))
+
+    def set_binding(self, chat_id: int, seller: dict[str, str], bound_by: str) -> None:
+        """Один чат — один селлер: прежняя привязка заменяется."""
+        self.execute(
+            "INSERT INTO chat_bindings(chat_id,seller_id,seller_name,tenant_id,tenant_name,bound_at,"
+            "bound_by) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET seller_id=excluded.seller_id,"
+            "seller_name=excluded.seller_name,tenant_id=excluded.tenant_id,tenant_name=excluded.tenant_name,"
+            "bound_at=excluded.bound_at,bound_by=excluded.bound_by",
+            (chat_id, seller["seller_id"], seller["seller_name"], seller["tenant_id"],
+             seller["tenant_name"], time.time(), bound_by),
+        )
+
+    def add_proposal(self, chat_id: int, candidates: list[dict[str, str]], requested_by: str) -> int:
+        self.execute("UPDATE binding_proposals SET status='replaced' WHERE chat_id=? AND status='open'",
+                     (chat_id,))
+        cur = self.execute(
+            "INSERT INTO binding_proposals(chat_id,candidates,requested_by,created_at) VALUES(?,?,?,?)",
+            (chat_id, json.dumps(candidates, ensure_ascii=False), requested_by, time.time()),
+        )
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def proposal(self, proposal_id: int) -> sqlite3.Row | None:
+        return self.row("SELECT * FROM binding_proposals WHERE id=?", (proposal_id,))
+
+    def close_proposal(self, proposal_id: int, status: str) -> None:
+        self.execute("UPDATE binding_proposals SET status=? WHERE id=?", (status, proposal_id))
+
+    def outbox_by_tg(self, chat_id: int, tg_message_id: str) -> sqlite3.Row | None:
+        return self.row("SELECT * FROM outbox WHERE chat_id=? AND tg_message_id=?", (chat_id, tg_message_id))
 
     # -- cards ---------------------------------------------------------------------
     def card(self, key: str) -> sqlite3.Row | None:

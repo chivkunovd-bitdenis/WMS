@@ -102,11 +102,12 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--max-bytes", type=int, default=60_000)
     parser.add_argument("--log", default="")
+    parser.add_argument("--db-role", required=True)
     a = parser.parse_args()
     global LOG_PATH
     LOG_PATH = a.log or None
     serve(ProdSqlSettings(a.ssh_host, a.ssh_user, a.key, a.known_hosts, a.row_limit, a.timeout, a.max_bytes,
-                          a.ssh_bin))
+                          a.ssh_bin, a.db_role))
 
 
 if __name__ == "__main__":

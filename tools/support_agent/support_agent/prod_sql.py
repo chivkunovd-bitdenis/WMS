@@ -141,6 +141,18 @@ def truncate_csv(text: str, row_limit: int, max_bytes: int) -> str:
     return result + note
 
 
+SELLER_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+ROLE_RE = re.compile(r"^wms_agent_s_[0-9a-f]{32}$")
+
+
+def role_for_seller(seller_id: str) -> str:
+    """Роль Postgres селлера (R41). Общая роль wms_agent_ro обращениям клиентов не выдаётся (R42)."""
+    seller_id = str(seller_id).strip().lower()
+    if not SELLER_RE.match(seller_id):
+        raise SqlRefused("некорректный идентификатор селлера")
+    return "wms_agent_s_" + seller_id.replace("-", "")
+
+
 @dataclass
 class ProdSqlSettings:
     ssh_host: str
@@ -151,6 +163,7 @@ class ProdSqlSettings:
     timeout_sec: int = 30
     max_bytes: int = 60_000
     ssh_bin: str = "ssh"
+    db_role: str = ""  # роль селлера обращения; задаёт доверенный код при запуске сервера, не модель
 
 
 Runner = Callable[[list[str], str, int], tuple[int, str, str]]
@@ -205,18 +218,22 @@ def default_runner(
     return rc, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
 
 
-def ssh_argv(cfg: ProdSqlSettings) -> list[str]:
+def ssh_argv(cfg: ProdSqlSettings, remote_command: str | None = None) -> list[str]:
     argv = [cfg.ssh_bin, "-F", "/dev/null", "-i", str(Path(cfg.ssh_key_path).expanduser()),
             "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
             "-o", "ClearAllForwardings=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10",
             "-o", "ServerAliveCountMax=2", "-T"]
     if cfg.known_hosts:
         argv += ["-o", f"UserKnownHostsFile={Path(cfg.known_hosts).expanduser()}"]
-    return [*argv, f"{cfg.ssh_user}@{cfg.ssh_host}"]
+    target = f"{cfg.ssh_user}@{cfg.ssh_host}"
+    # Шлюз на сервере принимает ровно `sql <роль>`, `ensure-seller <uuid>` или `find-seller <строка>`.
+    return [*argv, target, remote_command] if remote_command else [*argv, target]
 
 
 def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None) -> str:
     """Проверенный запрос -> CSV (с лимитами). Ошибки возвращаются исключением SqlRefused/RuntimeError."""
+    if not ROLE_RE.match(cfg.db_role):
+        raise SqlRefused("доступ к базе не выдан: у обращения нет привязанного селлера")
     query, first = validate_sql(sql)
     stdin = wrap_limit(query, first, cfg.row_limit) + "\n"
     budget = cfg.max_bytes * 2 + 4096
@@ -224,7 +241,7 @@ def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None) -> s
     def default(argv: list[str], text: str, timeout: int) -> tuple[int, str, str]:
         return default_runner(argv, text, timeout, max_out=budget)
 
-    rc, out, err = (runner or default)(ssh_argv(cfg), stdin, cfg.timeout_sec)
+    rc, out, err = (runner or default)(ssh_argv(cfg, f"sql {cfg.db_role}"), stdin, cfg.timeout_sec)
     if rc == 124:
         raise RuntimeError(f"запрос не уложился в {cfg.timeout_sec} с")
     if rc == OUTPUT_TRUNCATED_RC:

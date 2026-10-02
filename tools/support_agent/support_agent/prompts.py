@@ -87,11 +87,24 @@ permission denied. Всегда перечисляй нужные колонки
 количества, статусы, даты и списки бери только из ответов sql_query или из текста обращения; ничего не
 придумывай. answer_needs_data=true ставь, только если нужных данных нет ни в обращении, ни в коде,
 ни в базе: тогда info_answer=null, info_file=null, а в missing_for_owner опиши, что проверить.
-Границы клиентов: в ответ клиенту (info_answer, info_file) попадают ТОЛЬКО данные организации и
-селлера из этого обращения. Сначала найди их идентификаторы (tenant, seller) по названию клиента из
-шапки обращения и ВО ВСЕХ запросах фильтруй по ним. Данные других организаций не показывай ни в
-ответе клиенту, ни в файле. Владельцу в missing_for_owner и в разборе можно писать, что нужно для
-решения. Таблицы и колонки с секретами тебе недоступны на сервере: не пытайся их читать."""
+Границы клиентов обеспечены самой базой: твоя роль видит только данные селлера ЭТОГО обращения,
+других клиентов и организаций в ней нет. Идентификаторы селлера и организации искать и подставлять
+в запросы не нужно. Таблиц, которых ты не видишь, для тебя нет (permission denied): не пытайся их
+обойти. В ответ клиенту (info_answer, info_file) попадают только данные, полученные sql_query, и текст
+обращения. Владельцу в missing_for_owner и в разборе можно писать, что нужно для решения. Таблицы и
+колонки с секретами тебе недоступны на сервере."""
+
+UNBOUND_CHAT_RULES = """\
+ВАЖНО: этот чат клиента не привязан к селлеру, поэтому доступа к базе у тебя нет вовсе. Данных для
+ответа клиенту нет: ставь answer_needs_data=true, info_answer=null, info_file=null, а в
+missing_for_owner первым пунктом напиши «чат не привязан, данных для ответа нет» и подскажи
+владельцу, что чат нужно привязать командой «привяжи к ИП <название>» в этом чате."""
+
+UNBOUND_FORM_RULES = """\
+ВАЖНО: у этой записи формы сервер не определил селлера, поэтому доступа к базе у тебя нет вовсе.
+Данных для ответа нет: ставь answer_needs_data=true, info_answer=null, info_file=null, а в
+missing_for_owner первым пунктом напиши «селлер не определён, данных для ответа нет»."""
+
 
 ANALYSIS_SCHEMA = """\
 {
@@ -117,13 +130,19 @@ ANALYSIS_SCHEMA = """\
 ANALYST_RULES = f"{ANALYST_RULES_BASE}\n{NO_DATA_RULES}"
 
 
-def analyst_rules(prod_db: bool) -> str:
-    return f"{ANALYST_RULES_BASE}\n{DATA_RULES if prod_db else NO_DATA_RULES}"
+def analyst_rules(prod_db: bool, bound: bool = True, form: bool = False) -> str:
+    """Инструмент базы описывается только тогда, когда он у вызова есть: база включена и обращение
+    привязано к селлеру. Иначе правила без данных, а при включённой базе ещё и пояснение про привязку."""
+    if prod_db and bound:
+        return f"{ANALYST_RULES_BASE}\n{DATA_RULES}"
+    extra = (f"\n{UNBOUND_FORM_RULES if form else UNBOUND_CHAT_RULES}") if prod_db else ""
+    return f"{ANALYST_RULES_BASE}\n{NO_DATA_RULES}{extra}"
 
 
-def analysis_context(ticket_context: str, data_hint: str, prod_db: bool = False) -> str:
+def analysis_context(ticket_context: str, data_hint: str, prod_db: bool = False, bound: bool = True,
+                     form: bool = False) -> str:
     hint = f"\nКак читать данные системы (только чтение): {data_hint}\n" if data_hint else ""
-    return f"{analyst_rules(prod_db)}\n\n{DATA_NOTE}\n{ticket_context}\n{hint}"
+    return f"{analyst_rules(prod_db, bound, form)}\n\n{DATA_NOTE}\n{ticket_context}\n{hint}"
 
 
 def analysis_ask(note: str | None) -> str:

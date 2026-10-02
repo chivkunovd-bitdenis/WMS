@@ -8,6 +8,7 @@ Pipeline.stages: новая стадия (разработка, вечерний
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import time
@@ -20,7 +21,9 @@ from typing import Any
 from . import prompts
 from .config import Config
 from .llm import LlmError, LlmRouter, LlmUnavailable, extract_json
+from .prod_sql import SELLER_RE
 from .redact import scrub
+from .seller_directory import DirectoryError, SellerDirectory
 from .store import Store
 from .telegram import Inbound, TelegramError, as_bots
 from .transcribe import TranscribeError, Transcriber
@@ -32,6 +35,13 @@ log = logging.getLogger(__name__)
 CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
 MAX_FILE_BYTES = 5_000_000
+TRANSCRIPT_PREFIX = "(расшифровка голосового) "
+BIND_RE = re.compile(r"^\s*(?:пере)?привяж\w*\s+(?:(?:этот|данный|наш)\s+чат\s+)?(?:к|на)\s+(.+?)\s*$",
+                     re.IGNORECASE | re.DOTALL)
+CONFIRM_RE = re.compile(
+    r"^\s*(?:да|ага|угу|верно|подтверждаю|ок|окей|yes)\b[\s,.!)]*(?:этот|он|она)?[\s.!]*$", re.IGNORECASE)
+DECLINE_RE = re.compile(r"^\s*(?:нет|не он|не тот|отмена|отбой)\b", re.IGNORECASE)
+CHOICE_RE = re.compile(r"^\s*(?:№|номер|вариант)?\s*(\d)\s*[.)!]*\s*$", re.IGNORECASE)
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 ALLOWED_EXPORT_EXT = ("csv", "tsv", "txt", "json", "md")
 MAX_ANSWER_CHARS = 3000  # с запасом на служебный текст предпросмотра (лимит Telegram 4096)
@@ -98,6 +108,7 @@ class Pipeline:
         self.pool = pool or ThreadPool(cfg.limits.max_parallel)
         self.clock = clock
         store.scrubber = lambda text: scrub(cfg, text)
+        self.directory: SellerDirectory | None = None  # поиск селлеров через шлюз; подключает runner
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
         self.mockups: Any = None
         self.stages: dict[str, Callable[[int], None]] = {
@@ -264,7 +275,105 @@ class Pipeline:
                     )
 
     # ----- клиентский чат ------------------------------------------------------------
+    # ----- привязка чата к селлеру (R39, R40) -------------------------------------------
+    def _is_owner_author(self, m: Any) -> bool:
+        owner = self.cfg.telegram.owner_user_id
+        return bool(owner) and str(m["author_id"]) == str(owner)
+
+    def _binding_flow(self, m: Any) -> bool:
+        """Команда привязки и её подтверждение. Решает только код: ни модель, ни текст клиента не задают
+        селлера. Привязывает только владелец (owner_user_id) в клиентском чате через бота приёма;
+        подтверждение действует только ответом владельца на наше сообщение с кандидатами."""
+        text = m["text"]
+        if text.startswith(TRANSCRIPT_PREFIX):
+            text = text[len(TRANSCRIPT_PREFIX):]
+        if m["reply_to"]:
+            hit = self.store.outbox_by_tg(m["chat_id"], m["reply_to"])
+            if hit is not None and str(hit["key"]).startswith("bind:"):
+                if self._is_owner_author(m):
+                    self._confirm_binding(m, text, int(str(hit["key"]).split(":")[1]))
+                else:
+                    self.store.set_message(m["id"], status="dropped")  # чужой ответ на служебное сообщение
+                return True
+        match = BIND_RE.match(text)
+        if not match or not self._is_owner_author(m):
+            return False  # у не-владельца команда силы не имеет: обычное сообщение
+        self._propose_binding(m, match.group(1))
+        return True
+
+    def _bind_reply(self, m: Any, key: str, text: str) -> None:
+        self.store.queue_message(key=key, chat_id=m["chat_id"], text=text, reply_to=m["msg_id"],
+                                 purpose="bind", repeat_ok=False)
+
+    def _propose_binding(self, m: Any, name: str) -> None:
+        self.store.set_message(m["id"], status="handled")
+        if self.directory is None:
+            self._bind_reply(m, f"bindoff:{m['id']}", "Привязка недоступна: доступ к базе не настроен.")
+            return
+        try:
+            found = self.directory.find(name)
+        except DirectoryError as exc:
+            log.warning("seller search failed: %s", exc)
+            self._bind_reply(m, f"binderr:{m['id']}", "Поиск селлера сейчас недоступен, попробуйте позже.")
+            return
+        if not found:
+            self._bind_reply(m, f"bindnf:{m['id']}",
+                             f"Селлера «{name[:60]}» не нашёл. Проверьте название и повторите команду.")
+            return
+        cands = [c.__dict__ for c in found]
+        pid = self.store.add_proposal(m["chat_id"], cands, str(m["author_id"]))
+        current = self.store.binding(m["chat_id"])
+        replace = f" Сейчас чат привязан к «{current['seller_name']}»; привязка заменится." if current else ""
+        if len(found) == 1:
+            c = found[0]
+            body = (f"Нашёл селлера «{c.seller_name}» в фулфилменте «{c.tenant_name}». Если это он, "
+                    f"ответьте на это сообщение словом «да».{replace}")
+        else:
+            lines = [f"{i}. «{c.seller_name}» в фулфилменте «{c.tenant_name}»"
+                     for i, c in enumerate(found, 1)]
+            body = ("Нашёл несколько селлеров с таким названием:\n" + "\n".join(lines)
+                    + f"\nОтветьте на это сообщение номером нужного.{replace}")
+        self._bind_reply(m, f"bind:{pid}", body)
+
+    def _confirm_binding(self, m: Any, text: str, pid: int) -> None:
+        self.store.set_message(m["id"], status="handled")
+        prop = self.store.proposal(pid)
+        if prop is None or prop["chat_id"] != m["chat_id"] or prop["status"] != "open":
+            self._bind_reply(m, f"bindold:{m['id']}",
+                             "Это предложение уже неактуально. Повторите команду «привяжи к …».")
+            return
+        cands = json.loads(prop["candidates"])
+        if DECLINE_RE.match(text):
+            self.store.close_proposal(pid, "declined")
+            self._bind_reply(m, f"binddecl:{m['id']}", "Хорошо, привязку не меняю.")
+            return
+        choice = CHOICE_RE.match(text)
+        if choice and 1 <= int(choice.group(1)) <= len(cands):
+            picked = cands[int(choice.group(1)) - 1]
+        elif len(cands) == 1 and CONFIRM_RE.match(text):
+            picked = cands[0]
+        else:
+            self._bind_reply(m, f"bindask:{m['id']}",
+                             "Не понял. Ответьте на сообщение со списком номером селлера или «нет».")
+            return
+        if not SELLER_RE.match(picked["seller_id"]):
+            return
+        self.store.set_binding(m["chat_id"], picked, str(m["author_id"]))
+        self.store.close_proposal(pid, "confirmed")
+        note = ""
+        if self.directory is not None:
+            try:
+                self.directory.ensure(picked["seller_id"])
+            except DirectoryError as exc:
+                log.warning("ensure failed after binding: %s", exc)
+                note = " Доступ к данным пока не подготовлен, я повторю при разборе обращения."
+        self._bind_reply(m, f"bindok:{m['id']}",
+                         f"Готово: чат привязан к селлеру «{picked['seller_name']}» "
+                         f"(фулфилмент «{picked['tenant_name']}»).{note}")
+
     def handle_client_message(self, m: Any) -> None:
+        if self._binding_flow(m):
+            return
         # Ответ на наш вопрос (reply) — сразу к своему обращению, без фильтра.
         if m["reply_to"]:
             tid = self.store.ticket_for_tg_message(m["chat_id"], m["reply_to"])
@@ -290,10 +399,15 @@ class Pipeline:
             self.attach(m, target)
             return
         chat = self.cfg.telegram.chats[m["chat_id"]]
+        data: dict[str, Any] = {"first_msg_id": m["msg_id"], "title": m["text"][:60]}
+        bound = self.store.binding(m["chat_id"])
+        if bound is not None:
+            # R40: селлер фиксируется при создании; последующая перепривязка чата прежнее обращение не меняет
+            data.update(seller_id=bound["seller_id"], seller_name=bound["seller_name"],
+                        tenant_id=bound["tenant_id"])
         tid = self.store.add_ticket(
             kind="chat", source="telegram", chat_id=m["chat_id"], seller=chat.seller,
-            stage="collecting", author_id=m["author_id"], now=self.clock(),
-            data={"first_msg_id": m["msg_id"], "title": m["text"][:60]},
+            stage="collecting", author_id=m["author_id"], now=self.clock(), data=data,
         )
         self.attach(m, tid)
 
@@ -479,8 +593,10 @@ class Pipeline:
     # ----- разбор --------------------------------------------------------------------
     def stage_analysis(self, tid: int) -> None:
         d = self.store.data(tid)
-        context = prompts.analysis_context(self.ticket_context(tid), self.cfg.llm.analyst_data_hint,
-                                          prod_db=self.cfg.prod_db.enabled)
+        context = prompts.analysis_context(
+            self.ticket_context(tid), self.cfg.llm.analyst_data_hint,
+            prod_db=self.cfg.prod_db.enabled, bound=bool(d.get("seller_id")),
+            form=bool(d.get("form")))
         analysis, result = self.llm.ask_json(
             "analyst", prompts.analysis_ask(d.get("resume_note")), ticket_id=tid,
             session_key="analyst", mode="readonly", cwd=self._analysis_cwd(), context=context,
@@ -685,6 +801,10 @@ class Pipeline:
         if not answer or not t["chat_id"]:
             return
         ask = "Ответьте «кати» на это сообщение — отправлю клиенту как есть; «нет» — не отправлять."
+        if not d.get("db_used"):
+            # R44: данные клиенту идут только из базы под ролью селлера; здесь запросов к базе не было
+            ask = ("ВНИМАНИЕ: ответ собран без запросов к базе (из текста обращения и кода), "
+                   "данные в нём не проверены по базе.\n" + ask)
         files = answer["files"]
         if answer["text"]:
             self.store.queue_message(
@@ -1184,11 +1304,15 @@ class Pipeline:
                 )
                 tid = None
                 if mid is not None:
+                    data: dict[str, Any] = {"form": row, "title": (row.get("title") or "")[:80],
+                                            "card_id": row.get("trello_card_id")}
+                    # R43: селлер берётся из записи на сервере (не из текста формы); нет селлера = нет базы
+                    seller_id = str(row.get("seller_id") or "").lower()
+                    if SELLER_RE.match(seller_id):
+                        data.update(seller_id=seller_id, tenant_id=str(row.get("tenant_id") or ""))
                     tid = self.store.add_ticket(
                         kind="form", source="form", chat_id=None, seller=row["client_name"],
-                        stage="form_new", category=None, now=self.clock(),
-                        data={"form": row, "title": (row.get("title") or "")[:80],
-                              "card_id": row.get("trello_card_id")},
+                        stage="form_new", category=None, now=self.clock(), data=data,
                     )
                     self.store.set_message(mid, status="attached", ticket_id=tid)
                 self.store.execute("COMMIT")

@@ -17,7 +17,7 @@ from support_agent.telegram import Bots, flush_outbox
 
 from .conftest import CLIENT_CHAT, OWNER_CHAT, OWNER_ID
 from .test_pipeline_chat import ANALYSIS_BUG, script, script_owner
-from .test_prod_sql import CALL, SERVER, FakeSsh, make_router, rpc, settings, stub_ssh
+from .test_prod_sql import CALL, ROLE, SELLER, SERVER, FakeSsh, make_router, rpc, settings, stub_ssh
 from .test_two_bots import drive_to_summary, two_bot_env, upd  # noqa: F401
 
 MARKER = "Client A,7319"
@@ -59,7 +59,8 @@ def test_db_use_is_recorded_from_the_trusted_server_log_not_from_model_words(tmp
     llm = make_router(tmp_path)
     if cli == "codex":
         llm.store.kv_set("cooldown:claude", time.time() + 999)
-    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
+    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis",
+                              data={"seller_id": SELLER})
     llm.exec = DbScript(write_log=False)
     llm.ask("analyst", "Я читал базу и получил данные клиента A", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
     assert not llm.store.data(tid).get("db_used")  # слова модели ничего не значат
@@ -73,7 +74,8 @@ def test_review_role_and_failed_call_after_success_also_mark_the_ticket(tmp_path
     from support_agent.llm import LlmUnavailable
 
     llm = make_router(tmp_path)
-    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
+    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis",
+                              data={"seller_id": SELLER})
     llm.exec = DbScript(write_log=True, fail_after=True)
     with pytest.raises(LlmUnavailable):
         llm.ask("review", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
@@ -82,7 +84,8 @@ def test_review_role_and_failed_call_after_success_also_mark_the_ticket(tmp_path
 
 def test_no_log_and_no_marking_without_the_tool(tmp_path: Path) -> None:
     llm = make_router(tmp_path, enabled=False)
-    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
+    tid = llm.store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis",
+                              data={"seller_id": SELLER})
     llm.exec = DbScript(write_log=True)
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path), ticket_id=tid)
     assert not llm.store.data(tid).get("db_used") and not (tmp_path / "state" / "prod-sql-log").exists()
@@ -93,7 +96,7 @@ def test_mcp_server_writes_the_trace_only_for_successful_queries(tmp_path: Path)
     log = tmp_path / "trace.log"
     log.touch()
     argv = [sys.executable, "-E", "-s", "-S", str(SERVER), "--ssh-host", "h", "--ssh-user", "u", "--key", "k",
-            "--ssh-bin", str(stub), "--log", str(log)]
+            "--ssh-bin", str(stub), "--log", str(log), "--db-role", ROLE]
     bad = {**CALL, "id": 1, "params": {"name": "sql_query", "arguments": {"sql": "delete from t"}}}
     rpc(argv, [bad])
     assert log.read_text(encoding="utf-8") == ""
@@ -322,7 +325,7 @@ def test_server_survives_every_refusal_and_handler_crash(tmp_path: Path) -> None
 
     def argv(ssh: Path) -> list[str]:
         return [sys.executable, "-E", "-s", "-S", str(SERVER), "--ssh-host", "h", "--ssh-user", "u", "--key", "k",
-                "--ssh-bin", str(ssh), "--max-bytes", "20000", "--timeout", "30"]
+                "--ssh-bin", str(ssh), "--max-bytes", "20000", "--timeout", "30", "--db-role", ROLE]
 
     def call(i: int, sql: str) -> dict[str, Any]:
         return {**CALL, "id": i, "params": {"name": "sql_query", "arguments": {"sql": sql}}}
@@ -352,7 +355,7 @@ def test_handler_exceptions_become_errors_and_do_not_stop_serving(monkeypatch: p
     monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join(lines) + "\n"))
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)
-    prod_sql_mcp.serve(ProdSqlSettings("h", "u", "k"))
+    prod_sql_mcp.serve(ProdSqlSettings("h", "u", "k", db_role=ROLE))
     replies = [json.loads(x) for x in out.getvalue().splitlines()]
     assert [r["id"] for r in replies] == [1, 2]
     assert replies[0]["result"]["isError"] and "ValueError" in replies[0]["result"]["content"][0]["text"]
