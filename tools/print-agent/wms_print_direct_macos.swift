@@ -339,6 +339,10 @@ private final class Printer {
     private let submit: (Data, String, LabelSize, Date, () throws -> Void) throws -> String
     private let queue: (TimeInterval) throws -> String
     private var jobs: [String: StoredJob]
+    private let unsentURL: URL
+    private var unsent = Set<String>()     // keys proven not sent whose mark may still sit in a journal
+    private let staleLock = NSLock()
+    private var staleFlight = Set<String>()  // keys released without taking `state` (answer stays in time)
     private var normalized = Set<String>()  // keys whose hash was rewritten in both journals this run
     private var inflight = Set<String>()  // keys being processed right now, guarded by `state`
     private var legacyChecked = false  // the old sqlite journal was read and brought level with the json
@@ -353,6 +357,7 @@ private final class Printer {
         self.queue = queue
         self.storeURL = directory.appendingPathComponent("direct-jobs.json")
         self.legacyURL = directory.appendingPathComponent("direct-jobs.sqlite3")
+        self.unsentURL = directory.appendingPathComponent("direct-unsent.json")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: storeURL.path) {
             let data = try Data(contentsOf: storeURL)
@@ -364,9 +369,44 @@ private final class Printer {
         } else {
             self.jobs = [:]
         }
+        if let saved = try? Data(contentsOf: unsentURL), let keys = try? JSONDecoder().decode([String].self, from: saved) {
+            unsent = Set(keys)
+        }
         // A locked old journal must not stop the program; it stops printing instead
         // (see printJob) until the old copy is closed and the journal can be read.
         do { try importLegacy(busyMs: legacyBusyMs) } catch { fputs("\(error)\n", stderr) }
+    }
+
+    /// "Proven not sent" is kept in a small file independent of the journals, so it
+    /// survives a restart: a mark without receipt and with this sign is a free key.
+    private func writeUnsent() {
+        if let data = try? JSONEncoder().encode(unsent.sorted()) { try? data.write(to: unsentURL, options: .atomic) }
+    }
+
+    /// Takes the mark of a proven-unsent job out of the json and the old journal.  Called
+    /// with `state` held.  If a journal cannot be cleaned now, the sign stays.
+    private func retractLocked(_ key: String) {
+        unsent.insert(key)
+        writeUnsent()
+        jobs[key] = nil
+        var clean = (try? persist()) != nil
+        if mirror {
+            clean = clean && (try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key], busyMs: 2000)) != nil
+        }
+        if clean { unsent.remove(key); writeUnsent() }
+    }
+
+    /// Forgets that the key is being processed, within the request budget; if `state` is
+    /// not free in time the next journal access does it, the answer is not delayed.
+    private func releaseKey(_ key: String, deadline: Date) {
+        if state.lock(before: deadline) {
+            inflight.remove(key)
+            state.unlock()
+        } else {
+            staleLock.lock()
+            staleFlight.insert(key)
+            staleLock.unlock()
+        }
     }
 
     private func persist() throws {
@@ -393,8 +433,16 @@ private final class Printer {
             fputs("Старый журнал direct-jobs.sqlite3 не читается (\(reason)); импорт пропущен\n", stderr)
             legacyChecked = true
         case .ok(let old):
-            let fresh = old.keys.filter { jobs[$0] == nil }
+            let stale = old.keys.filter { old[$0]?.receipt == nil && unsent.contains($0) }  // proven not sent
+            let fresh = old.keys.filter { jobs[$0] == nil && !stale.contains($0) }
             for key in fresh { jobs[key] = old[key] }
+            if !stale.isEmpty {
+                let removals = stale.map { ("DELETE FROM jobs WHERE id=? AND receipt IS NULL", [$0] as [String?]) }
+                if (try? legacyBatch(legacyURL, removals, busyMs: busyMs)) != nil {
+                    for key in stale { unsent.remove(key) }
+                    writeUnsent()
+                }
+            }
             if !fresh.isEmpty {
                 do { try persist() } catch {
                     for key in fresh { jobs[key] = nil }
@@ -435,7 +483,7 @@ private final class Printer {
         // The key's own history is answered first, never behind the print queue.  A new
         // key is registered as "in progress" at once: a parallel repeat gets "unknown".
         if let known = try knownResult(key, digests, deadline: deadline) { return known }
-        defer { state.lock(); inflight.remove(key); state.unlock() }
+        defer { releaseKey(key, deadline: deadline) }
         guard printLock.lock(before: deadline) else {
             throw PrintError.message("Принтер занят предыдущим заданием. Это задание не отправлялось; повторите.")
         }
@@ -454,27 +502,25 @@ private final class Printer {
             guard deadline.timeIntervalSinceNow > minimumToStart else {
                 throw PrintError.notSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
             }
+            let reuse = unsent.contains(key)  // a stale mark of this key is replaced
+            if reuse { unsent.remove(key); writeUnsent() }
             jobs[key] = StoredJob(hash: digest, receipt: nil)
-            func undo() {
-                jobs[key] = nil
-                try? persist()
-                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key], busyMs: 2000) }
-            }
             do {
                 try persist()
                 if mirror {
                     // The Python release reads this journal with its own identity formula.
-                    try legacyExecute(legacyURL, "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)", [key, digests.python],
-                                      busyMs: busyBudget(deadline))
+                    try legacyExecute(legacyURL, reuse ? "INSERT OR REPLACE INTO jobs VALUES (?, ?, NULL)"
+                                                       : "INSERT OR IGNORE INTO jobs VALUES (?, ?, NULL)",
+                                      [key, digests.python], busyMs: busyBudget(deadline))
                 }
             } catch {
-                undo()  // not recorded everywhere, not sent
+                retractLocked(key)  // not recorded everywhere, not sent
                 if error is PrintError { throw PrintError.notSent("\(error). Задание не отправлялось.") }
                 throw PrintError.notSent("Не удалось записать журнал печати; задание не отправлялось")
             }
             // Waiting for the journal may have used up the budget: then the job is not sent.
             guard deadline.timeIntervalSinceNow > minimumToStart else {
-                undo()
+                retractLocked(key)
                 throw PrintError.notSent("Время ожидания истекло. Это задание не отправлялось; повторите.")
             }
             marked = true
@@ -485,9 +531,7 @@ private final class Printer {
         } catch PrintError.notSent(let reason) {
             if marked {
                 state.lock()
-                jobs[key] = nil
-                try? persist()
-                if mirror { try? legacyExecute(legacyURL, "DELETE FROM jobs WHERE id=? AND receipt IS NULL", [key], busyMs: 2000) }
+                retractLocked(key)
                 state.unlock()
             }
             throw PrintError.message(reason)
@@ -508,9 +552,16 @@ private final class Printer {
     /// key (which is registered as in progress under the same lock).
     private func knownResult(_ key: String, _ digests: (primary: String, python: String, legacy: String),
                              deadline: Date) throws -> String? {
-        state.lock()
+        guard state.lock(before: deadline) else {
+            throw PrintError.message("Время ожидания истекло. Это задание не отправлялось; повторите.")
+        }
         defer { state.unlock() }
+        staleLock.lock()
+        inflight.subtract(staleFlight)
+        staleFlight.removeAll()
+        staleLock.unlock()
         try importLegacy(busyMs: busyBudget(deadline))  // retried until the old journal has been read
+        if jobs[key]?.receipt == nil, unsent.contains(key) { jobs[key] = nil }  // proven not sent: the key is free
         if let old = jobs[key] {
             guard [digests.primary, digests.python, digests.legacy].contains(old.hash) else { throw PrintError.message("Содержимое этого задания изменилось") }
             // The request is confirmed (same PNG and size), so each journal gets the hash in
@@ -992,6 +1043,52 @@ private func runSelfTest() throws {
           let json = try? JSONDecoder().decode([String: StoredJob].self, from: Data(contentsOf: normDirectory.appendingPathComponent("direct-jobs.json"))),
           json["py-key"]?.hash == normForms.primary, json["mac-key"]?.hash == normForms.primary   // the previous Swift reads this
     else { throw fail("hash normalisation for the previous versions") }
+
+    // A proven-unsent mark that cannot be removed now (journal locked) still frees the key,
+    // in the same run and after a restart; a really unknown outcome stays blocked.
+    let freeDirectory = directory.appendingPathComponent("free")
+    var freeAttempt = 0
+    var freeBlocker: OpaquePointer?
+    let freeFile = freeDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    legacyBusyMs = 100
+    let freePrinter = try Printer(directory: freeDirectory, submit: { _, _, _, _, mark in
+        freeAttempt += 1
+        try mark()
+        if freeAttempt == 1 {
+            guard sqlite3_open(freeFile.path, &freeBlocker) == SQLITE_OK,
+                  sqlite3_exec(freeBlocker, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK else { throw fail("free fixture") }
+            throw PrintError.notSent("lp did not start")   // the cleanup now meets a locked journal
+        }
+        return "free-\(freeAttempt)"
+    }, queue: { _ in "test-printer" })
+    guard refused({ try freePrinter.printJob(jobBody("fk", opaque)) }) != nil else { throw fail("free: first attempt") }
+    sqlite3_exec(freeBlocker, "COMMIT", nil, nil, nil)
+    sqlite3_close(freeBlocker)
+    guard legacyRows(freeFile)["fk"] == "-" else { throw fail("free: the stale mark should still be in the journal") }
+    guard try freePrinter.printJob(jobBody("fk", opaque)) == "free-2" else { throw fail("free: repeat in the same run") }
+    // restart: the stale mark must not come back from the old journal
+    var restartAttempt = 0
+    var restartBlocker: OpaquePointer?
+    let restartDirectory = directory.appendingPathComponent("restart")
+    let restartFile = restartDirectory.appendingPathComponent("direct-jobs.sqlite3")
+    let beforeRestart = try Printer(directory: restartDirectory, submit: { _, _, _, _, mark in
+        try mark()
+        guard sqlite3_open(restartFile.path, &restartBlocker) == SQLITE_OK,
+              sqlite3_exec(restartBlocker, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK else { throw fail("restart fixture") }
+        throw PrintError.notSent("lp did not start")
+    }, queue: { _ in "test-printer" })
+    _ = refused({ try beforeRestart.printJob(jobBody("rk", opaque)) })
+    sqlite3_exec(restartBlocker, "COMMIT", nil, nil, nil)
+    sqlite3_close(restartBlocker)
+    let second = try Printer(directory: restartDirectory, submit: { _, _, _, _, mark in try mark(); restartAttempt += 1; return "restart-1" },
+                             queue: { _ in "test-printer" })
+    guard try second.printJob(jobBody("rk", opaque)) == "restart-1", restartAttempt == 1 else { throw fail("free: repeat after a restart") }
+    let unknown = try Printer(directory: directory.appendingPathComponent("unknown"), submit: { _, _, _, _, mark in
+        try mark(); throw PrintError.message("lp outcome unknown") }, queue: { _ in "test-printer" })
+    _ = refused({ try unknown.printJob(jobBody("uk", opaque)) })
+    let unknownAgain = try Printer(directory: directory.appendingPathComponent("unknown"), submit: { _, _, _, _, _ in "never" }, queue: { _ in "q" })
+    guard says({ try unknownAgain.printJob(jobBody("uk", opaque)) }, "проверьте принтер") else { throw fail("an unknown outcome must stay blocked") }
+    legacyBusyMs = 100
 
     // A tool that ignores SIGTERM is killed; the output pipe is drained meanwhile.
     let hung = Date()

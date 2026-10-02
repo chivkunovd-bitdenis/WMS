@@ -281,6 +281,79 @@ class Printer:
         self.adapter = (DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()) if submit is None else None
         with closing(sqlite3.connect(self.db)) as db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT)")
+        # Keys released without taking the journal lock (so the answer stays in time);
+        # the next journal access drops them from ``inflight``.
+        self.stale = set()
+        self.stale_lock = threading.Lock()
+        # "Proven not sent": the mark of such a key may still sit in the journal when the
+        # journal was locked.  The fact is kept in a small file, independent of SQLite, so
+        # it survives a restart: a mark without receipt and with this sign is a free key.
+        self.unsent_path = directory / "direct-unsent.txt"
+        self.unsent_lock = threading.Lock()
+        try:
+            self.unsent = {line for line in self.unsent_path.read_text(encoding="utf-8").split("\n") if line}
+        except OSError:
+            self.unsent = set()
+        for key in list(self.unsent):  # clear what can be cleared now
+            try:
+                self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=1)
+                self._unsent_remove(key)
+            except Exception:
+                pass
+
+    def _unsent_write(self):
+        temporary = self.unsent_path.with_suffix(".tmp")
+        temporary.write_text("\n".join(sorted(self.unsent)), encoding="utf-8")
+        os.replace(temporary, self.unsent_path)
+
+    def _unsent_add(self, key):
+        with self.unsent_lock:
+            if key not in self.unsent:
+                self.unsent.add(key)
+                try:
+                    self._unsent_write()
+                except OSError:
+                    pass  # still held in memory for this run
+
+    def _unsent_remove(self, key):
+        with self.unsent_lock:
+            if key in self.unsent:
+                self.unsent.discard(key)
+                try:
+                    self._unsent_write()
+                except OSError:
+                    pass
+
+    def _unsent_take(self, key):
+        with self.unsent_lock:
+            present = key in self.unsent
+        if present:
+            self._unsent_remove(key)
+        return present
+
+    def _retract(self, key):
+        """The job is proven not sent: take its mark out of the journal.  If the journal is
+        locked meanwhile, the sign "not sent" stays and frees the key anyway."""
+        self._unsent_add(key)
+        try:
+            self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
+        except Exception:
+            return
+        self._unsent_remove(key)
+
+    def _release_key(self, key, until=None):
+        """Forget that the key is being processed.  Within the request budget when a deadline
+        is given; if the lock cannot be had in time the key is dropped by the next journal access."""
+        if until is None or self.lock.acquire(timeout=max(0.0, until - time.monotonic())):
+            if until is None:
+                self.lock.acquire()
+            try:
+                self.inflight.discard(key)
+            finally:
+                self.lock.release()
+        else:
+            with self.stale_lock:
+                self.stale.add(key)
 
     def _submit(self, data, queue, mark, width_mm, height_mm):
         return self.adapter.submit_default(data, queue, mark, width_mm, height_mm)
@@ -318,6 +391,9 @@ class Printer:
         so the previous version, if started again, recognises the key too."""
         self._locked(deadline)
         try:
+            with self.stale_lock:
+                self.inflight -= self.stale
+                self.stale.clear()
             db = None
             try:
                 db = sqlite3.connect(self.db, timeout=max(0.05, min(10, deadline - time.monotonic())))
@@ -327,7 +403,7 @@ class Printer:
                     db.close()
                 raise PrintNotSent(LATE_TEXT) from None  # a locked journal used up the budget
             with closing(db):
-                if old:
+                if old and not (old[1] is None and key in self.unsent):
                     if old[0] not in digests:
                         raise ValueError("Содержимое этого задания изменилось")
                     if old[0] != digests[0]:
@@ -336,6 +412,8 @@ class Printer:
                             db.commit()
                         except sqlite3.Error:
                             pass  # best effort: the answer below does not depend on it
+            if old and old[1] is None and key in self.unsent:
+                old = None  # a mark that is proven not sent: the key is free
             if old:
                 if old[1] is None:
                     raise agent.UnknownPrintOutcome(UNKNOWN_TEXT)
@@ -365,13 +443,20 @@ class Printer:
                         raise late
                 # The waits for the journal lock and for SQLite are part of the same budget;
                 # no lock the request thread needs is held meanwhile.
-                self._execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest), until=deadline)
+                reuse = self._unsent_take(key)  # a stale mark of this key is replaced
+                try:
+                    self._execute("INSERT OR REPLACE INTO jobs VALUES (?, ?, NULL)" if reuse
+                                  else "INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest), until=deadline)
+                except BaseException:
+                    if reuse:
+                        self._unsent_add(key)
+                    raise
                 with gate["flag"]:
                     too_late = gate["cancelled"] or deadline - time.monotonic() < self.minimum_to_start
                     if not too_late:
                         gate["marked"] = True
                 if too_late:
-                    self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
+                    self._retract(key)
                     raise late  # the budget went on the journal: not sent, mark removed
 
             try:
@@ -385,7 +470,7 @@ class Printer:
                     receipt = self._submit(data, queue, mark, size[0] / 10, size[1] / 10)
             except PrintNotSent:
                 if gate["marked"]:  # proven: the OS never received the job
-                    self._execute("DELETE FROM jobs WHERE id=? AND receipt IS NULL", (key,), timeout=2)
+                    self._retract(key)
                     with gate["flag"]:
                         gate["marked"] = False
                 raise
@@ -398,8 +483,7 @@ class Printer:
             outcome["error"] = exc
         finally:
             self.hung = False
-            with self.lock:
-                self.inflight.discard(key)
+            self._release_key(key)
             self.slot.release()
 
     def print(self, body, started=None):
@@ -445,8 +529,7 @@ class Printer:
                     self.slot.release()
         finally:
             if not started_worker:
-                with self.lock:
-                    self.inflight.discard(key)
+                self._release_key(key, deadline)
         worker.join(max(0.0, deadline - time.monotonic()))
         if worker.is_alive():
             with gate["flag"]:  # held only for these two reads/writes, never across the journal

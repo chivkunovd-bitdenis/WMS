@@ -413,6 +413,94 @@ def closing_db(path):
     return closing(sqlite3.connect(path))
 
 
+class CleanupAndUnsentTest(unittest.TestCase):
+    printer = RetryBoundaryTest.printer
+
+    @staticmethod
+    def _quiet(printer, body):
+        try:
+            printer.print(body)
+        except Exception:  # noqa: BLE001
+            pass
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_waiting_for_the_slot_answers_in_time_even_if_the_journal_lock_is_held(self):
+        release = threading.Event()
+        with tempfile.TemporaryDirectory() as root:
+            printer = Printer(Path(root), lambda data: release.wait(10) and 'r', print_timeout=1.0, minimum_to_start=0.1)
+            first = threading.Thread(target=lambda: self._quiet(printer, job('first', PNG + b'1')), daemon=True)
+            first.start()
+            time.sleep(0.2)               # `first` holds the slot
+            answers = {}
+
+            def waiting():
+                started = time.monotonic()
+                try:
+                    printer.print(job('w', PNG + b'w'))
+                except Exception as exc:  # noqa: BLE001
+                    answers['w'] = exc
+                answers['t'] = time.monotonic() - started
+
+            waiter = threading.Thread(target=waiting)
+            waiter.start()
+            time.sleep(0.3)
+            printer.lock.acquire()        # another request sits in the journal for a long time
+            waiter.join(4)
+            printer.lock.release()
+            self.assertIsInstance(answers['w'], PrintNotSent)
+            self.assertLess(answers['t'], 1.0 + 0.4)   # the answer did not wait for the lock
+            release.set()
+            first.join(3)
+            printer.submit = Mock(return_value='w-1')
+            printer.print_timeout = 5
+            self.assertEqual(printer.print(job('w', PNG + b'w')), 'w-1')   # the key was released later
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_failed_cleanup_of_a_proven_unsent_mark_frees_the_key_even_after_restart(self):
+        with tempfile.TemporaryDirectory() as root:
+            class Refused(FakeAdapter):
+                def submit_default(inner, data, queue, mark, width_mm=None, height_mm=None):
+                    mark()
+                    raise PrintNotSent('lp did not start')
+
+            printer = self.printer(root, Refused())
+            original = printer._execute
+
+            def locked_delete(sql, params=(), *args, **kwargs):
+                if sql.startswith('DELETE'):
+                    raise sqlite3.OperationalError('database is locked')
+                return original(sql, params, *args, **kwargs)
+
+            with patch.object(printer, '_execute', side_effect=locked_delete):
+                with self.assertRaises(PrintNotSent):
+                    printer.print(job())
+            self.assertIsNotNone(printer._lookup('scan-1'))               # the mark is still there ...
+            printer.adapter = FakeAdapter()
+            self.assertEqual(printer.print(job()), 'Label-7')              # ... and the repeat goes through
+            # the same after a restart: mark without receipt + sign "not sent" = free key
+            with tempfile.TemporaryDirectory() as root2:
+                restarted = self.printer(root2, Refused())
+                original2 = restarted._execute
+                with patch.object(restarted, '_execute', side_effect=lambda sql, params=(), *a, **k:
+                                  (_ for _ in ()).throw(sqlite3.OperationalError('locked')) if sql.startswith('DELETE')
+                                  else original2(sql, params, *a, **k)):
+                    with self.assertRaises(PrintNotSent):
+                        restarted.print(job())
+                again = self.printer(root2, FakeAdapter())
+                self.assertEqual(again.print(job()), 'Label-7')
+
+    @patch('wms_print_direct.sys.platform', 'darwin')
+    def test_a_really_unknown_outcome_is_not_freed_by_restart(self):
+        with tempfile.TemporaryDirectory() as root:
+            printer = self.printer(root, FakeAdapter(after=agent.UnknownPrintOutcome('lost')))
+            with self.assertRaises(agent.UnknownPrintOutcome):
+                printer.print(job())
+            again = self.printer(root, FakeAdapter())
+            with self.assertRaises(agent.UnknownPrintOutcome):
+                again.print(job())
+            self.assertEqual(again.adapter.calls, 0)
+
+
 class HealthTest(unittest.TestCase):
     def test_health_error_is_not_working(self):
         server = DirectServer(('127.0.0.1', 0), Handler)
