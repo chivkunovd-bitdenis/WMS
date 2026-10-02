@@ -15,7 +15,14 @@ import pytest
 from support_agent import prod_sql, prompts
 from support_agent.llm import ExecResult
 from support_agent.prod_sql import ProdSqlSettings, SqlRefused, role_for_seller, run_query
-from support_agent.seller_directory import Candidate, DirectoryError, SellerDirectory, clean_name
+from support_agent.seller_directory import (
+    Candidate,
+    DirectoryError,
+    SellerDirectory,
+    TenantCandidate,
+    clean_name,
+    clean_tenant_name,
+)
 from support_agent.telegram import Bots, flush_outbox
 
 from .conftest import CLIENT_CHAT, OWNER_CHAT, OWNER_ID, PARTNER_CHAT
@@ -30,8 +37,11 @@ ROLE2 = "wms_agent_s_99999999888877776666555555555555"
 class FakeDirectory:
     """Подделка шлюза: find ищет по подстроке, журнал вызовов."""
 
-    def __init__(self, sellers: list[Candidate]) -> None:
+    def __init__(self, sellers: list[Candidate], tenants: list[TenantCandidate] | None = None) -> None:
         self.sellers = sellers
+        self.tenants = tenants or []
+        self.tenant_finds: list[str] = []
+        self.tenant_ensures: list[str] = []
         self.finds: list[str] = []
         self.ensures: list[str] = []
         self.fail_ensure = False
@@ -46,6 +56,21 @@ class FakeDirectory:
         self.ensures.append(seller_id)
         if self.fail_ensure:
             raise DirectoryError("down")
+
+    def find_tenants(self, name: str) -> list[TenantCandidate]:
+        n = clean_tenant_name(name)
+        self.tenant_finds.append(n)
+        words = [w.lower() for w in n.split() if len(w) >= 3] or [n.lower()]
+        hits = [(sum(w in t.tenant_name.lower() for w in words), t) for t in self.tenants]
+        return [t for score, t in sorted(hits, key=lambda x: -x[0]) if score]
+
+    def ensure_tenant(self, tenant_id: str) -> None:
+        self.tenant_ensures.append(tenant_id)
+        if self.fail_ensure:
+            raise DirectoryError("down")
+
+    def ensure_scope(self, level: str, scope_id: str) -> None:
+        (self.ensure_tenant if level == "tenant" else self.ensure)(scope_id)
 
 
 A = Candidate(SELLER, "ИП Ромашка", "t-1", "ФФ Север")
@@ -98,6 +123,8 @@ def step(e: Any) -> None:
 
 
 def owner_says_in_group(e: Any, text: str, chat: int = NEW_CHAT, title: str = NEW_TITLE) -> None:
+    if "@" not in text:
+        text = f"{BOT} {text}"  # команда принимается только с упоминанием бота
     e.intake.updates.append(gupd(chat, OWNER_ID, text, title=title))
     step(e)
 
@@ -420,7 +447,7 @@ def test_role_is_prepared_once_and_failure_means_no_tool(tmp_path: Path) -> None
     calls: list[str] = []
     state = {"fail": True}
 
-    def ensure(seller: str) -> None:
+    def ensure(level: str, seller: str) -> None:
         calls.append(seller)
         if state["fail"]:
             raise DirectoryError("шлюз недоступен")
@@ -445,31 +472,31 @@ def test_failed_prepare_backs_off_alerts_the_owner_once_and_keeps_an_already_wor
     llm = make_router(tmp_path)
     llm.exec = Capture()
     alerts: list[tuple[str, int, str]] = []
-    llm.role_alert = lambda seller, n, why: alerts.append((seller, n, why))
+    llm.role_alert = lambda level, seller, n, why: alerts.append((seller, n, why))
     calls: list[str] = []
 
-    def busy(seller: str) -> None:
+    def busy(level: str, seller: str) -> None:
         calls.append(seller)
         raise DirectoryError("busy: lock timeout, nothing was changed, retry later")
 
     llm.role_ensurer = busy
     for attempt in range(1, 5):
-        assert llm._role_ready(ROLE, SELLER) is False  # ни разу не готовилась: базы нет
+        assert llm._role_ready(ROLE, "seller", SELLER) is False  # ни разу не готовилась: базы нет
         state = llm.store.kv_get(f"role_fail:{ROLE}")
         assert state["n"] == attempt and state["next"] - time.time() >= llm.ROLE_RETRY_BASE_SEC * 2 ** (attempt - 1) - 5
-        assert llm._role_ready(ROLE, SELLER) is False and len(calls) == attempt  # в паузе: без вызова
+        assert llm._role_ready(ROLE, "seller", SELLER) is False and len(calls) == attempt  # в паузе: без вызова
         llm.store.kv_set(f"role_fail:{ROLE}", {"n": attempt, "next": 0})
     assert [a[1] for a in alerts] == [3] and "lock timeout" in alerts[0][2]  # владельцу ровно один раз, на 3-й неудаче
     # роль уже работала: сбой повторной проверки доступ не отнимает
     llm.store.kv_set(f"role_ready:{ROLE}", time.time() - llm.ROLE_TTL_SEC - 10)
     llm.store.kv_set(f"role_fail:{ROLE}", {"n": 0, "next": 0})
-    assert llm._role_ready(ROLE, SELLER) is True
+    assert llm._role_ready(ROLE, "seller", SELLER) is True
 
 
 def test_owner_is_told_about_repeated_prepare_failures(env: Any) -> None:
     env.store.set_binding(CLIENT_CHAT, {"seller_id": SELLER, "seller_name": "ИП Ромашка", "tenant_id": "t",
                                         "tenant_name": "ФФ"}, "1")
-    env.pipe.on_role_failure(SELLER, 3, "busy: lock timeout")
+    env.pipe.on_role_failure("seller", SELLER, 3, "busy: lock timeout")
     env.flush()
     text = env.tg.to(OWNER_CHAT)[-1]
     assert "«ИП Ромашка»" in text and "3 раза" in text and "lock timeout" in text

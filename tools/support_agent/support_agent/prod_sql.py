@@ -135,7 +135,7 @@ def truncate_csv(text: str, row_limit: int, max_bytes: int) -> str:
 
 
 SELLER_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-ROLE_RE = re.compile(r"^wms_agent_s_[0-9a-f]{32}$")
+ROLE_RE = re.compile(r"^wms_agent_[st]_[0-9a-f]{32}$")
 
 
 def role_for_seller(seller_id: str) -> str:
@@ -144,6 +144,19 @@ def role_for_seller(seller_id: str) -> str:
     if not SELLER_RE.match(seller_id):
         raise SqlRefused("некорректный идентификатор селлера")
     return "wms_agent_s_" + seller_id.replace("-", "")
+
+
+def role_for_tenant(tenant_id: str) -> str:
+    """Роль фулфилмента (чат владельца с ФФ: видны все селлеры этого тенанта)."""
+    tenant_id = str(tenant_id).strip().lower()
+    if not SELLER_RE.match(tenant_id):
+        raise SqlRefused("некорректный идентификатор фулфилмента")
+    return "wms_agent_t_" + tenant_id.replace("-", "")
+
+
+def role_for_scope(level: str, scope_id: str) -> str:
+    """Роль по уровню привязки: tenant (фулфилмент) или seller (селлер)."""
+    return role_for_tenant(scope_id) if level == "tenant" else role_for_seller(scope_id)
 
 
 @dataclass

@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS llm_calls (
 CREATE TABLE IF NOT EXISTS chat_bindings (
   chat_id INTEGER PRIMARY KEY, seller_id TEXT NOT NULL, seller_name TEXT NOT NULL,
   tenant_id TEXT NOT NULL, tenant_name TEXT NOT NULL, bound_at REAL NOT NULL, bound_by TEXT NOT NULL,
-  chat_title TEXT NOT NULL DEFAULT ''
+  chat_title TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT 'seller'
 );
 CREATE TABLE IF NOT EXISTS binding_proposals (
   id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, candidates TEXT NOT NULL,
@@ -71,6 +71,13 @@ class Store:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA busy_timeout=5000")
             self.db.executescript(SCHEMA)
+            for ddl in ("ALTER TABLE chat_bindings ADD COLUMN level TEXT NOT NULL DEFAULT 'seller'",
+                        "ALTER TABLE chat_bindings ADD COLUMN chat_title TEXT NOT NULL DEFAULT ''",
+                        "ALTER TABLE binding_proposals ADD COLUMN chat_title TEXT NOT NULL DEFAULT ''"):
+                try:  # база прежней версии: уровень привязки и название чата
+                    self.db.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
             try:  # база старой версии без файлов в очереди отправки
                 self.db.execute("ALTER TABLE outbox ADD COLUMN file_path TEXT")
             except sqlite3.OperationalError:
@@ -307,12 +314,12 @@ class Store:
         """Один чат — один селлер: прежняя привязка заменяется."""
         self.execute(
             "INSERT INTO chat_bindings(chat_id,seller_id,seller_name,tenant_id,tenant_name,bound_at,"
-            "bound_by,chat_title) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET "
+            "bound_by,chat_title,level) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET "
             "seller_id=excluded.seller_id,seller_name=excluded.seller_name,tenant_id=excluded.tenant_id,"
             "tenant_name=excluded.tenant_name,bound_at=excluded.bound_at,bound_by=excluded.bound_by,"
-            "chat_title=excluded.chat_title",
-            (chat_id, seller["seller_id"], seller["seller_name"], seller["tenant_id"],
-             seller["tenant_name"], time.time(), bound_by, chat_title),
+            "chat_title=excluded.chat_title,level=excluded.level",
+            (chat_id, seller.get("seller_id", ""), seller.get("seller_name", ""), seller["tenant_id"],
+             seller["tenant_name"], time.time(), bound_by, chat_title, seller.get("level", "seller")),
         )
 
     def add_proposal(self, chat_id: int, candidates: list[dict[str, str]], requested_by: str,

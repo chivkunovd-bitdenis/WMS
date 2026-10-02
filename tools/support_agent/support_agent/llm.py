@@ -20,7 +20,7 @@ from typing import Any
 
 from . import prod_sql_mcp, readonly_mcp, sandbox
 from .config import Config
-from .prod_sql import ROLE_RE, SqlRefused, role_for_seller
+from .prod_sql import ROLE_RE, SqlRefused, role_for_scope
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -149,9 +149,9 @@ class LlmRouter:
         self.scratch = cfg.state_path / "scratch"
         # Подготовка роли селлера на сервере (шлюз ensure-seller); подключает runner. Без неё
         # (в тестах) роль считается готовой.
-        self.role_ensurer: Callable[[str], None] | None = None
+        self.role_ensurer: Callable[[str, str], None] | None = None  # (уровень: seller|tenant, uuid)
         # Сообщение владельцу, когда подготовка роли не удалась несколько раз подряд; подключает runner.
-        self.role_alert: Callable[[str, int, str], None] | None = None
+        self.role_alert: Callable[[str, str, int, str], None] | None = None  # уровень, uuid, попыток, причина
 
     # -- выбор CLI и модели ----------------------------------------------------------
     def cooling(self, cli: str) -> bool:
@@ -308,17 +308,19 @@ class LlmRouter:
                     and ROLE_RE.match(db_role))
 
     def ticket_db_role(self, ticket_id: int | None) -> str:
-        """Роль селлера обращения. Берётся доверенным кодом из записи обращения (селлер зафиксирован
-        при создании по привязке чата или по данным формы с сервера); текст клиента и модель
-        на неё не влияют."""
+        """Роль базы обращения: селлера или фулфилмента (уровень привязки). Берётся доверенным кодом из
+        записи обращения (область зафиксирована при создании по привязке чата или по данным формы с
+        сервера); текст клиента и модель на неё не влияют."""
         if ticket_id is None:
             return ""
-        seller = str(self.store.data(ticket_id).get("seller_id") or "")
+        data = self.store.data(ticket_id)
+        level = "tenant" if data.get("level") == "tenant" else "seller"
+        scope_id = str(data.get("tenant_id" if level == "tenant" else "seller_id") or "")
         try:
-            role = role_for_seller(seller) if seller else ""
+            role = role_for_scope(level, scope_id) if scope_id else ""
         except SqlRefused:
             return ""
-        if role and self.role_ensurer is not None and not self._role_ready(role, seller):
+        if role and self.role_ensurer is not None and not self._role_ready(role, level, scope_id):
             return ""  # не удалось подготовить доступ: инструмента базы у этого вызова нет
         return role
 
@@ -326,7 +328,7 @@ class LlmRouter:
     ROLE_RETRY_BASE_SEC = 600  # пауза после неудачи удваивается: 10 мин, 20 мин, 40 мин ... до 6 ч
     ROLE_ALERT_AFTER = 3
 
-    def _role_ready(self, role: str, seller_id: str) -> bool:
+    def _role_ready(self, role: str, level: str, scope_id: str) -> bool:
         """Роль и политики на сервере (идемпотентно). Успех помнится 6 часов; на текущей версии сервер
         отвечает дёшево (без блокировок таблиц). Сбой: пауза с нарастанием (не крутимся в цикле), после
         ROLE_ALERT_AFTER неудач подряд один раз сообщается владельцу. Если роль уже готовилась раньше,
@@ -341,14 +343,14 @@ class LlmRouter:
             return last_ok > 0  # пауза после неудачи: сервер не дёргаем
         try:
             assert self.role_ensurer is not None
-            self.role_ensurer(seller_id)
+            self.role_ensurer(level, scope_id)
         except Exception as exc:  # noqa: BLE001 - любой сбой шлюза: роль не подтверждена
             attempts = int(state["n"]) + 1
             pause = min(self.ROLE_RETRY_BASE_SEC * 2 ** (attempts - 1), self.ROLE_TTL_SEC)
             self.store.kv_set(fail_key, {"n": attempts, "next": now + pause})
             log.warning("seller role not prepared (%s), attempt %s: %s", role, attempts, type(exc).__name__)
             if attempts == self.ROLE_ALERT_AFTER and self.role_alert is not None:
-                self.role_alert(seller_id, attempts, str(exc)[:200])
+                self.role_alert(level, scope_id, attempts, str(exc)[:200])
             return last_ok > 0
         self.store.kv_set(key, now)
         self.store.kv_set(fail_key, None)
