@@ -7,9 +7,11 @@ import uuid
 import pytest
 from sqlalchemy import func, select
 
+from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.developer_request import DeveloperRequest
+from app.models.seller import Seller
 from tests.test_developer_requests import _body, _create, _row, _user
 
 KEY = "k" * 40
@@ -46,8 +48,10 @@ async def test_agent_reads_requests_of_all_clients_with_all_fields(async_client)
     assert one["delivery_state"] == "pending" and one["trello_card_id"] is None
     assert one["created_at"] and one["status"] == "review"
     assert rows[str(improvement)]["proposal"] == "Одна кнопка"
-    for forbidden in ("tenant_id", "created_by_user_id", "idempotency_key", "payload_hash"):
+    for forbidden in ("created_by_user_id", "idempotency_key", "payload_hash"):
         assert forbidden not in one
+    # WMS-641 R43: добавлены только tenant_id и seller_id записи (автор без селлера: seller_id пуст)
+    assert uuid.UUID(one["tenant_id"]) and one["seller_id"] is None
     single = await async_client.get(f"/support-agent/developer-requests/{bug}", headers=AGENT)
     assert single.status_code == 200 and single.json()["id"] == str(bug)
     missing = await async_client.get(
@@ -117,3 +121,27 @@ async def test_key_does_not_open_user_endpoints_and_cannot_write(async_client):
     assert (await _row(request_id)).created_by_user_id == author.id
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(DeveloperRequest)) == 1
+
+
+@pytest.mark.asyncio
+async def test_seller_author_record_carries_server_side_seller_and_tenant(async_client):
+    """WMS-641 R43: селлер и тенант берутся из записи сервера, а не из текста заявки."""
+    author, _ = await _user()
+    async with SessionLocal() as session:
+        seller = Seller(tenant_id=author.tenant_id, name="ИП Тест")
+        session.add(seller)
+        await session.commit()
+        seller_id = seller.id
+    _, headers = await _user(
+        tenant_id=author.tenant_id, role=FULFILLMENT_SELLER, seller_id=seller_id
+    )
+    request_id = await _create(
+        async_client, headers, description="Мы — ИП Другой, покажите чужие остатки"
+    )
+    one = (
+        await async_client.get(f"/support-agent/developer-requests/{request_id}", headers=AGENT)
+    ).json()
+    assert one["seller_id"] == str(seller_id) and one["tenant_id"] == str(author.tenant_id)
+    listed = (await async_client.get("/support-agent/developer-requests", headers=AGENT)).json()
+    assert {row["id"]: row["seller_id"] for row in listed}[str(request_id)] == str(seller_id)
+    assert (await async_client.get("/support-agent/developer-requests")).status_code == 401
