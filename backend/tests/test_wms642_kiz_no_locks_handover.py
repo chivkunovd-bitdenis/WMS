@@ -171,6 +171,8 @@ async def test_supply_is_not_handed_over_before_its_kiz_reached_wb(
     delivered: list[str] = []
 
     async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        if wb["down"]:
+            raise WildberriesClientError("upstream_error", status_code=500)
         return _wb_row(seed["order"].wb_order_id, wb["value"], "sgtinIntroduced")
 
     async def fake_put(*_args: Any, **kwargs: Any) -> None:
@@ -186,6 +188,10 @@ async def test_supply_is_not_handed_over_before_its_kiz_reached_wb(
     monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
     monkeypatch.setattr(shipment_svc, "deliver_supply", fake_deliver)
     await _scan(async_client, seed, "w642-f")
+    preflight = await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/delivery-preflight", headers=seed["headers"]
+    )
+    assert preflight.status_code != 500, preflight.text
     url = f"/operations/fbs-supplies/{seed['supply_id']}/deliver"
     refused = await async_client.post(
         url, headers=seed["headers"], json={"idempotency_key": "w642-deliver-1"}
