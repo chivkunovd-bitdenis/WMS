@@ -35,6 +35,9 @@ export function FbsCellPickTable({
   onUndo: (row: PickRow) => void
 }) {
   const displayRows = cellPickRowsOf(rows, objects, cells)
+  // Столбцы называет владелец задачи WMS-610: «Остаток в коробе», «Собрать»,
+  // «Собрано». Отмена последней правки живёт в той же ячейке справа от поля,
+  // чтобы не заводить отдельную пустую колонку правее «Собрано».
   const columns: Column<CellPickRow>[] = [
     {
       key: 'what',
@@ -92,50 +95,56 @@ export function FbsCellPickTable({
       render: (item) => item.kind === 'goods' ? item.row.product.size : null,
     },
     {
-      key: 'lying', header: 'Лежит', align: 'right', width: 78,
+      // «Остаток в коробе» — физический остаток именно того места, откуда
+      // снимаем (короб, палета или сама ячейка при россыпи). Значение уже
+      // приходит без вычетов текущей смены, повторно отнимать «Собрано» нельзя.
+      key: 'inBox',
+      header: <Box sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток<br />в коробе</Box>,
+      align: 'right', width: 112,
       render: (item) => item.kind === 'goods' && item.place ? <QtyCell value={item.place.qty} /> : null,
     },
     {
-      key: 'plan', header: <Box sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>План<br />товара</Box>, align: 'right', width: 80,
+      // «Собрать» — общий план по товару из документа отгрузки. Строк места
+      // у одного товара может быть несколько, план у них общий: снятие с
+      // любого места учитывается в этот же план.
+      key: 'toPick', header: 'Собрать', align: 'right', width: 88,
       render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.plan} muted /> : null,
     },
     {
-      key: 'picked', header: <Box sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Снято<br />всего</Box>, align: 'right', width: 80,
-      render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.picked} /> : null,
-    },
-    {
-      key: 'left', header: 'Осталось', align: 'right', width: 90,
-      render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.left} muted={item.row.left === 0} /> : null,
-    },
-    {
-      key: 'take', header: 'Снять', align: 'right', width: 96,
+      // «Собрано» — редактируемое поле по конкретному месту: сколько уже снято
+      // с этого короба/палеты/россыпи. Верхняя граница — сколько ещё можно снять
+      // отсюда с учётом плана товара (та же логика, что была у столбца «Снять»).
+      // Отмена последней правки живёт здесь же, справа от поля: без отдельной
+      // колонки правее и без «пустой» ячейки в шапке.
+      key: 'picked', header: 'Собрано', align: 'right', width: 132,
       render: (item) => {
         if (item.kind !== 'goods' || !item.place) return null
         const ceiling = item.place.picked + Math.min(item.place.left, item.row.left)
-        return <NumberInput
-          label="Снять"
-          hideLabel
-          value={item.place.picked}
-          onChange={(next) => onQtyChange(item.row, item.place!, next)}
-          min={0}
-          max={ceiling}
-          testId={`pick-place-qty-${item.row.product.id}-${item.place.key}`}
-        />
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+            <Box sx={{ width: 84 }}>
+              <NumberInput
+                label="Собрано"
+                hideLabel
+                value={item.place.picked}
+                onChange={(next) => onQtyChange(item.row, item.place!, next)}
+                min={0}
+                max={ceiling}
+                testId={`pick-place-qty-${item.row.product.id}-${item.place.key}`}
+              />
+            </Box>
+            {canUndo(item.row, item.place) ? (
+              <IconAction
+                title={`Отменить последнее снятие: ${item.row.product.sku}`}
+                onClick={() => onUndo(item.row)}
+                testId={`pick-undo-${item.row.product.id}-${item.place.key}`}
+              >
+                <UndoOutlined fontSize="small" />
+              </IconAction>
+            ) : null}
+          </Stack>
+        )
       },
-    },
-    {
-      key: 'actions', header: '', align: 'right', width: 48,
-      render: (item) => item.kind === 'goods' && canUndo(item.row, item.place) ? (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <IconAction
-            title={`Отменить последнее снятие: ${item.row.product.sku}`}
-            onClick={() => onUndo(item.row)}
-            testId={`pick-undo-${item.row.product.id}-${item.place?.key ?? 'no-stock'}`}
-          >
-            <UndoOutlined fontSize="small" />
-          </IconAction>
-        </Box>
-      ) : null,
     },
   ]
   return <DataTable
@@ -143,6 +152,7 @@ export function FbsCellPickTable({
     rows={displayRows}
     getRowKey={(item) => item.key}
     fixedLayout
+    pageStickyHeader
     selectedKey={source}
     testId="fbs-cell-pick-table"
     empty={{ title: 'В отгрузке нет товаров', hint: 'Добавьте товары в план отгрузки — снимать пока нечего.' }}
