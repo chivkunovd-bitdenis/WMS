@@ -743,9 +743,9 @@ class Pipeline:
         lines = [body]
         d = self.store.data(tid)
         if verdict == "info" and d.get("needs_data"):
-            missing = "; ".join(str(x) for x in analysis.get("missing_for_owner") or []) or "—"
+            needed = "; ".join(str(x) for x in analysis.get("missing_for_owner") or []) or "—"
             lines.append("Данных для ответа нет: нужен доступ или проверка владельцем. Что проверить: "
-                         f"{missing}. Клиенту ответ не готовлю, чтобы не выдумывать значения.")
+                         f"{needed}. Клиенту ответ не готовлю, чтобы не выдумывать значения.")
         elif verdict == "info":
             lines.append(
                 "Ответ клиенту покажу следующим сообщением дословно; отправлю только после вашего "
