@@ -166,7 +166,9 @@ async def get_or_create_open_box(
 async def _request_for_collect(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
-    req = await mu_svc.get_request(session, tenant_id, request_id)
+    # WMS-632: статус читается под замком документа и перечитывается — иначе
+    # изменение подбора/коробов идёт по устаревшему статусу после «Завершить»/«Отменить».
+    req = await mu_svc.get_request(session, tenant_id, request_id, lock=True)
     if req is None:
         raise MarketplaceUnloadPickError("not_found")
     if req.status not in PICK_EDITABLE_STATUSES:
@@ -182,9 +184,15 @@ async def _request_and_plan_for_product(
     request_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> tuple[MarketplaceUnloadRequest, int]:
-    stmt = select(MarketplaceUnloadRequest).where(
-        MarketplaceUnloadRequest.id == request_id,
-        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    # Замок строки документа и принудительное перечитывание статуса (см. выше).
+    stmt = (
+        select(MarketplaceUnloadRequest)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:

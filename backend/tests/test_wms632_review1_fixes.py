@@ -202,3 +202,73 @@ async def test_d5_remove_from_shipment_box_returns_unit_to_source_container(db_s
     by_container = {cid: int(qty) for cid, qty in rows}
     assert by_container.get(source_box_id) == 10
     assert by_container.get(None, 0) == 0
+
+
+async def _stale_then_completed(ctx, tenant_id, request_id, actor_id):
+    """Сессия A держит документ со статусом collecting, B успевает «Завершить»."""
+    sa = SessionLocal()
+    sb = SessionLocal()
+    stale = await mu.get_request(sa, tenant_id, request_id)
+    assert stale is not None and stale.status == "collecting"
+    await mu.complete_unload(
+        sb, tenant_id, request_id, acknowledge_discrepancy=True, performer_id=actor_id
+    )
+    await sb.close()
+    return sa
+
+
+@pytest.mark.asyncio
+async def test_d2_remove_from_box_after_complete_is_rejected(async_client) -> None:
+    ctx, tenant_id, request_id, actor_id = await _committed_ctx_with_boxed(1)
+    product_id, box_id = ctx.product.id, ctx.box.id
+    sa = await _stale_then_completed(ctx, tenant_id, request_id, actor_id)
+    try:
+        line_id = (
+            await sa.scalars(
+                select(collect.MarketplaceUnloadBoxLine).where(
+                    collect.MarketplaceUnloadBoxLine.box_id == box_id
+                )
+            )
+        ).one().id
+        with pytest.raises(MarketplaceUnloadPickError, match="not_editable"):
+            await collect.remove_from_box(
+                sa, tenant_id, request_id, box_id=box_id, line_id=line_id, quantity=1,
+                actor_user_id=actor_id,
+            )
+    finally:
+        await sa.close()
+    async with SessionLocal() as s:
+        total = await s.scalar(
+            select(func.sum(InventoryBalance.quantity)).where(
+                InventoryBalance.product_id == product_id
+            )
+        )
+        in_box = await s.scalar(
+            select(func.sum(collect.MarketplaceUnloadBoxLine.quantity)).where(
+                collect.MarketplaceUnloadBoxLine.box_id == box_id
+            )
+        )
+    assert int(total or 0) == 9  # списание проведения не обращено
+    assert int(in_box or 0) == 1
+
+
+@pytest.mark.asyncio
+async def test_d2_collect_into_box_after_complete_is_rejected(async_client) -> None:
+    ctx, tenant_id, request_id, actor_id = await _committed_ctx_with_boxed(1)
+    product_id, box_id, location_id = ctx.product.id, ctx.box.id, ctx.location.id
+    sa = await _stale_then_completed(ctx, tenant_id, request_id, actor_id)
+    try:
+        with pytest.raises(MarketplaceUnloadPickError, match="not_editable"):
+            await collect.collect_into_box(
+                sa, tenant_id, request_id, box_id=box_id, storage_location_id=location_id,
+                product_id=product_id, quantity=1, actor_user_id=actor_id,
+            )
+    finally:
+        await sa.close()
+    async with SessionLocal() as s:
+        in_box = await s.scalar(
+            select(func.sum(collect.MarketplaceUnloadBoxLine.quantity)).where(
+                collect.MarketplaceUnloadBoxLine.box_id == box_id
+            )
+        )
+    assert int(in_box or 0) == 1  # факт проведённого документа не вырос
