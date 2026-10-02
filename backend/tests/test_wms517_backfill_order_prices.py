@@ -86,6 +86,10 @@ async def test_backfill_uses_statistics_then_orders_api_and_is_idempotent(
 
     def upstream(request: httpx.Request) -> httpx.Response:
         requests.append(request.url.path)
+        if request.url.path == "/api/v1/supplier/orders" and requests.count(
+            "/api/v1/supplier/orders"
+        ) == 1:
+            return httpx.Response(429)
         if request.url.path == "/api/v1/supplier/orders":
             rows: list[dict[str, Any]] = [
                 {"srid": "rid-101.0.0", "finishedPrice": 1404, "isCancel": False,
@@ -152,3 +156,51 @@ async def test_backfill_uses_statistics_then_orders_api_and_is_idempotent(
     [again] = await cli.run(apply=True, seller_id=seller_id)
     assert again.orders_without_price == 1 and again.written == 0
     assert await snapshot_count() == before + 2
+
+
+async def test_backfill_falls_back_to_orders_api_without_statistics_access(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tenant = Tenant(name="backfill-403", slug=uuid.uuid4().hex)
+    db_session.add(tenant)
+    await db_session.flush()
+    seller = Seller(tenant_id=tenant.id, name="Seller")
+    warehouse = Warehouse(tenant_id=tenant.id, code="wh", name="Warehouse")
+    db_session.add_all([seller, warehouse])
+    await db_session.flush()
+    order = await _order(db_session, tenant, seller, warehouse, 201)
+    await db_session.commit()
+    tenant_id, seller_id, order_id = tenant.id, seller.id, order.id
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/supplier/orders":
+            return httpx.Response(403)
+        return httpx.Response(200, json={"next": 0, "orders": [
+            {"id": 201, "convertedPrice": 123400, "convertedCurrencyCode": 643},
+        ]})
+
+    transport = httpx.MockTransport(upstream)
+    real_client = httpx.AsyncClient
+
+    def client_factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        kwargs.pop("transport", None)
+        return real_client(*args, transport=transport, **kwargs)
+
+    async def token(*_: Any) -> str:
+        return "token"
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(cli.httpx, "AsyncClient", client_factory)
+    monkeypatch.setattr(cli, "get_decrypted_marketplace_token", token)
+    monkeypatch.setattr(cli.asyncio, "sleep", no_sleep)
+
+    [report] = await cli.run(apply=True, seller_id=seller_id)
+    assert report.statistics_error == "wb_http_403" and report.error is None
+    assert (report.orders_api_found, report.written) == (1, 1)
+    db_session.expire_all()
+    cost = await resolve_wb_product_cost(
+        db_session, tenant_id=tenant_id, seller_id=seller_id, order_id=order_id
+    )
+    assert cost.product_cost == 123400

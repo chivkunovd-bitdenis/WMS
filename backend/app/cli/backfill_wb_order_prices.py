@@ -40,6 +40,7 @@ ORDERS_URL = "https://marketplace-api.wildberries.ru/api/v3/orders"
 STATISTICS_SOURCE = "backfill /api/v1/supplier/orders finishedPrice"
 ORDERS_SOURCE = "backfill /api/v3/orders convertedPrice"
 STATISTICS_PAUSE_SECONDS = 61  # WB Statistics: 1 request per minute per seller
+STATISTICS_ATTEMPTS = 3
 ORDERS_WINDOW = timedelta(days=29)  # /api/v3/orders: at most 30 days per request
 RUB = 643
 
@@ -61,6 +62,7 @@ class SellerReport:
     orders_api_found: int = 0
     not_found: list[int] = field(default_factory=list)
     written: int = 0
+    statistics_error: str | None = None
     error: str | None = None
 
 
@@ -125,11 +127,15 @@ async def _statistics_prices(
     found: dict[str, int] = {}
     cursor = date_from.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
     while True:
-        response = await client.get(
-            STATISTICS_URL,
-            headers={"Authorization": token},
-            params={"dateFrom": cursor, "flag": 0},
-        )
+        for attempt in range(STATISTICS_ATTEMPTS):
+            response = await client.get(
+                STATISTICS_URL,
+                headers={"Authorization": token},
+                params={"dateFrom": cursor, "flag": 0},
+            )
+            if response.status_code != 429 or attempt == STATISTICS_ATTEMPTS - 1:
+                break
+            await asyncio.sleep(STATISTICS_PAUSE_SECONDS)
         response.raise_for_status()
         rows = response.json()
         if not isinstance(rows, list) or not rows:
@@ -242,12 +248,17 @@ async def run(*, apply: bool, seller_id: uuid.UUID | None) -> list[SellerReport]
                     continue
                 if index:
                     await asyncio.sleep(STATISTICS_PAUSE_SECONDS)
-                by_rid = await _statistics_prices(
-                    client,
-                    token,
-                    min(order.created_at_wb for order in orders) - timedelta(hours=1),
-                    {order.wb_rid for order in orders if order.wb_rid},
-                )
+                try:
+                    by_rid = await _statistics_prices(
+                        client,
+                        token,
+                        min(order.created_at_wb for order in orders) - timedelta(hours=1),
+                        {order.wb_rid for order in orders if order.wb_rid},
+                    )
+                except httpx.HTTPStatusError as exc:
+                    # A key without the Statistics category still reads /api/v3/orders.
+                    report.statistics_error = f"wb_http_{exc.response.status_code}"
+                    by_rid = {}
                 prices: dict[uuid.UUID, tuple[int, str]] = {}
                 for order in orders:
                     if order.wb_rid in by_rid:
