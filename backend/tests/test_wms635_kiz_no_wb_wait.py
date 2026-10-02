@@ -305,7 +305,7 @@ async def test_q1_scan_write_waits_for_wb_only_briefly(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """WMS-640: the scan's request never calls WB; WB gets the code in the background."""
+    """WMS-640: the scan never calls WB; the existing minute resend writes the code."""
     from app.services import wildberries_client as wb_client
 
     seed = await _seed(async_client, 635_602)
@@ -333,10 +333,19 @@ async def test_q1_scan_write_waits_for_wb_only_briefly(
         ]},
     )
     assert response.json()[0]["code"] == "wb_pending_confirmation"
-    assert in_scan == [], "the operator's scan request must not call WB"
-    # The background send (run by the test client after the answer) wrote the code once.
-    assert sent == [value]
+    assert in_scan == [] and sent == [], "the operator's scan request must not call WB"
     assert wb_client.kiz_scan_skips_wb_readback() is False
+    # The minute autopoll's existing resend reads WB and writes the code once.
+    async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        token = await fbs_marking_svc.require_marketplace_token(
+            session, db_order.tenant_id, db_order.seller_id
+        )
+        await fbs_marking_svc.resend_pending_kiz_bindings(
+            session, [(db_order.id, db_order.tenant_id)], http_client, token
+        )
+    assert sent == [value]
 
 
 async def test_d3_operator_kiz_is_usable_again_after_step_back(

@@ -159,11 +159,3 @@ async def db_session_with_foreign_keys(db_session: AsyncSession) -> AsyncIterato
             await connection.rollback()
             await connection.exec_driver_sql(f"PRAGMA foreign_keys={int(original)}")
             await connection.commit()
-
-
-@pytest.fixture(autouse=True)
-def _wms640_scan_kiz_resend_without_delay(monkeypatch: pytest.MonkeyPatch) -> None:
-    """WMS-640: the scan's background WB send waits 15 s in production, not in tests."""
-    from app.services import fbs_marking_service
-
-    monkeypatch.setattr(fbs_marking_service, "SCAN_KIZ_RESEND_DELAY_SEC", 0.0)
