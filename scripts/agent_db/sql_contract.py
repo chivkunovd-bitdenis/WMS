@@ -24,7 +24,6 @@ FORBIDDEN_FUNCS = re.compile(
     r"pg_rotate_logfile|pg_sleep\w*|pg_advisory\w*|pg_logical\w*|pg_create\w*|pg_drop\w*|pg_replication\w*|"
     r"pg_switch_wal|pg_promote|lo_\w+|dblink\w*|set_config|nextval|setval|txid_\w*)\b", re.IGNORECASE)
 LOCKING_RE = re.compile(r"\bfor\s+(no\s+key\s+update|update|share|key\s+share)\b", re.IGNORECASE)
-DOLLAR_TAG = re.compile(r"\$([A-Za-z_][A-Za-z_0-9]*)?\$")
 
 
 class SqlRefused(Exception):
@@ -32,7 +31,10 @@ class SqlRefused(Exception):
 
 
 def mask_literals(sql: str) -> str:
-    """Строки и кавычные идентификаторы заменяются заглушками; комментарии и обратный слеш запрещены."""
+    """Строки ('' экранируется удвоением) и кавычные идентификаторы заменяются заглушками; комментарии,
+    обратный слеш и любой символ $ (долларовые строки, `a$$` в идентификаторах, параметры) запрещены."""
+    if "$" in sql:
+        raise SqlRefused("dollar sign is not allowed")
     if "\\" in sql:
         raise SqlRefused("backslash is not allowed")
     out = []
@@ -55,16 +57,6 @@ def mask_literals(sql: str) -> str:
             out.append("''" if ch == "'" else '"x"')
             i = j + 1
             continue
-        if ch == "$":
-            match = DOLLAR_TAG.match(sql, i)
-            if match:
-                tag = match.group(0)
-                end = sql.find(tag, match.end())
-                if end < 0:
-                    raise SqlRefused("unclosed dollar quote")
-                out.append("''")
-                i = end + len(tag)
-                continue
         out.append(ch)
         i += 1
     return "".join(out)

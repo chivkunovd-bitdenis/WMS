@@ -127,6 +127,17 @@ SECRET_COLUMNS: dict[str, set[str]] = {
     "withdrawal_operations": {"auth_challenge", "auth_signature_hash", "token_enc"},
     "developer_requests": {"lease_token"},
 }
+# Настройки сессии роли: ALTER ROLE ... SET при каждом ensure (идемпотентно) и те же значения шлюз
+# навязывает СЕССИИ при подключении (options в строке подключения перекрывают настройки роли, поэтому даже
+# изменённые роль-настройки в сессии не действуют).
+SESSION_SETTINGS = (
+    ("default_transaction_read_only", "on"),
+    ("statement_timeout", "'20s'"),
+    ("idle_in_transaction_session_timeout", "'30s'"),
+    ("lock_timeout", "'3s'"),
+    ("row_security", "on"),
+    ("search_path", "public, pg_catalog"),
+)
 SECRET_NAME_RE = re.compile(
     r"(password|passwd|secret|token|signature|credential|api_key|apikey|cookie|private_key|"
     r"_enc$|_encrypted$|^auth_|hash$|challenge)", re.IGNORECASE)
@@ -245,12 +256,7 @@ def render_sql(seller_id: str, catalog: Catalog) -> str:
         "END $do$;",
         f"ALTER ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT "
         "CONNECTION LIMIT 8;",
-        f"ALTER ROLE {r} SET default_transaction_read_only = on;",
-        f"ALTER ROLE {r} SET statement_timeout = '20s';",
-        f"ALTER ROLE {r} SET idle_in_transaction_session_timeout = '30s';",
-        f"ALTER ROLE {r} SET lock_timeout = '3s';",
-        f"ALTER ROLE {r} SET row_security = on;",
-        f"ALTER ROLE {r} SET search_path = public, pg_catalog;",
+        *[f"ALTER ROLE {r} SET {name} = {value};" for name, value in SESSION_SETTINGS],
         f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM {r};",

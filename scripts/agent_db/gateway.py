@@ -53,11 +53,27 @@ class Refused(Exception):
     pass
 
 
-def psql_argv(user: str, extra: list[str] | None = None, env: dict[str, str] | None = None) -> list[str]:
+DB_NAME_RE = re.compile(r"^[A-Za-z0-9_]{1,63}$")
+
+
+def session_options() -> str:
+    """Значения настроек роли селлера, навязываемые сессии при подключении."""
+    return " ".join(f"-c {name}={value.strip(chr(39)).replace(', ', ',').replace(' ', '')}"
+                    for name, value in sa.SESSION_SETTINGS)
+
+
+def psql_argv(user: str, extra: list[str] | None = None, env: dict[str, str] | None = None,
+              session_guard: bool = False) -> list[str]:
+    """session_guard: база задаётся строкой подключения с options: настройки сессии (только чтение, таймауты,
+    row_security, search_path) перекрывают настройки роли, даже если их изменили через ALTER ROLE. Строка
+    подключения не зависит от того, как базовая команда (docker exec) передаёт окружение."""
     env = env if env is not None else dict(os.environ)
     base = json.loads(env["AGENT_DB_PSQL"]) if env.get("AGENT_DB_PSQL") else list(DEFAULT_BASE)
     db = env.get("AGENT_DB_NAME", "wms")
-    return [*base, "-U", user, "-d", db, "-X", "-v", "ON_ERROR_STOP=1", *(extra or [])]
+    if not DB_NAME_RE.match(db):
+        raise ValueError("bad database name")
+    target = f"dbname={db} options='{session_options()}'" if session_guard else db
+    return [*base, "-U", user, "-d", target, "-X", "-v", "ON_ERROR_STOP=1", *(extra or [])]
 
 
 def run_psql(user: str, stdin: str, extra: list[str] | None = None,
@@ -126,7 +142,7 @@ def read_stdin_sql() -> str:
 def run_sql(role: str, data: str, env: dict[str, str] | None = None) -> int:
     """Ветка sql: проверка контракта ДО psql; psql получает запрос ключом -c, не из ввода."""
     query = sc.validate_sql(data)  # SqlRefused -> отказ (код 3), psql не запускается
-    argv = psql_argv(role, ["--csv", "-v", "VERBOSITY=verbose", "-c", query], env)
+    argv = psql_argv(role, ["--csv", "-v", "VERBOSITY=verbose", "-c", query], env, session_guard=True)
     rc, out, err = run_bounded(argv)
     if rc not in (0, OUTPUT_TRUNCATED_RC):
         # ошибка запроса: модели уходит только очищенная первая строка, частичный вывод отбрасывается

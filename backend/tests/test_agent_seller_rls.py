@@ -747,6 +747,8 @@ def test_gateway_contract_matches_the_client_validator_on_one_corpus() -> None:
         "\\connect wms postgres", "select 1\n\\gexec", "set role postgres", "", " ", "select 'a", 'select "a',
         "select $a$ x", "select 1\x00", "do $$ begin end $$", "call p()", "select pg_sleep(1)", "select dblink('a','b')",
         "with x as (delete from t returning *) select * from x", "values (1)", "table t", "show all",
+        "SELECT 1 AS a$$; SELECT 2 AS b$$", "SELECT 1 AS a$tag$; COMMIT; SELECT 2 AS b$tag$", "select $1", "select '$'",
+        'select "a$b" from t', "select $$a;b$$", "explain select 1 as a$$; commit; select 2 as b$$", "select 'a;b'",
     ]
     for sql in corpus:
         try:
@@ -827,3 +829,71 @@ def test_error_text_returned_by_the_gateway_has_no_data_values(cluster: Cluster,
     assert syntax.stderr.startswith("42601:")
     denied = sql_via_gateway(cluster, world, "SELECT * FROM users")
     assert denied.stderr.startswith("42501:") and "permission denied for table users" in denied.stderr
+
+
+# ------------------------------------------------------------------------------ круг 9: N4 и глубокая защита сессии
+DOLLAR_TRICKS = [
+    "SELECT 1 AS a$$; SELECT 2 AS b$$",
+    "SELECT 1 AS a$tag$; SELECT 2 AS b$tag$",
+    "EXPLAIN SELECT 1 AS a$$; COMMIT; SET default_transaction_read_only=off; "
+    "ALTER ROLE CURRENT_USER SET statement_timeout=0; SELECT 2 AS b$$",
+    "EXPLAIN SELECT 1 AS a$x$; COMMIT; ALTER ROLE CURRENT_USER SET statement_timeout=0; SELECT 2 AS b$x$",
+    "SELECT $1", "SELECT '$'", "SELECT $$x$$", 'SELECT "a$b" FROM products', "SELECT 1 AS a$",
+]
+
+
+@pytest.mark.parametrize("sql", DOLLAR_TRICKS)
+def test_any_dollar_sign_is_refused_before_psql_and_nothing_is_executed(cluster: Cluster, world: World, sql: str) -> None:
+    res = sql_via_gateway(cluster, world, sql)
+    assert res.returncode == 3 and "dollar sign" in res.stderr and res.stdout == ""
+    settings = cluster.q("postgres", f"SELECT array_to_string(setconfig, ',') FROM pg_db_role_setting s "
+                         f"JOIN pg_roles r ON r.oid = s.setrole WHERE r.rolname = '{world.role('S1')}'").stdout
+    assert "statement_timeout=20s" in settings and "default_transaction_read_only=on" in settings
+
+
+@pytest.mark.parametrize("sql", ["SELECT 1 AS a; SELECT 2 AS b", "EXPLAIN SELECT 1; COMMIT", "SELECT 1;;SELECT 2",
+                                 "SELECT 'x'; SET default_transaction_read_only=off", "COMMIT", "ALTER ROLE CURRENT_USER SET statement_timeout=0"])
+def test_second_statement_in_any_form_is_refused(cluster: Cluster, world: World, sql: str) -> None:
+    res = sql_via_gateway(cluster, world, sql)
+    assert res.returncode == 3 and res.stdout == ""
+
+
+def test_normal_select_with_explain_still_work_and_a_semicolon_in_a_string_is_data(cluster: Cluster, world: World) -> None:
+    assert sql_via_gateway(cluster, world, "SELECT 'a;b' AS x").stdout.splitlines() == ["x", "a;b"]
+    assert sql_via_gateway(cluster, world, "WITH a AS (SELECT 1 AS n) SELECT n FROM a").stdout.splitlines() == ["n", "1"]
+    explain = sql_via_gateway(cluster, world, "EXPLAIN SELECT id FROM products")
+    assert explain.returncode == 0 and "QUERY PLAN" in explain.stdout
+    assert sql_via_gateway(cluster, world, "SELECT 1 AS n;").stdout.splitlines() == ["n", "1"]  # один завершающий ;
+
+
+def test_session_settings_override_a_tampered_role_and_ensure_restores_the_role(cluster: Cluster, world: World) -> None:
+    role = world.role("S1")
+    probe = ("SELECT current_setting('statement_timeout') AS t, current_setting('default_transaction_read_only') AS ro, "
+             "current_setting('lock_timeout') AS l, current_setting('row_security') AS rs, current_setting('search_path') AS sp")
+    cluster.q("postgres", f"ALTER ROLE {role} SET statement_timeout = 0; ALTER ROLE {role} SET default_transaction_read_only = off; "
+                          f"ALTER ROLE {role} SET lock_timeout = 0; ALTER ROLE {role} SET search_path = pg_catalog;")
+    # доказательство чувствительности: прямое подключение роли видит испорченные значения
+    raw = cluster.q(role, probe)
+    assert raw.returncode == 0 and raw.stdout.strip().startswith("0|off|0|")
+    # через шлюз сессия навязывает свои значения поверх настроек роли
+    res = sql_via_gateway(cluster, world, probe)
+    rows = list(csv.DictReader(io.StringIO(res.stdout)))
+    assert res.returncode == 0 and rows == [{"t": "20s", "ro": "on", "l": "3s", "rs": "on", "sp": "public,pg_catalog"}]
+    write = sql_via_gateway(cluster, world, "SELECT 1 INTO TEMP TABLE x")  # запись по-прежнему закрыта
+    assert write.returncode == 3
+    # ensure при каждом вызове выставляет настройки роли заново
+    again = run_gateway(cluster, f"ensure-seller {world.sellers['S1'][0]}")
+    assert again.returncode == 0
+    fixed = cluster.q(role, probe)
+    assert fixed.stdout.strip().startswith("20s|on|3s|on|")
+
+
+def test_gateway_session_guard_uses_a_connection_string_not_the_environment() -> None:
+    argv = gateway.psql_argv("wms_agent_s_" + "a" * 32, ["-c", "SELECT 1"], {"AGENT_DB_PSQL": '["docker", "exec", "-i", "c", "psql"]'},
+                             session_guard=True)
+    target = argv[argv.index("-d") + 1]
+    assert target.startswith("dbname=wms options='") and "default_transaction_read_only=on" in target
+    assert "statement_timeout=20s" in target and "idle_in_transaction_session_timeout=30s" in target
+    assert "-e" not in argv and "PGOPTIONS" not in " ".join(argv)  # не зависит от передачи окружения в docker exec
+    with pytest.raises(ValueError):
+        gateway.psql_argv("x", None, {"AGENT_DB_NAME": "wms options='-c x'"}, session_guard=True)

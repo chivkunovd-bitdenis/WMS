@@ -36,7 +36,7 @@ SERVER = Path(__file__).resolve().parents[1] / "support_agent" / "prod_sql_mcp.p
     ("with a as (select 1 as n) select * from a", "with"),
     ("EXPLAIN select 1", "explain"),
     ("explain (costs off, format text) select * from t", "explain"),
-    ("select $$a;b$$ as x", "select"),
+    ("select 'a;b' as x", "select"),
     ("select \"update\", updated_at, created_at::date from t", "select"),
     ("select 'it''s' as q", "select"),
     ("(select 1) union all (select 2)", "select"),
@@ -53,6 +53,10 @@ def test_valid_read_only_queries_pass(sql: str, first: str) -> None:
     "copy t to '/tmp/x'", "copy (select 1) to program 'id'", "call p()", "do $$ begin end $$",
     "select 1; select 2", "select 1;select 2", "select 1\n;\nselect 2", "select 1; drop table t",
     "select 1 /*;*/ ; drop table t", "select $a$ ; $a$ ; drop table x",
+    # круг 9, N4: $ внутри идентификатора раньше маскировал `;` и запрещённые слова
+    "SELECT 1 AS a$$; SELECT 2 AS b$$", "SELECT 1 AS a$tag$; COMMIT; SELECT 2 AS b$tag$",
+    "EXPLAIN SELECT 1 AS a$$; SET default_transaction_read_only=off; ALTER ROLE CURRENT_USER SET statement_timeout=0; SELECT 1 AS b$$",
+    "select $1", "select '$'", "select \"a$b\" from t", "select 1 as a$",
     "with x as (delete from t returning *) select * from x",
     "with x as (insert into t values (1) returning *) select * from x",
     "explain analyze select 1", "explain (analyze) select 1", "explain (analyse, buffers) select 1",
@@ -123,7 +127,8 @@ def test_ssh_command_and_stdin_format() -> None:
 
 def test_refused_sql_never_reaches_ssh_and_limits_apply() -> None:
     ssh = FakeSsh()
-    for bad in ("delete from t", "select 1; select 2", "explain analyze select 1", "select 1 -- x"):
+    for bad in ("delete from t", "select 1; select 2", "explain analyze select 1", "select 1 -- x",
+                "SELECT 1 AS a$$; SELECT 2 AS b$$", "EXPLAIN SELECT 1 AS a$t$; COMMIT; SELECT 2 AS b$t$"):
         with pytest.raises(SqlRefused):
             run_query(settings(), bad, ssh)
     assert ssh.calls == []
