@@ -128,3 +128,22 @@ def test_all_openapi_components_have_exact_model_fields_and_requiredness() -> No
                 referenced = _referenced_model(field_schema["items"])
             if referenced is not None:
                 assert _annotation_contains(field.annotation, referenced)
+
+
+def test_requirement_sku_lists_accept_numbers_from_live_ozon() -> None:
+    # 1 и 2 октября 2026: Ozon прислал products_requiring_gtd числами — сборка падала.
+    from app.schemas.ozon_fbs_api import OzonV3GetFbsPostingResponseV3
+
+    response = OzonV3GetFbsPostingResponseV3.model_validate({
+        "result": {
+            "posting_number": "0148656673-0134-1",
+            "status": "awaiting_packaging",
+            "requirements": {
+                "products_requiring_gtd": [1695134284],
+                "products_requiring_mandatory_mark": [1697770458, "1"],
+            },
+        }
+    })
+    requirements = response.result.requirements
+    assert requirements.products_requiring_gtd == ["1695134284"]
+    assert requirements.products_requiring_mandatory_mark == ["1697770458", "1"]
