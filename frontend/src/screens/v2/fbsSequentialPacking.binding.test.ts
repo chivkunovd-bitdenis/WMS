@@ -105,3 +105,15 @@ it('WMS-635 R4: a KIZ WB refused stays bound — QR printed, order packed, no ex
   expect(deps.printCopy).not.toHaveBeenCalled()
   expect(deps.pack).toHaveBeenCalledTimes(1)
 })
+
+it('WMS-635 Q1: the packing scan asks the server not to wait long for WB', async () => {
+  const bodies: unknown[] = []
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/kiz/commit')) bodies.push(JSON.parse(String(init?.body)))
+    const body = path.endsWith('/kiz/commit') ? [{ order_id: 'order-1', status: 'ok', code: 'ok', bound_kiz: 'kiz' }] : { ok: true, hints: [] }
+    return new Response(JSON.stringify(body), { status: 200 })
+  }))
+  const deps = makePackingScanDeps('token', () => ({}), () => ws, () => undefined, () => undefined)
+  await deps.bind({ scan_id: 'scan-1', order_id: 'order-1' } as FbsScanAutoPrintResult, 'kiz')
+  expect(bodies).toEqual([expect.objectContaining({ scan_no_wb_wait: true })])
+})

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
@@ -46,6 +47,7 @@ from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_wor
 from app.services.marketplace_account_service import MarketplaceAccountError
 from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
 from app.services.ozon_fbs_errors import OzonFbsProcessError
+from app.services.wildberries_client import short_kiz_write_timeout
 
 router = APIRouter(prefix="/operations/fbs-supplies", tags=["operations"])
 
@@ -2523,23 +2525,28 @@ async def scan_fbs_supply_product_for_auto_print(
                 session, tenant_id, actor_id, scan_id=scan_id, order=order, marking=marking
             )
 
+    # WMS-635 Д2, Q1: the scan's pool KIZ write waits for WB only briefly and a
+    # pending WB answer still hands the label out.
+    wb_wait = short_kiz_write_timeout() if body.print_chz else contextlib.nullcontext()
     async with httpx.AsyncClient() as http_client:
-        try:
-            result = await order_tape_svc.print_fbs_order_tape(
-                session,
-                user.tenant_id,
-                supply_id,
-                order_ids=[selected.order_id],
-                layout=layout,
-                allow_partial=True,
-                include_order_qr=body.print_qr,
-                reprint=False,
-                actor_user_id=user.id,
-                http_client=http_client,
-                on_new_binding=_note_pool_kiz if body.print_chz else None,
-            )
-        except order_tape_svc.FbsOrderTapePrintError as exc:
-            _raise_from_order_tape_service(exc)
+        with wb_wait:
+            try:
+                result = await order_tape_svc.print_fbs_order_tape(
+                    session,
+                    user.tenant_id,
+                    supply_id,
+                    order_ids=[selected.order_id],
+                    layout=layout,
+                    allow_partial=True,
+                    include_order_qr=body.print_qr,
+                    reprint=False,
+                    actor_user_id=user.id,
+                    http_client=http_client,
+                    scan_no_wb_wait=True,
+                    on_new_binding=_note_pool_kiz if body.print_chz else None,
+                )
+            except order_tape_svc.FbsOrderTapePrintError as exc:
+                _raise_from_order_tape_service(exc)
     # The selection was intentionally committed before marketplace work.  The
     # prepared QR asset and any allocated/bound marking code are a second,
     # independently durable phase so a lost response can recover exactly this

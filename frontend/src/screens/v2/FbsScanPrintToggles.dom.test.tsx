@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { FbsRejectedKizTriangle } from './FbsRejectedKizFilter'
+import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { FbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 beforeAll(() => {
@@ -80,7 +82,10 @@ describe('WMS-633 · «− N +» counter never takes the scanner', () => {
 describe('WMS-636 · треугольник «Не принятые WB КИЗ»', () => {
   const base = { printQr: true, printChz: false, reprintChz: false }
   const renderWith = (rejected?: { count: number; active: boolean; onToggle: () => void }) =>
-    act(() => root.render(<FbsScanPrintToggles value={base} onChange={onChange} rejected={rejected} />))
+    act(() => root.render(<>
+      <FbsScanPrintToggles value={base} onChange={onChange} />
+      {rejected ? <FbsRejectedKizTriangle filter={rejected} /> : null}
+    </>))
 
   it('R1: без фильтра или при N = 0 ничего не рисуется — полоса как раньше', () => {
     renderWith()
@@ -107,5 +112,17 @@ describe('WMS-636 · треугольник «Не принятые WB КИЗ»'
     expect(onToggle).toHaveBeenCalledTimes(1)
     renderWith({ count: 2, active: true, onToggle })
     expect(q('fbs-wb-rejected-kiz-toggle')!.getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('WMS-635 Д4 · треугольник внутри поля скана', () => {
+  it('stands inside the scan field, so the checkboxes and «Назад» do not move', () => {
+    act(() => root.render(<FbsPackingScanBar token="t" enabled={false} controllers={[]}
+      rejected={{ count: 3, active: false, onToggle: vi.fn() }} />))
+    const field = host.querySelector('.MuiInputBase-root')!
+    expect(field.querySelector('[data-testid="fbs-wb-rejected-kiz-toggle"]')).not.toBeNull()
+    act(() => root.render(<FbsPackingScanBar token="t" enabled={false} controllers={[]}
+      rejected={{ count: 0, active: false, onToggle: vi.fn() }} />))
+    expect(host.querySelector('[data-testid="fbs-wb-rejected-kiz-toggle"]')).toBeNull()
   })
 })

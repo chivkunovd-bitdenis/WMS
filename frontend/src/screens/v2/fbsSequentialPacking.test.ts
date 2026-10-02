@@ -457,3 +457,12 @@ describe('WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4)', ()
     expect(b.scanner.hasPending()).toBe(false)
   })
 })
+
+describe('WMS-635 Q4', () => {
+  it('the ordinary supply speaks of «поставке», not «сборке»', async () => {
+    const { deps, scanner } = fixture()
+    vi.mocked(deps.select).mockReset().mockRejectedValue(new FbsApiError('scan_product_not_found', 'nf', null, false, 404))
+    deps.preferences = () => ({ printQr: true, printChz: false, reprintChz: false })
+    await expect(routePackingScan([scanner], 'unknown', 'поставке')).rejects.toThrow('В этой поставке не осталось заказов')
+  })
+})

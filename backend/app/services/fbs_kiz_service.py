@@ -1616,6 +1616,16 @@ async def _commit_one_kiz_pair(
                 persist_failure_state=True,
             ) from restore_error
         raise new_error
+    if new_error is None and marking.meta_status == META_STATUS_REJECTED:
+        # WMS-635 Д1: WB took the write, but its read-back already refuses the code.
+        # Same as a final refusal (R4.3): the KIZ stays bound and the row turns red.
+        wb_reason = (marking.reason or "").strip() or "КИЗ отклонён WB"
+        order.metadata_delivery_allowed = False
+        pending_error = FbsKizError(
+            KIZ_BOUND_WB_REJECTED,
+            message=f"WB не принял ЧЗ: {wb_reason}",
+            persist_failure_state=True,
+        )
     if order.supply_id is not None:
         await record_kiz_bound_event(
             session,
@@ -2043,7 +2053,11 @@ async def rollback_scan_kiz(
         await _void_existing_sgtin_marking_locally(
             session, current, actor_user_id=actor_user_id, reason=_VOID_OPERATOR_CANCEL_REASON
         )
-        if was_pool and code_id is not None:
+        # Д19 applies to a pool KIZ this scan printed («Печатать ЧЗ», receipt
+        # scan:<id>). A KIZ the operator scanned is on the item: like the cross
+        # in the row, «Назад» leaves it usable for the next scan (Д3).
+        issued_by_print = str(receipt.get("commit_key") or "").startswith("scan:")
+        if was_pool and issued_by_print and code_id is not None:
             # Д19: its label is already printed; the code is annulled, not returned to the pool.
             pool_code = await session.get(MarkingCode, code_id)
             if pool_code is not None and pool_code.status != STATUS_INTRODUCED:

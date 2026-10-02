@@ -186,11 +186,15 @@ function poolKizKeys(result: FbsScanAutoPrintResult): string[] {
 }
 
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
-export function routePackingScan(controllers: PackingScanController[], raw: string): Promise<void> {
-  return runPackingSerial(() => routePackingScanNow(controllers, raw))
+export function routePackingScan(
+  controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке' = 'сборке',
+): Promise<void> {
+  return runPackingSerial(() => routePackingScanNow(controllers, raw, place))
 }
 
-async function routePackingScanNow(controllers: PackingScanController[], raw: string): Promise<void> {
+async function routePackingScanNow(
+  controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке',
+): Promise<void> {
   const selectedRow = controllers.find((one) => one.hasSelectedRow?.())
   let remaining = controllers
   if (selectedRow) {
@@ -221,7 +225,8 @@ async function routePackingScanNow(controllers: PackingScanController[], raw: st
   }
   // All checkboxes off: the same error as the ordinary supply showed (R9).
   if (stickerNotFound) throw stickerNotFound
-  throw new Error('В этой сборке не осталось заказов с таким штрихкодом.')
+  // Q4: the ordinary supply says «поставке», the assembly «сборке».
+  throw new Error(`В этой ${place} не осталось заказов с таким штрихкодом.`)
 }
 
 type Pending = {
@@ -708,7 +713,7 @@ export function makePackingScanDeps(
       const commit = (confirmed: boolean) => commitFbsKiz(token, authHeaders, [{
         order_id: result.order_id, value: raw, confirmed,
         ...(isLocalPackingSelection(result) ? {} : { scan_auto_print_id: result.scan_id }),
-      }], confirmed ? replaceKey : bindKey)
+      }], confirmed ? replaceKey : bindKey, true)
       let outcomes = await commit(replace)
       let outcome = outcomes.find((item) => item.order_id === result.order_id)
       // R18: an order that already has a KIZ gets the scanned one at once, without a dialog.

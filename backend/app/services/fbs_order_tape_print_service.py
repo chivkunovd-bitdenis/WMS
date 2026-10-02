@@ -119,6 +119,7 @@ async def print_fbs_order_tape(
     http_client: httpx.AsyncClient,
     reprint_marking_ids: list[uuid.UUID] | None = None,
     on_new_binding: Callable[[FbsOrder, FbsOrderMarking], Awaitable[None]] | None = None,
+    scan_no_wb_wait: bool = False,
 ) -> FbsOrderTapePrintResult:
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
@@ -559,7 +560,11 @@ async def print_fbs_order_tape(
                 ordinary_print=order_id in ordinary_print_orders,
             )
         except marking_svc.FbsMarkingError as exc:
-            if _wb_accepted_code_without_echo(exc):
+            if _wb_accepted_code_without_echo(exc) or (
+                # WMS-635 Д2: the packing scan does not wait for WB either; the
+                # code is bound and its pending operation reconciles WB later.
+                scan_no_wb_wait and exc.code == "wb_pending_confirmation"
+            ):
                 # WMS-560: WB answered the write, only its readback has not echoed
                 # the value yet. The code is already bound to this order and the
                 # pending operation keeps tracking the WB result, so the label

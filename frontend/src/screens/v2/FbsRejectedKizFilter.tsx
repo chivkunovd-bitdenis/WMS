@@ -10,6 +10,10 @@ export type FbsRejectedKizFilter = { count: number; active: boolean; onToggle: (
  * R1, R2: красный треугольник с числом N — переключатель фильтра. При N = 0 его нет.
  * Как и «− N +» (WMS-633), фокус не забирает: сканер продолжает писать в поле скана.
  */
+/**
+ * WMS-635 Д4: the triangle lives inside the scan field (end adornment), sized to
+ * the field, so its appearance never moves the field, checkboxes or «Назад».
+ */
 export function FbsRejectedKizTriangle({ filter }: { filter: FbsRejectedKizFilter }) {
   if (filter.count <= 0) return null
   const color = filter.active ? 'error.contrastText' : 'error.main'
@@ -24,12 +28,13 @@ export function FbsRejectedKizTriangle({ filter }: { filter: FbsRejectedKizFilte
         onClick={filter.onToggle}
         data-testid="fbs-wb-rejected-kiz-toggle"
         sx={{
-          flexShrink: 0, px: 1, py: 0.25, gap: 0.5, borderRadius: 1, border: 2, borderColor: 'error.main',
+          flexShrink: 0, px: 0.75, py: 0, gap: 0.5, borderRadius: 1, border: 2, borderColor: 'error.main',
+          height: 28,
           bgcolor: (theme) => (filter.active ? theme.palette.error.main : alpha(theme.palette.error.main, 0.08)),
         }}
       >
-        <ReportProblemIcon sx={{ color, fontSize: 30 }} />
-        <Typography sx={{ color, fontWeight: 800, fontSize: 26, lineHeight: 1 }} data-testid="fbs-wb-rejected-kiz-count">
+        <ReportProblemIcon sx={{ color, fontSize: 22 }} />
+        <Typography sx={{ color, fontWeight: 800, fontSize: 20, lineHeight: 1 }} data-testid="fbs-wb-rejected-kiz-count">
           {filter.count}
         </Typography>
       </ButtonBase>

@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
-import { FbsRejectedKizHeader, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
+import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
@@ -1922,7 +1922,7 @@ export function FfFbsSupplyWorkspace({
     setKizScanNotice(null)
     setKizScanDebugOpen(false)
     try {
-      await routePackingScan([sequentialScanner], raw)
+      await routePackingScan([sequentialScanner], raw, 'поставке')
       playScanSuccess()
     } catch (cause) {
       setKizScanError({
@@ -3712,6 +3712,12 @@ export function FfFbsSupplyWorkspace({
                                   <QrCodeScannerOutlined fontSize="small" color="action" />
                                 </InputAdornment>
                               ),
+                              // WMS-635 Д4: inside the field, so nothing in the bar moves.
+                              endAdornment: ordinaryWbPacking && ownRejectedToggle.count > 0 ? (
+                                <InputAdornment position="end">
+                                  <FbsRejectedKizTriangle filter={ownRejectedToggle} />
+                                </InputAdornment>
+                              ) : undefined,
                             },
                           }}
                           sx={{ '& input': { fontFamily: 'monospace' } }}
@@ -3723,7 +3729,7 @@ export function FfFbsSupplyWorkspace({
                           }} undo={ordinaryWbPacking ? {
                             disabled: kizScanBusy || sequentialScanner?.lastStep?.() == null,
                             onClick: () => void undoUnifiedScanRef.current(),
-                          } : undefined} rejected={ordinaryWbPacking ? ownRejectedToggle : undefined} />
+                          } : undefined} />
                         ) : null}
                         {shownKizTarget ? (
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
