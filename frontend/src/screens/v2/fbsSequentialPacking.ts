@@ -72,6 +72,12 @@ export type PackingQrIntent = { scanId: string; done: boolean }
 export class PackingBindRejectedError extends Error {}
 
 /**
+ * WMS-635 R4: the KIZ is bound in WMS although WB refused it; the row shows WB's
+ * verdict and the scan goes on to print the QR and pack — only no exact copy.
+ */
+export type PackingBoundRejected = { kiz: string; wbRejected: true }
+
+/**
  * WMS-631 P0-06: scans, Escape and «Назад» run strictly one after another for
  * every WB packing controller on the page.
  */
@@ -121,7 +127,7 @@ export type PackingScanDeps = {
   release: (result: FbsScanAutoPrintResult) => Promise<void>
   preload: (result: FbsScanAutoPrintResult) => Promise<string>
   /** Resolves the canonical KIZ bound to the order. Throws PackingBindRejectedError when nothing was saved. */
-  bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<string | void>
+  bind: (result: FbsScanAutoPrintResult, raw: string, replace?: boolean) => Promise<string | void | PackingBoundRejected>
   /** Prints the order QR under the key (and server claim) of the scan that first intended it. */
   print: (result: FbsScanAutoPrintResult, image: string, size: LabelSizeId, keyScanId: string) => Promise<void>
   /** WMS-633: `copies` labels of the pool KIZ, frozen with the scan's checkbox snapshot. */
@@ -180,11 +186,15 @@ function poolKizKeys(result: FbsScanAutoPrintResult): string[] {
 }
 
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
-export function routePackingScan(controllers: PackingScanController[], raw: string): Promise<void> {
-  return runPackingSerial(() => routePackingScanNow(controllers, raw))
+export function routePackingScan(
+  controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке' = 'сборке',
+): Promise<void> {
+  return runPackingSerial(() => routePackingScanNow(controllers, raw, place))
 }
 
-async function routePackingScanNow(controllers: PackingScanController[], raw: string): Promise<void> {
+async function routePackingScanNow(
+  controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке',
+): Promise<void> {
   const selectedRow = controllers.find((one) => one.hasSelectedRow?.())
   let remaining = controllers
   if (selectedRow) {
@@ -215,7 +225,8 @@ async function routePackingScanNow(controllers: PackingScanController[], raw: st
   }
   // All checkboxes off: the same error as the ordinary supply showed (R9).
   if (stickerNotFound) throw stickerNotFound
-  throw new Error('В этой сборке не осталось заказов с таким штрихкодом.')
+  // Q4: the ordinary supply says «поставке», the assembly «сборке».
+  throw new Error(`В этой ${place} не осталось заказов с таким штрихкодом.`)
 }
 
 type Pending = {
@@ -311,8 +322,9 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
   const bindKiz = async (current: Pending, raw: string, replace: boolean, kind: 'kiz' | 'row') => {
     // The intent is recorded first: a lost answer may still have saved the KIZ.
     const step = pushStep(kind, current, await packingCommitKeys(current.result, raw))
+    let answer: string | void | PackingBoundRejected
     try {
-      await deps.bind(current.result, raw, replace)
+      answer = await deps.bind(current.result, raw, replace)
     } catch (cause) {
       if (cause instanceof PackingBindRejectedError || cause instanceof FbsApiError) {
         dropStep(step)
@@ -321,7 +333,8 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       throw cause
     }
     current.needsKiz = false
-    current.bound = true
+    // A code WB refused is not copied onto a label; the order is still printed and packed.
+    current.bound = !(answer && typeof answer === 'object' && answer.wbRejected)
     deps.changed()
   }
   const selectByProduct = async (raw: string, preferences: FbsScanPrintPreferences) => {
@@ -381,22 +394,6 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       throw productMiss ?? cause
     }
   }
-  /** After «Назад» on a KIZ scan the order is selected again with fresh keys (new scan id). */
-  const reselect = async (step: PackingScanStep) => {
-    const selectStep = history.findLast((one) => one.kind === 'select' && one.result.scan_id === step.result.scan_id)
-    if (!selectStep || pending) return
-    deps.complete(step.barcode)
-    const attempt = deps.claim(step.barcode, step.preferences, true)
-    const result = isLocalPackingSelection(step.result)
-      ? localSelection(attempt.key, step.result.binding_target!)
-      : await deps.select(step.barcode, attempt.key, attempt.preferences, step.result.order_id)
-    deps.remember(step.barcode, result)
-    // The order QR keeps its own intent: printed — not again; not printed — the same key.
-    pending = startPending(step.barcode, result, attempt, true, true, false)
-    pending.step = selectStep
-    selectStep.result = result
-    selectStep.explicit = true
-  }
   return {
     hasPending: () => pending !== null,
     hasSavedAttempt: deps.saved,
@@ -414,7 +411,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       const holdsSelection = pending?.result.scan_id === step.result.scan_id
       let warning: string | null
       try {
-        // Every undone step frees its selection; a KIZ step re-selects with fresh keys below.
+        // Every undone step frees its selection on the server.
         warning = await deps.undo(step, true)
       } catch (cause) {
         if (cause instanceof FbsApiError && UNDO_FINAL_CODES.includes(cause.code)) dropStep(step)
@@ -422,14 +419,16 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         throw cause
       }
       dropStep(step)
+      // WMS-636 R10: one press undoes the whole last scan. The KIZ step released the
+      // selection of its scan, so that selection is no longer a step of the history;
+      // the next press undoes the previous scan.
       if (step.kind === 'kiz') {
-        if (holdsSelection) pending = null
-        // The KIZ scan is undone: the order waits for its KIZ again under a fresh selection.
-        await reselect(step)
-      } else {
-        if (holdsSelection) pending = null
-        deps.complete(step.barcode)
+        for (const one of [...history]) {
+          if (one.kind === 'select' && one.result.scan_id === step.result.scan_id) dropStep(one)
+        }
       }
+      if (holdsSelection) pending = null
+      deps.complete(step.barcode)
       deps.changed()
       return warning
     },
@@ -556,6 +555,8 @@ export function makePackingScanDeps(
   onBound: (orderId: string, value: string) => void = () => undefined,
   onSelected: (orderId: string) => void = () => undefined,
   preferences: () => FbsScanPrintPreferences = () => ({ printQr: true, printChz: false, reprintChz: false }),
+  /** WMS-636 R11: the server answered «Назад» for this order — drop what the screen kept from its scan. */
+  onUndone: (orderId: string) => void = () => undefined,
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
@@ -712,7 +713,7 @@ export function makePackingScanDeps(
       const commit = (confirmed: boolean) => commitFbsKiz(token, authHeaders, [{
         order_id: result.order_id, value: raw, confirmed,
         ...(isLocalPackingSelection(result) ? {} : { scan_auto_print_id: result.scan_id }),
-      }], confirmed ? replaceKey : bindKey)
+      }], confirmed ? replaceKey : bindKey, true)
       let outcomes = await commit(replace)
       let outcome = outcomes.find((item) => item.order_id === result.order_id)
       // R18: an order that already has a KIZ gets the scanned one at once, without a dialog.
@@ -720,12 +721,22 @@ export function makePackingScanDeps(
         outcomes = await commit(true)
         outcome = outcomes.find((item) => item.order_id === result.order_id)
       }
-      if (outcome?.status !== 'ok') {
-        // The server answered: an outcome other than «pending confirmation» saved nothing.
-        if (outcome?.code === 'wb_pending_confirmation') throw new Error(outcome.message ?? 'Честный знак ждёт подтверждения WB.')
+      // WMS-635: the scan never waits for WB. «Pending confirmation» means the
+      // code is bound in WMS and WB's answer is reconciled in the background;
+      // the order goes on to print and pack exactly as after «ok».
+      const pendingWb = outcome?.code === 'wb_pending_confirmation'
+      // WMS-635 R4: WB refused the code finally, yet it stays bound (row marked red).
+      const rejectedWb = outcome?.code === 'wb_rejected_kept'
+      if (outcome?.status !== 'ok' && !pendingWb && !rejectedWb) {
+        // The server answered: any other outcome saved nothing.
         throw new PackingBindRejectedError(outcome?.message ?? 'Честный знак не сохранён.')
       }
-      const bound = outcome.bound_kiz ?? raw
+      const bound = outcome?.bound_kiz ?? raw
+      if (rejectedWb) {
+        onBound(result.order_id, bound)
+        refreshed()
+        return { kiz: bound, wbRejected: true }
+      }
       onBound(result.order_id, bound)
       refreshed()
       return bound
@@ -805,6 +816,7 @@ export function makePackingScanDeps(
         })
         warning = answer.warning
       }
+      onUndone(step.result.order_id)
       refreshed()
       return warning
     },

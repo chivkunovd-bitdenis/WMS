@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
 import { loadLabelSizeId } from '../../utils/labelSize'
-import { Alert, Box, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, InputAdornment, Stack, TextField, Typography } from '@mui/material'
 import { useScanIntake } from '../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { fbsErrorText } from './fbsUx'
 import { packingSerialBusy, routePackingScan, runPackingSerial, type PackingScanController } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
-export function FbsPackingScanBar({ controllers, enabled, token }: {
+export function FbsPackingScanBar({ controllers, enabled, token, rejected }: {
   controllers: PackingScanController[]; enabled: boolean; token: string
+  /** WMS-636: the filter of the whole assembly (N summed over its WB supplies). */
+  rejected?: FbsRejectedKizFilter
 }) {
   const [value, setValue] = useState('')
   const [labelSizeId, setLabelSizeId] = useState(loadLabelSizeId)
@@ -92,7 +95,13 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
       <TextField size="small" fullWidth autoFocus value={value} disabled={!enabled} autoComplete="off"
         placeholder={active?.needsKiz ? 'Сканируйте Честный знак' : 'Сканируйте штрихкод товара'}
         onChange={(event) => setValue(event.target.value)}
-        slotProps={{ htmlInput: { 'data-packing-scan': 'true' } }}
+        slotProps={{
+          htmlInput: { 'data-packing-scan': 'true' },
+          // WMS-635 Д4: inside the field, so nothing in the bar moves when it appears.
+          input: rejected && rejected.count > 0 ? {
+            endAdornment: <InputAdornment position="end"><FbsRejectedKizTriangle filter={rejected} /></InputAdornment>,
+          } : undefined,
+        }}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); intake.submit(value); setValue('') } }} />
       {/* WB only: an Ozon-only assembly keeps its bar exactly as before (R16). */}
       {controllers.length > 0 ? <FbsScanPrintToggles value={printPreferences} onChange={(next) => {

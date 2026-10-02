@@ -1,9 +1,10 @@
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import {
   Alert,
   Box,
@@ -78,6 +79,7 @@ import {
   fbsOrderMarkingAccepted,
   fbsMarkingPresentation,
   fbsMarkingVerdictsSummary,
+  fbsOrderKizRejectedByWb,
   fbsBoxEditingDisabled,
   fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
@@ -673,6 +675,13 @@ export function FfFbsSupplyWorkspace({
       () => (sequentialFrameRef.current?.registerScanner
         ? loadFbsScanPrintPreferences(token)
         : scanPrintPreferencesRef.current),
+      // WMS-636 R11: the undone KIZ tail leaves the row at once, the reload brings the rest.
+      (orderId) => setKizCommittedTails((current) => {
+        if (!(orderId in current)) return current
+        const next = { ...current }
+        delete next[orderId]
+        return next
+      }),
     ))
     return {
       ...controller,
@@ -1913,7 +1922,7 @@ export function FfFbsSupplyWorkspace({
     setKizScanNotice(null)
     setKizScanDebugOpen(false)
     try {
-      await routePackingScan([sequentialScanner], raw)
+      await routePackingScan([sequentialScanner], raw, 'поставке')
       playScanSuccess()
     } catch (cause) {
       setKizScanError({
@@ -2764,6 +2773,27 @@ export function FfFbsSupplyWorkspace({
     })
   }, [workspace, recentlyScannedOrderId])
 
+  // WMS-636: фильтр «Не принятые WB КИЗ». Выключен — лента ровно как раньше.
+  // В карточке поставки он свой, в окне сборки — общий (assemblyFrame.rejectedFilter).
+  const [ownRejectedFilter, setOwnRejectedFilter] = useState(false)
+  const ownRejectedCount = useMemo(() => (
+    workspace && workspace.supply.marketplace === 'wb' ? workspace.orders.filter(fbsOrderKizRejectedByWb).length : 0
+  ), [workspace])
+  useEffect(() => { setOwnRejectedFilter(false) }, [open, supplyId])
+  useEffect(() => { if (ownRejectedCount === 0) setOwnRejectedFilter(false) }, [ownRejectedCount])
+  const ownRejectedToggle: FbsRejectedKizFilter = {
+    count: ownRejectedCount,
+    active: ownRejectedFilter && ownRejectedCount > 0,
+    onToggle: () => setOwnRejectedFilter((current) => !current),
+  }
+  const rejectedFilterOn = !isOzonSupply && (assemblyFrame
+    ? Boolean(assemblyFrame.rejectedFilter?.active)
+    : ownRejectedToggle.active)
+  const rejectedCountShown = assemblyFrame ? assemblyFrame.rejectedFilter?.count ?? 0 : ownRejectedCount
+  const rejectedHeaderHere = rejectedFilterOn && (!assemblyFrame || assemblyFrame.rejectedFilter?.headerSupplyId === supplyId)
+  // Зелёная строка в сборке — только у поставки последнего скана (она и так наверху).
+  const rejectedGreenHere = !assemblyFrame || assemblyFrame.promotedSupplyId === supplyId
+
   // WB ставит ЧЗ в optional, поэтому после «Очистить ЧЗ» проверка «метки приняты»
   // проходит по пустому списку. Без кода заказ не напечатан, иначе «Печать всего»
   // уходит в перепечатку, и сервер молча отвечает nothing_to_reprint.
@@ -3249,12 +3279,20 @@ export function FfFbsSupplyWorkspace({
     </>
   )
 
+  /** WMS-636 R4: шапка «Не принятые WB КИЗ · N» сразу под зелёной строкой (или первой, если её нет). */
+  const withRejectedKizHeader = (rows: ReactNode[]): ReactNode[] => {
+    if (!rejectedHeaderHere) return rows
+    const header = <FbsRejectedKizHeader key="wms636-rejected-kiz-header" count={rejectedCountShown} />
+    const greenFirst = rejectedGreenHere && packingOrders[0]?.id === recentlyScannedOrderId && recentlyScannedOrderId != null
+    return greenFirst ? [rows[0], header, ...rows.slice(1)] : [header, ...rows]
+  }
+
   const packingRows = workspace ? (
                   <Stack
-                    divider={<Divider flexItem />}
+                    divider={rejectedFilterOn ? undefined : <Divider flexItem />}
                     sx={{ order: assemblyFrame?.promotedSupplyId === supplyId ? -1 : 0 }}
                   >
-                    {packingOrders.map((order) => {
+                    {withRejectedKizHeader(packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
                       const needsHonestSign = requiresOrderHonestSign(order)
@@ -3294,12 +3332,20 @@ export function FfFbsSupplyWorkspace({
                       const tail = kizCommittedTails[order.id] ?? markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
                       const rowSizes = packingShowsSize ? fbsPackingSizes(order, isOzonSupply) : []
+                      // WMS-636 R4: в фильтре видны зелёная строка и непринятые; остальные только скрыты.
+                      const rejectedHidden = rejectedFilterOn && !kizRowActive
+                        && !(rejectedGreenHere && recentlyScannedOrderId === order.id) && !fbsOrderKizRejectedByWb(order)
                       return (
                         <Stack
                           key={order.id}
                           direction="row"
                           spacing={1.5}
                           sx={{
+                            ...(rejectedFilterOn ? {
+                              display: rejectedHidden ? 'none' : undefined,
+                              borderBottom: '1px solid',
+                              borderBottomColor: 'divider',
+                            } : {}),
                             alignItems: 'center',
                             px: 2,
                             py: 1.25,
@@ -3539,7 +3585,7 @@ export function FfFbsSupplyWorkspace({
                           </Stack>
                         </Stack>
                       )
-                    })}
+                    }))}
                   </Stack>
   ) : null
 
@@ -3666,6 +3712,12 @@ export function FfFbsSupplyWorkspace({
                                   <QrCodeScannerOutlined fontSize="small" color="action" />
                                 </InputAdornment>
                               ),
+                              // WMS-635 Д4: inside the field, so nothing in the bar moves.
+                              endAdornment: ordinaryWbPacking && ownRejectedToggle.count > 0 ? (
+                                <InputAdornment position="end">
+                                  <FbsRejectedKizTriangle filter={ownRejectedToggle} />
+                                </InputAdornment>
+                              ) : undefined,
                             },
                           }}
                           sx={{ '& input': { fontFamily: 'monospace' } }}

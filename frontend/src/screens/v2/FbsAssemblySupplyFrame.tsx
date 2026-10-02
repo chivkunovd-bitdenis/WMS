@@ -33,6 +33,11 @@ export type FbsAssemblyFrameControl = {
   onScanChange?: () => void
   promotedSupplyId?: string | null
   onPromotePackingOrder?: (supplyId: string, orderId: string) => void
+  /**
+   * WMS-636: фильтр «Не принятые WB КИЗ» окна сборки. N — по всем поставкам;
+   * шапку рисует одна рамка (headerSupplyId), зелёную строку — поднятая поставка.
+   */
+  rejectedFilter?: { active: boolean; count: number; headerSupplyId: string | null }
 
   /** Рамка активна: сканы принимает она, шапка светло-зелёная (R13). */
   active: boolean

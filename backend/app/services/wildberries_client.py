@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -62,6 +65,22 @@ def _wb_error_from_response(
 # In-memory store for e2e_mock_wb_marketplace_marking (tests may clear via reset helper).
 _mock_order_meta: dict[int, dict[str, list[dict[str, str]]]] = {}
 _mock_marketplace_supply_add_error_once: str | None = None
+
+
+# WMS-635 Q1: the packing scan does not wait for a hanging WB. Its KIZ write gets a
+# short timeout; a timeout is an unknown result and goes to the existing pending
+# operation, whose reconciliation reads WB before any repeat.
+KIZ_WRITE_TIMEOUT_SCAN_SEC = 4.0
+_KIZ_WRITE_TIMEOUT: ContextVar[float] = ContextVar("wb_kiz_write_timeout", default=60.0)
+
+
+@contextmanager
+def short_kiz_write_timeout(seconds: float = KIZ_WRITE_TIMEOUT_SCAN_SEC) -> Iterator[None]:
+    token = _KIZ_WRITE_TIMEOUT.set(seconds)
+    try:
+        yield
+    finally:
+        _KIZ_WRITE_TIMEOUT.reset(token)
 
 
 def reset_mock_marketplace_order_meta() -> None:
@@ -950,7 +969,9 @@ async def put_marketplace_order_meta(
     }
     payload = build_marketplace_order_meta_put_body(kind, value)
     try:
-        response = await client.put(url, headers=headers, json=payload, timeout=60.0)
+        response = await client.put(
+            url, headers=headers, json=payload, timeout=_KIZ_WRITE_TIMEOUT.get()
+        )
     except httpx.HTTPError as exc:
         raise WildberriesClientError("transport_error") from exc
     if response.status_code >= 400:
