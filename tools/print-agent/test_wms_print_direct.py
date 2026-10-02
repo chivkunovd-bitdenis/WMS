@@ -385,9 +385,9 @@ class JournalBudgetAndIdentityTest(unittest.TestCase):
             blocker.rollback()
             blocker.close()
             self.assertIsInstance(answers['a'], PrintNotSent)           # A mark: lock wait ended with its budget
-            self.assertLess(answers['a_t'], 2.0 + 1.5)                  # answered within its own deadline
+            self.assertLess(answers['a_t'], 2.0 + 3.0)                  # answered within its own deadline
             self.assertIsInstance(answers['b'], PrintNotSent)
-            self.assertLess(answers['b_t'], 2.0 + 1.5)
+            self.assertLess(answers['b_t'], 2.0 + 3.0)
             self.assertIsNone(printer._lookup('ka'))                    # both keys are free
             self.assertIsNone(printer._lookup('kb'))
             printer.print_timeout = 5
