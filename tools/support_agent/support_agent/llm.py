@@ -18,8 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import readonly_mcp, sandbox
+from . import prod_sql_mcp, readonly_mcp, sandbox
 from .config import Config
+from .prod_sql import ROLE_RE, SqlRefused, role_for_seller
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -146,6 +147,9 @@ class LlmRouter:
         self.store = store
         self.exec = exec_fn
         self.scratch = cfg.state_path / "scratch"
+        # Подготовка роли селлера на сервере (шлюз ensure-seller); подключает runner. Без неё
+        # (в тестах) роль считается готовой.
+        self.role_ensurer: Callable[[str], None] | None = None
 
     # -- выбор CLI и модели ----------------------------------------------------------
     def cooling(self, cli: str) -> bool:
@@ -207,7 +211,7 @@ class LlmRouter:
 
     def build_claude(
         self, model: str, mode: str, session: tuple[str, bool] | None, system: str | None,
-        cwd: str = "",
+        cwd: str = "", with_db: bool = False, db_log: str | None = None, db_role: str = "",
     ) -> list[str]:
         argv = [self.cfg.llm.claude_bin, "-p", "--model", model, "--output-format", "json"]
         if session is None:
@@ -228,7 +232,14 @@ class LlmRouter:
         if mode == "text":
             argv += ["--tools", "", "--disable-slash-commands", "--setting-sources", ""]
         elif mode == "readonly":
-            argv += ["--permission-mode", "dontAsk", "--allowedTools", *READONLY_TOOLS]
+            allowed = list(READONLY_TOOLS)
+            if with_db:
+                # Чтение боевой базы: единственный MCP-сервер, только его инструмент разрешён.
+                command, args = self.prod_sql_server(db_log, db_role)
+                argv += ["--mcp-config", json.dumps({"mcpServers": {"proddb": {
+                    "command": command, "args": args}}}, ensure_ascii=False), "--strict-mcp-config"]
+                allowed.append("mcp__proddb__sql_query")
+            argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
             argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit", *secret_read_denies()]
         else:  # write: разработчик хотфикса / макетчик в своём worktree, без bypassPermissions
             allowed, denied = self.write_tools(cwd)
@@ -264,7 +275,70 @@ class LlmRouter:
                 dirs.append(real)
         return dirs
 
-    def mcp_args(self, root: str) -> list[str]:
+    def prod_sql_server(self, log_path: str | None = None, db_role: str = "") -> tuple[str, list[str]]:
+        """Команда MCP-сервера sql_query: доверенный процесс с ключом ssh, под sandbox-exec (чтение только
+        ключа, known_hosts и кода агента; сеть только на порт 22). Модель ключа не видит."""
+        c = self.cfg.prod_db
+        script = Path(prod_sql_mcp.__file__).resolve()
+        key = os.path.expanduser(c.ssh_key_path)
+        known = os.path.expanduser(c.known_hosts) if c.known_hosts else ""
+        args = [str(script), "--ssh-host", c.ssh_host, "--ssh-user", c.ssh_user, "--key", key,
+                "--row-limit", str(c.row_limit), "--timeout", str(c.timeout_sec),
+                "--max-bytes", str(c.max_bytes), "--ssh-bin", c.ssh_bin, "--db-role", db_role]
+        if known:
+            args += ["--known-hosts", known]
+        if log_path:
+            args += ["--log", log_path]
+        # без -I: каталог скрипта нужен в sys.path (рядом лежит prod_sql); -E -s -S изолируют окружение
+        command, full = sys.executable, ["-E", "-s", "-S", *args]
+        if self.cfg.sandbox.enabled:
+            sandbox.require()
+            readable = [str(script.parent), sys.prefix, sys.base_prefix, key,
+                        known or os.path.expanduser("~/.ssh/known_hosts")]
+            profile = sandbox.prod_sql_profile(readable, [log_path] if log_path else None)
+            command, full = sandbox.SANDBOX_EXEC, ["-p", profile, sys.executable, *full]
+        return command, full
+
+    def with_prod_db(self, role: str, mode: str, db_role: str = "") -> bool:
+        """Инструмент базы получает только вызов по обращению с привязанным селлером (R42):
+        без db_role инструмента нет вовсе, общая роль wms_agent_ro обращениям не выдаётся."""
+        return bool(self.cfg.prod_db.enabled and mode == "readonly" and role in ("analyst", "review")
+                    and ROLE_RE.match(db_role))
+
+    def ticket_db_role(self, ticket_id: int | None) -> str:
+        """Роль селлера обращения. Берётся доверенным кодом из записи обращения (селлер зафиксирован
+        при создании по привязке чата или по данным формы с сервера); текст клиента и модель
+        на неё не влияют."""
+        if ticket_id is None:
+            return ""
+        seller = str(self.store.data(ticket_id).get("seller_id") or "")
+        try:
+            role = role_for_seller(seller) if seller else ""
+        except SqlRefused:
+            return ""
+        if role and self.role_ensurer is not None and not self._role_ready(role, seller):
+            return ""  # не удалось подготовить доступ: инструмента базы у этого вызова нет
+        return role
+
+    ROLE_TTL_SEC = 6 * 3600
+
+    def _role_ready(self, role: str, seller_id: str) -> bool:
+        """Роль и политики на сервере (идемпотентно); успех помнится несколько часов, чтобы новый
+        релиз перечня таблиц подхватывался."""
+        key = f"role_ready:{role}"
+        if time.time() - float(self.store.kv_get(key, 0)) < self.ROLE_TTL_SEC:
+            return True
+        try:
+            assert self.role_ensurer is not None
+            self.role_ensurer(seller_id)
+        except Exception as exc:  # noqa: BLE001 - любой сбой шлюза = доступа нет, обращение идёт без базы
+            log.warning("seller role not prepared (%s): %s", role, type(exc).__name__)
+            return False
+        self.store.kv_set(key, time.time())
+        return True
+
+    def mcp_args(self, root: str, with_db: bool = False, db_log: str | None = None,
+                 db_role: str = "") -> list[str]:
         """Подключение читателя проекта: сервер запускает Codex, но под sandbox-exec (чтение только
         корня проекта и кода самого сервера, без сети и без записи)."""
         script = Path(readonly_mcp.__file__).resolve()
@@ -278,13 +352,21 @@ class LlmRouter:
         else:
             command, args = python, ["-I", "-S", str(script), "--root", root]
         toml_args = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in args) + "]"
+        extra: list[str] = []
+        if with_db:
+            db_command, db_args = self.prod_sql_server(db_log, db_role)
+            db_toml = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in db_args) + "]"
+            extra = ["-c", f"mcp_servers.proddb.command={json.dumps(db_command)}",
+                     "-c", f"mcp_servers.proddb.args={db_toml}",
+                     "-c", 'mcp_servers.proddb.default_tools_approval_mode="approve"']
         return ["-c", f"mcp_servers.wms.command={json.dumps(command)}",
                 "-c", f"mcp_servers.wms.args={toml_args}",
-                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"']
+                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"', *extra]
 
     def build_codex(
         self, model: str, effort: str | None, mode: str, session_id: str | None,
-        cwd: str | None, last_message_file: str,
+        cwd: str | None, last_message_file: str, role: str = "", db_log: str | None = None,
+        db_role: str = "",
     ) -> list[str]:
         effort = check_effort(model, effort)
         argv = [self.cfg.llm.codex_bin, "exec"]
@@ -304,7 +386,8 @@ class LlmRouter:
         for setting in CODEX_EXTRA_CONFIG:
             argv += ["-c", setting]
         if mode == "readonly" and cwd:
-            argv += self.mcp_args(cwd)
+            argv += self.mcp_args(cwd, with_db=self.with_prod_db(role, mode, db_role), db_log=db_log,
+                                  db_role=db_role)
         sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
         if mode == "write":
             argv += ["-c", "sandbox_workspace_write.network_access=false"]
@@ -339,17 +422,23 @@ class LlmRouter:
         self.scratch.mkdir(parents=True, exist_ok=True)
         work_cwd = cwd or str(self.scratch)
         last_error = ""
+        wants_db = self.cfg.prod_db.enabled and mode == "readonly" and role in ("analyst", "review")
+        db_role = self.ticket_db_role(ticket_id) if wants_db else ""
         for cli, model in options:
             sessions = self._sessions(ticket_id, session_key)
             existing = sessions.get(cli)
             for resume in ([True, False] if existing else [False]):
                 full = prompt if resume else (f"{context}\n\n{prompt}" if context else prompt)
+                db_log = self._new_db_log(role, mode, db_role)
                 try:
-                    result = self._run_once(
-                        cli, model, role, full, mode=mode, cwd=work_cwd, system=system,
-                        session_id=existing if resume else None, keep_session=bool(session_key),
-                        timeout=timeout,
-                    )
+                    try:
+                        result = self._run_once(
+                            cli, model, role, full, mode=mode, cwd=work_cwd, system=system,
+                            session_id=existing if resume else None, keep_session=bool(session_key),
+                            timeout=timeout, db_log=db_log, db_role=db_role,
+                        )
+                    finally:
+                        self._note_db_use(ticket_id, db_log)
                 except _LimitHit as hit:
                     self.store.kv_set(
                         f"cooldown:{cli}", time.time() + self.cfg.llm.cooldown_sec
@@ -383,16 +472,46 @@ class LlmRouter:
         sessions.setdefault(key, {})[cli] = session_id
         self.store.patch_data(ticket_id, sessions=sessions)
 
+    def _new_db_log(self, role: str, mode: str, db_role: str = "") -> str | None:
+        """Файл следа успешных SQL-запросов этого вызова: пишет только доверенный сервер sql_query,
+        лежит в каталоге состояния агента (модели недоступен)."""
+        if not self.with_prod_db(role, mode, db_role):
+            return None
+        folder = self.cfg.state_path / "prod-sql-log"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{uuid.uuid4().hex}.log"
+        path.touch()
+        return str(path)
+
+    def _note_db_use(self, ticket_id: int | None, db_log: str | None) -> None:
+        """Если сервер хоть раз успешно вернул данные, обращение помечается db_used: любое сообщение
+        клиенту по нему уходит только через предпросмотр владельцу (N1)."""
+        if not db_log:
+            return
+        try:
+            used = bool(Path(db_log).read_text(encoding="utf-8").strip())
+        except OSError:
+            used = True  # след не прочитан или его нет: считаем, что база использовалась (fail closed)
+        try:
+            Path(db_log).unlink(missing_ok=True)
+        except OSError:
+            pass
+        if used and ticket_id is not None:
+            self.store.patch_data(ticket_id, db_used=True)
+
     def _run_once(
         self, cli: str, model: str, role: str, prompt: str, *, mode: str, cwd: str,
         system: str | None, session_id: str | None, keep_session: bool, timeout: int,
+        db_log: str | None = None, db_role: str = "",
     ) -> LlmResult:
         if cli == "claude":
             if keep_session:
                 session = (session_id, True) if session_id else (str(uuid.uuid4()), False)
             else:
                 session = None
-            argv = self.build_claude(model, mode, session, system, cwd)
+            argv = self.build_claude(model, mode, session, system, cwd,
+                                     with_db=self.with_prod_db(role, mode, db_role), db_log=db_log,
+                                     db_role=db_role)
             res = self.exec(argv, cwd, timeout, prompt)
             text, new_id, is_error = _parse_claude(res)
             if res.rc != 0 or is_error:
@@ -405,7 +524,7 @@ class LlmRouter:
         with sandbox.temp_dir() as tmp:
             out_file = str(Path(tmp) / "last.txt")
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
-                                    out_file)
+                                    out_file, role=role, db_log=db_log, db_role=db_role)
             res = self.exec(argv, cwd, timeout, prompt)
             text = ""
             try:

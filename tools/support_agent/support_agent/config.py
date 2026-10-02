@@ -125,6 +125,21 @@ class TranscribeCfg:
 
 
 @dataclass
+class ProdDbCfg:
+    """Чтение боевой базы аналитиками (только SELECT, ssh с отдельным ключом). Выключено: инструмента нет."""
+
+    enabled: bool = False
+    ssh_host: str = "sellerfocus.pro"
+    ssh_user: str = "root"
+    ssh_key_path: str = "~/.wms-support-agent/prod_ro_ed25519"
+    known_hosts: str = ""
+    row_limit: int = 200
+    timeout_sec: int = 30
+    max_bytes: int = 60_000
+    ssh_bin: str = "ssh"
+
+
+@dataclass
 class SandboxCfg:
     enabled: bool = True  # выключать нельзя без явного решения владельца
     extra_deny_read: list[str] = field(default_factory=list)
@@ -159,6 +174,7 @@ class Config:
     transcribe: TranscribeCfg = field(default_factory=TranscribeCfg)
     hotfix: HotfixCfg = field(default_factory=HotfixCfg)
     sandbox: SandboxCfg = field(default_factory=SandboxCfg)
+    prod_db: ProdDbCfg = field(default_factory=ProdDbCfg)
     mockups: MockupCfg = field(default_factory=MockupCfg)
 
     @property
@@ -224,5 +240,6 @@ def config_from_dict(data: dict[str, Any]) -> Config:
     cfg.transcribe = _build(TranscribeCfg, data.get("transcribe", {}))
     cfg.hotfix = _build(HotfixCfg, data.get("hotfix", {}))
     cfg.sandbox = _build(SandboxCfg, data.get("sandbox", {}))
+    cfg.prod_db = _build(ProdDbCfg, data.get("prod_db", {}))
     cfg.mockups = _build(MockupCfg, data.get("mockups", {}))
     return cfg

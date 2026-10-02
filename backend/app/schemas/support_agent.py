@@ -21,6 +21,9 @@ class SupportAgentRequestOut(BaseModel):
     proposal: str | None
     page_url: str | None
     client_name: str
+    # WMS-641 R43: серверная привязка заявки к селлеру (у сотрудника фулфилмента seller_id пуст)
+    tenant_id: uuid.UUID
+    seller_id: uuid.UUID | None
     status: Literal["review", "queued", "in_progress", "completed"]
     created_at: datetime
     updated_at: datetime

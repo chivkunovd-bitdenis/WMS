@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -121,6 +122,14 @@ class Inbound:
     text: str
     file_id: str | None = None
     reply_to: str | None = None
+    chat_title: str = ""
+
+
+# Команда владельца «привяжи к ИП …» (WMS-641 R39): допускается упоминание бота в начале
+# («@бот привяжи …»); в чате, где бот не настроен, принимается только она и только от владельца.
+BIND_RE = re.compile(
+    r"^\s*(?:@\w+[\s,:]+)?(?:пере)?привяж\w*\s+(?:(?:этот|данный|наш)\s+чат\s+)?(?:к|на)\s+(.+?)\s*$",
+    re.IGNORECASE | re.DOTALL)
 
 
 class Bots:
@@ -163,6 +172,23 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     chat_id = int((message.get("chat") or {}).get("id", 0))
     owner_chat = cfg.telegram.owner_chat_id
     single = cfg.telegram.single_bot
+    title = str((message.get("chat") or {}).get("title") or "")
+    is_owner = bool(cfg.telegram.owner_user_id) and int(sender.get("id", 0)) == cfg.telegram.owner_user_id
+    known = cfg.telegram.chats.get(chat_id)
+    text_only = message.get("text") or message.get("caption") or ""
+    if (
+        is_owner and chat_id < 0 and chat_id != owner_chat and (bot != "owner" or single)
+        and (known is None or known.role == "client") and BIND_RE.match(text_only)
+    ):
+        # Привязка чата (R39): принимает только бот приёма и только от владельца; это не клиентское
+        # сообщение. Из любого группового чата, где есть бот, даже если чата нет в конфиге.
+        reply = message.get("reply_to_message") or {}
+        return Inbound(
+            source="telegram", chat_id=chat_id, msg_id=str(message["message_id"]), role="bind",
+            author_id=str(sender.get("id", "")), author_name="владелец", ts=float(message.get("date", 0)),
+            kind="text", text=text_only, chat_title=title,
+            reply_to=str(reply["message_id"]) if reply.get("message_id") else None,
+        )
     if chat_id == owner_chat and chat_id:
         if bot != "owner" and not single:
             return None  # бот приёма в чате владельца ничего не принимает
@@ -195,6 +221,7 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
         text=text,
         file_id=voice.get("file_id") if voice and not text else None,
         reply_to=str(reply["message_id"]) if reply.get("message_id") else None,
+        chat_title=title,
     )
 
 

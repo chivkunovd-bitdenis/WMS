@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import threading
 import time
@@ -18,7 +19,9 @@ from .hotfix import HotfixRunner
 from .llm import LlmRouter
 from .mockups import MockupRunner
 from .pipeline import Pipeline, ThreadPool
+from .prod_sql import ProdSqlSettings
 from .redact import scrub
+from .seller_directory import SellerDirectory
 from .store import Store
 from .telegram import (
     Bots,
@@ -220,5 +223,13 @@ def build_agent(cfg: Config) -> Agent:
     )
     hotfix = HotfixRunner(pipe, http=http)
     pipe.hotfix = hotfix
+    if cfg.prod_db.enabled:
+        c = cfg.prod_db
+        directory = SellerDirectory(ProdSqlSettings(
+            c.ssh_host, c.ssh_user, os.path.expanduser(c.ssh_key_path),
+            os.path.expanduser(c.known_hosts) if c.known_hosts else "", c.row_limit, c.timeout_sec,
+            c.max_bytes, c.ssh_bin))
+        pipe.directory = directory
+        llm.role_ensurer = directory.ensure
     pipe.mockups = MockupRunner(pipe, hotfix)
     return Agent(cfg, store, tg, pipe)
