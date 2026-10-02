@@ -1,0 +1,156 @@
+"""F4/F5: необязательные sha и attempt_id в deploy.yml и prod-update.sh; без них поведение прежнее.
+
+Workflow и боевой скрипт не запускаются: проверяются разбор YAML и серверная часть на временных git-репозиториях
+(для боевого скрипта включён WMS_DEPLOY_GUARD_ONLY=1: остановка до сборки и базы)."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[3]
+WORKFLOW = ROOT / ".github" / "workflows" / "deploy.yml"
+UPDATE = ROOT / "scripts" / "deploy" / "prod-update.sh"
+pytestmark = pytest.mark.skipif(shutil.which("git") is None or shutil.which("bash") is None, reason="needs git/bash")
+
+
+def load() -> dict[str, Any]:
+    data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    data["on"] = data.pop(True)  # PyYAML читает ключ on как True
+    return data  # type: ignore[no-any-return]
+
+
+def test_workflow_yaml_has_optional_inputs_run_name_and_unchanged_triggers() -> None:
+    wf = load()
+    assert list(wf["on"]) == ["workflow_dispatch"]  # по-прежнему только ручной запуск
+    inputs = wf["on"]["workflow_dispatch"]["inputs"]
+    for name in ("sha", "attempt_id"):
+        assert inputs[name]["required"] is False and inputs[name]["default"] == ""
+    assert "inputs.attempt_id" in wf["run-name"] and "'Deploy Production'" in wf["run-name"]
+    steps = wf["jobs"]["deploy"]["steps"]
+    deploy = next(s for s in steps if s["name"].startswith("Deploy on server"))
+    assert deploy["env"]["DEPLOY_SHA"] == "${{ inputs.sha }}" and deploy["with"]["envs"] == "DEPLOY_SHA"
+    assert "prod-update.sh" in deploy["with"]["script"] and "docker" not in deploy["with"]["script"]
+    assert any(s["name"].startswith("Smoke check") for s in steps)  # проверка адресов осталась
+    assert wf["concurrency"] == {"group": "deploy-production", "cancel-in-progress": False}
+
+
+def git(*args: str, cwd: Path, env: dict[str, str] | None = None) -> str:
+    base = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t"}
+    return subprocess.run(["git", *args], cwd=cwd, env={**base, **(env or {})}, capture_output=True,
+                          text=True, check=True).stdout.strip()
+
+
+def make_remote(tmp_path: Path, script_for: Any) -> tuple[Path, Path, dict[str, str]]:
+    """origin с тремя коммитами etalon (c1, c2, c3) и коммитом side, не входящим в etalon."""
+    work = tmp_path / "work"
+    work.mkdir()
+    git("init", "-q", "-b", "etalon", ".", cwd=work)
+    shas: dict[str, str] = {}
+    for tag in ("c1", "c2", "c3"):
+        target = work / "scripts" / "deploy"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "prod-update.sh").write_text(script_for(tag), encoding="utf-8")
+        (work / "marker.txt").write_text(tag, encoding="utf-8")
+        git("add", "-A", cwd=work)
+        git("commit", "-qm", tag, cwd=work)
+        shas[tag] = git("rev-parse", "HEAD", cwd=work)
+    git("checkout", "-q", "-b", "side", shas["c1"], cwd=work)
+    (work / "side.txt").write_text("x", encoding="utf-8")
+    git("add", "-A", cwd=work)
+    git("commit", "-qm", "side", cwd=work)
+    shas["side"] = git("rev-parse", "HEAD", cwd=work)
+    git("checkout", "-q", "etalon", cwd=work)
+    origin = tmp_path / "origin.git"
+    git("clone", "-q", "--bare", str(work), str(origin), cwd=tmp_path)
+    clone = tmp_path / "server"
+    git("clone", "-q", str(origin), str(clone), cwd=tmp_path)
+    return origin, clone, shas
+
+
+def stub_script(tag: str) -> str:
+    return f'#!/usr/bin/env bash\necho "STUB script={tag} pin=${{WMS_DEPLOY_SHA:-}} head=$(git rev-parse HEAD)"\n'
+
+
+def run_remote_part(clone: Path, tmp_path: Path, deploy_sha: str | None) -> subprocess.CompletedProcess[str]:
+    wf = load()
+    deploy = next(s for s in wf["jobs"]["deploy"]["steps"] if s["name"].startswith("Deploy on server"))
+    env = {**os.environ, "WMS_REPO_DIR": str(clone), "HOME": str(tmp_path / "home"),
+           "GIT_CONFIG_GLOBAL": "/dev/null"}
+    if deploy_sha is not None:
+        env["DEPLOY_SHA"] = deploy_sha
+    return subprocess.run(["bash", "-c", deploy["with"]["script"]], env=env, capture_output=True, text=True,
+                          cwd=tmp_path)
+
+
+def test_workflow_server_part_without_inputs_deploys_head_of_etalon_like_before(tmp_path: Path) -> None:
+    origin, clone, shas = make_remote(tmp_path, stub_script)
+    res = run_remote_part(clone, tmp_path, None)  # переменная даже не задана
+    assert res.returncode == 0, res.stderr
+    assert f"STUB script=c3 pin= head={shas['c3']}" in res.stdout or "STUB script=c3 pin=" in res.stdout
+    res = run_remote_part(clone, tmp_path, "")
+    assert res.returncode == 0 and "script=c3 pin=" in res.stdout
+
+
+def test_workflow_server_part_pinned_uses_that_commit_script_and_pin(tmp_path: Path) -> None:
+    origin, clone, shas = make_remote(tmp_path, stub_script)
+    res = run_remote_part(clone, tmp_path, shas["c2"])
+    assert res.returncode == 0, res.stderr
+    assert f"STUB script=c2 pin={shas['c2']}" in res.stdout  # скрипт из закреплённого коммита, не из вершины
+
+
+def test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything(tmp_path: Path) -> None:
+    origin, clone, shas = make_remote(tmp_path, stub_script)
+    for bad in (shas["side"], "abc123", "G" * 40, "0" * 40, shas["c2"].upper()):
+        res = run_remote_part(clone, tmp_path, bad)
+        assert res.returncode != 0 and "STUB" not in res.stdout, bad
+
+
+def prod_script(tmp_path: Path) -> Any:
+    return lambda tag: UPDATE.read_text(encoding="utf-8")
+
+
+def run_update(clone: Path, tmp_path: Path, pin: str | None) -> subprocess.CompletedProcess[str]:
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    env = {**os.environ, "HOME": str(home), "WMS_REPO_DIR": str(clone), "WMS_DEPLOY_GUARD_ONLY": "1",
+           "GIT_CONFIG_NOSYSTEM": "1"}
+    if pin is not None:
+        env["WMS_DEPLOY_SHA"] = pin
+    return subprocess.run(["bash", str(UPDATE)], env=env, capture_output=True, text=True, cwd=clone)
+
+
+def test_real_update_script_default_is_head_of_etalon_and_pin_selects_exact_commit(tmp_path: Path) -> None:
+    origin, clone, shas = make_remote(tmp_path, prod_script(tmp_path))
+    res = run_update(clone, tmp_path, None)
+    assert res.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c3"], res.stderr
+    res = run_update(clone, tmp_path, "")
+    assert res.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c3"]
+    res = run_update(clone, tmp_path, shas["c2"])
+    assert res.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c2"], res.stderr
+    assert "guard passed" in res.stdout
+
+
+def test_real_update_script_refuses_pin_outside_trunk_or_malformed(tmp_path: Path) -> None:
+    origin, clone, shas = make_remote(tmp_path, prod_script(tmp_path))
+    git("fetch", "-q", "origin", "side", cwd=clone)
+    res = run_update(clone, tmp_path, shas["side"])
+    assert res.returncode != 0 and "not contained in trunk" in res.stderr
+    for bad in ("abc", "Z" * 40, "x" * 41):
+        res = run_update(clone, tmp_path, bad)
+        assert res.returncode != 0 and "40-character" in res.stderr
+
+
+def test_update_script_still_contains_backup_migration_and_health_steps() -> None:
+    text = UPDATE.read_text(encoding="utf-8")
+    for needle in ("pg_dump", "pg_restore --list", "run --rm migrations", "verify public access settings",
+                   "WMS_DEPLOY_GUARD_ONLY", "is-ancestor"):
+        assert needle in text

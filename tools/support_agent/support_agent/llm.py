@@ -30,6 +30,8 @@ LIMIT_PATTERNS = re.compile(
     r"authentication|unauthorized|invalid api key",
     re.IGNORECASE,
 )
+CODEX_DISABLED_FEATURES = ("shell_tool", "unified_exec", "browser_use", "browser_use_external",
+                           "computer_use", "apps", "in_app_browser", "image_generation")
 READONLY_TOOLS = [
     "Read", "Grep", "Glob", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
     "Bash(git grep:*)", "Bash(git status:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)",
@@ -210,8 +212,9 @@ class LlmRouter:
             # Встроенная песочница Bash Claude Code: запись только в cwd и tmp, без сети,
             # чтение конфига агента и учётных данных закрыто (проверено вживую).
             sandbox.require()
-            argv += ["--settings", sandbox.claude_settings(os.path.expanduser("~"),
-                                                           self.cfg.sandbox.extra_deny_read)]
+            protect = [str(Path(cwd) / ".git")] if cwd else []
+            argv += ["--settings", sandbox.claude_settings(
+                os.path.expanduser("~"), self.cfg.sandbox.extra_deny_read, protect)]
         if mode == "text":
             argv += ["--tools", "", "--disable-slash-commands", "--setting-sources", ""]
         elif mode == "readonly":
@@ -235,12 +238,18 @@ class LlmRouter:
         argv += ["-m", model]
         if effort:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
-        # write при включённой песочнице: границу задаёт внешний Seatbelt (вложенный нельзя),
-        # внутри Codex без собственной; иначе собственная workspace-write без сети.
-        outer = mode == "write" and self.cfg.sandbox.enabled
-        sbx_mode = {"text": "read-only", "readonly": "read-only",
-                    "write": "danger-full-access" if outer else "workspace-write"}[mode]
-        if mode == "write" and not outer:
+        # Пользовательские настройки Codex (MCP, хуки, плагины) не подгружаем. В режимах без
+        # необходимости читать проект (text) и записи (write) командная оболочка Codex ОТКЛЮЧЕНА
+        # (проверено вживую: правка файлов через apply_patch работает, shell, чтение произвольных
+        # файлов, запись вне каталога и в .git недоступны). Разработчик только правит файлы в
+        # worktree, а проверки делает диспетчер в строгой песочнице. Аналитику (readonly) shell
+        # нужен для чтения проекта: он идёт в read-only песочнице Codex.
+        argv += ["--ignore-user-config", "--ignore-rules"]
+        if mode in ("text", "write"):
+            for feature in CODEX_DISABLED_FEATURES:
+                argv += ["--disable", feature]
+        sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
+        if mode == "write":
             argv += ["-c", "sandbox_workspace_write.network_access=false"]
         if not session_id:
             argv += ["-s", sbx_mode, "--color", "never"]
@@ -340,13 +349,6 @@ class LlmRouter:
             out_file = str(Path(tmp) / "last.txt")
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
                                     out_file)
-            if mode == "write" and self.cfg.sandbox.enabled:
-                home = os.path.expanduser("~")
-                deny = [p for p in sandbox.deny_read_paths(home, self.cfg.sandbox.extra_deny_read)
-                        if not p.endswith("/.codex/auth.json")]  # токен нужен самому Codex
-                prof = sandbox.profile([cwd, tmp, str(Path(home) / ".codex")], deny,
-                                       allow_network=True)  # Codex ходит в API; дети тоже (остаток риска)
-                argv = sandbox.wrap(argv, prof)
             res = self.exec(argv, cwd, timeout, prompt)
             text = ""
             try:

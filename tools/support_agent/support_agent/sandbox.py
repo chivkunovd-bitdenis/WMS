@@ -57,7 +57,7 @@ def _q(path: str) -> str:
 
 def profile(
     write_dirs: list[str], deny_read: list[str], *, allow_network: bool,
-    keep_readable: list[str] | None = None,
+    keep_readable: list[str] | None = None, protect_write: list[str] | None = None,
 ) -> str:
     """Профиль Seatbelt: по умолчанию всё разрешено, затем запреты (последнее правило сильнее)."""
     rules = ["(version 1)", "(allow default)"]
@@ -67,6 +67,8 @@ def profile(
     rules.append('(allow file-write* (subpath "/dev"))')
     for path in write_dirs:
         rules.append(f"(allow file-write* (subpath {_q(path)}))")
+    for path in protect_write or []:  # например <worktree>/.git: метаданные Git менять нельзя (N1)
+        rules.append(f"(deny file-write* (subpath {_q(path)}))")
     for path in deny_read:
         rules.append(f"(deny file-read* (subpath {_q(path)}))")
     for path in keep_readable or []:  # исключения из запрета чтения (например, ~/.codex для Codex)
@@ -92,19 +94,22 @@ def check_argv(
     argv: list[str], worktree: str, tmp: str, home: str, extra_deny: list[str] | None
 ) -> list[str]:
     """Команда проверки: без сети, запись только в worktree и временный каталог, чистое окружение."""
-    prof = profile([worktree, tmp], deny_read_paths(home, extra_deny), allow_network=False)
+    prof = profile([worktree, tmp], deny_read_paths(home, extra_deny), allow_network=False,
+                   protect_write=[str(Path(worktree) / ".git")])
     env = ["/usr/bin/env", "-i", f"PATH={os.environ.get('PATH', '/usr/bin:/bin')}", f"HOME={tmp}",
            f"TMPDIR={tmp}", "LANG=en_US.UTF-8", f"npm_config_cache={tmp}/npm", "PYTHONDONTWRITEBYTECODE=1"]
     return wrap([*env, *argv], prof)
 
 
-def claude_settings(home: str, extra_deny: list[str] | None) -> str:
+def claude_settings(
+    home: str, extra_deny: list[str] | None, protect_write: list[str] | None = None
+) -> str:
     """Встроенная песочница Bash Claude Code: запись в cwd и tmp, без сети, чтение секретов закрыто."""
     deny = deny_read_paths(home, extra_deny)
     return json.dumps({
         "sandbox": {
             "enabled": True,
             "allowUnsandboxedCommands": False,
-            "filesystem": {"denyRead": deny},
+            "filesystem": {"denyRead": deny, "denyWrite": list(protect_write or [])},
         }
     })

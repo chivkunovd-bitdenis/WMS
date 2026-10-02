@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,9 +28,12 @@ def agent_marker(key: str) -> str:
 
 
 class TrelloClient:
-    def __init__(self, cfg: TrelloCfg, http: httpx.Client) -> None:
+    def __init__(
+        self, cfg: TrelloCfg, http: httpx.Client, redact: Callable[[str], str] = lambda t: t
+    ) -> None:
         self.cfg = cfg
         self.http = http
+        self.redact = redact  # маскировка секретов во всём, что уходит в Trello
 
     def _request(
         self, method: str, path: str, *, params: dict[str, str] | None = None,
@@ -52,7 +56,7 @@ class TrelloClient:
             raise TrelloError("invalid_response") from None
 
     def create_card(self, *, list_id: str, name: str, desc: str, label_id: str = "") -> dict[str, Any]:
-        data = {"idList": list_id, "name": name[:200], "desc": desc[:16000]}
+        data = {"idList": list_id, "name": self.redact(name)[:200], "desc": self.redact(desc)[:16000]}
         if label_id:
             data["idLabels"] = label_id
         card = self._request("POST", "cards", data=data)
@@ -94,7 +98,7 @@ class TrelloClient:
         return [str(a.get("data", {}).get("text", "")) for a in actions]
 
     def add_comment(self, card_id: str, text: str) -> None:
-        self._request("POST", f"cards/{card_id}/actions/comments", data={"text": text[:16000]})
+        self._request("POST", f"cards/{card_id}/actions/comments", data={"text": self.redact(text)[:16000]})
 
     def move_card(self, card_id: str, list_id: str) -> None:
         self._request("PUT", f"cards/{card_id}", data={"idList": list_id})

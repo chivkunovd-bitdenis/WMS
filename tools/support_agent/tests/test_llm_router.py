@@ -157,25 +157,36 @@ def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
         assert blocked in denied
 
 
-def test_codex_dev_runs_under_seatbelt_without_secret_reads(tmp_path: Path) -> None:
+def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path) -> None:
+    """F2: у Sol-разработчика отключены shell и прочие инструменты; он только правит файлы worktree."""
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="hotfix")
     wt = str(tmp_path / "wt")
     llm.ask("routine", "x", mode="write", cwd=wt, ticket_id=tid, session_key="dev")
-    full = script.full[-1]
-    assert full[0] == "/usr/bin/sandbox-exec" and full[1] == "-p"
-    prof = full[2]
-    assert "(deny file-write*)" in prof and f'(allow file-write* (subpath "{Path(wt).resolve()}"))' in prof
-    assert "/.wms-support-agent" in prof and "/.ssh" in prof and "/.config/gh" in prof
-    assert "/.codex/auth.json" not in prof  # токен нужен самому Codex (остаток риска описан)
-    assert "(deny network*)" not in prof  # Codex ходит в API
-    inner = full[3:]
-    assert inner[inner.index("-s") + 1] == "danger-full-access"  # вложенный Seatbelt невозможен
+    argv = script.full[-1]
+    assert argv[0] == "codex"  # без внешней оболочки: она больше не нужна и не даёт доступ к ~/.codex
+    disabled = [argv[i + 1] for i, a in enumerate(argv) if a == "--disable"]
+    assert {"shell_tool", "unified_exec", "browser_use", "computer_use", "apps"} <= set(disabled)
+    assert "--ignore-user-config" in argv and "--ignore-rules" in argv
+    assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
+    assert "sandbox_workspace_write.network_access=false" in argv
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
-    resume = script.full[-1][3:]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and 'sandbox_mode="danger-full-access"' in resume
+    resume = script.full[-1]
+    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and "shell_tool" in resume
+    assert 'sandbox_mode="workspace-write"' in resume and "--ignore-user-config" in resume
+
+
+def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)
+    llm.ask("filter", "x", mode="text", cwd=str(tmp_path))
+    assert "shell_tool" in script.full[-1]
+    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
+    argv = script.full[-1]
+    assert "shell_tool" not in argv and argv[argv.index("-s") + 1] == "read-only"
 
 
 def test_codex_dev_without_seatbelt_falls_back_to_native_workspace_write(tmp_path: Path) -> None:

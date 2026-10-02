@@ -20,6 +20,7 @@ from typing import Any
 from . import prompts
 from .config import Config
 from .llm import LlmError, LlmRouter, LlmUnavailable, extract_json
+from .redact import scrub
 from .store import Store
 from .telegram import Inbound, TelegramClient, TelegramError
 from .transcribe import TranscribeError, Transcriber
@@ -92,6 +93,7 @@ class Pipeline:
         self.trello, self.wms, self.transcriber = trello, wms, transcriber
         self.pool = pool or ThreadPool(cfg.limits.max_parallel)
         self.clock = clock
+        store.scrubber = lambda text: scrub(cfg, text)
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
         self.mockups: Any = None
         self.stages: dict[str, Callable[[int], None]] = {
@@ -570,9 +572,12 @@ class Pipeline:
                 digest.update(Path(path).read_bytes())
         return digest.hexdigest()
 
-    def _export_file(self, tid: int, filename: str, content: bytes) -> str:
+    def _export_file(self, tid: int, kind: str, filename: str, content: bytes) -> str:
+        """kind разводит служебный файл длинного ответа и вложение аналитика по разным папкам:
+        одноимённые файлы не перезаписывают друг друга (N2)."""
         name = re.sub(r"[^\w.\- ]", "_", Path(filename).name) or "export.txt"
-        folder = self.cfg.state_path / "exports" / str(tid) / str(self._rev(self.store.data(tid)))
+        folder = (self.cfg.state_path / "exports" / str(tid)
+                  / str(self._rev(self.store.data(tid))) / kind)
         folder.mkdir(parents=True, exist_ok=True)
         target = folder / name
         target.write_bytes(content)
@@ -582,15 +587,16 @@ class Pipeline:
         """Замораживает ровно то, что уйдёт клиенту (текст и/или файлы) и отпечаток.
 
         Длинный текст не обрезается молча: он уходит файлом, а предпросмотр показывает тот же файл."""
-        text = str(analysis.get("info_answer") or "").strip()
+        text = scrub(self.cfg, str(analysis.get("info_answer") or "").strip())
         files: list[str] = []
         info_file = analysis.get("info_file")
         if isinstance(info_file, dict) and info_file.get("content"):
-            content = str(info_file["content"]).encode()
+            content = scrub(self.cfg, str(info_file["content"])).encode()
             if len(content) <= MAX_FILE_BYTES:
-                files.append(self._export_file(tid, str(info_file.get("filename") or "export.csv"), content))
+                files.append(self._export_file(tid, "attachment",
+                                               str(info_file.get("filename") or "export.csv"), content))
         if len(text) > MAX_ANSWER_CHARS:
-            files.insert(0, self._export_file(tid, "ответ.txt", text.encode()))
+            files.insert(0, self._export_file(tid, "answer", "ответ.txt", text.encode()))
             text = "Подробный ответ во вложении."
         if not text and not files:
             self.store.patch_data(tid, client_answer=None)

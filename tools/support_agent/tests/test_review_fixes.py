@@ -231,3 +231,71 @@ def test_partner_message_replayed_after_crash_does_not_duplicate_task(env: Any) 
     env.store.set_message(msg, status="new")  # «упали» до пометки о завершении
     env.pipe.tick()
     assert len(env.store.rows("SELECT * FROM tickets WHERE kind='partner_task'")) == 1
+
+
+# ------------------------------------------------------------------ круг 2: N2 и маскировка исходящего
+def test_long_answer_file_does_not_overwrite_same_named_attachment(env: Any) -> None:
+    from pathlib import Path
+
+    long_text = "Подробность. " * 300
+    analysis = dict(ANALYSIS_BUG, category="info", info_answer=long_text, hotfix={},
+                    info_file={"filename": "ответ.txt", "content": "REQUESTED-EXPORT"})
+    script(env, analysis, category="info")
+    env.say(CLIENT_CHAT, "выгрузка и пояснение", msg_id="51")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    env.flush()
+    files = env.store.data(1)["client_answer"]["files"]
+    assert len(files) == 2 and len(set(files)) == 2
+    contents = {Path(f).read_text(encoding="utf-8") for f in files}
+    assert contents == {long_text.strip(), "REQUESTED-EXPORT"}
+    assert [Path(d[1]).read_text(encoding="utf-8").strip() for d in env.tg.documents if d[0] == OWNER_CHAT] \
+        == [Path(f).read_text(encoding="utf-8").strip() for f in files]  # владелец видел оба
+    script_owner(env, {"intent": "go", "ticket_ids": [], "all": False})
+    env.say(OWNER_CHAT, "кати", user=OWNER_ID, name="Владелец",
+            reply_to=env.store.outbox_by_key("preview:1")["tg_message_id"], msg_id="o9")
+    env.flush()
+    sent = [Path(d[1]).read_text(encoding="utf-8").strip() for d in env.tg.documents if d[0] == CLIENT_CHAT]
+    assert sorted(sent) == sorted(c.strip() for c in contents)  # клиент получил оба
+
+
+def test_secrets_from_analyst_output_are_masked_in_every_outgoing_text(env: Any) -> None:
+    leaked = ["sk-proj-ABCDEFGHIJKLMNOP1234", "ghp_" + "a" * 36, "123456789:" + "A" * 35,
+              "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkw.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV",
+              "b" * 64, env.cfg.trello.token, env.cfg.telegram.bot_token]
+    blob = " ".join(leaked)
+    analysis = dict(ANALYSIS_BUG, category="info", info_answer=f"найдено: {blob}", hotfix={},
+                    info_file={"filename": "x.txt", "content": blob})
+    script(env, analysis, category="info")
+    env.llm.on("routine", "короткую сводку", f"Что-то нашёл: {blob}")
+    env.say(CLIENT_CHAT, "что-нибудь", msg_id="61")
+    env.clock.advance(130)
+    env.pipe.tick()
+    env.clock.advance(100)
+    env.pipe.tick()
+    env.flush()
+    from pathlib import Path
+
+    out = " ".join(t for _, t, _ in env.tg.sent) + " ".join(
+        Path(d[1]).read_text(encoding="utf-8") + d[2] for d in env.tg.documents)
+    assert out.strip()
+    for secret in leaked:
+        assert secret not in out, secret
+    # карточка Trello: и название, и описание
+    from support_agent.redact import scrub
+    from support_agent.trello import TrelloClient
+
+    sent_to_trello: list[bytes] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent_to_trello.append(request.read())
+        return httpx.Response(200, json={"id": "c1"})
+
+    client = TrelloClient(env.cfg.trello, httpx.Client(transport=httpx.MockTransport(handle)),
+                          redact=lambda t: scrub(env.cfg, t))
+    client.create_card(list_id="L", name=blob, desc=blob)
+    client.add_comment("c1", blob)
+    joined = b" ".join(sent_to_trello).decode()
+    assert all(secret not in joined for secret in leaked)

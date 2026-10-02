@@ -13,6 +13,17 @@ DEPLOY_BRANCH="${WMS_DEPLOY_BRANCH:-etalon}"
 DEPLOY_TRUNK_REF="${WMS_DEPLOY_TRUNK_REF:-${DEPLOY_REMOTE}/etalon}"
 DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
 
+# Optional pin (WMS-639): deploy exactly this commit instead of the branch head.
+# Empty or unset keeps the previous behaviour. The trunk guard below still applies,
+# so the pinned commit must be contained in the trunk.
+if [[ -n "${WMS_DEPLOY_SHA:-}" ]]; then
+  if [[ ! "${WMS_DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: WMS_DEPLOY_SHA must be a full 40-character lowercase commit id." >&2
+    exit 1
+  fi
+  DEPLOY_TARGET_REF="${WMS_DEPLOY_SHA}"
+fi
+
 echo "==> git fetch"
 # Протокол v2 с боевого сервера ломается: GitHub отвечает 401, git просит логин
 # и падает с «expected flush after ref listing» — при том что репозиторий

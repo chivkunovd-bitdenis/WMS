@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +25,15 @@ from .pipeline import Pipeline
 log = logging.getLogger(__name__)
 MAX_FIX_ROUNDS = 2
 DEPLOY_LOOKUP_SEC = 120
+GIT_HARDEN = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.editor=true",
+              "-c", "diff.external=", "-c", "core.untrackedCache=false", "-c", "core.pager=cat"]
 FORBIDDEN_PATHS = (".github/", "scripts/deploy/", "scripts/ci/", ".claude/", ".cursor/",
                    "docker-compose", "deploy/", "tools/support_agent/")
 HONEST_STATUS = "Статус: выложено в облегчённом режиме, приёмка аналитика не проводилась."
+
+
+class RunsUnreadable(Exception):
+    pass
 
 
 class StepFailed(Exception):
@@ -53,6 +60,17 @@ class HotfixRunner:
             raise StepFailed(f"команда не удалась: {' '.join(argv[:3])}: {res.err.strip()[:200]}")
         return res.out
 
+    def run_gh(self, argv: list[str], cwd: str | Path | None = None, timeout: int = 300) -> ExecResult:
+        """gh запускается только из основного репозитория: из рабочей копии с недоверенными
+        метаданными он мог бы исполнить чужие настройки git (N1). Аргумент cwd игнорируется."""
+        return self.run(argv, None, timeout)
+
+    def must_gh(self, argv: list[str], cwd: str | Path | None = None, timeout: int = 300) -> str:
+        res = self.run_gh(argv, None, timeout)
+        if res.rc != 0:
+            raise StepFailed(f"команда не удалась: {' '.join(argv[:3])}: {res.err.strip()[:200]}")
+        return res.out
+
     def run_untrusted(
         self, argv: list[str], worktree: str | Path, cwd: str | Path, timeout: int = 900
     ) -> ExecResult:
@@ -66,8 +84,45 @@ class HotfixRunner:
             )
             return self.run(wrapped, cwd, timeout)
 
+    def _in_worktree(self, cwd: str | Path | None) -> bool:
+        if not cwd:
+            return False
+        root = (Path(self.cfg.repo) / ".worktrees").resolve()
+        return root in Path(cwd).resolve().parents
+
     def git(self, *args: str, cwd: str | Path | None = None) -> str:
+        """Git в рабочей копии, которую правил недоверенный код, запускается с жёсткими настройками:
+        без fsmonitor и хуков, без внешних драйверов diff, без системного конфига (N1)."""
+        if self._in_worktree(cwd):
+            return self.must(["/usr/bin/env", "GIT_CONFIG_NOSYSTEM=1", "git", *GIT_HARDEN, *args], cwd)
         return self.must(["git", *args], cwd)
+
+    def trusted_admin_dir(self, path: str | Path) -> Path:
+        """Каталог метаданных worktree берём из ДОВЕРЕННОГО основного .git (недоступен песочнице)."""
+        want = (Path(path) / ".git").resolve()
+        admin_root = Path(self.cfg.repo) / ".git" / "worktrees"
+        if admin_root.is_dir():
+            for admin in admin_root.iterdir():
+                pointer = admin / "gitdir"
+                if pointer.is_file() and Path(pointer.read_text(encoding="utf-8").strip()).resolve() == want:
+                    return admin.resolve()
+        raise StepFailed("рабочая копия не зарегистрирована в основном git: метаданные подменены")
+
+    def guard_gitdir(self, path: str | Path) -> None:
+        """Перед привилегированным Git: .git рабочей копии — обычный файл-ссылка на ожидаемый каталог
+        метаданных, и git rev-parse подтверждает пути. Иначе подмена (хуки, fsmonitor) — остановка."""
+        admin = self.trusted_admin_dir(path)
+        gitfile = Path(path) / ".git"
+        if gitfile.is_symlink() or not gitfile.is_file():
+            raise StepFailed("метаданные .git рабочей копии подменены (не файл-ссылка)")
+        if gitfile.read_text(encoding="utf-8").strip() != f"gitdir: {admin}":
+            raise StepFailed("метаданные .git рабочей копии подменены (другая ссылка)")
+        out = self.git("rev-parse", "--git-dir", "--git-common-dir", cwd=path).split()
+        if len(out) != 2:
+            raise StepFailed("не удалось подтвердить каталог метаданных git")
+        git_dir, common = ((Path(path) / out[0]).resolve(), (Path(path) / out[1]).resolve())
+        if git_dir != admin or common != (Path(self.cfg.repo) / ".git").resolve():
+            raise StepFailed("git указывает не на ожидаемые каталоги метаданных: рабочая копия подменена")
 
     def fetch(self) -> None:
         self.git("fetch", "origin")
@@ -94,7 +149,7 @@ class HotfixRunner:
             self.run(["git", "ls-tree", "--name-only", "origin/etalon", "docs/requirements/"]).out,
             self.run(["git", "worktree", "list"]).out,
         ]
-        gh = self.run(["gh", "pr", "list", "--state", "all", "--limit", "200", "--json",
+        gh = self.run_gh(["gh", "pr", "list", "--state", "all", "--limit", "200", "--json",
                        "title,headRefName"])
         if gh.rc == 0:
             text.append(gh.out)
@@ -207,13 +262,15 @@ class HotfixRunner:
         """Коммит делает диспетчер: у сессии разработчика нет прав на git add/commit/push."""
         path = h["path"]
         number = f"WMS-{h['number']}"
+        self.guard_gitdir(path)
         self.git("add", "-A", "--", ".", ":(exclude)frontend/node_modules", cwd=path)
-        if not self.must(["git", "status", "--porcelain"], path).strip():
+        if not self.git("status", "--porcelain", cwd=path).strip():
             return
         summary = " ".join(str((h.get("dev") or {}).get("summary", "")).split())[:100]
         who = "Codex Sol <noreply@openai.com>" if h.get("dev_cli") == "codex" else (
             "Claude Sonnet <noreply@anthropic.com>")
-        self.git("commit", "-m", f"{number}: {summary or 'облегчённый хотфикс'}",
+        self.git("-c", "user.name=WMS support agent", "-c", "user.email=noreply@anthropic.com",
+                 "commit", "--no-verify", "-m", f"{number}: {summary or 'облегчённый хотфикс'}",
                  "-m", f"Co-Authored-By: {who}", cwd=path)
 
     # -- проверки (делает сам диспетчер, не доверяя отчёту разработчика) ------------------
@@ -254,6 +311,7 @@ class HotfixRunner:
     def verify_worktree(self, h: dict[str, Any]) -> list[str]:
         path, number = Path(h["path"]), f"WMS-{h['number']}"
         problems: list[str] = []
+        self.guard_gitdir(path)
         names = self.git("diff", "--name-only", "origin/etalon...HEAD", cwd=path).split()
         if not names:
             return ["нет ни одного коммита с изменениями относительно origin/etalon"]
@@ -318,6 +376,7 @@ class HotfixRunner:
         base = path.parent / f"{path.name}-base"
         try:
             self.git("worktree", "add", "--detach", str(base), "origin/etalon")
+            self.guard_gitdir(base)
             for rel in tests:
                 dest = base / "backend" / rel
                 dest.parent.mkdir(parents=True, exist_ok=True)
@@ -365,8 +424,8 @@ class HotfixRunner:
         self.fetch()
         if self._number_collides(h):
             raise StepFailed(f"номер {number} уже занят в origin/etalon параллельной работой")
-        self.git("push", "-u", "origin", branch, cwd=path)  # повторный push безопасен
-        existing = self.run(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
+        self.git("push", "-u", "origin", branch)  # из доверенного основного репозитория; повтор безопасен
+        existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
                              "number,url"], path)
         found = json.loads(existing.out) if existing.rc == 0 and existing.out.strip() else []
         if not found:
@@ -375,9 +434,9 @@ class HotfixRunner:
                     f"{(h.get('dev') or {}).get('summary', '')}\n\n"
                     "Приёмка аналитика не проводилась.\n\n"
                     "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
-            self.must(["gh", "pr", "create", "--base", "etalon", "--head", branch, "--title", title,
+            self.must_gh(["gh", "pr", "create", "--base", "etalon", "--head", branch, "--title", title,
                        "--body", body], path)
-            existing = self.run(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
+            existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
                                  "number,url"], path)
             found = json.loads(existing.out or "[]")
         if not found:
@@ -392,7 +451,7 @@ class HotfixRunner:
     # -- CI -------------------------------------------------------------------------------
     def _s_ci(self, tid: int, h: dict[str, Any]) -> None:
         # gh pr checks возвращает код 8 (ждём) и 1 (упало) и при --json: разбираем вывод, не код.
-        res = self.run(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
+        res = self.run_gh(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
         try:
             checks = json.loads(res.out or "[]")
         except ValueError:
@@ -423,7 +482,7 @@ class HotfixRunner:
 
     def _s_merge(self, tid: int, h: dict[str, Any]) -> None:
         pr = str(h["pr"])
-        view = json.loads(self.must(["gh", "pr", "view", pr, "--json", "state,mergeCommit"], h["path"]))
+        view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"], h["path"]))
         if view.get("state") != "MERGED":
             self.fetch()
             deployed = self.deployed_sha()
@@ -435,8 +494,8 @@ class HotfixRunner:
                 )
             if self.cfg.hotfix.preflight_cmd:
                 self.must(["bash", "-lc", self.cfg.hotfix.preflight_cmd], timeout=120)
-            self.must(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
-            view = json.loads(self.must(["gh", "pr", "view", pr, "--json", "state,mergeCommit"],
+            self.must_gh(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
+            view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"],
                                         h["path"]))
         oid = str((view.get("mergeCommit") or {}).get("oid") or "")
         if not re.fullmatch(r"[0-9a-f]{40}", oid):
@@ -444,52 +503,77 @@ class HotfixRunner:
         self.save(tid, h, step="deploy", merged=True, merge_sha=oid)
 
     # -- deploy ---------------------------------------------------------------------------
-    def _runs(self, path: str) -> list[dict[str, Any]]:
-        res = self.run(["gh", "run", "list", "--workflow", "deploy.yml", "--branch", "etalon",
-                        "--limit", "20", "--json", "databaseId,status,conclusion,createdAt,event"],
-                       path)
-        return json.loads(res.out) if res.rc == 0 and res.out.strip() else []
+    def _runs(self) -> list[dict[str, Any]]:
+        """Список запусков выкладки. Ошибка чтения НЕ превращается в пустой список (F5)."""
+        res = self.run_gh(["gh", "run", "list", "--workflow", "deploy.yml", "--branch", "etalon",
+                           "--limit", "30", "--json",
+                           "databaseId,displayTitle,status,conclusion,createdAt,event"])
+        try:
+            runs = json.loads(res.out)
+        except ValueError:
+            runs = None
+        if res.rc != 0 or not isinstance(runs, list):
+            raise RunsUnreadable("список запусков выкладки не прочитан")
+        return runs
+
+    def foreign_commits(self, deployed: str, merge_sha: str) -> list[str]:
+        """Коммиты, которые выложатся вместе с хотфиксом, кроме самого слияния и его ветки."""
+        commits = set(self.git("rev-list", f"{deployed}..{merge_sha}").split())
+        parents = self.git("rev-list", "--parents", "-n", "1", merge_sha).split()
+        allowed = {merge_sha}
+        if len(parents) == 3:  # обычное слияние: первый родитель — etalon, второй — ветка хотфикса
+            allowed |= set(self.git("rev-list", f"{parents[1]}..{parents[2]}").split())
+        return sorted(commits - allowed)
 
     def _s_deploy(self, tid: int, h: dict[str, Any]) -> None:
-        """Штатный workflow выкатывает ТЕКУЩУЮ вершину etalon (deploy.yml без входных параметров),
-        поэтому: версия фиксируется как merge_sha; перед запуском вершина обязана совпасть с ним; намерение
-        записывается ДО запуска; свой запуск опознаётся по новому id, а не по времени; после
-        перезапуска запуск повторно не отправляется (F4, F5)."""
+        """Штатный workflow получает merge_sha и attempt_id (необязательные inputs deploy.yml): сервер
+        выкатывает ровно этот коммит, а запуск опознаётся только по attempt_id в его имени.
+        Намерение записывается ДО запуска; неизвестный исход не повторяется, а останавливает (F4, F5)."""
         now = self.p.clock()
         if not h.get("deploy_intent"):
             self.fetch()
-            etalon = self.git("rev-parse", "origin/etalon").strip()
-            if etalon != h["merge_sha"]:
-                raise StepFailed(
-                    f"после слияния хотфикса в etalon появились другие изменения ({etalon[:8]} вместо "
-                    f"{h['merge_sha'][:8]}): штатная выкладка выкатит и их, без вашего решения не запускаю"
-                )
-            before = [r["databaseId"] for r in self._runs(h["path"])]
-            self.save(tid, h, deploy_intent=True, runs_before=before, deploy_ts=now)  # до запуска
+            sha = h["merge_sha"]
+            if self.run(["git", "merge-base", "--is-ancestor", sha, "origin/etalon"]).rc != 0:
+                raise StepFailed("коммит слияния хотфикса не найден в origin/etalon")
+            workflow = self.run(["git", "show", "origin/etalon:.github/workflows/deploy.yml"]).out
+            if "attempt_id" not in workflow:
+                raise StepFailed("deploy.yml в etalon не принимает sha и attempt_id: закрепить версию "
+                                 "выкладки нельзя, без вашего решения не запускаю")
+            extra = self.foreign_commits(self.deployed_sha(), sha)
+            if extra and not self.cfg.hotfix.allow_foreign_commits:
+                raise StepFailed(f"вместе с хотфиксом выложились бы ещё {len(extra)} чужих изменений: "
+                                 "без вашего решения не запускаю")
+            attempt = "wms639-" + uuid.uuid4().hex[:12]
+            self.save(tid, h, deploy_intent=True, attempt_id=attempt, deploy_ts=now)  # до запуска
             # Код выхода не важен: исход выясняется чтением списка запусков, повторно не запускаем.
-            self.run(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon"], h["path"])
-        if not h.get("deploy_run_id"):
-            new = [r for r in self._runs(h["path"])
-                   if r["databaseId"] not in h.get("runs_before", [])
-                   and r.get("event") == "workflow_dispatch"]
-            if len(new) > 1:
-                raise StepFailed("появилось несколько новых запусков выкладки, свой опознать нельзя")
-            if not new:
-                if now - float(h.get("deploy_ts", now)) > DEPLOY_LOOKUP_SEC:
-                    raise StepFailed("запуск выкладки не подтверждён (мог не уйти или уйти без ответа): "
-                                     "повторно не запускаю, проверьте Actions вручную")
-                self.save(tid, h, next_poll=now + 10)
-                return
-            self.save(tid, h, deploy_run_id=new[0]["databaseId"], deploy_wait_from=now)
-        run = next((r for r in self._runs(h["path"]) if r["databaseId"] == h["deploy_run_id"]), None)
-        if run is None or run.get("status") != "completed":
-            if now - float(h.get("deploy_wait_from", now)) > self.cfg.limits.deploy_timeout_sec:
+            self.run_gh(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon", "-f", f"sha={sha}",
+                         "-f", f"attempt_id={attempt}"])
+        try:
+            runs = self._runs()
+        except RunsUnreadable:
+            self._wait_or_fail(tid, h, now, "список запусков выкладки не читается")
+            return
+        own = [r for r in runs if h["attempt_id"] in str(r.get("displayTitle", ""))]
+        if len(own) > 1:
+            raise StepFailed("запусков с моим attempt_id несколько, исход неоднозначен: не продолжаю")
+        if not own:
+            self._wait_or_fail(tid, h, now, "запуск выкладки с моим attempt_id не найден (мог не уйти или "
+                               "уйти без ответа): повторно не запускаю, проверьте Actions вручную")
+            return
+        run = own[0]
+        if run.get("status") != "completed":
+            if now - float(h.get("deploy_ts", now)) > self.cfg.limits.deploy_timeout_sec:
                 raise StepFailed("выкладка не завершилась за отведённое время")
-            self.save(tid, h, next_poll=now + 20)
+            self.save(tid, h, deploy_run_id=run["databaseId"], next_poll=now + 20)
             return
         if run.get("conclusion") != "success":
             raise StepFailed(f"выкладка завершилась неуспешно ({run.get('conclusion')})")
-        self.save(tid, h, step="verify")
+        self.save(tid, h, step="verify", deploy_run_id=run["databaseId"])
+
+    def _wait_or_fail(self, tid: int, h: dict[str, Any], now: float, reason: str) -> None:
+        if now - float(h.get("deploy_ts", now)) > DEPLOY_LOOKUP_SEC:
+            raise StepFailed(f"{reason}; запуск не подтверждён")
+        self.save(tid, h, next_poll=now + 10)
 
     # -- проверка версии ------------------------------------------------------------------
     def _s_verify(self, tid: int, h: dict[str, Any]) -> None:

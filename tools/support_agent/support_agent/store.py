@@ -6,6 +6,7 @@ import json
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,7 @@ class Store:
         self.db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         self.lock = threading.RLock()
+        self.scrubber: Callable[[str], str] = lambda text: text  # маскировка секретов в исходящем
         with self.lock:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA busy_timeout=5000")
@@ -224,6 +226,7 @@ class Store:
         file_path: str | None = None,
     ) -> bool:
         """Записывает НАМЕРЕНИЕ отправить. Тот же key второй раз не создаёт сообщения."""
+        text = self.scrubber(text)
         cur = self.execute(
             "INSERT OR IGNORE INTO outbox(key,chat_id,reply_to,text,status,ticket_id,purpose,"
             "repeat_ok,created_at,file_path) VALUES(?,?,?,?, 'pending', ?,?,?,?,?)",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import signal
 import time
 import traceback
@@ -17,6 +16,7 @@ from .hotfix import HotfixRunner
 from .llm import LlmRouter
 from .mockups import MockupRunner
 from .pipeline import Pipeline, ThreadPool
+from .redact import scrub
 from .store import Store
 from .telegram import (
     TelegramClient,
@@ -31,22 +31,6 @@ from .wms import WmsClient
 
 log = logging.getLogger(__name__)
 DAY = 24 * 3600
-
-
-SECRET_PATTERNS = [
-    (re.compile(r"bot\d+:[\w-]{10,}"), "bot***"),
-    (re.compile(r"(?i)\b(key|token|api_key|access_token)=[^&\s\"']+"), r"\1=***"),
-    (re.compile(r"(?i)bearer\s+[\w.\-]+"), "Bearer ***"),
-    (re.compile(r"\bsk-[\w\-]{12,}"), "sk-***"),
-]
-
-
-def scrub(cfg: Config, text: str) -> str:
-    """Известные значения секретов и типовые формы токенов (URL Telegram, ключи Trello, Bearer)."""
-    text = cfg.redact(text)
-    for pattern, repl in SECRET_PATTERNS:
-        text = pattern.sub(repl, text)
-    return text
 
 
 class RedactFilter(logging.Filter):
@@ -180,8 +164,9 @@ def build_agent(cfg: Config) -> Agent:
     store = Store(cfg.db_path)
     tg = TelegramClient(cfg.telegram.bot_token, http)
     llm = LlmRouter(cfg, store)
+    trello = TrelloClient(cfg.trello, http, redact=lambda t: scrub(cfg, t))
     pipe = Pipeline(
-        cfg, store, tg, llm, TrelloClient(cfg.trello, http), WmsClient(cfg.wms, http),
+        cfg, store, tg, llm, trello, WmsClient(cfg.wms, http),
         Transcriber(cfg.transcribe, cfg.openai, http), pool=ThreadPool(cfg.limits.max_parallel),
     )
     hotfix = HotfixRunner(pipe, http=http)

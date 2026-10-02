@@ -249,17 +249,39 @@ def ok(rc: int = 0, out: str = "", err: str = "") -> ExecResult:
     return ExecResult(rc, out, err)
 
 
+def normalize_git(argv: list[str]) -> list[str]:
+    """Убирает жёсткую обвязку git (env и -c ...), чтобы тесты сверяли суть команды."""
+    if argv[:2] == ["/usr/bin/env", "GIT_CONFIG_NOSYSTEM=1"] and argv[2] == "git":
+        rest = argv[3:]
+        out = ["git"]
+        i = 0
+        while i < len(rest):
+            if rest[i] == "-c" and i + 1 < len(rest):
+                if rest[i + 1].startswith(("core.", "diff.external", "user.")):
+                    i += 2
+                    continue
+            out.append(rest[i])
+            i += 1
+        return out
+    return argv
+
+
 class FakeShell:
     """Подделка git/gh/ruff/pytest: ответы по подстроке команды, журнал вызовов."""
 
     def __init__(self) -> None:
         self.rules: list[tuple[str, Callable[[list[str]], ExecResult] | ExecResult]] = []
         self.calls: list[list[str]] = []
+        self.raw_calls: list[list[str]] = []
+        self.cwd: str | None = None
 
     def on(self, contains: str, reply: Callable[[list[str]], ExecResult] | ExecResult) -> None:
         self.rules.insert(0, (contains, reply))
 
     def __call__(self, argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
+        self.raw_calls.append(list(argv))
+        self.cwd = cwd
+        argv = normalize_git(argv)
         self.calls.append(argv)
         line = " ".join(argv)
         for contains, reply in self.rules:
