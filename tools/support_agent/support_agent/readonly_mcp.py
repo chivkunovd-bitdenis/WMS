@@ -62,10 +62,12 @@ class Reader:
 
     @staticmethod
     def check_name(parts: list[str]) -> None:
-        if ".git" in parts:
-            raise Refused("внутренности .git недоступны (используйте git_log и git_show)")
+        """ЕДИНАЯ проверка компонентов относительного пути, без учёта регистра (APFS нечувствительна):
+        её проходят read_file, list_files, search и каждый каталог и файл при обходе."""
         for part in parts:
             low = part.lower()
+            if low == ".git":
+                raise Refused("внутренности .git недоступны (используйте git_log и git_show)")
             if low == ".env" or low.startswith(".env.") or low.endswith(".env"):
                 raise Refused("файлы окружения недоступны")
             if any(fnmatch.fnmatch(low, pat) for pat in SECRET_NAMES):
@@ -81,7 +83,7 @@ class Reader:
             raise Refused("это не каталог")
         out = []
         for entry in sorted(target.iterdir()):
-            if entry.is_symlink() or entry.name in SKIP_DIRS:
+            if entry.is_symlink() or entry.name.lower() in SKIP_DIRS:
                 continue
             try:
                 self.check_name([entry.name])
@@ -133,14 +135,22 @@ class Reader:
     def _walk(self, base: Path) -> list[Path]:
         found: list[Path] = []
         for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
-            dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS
-                                 and not os.path.islink(os.path.join(dirpath, d)))
+            kept = []
+            for d in sorted(dirnames):  # запретный каталог отсекается целиком, вместе со всем содержимым
+                if d.lower() in SKIP_DIRS or os.path.islink(os.path.join(dirpath, d)):
+                    continue
+                try:
+                    self.check_name([d])
+                except Refused:
+                    continue
+                kept.append(d)
+            dirnames[:] = kept
             for name in sorted(filenames):
                 full = Path(dirpath) / name
                 if full.is_symlink():
                     continue
                 try:
-                    self.check_name([name])
+                    self.check_name(list(full.relative_to(self.root).parts))  # полный путь, все компоненты
                 except Refused:
                     continue
                 found.append(full)

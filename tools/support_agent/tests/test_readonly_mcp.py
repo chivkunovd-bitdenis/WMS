@@ -164,3 +164,151 @@ def test_server_under_strict_profile_cannot_read_outside_root_write_or_use_netwo
     assert lines == {"read_outside_root": "DENIED", "write": "DENIED", "network": "DENIED"}, (
         res.stdout + res.stderr)
     assert root_probe.exists() and not (project / "w.txt").exists()
+
+
+# ------------------------------------------------------------------ круг 5: N6
+@pytest.fixture
+def secret_tree(tmp_path: Path) -> Path:
+    root = tmp_path / "tree"
+    for directory in ("secrets", "Secrets", ".env.private", "credentials", "Credentials", "ok", ".GIT"):
+        (root / directory).mkdir(parents=True, exist_ok=True)
+        if directory != "ok":
+            (root / directory / "data.txt").write_text("SYNTHETIC_PRIVATE_MARKER", encoding="utf-8")
+    (root / ".GIT" / "config").write_text("SYNTHETIC_GIT_CONFIG", encoding="utf-8")
+    (root / "ok" / "visible.txt").write_text("VISIBLE-MARKER", encoding="utf-8")
+    (root / "ok" / ".Env").write_text("SYNTHETIC_PRIVATE_MARKER", encoding="utf-8")
+    (root / "ok" / "Server.PEM").write_text("SYNTHETIC_PRIVATE_MARKER", encoding="utf-8")
+    return root
+
+
+def test_search_never_returns_files_from_forbidden_directories(secret_tree: Path) -> None:
+    for pattern in ("SYNTHETIC_PRIVATE_MARKER", ".*", "SYNTHETIC"):
+        for path in (".", "ok"):
+            text, err = call_tool(Reader(str(secret_tree)), "search", {"pattern": pattern, "path": path})
+            assert "SYNTHETIC" not in text, (pattern, path, text)
+    text, _ = call_tool(Reader(str(secret_tree)), "search", {"pattern": "VISIBLE"})
+    assert "ok/visible.txt:1: VISIBLE-MARKER" in text  # обычное по-прежнему находится
+
+
+@pytest.mark.parametrize("path", [".GIT/config", ".Git/config", ".gIt", "secrets/data.txt", "Secrets/data.txt",
+                                   ".env.private/data.txt", "credentials/data.txt", "Credentials/data.txt",
+                                   "ok/.Env", "ok/Server.PEM", ".GIT"])
+def test_case_variants_are_refused_by_every_tool(secret_tree: Path, path: str) -> None:
+    reader = Reader(str(secret_tree))
+    for tool, args in (("read_file", {"path": path}), ("list_files", {"path": path}),
+                       ("search", {"pattern": "SYNTHETIC", "path": path})):
+        text, err = call_tool(reader, tool, args)
+        assert err and text.startswith("ОТКАЗ") and "SYNTHETIC" not in text, (tool, path, text)
+
+
+def test_listing_hides_forbidden_entries_in_any_case(secret_tree: Path) -> None:
+    text, err = call_tool(Reader(str(secret_tree)), "list_files", {"path": "."})
+    assert not err and "ok/" in text
+    for hidden in ("secrets", "Secrets", ".env.private", "credentials", "Credentials", ".GIT"):
+        assert hidden not in text, hidden
+    inner, _ = call_tool(Reader(str(secret_tree)), "list_files", {"path": "ok"})
+    assert "visible.txt" in inner and ".Env" not in inner and "Server.PEM" not in inner
+
+
+# ------------------------------------------------------------------ круг 5: N7
+GITENV = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+          "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+
+def linked_worktree_under_home() -> tuple[Path, Path]:
+    """Настоящий связанный worktree в .worktrees внутри ДОМАШНЕГО каталога (там действует запрет чтения)."""
+    import tempfile
+
+    base = Path(tempfile.mkdtemp(prefix=".wms-mcp-n7-", dir=str(Path.home())))
+    repo = base / "repo"
+    repo.mkdir()
+    for cmd in (["git", "init", "-q", "-b", "etalon", "."],):
+        subprocess.run(cmd, cwd=repo, env=GITENV, check=True, capture_output=True)
+    (repo / "README.md").write_text("HISTORY-FILE-V1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=repo, env=GITENV, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "first commit"], cwd=repo, env=GITENV, check=True, capture_output=True)
+    (repo / "README.md").write_text("HISTORY-FILE-V2\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-qam", "second commit"], cwd=repo, env=GITENV, check=True, capture_output=True)
+    worktree = repo / ".worktrees" / "support-agent-etalon"
+    subprocess.run(["git", "worktree", "add", "-q", "--detach", str(worktree), "HEAD"], cwd=repo, env=GITENV,
+                   check=True, capture_output=True)
+    return base, worktree
+
+
+@pytest.mark.skipif(not sandbox.available(), reason="needs macOS sandbox-exec")
+def test_git_log_and_show_work_in_a_real_linked_worktree_under_the_profile() -> None:
+    import shutil
+
+    from support_agent.llm import LlmRouter
+
+    base, worktree = linked_worktree_under_home()
+    try:
+        assert (worktree / ".git").is_file()  # файл-указатель: метаданные вне корня
+        dirs = LlmRouter.git_metadata_dirs(str(worktree))
+        real_base = os.path.realpath(base)
+        assert len(dirs) == 2 and dirs[0].startswith(f"{real_base}/repo/.git/worktrees/")
+        assert dirs[1] == f"{real_base}/repo/.git"
+        prof = sandbox.mcp_profile(str(worktree), [str(SERVER.parent), sys.prefix, sys.base_prefix, *dirs])
+        prefix = [sandbox.SANDBOX_EXEC, "-p", prof]
+
+        def call(name: str, **arguments: object) -> dict:
+            out = rpc(worktree, [{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                  "params": {"name": name, "arguments": arguments}}], prefix)
+            return out[0]["result"]
+
+        log = call("git_log", max_count=5)
+        assert not log["isError"] and "second commit" in log["content"][0]["text"]
+        assert "first commit" in log["content"][0]["text"]
+        old = call("git_show", rev="HEAD~1", path="README.md")
+        assert not old["isError"] and old["content"][0]["text"].strip() == "HISTORY-FILE-V1"
+        assert "second commit" in call("git_show", rev="HEAD")["content"][0]["text"]
+        assert call("read_file", path="README.md")["content"][0]["text"].strip() == "HISTORY-FILE-V2"
+        # прямое чтение метаданных моделью остаётся запрещённым (проверка в Python)
+        for tool, args in (("read_file", {"path": ".git"}), ("read_file", {"path": ".GIT"}),
+                           ("search", {"pattern": "gitdir"}), ("list_files", {"path": ".git"}),
+                           ("read_file", {"path": f"{dirs[0]}/HEAD"}), ("read_file", {"path": "../../.git/HEAD"})):
+            res = call(tool, **args)
+            body = res["content"][0]["text"]
+            assert ("gitdir:" not in body) and (res["isError"] or tool == "search"), (tool, args, body)
+        # и процесс под профилем не читает остальной домашний каталог даже в обход сервера
+        probe = subprocess.run([*prefix, sys.executable, "-I", "-S", "-c",
+                                f"open({str(base / 'repo' / 'README.md')!r}).read()"],
+                               capture_output=True, text=True, timeout=60)
+        assert probe.returncode != 0 and "Operation not permitted" in probe.stderr  # вне корня закрыто
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+    assert not base.exists()
+
+
+def test_git_metadata_dirs_for_plain_repo_and_non_repo(tmp_path: Path) -> None:
+    from support_agent.llm import LlmRouter
+
+    assert LlmRouter.git_metadata_dirs(str(tmp_path)) == []
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, env=GITENV, check=True, capture_output=True)
+    dirs = LlmRouter.git_metadata_dirs(str(tmp_path))
+    assert dirs == [os.path.realpath(tmp_path / ".git")]
+
+
+def test_profile_for_codex_analyst_includes_verified_git_dirs(tmp_path: Path) -> None:
+    from .test_llm_router import ExecScript, router
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "etalon", "."], cwd=repo, env=GITENV, check=True, capture_output=True)
+    (repo / "a.txt").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=repo, env=GITENV, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "c"], cwd=repo, env=GITENV, check=True, capture_output=True)
+    wt = repo / ".worktrees" / "wt"
+    subprocess.run(["git", "worktree", "add", "-q", "--detach", str(wt), "HEAD"], cwd=repo, env=GITENV,
+                   check=True, capture_output=True)
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    import time as _t
+
+    store.kv_set("cooldown:claude", _t.time() + 999)
+    llm.ask("analyst", "x", mode="readonly", cwd=str(wt))
+    argv = script.full[-1]
+    args = json.loads(next(a for a in argv if a.startswith("mcp_servers.wms.args=")).split("=", 1)[1])
+    prof = args[1]
+    assert f'(subpath "{os.path.realpath(repo / ".git")}")' in prof
+    assert f'(subpath "{os.path.realpath(repo / ".git" / "worktrees" / "wt")}")' in prof

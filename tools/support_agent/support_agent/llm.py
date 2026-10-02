@@ -31,8 +31,17 @@ LIMIT_PATTERNS = re.compile(
     r"authentication|unauthorized|invalid api key",
     re.IGNORECASE,
 )
-CODEX_DISABLED_FEATURES = ("shell_tool", "unified_exec", "browser_use", "browser_use_external",
-                           "computer_use", "apps", "in_app_browser", "image_generation")
+CODEX_DISABLED_FEATURES = (
+    "shell_tool", "unified_exec", "browser_use", "browser_use_external",
+    "browser_use_full_cdp_access", "computer_use", "apps", "in_app_browser", "image_generation",
+    "view_image", "multi_agent", "goals", "hooks", "memories", "plugins", "plugin_sharing",
+    "remote_plugin", "skill_search", "sleep_tool", "tool_suggest", "multi_agent_v2", "code_mode",
+    "code_mode_only", "code_mode_interrupt", "code_mode_prewarm", "default_mode_request_user_input",
+    "request_permissions_tool", "exec_permission_approvals", "deferred_executor",
+    "executor_capability_discovery", "collaboration_modes", "js_repl", "standalone_web_search",
+)
+# Дополнительные настройки: веб-поиск и просмотр картинок выключены, подтверждений не запрашиваем.
+CODEX_EXTRA_CONFIG = ('web_search="disabled"', "tools.view_image=false", 'approval_policy="never"')
 READONLY_TOOLS = [
     "Read", "Grep", "Glob", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
     "Bash(git grep:*)", "Bash(git status:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)",
@@ -228,13 +237,41 @@ class LlmRouter:
             argv += ["--disallowedTools", *denied]
         return argv
 
+    @staticmethod
+    def git_metadata_dirs(root: str) -> list[str]:
+        """Каталоги метаданных git (gitdir и common-dir), найденные ДОВЕРЕННЫМ кодом до запуска сервера.
+
+        В связанном worktree `.git` — файл-указатель, а история лежит вне корня; чтению профиля дают
+        именно эти проверенные каталоги. Прямое чтение моделью остаётся запрещённым проверкой путей."""
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_CONFIG_NOSYSTEM": "1",
+               "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
+        try:
+            res = subprocess.run(
+                ["git", "-C", root, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                 "rev-parse", "--absolute-git-dir", "--git-common-dir"],
+                capture_output=True, text=True, timeout=20, env=env,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        lines = res.stdout.split("\n")
+        if res.returncode != 0 or len([x for x in lines if x]) != 2:
+            return []
+        dirs = []
+        for raw in lines[:2]:
+            path = Path(raw) if os.path.isabs(raw) else Path(root) / raw
+            real = os.path.realpath(path)
+            if os.path.isdir(real) and real not in dirs:
+                dirs.append(real)
+        return dirs
+
     def mcp_args(self, root: str) -> list[str]:
         """Подключение читателя проекта: сервер запускает Codex, но под sandbox-exec (чтение только
         корня проекта и кода самого сервера, без сети и без записи)."""
         script = Path(readonly_mcp.__file__).resolve()
         python = sys.executable
         if self.cfg.sandbox.enabled:
-            prof = sandbox.mcp_profile(root, [str(script.parent), sys.prefix, sys.base_prefix])
+            prof = sandbox.mcp_profile(root, [str(script.parent), sys.prefix, sys.base_prefix,
+                                              *self.git_metadata_dirs(root)])
             command, args = sandbox.SANDBOX_EXEC, ["-p", prof, python, "-I", "-S", str(script),
                                                     "--root", root]
             sandbox.require()
@@ -243,8 +280,7 @@ class LlmRouter:
         toml_args = "[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in args) + "]"
         return ["-c", f"mcp_servers.wms.command={json.dumps(command)}",
                 "-c", f"mcp_servers.wms.args={toml_args}",
-                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"',
-                "-c", 'approval_policy="never"']
+                "-c", 'mcp_servers.wms.default_tools_approval_mode="approve"']
 
     def build_codex(
         self, model: str, effort: str | None, mode: str, session_id: str | None,
@@ -265,6 +301,8 @@ class LlmRouter:
         argv += ["--ignore-user-config", "--ignore-rules"]
         for feature in CODEX_DISABLED_FEATURES:
             argv += ["--disable", feature]
+        for setting in CODEX_EXTRA_CONFIG:
+            argv += ["-c", setting]
         if mode == "readonly" and cwd:
             argv += self.mcp_args(cwd)
         sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]

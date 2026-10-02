@@ -218,6 +218,11 @@ def test_codex_analyst_has_no_shell_and_reads_only_through_sandboxed_mcp(tmp_pat
     assert argv[argv.index("-s") + 1] == "read-only" and "danger-full-access" not in argv
     assert "--ignore-user-config" in argv and "--ignore-rules" in argv
     assert 'mcp_servers.wms.default_tools_approval_mode="approve"' in argv
+    # круг 5: фактический набор инструментов сведён к минимуму (проверено живым вызовом Sol)
+    assert {"view_image", "multi_agent", "goals", "hooks", "memories", "plugins", "skill_search",
+            "sleep_tool", "tool_suggest", "multi_agent_v2", "code_mode"} <= disabled
+    assert "code_mode_host" not in disabled  # без него в этой сборке не работают и инструменты MCP
+    assert 'web_search="disabled"' in argv and "tools.view_image=false" in argv
     command = next(a for a in argv if a.startswith("mcp_servers.wms.command="))
     args = json.loads(next(a for a in argv if a.startswith("mcp_servers.wms.args=")).split("=", 1)[1])
     assert json.loads(command.split("=", 1)[1]) == "/usr/bin/sandbox-exec" and args[0] == "-p"
