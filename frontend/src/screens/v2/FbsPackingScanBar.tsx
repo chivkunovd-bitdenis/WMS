@@ -7,10 +7,13 @@ import { playScanError, playScanSuccess } from '../../utils/scanFeedback'
 import { fbsErrorText } from './fbsUx'
 import { packingSerialBusy, routePackingScan, runPackingSerial, type PackingScanController } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import type { FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
-export function FbsPackingScanBar({ controllers, enabled, token }: {
+export function FbsPackingScanBar({ controllers, enabled, token, rejected }: {
   controllers: PackingScanController[]; enabled: boolean; token: string
+  /** WMS-636: the filter of the whole assembly (N summed over its WB supplies). */
+  rejected?: FbsRejectedKizFilter
 }) {
   const [value, setValue] = useState('')
   const [labelSizeId, setLabelSizeId] = useState(loadLabelSizeId)
@@ -98,7 +101,7 @@ export function FbsPackingScanBar({ controllers, enabled, token }: {
       {controllers.length > 0 ? <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
         setPrintPreferences(next)
         saveFbsScanPrintPreferences(token, next)
-      }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} /> : null}
+      }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} rejected={rejected} /> : null}
       <LabelSizeSelect value={labelSizeId} onChange={(size) => setLabelSizeId(size.id)} />
       {active ? <Typography variant="body2" sx={{ minWidth: 160 }}>
         {active.name}{active.needsKiz ? ' · сканируйте ЧЗ' : ' · завершение упаковки'}

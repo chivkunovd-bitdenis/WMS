@@ -306,32 +306,39 @@ describe('WMS-631 R19 step back', () => {
     binding_target: null, reprint_recovery: null, qr_asset: null, replayed: false,
     codes: [], printed_codes: [], shortage: 0, order_errors: [],
   }) as FbsScanAutoPrintResult
-  it('U1/U2: «Назад» on the KIZ scan re-selects the order with fresh keys, then frees it', async () => {
+  it('U1/U2 + WMS-636 R10: one «Назад» undoes the whole KIZ scan (unpack, KIZ, selection); the next press — the previous scan', async () => {
     const { deps, scanner } = fixture()
     vi.mocked(deps.select).mockReset()
-      .mockResolvedValueOnce(selected('scan-1')).mockResolvedValueOnce(selected('scan-1b'))
+      .mockResolvedValueOnce(selected('scan-0', '0')).mockResolvedValueOnce(selected('scan-1'))
     vi.mocked(deps.bind).mockResolvedValue('kiz-1')
-    vi.mocked(deps.pack).mockImplementation(async (_result, _explicit, _barcode, step) => {
-      if (step) { step.packKey = 'scan-1:packed'; step.boxId = 'box-1' }
+    vi.mocked(deps.pack).mockImplementation(async (result, _explicit, _barcode, step) => {
+      if (step) { step.packKey = `${result.scan_id}:packed`; step.boxId = 'box-1' }
     })
+    await scanner.scan('barcode')
+    await scanner.scan('kiz-0')
     await scanner.scan('barcode')
     await scanner.scan('kiz-1')
     expect(scanner.hasPending()).toBe(false)
     await scanner.undo?.()
+    // The existing server undo: KIZ, unit, box and the selection of this scan in one call.
+    expect(deps.undo).toHaveBeenCalledTimes(1)
     expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
       kind: 'kiz', kizKeys: [expect.stringMatching(/^scan-1:.+:bind$/), expect.stringMatching(/^scan-1:.+:replace$/)],
       packKey: 'scan-1:packed', boxId: 'box-1',
     }), true)
-    // A new scan id: the next KIZ scan packs and copies under new keys (P1-1, P0-05).
-    expect(deps.select).toHaveBeenLastCalledWith('barcode', 'request', expect.anything(), '1')
-    expect(scanner.view()).toMatchObject({ orderId: '1', needsKiz: true })
-    await scanner.undo?.()
-    expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: 'select', kizKeys: [], result: expect.objectContaining({ scan_id: 'scan-1b' }),
-    }), true)
+    // Nothing is selected again: no new selection request, no «сканируйте ЧЗ».
+    expect(deps.select).toHaveBeenCalledTimes(2)
     expect(scanner.hasPending()).toBe(false)
+    expect(scanner.view()).toBeNull()
+    expect(deps.complete).toHaveBeenLastCalledWith('barcode')
+    // The next press undoes the previous scan, also in one press.
+    await scanner.undo?.()
+    expect(deps.undo).toHaveBeenCalledTimes(2)
+    expect(deps.undo).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: 'kiz', packKey: 'scan-0:packed', result: expect.objectContaining({ scan_id: 'scan-0' }),
+    }), true)
     expect(scanner.lastStep?.()).toBeNull()
-    expect(deps.print).toHaveBeenCalledTimes(1)
+    expect(deps.print).toHaveBeenCalledTimes(2)
   })
   it('U8: a failed undo keeps the step for the next press; a final refusal drops it (Д20)', async () => {
     const { deps, scanner } = fixture(false)
@@ -413,10 +420,13 @@ describe('WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4)', ()
     await scanner.scan('barcode')
     await expect(scanner.scan('K1')).rejects.toThrow('WMS Print offline')
     await scanner.undo?.()
+    // WMS-636 R10: «Назад» undid the whole scan; the operator scans the product and its KIZ again.
+    expect(scanner.hasPending()).toBe(false)
+    await scanner.scan('barcode')
     await scanner.scan('K2')
     expect(deps.print).toHaveBeenCalledTimes(2)
     expect(vi.mocked(deps.print).mock.calls.map((call) => call[3])).toEqual(['s1', 's1'])
-    expect(deps.pack).toHaveBeenCalledWith(expect.objectContaining({ scan_id: 's2' }), true, 'barcode', expect.anything())
+    expect(deps.pack).toHaveBeenCalledWith(expect.objectContaining({ scan_id: 's2' }), false, 'barcode', expect.anything())
   })
   it('N3: Escape after a print failure keeps the QR key; a printed QR is never repeated', async () => {
     const { deps, scanner } = fixture(false)

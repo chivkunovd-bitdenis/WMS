@@ -381,22 +381,6 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       throw productMiss ?? cause
     }
   }
-  /** After «Назад» on a KIZ scan the order is selected again with fresh keys (new scan id). */
-  const reselect = async (step: PackingScanStep) => {
-    const selectStep = history.findLast((one) => one.kind === 'select' && one.result.scan_id === step.result.scan_id)
-    if (!selectStep || pending) return
-    deps.complete(step.barcode)
-    const attempt = deps.claim(step.barcode, step.preferences, true)
-    const result = isLocalPackingSelection(step.result)
-      ? localSelection(attempt.key, step.result.binding_target!)
-      : await deps.select(step.barcode, attempt.key, attempt.preferences, step.result.order_id)
-    deps.remember(step.barcode, result)
-    // The order QR keeps its own intent: printed — not again; not printed — the same key.
-    pending = startPending(step.barcode, result, attempt, true, true, false)
-    pending.step = selectStep
-    selectStep.result = result
-    selectStep.explicit = true
-  }
   return {
     hasPending: () => pending !== null,
     hasSavedAttempt: deps.saved,
@@ -414,7 +398,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
       const holdsSelection = pending?.result.scan_id === step.result.scan_id
       let warning: string | null
       try {
-        // Every undone step frees its selection; a KIZ step re-selects with fresh keys below.
+        // Every undone step frees its selection on the server.
         warning = await deps.undo(step, true)
       } catch (cause) {
         if (cause instanceof FbsApiError && UNDO_FINAL_CODES.includes(cause.code)) dropStep(step)
@@ -422,14 +406,16 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
         throw cause
       }
       dropStep(step)
+      // WMS-636 R10: one press undoes the whole last scan. The KIZ step released the
+      // selection of its scan, so that selection is no longer a step of the history;
+      // the next press undoes the previous scan.
       if (step.kind === 'kiz') {
-        if (holdsSelection) pending = null
-        // The KIZ scan is undone: the order waits for its KIZ again under a fresh selection.
-        await reselect(step)
-      } else {
-        if (holdsSelection) pending = null
-        deps.complete(step.barcode)
+        for (const one of [...history]) {
+          if (one.kind === 'select' && one.result.scan_id === step.result.scan_id) dropStep(one)
+        }
       }
+      if (holdsSelection) pending = null
+      deps.complete(step.barcode)
       deps.changed()
       return warning
     },
@@ -556,6 +542,8 @@ export function makePackingScanDeps(
   onBound: (orderId: string, value: string) => void = () => undefined,
   onSelected: (orderId: string) => void = () => undefined,
   preferences: () => FbsScanPrintPreferences = () => ({ printQr: true, printChz: false, reprintChz: false }),
+  /** WMS-636 R11: the server answered «Назад» for this order — drop what the screen kept from its scan. */
+  onUndone: (orderId: string) => void = () => undefined,
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
@@ -808,6 +796,7 @@ export function makePackingScanDeps(
         })
         warning = answer.warning
       }
+      onUndone(step.result.order_id)
       refreshed()
       return warning
     },

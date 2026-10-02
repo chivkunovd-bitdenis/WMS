@@ -76,3 +76,36 @@ describe('WMS-633 · «− N +» counter never takes the scanner', () => {
     expect(q('fbs-scan-reprint-chz-copies-value')?.textContent).toBe('3')
   })
 })
+
+describe('WMS-636 · треугольник «Не принятые WB КИЗ»', () => {
+  const base = { printQr: true, printChz: false, reprintChz: false }
+  const renderWith = (rejected?: { count: number; active: boolean; onToggle: () => void }) =>
+    act(() => root.render(<FbsScanPrintToggles value={base} onChange={onChange} rejected={rejected} />))
+
+  it('R1: без фильтра или при N = 0 ничего не рисуется — полоса как раньше', () => {
+    renderWith()
+    const before = host.innerHTML
+    expect(q('fbs-wb-rejected-kiz-toggle')).toBeNull()
+    renderWith({ count: 0, active: false, onToggle: vi.fn() })
+    expect(q('fbs-wb-rejected-kiz-toggle')).toBeNull()
+    expect(host.innerHTML).toBe(before)
+  })
+
+  it('R1/R2: N крупно, клик переключает, «нажат» виден по aria-pressed; фокус сканера не забирается', () => {
+    const onToggle = vi.fn()
+    renderWith({ count: 2, active: false, onToggle })
+    const button = q('fbs-wb-rejected-kiz-toggle')!
+    expect(q('fbs-wb-rejected-kiz-count')!.textContent).toBe('2')
+    expect(button.getAttribute('aria-label')).toBe('Не принятые WB КИЗ: 2')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.tabIndex).toBe(-1)
+    scanField.focus()
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    act(() => { button.dispatchEvent(down) })
+    expect(down.defaultPrevented).toBe(true)
+    act(() => button.click())
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    renderWith({ count: 2, active: true, onToggle })
+    expect(q('fbs-wb-rejected-kiz-toggle')!.getAttribute('aria-pressed')).toBe('true')
+  })
+})

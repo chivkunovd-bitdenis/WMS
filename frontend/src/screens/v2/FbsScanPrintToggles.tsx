@@ -6,6 +6,7 @@ import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined'
 import {
   FBS_CHZ_COPIES_MAX, FBS_CHZ_COPIES_MIN, normalizeFbsChzCopies, type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
+import { FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 
 /**
  * WMS-633: number of KIZ labels printed by one scan, «− N +» next to its checkbox.
@@ -37,11 +38,13 @@ function CopiesField({ value, onChange, label, testId }: {
 }
 
 /** The three scan-print checkboxes of WB packing, shared by the supply and the assembly (WMS-631 R1). */
-export function FbsScanPrintToggles({ value, onChange, undo }: {
+export function FbsScanPrintToggles({ value, onChange, undo, rejected }: {
   value: FbsScanPrintPreferences
   onChange: (next: FbsScanPrintPreferences) => void
   /** R19: «Назад» right after the checkboxes; absent where scans are not undoable. */
   undo?: { disabled: boolean; onClick: () => void }
+  /** WMS-636: «Не принятые WB КИЗ» right of the checkboxes; nothing is rendered at N = 0. */
+  rejected?: FbsRejectedKizFilter
 }) {
   return <>
     <FormControlLabel
@@ -100,5 +103,6 @@ export function FbsScanPrintToggles({ value, onChange, undo }: {
         </span>
       </Tooltip>
     ) : null}
+    {rejected ? <FbsRejectedKizTriangle filter={rejected} /> : null}
   </>
 }

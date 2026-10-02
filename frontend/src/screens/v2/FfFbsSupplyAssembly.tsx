@@ -40,6 +40,7 @@ import {
 import {
   buildFbsPickingListPrintHtml,
   fbsErrorText,
+  fbsOrderKizRejectedByWb,
   fbsPickSourceLabels,
   ordersWord,
 } from './fbsUx'
@@ -95,6 +96,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const [promotedSupplyId, setPromotedSupplyId] = useState<string | null>(null)
   const onScanChange = useCallback(() => setScannerVersion((value) => value + 1), [])
   const onPromotePackingOrder = useCallback((supplyId: string) => setPromotedSupplyId(supplyId), [])
+  // WMS-636: фильтр «Не принятые WB КИЗ» по всем поставкам сборки; выключен по умолчанию.
+  const [rejectedFilter, setRejectedFilter] = useState(false)
   const registerScanner = useCallback((id: string, scanner: PackingScanController | null) => {
     if (scanner) scanners.current.set(id, scanner)
     else scanners.current.delete(id)
@@ -163,6 +166,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setActiveSupplyId(null)
     setExpandedIds(new Set())
     setHistorySupplyId(null)
+    setRejectedFilter(false)
     const restoredStage = readFbsAssemblyStage(ids) ?? 'composition'
     setStage(restoredStage)
     setFramesMounted(restoredStage === 'packing' || restoredStage === 'boxes')
@@ -194,6 +198,17 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const percent = total ? Math.round((ready / total) * 100) : 0
   const sellerNames = [...new Set(ordered.map((one) => one.supply.seller.name))].join(', ')
   const ordersCount = ordered.reduce((sum, one) => sum + one.orders.length, 0)
+  // WMS-636 R1, C10: N — сумма по WB-поставкам; шапку рисует поставка последнего скана,
+  // а без скана — первая поставка с непринятыми КИЗ (выше неё в ленте красных строк нет).
+  const rejectedBySupply = ordered
+    .filter((one) => one.supply.marketplace === 'wb')
+    .map((one) => ({ id: one.supply.id, count: one.orders.filter(fbsOrderKizRejectedByWb).length }))
+  const rejectedCount = rejectedBySupply.reduce((sum, one) => sum + one.count, 0)
+  const rejectedFilterOn = rejectedFilter && rejectedCount > 0
+  useEffect(() => { if (rejectedCount === 0) setRejectedFilter(false) }, [rejectedCount])
+  const rejectedHeaderSupplyId = rejectedBySupply.some((one) => one.id === promotedSupplyId)
+    ? promotedSupplyId
+    : rejectedBySupply.find((one) => one.count > 0)?.id ?? null
 
   const requestClose = () => {
     onClose()
@@ -412,7 +427,9 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               data-testid="fbs-assembly-packing"
             >
               <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
-                <FbsPackingScanBar token={token} enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
+                <FbsPackingScanBar token={token} rejected={{
+                  count: rejectedCount, active: rejectedFilterOn, onToggle: () => setRejectedFilter((current) => !current),
+                }} enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
@@ -430,6 +447,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     onClose={() => undefined}
                     assemblyFrame={{
                       packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
+                      rejectedFilter: { active: rejectedFilterOn, count: rejectedCount, headerSupplyId: rejectedHeaderSupplyId },
                       active: activeSupplyId === supplyId,
                       expanded: expandedIds.has(supplyId),
                       stage: stage === 'boxes' ? 'boxes' : 'packing',
