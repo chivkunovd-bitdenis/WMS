@@ -19,7 +19,11 @@ from app.models.marking_withdrawal import WithdrawalDocument, WithdrawalItem, Wi
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
-from app.services.wb_order_price_service import WbPriceDataError, product_cost_from_snapshot
+from app.services.wb_order_price_service import (
+    WbPriceDataError,
+    has_price,
+    product_cost_from_snapshot,
+)
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -100,7 +104,8 @@ def eligible_rows(scope: WithdrawalScope) -> Select[tuple[FbsOrderMarking, FbsOr
             FbsOrder.tenant_id == scope.tenant_id,
             FbsOrder.seller_id == scope.seller_id,
             FbsOrder.marketplace == "wb",
-            FbsOrder.status != "cancelled",
+            # WB defect — отмена по браку: товар до покупателя не дойдёт.
+            FbsOrder.status.not_in(["cancelled", "defect"]),
             FbsOrder.pick_status != "returned",
             ~returned,
             FbsSupply.tenant_id == scope.tenant_id,
@@ -238,6 +243,7 @@ async def registry(
         select(WbOrderPriceSnapshot.id)
         .where(
             WbOrderPriceSnapshot.order_id == FbsOrder.id,
+            has_price(),
         )
         .order_by(WbOrderPriceSnapshot.revision.desc())
         .limit(1)
