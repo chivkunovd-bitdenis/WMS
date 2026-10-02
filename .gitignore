@@ -94,3 +94,9 @@ output/
 outputs/
 tmp/
 .archive-backlogs-20260904/
+
+# WMS-639 support agent
+tools/support_agent/.venv/
+tools/support_agent/.pytest_cache/
+tools/support_agent/.mypy_cache/
+tools/support_agent/.ruff_cache/
