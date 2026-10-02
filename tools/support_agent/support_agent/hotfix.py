@@ -1,4 +1,4 @@
-"""Облегчённый хотфикс (WMS-639, раздел 5): только после «кати» владельца по этому обращению.
+"""Облегчённый хотфикс (WMS-641, раздел 5): только после «кати» владельца по этому обращению.
 
 Диспетчер сам код продукта не меняет: код пишет отдельная CLI-сессия-разработчик в отдельном
 worktree. Каждый вызов step() делает один ограниченный шаг и записывает его итог в тикет, поэтому
@@ -430,7 +430,7 @@ class HotfixRunner:
         found = json.loads(existing.out) if existing.rc == 0 and existing.out.strip() else []
         if not found:
             title = f"fix({number}): {self.p.title_of(tid)}"[:100]
-            body = (f"Облегчённый хотфикс по «кати» владельца (WMS-639).\n\n"
+            body = (f"Облегчённый хотфикс по «кати» владельца (WMS-641).\n\n"
                     f"{(h.get('dev') or {}).get('summary', '')}\n\n"
                     "Приёмка аналитика не проводилась.\n\n"
                     "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
@@ -547,7 +547,7 @@ class HotfixRunner:
             if extra and not self.cfg.hotfix.allow_foreign_commits:
                 raise StepFailed(f"вместе с хотфиксом выложились бы ещё {len(extra)} чужих изменений: "
                                  "без вашего решения не запускаю")
-            attempt = "wms639-" + uuid.uuid4().hex[:12]
+            attempt = "wms641-" + uuid.uuid4().hex[:12]
             self.save(tid, h, deploy_intent=True, attempt_id=attempt, deploy_ts=now)  # до запуска
             # Код выхода не важен: исход выясняется чтением списка запусков, повторно не запускаем.
             self.run_gh(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon", "-f", f"sha={sha}",

@@ -215,7 +215,7 @@ python dev/developer_requests_probe.py cycle --step completed --config /PRIVATE/
 pytest -q dev/test_developer_requests_probe.py
 ```
 
-## WMS-639: машинное чтение для агента-диспетчера
+## WMS-641: машинное чтение для агента-диспетчера
 
 Агент-диспетчер (`tools/support_agent/`, работает на маке владельца) сам опрашивает записи формы
 «?». Для этого есть две ручки только на чтение, не меняющие пользовательский контур выше:

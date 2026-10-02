@@ -1,4 +1,4 @@
-"""WMS-639 R4-R6: read-only machine access of the dispatcher agent to developer requests."""
+"""WMS-641 R4-R6: read-only machine access of the dispatcher agent to developer requests."""
 
 from __future__ import annotations
 

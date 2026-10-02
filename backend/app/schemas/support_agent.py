@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class SupportAgentRequestOut(BaseModel):
-    """What the dispatcher agent may read about one developer request (WMS-639 R4)."""
+    """What the dispatcher agent may read about one developer request (WMS-641 R4)."""
 
     model_config = ConfigDict(from_attributes=True)
 

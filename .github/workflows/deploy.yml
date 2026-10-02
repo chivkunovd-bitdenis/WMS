@@ -3,7 +3,7 @@ name: Deploy Production
 # Manual production deploy only. The server script refuses commits that are
 # not already contained in the configured trunk (default: origin/etalon).
 #
-# Optional inputs (WMS-639 support agent; a plain dispatch behaves exactly as before):
+# Optional inputs (WMS-641 support agent; a plain dispatch behaves exactly as before):
 #   sha         full 40-char commit to deploy instead of the current head of etalon.
 #               It must be etalon itself or an ancestor of it; the deploy script is
 #               taken from that same commit.

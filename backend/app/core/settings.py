@@ -69,7 +69,7 @@ class Settings(BaseSettings):
         repr=False,
         validation_alias=AliasChoices("WMS_SUPPORT_AGENT_KEY", "SUPPORT_AGENT_KEY"),
         description=(
-            "WMS-639: machine key of the support dispatcher agent for READ-ONLY access to "
+            "WMS-641: machine key of the support dispatcher agent for READ-ONLY access to "
             "developer requests (GET /support-agent/developer-requests). Unset or shorter "
             "than 32 characters: the endpoints answer 404 and the access is switched off."
         ),

@@ -1,4 +1,4 @@
-"""Read-only access of the WMS-639 dispatcher agent to developer requests."""
+"""Read-only access of the WMS-641 dispatcher agent to developer requests."""
 
 from __future__ import annotations
 

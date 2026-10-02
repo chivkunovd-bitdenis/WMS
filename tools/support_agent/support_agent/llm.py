@@ -182,7 +182,7 @@ class LlmRouter:
 
     # -- построение команд -------------------------------------------------------------
     def write_tools(self, cwd: str) -> tuple[list[str], list[str]]:
-        """Минимальные права разработчика/макетчика (WMS-639): правка файлов только в своём worktree,
+        """Минимальные права разработчика/макетчика (WMS-641): правка файлов только в своём worktree,
         явный список команд. push, gh, ssh, curl и т. п. выполняет код диспетчера, не модель."""
         bin_dir = self.cfg.hotfix.backend_bin.rstrip("/")
         tools = [f"Bash({name}:*)" for name in ("ruff", "mypy", "pytest")]

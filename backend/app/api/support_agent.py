@@ -1,4 +1,4 @@
-"""WMS-639: read-only machine access of the dispatcher agent to developer requests.
+"""WMS-641: read-only machine access of the dispatcher agent to developer requests.
 
 Only GET. Authenticated by a separate server secret (settings.support_agent_key), never by a
 user JWT, and it opens none of the user endpoints of developer-requests (WMS-624 R10).

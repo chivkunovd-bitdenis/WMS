@@ -197,7 +197,7 @@ def hotfix_env(env: Any, tmp_path: Path, *, ci: str = "pass", foreign: int = 0,
     shell.on("git show origin/etalon:.github/workflows/deploy.yml", ok(out="inputs: sha attempt_id"))
     shell.on(":scripts/deploy/prod-update.sh", ok(out="WMS_DEPLOY_SHA support"))
     shell.on("git status --porcelain", ok(out=" M backend/app/services/x.py\n"))
-    shell.on("git show origin/etalon:docs/KANONICHESKIY_BACKLOG.md", ok(out="WMS-639 WMS-648"))
+    shell.on("git show origin/etalon:docs/KANONICHESKIY_BACKLOG.md", ok(out="WMS-641 WMS-648"))
     shell.on("git branch --all", ok(out="origin/etalon\nwms649-x"))
     shell.on("git log origin/etalon -400", ok(out="Merge WMS-643"))
     shell.on("git diff --name-only", names)
@@ -552,7 +552,7 @@ def test_etalon_moving_after_merge_does_not_matter_because_exact_sha_is_pinned(e
     drive(env, tid, 8)
     assert env.store.ticket(tid)["stage"] == "done"
     dispatch = next(c for c in hf.shell.raw_calls if "workflow" in c and "run" in c)
-    assert f"sha={'b' * 40}" in dispatch and any(a.startswith("attempt_id=wms639-") for a in dispatch)
+    assert f"sha={'b' * 40}" in dispatch and any(a.startswith("attempt_id=wms641-") for a in dispatch)
 
 
 def test_deploy_yml_without_pin_support_stops_before_dispatch(env: Any, tmp_path: Path) -> None:
@@ -579,8 +579,8 @@ def test_server_with_extra_commits_is_not_success(env: Any, tmp_path: Path) -> N
 def test_restart_after_intent_never_dispatches_twice_and_adopts_run_by_attempt_id(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = start_hotfix(env)
-    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms639-test01", deploy_ts=env.clock.now)
-    hf.state["attempt"] = "wms639-test01"  # запуск дошёл до GitHub, процесс убит до записи id
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-test01", deploy_ts=env.clock.now)
+    hf.state["attempt"] = "wms641-test01"  # запуск дошёл до GitHub, процесс убит до записи id
     hf.state["deployed"] = "b" * 40
     drive(env, tid, 6)
     assert hf.shell.ran("gh workflow run") == 0
@@ -590,7 +590,7 @@ def test_restart_after_intent_never_dispatches_twice_and_adopts_run_by_attempt_i
 def test_unconfirmed_dispatch_after_restart_stops_instead_of_retrying(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = start_hotfix(env)
-    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms639-test02", deploy_ts=env.clock.now)
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-test02", deploy_ts=env.clock.now)
     env.pipe.process_ticket(tid)
     assert env.store.ticket(tid)["stage"] == "hotfix"  # ждём появления запуска
     env.clock.advance(300)
@@ -602,7 +602,7 @@ def test_unconfirmed_dispatch_after_restart_stops_instead_of_retrying(env: Any, 
 def test_neighbour_run_without_our_attempt_id_is_never_adopted(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = start_hotfix(env)
-    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms639-test03", deploy_ts=env.clock.now)
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-test03", deploy_ts=env.clock.now)
     hf.shell.on("gh run list", ok(out=json.dumps([
         {"databaseId": 201, "displayTitle": "Deploy Production", "status": "completed",
          "conclusion": "success", "createdAt": "2099-01-01T00:00:00Z", "event": "workflow_dispatch"}])))
@@ -617,8 +617,8 @@ def test_neighbour_run_without_our_attempt_id_is_never_adopted(env: Any, tmp_pat
 def test_two_runs_with_same_attempt_id_are_ambiguous(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = start_hotfix(env)
-    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms639-test04", deploy_ts=env.clock.now)
-    row = {"displayTitle": "Deploy Production [wms639-test04]", "status": "completed", "conclusion": "success",
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-test04", deploy_ts=env.clock.now)
+    row = {"displayTitle": "Deploy Production [wms641-test04]", "status": "completed", "conclusion": "success",
            "createdAt": "2099-01-01T00:00:00Z", "event": "workflow_dispatch"}
     hf.shell.on("gh run list", ok(out=json.dumps([{**row, "databaseId": 1}, {**row, "databaseId": 2}])))
     env.pipe.process_ticket(tid)
@@ -628,7 +628,7 @@ def test_two_runs_with_same_attempt_id_are_ambiguous(env: Any, tmp_path: Path) -
 def test_unreadable_run_list_is_not_treated_as_empty(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = start_hotfix(env)
-    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms639-test05", deploy_ts=env.clock.now)
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-test05", deploy_ts=env.clock.now)
     hf.shell.on("gh run list", ExecResult(1, "", "HTTP 502"))
     env.pipe.process_ticket(tid)
     assert env.store.ticket(tid)["stage"] == "hotfix"  # ждём, а не «запуска нет»
