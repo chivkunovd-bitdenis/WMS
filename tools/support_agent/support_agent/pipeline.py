@@ -490,7 +490,7 @@ class Pipeline:
         need = analysis.get("need_data")
         if (
             need and need.get("points") and t["kind"] == "chat"
-            and len(d.get("data_requests", [])) < 2
+            and len(d.get("data_requests", [])) < 2 and not d.get("no_asks")
         ):
             self._ask_data(tid, need)
             return
@@ -514,14 +514,74 @@ class Pipeline:
             f"{i}. {p}" for i, p in enumerate(points, 1)
         )
         msgs = self.store.ticket_messages(tid)
-        self.say_client(f"t{tid}:data:{len(requests)}", self.store.ticket(tid)["chat_id"], text,
-                        msgs[-1]["msg_id"] if msgs else None, tid)
-        now = self.clock()
-        self.store.set_stage(
-            tid, "await_client_data", data_requests=requests, asked_ts=now,
-            deadline=now + self.cfg.limits.data_wait_sec,
-            asked_after_msg=max((m["id"] for m in msgs), default=0),
+        then = {"stage": "await_client_data", "patch": {"data_requests": requests}, "wait": "data"}
+        if self.send_client_gated(tid, f"t{tid}:data:{len(requests)}", text,
+                                  msgs[-1]["msg_id"] if msgs else None, then):
+            self.apply_then(tid, then)
+
+    # ----- сообщения клиенту при чтении боевой базы (N1) --------------------------------
+    def send_client_gated(
+        self, tid: int, key: str, text: str, reply_to: str | None, then: dict[str, Any]
+    ) -> bool:
+        """Сообщение клиенту по обращению. Если по нему хоть раз читалась база (след пишет доверенный
+        сервер sql_query, не модель), текст уходит ТОЛЬКО через дословный предпросмотр владельцу и его
+        подтверждение именно этого предпросмотра. Иначе уходит сразу (True)."""
+        t, d = self.store.ticket(tid), self.store.data(tid)
+        if not d.get("db_used"):
+            self.say_client(key, t["chat_id"], text, reply_to, tid)
+            return True
+        text = text[:MAX_ANSWER_CHARS]
+        seq = int(d.get("pending_seq", 0)) + 1
+        preview_key = self._key(f"msgpreview{seq}", tid, d)
+        self.store.patch_data(tid, pending_seq=seq, pending_client={
+            "key": key, "text": text, "reply_to": reply_to, "then": then, "preview_key": preview_key,
+            "chat_id": t["chat_id"],
+        })
+        self.store.queue_message(
+            key=preview_key, chat_id=self.cfg.telegram.owner_chat_id, ticket_id=tid,
+            purpose="client_msg_preview", repeat_ok=True,
+            text=(f"Предпросмотр сообщения клиенту «{t['seller']}» (обращение №{tid}). По обращению "
+                  "читалась база, поэтому сообщение уйдёт только после вашего подтверждения. Дословно "
+                  f"уйдёт текст между линиями:\n———\n{text}\n———\n"
+                  "Ответьте «кати» на это сообщение — отправлю; «нет» — не отправлять."),
         )
+        self.store.set_stage(tid, "await_owner_msg")
+        return False
+
+    def apply_then(self, tid: int, then: dict[str, Any]) -> None:
+        patch = dict(then.get("patch") or {})
+        if then.get("wait") == "data":
+            now = self.clock()
+            msgs = self.store.ticket_messages(tid)
+            patch.update(asked_ts=now, deadline=now + self.cfg.limits.data_wait_sec,
+                         asked_after_msg=max((m["id"] for m in msgs), default=0))
+        self.store.set_stage(tid, str(then["stage"]), pending_client=None, **patch)
+
+    def _decide_pending(self, tid: int, intent: str, via_key: str | None) -> None:
+        d = self.store.data(tid)
+        pending = d.get("pending_client")
+        if not pending:
+            return
+        then = pending["then"]
+        if intent == "go":
+            row = self.store.outbox_by_key(pending["preview_key"])
+            if row is None or row["status"] != "sent":
+                self.say_owner(f"msgwait:{tid}", f"По обращению №{tid} предпросмотр ещё не доставлен вам, "
+                               "клиенту ничего не отправляю.", tid)
+                return
+            if via_key is not None and via_key != pending["preview_key"]:
+                self.say_owner(f"msgstale:{tid}:{via_key}", f"Это устаревший предпросмотр по обращению "
+                               f"№{tid}. Ответьте на последний.", tid)
+                return
+            self.say_client(pending["key"], pending["chat_id"], pending["text"], pending["reply_to"], tid)
+            self.apply_then(tid, then)
+        elif intent == "reject":
+            if then.get("stage") == "await_client_data":  # вопрос не задан: разбор продолжается без него
+                note = ("Владелец не разрешил задавать клиенту этот вопрос. Оцени без этих данных "
+                        "и больше не проси.")
+                self.store.set_stage(tid, "analysis", pending_client=None, resume_note=note, no_asks=True)
+            else:
+                self.apply_then(tid, then)  # «пробуйте» не отправляем, обращение закрывается
 
     def stage_await_client_data(self, tid: int) -> None:
         d = self.store.data(tid)
@@ -846,16 +906,18 @@ class Pipeline:
         return f"№{t['id']} ({self._client_label(t)}, {self.store.data(t['id']).get('verdict') or 'разбор'})"
 
     def handle_owner_message(self, m: Any) -> None:
-        awaiting_rows = self.store.tickets_in("await_owner", "postponed", "await_mockup")
+        awaiting_rows = self.store.tickets_in("await_owner", "postponed", "await_mockup",
+                                              "await_owner_msg")
         # Модели передаются номера, клиент и вердикт; текст из клиентских сообщений полномочий не задаёт.
         awaiting = [{"id": str(t["id"]), "client": self._client_label(t),
                      "kind": self.store.data(t["id"]).get("verdict", "")} for t in awaiting_rows]
         target: int | None = None
         target_rev = 0
+        via_key: str | None = None
         if m["reply_to"]:
             hit = self.store.outbox_for_tg_message(m["chat_id"], m["reply_to"])
             if hit is not None and hit["ticket_id"] is not None:
-                target, target_rev = int(hit["ticket_id"]), self._key_rev(hit["key"])
+                target, target_rev, via_key = int(hit["ticket_id"]), self._key_rev(hit["key"]), hit["key"]
         parsed, _ = self.llm.ask_json(
             "filter", prompts.owner_command_prompt(m["text"], awaiting, target),
             system="Ты разбираешь короткие ответы владельца склада.",
@@ -905,23 +967,29 @@ class Pipeline:
                     self.say_owner(f"unnamed:{m['id']}", clarify)
                     return
                 ids = [t["id"] for t in awaiting_rows if self._fits(t, intent)]
-            if not ids and len(awaiting_rows) == 1 and not model_ids:
+            if not ids and len(awaiting_rows) == 1 and not model_ids and not parsed.get("all"):
                 ids = [awaiting_rows[0]["id"]]
         if not ids:
             self.say_owner(f"clarify:{m['id']}", clarify)
             return
         for tid in ids:
-            self._apply_decision(tid, intent)
+            self._apply_decision(tid, intent, via_key if target == tid else None)
 
     def _fits(self, t: Any, intent: str) -> bool:
         if intent in ("mockup_yes", "mockup_no"):
             return bool(t["stage"] == "await_mockup")
-        if intent == "go" and self.store.data(t["id"]).get("verdict") == "info":
-            return False  # ответ клиенту подтверждается отдельно, по своему предпросмотру
+        if intent == "go" and (self.store.data(t["id"]).get("verdict") == "info"
+                               or t["stage"] == "await_owner_msg"):
+            return False  # сообщение клиенту подтверждается отдельно, по своему предпросмотру
+        if t["stage"] == "await_owner_msg":
+            return intent == "reject"
         return bool(t["stage"] in ("await_owner", "postponed"))
 
-    def _apply_decision(self, tid: int, intent: str) -> None:
+    def _apply_decision(self, tid: int, intent: str, via_key: str | None = None) -> None:
         t, d = self.store.ticket(tid), self.store.data(tid)
+        if t["stage"] == "await_owner_msg":
+            self._decide_pending(tid, intent, via_key)
+            return
         if intent in ("mockup_yes", "mockup_no"):
             if t["stage"] != "await_mockup":
                 return

@@ -16,9 +16,11 @@ import csv
 import io
 import re
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 MAX_SQL_CHARS = 8000
 ALLOWED_FIRST = ("select", "with", "explain")
@@ -119,14 +121,20 @@ def wrap_limit(query: str, first: str, row_limit: int) -> str:
 
 
 def truncate_csv(text: str, row_limit: int, max_bytes: int) -> str:
-    rows = list(csv.reader(io.StringIO(text)))
+    """Режет по строкам и размеру. Длинное поле не роняет разбор: лимит поля поднимается до размера
+    уже ограниченного вывода, а любая ошибка разбора даёт обрезку по размеру с пометкой."""
     note = ""
-    if len(rows) > row_limit + 1:  # заголовок + row_limit строк
-        rows = rows[: row_limit + 1]
-        note = f"\n# вывод обрезан: показано {row_limit} строк, уточните запрос (WHERE, LIMIT)"
-    buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(rows)
-    result = buf.getvalue()
+    try:
+        csv.field_size_limit(max(len(text) + 1, 131072))
+        rows = list(csv.reader(io.StringIO(text)))
+        if len(rows) > row_limit + 1:  # заголовок + row_limit строк
+            rows = rows[: row_limit + 1]
+            note = f"\n# вывод обрезан: показано {row_limit} строк, уточните запрос (WHERE, LIMIT)"
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator="\n").writerows(rows)
+        result = buf.getvalue()
+    except (csv.Error, MemoryError):
+        result, note = text, "\n# CSV не разобран полностью, вывод обрезан по размеру"
     if len(result.encode("utf-8")) > max_bytes:
         result = result.encode("utf-8")[:max_bytes].decode("utf-8", "ignore")
         note = f"\n# вывод обрезан по размеру ({max_bytes} байт), уточните запрос"
@@ -146,16 +154,55 @@ class ProdSqlSettings:
 
 
 Runner = Callable[[list[str], str, int], tuple[int, str, str]]
+OUTPUT_TRUNCATED_RC = 125  # вывод превысил бюджет байтов, процесс остановлен
+STDERR_BUDGET = 8_000
 
 
-def default_runner(argv: list[str], stdin: str, timeout: int) -> tuple[int, str, str]:
+def default_runner(
+    argv: list[str], stdin: str, timeout: int, max_out: int = 200_000, max_err: int = STDERR_BUDGET
+) -> tuple[int, str, str]:
+    """Потоковое чтение с бюджетом байтов: stdout сверх бюджета останавливает процесс (код 125),
+    лишний stderr отбрасывается (канал при этом вычитывается, процесс не зависает)."""
     try:
-        proc = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except FileNotFoundError:
         return 127, "", "ssh not found"
+    out, err = bytearray(), bytearray()
+    over = threading.Event()
+
+    def pump(stream: Any, buf: bytearray, limit: int, kill_on_overflow: bool) -> None:
+        while True:
+            chunk = stream.read1(8192)
+            if not chunk:
+                return
+            room = limit - len(buf)
+            if room > 0:
+                buf.extend(chunk[:room])
+            if len(chunk) > room and kill_on_overflow:
+                over.set()
+                proc.kill()
+                return
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, out, max_out, True), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, err, max_err, False), daemon=True)]
+    for t in threads:
+        t.start()
+    try:
+        assert proc.stdin is not None
+        proc.stdin.write(stdin.encode("utf-8"))
+        proc.stdin.close()
+    except (BrokenPipeError, OSError):
+        pass
+    try:
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
         return 124, "", "timeout"
-    return proc.returncode, proc.stdout, proc.stderr
+    for t in threads:
+        t.join(timeout=5)
+    rc = OUTPUT_TRUNCATED_RC if over.is_set() else proc.returncode
+    return rc, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
 
 
 def ssh_argv(cfg: ProdSqlSettings) -> list[str]:
@@ -168,13 +215,21 @@ def ssh_argv(cfg: ProdSqlSettings) -> list[str]:
     return [*argv, f"{cfg.ssh_user}@{cfg.ssh_host}"]
 
 
-def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner = default_runner) -> str:
+def run_query(cfg: ProdSqlSettings, sql: str, runner: Runner | None = None) -> str:
     """Проверенный запрос -> CSV (с лимитами). Ошибки возвращаются исключением SqlRefused/RuntimeError."""
     query, first = validate_sql(sql)
     stdin = wrap_limit(query, first, cfg.row_limit) + "\n"
-    rc, out, err = runner(ssh_argv(cfg), stdin, cfg.timeout_sec)
+    budget = cfg.max_bytes * 2 + 4096
+
+    def default(argv: list[str], text: str, timeout: int) -> tuple[int, str, str]:
+        return default_runner(argv, text, timeout, max_out=budget)
+
+    rc, out, err = (runner or default)(ssh_argv(cfg), stdin, cfg.timeout_sec)
     if rc == 124:
         raise RuntimeError(f"запрос не уложился в {cfg.timeout_sec} с")
+    if rc == OUTPUT_TRUNCATED_RC:
+        cut = truncate_csv(out, cfg.row_limit, cfg.max_bytes)
+        return cut + "\n# вывод оборван: ответ сервера слишком большой"
     if rc != 0:
         # текст ошибки сервера (psql) полезен аналитику; секретов в нём нет, но длину ограничиваем
         raise RuntimeError(f"ошибка запроса (код {rc}): {(err or out).strip()[:400]}")

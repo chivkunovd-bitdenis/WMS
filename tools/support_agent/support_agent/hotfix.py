@@ -638,7 +638,11 @@ class HotfixRunner:
                     json.dumps(d.get("analysis", {}), ensure_ascii=False)), ticket_id=tid).text.strip()
             except (LlmUnavailable, LlmError):
                 text = "Мы исправили проблему. Попробуйте, пожалуйста, ещё раз."
-            self.p.say_client(f"t{tid}:tryit", t["chat_id"], text,
-                              first[0]["msg_id"] if first else None, tid)  # один раз на обращение
+            then = {"stage": "done", "patch": {"hotfix": {**h, "step": "done"}}}
+            # один раз на обращение; если по нему читалась база, только через предпросмотр владельцу
+            if self.p.send_client_gated(tid, f"t{tid}:tryit", text,
+                                        first[0]["msg_id"] if first else None, then):
+                self.p.apply_then(tid, then)
+            return
         self.store.set_stage(tid, "done", hotfix={**h, "step": "done"})
 

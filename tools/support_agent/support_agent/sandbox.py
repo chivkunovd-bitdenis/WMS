@@ -89,7 +89,7 @@ def mcp_profile(root: str, readable: list[str]) -> str:
     return "\n".join(rules)
 
 
-def prod_sql_profile(readable: list[str]) -> str:
+def prod_sql_profile(readable: list[str], writable_files: list[str] | None = None) -> str:
     """Профиль процесса, который ходит по ssh к боевой базе: без записи, чтение домашнего каталога закрыто,
     кроме ключа, known_hosts и кода агента; сеть только исходящая на порт 22 (и DNS)."""
     home = os.path.realpath(os.path.expanduser("~"))
@@ -101,6 +101,8 @@ def prod_sql_profile(readable: list[str]) -> str:
              f"(deny file-read-data (subpath {_q(home)}))"]
     for path in readable:
         rules.append(f"(allow file-read-data file-read-metadata (subpath {_q(path)}))")
+    for path in writable_files or []:  # только след успешных запросов, ничего больше
+        rules.append(f"(allow file-write* (literal {_q(path)}))")
     return "\n".join(rules)
 
 

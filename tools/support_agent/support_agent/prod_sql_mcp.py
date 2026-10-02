@@ -25,6 +25,20 @@ TOOL = {
 }
 
 
+LOG_PATH: str | None = None
+
+
+def record_success() -> None:
+    """Доверенный след успешного чтения базы: агент по нему (а не по словам модели) узнаёт, что
+    результаты SQL могли попасть в разбор обращения (N1)."""
+    if LOG_PATH:
+        try:
+            with open(LOG_PATH, "a", encoding="utf-8") as fh:
+                fh.write("ok\n")
+        except OSError:
+            pass
+
+
 def handle(settings: ProdSqlSettings, message: dict[str, Any]) -> dict[str, Any] | None:
     method, msg_id = message.get("method"), message.get("id")
     if msg_id is None:
@@ -42,10 +56,13 @@ def handle(settings: ProdSqlSettings, message: dict[str, Any]) -> dict[str, Any]
             try:
                 sql = str((params.get("arguments") or {}).get("sql", ""))
                 text, is_error = run_query(settings, sql), False
+                record_success()
             except SqlRefused as exc:
                 text, is_error = f"ОТКАЗ: {exc}", True
             except RuntimeError as exc:
                 text, is_error = f"ОШИБКА: {exc}", True
+            except Exception as exc:  # любая другая ошибка не должна ронять сервер
+                text, is_error = f"ОШИБКА: внутренняя ошибка обработки ({type(exc).__name__})", True
         result = {"content": [{"type": "text", "text": text}], "isError": is_error}
     elif method == "ping":
         result = {}
@@ -59,10 +76,16 @@ def serve(settings: ProdSqlSettings) -> None:
         line = line.strip()
         if not line:
             continue
+        message: Any = None
         try:
-            reply = handle(settings, json.loads(line))
+            message = json.loads(line)
+            reply = handle(settings, message)
         except ValueError:
             reply = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}
+        except Exception:  # обработчик упал: отвечаем ошибкой и продолжаем обслуживание
+            msg_id = message.get("id") if isinstance(message, dict) else None
+            reply = ({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32603, "message": "internal error"}}
+                     if msg_id is not None else None)
         if reply is not None:
             sys.stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             sys.stdout.flush()
@@ -78,7 +101,10 @@ def main() -> None:
     parser.add_argument("--row-limit", type=int, default=200)
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--max-bytes", type=int, default=60_000)
+    parser.add_argument("--log", default="")
     a = parser.parse_args()
+    global LOG_PATH
+    LOG_PATH = a.log or None
     serve(ProdSqlSettings(a.ssh_host, a.ssh_user, a.key, a.known_hosts, a.row_limit, a.timeout, a.max_bytes,
                           a.ssh_bin))
 
