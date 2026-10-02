@@ -45,14 +45,14 @@ class DirectPrintTest(unittest.TestCase):
         self.assertFalse(handler.allowed())
 
     def test_receipt_survives_restart_without_duplicate(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock(return_value='printer-123')
             self.assertEqual(Printer(Path(root), submit).print(job()), 'printer-123')
             self.assertEqual(Printer(Path(root), submit).print(job()), 'printer-123')
             submit.assert_called_once()
 
     def test_uncertain_submission_not_repeated(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock(side_effect=RuntimeError('lost receipt'))
             for _ in range(2):
                 with self.assertRaises(RuntimeError):
@@ -60,7 +60,7 @@ class DirectPrintTest(unittest.TestCase):
             submit.assert_called_once()
 
     def test_changed_content_rejected(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock(return_value='printer-123')
             printer = Printer(Path(root), submit)
             printer.print(job())
@@ -69,7 +69,7 @@ class DirectPrintTest(unittest.TestCase):
             submit.assert_called_once()
 
     def test_changed_size_is_part_of_idempotent_job(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock(return_value='printer-123')
             printer = Printer(Path(root), submit)
             printer.print(job())
@@ -78,7 +78,7 @@ class DirectPrintTest(unittest.TestCase):
             submit.assert_called_once()
 
     def test_missing_or_invalid_size_never_reaches_printer(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock()
             invalid = job()
             del invalid['widthMm']
@@ -91,7 +91,7 @@ class DirectPrintTest(unittest.TestCase):
     def test_identity_formula_is_the_installed_one(self):
         # Journals written by the installed Windows release must still be recognised.
         import hashlib
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = Printer(Path(root), Mock(return_value='x'))
             printer.print(job())
             row = printer._lookup('scan-1')
@@ -107,7 +107,7 @@ class DirectPrintTest(unittest.TestCase):
         win32print.GetDefaultPrinter.assert_called_once_with()
 
     def test_invalid_content_never_reaches_printer(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             submit = Mock()
             with self.assertRaises(ValueError):
                 Printer(Path(root), submit).print(job(data=b'not a png'))
@@ -169,7 +169,7 @@ class RetryBoundaryTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_failure_before_the_os_boundary_allows_retry_of_same_key(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             adapter = FakeAdapter(before=ValueError('cannot prepare'))
             printer = self.printer(root, adapter)
             with self.assertRaises(ValueError):
@@ -180,7 +180,7 @@ class RetryBoundaryTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_proven_not_sent_after_mark_removes_the_mark(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = self.printer(root, FakeAdapter())
             printer.submit = Mock(side_effect=[PrintNotSent('lp did not start'), 'Label-9'])
             with self.assertRaises(PrintNotSent):
@@ -189,7 +189,7 @@ class RetryBoundaryTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_failure_after_the_boundary_is_never_repeated(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             adapter = FakeAdapter(after=agent.UnknownPrintOutcome('lost'))
             printer = self.printer(root, adapter)
             for _ in range(2):
@@ -207,7 +207,7 @@ class RetryBoundaryTest(unittest.TestCase):
             release.wait(10)
             return 'late-1'
 
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = Printer(Path(root), hang, print_timeout=0.4, minimum_to_start=0)
             started = time.monotonic()
             with self.assertRaises(agent.UnknownPrintOutcome) as unknown:
@@ -235,7 +235,13 @@ class RetryBoundaryTest(unittest.TestCase):
                 except agent.UnknownPrintOutcome:
                     time.sleep(0.05)
             self.assertEqual(printer.print(job('a')), 'late-1')
+            for _ in range(200):   # the late worker leaves the slot right after its receipt (slow on Windows)
+                if printer.slot.acquire(blocking=False):
+                    printer.slot.release()
+                    break
+                time.sleep(0.05)
             printer.submit = Mock(return_value='b-1')
+            printer.print_timeout = 10
             self.assertEqual(printer.print(job('b', PNG + b'2')), 'b-1')
 
     @patch('wms_print_direct.sys.platform', 'darwin')
@@ -251,7 +257,7 @@ class RetryBoundaryTest(unittest.TestCase):
                 calls.append('sent')
                 return 'Label-1'
 
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             adapter = Slow()
             printer = self.printer(root, adapter)
             printer.print_timeout = 0.4
@@ -273,7 +279,7 @@ class RetryBoundaryTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_too_little_time_left_never_starts_a_job(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             adapter = FakeAdapter()
             printer = self.printer(root, adapter)
             printer.minimum_to_start = 100
@@ -293,7 +299,7 @@ class ParallelAndBudgetTest(unittest.TestCase):
                 mark()
                 return 'Label-5'
 
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = self.printer(root, Slow())
             first = threading.Thread(target=lambda: printer.print(job()))
             first.start()
@@ -307,7 +313,7 @@ class ParallelAndBudgetTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_budget_spent_waiting_for_the_journal_means_not_sent_and_mark_removed(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             sent = []
 
             class Locking(FakeAdapter):
@@ -346,7 +352,7 @@ class JournalBudgetAndIdentityTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_two_requests_competing_for_a_locked_journal_still_answer_in_time(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             events = {}
 
             class Preparing(FakeAdapter):
@@ -396,7 +402,7 @@ class JournalBudgetAndIdentityTest(unittest.TestCase):
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_known_identity_forms_are_accepted_and_rewritten_for_the_previous_version(self):
         import hashlib
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = self.printer(root, FakeAdapter())
             python_form = hashlib.sha256(PNG + b'|580x400').hexdigest()
             rows = {
@@ -434,7 +440,7 @@ class CleanupAndUnsentTest(unittest.TestCase):
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_waiting_for_the_slot_answers_in_time_even_if_the_journal_lock_is_held(self):
         release = threading.Event()
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = Printer(Path(root), lambda data: release.wait(10) and 'r', print_timeout=1.0, minimum_to_start=0.1)
             first = threading.Thread(target=lambda: self._quiet(printer, job('first', PNG + b'1')), daemon=True)
             first.start()
@@ -465,7 +471,7 @@ class CleanupAndUnsentTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_mark_that_could_not_be_removed_keeps_the_key_blocked_also_after_restart(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             class Refused(FakeAdapter):
                 def submit_default(inner, data, queue, mark, width_mm=None, height_mm=None):
                     inner.calls += 1
@@ -495,7 +501,7 @@ class CleanupAndUnsentTest(unittest.TestCase):
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_error_lost_result_restart_repeat_sends_exactly_once(self):
         """R5-01: the receipt cannot be written after the job went out; a restart must not resend."""
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             adapter = FakeAdapter()
             printer = self.printer(root, adapter)
             original = printer._execute
@@ -515,7 +521,7 @@ class CleanupAndUnsentTest(unittest.TestCase):
             self.assertEqual(adapter.calls, 1)
 
     def test_no_direct_unsent_file_is_ever_written(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = Printer(Path(root), Mock(side_effect=PrintNotSent('x')))
             with self.assertRaises(PrintNotSent):
                 printer.print(job())
@@ -523,7 +529,7 @@ class CleanupAndUnsentTest(unittest.TestCase):
 
     @patch('wms_print_direct.sys.platform', 'darwin')
     def test_a_really_unknown_outcome_is_not_freed_by_restart(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             printer = self.printer(root, FakeAdapter(after=agent.UnknownPrintOutcome('lost')))
             with self.assertRaises(agent.UnknownPrintOutcome):
                 printer.print(job())
@@ -670,7 +676,7 @@ class LayoutTest(unittest.TestCase):
 class SingleInstanceTest(unittest.TestCase):
     @unittest.skipIf(sys.platform == 'win32', 'file lock is the macOS/Linux path')
     def test_second_lock_is_refused_and_released_with_the_first(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             held = list(wms_print_direct._instance_guard)
             try:
                 self.assertTrue(acquire_instance(Path(root)))
@@ -685,13 +691,13 @@ class SingleInstanceTest(unittest.TestCase):
     def test_windows_named_mutex(self):
         kernel32 = Mock()
         kernel32.CreateMutexW.return_value = 99
-        with tempfile.TemporaryDirectory() as root, \
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root, \
                 patch('wms_print_direct.sys.platform', 'win32'), \
                 patch('wms_print_direct.ctypes.WinDLL', create=True, return_value=kernel32), \
                 patch('wms_print_direct.ctypes.get_last_error', create=True, return_value=183):
             self.assertFalse(acquire_instance(Path(root)))  # ERROR_ALREADY_EXISTS
             kernel32.CloseHandle.assert_called_once()
-        with tempfile.TemporaryDirectory() as root, \
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root, \
                 patch('wms_print_direct.sys.platform', 'win32'), \
                 patch('wms_print_direct.ctypes.WinDLL', create=True, return_value=kernel32), \
                 patch('wms_print_direct.ctypes.get_last_error', create=True, return_value=0):
@@ -766,7 +772,7 @@ class SingleInstanceTest(unittest.TestCase):
             main()
 
     def test_build_id_comes_from_build_json_next_to_the_program(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             Path(root, 'build.json').write_text(json.dumps({'source_commit': 'abc123'}))
             with patch('wms_print_direct.sys.executable', str(Path(root, 'wms-print'))):
                 self.assertEqual(wms_print_direct.build_id(), 'abc123')
