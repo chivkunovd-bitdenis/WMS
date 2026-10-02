@@ -7,12 +7,14 @@ Pipeline.stages: новая стадия (разработка, вечерний
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from . import prompts
@@ -28,6 +30,7 @@ log = logging.getLogger(__name__)
 
 CLOSED = ("done", "closed", "rejected", "failed")
 DECISION_INTENTS = ("go", "reject", "postpone", "mockup_yes", "mockup_no")
+MAX_FILE_BYTES = 5_000_000
 FORBIDDEN_IN_SUMMARY = re.compile(r"```|\b[\w/.-]+\.(py|tsx?|js|sql)\b|/app/|\b\d{9,}\b")
 
 
@@ -363,16 +366,10 @@ class Pipeline:
         if self.store.kv_get("llm_unavailable_notified", False):
             return
         self.store.kv_set("llm_unavailable_notified", True)
-        if reason == "claude_only_unavailable":
-            text = (
-                "Для правки интерфейса нужен Opus, а он сейчас недоступен (лимит или вход). "
-                "Передать задачу Astra? Пока она ждёт в очереди."
-            )
-        else:
-            text = (
-                "Обе модели (Claude и Codex) сейчас недоступны: лимит или вход. Обращения ждут "
-                "в очереди и обработаются сами, когда доступ вернётся."
-            )
+        text = (
+            "Обе модели (Claude и Codex) сейчас недоступны: лимит или вход. Обращения ждут "
+            "в очереди и обработаются сами, когда доступ вернётся."
+        )
         self.say_owner(f"llm_down:{int(self.clock())}", text)
 
     # ----- ворох -> классификация ----------------------------------------------------
@@ -521,6 +518,8 @@ class Pipeline:
         card_note = ""
         if category == "improvement" or (category == "bug" and not urgent):
             card_note = self._card_for(tid, analysis)
+        if category == "info" and t["kind"] == "chat":
+            self._prepare_client_answer(tid, analysis)
         verdict = {"info": "info", "improvement": "trello"}.get(
             category, "hotfix" if safe else "bug_no_hotfix"
         )
@@ -530,6 +529,94 @@ class Pipeline:
             urgent=urgent, cross=cross, report={"body": body},
             affected=hotfix.get("affected") or [],
         )
+
+    # ----- ответ клиенту на информационный запрос: предпросмотр владельцу (R13, R17) ------
+    @staticmethod
+    def answer_sha(text: str, file_path: str | None) -> str:
+        digest = hashlib.sha256(text.encode())
+        digest.update(b"\0")
+        if file_path and Path(file_path).is_file():
+            digest.update(Path(file_path).read_bytes())
+        return digest.hexdigest()
+
+    def _prepare_client_answer(self, tid: int, analysis: dict[str, Any]) -> None:
+        """Замораживает ровно то, что уйдёт клиенту (текст и/или файл) и его отпечаток."""
+        text = str(analysis.get("info_answer") or "").strip()
+        file_path: str | None = None
+        info_file = analysis.get("info_file")
+        if isinstance(info_file, dict) and info_file.get("content"):
+            name = re.sub(r"[^\w.\- ]", "_", Path(str(info_file.get("filename") or "export.csv")).name)
+            content = str(info_file["content"]).encode()
+            if len(content) <= MAX_FILE_BYTES:
+                folder = self.cfg.state_path / "exports" / str(tid)
+                folder.mkdir(parents=True, exist_ok=True)
+                target = folder / (name or "export.csv")
+                target.write_bytes(content)
+                file_path = str(target)
+        if not text and not file_path:
+            self.store.patch_data(tid, client_answer=None)
+            return
+        self.store.patch_data(
+            tid, client_answer={"text": text, "file": file_path},
+            preview_sha=self.answer_sha(text, file_path),
+        )
+
+    def _queue_previews(self, tid: int, t: Any, d: dict[str, Any]) -> None:
+        """Владельцу — точная копия того, что отправится клиенту; клиенту пока ничего."""
+        answer = d.get("client_answer")
+        if not answer or not t["chat_id"]:
+            return
+        ask = "Ответьте «кати» на это сообщение — отправлю клиенту как есть; «нет» — не отправлять."
+        if answer["text"]:
+            self.store.queue_message(
+                key=f"preview:{tid}", chat_id=self.cfg.telegram.owner_chat_id, ticket_id=tid,
+                purpose="info_preview", repeat_ok=True,
+                text=(
+                    f"Предпросмотр для клиента «{t['seller']}» (обращение №{tid}). Дословно уйдёт "
+                    f"в его чат текст между линиями"
+                    f"{', затем файл' if answer['file'] else ''}:\n———\n{answer['text']}\n———\n{ask}"
+                ),
+            )
+        if answer["file"]:
+            self.store.queue_message(
+                key=f"preview_file:{tid}", chat_id=self.cfg.telegram.owner_chat_id, ticket_id=tid,
+                purpose="info_preview", repeat_ok=True, file_path=answer["file"],
+                text=f"Файл для клиента «{t['seller']}» (обращение №{tid}), уйдёт как есть. {ask}",
+            )
+
+    def _send_confirmed_answer(self, tid: int, t: Any, d: dict[str, Any]) -> None:
+        """Отправка клиенту только после подтверждения именно этого предпросмотра."""
+        answer = d.get("client_answer")
+        if not answer:
+            self.say_owner(f"noanswer:{tid}", f"По обращению №{tid} отправлять клиенту нечего.", tid)
+            return
+        keys = (["preview"] if answer["text"] else []) + (["preview_file"] if answer["file"] else [])
+        for key in keys:
+            row = self.store.outbox_by_key(f"{key}:{tid}")
+            if row is None or row["status"] != "sent":
+                self.say_owner(
+                    f"preview_wait:{tid}",
+                    f"По обращению №{tid} предпросмотр ещё не доставлен вам, поэтому клиенту "
+                    "ничего не отправляю. Дождитесь предпросмотра и подтвердите его.", tid,
+                )
+                return
+        if self.answer_sha(answer["text"], answer["file"]) != d.get("preview_sha"):
+            self.say_owner(
+                f"preview_changed:{tid}",
+                f"По обращению №{tid} содержимое изменилось после предпросмотра, клиенту не "
+                "отправляю. Нужен новый предпросмотр.", tid,
+            )
+            return
+        first = self.store.ticket_messages(tid)
+        reply_to = first[0]["msg_id"] if first else None
+        if answer["text"]:
+            self.say_client(f"t{tid}:info", t["chat_id"], answer["text"], reply_to, tid)
+        if answer["file"]:
+            self.store.queue_message(
+                key=f"t{tid}:info_file", chat_id=t["chat_id"], text="", reply_to=reply_to,
+                ticket_id=tid, purpose="client", repeat_ok=False, file_path=answer["file"],
+            )
+        self.store.set_stage(tid, "done", answer_confirmed_at=self.clock())
 
     def _crosscheck(self, tid: int, analysis: dict[str, Any], analyst_cli: str) -> dict[str, Any]:
         """R16: проверяет модель другого семейства; нет модели — честная пометка."""
@@ -595,8 +682,12 @@ class Pipeline:
             )
         lines = [body]
         d = self.store.data(tid)
-        if verdict == "info" and analysis.get("info_answer"):
-            lines.append(f"Ответ клиенту (после вашего «кати»): {analysis['info_answer']}")
+        if verdict == "info":
+            lines.append(
+                "Ответ клиенту покажу следующим сообщением дословно; отправлю только после вашего "
+                "подтверждения именно его." if d.get("client_answer")
+                else "Готового ответа или файла для клиента нет."
+            )
         if cross is not None:
             if cross["verdict"] == "safe":
                 lines.append("Проверка второй моделью: безопасно.")
@@ -636,7 +727,7 @@ class Pipeline:
             "«позже» — отложить."
         ),
         "bug_no_hotfix": "Коротким хотфиксом это не закрыть. Решение за вами: «нет» или «позже».",
-        "info": "Ответьте «кати» — отправлю этот ответ клиенту; «нет» — не отправлять.",
+        "info": "",
         "trello": "",
         "other": "Ответьте «нет» или «позже»; хотфикса и карточки по этому обращению нет.",
     }
@@ -674,6 +765,8 @@ class Pipeline:
             if footer:
                 text += f"\n\n{footer}"
             self.say_owner(f"report:{t['id']}", text, t["id"], "summary")
+            if d.get("verdict") == "info":
+                self._queue_previews(t["id"], t, d)
             final = "done" if d.get("verdict") in ("trello",) else "await_owner"
             self.store.set_stage(t["id"], final, reported_at=now)
 
@@ -717,6 +810,8 @@ class Pipeline:
     def _fits(self, t: Any, intent: str) -> bool:
         if intent in ("mockup_yes", "mockup_no"):
             return bool(t["stage"] == "await_mockup")
+        if intent == "go" and self.store.data(t["id"]).get("verdict") == "info":
+            return False  # ответ клиенту подтверждается отдельно, по своему предпросмотру
         return bool(t["stage"] in ("await_owner", "postponed"))
 
     def _apply_decision(self, tid: int, intent: str) -> None:
@@ -746,12 +841,10 @@ class Pipeline:
                     "В облегчённом режиме не делаю. Как поступить?", tid,
                 )
             elif verdict == "info":
-                answer = (d.get("analysis") or {}).get("info_answer")
-                if answer and t["chat_id"]:
-                    first = self.store.ticket_messages(tid)
-                    self.say_client(f"t{tid}:info", t["chat_id"], str(answer),
-                                    first[0]["msg_id"] if first else None, tid)
-                self.store.set_stage(tid, "done")
+                if t["chat_id"]:
+                    self._send_confirmed_answer(tid, t, d)
+                else:
+                    self.store.set_stage(tid, "done")  # форма: клиенту писать некуда
             else:
                 self.say_owner(f"noop:{tid}", f"По обращению №{tid} действий не требуется.", tid)
 

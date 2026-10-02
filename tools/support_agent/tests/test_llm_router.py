@@ -56,7 +56,7 @@ def test_roles_use_cheap_and_strong_models_without_api_keys(tmp_path: Path) -> N
     flat = " ".join(" ".join(c) for c in script.calls).lower()
     assert "api-key" not in flat and "api_key" not in flat
     assert "--tools" in script.calls[0]  # фильтр: без инструментов
-    assert "bypassPermissions" in script.calls[1] and "dontAsk" in script.calls[2]
+    assert "bypassPermissions" not in " ".join(script.calls[1]) and "dontAsk" in script.calls[2]
     assert "Edit" in script.calls[2][script.calls[2].index("--disallowedTools"):]  # аналитик не пишет
 
 
@@ -110,13 +110,75 @@ def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
     assert script.calls[-1][0] == "claude"
 
 
-def test_claude_only_role_does_not_fall_back_to_codex(tmp_path: Path) -> None:
+def test_interface_analysis_and_dev_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    store.kv_set("cooldown:claude", time.time() + 999)  # Opus и Sonnet недоступны
+    for role in ("frontend", "mockup", "analyst", "routine", "filter"):
+        llm.ask(role, "x", mode="write" if role in ("frontend", "mockup", "routine") else "text",
+                cwd=str(tmp_path))
+    models = [c[c.index("-m") + 1] for c in script.calls]
+    assert models == ["gpt-5.6-sol"] * 5  # без вопроса владельцу и без Astra
+    assert llm.cfg.llm.models["codex"]["review"] == "gpt-6-astra"
+    assert {r for r, m in ((r, llm.model_for("codex", r)) for r in ("filter", "routine", "analyst",
+            "frontend", "mockup", "review")) if m and "astra" in m} == {"review"}
+
+
+def test_astra_configured_for_a_non_review_role_is_refused(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    llm.cfg.llm.models["codex"]["analyst"] = "gpt-6-astra"
+    with pytest.raises(ValueError, match="reviewer-only"):
+        llm.model_for("codex", "analyst")
+
+
+def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    wt = str(tmp_path / "wt")
+    llm.ask("routine", "x", mode="write", cwd=wt)
+    argv = script.calls[-1]
+    assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
+    assert "bypassPermissions" not in argv and "--dangerously-skip-permissions" not in argv
+    allowed = argv[argv.index("--allowedTools") + 1: argv.index("--disallowedTools")]
+    denied = argv[argv.index("--disallowedTools") + 1:]
+    assert f"Edit(/{wt}/**)" in allowed and f"Write(/{wt}/**)" in allowed  # только свой worktree
+    assert "Edit" not in allowed and "Write" not in allowed and "Bash" not in allowed
+    assert not any(a.startswith("Bash(git add") or a.startswith("Bash(git commit")
+                   or a.startswith("Bash(git push") for a in allowed)
+    for needed in ("Bash(ruff:*)", "Bash(mypy:*)", "Bash(pytest:*)", "Bash(npm run build:*)",
+                   "Bash(npx tsc:*)", "Bash(git status:*)"):
+        assert needed in allowed
+    for blocked in ("Bash(git push:*)", "Bash(gh:*)", "Bash(ssh:*)", "Bash(curl:*)", "Read(**/*.env)",
+                    "Read(~/.wms-support-agent/**)"):
+        assert blocked in denied
+
+
+def test_codex_dev_runs_in_workspace_write_without_network(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
-    with pytest.raises(LlmUnavailable, match="claude_only"):
-        llm.ask("mockup", "x", mode="write", cli_only="claude")
-    assert script.calls == []  # Astra не вызвана
+    tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="hotfix")
+    wt = str(tmp_path / "wt")
+    llm.ask("routine", "x", mode="write", cwd=wt, ticket_id=tid, session_key="dev")
+    argv = script.calls[-1]
+    assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
+    assert "sandbox_workspace_write.network_access=false" in argv
+    llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
+    resume = script.calls[-1]
+    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and "danger-full-access" not in resume
+    assert 'sandbox_mode="workspace-write"' in resume
+    assert "sandbox_workspace_write.network_access=false" in resume
+
+
+def test_real_codex_json_stream_gives_session_id() -> None:
+    from support_agent.llm import _codex_session_id
+
+    live = (
+        '{"type":"thread.started","thread_id":"01a0fd43-39f6-70c3-9213-907ea87ac473"}\n'
+        '{"type":"turn.started"}\n{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n'
+    )
+    assert _codex_session_id(live) == "01a0fd43-39f6-70c3-9213-907ea87ac473"
 
 
 def test_session_is_created_then_resumed_and_context_only_for_new(tmp_path: Path) -> None:

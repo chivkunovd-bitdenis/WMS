@@ -80,7 +80,8 @@ ANALYSIS_SCHEMA = """\
  "hotfix": {"safe": true|false, "reason": "...", "needs_migration": true|false,
             "single_process": true|false, "touches_frontend": true|false,
             "affected": ["какие процессы заденет"]},
- "info_answer": null | "готовый ответ клиенту простыми словами (для category=info)",
+ "info_answer": null | "готовый ответ клиенту простыми словами (для category=info); уйдёт клиенту дословно, после подтверждения владельца",
+ "info_file": null | {"filename": "имя.csv", "content": "полное содержимое выгрузки текстом (CSV и т. п.), только прочитанное"},
  "improvement_card": null | {"title": "...", "description": "суть и обоснование"},
  "missing_for_owner": ["чего не хватает, если это форма и спросить некого"]
 }"""
@@ -204,11 +205,13 @@ DEV_RULES = """\
    заполнены), раздел «Заключение» (честно: облегчённый режим, приёмка аналитика не проводилась).
 4. Проверки бэка: cd backend && ruff check . && mypy . && pytest -n auto <твои тесты>
    (бинарники: {bin}). Полный набор не запускай. Для фронта: cd frontend && npx tsc --noEmit
-   -p tsconfig.app.json && npm run build (node_modules можно подключить симлинком из основного
-   checkout).
-5. Каждый коммит начинается с {number} и заканчивается строкой
-   Co-Authored-By: Claude Sonnet <noreply@anthropic.com>
-Не пуши, не создавай PR, не трогай другие каталоги и git stash. В конце верни ТОЛЬКО JSON:
+   -p tsconfig.app.json && npm run build (node_modules уже подключены).
+5. НЕ коммить, не пуши, не создавай PR: коммит с номером {number} делает диспетчер сам. Тебе
+   доступны только правка файлов в этом каталоге и команды: чтение git (status, diff, log, show),
+   ruff, mypy, pytest, npm run build, npx tsc, ls, cat. Любые другие команды (сеть, ssh, gh,
+   docker, установка пакетов), выход за этот каталог, чтение секретов и правка CI, скриптов
+   выкладки, .github и docker-compose запрещены и будут отклонены; не пытайся их обойти.
+Не трогай git stash. В конце верни ТОЛЬКО JSON:
 {{"summary": "что сделано, по-человечески", "test_files": ["путь"], "migration": false,
 "frontend": true|false, "client_scenario": "что клиенту повторить, чтобы проверить"}}"""
 

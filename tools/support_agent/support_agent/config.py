@@ -74,10 +74,14 @@ class LlmCfg:
                 "mockup": "opus",
                 "frontend": "opus",
             },
+            # Sol 5.6 — рабочая модель Codex и запасная при недоступности Claude (разбор, хотфикс,
+            # интерфейс, макеты); Astra — только ревью и перекрёстная проверка.
             "codex": {
                 "filter": "gpt-5.6-sol",
                 "routine": "gpt-5.6-sol",
-                "analyst": "gpt-6-astra",
+                "analyst": "gpt-5.6-sol",
+                "frontend": "gpt-5.6-sol",
+                "mockup": "gpt-5.6-sol",
                 "review": "gpt-6-astra",
             },
         }
@@ -87,10 +91,15 @@ class LlmCfg:
 
 
 @dataclass
+class OpenAiCfg:
+    api_key: str = field(default="", repr=False)  # или переменная окружения OPENAI_API_KEY
+
+
+@dataclass
 class TranscribeCfg:
-    whisper_bin: str = "whisper-cli"
-    model_path: str = "~/.wms-support-agent/models/ggml-small.bin"
+    model: str = "gpt-4o-mini-transcribe"
     language: str = "ru"
+    api_url: str = "https://api.openai.com/v1/audio/transcriptions"
     ffmpeg_bin: str = "ffmpeg"
     max_attempts: int = 3
 
@@ -120,6 +129,7 @@ class Config:
     wms: WmsCfg = field(default_factory=WmsCfg)
     limits: LimitsCfg = field(default_factory=LimitsCfg)
     llm: LlmCfg = field(default_factory=LlmCfg)
+    openai: OpenAiCfg = field(default_factory=OpenAiCfg)
     transcribe: TranscribeCfg = field(default_factory=TranscribeCfg)
     hotfix: HotfixCfg = field(default_factory=HotfixCfg)
     mockups: MockupCfg = field(default_factory=MockupCfg)
@@ -138,6 +148,8 @@ class Config:
             self.trello.api_key,
             self.trello.token,
             self.wms.agent_key,
+            self.openai.api_key,
+            os.environ.get("OPENAI_API_KEY", ""),
         ]
         return [v for v in values if v and len(v) >= 6]
 
@@ -179,6 +191,7 @@ def config_from_dict(data: dict[str, Any]) -> Config:
     cfg.wms = _build(WmsCfg, data.get("wms", {}))
     cfg.limits = _build(LimitsCfg, data.get("limits", {}))
     cfg.llm = _build(LlmCfg, data.get("llm", {}))
+    cfg.openai = _build(OpenAiCfg, data.get("openai", {}))
     cfg.transcribe = _build(TranscribeCfg, data.get("transcribe", {}))
     cfg.hotfix = _build(HotfixCfg, data.get("hotfix", {}))
     cfg.mockups = _build(MockupCfg, data.get("mockups", {}))

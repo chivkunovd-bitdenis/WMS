@@ -305,3 +305,25 @@ def test_client_chats_are_isolated_in_summaries_and_questions(env: Any, tmp_path
     tickets = {t["chat_id"]: t["seller"] for t in store.rows("SELECT * FROM tickets")}
     assert tickets == {-1: "Селлер А", -2: "Селлер Б"}
     assert all("у Б" not in c["prompt"] for c in llm.calls if "Селлер А" in c["prompt"] and "Разберись" in c["prompt"])
+
+
+def test_send_document_uploads_file_and_classifies_errors(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 9}})
+
+    f = tmp_path / "x.csv"
+    f.write_text("a;b", encoding="utf-8")
+    tg = TelegramClient("TOK", httpx.Client(transport=httpx.MockTransport(handle)))
+    assert tg.send_document(5, str(f), "подпись", reply_to="3") == "9"
+    body = seen[0].read()
+    assert seen[0].url.path.endswith("/sendDocument") and b'filename="x.csv"' in body
+    assert b"a;b" in body and b"\r\n5\r\n" in body
+    bad = TelegramClient("TOK", httpx.Client(transport=httpx.MockTransport(
+        lambda r: httpx.Response(500, json={"ok": False}))))
+    try:
+        bad.send_document(5, str(f))
+    except TelegramError as exc:
+        assert exc.outcome == "unknown"

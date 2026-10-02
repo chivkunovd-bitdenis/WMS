@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,9 +31,16 @@ class TelegramClient:
         self.token = token
         self.http = http
 
-    def _call(self, method: str, payload: dict[str, Any], timeout: float = 30) -> Any:
+    def _call(
+        self, method: str, payload: dict[str, Any], timeout: float = 30,
+        files: dict[str, Any] | None = None,
+    ) -> Any:
         try:
-            response = self.http.post(f"{API}/bot{self.token}/{method}", json=payload, timeout=timeout)
+            url = f"{API}/bot{self.token}/{method}"
+            if files is not None:
+                response = self.http.post(url, data=payload, files=files, timeout=timeout)
+            else:
+                response = self.http.post(url, json=payload, timeout=timeout)
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
             raise TelegramError("not_sent", "connect") from None
         except httpx.HTTPError as exc:  # токен в URL: текст исключения не пробрасываем
@@ -64,6 +72,20 @@ class TelegramClient:
             payload["reply_to_message_id"] = int(reply_to)
             payload["allow_sending_without_reply"] = True
         return str(self._call("sendMessage", payload)["message_id"])
+
+    def send_document(
+        self, chat_id: int, path: str, caption: str = "", reply_to: str | None = None
+    ) -> str:
+        payload: dict[str, Any] = {"chat_id": str(chat_id)}
+        if caption:
+            payload["caption"] = caption[:1000]
+        if reply_to:
+            payload["reply_to_message_id"] = reply_to
+            payload["allow_sending_without_reply"] = "true"
+        file = Path(path)
+        result = self._call("sendDocument", payload, timeout=120,
+                            files={"document": (file.name, file.read_bytes())})
+        return str(result["message_id"])
 
     def download_file(self, file_id: str) -> bytes:
         info = self._call("getFile", {"file_id": file_id})
@@ -140,7 +162,12 @@ def flush_outbox(store: Store, tg: TelegramClient, cfg: Config) -> int:
         if not store.claim_outbox(item["id"]):
             continue
         try:
-            message_id = tg.send_message(item["chat_id"], item["text"], item["reply_to"])
+            if item["file_path"]:
+                message_id = tg.send_document(
+                    item["chat_id"], item["file_path"], item["text"], item["reply_to"]
+                )
+            else:
+                message_id = tg.send_message(item["chat_id"], item["text"], item["reply_to"])
         except TelegramError as exc:
             attempts = item["attempts"] + 1
             if exc.outcome == "rejected":

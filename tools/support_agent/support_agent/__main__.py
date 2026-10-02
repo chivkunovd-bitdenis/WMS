@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from .config import load_config
@@ -27,6 +28,8 @@ def check_config(path: str | None) -> int:
         warnings.append("trello: нет ключа, токена или доски (карточки создаваться не будут)")
     if not cfg.wms.agent_key:
         warnings.append("wms.agent_key не задан (форма «?» не опрашивается)")
+    if not (cfg.openai.api_key or os.environ.get("OPENAI_API_KEY")):
+        warnings.append("openai.api_key (или OPENAI_API_KEY) не задан: голос не расшифровывается")
     if not cfg.hotfix.deployed_sha_cmd:
         warnings.append("hotfix.deployed_sha_cmd не задан (хотфикс не сможет проверить версию)")
     for line in critical:

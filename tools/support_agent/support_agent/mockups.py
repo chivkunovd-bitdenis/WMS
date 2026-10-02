@@ -28,7 +28,7 @@ class MockupRunner:
             task = self.p._task_text(d) if d.get("draft") else d.get("raw", "")
             res, _ = self.p.llm.ask_json(
                 "mockup", prompts.mockup_prompt(task, str(tid)), ticket_id=tid,
-                session_key="mockup", mode="write", cwd=str(path), cli_only="claude", timeout=3600,
+                session_key="mockup", mode="write", cwd=str(path), timeout=3600,
             )
             out = (path / str(res.get("dir", ""))).resolve()
             if not out.is_dir() or path.resolve() not in out.parents:

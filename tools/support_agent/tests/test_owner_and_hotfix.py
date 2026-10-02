@@ -157,6 +157,7 @@ def hotfix_env(env: Any, tmp_path: Path, *, ci: str = "pass", foreign: int = 0,
         return ExecResult(1 if base_fails else 0, "1 failed", "")
 
     shell.on("git fetch", ok())
+    shell.on("git status --porcelain", ok(out=" M backend/app/services/x.py\n"))
     shell.on("git show origin/etalon:docs/KANONICHESKIY_BACKLOG.md", ok(out="WMS-639 WMS-648"))
     shell.on("git branch --all", ok(out="origin/etalon\nwms649-x"))
     shell.on("git log origin/etalon -400", ok(out="Merge WMS-643"))
@@ -350,7 +351,7 @@ def test_form_ticket_moves_card_in_progress_then_done_and_sends_no_client_messag
     assert env.tg.to(CLIENT_CHAT) == []
 
 
-def test_mockup_only_after_yes_and_only_opus(env: Any, tmp_path: Path) -> None:
+def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = env.store.add_ticket(
         kind="partner_task", source="telegram", chat_id=-100222, seller="", stage="await_mockup",
@@ -361,7 +362,7 @@ def test_mockup_only_after_yes_and_only_opus(env: Any, tmp_path: Path) -> None:
         out = Path(kw["cwd"]) / f"mockup-out-{tid}"
         out.mkdir(parents=True, exist_ok=True)
         (out / "index.html").write_text("<html></html>", encoding="utf-8")
-        assert kw["cli_only"] == "claude" and kw["mode"] == "write"
+        assert kw["mode"] == "write" and "cli_only" not in kw
         return {"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}
 
     env.llm.on("mockup", "Opus, дизайнер", mock)
@@ -432,3 +433,51 @@ def test_missing_backlog_heading_or_verdict_table_is_sent_back(env: Any, tmp_pat
     env.flush()
     owner = env.tg.to(OWNER_CHAT)[-1]
     assert "## WMS-651" in owner and "Вердикт" in owner
+
+
+def test_dispatcher_commits_with_number_and_never_pushes_before_pr(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    drive(env, tid)
+    calls = [" ".join(c) for c in hf.shell.calls]
+    add = next(i for i, c in enumerate(calls) if c.startswith("git add -A"))
+    commit = next(i for i, c in enumerate(calls) if c.startswith("git commit -m WMS-651: "))
+    push = next(i for i, c in enumerate(calls) if c.startswith("git push"))
+    assert add < commit < push  # коммит делает диспетчер, push — только после проверок
+    assert "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>" in calls[commit]
+    assert ":(exclude)frontend/node_modules" in calls[add]
+    dev_calls = [c for c in env.llm.calls if c.get("session_key") == "dev"]
+    assert dev_calls and all(c["mode"] == "write" for c in dev_calls)
+    assert "НЕ коммить, не пуши" in dev_calls[0]["prompt"]
+
+
+def test_changes_to_ci_or_deploy_files_are_not_a_hotfix(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path)
+    hf.shell.on("git diff --name-only", ok(out="backend/app/x.py\nbackend/tests/test_x.py\n"
+                                                ".github/workflows/deploy.yml\n"))
+    tid = start_hotfix(env)
+    drive(env, tid)
+    assert env.store.ticket(tid)["stage"] == "failed"
+    assert "выкладку, CI" in env.store.data(tid)["hotfix"]["failure"]
+    assert hf.shell.ran("git push") == 0 and hf.shell.ran("gh pr create") == 0
+
+
+def test_frontend_hotfix_links_node_modules_by_dispatcher_and_uses_opus_role(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path)
+    (Path(env.cfg.repo) / "frontend" / "node_modules").mkdir(parents=True)
+    tid = start_hotfix(env)
+    env.store.patch_data(tid, analysis={"hotfix": {"touches_frontend": True}})
+    env.llm.on("frontend", "исполнитель облегчённого хотфикса", lambda p, kw: _fake_dev(kw))
+    env.pipe.hotfix.step(tid)  # start
+    env.pipe.hotfix.step(tid)  # worktree
+    wt = Path(env.store.data(tid)["hotfix"]["path"])
+    (wt / "frontend").mkdir(parents=True, exist_ok=True)
+    env.pipe.hotfix.step(tid)  # dev
+    assert (wt / "frontend" / "node_modules").is_symlink()
+    assert [c["role"] for c in env.llm.calls if c.get("session_key") == "dev"] == ["frontend"]
+    del hf
+
+
+def _fake_dev(kw: Any) -> dict[str, Any]:
+    return {"summary": "интерфейс", "test_files": [], "migration": False, "frontend": True,
+            "client_scenario": "открыть экран"}

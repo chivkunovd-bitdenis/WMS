@@ -146,7 +146,7 @@ def build_agent(cfg: Config) -> Agent:
     llm = LlmRouter(cfg, store)
     pipe = Pipeline(
         cfg, store, tg, llm, TrelloClient(cfg.trello, http), WmsClient(cfg.wms, http),
-        Transcriber(cfg.transcribe), pool=ThreadPool(cfg.limits.max_parallel),
+        Transcriber(cfg.transcribe, cfg.openai, http), pool=ThreadPool(cfg.limits.max_parallel),
     )
     hotfix = HotfixRunner(pipe, http=http)
     pipe.hotfix = hotfix

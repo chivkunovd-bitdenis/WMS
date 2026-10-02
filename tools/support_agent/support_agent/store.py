@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS outbox (
   key TEXT NOT NULL UNIQUE, chat_id INTEGER NOT NULL, reply_to TEXT, text TEXT NOT NULL,
   status TEXT NOT NULL, tg_message_id TEXT, ticket_id INTEGER, purpose TEXT NOT NULL DEFAULT '',
   attempts INTEGER NOT NULL DEFAULT 0, repeat_ok INTEGER NOT NULL DEFAULT 0,
-  created_at REAL NOT NULL, sent_at REAL
+  created_at REAL NOT NULL, sent_at REAL, file_path TEXT
 );
 CREATE TABLE IF NOT EXISTS cards (
   key TEXT PRIMARY KEY, ticket_id INTEGER, marker TEXT NOT NULL, status TEXT NOT NULL,
@@ -59,6 +59,10 @@ class Store:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA busy_timeout=5000")
             self.db.executescript(SCHEMA)
+            try:  # база старой версии без файлов в очереди отправки
+                self.db.execute("ALTER TABLE outbox ADD COLUMN file_path TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     # -- low level -----------------------------------------------------------------
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
@@ -217,12 +221,13 @@ class Store:
         ticket_id: int | None = None,
         purpose: str = "",
         repeat_ok: bool = False,
+        file_path: str | None = None,
     ) -> bool:
         """Записывает НАМЕРЕНИЕ отправить. Тот же key второй раз не создаёт сообщения."""
         cur = self.execute(
             "INSERT OR IGNORE INTO outbox(key,chat_id,reply_to,text,status,ticket_id,purpose,"
-            "repeat_ok,created_at) VALUES(?,?,?,?, 'pending', ?,?,?,?)",
-            (key, chat_id, reply_to, text, ticket_id, purpose, int(repeat_ok), time.time()),
+            "repeat_ok,created_at,file_path) VALUES(?,?,?,?, 'pending', ?,?,?,?,?)",
+            (key, chat_id, reply_to, text, ticket_id, purpose, int(repeat_ok), time.time(), file_path),
         )
         return cur.rowcount == 1
 

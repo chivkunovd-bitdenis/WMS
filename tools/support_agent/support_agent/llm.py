@@ -130,7 +130,11 @@ class LlmRouter:
         return [c for c in self.cfg.llm.cli_order if not self.cooling(c)]
 
     def model_for(self, cli: str, role: str) -> str | None:
-        return self.cfg.llm.models.get(cli, {}).get(role)
+        model = self.cfg.llm.models.get(cli, {}).get(role)
+        if model and "astra" in model.lower() and role != "review":
+            # Astra — только ревьюер (решение владельца); ошибка в конфиге не должна её запустить.
+            raise ValueError(f"Astra is reviewer-only, but configured for role {role!r}")
+        return model
 
     def effort_for(self, cli: str, role: str) -> str | None:
         if cli != "codex":
@@ -152,8 +156,33 @@ class LlmRouter:
         return result
 
     # -- построение команд -------------------------------------------------------------
+    def write_tools(self, cwd: str) -> tuple[list[str], list[str]]:
+        """Минимальные права разработчика/макетчика (WMS-639): правка файлов только в своём worktree,
+        явный список команд. push, gh, ssh, curl и т. п. выполняет код диспетчера, не модель."""
+        bin_dir = self.cfg.hotfix.backend_bin.rstrip("/")
+        tools = [f"Bash({name}:*)" for name in ("ruff", "mypy", "pytest")]
+        if bin_dir:
+            tools += [f"Bash({bin_dir}/{name}:*)" for name in ("ruff", "mypy", "pytest")]
+        allowed = [
+            "Read", "Grep", "Glob", f"Edit(/{cwd}/**)", f"Write(/{cwd}/**)",
+            "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+            "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)", "Bash(cd:*)",
+            "Bash(python -m pytest:*)", "Bash(python3 -m pytest:*)", "Bash(npm run build:*)",
+            "Bash(npx tsc:*)", *tools,
+        ]
+        denied = [
+            "Bash(git push:*)", "Bash(git remote:*)", "Bash(git config:*)", "Bash(gh:*)",
+            "Bash(ssh:*)", "Bash(scp:*)", "Bash(rsync:*)", "Bash(curl:*)", "Bash(wget:*)",
+            "Bash(docker:*)", "Bash(sudo:*)", "Bash(launchctl:*)", "Bash(npm install:*)",
+            "Bash(npm publish:*)", "Read(**/*.env)", "Read(**/.env*)", "Read(~/.ssh/**)",
+            "Read(~/.wms-support-agent/**)", "Read(~/.config/**)", "Read(~/.aws/**)",
+            "Edit(**/.git/**)", "Write(**/.git/**)", "NotebookEdit",
+        ]
+        return allowed, denied
+
     def build_claude(
-        self, model: str, mode: str, session: tuple[str, bool] | None, system: str | None
+        self, model: str, mode: str, session: tuple[str, bool] | None, system: str | None,
+        cwd: str = "",
     ) -> list[str]:
         argv = [self.cfg.llm.claude_bin, "-p", "--model", model, "--output-format", "json"]
         if session is None:
@@ -169,8 +198,10 @@ class LlmRouter:
         elif mode == "readonly":
             argv += ["--permission-mode", "dontAsk", "--allowedTools", *READONLY_TOOLS]
             argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit"]
-        else:  # write: разработчик хотфикса в своём worktree
-            argv += ["--permission-mode", "bypassPermissions"]
+        else:  # write: разработчик хотфикса / макетчик в своём worktree, без bypassPermissions
+            allowed, denied = self.write_tools(cwd)
+            argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
+            argv += ["--disallowedTools", *denied]
         return argv
 
     def build_codex(
@@ -184,11 +215,15 @@ class LlmRouter:
         argv += ["-m", model]
         if effort:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
-        sandbox = {"text": "read-only", "readonly": "read-only", "write": "danger-full-access"}[mode]
+        sandbox = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
+        if mode == "write":  # запись только в рабочий каталог, сети нет
+            argv += ["-c", "sandbox_workspace_write.network_access=false"]
         if not session_id:
             argv += ["-s", sandbox, "--color", "never"]
             if cwd:
                 argv += ["-C", cwd]
+        else:
+            argv += ["-c", f'sandbox_mode="{sandbox}"']
         argv += ["--json", "--skip-git-repo-check", "-o", last_message_file, "-"]
         return argv
 
@@ -210,9 +245,7 @@ class LlmRouter:
     ) -> LlmResult:
         options = self.candidates(role, cli_only, exclude_cli)
         if not options:
-            raise LlmUnavailable(
-                "claude_only_unavailable" if cli_only else "no_cli_available"
-            )
+            raise LlmUnavailable("no_cli_available")
         self.scratch.mkdir(parents=True, exist_ok=True)
         work_cwd = cwd or str(self.scratch)
         last_error = ""
@@ -269,7 +302,7 @@ class LlmRouter:
                 session = (session_id, True) if session_id else (str(uuid.uuid4()), False)
             else:
                 session = None
-            argv = self.build_claude(model, mode, session, system)
+            argv = self.build_claude(model, mode, session, system, cwd)
             res = self.exec(argv, cwd, timeout, prompt)
             text, new_id, is_error = _parse_claude(res)
             if res.rc != 0 or is_error:
@@ -330,7 +363,8 @@ def _parse_claude(res: ExecResult) -> tuple[str, str | None, bool]:
 
 
 def _codex_session_id(stdout: str) -> str | None:
-    """Best effort: ищем id сессии в первых строках JSONL; не нашли — продолжаем без resume."""
+    """Живой вывод `codex exec --json` (проверено): первая строка {"type":"thread.started",
+    "thread_id":"<uuid>"}. Не нашли — продолжаем без resume."""
     for line in stdout.splitlines()[:8]:
         try:
             event = json.loads(line)

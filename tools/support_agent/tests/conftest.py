@@ -55,6 +55,7 @@ def make_config(tmp_path: Any, **over: Any) -> Config:
 class FakeTelegram:
     def __init__(self) -> None:
         self.sent: list[tuple[int, str, str | None]] = []
+        self.documents: list[tuple[int, str, str, str | None]] = []
         self.updates: list[dict[str, Any]] = []
         self.files: dict[str, bytes] = {}
         self.fail: list[TelegramError] = []
@@ -68,6 +69,12 @@ class FakeTelegram:
         if self.fail:
             raise self.fail.pop(0)
         self.sent.append((chat_id, text, reply_to))
+        return str(next(self.ids))
+
+    def send_document(self, chat_id: int, path: str, caption: str = "", reply_to: str | None = None) -> str:
+        if self.fail:
+            raise self.fail.pop(0)
+        self.documents.append((chat_id, path, caption, reply_to))
         return str(next(self.ids))
 
     def download_file(self, file_id: str) -> bytes:

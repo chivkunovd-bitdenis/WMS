@@ -22,6 +22,8 @@ from .pipeline import Pipeline
 
 log = logging.getLogger(__name__)
 MAX_FIX_ROUNDS = 2
+FORBIDDEN_PATHS = (".github/", "scripts/deploy/", "scripts/ci/", ".claude/", ".cursor/",
+                   "docker-compose", "deploy/", "tools/support_agent/")
 HONEST_STATUS = "Статус: выложено в облегчённом режиме, приёмка аналитика не проводилась."
 
 
@@ -177,11 +179,35 @@ class HotfixRunner:
         number = f"WMS-{h['number']}"
         prompt = prompts.dev_prompt(number, self.cfg.hotfix.backend_bin, self._request_text(tid),
                                     json.dumps(analysis, ensure_ascii=False)[:6000])
+        if frontend:
+            self.link_node_modules(h["path"])
         res, result = self.p.llm.ask_json(
             "frontend" if frontend else "routine", prompt, ticket_id=tid, session_key="dev",
-            mode="write", cwd=h["path"], timeout=3600, cli_only="claude" if frontend else None,
+            mode="write", cwd=h["path"], timeout=3600,
         )
-        self.save(tid, h, step="checks", dev=res, dev_cli=result.cli, frontend=frontend)
+        self.save(tid, h, dev=res, dev_cli=result.cli, frontend=frontend)
+        self.commit_dev(tid, h)
+        self.save(tid, h, step="checks")
+
+    def link_node_modules(self, path: str) -> None:
+        """Зависимости фронта подключает диспетчер (у разработчика нет сети и установки пакетов)."""
+        main = Path(self.cfg.repo) / "frontend" / "node_modules"
+        target = Path(path) / "frontend" / "node_modules"
+        if main.is_dir() and not target.exists():
+            target.symlink_to(main)
+
+    def commit_dev(self, tid: int, h: dict[str, Any]) -> None:
+        """Коммит делает диспетчер: у сессии разработчика нет прав на git add/commit/push."""
+        path = h["path"]
+        number = f"WMS-{h['number']}"
+        self.git("add", "-A", "--", ".", ":(exclude)frontend/node_modules", cwd=path)
+        if not self.must(["git", "status", "--porcelain"], path).strip():
+            return
+        summary = " ".join(str((h.get("dev") or {}).get("summary", "")).split())[:100]
+        who = "Codex Sol <noreply@openai.com>" if h.get("dev_cli") == "codex" else (
+            "Claude Sonnet <noreply@anthropic.com>")
+        self.git("commit", "-m", f"{number}: {summary or 'облегчённый хотфикс'}",
+                 "-m", f"Co-Authored-By: {who}", cwd=path)
 
     # -- проверки (делает сам диспетчер, не доверяя отчёту разработчика) ------------------
     def _s_checks(self, tid: int, h: dict[str, Any]) -> None:
@@ -211,9 +237,11 @@ class HotfixRunner:
             'Верни ТОЛЬКО JSON {"summary": "...", "test_files": ["путь"], "migration": false, '
             '"frontend": true|false, "client_scenario": "..."}',
             ticket_id=tid, session_key="dev", mode="write", cwd=h["path"], timeout=3600,
-            cli_only="claude" if h.get("frontend") else None, context=self._dev_context(tid, h),
+            context=self._dev_context(tid, h),
         )
-        self.save(tid, h, dev={**(h.get("dev") or {}), **dev}, step="checks")
+        self.save(tid, h, dev={**(h.get("dev") or {}), **dev})
+        self.commit_dev(tid, h)
+        self.save(tid, h, step="checks")
 
     def verify_worktree(self, h: dict[str, Any]) -> list[str]:
         path, number = Path(h["path"]), f"WMS-{h['number']}"
@@ -223,6 +251,12 @@ class HotfixRunner:
             return ["нет ни одного коммита с изменениями относительно origin/etalon"]
         if any("alembic/versions" in n or "migrations/" in n for n in names):
             raise StepFailed("правка требует миграцию базы: это не облегчённый хотфикс")
+        forbidden = [n for n in names if n.startswith(FORBIDDEN_PATHS)]
+        if forbidden:
+            raise StepFailed(
+                "правка затрагивает выкладку, CI или настройки агентов, это не хотфикс: "
+                + ", ".join(forbidden[:3])
+            )
         subjects = self.git("log", "origin/etalon..HEAD", "--format=%s", cwd=path).splitlines()
         if not all(number in s for s in subjects):
             problems.append(f"в каждом сообщении коммита должен быть номер {number}")
