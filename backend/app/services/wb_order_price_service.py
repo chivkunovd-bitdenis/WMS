@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder
@@ -114,6 +114,18 @@ async def capture_wb_price_snapshot(
     return snapshot
 
 
+def has_price() -> ColumnElement[bool]:
+    """Snapshot carries a price at all.
+
+    /api/v3/orders never returns finalPrice, so its later price-less revisions must
+    not hide the price WB sent with /orders/new or a backfilled one.
+    """
+    return or_(
+        WbOrderPriceSnapshot.final_price.is_not(None),
+        WbOrderPriceSnapshot.converted_final_price.is_not(None),
+    )
+
+
 async def resolve_wb_product_cost(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, order_id: uuid.UUID
 ) -> WbProductCost:
@@ -122,6 +134,7 @@ async def resolve_wb_product_cost(
     ).where(
         FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id,
         FbsOrder.seller_id == seller_id, FbsOrder.marketplace == "wb",
+        has_price(),
     ).order_by(WbOrderPriceSnapshot.revision.desc()).limit(1))
     if snapshot is None:
         raise WbPriceDataError("missing_price_snapshot", "WB: снимок финальной цены отсутствует")

@@ -228,6 +228,7 @@ async def test_registry_server_scope_and_moscow_date(db_session: AsyncSession) -
     assert (await registry(db_session, scope))[1] == 1
     for field, value in (
         ("status", "cancelled"),
+        ("status", "defect"),
         ("pick_status", "returned"),
         ("marketplace", "ozon"),
     ):
@@ -282,6 +283,31 @@ async def test_unshipped_and_forged_selection_is_rejected(db_session: AsyncSessi
         await create_operation(
             db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
         )
+
+
+async def test_price_less_order_feed_keeps_price_sent_with_new_order(
+    db_session: AsyncSession,
+) -> None:
+    # /api/v3/orders never carries finalPrice; its later revision must not turn
+    # every code into "no price" nor hide the price WB fixed at order time.
+    scope, marking, order, _ = await seed(db_session)
+    await capture_wb_price_snapshot(
+        db_session,
+        tenant_id=scope.tenant_id,
+        seller_id=scope.seller_id,
+        order_id=order.id,
+        row={"price": 150000},
+    )
+    await db_session.commit()
+    rows, _ = await registry(db_session, scope)
+    assert rows[0]["status"] == "not_withdrawn" and rows[0]["error"] is None
+    op = await create_operation(
+        db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
+    )
+    await db_session.commit()
+    item = (await current_items(db_session, scope, op.id))[0]
+    assert item.state == "pending"
+    assert item.product_cost == 99999999999999999
 
 
 async def test_registry_missing_price_is_an_actual_local_error(db_session: AsyncSession) -> None:
@@ -397,7 +423,7 @@ async def test_retry_retains_old_price_error_and_new_attempt(db_session: AsyncSe
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"finalPrice": None, "currencyCode": 643},
+        row={"finalPrice": 100, "currencyCode": 840},
     )
     op = await create_operation(
         db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
