@@ -16,6 +16,7 @@ from app.models.document_event import (
     EVENT_DATA_CHANGED,
     EVENT_DOCUMENT_CREATED,
 )
+from app.models.inventory_movement import MOVEMENT_TYPE_MARKETPLACE_UNLOAD
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -309,7 +310,24 @@ async def get_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    lock: bool = False,
 ) -> MarketplaceUnloadRequest | None:
+    """Загрузить документ. lock=True — взять замок строки и перечитать состояние.
+
+    «Завершить» и «Отменить» меняют остаток и конкурируют друг с другом: статус и
+    состав читаются только под замком (FOR UPDATE) и принудительно обновляются,
+    иначе одна операция действует по устаревшему статусу другой (WMS-632).
+    """
+    if lock:
+        await session.execute(
+            select(MarketplaceUnloadRequest.id)
+            .where(
+                MarketplaceUnloadRequest.id == request_id,
+                MarketplaceUnloadRequest.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
     stmt = (
         select(MarketplaceUnloadRequest)
         .where(MarketplaceUnloadRequest.id == request_id)
@@ -337,6 +355,8 @@ async def get_request(
             ),
         )
     )
+    if lock:
+        stmt = stmt.execution_options(populate_existing=True)
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -855,38 +875,6 @@ async def release_reservations_for_shipped(session: AsyncSession, request_id: uu
     await _release_reservations(session, request_id)
 
 
-async def reduce_reservation_for_collect(
-    session: AsyncSession,
-    request_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
-) -> None:
-    """DEC-016: collect_into_box reduces warehouse reserve alongside on_hand deduct."""
-    if quantity < 1:
-        return
-    stmt = (
-        select(MarketplaceUnloadReservation)
-        .join(
-            MarketplaceUnloadLine,
-            MarketplaceUnloadLine.id == MarketplaceUnloadReservation.marketplace_unload_line_id,
-        )
-        .where(
-            MarketplaceUnloadLine.request_id == request_id,
-            MarketplaceUnloadReservation.product_id == product_id,
-            MarketplaceUnloadReservation.quantity > 0,
-        )
-        .with_for_update()
-    )
-    res = await session.execute(stmt)
-    remaining = quantity
-    for reservation in res.scalars().all():
-        if remaining < 1:
-            break
-        take = min(int(reservation.quantity), remaining)
-        reservation.quantity = int(reservation.quantity) - take
-        remaining -= take
-
-
 async def restore_reservation_for_remove(
     session: AsyncSession,
     request_id: uuid.UUID,
@@ -896,7 +884,11 @@ async def restore_reservation_for_remove(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
 ) -> None:
-    """DEC-016: remove-from-box restores warehouse reserve."""
+    """Вернуть резерв, уменьшенный до WMS-632 (подбор больше резерв не трогает).
+
+    Потолок — план строки: у документов нового образца резерв уже равен плану,
+    и возврату добавлять нечего; у начатых до выкладки он восстанавливается.
+    """
     if quantity < 1:
         return
     line_stmt = select(MarketplaceUnloadLine).where(
@@ -926,7 +918,9 @@ async def restore_reservation_for_remove(
         )
         session.add(reservation)
         await session.flush()
-    reservation.quantity = int(reservation.quantity) + quantity
+    reservation.quantity = min(
+        int(unload_line.quantity), int(reservation.quantity) + quantity
+    )
 
 
 async def delete_empty_boxes_for_ship(session: AsyncSession, req: MarketplaceUnloadRequest) -> None:
@@ -975,7 +969,7 @@ async def complete_unload(
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, lock=True)
     if req is None:
         raise MarketplaceUnloadError("not_found")
     if req.status not in EXECUTION_STATUSES:
@@ -1066,11 +1060,65 @@ async def complete_unload(
                 seller_id=req.seller_id,
                 occurred_at=occurred_at,
             )
+    # WMS-632 R6/R8: остаток списывается здесь и только здесь — фактически
+    # уложенное, за вычетом того, что документ уже списал (начатые до выкладки
+    # документы списывали при подборе). Повтор «Завершить» упирается в статус,
+    # а при повторном проходе разница нулевая.
+    await _write_off_shipped_fact(
+        session, req, distributed, actor_user_id=req.completed_by_user_id
+    )
     await release_reservations_for_shipped(session, req.id)
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
     return r2
+
+
+async def _write_off_shipped_fact(
+    session: AsyncSession,
+    req: MarketplaceUnloadRequest,
+    distributed: dict[uuid.UUID, int],
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    from app.services import inventory_service as inv_svc
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
+    sorting = await get_or_create_sorting_location(session, req.tenant_id, req.warehouse_id)
+    product_ids = set(distributed) | {line.product_id for line in req.lines}
+    for product_id in sorted(product_ids, key=str):
+        fact = distributed.get(product_id, 0)
+        already = await inv_svc.marketplace_unload_written_off(
+            session, req.tenant_id, req.id, product_id
+        )
+        difference = int(fact) - already
+        if difference > 0:
+            # Товар физически уехал: расхождение учёта (штук на сортировке меньше)
+            # фиксируем минусом, а не блокируем отгрузку.
+            await inv_svc.record_movement_and_adjust_balance(
+                session,
+                tenant_id=req.tenant_id,
+                product_id=product_id,
+                storage_location_id=sorting.id,
+                quantity_delta=-difference,
+                movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+                marketplace_unload_request_id=req.id,
+                allow_negative=True,
+                actor_user_id=actor_user_id,
+                deduct_prefer="packed",
+            )
+        elif difference < 0:
+            # Документ списал при подборе больше, чем уложено в короба: лишнее
+            # возвращается, итог по документу равен факту.
+            await inv_svc.reverse_marketplace_unload_pick(
+                session,
+                tenant_id=req.tenant_id,
+                product_id=product_id,
+                storage_location_id=sorting.id,
+                quantity=-difference,
+                marketplace_unload_request_id=req.id,
+                actor_user_id=actor_user_id,
+            )
 
 
 async def scan_barcode_into_box(
@@ -1137,7 +1185,7 @@ async def cancel_request(
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Cancel before shipment, or reverse shipped billing without changing warehouse fact."""
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request(session, tenant_id, request_id, lock=True)
     if req is None:
         raise MarketplaceUnloadError("not_found")
     if req.status == STATUS_CANCELLED:

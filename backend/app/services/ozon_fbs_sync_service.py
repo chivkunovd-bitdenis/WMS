@@ -766,11 +766,16 @@ async def _apply_status(
                 reverse_fbs_order_billing,
                 reverse_fbs_shipment_if_needed,
             )
+            from app.services.fbs_picking_service import release_picks_of_cancelled_order
 
             await reverse_fbs_shipment_if_needed(
                 session,
                 order,
                 actor_user_id=None,
+            )
+            # Подобранная штука возвращается в ячейку/тару, как при отмене подбора.
+            await release_picks_of_cancelled_order(
+                session, order.tenant_id, order, actor_user_id=None,
             )
             # Ozon отменил заказ, за который уже начислили. Деньги снимаем
             # здесь: опрос — единственный путь, которым подтверждённый заказ

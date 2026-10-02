@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -117,6 +118,7 @@ async def print_fbs_order_tape(
     actor_user_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     reprint_marking_ids: list[uuid.UUID] | None = None,
+    on_new_binding: Callable[[FbsOrder, FbsOrderMarking], Awaitable[None]] | None = None,
 ) -> FbsOrderTapePrintResult:
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
@@ -498,6 +500,9 @@ async def print_fbs_order_tape(
             bindings_to_send[order.id] = marking.id
             if not printed.is_reprint:
                 ordinary_print_orders.add(order.id)
+                if on_new_binding is not None:
+                    # WMS-631: the caller's receipt joins this binding's transaction.
+                    await on_new_binding(order, marking)
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -939,6 +944,11 @@ def _order_requires_sgtin(order: FbsOrder) -> bool:
     return MARKING_KIND_SGTIN in required or bool(
         order.product and order.product.requires_honest_sign
     )
+
+
+def order_requires_sgtin(order: FbsOrder) -> bool:
+    """Public form of the order-tape KIZ rule (WMS-631 packing scan)."""
+    return _order_requires_sgtin(order)
 
 
 async def _mark_printed_sgtin_not_sent(

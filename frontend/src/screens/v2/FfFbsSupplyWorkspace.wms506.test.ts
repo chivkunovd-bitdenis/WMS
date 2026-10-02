@@ -2,12 +2,15 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
+// WMS-631 R1: the three checkboxes are one shared component of the supply and the assembly.
+const toggles = readFileSync(new URL('./FbsScanPrintToggles.tsx', import.meta.url), 'utf8')
 
 describe('WMS-506 · automatic duplicate in FBS packing scan', () => {
   it('keeps the compact switch in the existing scan bar', () => {
     const scanBar = source.slice(source.indexOf('data-testid="fbs-kiz-scan-bar"'))
-    expect(scanBar).toContain('Перепечатывать ЧЗ')
-    expect(scanBar).toContain('data-testid="fbs-kiz-auto-reprint-toggle"')
+    expect(scanBar).toContain('<FbsScanPrintToggles')
+    expect(toggles).toContain('Перепечатывать ЧЗ')
+    expect(toggles).toContain('data-testid="fbs-kiz-auto-reprint-toggle"')
   })
 
   it('queues one full KIZ only after a new successful bind and before refresh', () => {

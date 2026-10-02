@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
+import { saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 // WMS-574 · рамка поставки в окне групповой сборки — настоящая карточка
 // поставки в режиме рамки. Сервер подменён через fetch, сканер — keydown.
@@ -158,6 +159,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       order_id: orderId, wb_order_id: orderId === 'order-a' ? 5001 : 5003,
       product: { name: 'Товар', image_url: null, barcode: null, seller_article: null },
       current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
+      requires_honest_sign: orderId === 'order-a',
     })
   }
   const assign = path.match(new RegExp(`^/operations/fbs-supplies/${SUPPLY_ID}/boxes/([^/]+)/orders$`))
@@ -187,6 +189,8 @@ beforeEach(() => {
   autoPrintOrders = []
   window.sessionStorage.clear()
   window.localStorage.clear()
+  // WMS-631 Д2 made «Печатать QR» the unsaved default; these scenarios are the all-off path.
+  saveFbsScanPrintPreferences('t-574', { printQr: false, printChz: false, reprintChz: false })
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -493,7 +497,8 @@ describe('WMS-574 · обычная карточка поставки не ме�
     scan(STICKER_PLAIN)
     await settle(80)
     expect(assignCalls()).toHaveLength(0)
-    expect(scanMessage()).toContain('активен')
+    // WMS-631 M9: a sticker of an order without KIZ is packed at once — nothing waits.
+    expect(scanMessage()).not.toContain('активен')
     expect(document.body.textContent).not.toContain('Создать короб')
     expect(document.body.textContent).toContain('Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером')
   })

@@ -27,6 +27,10 @@ export type FbsPendingProductScanAttempt = {
   scanId?: string
   orderId?: string
   packingBoxId?: string | null
+  /** WMS-631: selected by order sticker / row, resumed the same way after reload. */
+  explicit?: boolean
+  /** WMS-631: label size frozen for every label of this attempt. */
+  labelSizeId?: string
   qrStarted: boolean
   chzStarted: boolean
 }
@@ -92,6 +96,8 @@ function readPendingAttempts(token: string, supplyId: string): FbsPendingProduct
         scanId: typeof row.scanId === 'string' ? row.scanId : undefined,
         orderId: typeof row.orderId === 'string' ? row.orderId : undefined,
         packingBoxId: typeof row.packingBoxId === 'string' || row.packingBoxId === null ? row.packingBoxId : undefined,
+        explicit: row.explicit === true ? true : undefined,
+        labelSizeId: typeof row.labelSizeId === 'string' ? row.labelSizeId : undefined,
         qrStarted: row.qrStarted === true,
         chzStarted: row.chzStarted === true,
       }]
@@ -199,10 +205,17 @@ export function mergeFbsBufferedHardwareScan(prefix: string, current: string): s
   return `${prefix}${current}`
 }
 
+/** WMS-631 Д2: without a saved choice packing prints the order QR, as the assembly did. */
+export const DEFAULT_FBS_SCAN_PRINT_PREFERENCES: FbsScanPrintPreferences = {
+  printQr: true,
+  printChz: false,
+  reprintChz: false,
+}
+
 export function loadFbsScanPrintPreferences(token: string): FbsScanPrintPreferences {
   try {
     const raw = window.localStorage.getItem(fbsScanPrintPreferencesStorageKey(token))
-    if (!raw) return { printQr: false, printChz: false, reprintChz: false }
+    if (!raw) return { ...DEFAULT_FBS_SCAN_PRINT_PREFERENCES }
     const saved = JSON.parse(raw) as Partial<FbsScanPrintPreferences>
     const printChz = saved.printChz === true
     return {

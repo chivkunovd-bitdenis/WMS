@@ -1243,17 +1243,15 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         params={"warehouse_id": wid},
     )
     row_collect = next(x for x in bal_after_collect.json() if x["product_id"] == pid)
-    assert row_collect["quantity"] == 7
+    # WMS-632 R5: подбор и укладка в короб остаток не списывают.
+    assert row_collect["quantity"] == 10
 
     movements_after_collect = await async_client.get("/operations/inventory-movements", headers=h)
     assert movements_after_collect.status_code == 200, movements_after_collect.text
-    collected_movements = movements_after_collect.json()
-    unload_movements = [
-        row for row in collected_movements
+    assert not [
+        row for row in movements_after_collect.json()
         if row["product_id"] == pid and row["movement_type"] == "marketplace_unload"
     ]
-    assert len(unload_movements) == 3
-    assert all(row["quantity_delta"] == -1 for row in unload_movements)
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -1275,7 +1273,15 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         params={"warehouse_id": wid},
     )
     row_after = next(x for x in bal_after.json() if x["product_id"] == pid)
+    # WMS-632 R6: «Завершить» списывает уложенный факт (3 шт) ровно один раз.
     assert row_after["quantity"] == 7
+
+    movements_after_ship = await async_client.get("/operations/inventory-movements", headers=h)
+    shipped_moves = [
+        row for row in movements_after_ship.json()
+        if row["product_id"] == pid and row["movement_type"] == "marketplace_unload"
+    ]
+    assert [row["quantity_delta"] for row in shipped_moves] == [-3]
 
     ship_again = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -1286,7 +1292,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
 
     movements_after_retry = await async_client.get("/operations/inventory-movements", headers=h)
     assert movements_after_retry.status_code == 200, movements_after_retry.text
-    assert movements_after_retry.json() == collected_movements
+    assert movements_after_retry.json() == movements_after_ship.json()
     balance_after_retry = await async_client.get(
         "/operations/inventory-balances/summary",
         headers=h,
@@ -1564,8 +1570,7 @@ async def test_marketplace_unload_ship_no_double_inventory_movement(
         for m in mov_before_ship.json()
         if m.get("movement_type") == "marketplace_unload" and m.get("product_id") == pid
     ]
-    assert len(mp_moves_before) == 1
-    assert mp_moves_before[0]["quantity_delta"] == -2
+    assert mp_moves_before == []  # WMS-632 R5: до проведения списаний нет
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -1579,7 +1584,7 @@ async def test_marketplace_unload_ship_no_double_inventory_movement(
         for m in mov_after_ship.json()
         if m.get("movement_type") == "marketplace_unload" and m.get("product_id") == pid
     ]
-    assert len(mp_moves_after) == 1
+    assert [m["quantity_delta"] for m in mp_moves_after] == [-2]
 
 
 @pytest.mark.asyncio
@@ -1678,7 +1683,7 @@ async def test_marketplace_unload_concurrent_collect_same_location(
         params={"warehouse_id": wid},
     )
     row = next(x for x in bal.json() if x["product_id"] == pid)
-    assert row["quantity"] == 6
+    assert row["quantity"] == 10  # WMS-632: подбор остаток не списывает
 
 
 @pytest.mark.asyncio
@@ -2687,7 +2692,7 @@ async def test_marketplace_unload_box_remove_copy_delete(
         params={"warehouse_id": wid},
     )
     row_after = next(x for x in bal_after_collect.json() if x["product_id"] == pid)
-    assert row_after["quantity"] == 31
+    assert row_after["quantity"] == 35  # WMS-632: укладка в короб остаток не списывает
 
     blocked_delete = await async_client.delete(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}",
@@ -2728,7 +2733,7 @@ async def test_marketplace_unload_box_remove_copy_delete(
         params={"warehouse_id": wid},
     )
     row_removed = next(x for x in bal_after_remove.json() if x["product_id"] == pid)
-    assert row_removed["quantity"] == row_after["quantity"] + 2
+    assert row_removed["quantity"] == row_after["quantity"]  # остаток не менялся
 
     # Restore the two units to preserve the copy/plan-limit checks below.
     restored = await async_client.post(
@@ -3103,7 +3108,7 @@ async def test_marketplace_unload_cancel_partial_distribution_restores_inventory
         params={"warehouse_id": wid},
     )
     row_partial = next(x for x in bal_partial.json() if x["product_id"] == pid)
-    assert row_partial["quantity"] == 8
+    assert row_partial["quantity"] == 10  # WMS-632: подбор — только расположение
 
     locs = await async_client.get(f"/warehouses/{wid}/locations", headers=ah)
     sorting_id = next(x for x in locs.json() if x["code"] == "__SORTING__")["id"]
@@ -3160,8 +3165,9 @@ async def test_marketplace_unload_cancel_partial_distribution_restores_inventory
     )
     loc_qty_after = next(x for x in bal_loc_after.json() if x["product_id"] == pid)["quantity"]
     sort_qty_after = next(x for x in bal_sort_after.json() if x["product_id"] == pid)["quantity"]
-    assert loc_qty_after == loc_qty_before
-    assert sort_qty_after == sort_qty_before + 2
+    # WMS-632 R9: отмена возвращает штуки в ячейку, откуда сняли (с сортировки).
+    assert loc_qty_after == loc_qty_before + 2
+    assert sort_qty_after == sort_qty_before - 2
 
     mu2 = await async_client.post(
         "/operations/marketplace-unload-requests",

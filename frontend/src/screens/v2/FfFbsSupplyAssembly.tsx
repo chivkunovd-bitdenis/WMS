@@ -412,7 +412,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               data-testid="fbs-assembly-packing"
             >
               <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
-                <FbsPackingScanBar enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
+                <FbsPackingScanBar token={token} enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
