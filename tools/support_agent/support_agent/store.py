@@ -181,7 +181,11 @@ class Store:
                         role=role, author_id=author_id, author_name=author_name, ts=ts,
                         kind=kind, text=text, file_id=file_id, reply_to=reply_to,
                         caption=caption)
-                if (old["text"] == text and old["kind"] == kind and old["file_id"] == file_id
+                # A voice transcript is derived from the same raw Telegram file.
+                # Telegram redelivers that edit with empty text after transcription;
+                # comparing against the transcript would create a false new version.
+                same_text = old["text"] == text or (old["kind"] == kind == "voice" and text == "")
+                if (same_text and old["kind"] == kind and old["file_id"] == file_id
                         and old["reply_to"] == reply_to and old["caption"] == caption):
                     return None
                 self.execute(

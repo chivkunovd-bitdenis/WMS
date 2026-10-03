@@ -66,6 +66,27 @@ def test_voice_transcript_bound_to_revision_and_old_worker_cannot_overwrite_edit
     assert item["revisions"][0]["text"] == "(расшифровка) сначала"
 
 
+def test_duplicate_voice_edit_after_transcription_does_not_create_another_revision():
+    store = Store(":memory:")
+    message_id = _add(store, 1, text="", kind="voice", file_id="voice-1")
+    edit = dict(source="telegram", chat_id=10, msg_id="1", role="client",
+                author_id="5", author_name="Анна", ts=100.0, kind="voice",
+                text="", file_id="voice-1", reply_to=None, caption="Новая подпись",
+                edited=True, edit_ts=101.0)
+    assert store.add_message(**edit) == message_id
+    assert store.complete_transcription(message_id, 2, "Расшифровка новой версии")
+    assert store.add_message(**edit) is None
+    current = store.row("SELECT revision,text,status FROM messages WHERE id=?", (message_id,))
+    assert current is not None and current["revision"] == 2
+    assert current["text"] == "Расшифровка новой версии" and current["status"] == "new"
+    assert store.row("SELECT count(*) AS n FROM message_revisions WHERE message_id=?",
+                     (message_id,))["n"] == 1
+    assert store.add_message(**{**edit, "caption": "Ещё одна подпись", "edit_ts": 102.0}) == message_id
+    assert store.row("SELECT revision FROM messages WHERE id=?", (message_id,))["revision"] == 3
+    assert store.add_message(**{**edit, "file_id": "voice-2", "edit_ts": 103.0}) == message_id
+    assert store.row("SELECT revision,file_id FROM messages WHERE id=?", (message_id,))["revision"] == 4
+
+
 def test_incremental_after_cursor_reads_oldest_new_events_first():
     store = Store(":memory:")
     for number in range(1, 6):
