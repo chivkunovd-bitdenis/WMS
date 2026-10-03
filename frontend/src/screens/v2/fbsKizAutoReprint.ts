@@ -17,6 +17,12 @@ export type FbsAutomaticPrintClaimApi<TClaim extends FbsAutomaticPrintClaimState
   claim: (attemptKey: string) => Promise<TClaim>
   markStarted: (attemptKey: string) => Promise<FbsAutomaticPrintClaimState>
   releaseClaim: (attemptKey: string) => Promise<unknown>
+  /**
+   * WMS-625: the server already marked this target started; check the printing
+   * program's own record before treating it as printed. Throws when the program
+   * reports a failed job; never creates a second copy.
+   */
+  reconcileStarted?: () => Promise<void>
 }
 
 export type FbsAutomaticPrintResult = {
@@ -53,7 +59,10 @@ export async function startClaimedAutomaticPrint<
 ): Promise<FbsAutomaticPrintResult> {
   const claim = await api.claim(attemptKey)
   if (!claim.claimed) {
-    if (claim.started) return { started: true, printedNow: false }
+    if (claim.started) {
+      await api.reconcileStarted?.()
+      return { started: true, printedNow: false }
+    }
     throw new FbsPrintOutcomeUnknownError(
       'Предыдущий запуск печати не подтверждён; автоматический повтор остановлен.',
     )

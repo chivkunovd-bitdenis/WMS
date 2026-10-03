@@ -1,11 +1,12 @@
 import { apiUrl } from '../../api'
 import { dispatchPreparedQrInKiosk } from '../../utils/printPreparedQr'
+import { dispatchDurableQr, type DurableQrInput } from '../../utils/durableDirectQr'
 import { renderCzLabelPng } from '../../utils/czLabelPng'
 import { loadLabelSizeId, resolveLabelSize, type LabelSizeId } from '../../utils/labelSize'
 import { startClaimedAutomaticPrint } from './fbsKizAutoReprint'
 import {
   claimFbsPendingProductScan, completeFbsPendingProductScan, normalizeFbsChzCopies, peekFbsPendingProductScan,
-  updateFbsPendingProductScan, type FbsScanPrintPreferences,
+  tokenIdentity, updateFbsPendingProductScan, type FbsScanPrintPreferences,
 } from './fbsScanAutoPrint'
 import {
   assignFbsPackingBoxOrders, cancelFbsScanAutoPrintSelection, undoFbsPackingScan, claimFbsDirectKizPrint,
@@ -564,6 +565,8 @@ export function makePackingScanDeps(
 ): PackingScanDeps {
   const supplyId = workspace().supply.id
   const scanBoxes = new Map<string, string | null>()
+  /** WMS-625: the barcode each selection was scanned with, recorded with its order QR job. */
+  const scanBarcodes = new Map<string, string>()
   let startedWorkspace: FbsWorkspace | null = null
   const ensureSupplyStarted = async () => {
     const current = workspace()
@@ -641,6 +644,7 @@ export function makePackingScanDeps(
       attempt.orderId = result.order_id
       updateFbsPendingProductScan(token, storageId, attempt)
       scanBoxes.set(result.scan_id, attempt.packingBoxId ?? null)
+      scanBarcodes.set(result.scan_id, raw)
       onSelected(result.order_id)
     },
     complete: (raw) => { completeFbsPendingProductScan(token, storageId, raw); refreshed() },
@@ -745,15 +749,29 @@ export function makePackingScanDeps(
       refreshed()
       return bound
     },
-    print: async (_result, imageDataUrl, sizeId, keyScanId) => {
+    print: async (result, imageDataUrl, sizeId, keyScanId) => {
+      // WMS-625: the order QR job carries its key, exact label and order; the browser
+      // keeps it before WMS Print is asked, and a retry of the key checks its result.
+      const size = resolveLabelSize(sizeId)
+      const identity = tokenIdentity(token)
+      const input: DurableQrInput = {
+        imageDataUrl, idempotencyKey: keyScanId, widthMm: size.widthMm, heightMm: size.heightMm,
+        context: {
+          tenantId: identity.tenant, userId: identity.user, supplyId, orderId: result.order_id, scanId: keyScanId,
+          barcode: scanBarcodes.get(keyScanId) ?? scanBarcodes.get(result.scan_id) ?? `order:${result.order_id}`,
+          marketplace: 'wildberries', wbOrderId: result.wb_order_id,
+        },
+      }
       await startClaimedAutomaticPrint(keyScanId,
-        () => send(imageDataUrl, keyScanId, sizeId), {
+        () => dispatchDurableQr(input), {
           claim: (key) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, keyScanId, 'qr', key),
           markStarted: (key) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, keyScanId, 'qr', key),
           // Preserve ownership after an uncertain print dispatch. The exact same
           // scan UUID lets the print transport reconcile a retry; it must never
           // create a new print intent or give this order to another scan.
           releaseClaim: async () => undefined,
+          // Marked started: a WMS Print with a journal still reports a job the queue later failed.
+          reconcileStarted: () => dispatchDurableQr(input, undefined, undefined, true),
         })
     },
     printChz: async (result, sizeId, copies) => {

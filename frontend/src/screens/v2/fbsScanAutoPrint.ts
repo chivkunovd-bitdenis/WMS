@@ -59,7 +59,7 @@ export type FbsPendingProductScanAttempt = {
 
 type TokenClaims = { sub?: unknown; tenant_id?: unknown }
 
-function tokenIdentity(token: string): { tenant: string; user: string } {
+export function tokenIdentity(token: string): { tenant: string; user: string } {
   try {
     const payload = token.split('.')[1]
     if (!payload) throw new Error('token payload is absent')

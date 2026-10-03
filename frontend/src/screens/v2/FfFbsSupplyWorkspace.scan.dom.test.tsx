@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import { act, useCallback, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +8,7 @@ import type { FbsWorkspace } from './fbsApi'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
+import { directQrHash, forgetDirectQrProtocol, qrAttemptStore, type DurableQrAttempt } from '../../utils/durableDirectQr'
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -110,6 +112,44 @@ let validationFailure = false
 let deleteFailure = false
 let commitGate: Promise<void> | null = null
 const originalFetch = globalThis.fetch
+/** WMS-625: product scans with printing on (off by default, as in every scenario above). */
+let printing: null | {
+  program: 'old' | 'modern' | null
+  loseNextPost: boolean
+  selections: Map<string, number>
+  started: Set<string>
+  jobs: Map<string, Record<string, unknown>>
+  native: Array<{ method: string; path: string; body: unknown }>
+} = null
+
+async function nativeServer(method: string, path: string, body: unknown): Promise<Response> {
+  const state = printing!
+  state.native.push({ method, path, body })
+  if (!state.program) throw new TypeError('Failed to fetch')
+  const sent = body as { idempotencyKey: string } & Parameters<typeof directQrHash>[0]
+  if (state.program === 'old') {
+    // WMS Print v2026.09.30.4/.5: only POST /print, the receipt kept by key.
+    if (method !== 'POST' || path !== '/print') return json({}, 404)
+    const receipt = (state.jobs.get(sent.idempotencyKey)?.receipt as string | undefined) ?? `queue-${state.jobs.size + 1}`
+    state.jobs.set(sent.idempotencyKey, { receipt })
+    if (state.loseNextPost) { state.loseNextPost = false; throw new TypeError('response lost') }
+    return json({ receipt })
+  }
+  if (path === '/health') return json({ app: 'WMS Print Direct', protocolVersion: 2 })
+  if (method === 'POST' && path === '/print') {
+    if (!state.jobs.has(sent.idempotencyKey)) {
+      // The journal keeps the key, size and order; the PNG stays behind its own endpoint.
+      const job: Record<string, unknown> = { ...sent, hash: await directQrHash(sent), status: 'accepted', receipt: `queue-${state.jobs.size + 1}` }
+      delete job.imageDataUrl
+      delete job.protocolVersion
+      state.jobs.set(sent.idempotencyKey, job)
+    }
+    if (state.loseNextPost) { state.loseNextPost = false; throw new TypeError('response lost') }
+    return json(state.jobs.get(sent.idempotencyKey), 202)
+  }
+  const key = decodeURIComponent(path.split('/jobs/')[1]?.split('/')[0] ?? '')
+  return state.jobs.has(key) ? json(state.jobs.get(key)) : json({}, 404)
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -124,6 +164,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const method = (init?.method ?? 'GET').toUpperCase()
   const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
   const path = url.pathname.replace(/^\/api/, '')
+  if (url.hostname === '127.0.0.1') return nativeServer(method, path, body)
   calls.push({ method, path: `${path}${url.search}`, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/start-work`) return json(workspace(committedTails))
@@ -163,7 +204,25 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
     return json(workspace(committedTails))
   }
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/scan-auto-print`) {
-    return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
+    if (!printing) return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
+    const sent = body as { idempotency_key: string }
+    if (!printing.selections.has(sent.idempotency_key)) printing.selections.set(sent.idempotency_key, printing.selections.size + 1)
+    const index = printing.selections.get(sent.idempotency_key)!
+    return json({
+      scan_id: `ordinary-scan-${index}`, order_id: index === 1 ? 'order-a' : 'order-b', wb_order_id: 5000 + index,
+      replayed: false, binding_target: null, reprint_recovery: null, requires_honest_sign: false,
+      qr_asset: { id: 'qr', status: 'ready', preview_url: '/fixture-qr.png' },
+      codes: [], printed_codes: [], shortage: 0, order_errors: [],
+    })
+  }
+  if (printing && path.startsWith(`/operations/fbs-supplies/${SUPPLY_ID}/scan-auto-print/`)) {
+    const scanId = path.split('/scan-auto-print/')[1]!.split('/')[0]!
+    if (path.endsWith('/print-started')) printing.started.add(scanId)
+    return json({ claimed: path.endsWith('/print-claim') && !printing.started.has(scanId), started: printing.started.has(scanId) })
+  }
+  if (printing && path === '/fixture-qr.png') {
+    const blob = new Blob([Uint8Array.from([137, 80, 78, 71])], { type: 'image/png' })
+    return { ok: true, status: 200, blob: async () => blob } as Response
   }
   return json(null)
 }
@@ -607,5 +666,85 @@ describe('WMS-604 unified packing presentation', () => {
     const prepares = calls.filter((call) => call.path.endsWith('/print-assets'))
     expect(prepares).toHaveLength(1)
     expect(prepares[0].body).toMatchObject({ kind: 'order_sticker', order_ids: ['order-a', 'order-b'], retry_missing: true })
+  })
+})
+
+describe('WMS-625 · обычная карточка WB: QR заказа через WMS Print после скана товара', () => {
+  const PRODUCT = '4600000000017'
+  let rows: Map<string, DurableQrAttempt>
+  let storeSpies: Array<{ mockRestore: () => void }> = []
+  const nativePosts = () => printing!.native.filter((call) => call.method === 'POST' && call.path === '/print')
+  const productScans = () => calls.filter((call) => call.path.endsWith('/scan-auto-print'))
+  const packs = () => calls.filter((call) => call.path.endsWith('/pack'))
+  const remount = async () => {
+    await act(async () => root.unmount())
+    root = createRoot(host)
+    await openPackingTab()
+  }
+
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
+  })
+  beforeEach(() => {
+    printing = { program: 'old', loseNextPost: false, selections: new Map(), started: new Set(), jobs: new Map(), native: [] }
+    rows = new Map()
+    forgetDirectQrProtocol()
+    // jsdom has no IndexedDB: the browser record lives in memory, with the same contract.
+    storeSpies = [
+      vi.spyOn(qrAttemptStore, 'get').mockImplementation(async (key) => structuredClone(rows.get(key))),
+      vi.spyOn(qrAttemptStore, 'put').mockImplementation(async (attempt) => { rows.set(attempt.input.idempotencyKey, structuredClone(attempt)) }),
+    ]
+    saveFbsScanPrintPreferences('t-575', { printQr: true, printChz: false, reprintChz: false })
+  })
+  afterEach(() => {
+    printing = null
+    for (const spy of storeSpies) spy.mockRestore()
+  })
+
+  it('старая программа (только POST /print): одна этикетка тем же запросом, что на production (плюс контекст заказа, который она не читает), заказ упакован', async () => {
+    await openPackingTab()
+    scan(PRODUCT)
+    await settle(200)
+    expect(nativePosts()).toHaveLength(1)
+    const body = nativePosts()[0].body as Record<string, unknown>
+    expect(Object.keys(body)).toEqual(['imageDataUrl', 'idempotencyKey', 'widthMm', 'heightMm', 'context'])
+    expect(body).toMatchObject({ idempotencyKey: 'ordinary-scan-1', widthMm: 58, heightMm: 40,
+      context: { orderId: 'order-a', scanId: 'ordinary-scan-1', barcode: PRODUCT, marketplace: 'wildberries', wbOrderId: 5001 } })
+    expect(String(body.imageDataUrl)).toMatch(/^data:image\/png;base64,/)
+    expect(printing!.started.has('ordinary-scan-1')).toBe(true)
+    expect(packs()).toHaveLength(1)
+    expect(document.body.textContent).not.toContain('WMS Print')
+  })
+
+  it('новая программа: ответ потерян, страница перезагружена — повторный скан того же товара берёт тот же заказ и ту же этикетку, второй копии нет', async () => {
+    printing!.program = 'modern'
+    printing!.loseNextPost = true
+    await openPackingTab()
+    scan(PRODUCT)
+    await settle(200)
+    expect(nativePosts()).toHaveLength(1)
+    expect(document.body.textContent).toContain('Нет ответа WMS Print')
+    expect(packs()).toHaveLength(0)
+    expect(rows.get('ordinary-scan-1')?.input.context).toMatchObject({ orderId: 'order-a', scanId: 'ordinary-scan-1', barcode: PRODUCT, wbOrderId: 5001 })
+    await remount()
+    scan(PRODUCT)
+    await settle(200)
+    expect(productScans()).toHaveLength(2)
+    expect((productScans()[1].body as { idempotency_key: string }).idempotency_key)
+      .toBe((productScans()[0].body as { idempotency_key: string }).idempotency_key)
+    expect(printing!.selections.size).toBe(1)
+    expect(nativePosts()).toHaveLength(1)
+    expect(packs()).toHaveLength(1)
+  })
+
+  it('WMS-643: галка QR снята — WMS Print не нужен и не вызывается', async () => {
+    saveFbsScanPrintPreferences('t-575', { printQr: false, printChz: true, reprintChz: false })
+    printing!.program = null
+    await openPackingTab()
+    scan(PRODUCT)
+    await settle(200)
+    expect(productScans()).toHaveLength(1)
+    expect(printing!.native).toEqual([])
+    expect(packs()).toHaveLength(1)
   })
 })
