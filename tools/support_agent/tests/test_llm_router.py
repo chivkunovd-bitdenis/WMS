@@ -80,6 +80,10 @@ def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
         else:
             delivered = script.stdin[-1] or ""
         assert delivered.startswith(prompts.WMS_SYSTEM_POLICY + "\n\nПравила роли")
+        assert "Сохраняй существующие идентификаторы, дизайн и действия" in delivered
+        assert "Не придумывай лимиты, блокировки, новые идентификаторы или сущности" in delivered
+        assert "Догадки и предложения модели не являются обязательными требованиями" in delivered
+        assert "обычную форму или расположение действия выбирай сам" in delivered
 
 
 def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_path: Path) -> None:
