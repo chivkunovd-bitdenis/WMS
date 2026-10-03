@@ -303,3 +303,57 @@ def test_report_has_required_per_task_lines_and_is_idempotent(env: Any) -> None:
     assert len(rows) == 1
     assert "ждёт твоего решения" in rows[0]["text"]
     assert "контракт тестов менялся: да" in rows[0]["text"]
+
+
+def _tester_repo(env: Any, tmp_path: Path) -> tuple[Any, int, Path]:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    doc = root / "docs" / "requirements" / "WMS-700.md"
+    doc.parent.mkdir(parents=True)
+    (root / "backend" / "app").mkdir(parents=True)
+    (root / "backend" / "tests").mkdir(parents=True)
+    (root / "backend" / "app" / "svc.py").write_text("X = 1\n", encoding="utf-8")
+    doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+                    "commit", "-qm", "baseline"], cwd=root, check=True)
+    hotfix = RealGitHotfix()
+    hotfix.p = env.pipe
+    runner.hotfix = hotfix  # type: ignore[assignment]
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="tester", path=str(root))
+    env.store.patch_data(tid, night=state)
+    return runner, tid, root
+
+
+def test_tester_helper_files_join_contract(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        (root / "backend" / "tests" / "test_wms_700.py").write_text("def test_c():\n    pass\n")
+        (root / "backend" / "tests" / "conftest.py").write_text("SEED = 1\n")
+        return {"summary": "ok", "tests": ["backend/tests/test_wms_700.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    files = subprocess.run(["git", "show", "--format=", "--name-only", "HEAD"], cwd=root,
+                           check=True, capture_output=True, text=True).stdout.splitlines()
+    assert sorted(files) == ["backend/tests/conftest.py", "backend/tests/test_wms_700.py"]
+    assert env.store.data(tid)["night"]["tasks"]["WMS-700"]["step"] == "developer"
+
+
+def test_tester_touching_product_code_stops_task(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        (root / "backend" / "tests" / "test_wms_700.py").write_text("def test_c():\n    pass\n")
+        (root / "backend" / "app" / "svc.py").write_text("X = 2\n")
+        return {"summary": "ok", "tests": ["backend/tests/test_wms_700.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
+    assert task["status"] == "stopped"
+    assert "backend/app/svc.py" in task["reason"]

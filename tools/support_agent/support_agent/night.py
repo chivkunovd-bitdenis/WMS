@@ -19,6 +19,7 @@ TASK_RE = re.compile(r"^WMS-(\d+)$")
 CONTRADICTION_RE = re.compile(r"\bC\d+\b.*\bR\d+\b|\bR\d+\b.*\bC\d+\b", re.IGNORECASE)
 REQUIRED_CHECKS = {"baseline", "backlog", "backend", "frontend-build", "охрана"}
 SKILLS_ROOT = "docs/reviews/2026-09-11-analyst-draft/skills"
+TEST_PATH_RE = re.compile(r"(^|/)(tests?|guards|__snapshots__|fixtures)/|(^|/)conftest\.py$|\.test\.[jt]sx?$")
 
 
 class NightRunner:
@@ -200,6 +201,10 @@ class NightRunner:
         tests = [str(item) for item in result.get("tests") or [] if self._safe_rel(str(item))]
         if not tests or any(not (Path(task["path"]) / path).is_file() for path in tests):
             raise StepFailed("тестировщик не создал контрактные тесты")
+        # Helper files the tests need (fixtures, conftest, seeds) belong to the contract too;
+        # only changes outside test code stop the task.
+        support = [item for item in self._changed_outside(task, tests) if TEST_PATH_RE.search(item)]
+        tests = tests + [item for item in support if self._safe_rel(item)]
         unrelated = self._changed_outside(task, tests)
         if unrelated:
             raise StepFailed("тестировщик изменил файлы вне контракта тестов: "
