@@ -23,7 +23,7 @@ from support_agent.seller_directory import (
     clean_name,
     clean_tenant_name,
 )
-from support_agent.telegram import Bots, flush_outbox
+from support_agent.telegram import Bots, flush_outbox, parse_bind_command
 
 from .conftest import CLIENT_CHAT, OWNER_CHAT, OWNER_ID, PARTNER_CHAT
 from .test_pipeline_chat import ANALYSIS_BUG, form_row, script
@@ -123,6 +123,11 @@ def step(e: Any) -> None:
 
 
 def owner_says_in_group(e: Any, text: str, chat: int = NEW_CHAT, title: str = NEW_TITLE) -> None:
+    parsed = parse_bind_command(text, require_mention=False)
+    assert parsed is not None
+    level, name = parsed
+    e.llm.on("routine", "Владелец упомянул бота",
+             {"is_binding": True, "level": level, "name": name})
     if "@" not in text:
         text = f"{BOT} {text}"  # команда принимается только с упоминанием бота
     e.intake.updates.append(gupd(chat, OWNER_ID, text, title=title))
@@ -153,8 +158,53 @@ def test_owner_command_in_a_group_outside_config_goes_to_the_owner_only(be: Any)
     text = be.owner.to(OWNER_CHAT)[-1]
     assert "селлер «ИП Василёк» в фулфилменте «ФФ Север»" in text and f"чат «{NEW_TITLE}»" in text
     assert "00000000" not in text  # без идентификаторов
-    assert be.llm.calls == [] and be.fd.finds == ["Василёк"]  # поиск решает код, модель не участвует
+    assert [c["role"] for c in be.llm.calls] == ["routine"] and be.fd.finds == ["Василёк"]
     assert be.store.binding(NEW_CHAT) is None and NEW_CHAT not in be.cfg.telegram.chats  # ещё не привязан
+
+
+def test_free_form_group_binding_is_understood_by_model_but_searched_by_code(be: Any) -> None:
+    text = f"{BOT} считай, что здесь наши ребята Василёк"
+    be.llm.on("routine", "Владелец упомянул бота",
+              {"is_binding": True, "level": "seller", "name": "Василёк"})
+    be.intake.updates.append(gupd(NEW_CHAT, OWNER_ID, text, title=NEW_TITLE))
+    step(be)
+    assert be.fd.finds == ["Василёк"]
+    assert be.store.binding(NEW_CHAT) is None  # модель только предложила поиск; подтверждение ещё нужно
+    assert "селлер «ИП Василёк»" in be.owner.to(OWNER_CHAT)[-1]
+    assert_intake_bot_said_nothing(be)
+
+
+def test_group_nonbinding_status_goes_to_private_chat_and_cannot_execute(be: Any) -> None:
+    tid = be.store.add_ticket(kind="chat", source="telegram", chat_id=CLIENT_CHAT, seller="Империя ФФ",
+                              stage="await_owner", data={"verdict": "hotfix", "hotfix_ok": True,
+                                                                 "report": {"body": "ждёт решения"}})
+    be.llm.on("routine", "Владелец склада написал",
+              {"scope": "wms", "reply": "По Империи обращение №1 ждёт решения.",
+               "actions": [{"kind": "go", "ticket_ids": [tid], "note": ""}],
+               "listed_ticket_ids": [tid]})
+    be.llm.on("routine", "Владелец упомянул бота",
+              {"is_binding": False, "level": None, "name": ""})
+    be.intake.updates.append(gupd(NEW_CHAT, OWNER_ID, f"{BOT} что сейчас у Империи?", title=NEW_TITLE))
+    step(be)
+    assert be.store.ticket(tid)["stage"] == "await_owner"  # actions из группового safe mode отброшены
+    assert be.owner.to(OWNER_CHAT)[-1] == "По Империи обращение №1 ждёт решения."
+    assert_intake_bot_said_nothing(be)
+
+
+def test_group_action_cue_never_trusts_a_model_reply_that_omits_the_action(be: Any) -> None:
+    tid = be.store.add_ticket(kind="chat", source="telegram", chat_id=CLIENT_CHAT, seller="Империя ФФ",
+                              stage="await_owner", data={"verdict": "hotfix", "hotfix_ok": True})
+    be.llm.on("routine", "Владелец склада написал",
+              {"scope": "wms", "reply": "Запускаю обращение №1.", "actions": [], "listed_ticket_ids": [tid]})
+    be.llm.on("routine", "Владелец упомянул бота",
+              {"is_binding": False, "level": None, "name": ""})
+    be.intake.updates.append(gupd(NEW_CHAT, OWNER_ID, f"{BOT} кати Империю", title=NEW_TITLE))
+    step(be)
+    assert be.store.ticket(tid)["stage"] == "await_owner"
+    assert be.owner.to(OWNER_CHAT)[-1] == (
+        "В группе ничего не запускаю. Напишите поручение в личный чат бота владельца."
+    )
+    assert_intake_bot_said_nothing(be)
 
 
 def test_owner_confirms_in_his_chat_and_the_group_becomes_a_served_client_chat(be: Any) -> None:
@@ -165,7 +215,7 @@ def test_owner_confirms_in_his_chat_and_the_group_becomes_a_served_client_chat(b
     owner_replies(be, "да", proposal_msg_id(be))
     row = be.store.binding(NEW_CHAT)
     assert row["seller_id"] == C.seller_id and row["tenant_id"] == "t-1" and row["chat_title"] == NEW_TITLE
-    assert be.fd.ensures == [C.seller_id] and be.llm.calls == []
+    assert be.fd.ensures == [C.seller_id] and [c["role"] for c in be.llm.calls] == ["routine"]
     done = be.owner.to(OWNER_CHAT)[-1]
     assert f"Чат «{NEW_TITLE}» привязан к селлеру «ИП Василёк»" in done
     assert_intake_bot_said_nothing(be)  # и после привязки в клиентский чат ничего
@@ -221,7 +271,7 @@ def test_several_same_name_sellers_need_a_number_in_the_owner_chat(be: Any) -> N
     assert be.store.binding(NEW_CHAT) is None  # «да» при двух не выбирает, номера 3 нет
     owner_replies(be, "2", pid)
     assert be.store.binding(NEW_CHAT)["seller_id"] == S2
-    assert_intake_bot_said_nothing(be) and be.llm.calls == []
+    assert_intake_bot_said_nothing(be) and [c["role"] for c in be.llm.calls] == ["routine"]
 
 
 def test_the_chat_comes_from_the_proposal_not_from_the_reply_words(be: Any) -> None:
@@ -233,9 +283,10 @@ def test_the_chat_comes_from_the_proposal_not_from_the_reply_words(be: Any) -> N
     assert be.store.binding(-100502)["seller_id"] == SELLER
 
 
-def test_confirmation_must_be_a_reply_of_the_owner_to_our_message(be: Any) -> None:
+def test_confirmation_must_come_from_the_owner_in_the_owner_chat(be: Any) -> None:
     owner_says_in_group(be, "привяжи к ИП Василёк")
-    be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да"))  # не ответом
+    # «да» без reply теперь засчитывается единственному открытому предложению (живой случай 03.10.2026,
+    # test_plain_number_without_reply_confirms_the_only_open_proposal); здесь — только чужие пути.
     be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да", reply_to=777))  # ответ на чужое
     step(be)
     be.intake.updates.append(gupd(NEW_CHAT, 5, "да", reply_to=int(proposal_msg_id(be))))  # клиент в группе

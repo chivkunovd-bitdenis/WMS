@@ -1,0 +1,32 @@
+{
+  "scope": "synthetic; actual model; no external writes",
+  "same_thread_resumed": true,
+  "turns": [
+    {
+      "turn": 1,
+      "thread_id": "01a1026d-f15f-70d2-a337-8c7bb8906ef6",
+      "reply": "resume-ok-1",
+      "calls": [
+        {
+          "name": "resume_probe",
+          "args": {
+            "turn": 1
+          }
+        }
+      ]
+    },
+    {
+      "turn": 2,
+      "thread_id": "01a1026d-f15f-70d2-a337-8c7bb8906ef6",
+      "reply": "resume-ok-2",
+      "calls": [
+        {
+          "name": "resume_probe",
+          "args": {
+            "turn": 2
+          }
+        }
+      ]
+    }
+  ]
+}

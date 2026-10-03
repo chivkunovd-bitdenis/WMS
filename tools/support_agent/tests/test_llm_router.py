@@ -64,6 +64,28 @@ def test_roles_use_cheap_and_strong_models_without_api_keys(tmp_path: Path) -> N
     assert "Edit" in script.calls[2][script.calls[2].index("--disallowedTools"):]  # аналитик не пишет
 
 
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("role", ["filter", "routine", "analyst", "review", "frontend", "mockup"])
+def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
+    tmp_path: Path, cli: str, role: str,
+) -> None:
+    from support_agent import prompts
+
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    for _ in range(2):
+        llm.ask(role, "поручение", cli_only=cli, session_key="policy-test", system="Правила роли")
+        if cli == "claude":
+            delivered = script.calls[-1][script.calls[-1].index("--system-prompt") + 1]
+        else:
+            delivered = script.stdin[-1] or ""
+        assert delivered.startswith(prompts.WMS_SYSTEM_POLICY + "\n\nПравила роли")
+        assert "Сохраняй существующие идентификаторы, дизайн и действия" in delivered
+        assert "Не придумывай лимиты, блокировки, новые идентификаторы или сущности" in delivered
+        assert "Догадки и предложения модели не являются обязательными требованиями" in delivered
+        assert "обычную форму или расположение действия выбирай сам" in delivered
+
+
 def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
@@ -83,6 +105,38 @@ def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_
     store.kv_set("cooldown:claude", time.time() - 1)
     script.claude_limit = False
     assert llm.ask("analyst", "back", mode="readonly").cli == "claude"
+
+
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_restart(
+    tmp_path: Path, cli: str,
+) -> None:
+    from support_agent import prompts
+
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    rules = prompts.OWNER_CHAT_SYSTEM
+    policy = prompts.WMS_SYSTEM_POLICY
+    first = llm.ask("routine", "первый ход: обращение №1 в разборе", session_key="owner_conversation",
+                    cli_only=cli, system=rules)
+    assert first.session_id and store.rows("SELECT * FROM tickets") == []
+    saved = store.kv_get("llm_sessions:owner_conversation")
+    assert saved == {cli: first.session_id}
+    restarted = LlmRouter(llm.cfg, store, exec_fn=script)
+    current = "История: первый ход. Теперь обращение №1 закрыто; новое обращение №2 в разборе."
+    updated_rules = rules + "\nИспользуй актуальный снимок обращений в каждом ходе."
+    restarted.ask("routine", current, session_key="owner_conversation", cli_only=cli, system=updated_rules)
+    if cli == "claude":
+        assert script.calls[-1][script.calls[-1].index("--resume") + 1] == first.session_id
+        for argv, expected in zip(script.calls, (rules, updated_rules), strict=True):
+            assert argv[argv.index("--system-prompt") + 1] == f"{policy}\n\n{expected}"
+        assert script.stdin[-1] == current
+    else:
+        assert script.calls[-1][:4] == ["codex", "exec", "resume", first.session_id]
+        assert script.stdin[0] == f"{policy}\n\n{rules}\n\nпервый ход: обращение №1 в разборе"
+        assert script.stdin[-1] == f"{policy}\n\n{updated_rules}\n\n{current}"
+    assert store.kv_get("llm_sessions:owner_conversation") == saved
+    assert store.rows("SELECT * FROM tickets") == []
 
 
 def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) -> None:
@@ -308,16 +362,36 @@ def test_real_codex_json_stream_gives_session_id() -> None:
     assert _codex_session_id(live) == "01a0fd43-39f6-70c3-9213-907ea87ac473"
 
 
-def test_session_is_created_then_resumed_and_context_only_for_new(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+def test_resumed_analyst_receives_current_rules_history_and_state_after_restart(
+    tmp_path: Path, cli: str,
+) -> None:
+    from support_agent import prompts
+
     script = ExecScript()
     llm, store = router(tmp_path, script)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
-    llm.ask("analyst", "вопрос 1", ticket_id=tid, session_key="analyst", context="КОНТЕКСТ", mode="readonly")
-    llm.ask("analyst", "вопрос 2", ticket_id=tid, session_key="analyst", context="КОНТЕКСТ", mode="readonly")
+    first_result = llm.ask("analyst", "разбери", ticket_id=tid, session_key="analyst",
+                           context="Старые правила. Клиент: короб не сканируется.",
+                           mode="readonly", cli_only=cli)
+    current = prompts.analysis_context(
+        "Клиент: короб не сканируется.\nКлиент: код уже присылал.\n"
+        "Состояние: вопрос клиенту уже отправлен. Владелец запретил новые вопросы.", "",
+    )
+    note = "Перечитай всю переписку и проверь код сам без вопросов клиенту."
+    restarted = LlmRouter(llm.cfg, store, exec_fn=script)
+    restarted.ask("analyst", note, ticket_id=tid, session_key="analyst", context=current,
+                  mode="readonly", cli_only=cli)
     first, second = script.calls
-    assert "--session-id" in first and "--resume" in second
-    assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
-    assert script.stdin[0].startswith("КОНТЕКСТ") and script.stdin[1] == "вопрос 2"
+    if cli == "claude":
+        assert "--session-id" in first and "--resume" in second
+        assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
+    else:
+        assert second[:4] == ["codex", "exec", "resume", first_result.session_id]
+    policy = f"{prompts.WMS_SYSTEM_POLICY}\n\n" if cli == "codex" else ""
+    assert script.stdin[0] == policy + "Старые правила. Клиент: короб не сканируется.\n\nразбери"
+    assert script.stdin[1] == f"{policy}{current}\n\n{note}"
+    assert store.data(tid)["sessions"]["analyst"][cli] == first_result.session_id
 
 
 def test_codex_session_id_is_saved_and_resumed(tmp_path: Path) -> None:

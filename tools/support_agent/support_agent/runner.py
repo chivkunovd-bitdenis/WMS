@@ -14,10 +14,12 @@ from typing import Any
 
 import httpx
 
+from .agent_coordinator import AgentCoordinator
 from .config import Config
 from .hotfix import HotfixRunner
 from .llm import LlmRouter
 from .mockups import MockupRunner
+from .night import NightRunner
 from .pipeline import Pipeline, ThreadPool
 from .prod_sql import ProdSqlSettings
 from .redact import scrub
@@ -92,6 +94,8 @@ class Agent:
     # ---- запуск ----------------------------------------------------------------------
     def startup(self) -> None:
         recover_after_restart(self.store, self.cfg)
+        if self.pipe.agent is not None:
+            self.pipe.agent.recover_after_restart()
         now = self.clock()
         last = self.store.kv_get("heartbeat")
         if last is not None and now - float(last) > self.cfg.limits.downtime_notice_sec:
@@ -223,6 +227,7 @@ def build_agent(cfg: Config) -> Agent:
     )
     hotfix = HotfixRunner(pipe, http=http)
     pipe.hotfix = hotfix
+    pipe.night = NightRunner(pipe, hotfix)
     if cfg.prod_db.enabled:
         c = cfg.prod_db
         directory = SellerDirectory(ProdSqlSettings(
@@ -233,4 +238,7 @@ def build_agent(cfg: Config) -> Agent:
         llm.role_ensurer = directory.ensure_scope
         llm.role_alert = pipe.on_role_failure
     pipe.mockups = MockupRunner(pipe, hotfix)
+    if cfg.agent.enabled:
+        from .agent_tools import AgentTools
+        pipe.agent = AgentCoordinator(pipe, AgentTools(pipe))
     return Agent(cfg, store, tg, pipe)
