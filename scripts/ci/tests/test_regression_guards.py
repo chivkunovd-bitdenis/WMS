@@ -98,6 +98,42 @@ class GuardTests(unittest.TestCase):
             {"backend_tests": 1, "frontend_tests": 0},
         )
 
+    def test_backend_guard_cannot_import_unprotected_test_module(self):
+        guard = self.root / guards.ROOTS[0] / "test_stock_guard.py"
+        forbidden_module = "tests.test_unprotected_seed"
+        imports = (
+            f"import {forbidden_module}\n",
+            f"from {forbidden_module} import seed\n",
+        )
+
+        for source in imports:
+            with self.subTest(source=source.strip()):
+                guard.write_text(source)
+                self.manifest["state"] = "active"
+                self.save_manifest()
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"защищённый тест зависит от незащищённого файла "
+                    r"tests\.test_unprotected_seed",
+                ):
+                    guards.verify(self.root, self.base)
+
+    def test_backend_guard_allows_protected_and_external_imports(self):
+        (self.root / guards.ROOTS[0] / "test_stock_guard.py").write_text(
+            "from app.services.stock import reserve\n"
+            "from tests.guards.stock_helpers import seed\n"
+            "from conftest import db_session\n"
+            "import pytest\n"
+            "from sqlalchemy import select\n"
+        )
+        self.manifest["state"] = "active"
+        self.save_manifest()
+
+        self.assertEqual(
+            guards.verify(self.root, self.base),
+            {"backend_tests": 1, "frontend_tests": 0},
+        )
+
     def test_simultaneous_file_and_hash_change_fails(self):
         (self.root / guards.ROOTS[0] / "README.md").write_text("changed")
         self.save_manifest()
