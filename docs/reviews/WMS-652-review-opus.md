@@ -286,3 +286,16 @@ CODEOWNERS в `.github/` не выполнялись — вне разрешён
 GitHub, деплой с проверкой зелёных обязательных, набор утверждённых
 бизнес-тестов, «забетонированность») этой задачей **не** достигаются и
 корректно отмечены как последующие в документе требований.
+
+### F12. Follow-up: WMS-349 merge test drain — PASS
+
+Правка `backend/tests/test_product_merge_service_wms349.py:243,266-268` (+5 строк)
+добавляет `await drain_background_stock_publish_tasks()` между seed-коммитом
+пулов и `_install_capture()`. Helper `fbs_stock_publish_service.py:312-319` —
+существующий, честно ждёт в-процессные publish-таски через `asyncio.gather` и
+очищает `_BACKGROUND_TASKS`. Фикстурные UPDATE по `fbs_warehouse_bindings` из
+after-commit хука больше не попадают в engine-wide capture — ловится только
+SQL самого merge. Все исходные контракты сохранены: `status_code == 409`,
+текст detail, запрет `update`/`delete` в captured, конечные balance [5,8] и
+pool [3,7] не изменены. Контракт не ослаблен. Ограничение: полный backend не
+перепрогонял, целевые 6 passed / 3 skipped (PG) — факт разработчика.
