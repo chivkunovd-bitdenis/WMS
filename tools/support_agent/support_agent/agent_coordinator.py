@@ -470,6 +470,23 @@ class AgentCoordinator:
         return None
 
     def _submit_job(self, job_id: str) -> None:
+        job = self.store.kv_get(f"agent_job:{job_id}", {})
+        if job.get("task_ids") and self.pipe.night is not None:
+            current_snapshot = self._task_snapshot(job.get("task_ids") or [])
+            scope_error = self._task_scope_error(job.get("task_ids") or [], current_snapshot)
+            if scope_error or job.get("task_snapshot") != current_snapshot:
+                reason = scope_error or "Task version or approval changed after selection"
+                self._patch_job(job_id, status="needs_owner_review", error=reason)
+                self.store.queue_message(
+                    key=f"agent_job_changed:{job_id}",
+                    chat_id=self.cfg.telegram.owner_chat_id,
+                    text=(f"Работа {job_id} ждёт повторного выбора: описание или согласование "
+                          "задачи изменилось после поручения."),
+                    purpose="agent_job", repeat_ok=False,
+                )
+                return
+            self.pipe.night.ensure_job(job_id)
+            return
         with self.job_lock:
             if job_id in self.active_jobs:
                 return
@@ -717,6 +734,8 @@ class AgentCoordinator:
         self.dispatcher.recover_after_restart()
         for jid in self.store.kv_get("agent_job_index", []):
             job = self.store.kv_get(f"agent_job:{jid}", {})
+            if job.get("status") == "running" and job.get("night_ticket_id"):
+                continue
             if job.get("status") == "running":
                 job["status"] = "recovering"
                 job["recovery_note"] = "Previous CLI outcome unknown; inspect state before any retry."

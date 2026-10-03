@@ -19,6 +19,7 @@ from .config import Config
 from .hotfix import HotfixRunner
 from .llm import LlmRouter
 from .mockups import MockupRunner
+from .night import NightRunner
 from .pipeline import Pipeline, ThreadPool
 from .prod_sql import ProdSqlSettings
 from .redact import scrub
@@ -226,6 +227,7 @@ def build_agent(cfg: Config) -> Agent:
     )
     hotfix = HotfixRunner(pipe, http=http)
     pipe.hotfix = hotfix
+    pipe.night = NightRunner(pipe, hotfix)
     if cfg.prod_db.enabled:
         c = cfg.prod_db
         directory = SellerDirectory(ProdSqlSettings(

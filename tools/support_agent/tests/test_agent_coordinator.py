@@ -187,6 +187,30 @@ def test_selected_frontend_task_needs_current_description_and_mockup_approval(tm
     assert accepted["task_ids"] == ["WMS-700"]
 
 
+def test_night_job_rechecks_owner_approval_before_start(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    tid = store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
+                           seller="client", stage="agent_discussion",
+                           data={"agent": {"wms_number": 700, "version": "v1",
+                                           "document_version": "v1", "is_frontend": False,
+                                           "owner_approval": {"version": "v1"}}})
+    snapshot = agent._task_snapshot(["WMS-700"])
+    store.kv_set("agent_job:night-1", {"id": "night-1", "status": "queued",
+                                       "task_ids": ["WMS-700"], "task_snapshot": snapshot})
+    started: list[str] = []
+    agent.pipe.night = SimpleNamespace(ensure_job=started.append)
+
+    data = store.data(tid)
+    data["agent"]["version"] = "v2"
+    store.patch_data(tid, **data)
+    agent._submit_job("night-1")
+
+    assert started == []
+    assert store.kv_get("agent_job:night-1")["status"] == "needs_owner_review"
+    assert store.outbox_by_key("agent_job_changed:night-1") is not None
+
+
 def test_job_file_relative_path_is_anchored_under_verified_worktree(tmp_path):
     now = [100.0]
     agent, store, _, _ = coordinator(tmp_path, now=now)
