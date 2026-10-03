@@ -228,6 +228,13 @@ class AgentTools:
             try:
                 document = persist_task(self.p, tid)
                 card = self._tool_trello_sync({"ticket_id": tid, "action": "create"}, event, True)
+                if bool(args.get("is_frontend")):
+                    mockup_key = f"agent_mockup:{tid}:{version}"
+                    latest = dict(self.store.data(tid).get("agent") or {})
+                    if latest.get("version") == version and self.store.kv_once(mockup_key):
+                        latest["mockup"] = {"version": version, "status": "queued",
+                                            "source_event": event["id"]}
+                        self.store.patch_data(tid, agent=latest)
                 if card["status"] == "linked":
                     self.p.say_owner(f"agent_task_confirmed:{tid}:{version}",
                         f"Задача WMS-{document['number']} подтверждена автором: {title}\n"
