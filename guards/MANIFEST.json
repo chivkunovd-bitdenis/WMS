@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "state": "active",
+  "files": {
+    "backend/tests/guards/README.md": "355b498fb6fd83e1cf8670f7b0ee93b273af05b22e771dafe3f5c72fd27c8689",
+    "backend/tests/guards/stock_helpers.py": "fc4d72c1f7509038765879160989f1fee4e908f73414ecb5d34421ef3d5ac5f3",
+    "backend/tests/guards/stock_seeds.py": "5f7e0b7eaa0cfab2728222dc25ac1a0d4543611e0e8adf63b7dd866619754666",
+    "backend/tests/guards/test_guard_stock_documents.py": "8341515e35210cac3692f38abc28df03e9932259eb760626d74fd51142e2495b",
+    "backend/tests/guards/test_guard_stock_limits.py": "46210ad3f3e421a69316809fb37f45946260016bace87fe126a5ff043d81d221",
+    "backend/tests/guards/test_guard_stock_picking.py": "b6184601f48f90de28459acf3de1976f59266ab8854726cc1640b1d63ca824b5",
+    "backend/tests/guards/test_guard_stock_printing.py": "232f42ddf543916fb211e147cde25db0987cd779117a8b836dd612148e2cbec3",
+    "backend/tests/guards/test_guard_stock_publication.py": "a26c4cf644b5fec7c0fcad72969060b9ad1dab02cd5dfde58e167a38f35886f9",
+    "backend/tests/guards/test_guard_stock_reservation.py": "f98397ac454882d993f2ed5226394bbab362fd2655805ac2790f6793c1417304",
+    "backend/tests/guards/test_guard_stock_shipment.py": "9dd53849db6990875cbf8b49e6f01795cf64b03fc9b17438c37780a89ebe7044",
+    "backend/tests/guards/test_guard_stock_tracking.py": "968b6cf5631e0062f3b2611bb049d298b55d04cd556e370214c8cee8d6718286",
+    "frontend/src/guards/README.md": "0296dbe18f64cf69e054d982cab3587a11912cfa162c0815254510ea40ae6e6f"
+  }
+}

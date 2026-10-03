@@ -3878,6 +3878,117 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/cancel": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Cancel Fbs Scan Auto Print Selection",
+        "description": "WMS-631 R20: Escape releases one unfinished selection of this operator.",
+        "operationId": "cancel_fbs_scan_auto_print_selection_operations_fbs_supplies__supply_id__scan_auto_print__scan_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "scan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scan Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/scan-undo": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Undo Fbs Packing Scan",
+        "description": "WMS-631 R19: undo one packing scan — its KIZ, its unit, its box, its selection.\n\nThe KIZ goes first: if WB refuses, nothing else changed and the step stays.\nA repeat continues from what is already undone.",
+        "operationId": "undo_fbs_packing_scan_operations_fbs_supplies__supply_id__scan_undo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsScanUndoBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsScanUndoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/scan-kiz-reprint": {
       "post": {
         "tags": [
@@ -5903,6 +6014,16 @@
             "type": "string",
             "title": "Status"
           },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State"
+          },
           "payload_json": {
             "anyOf": [
               {
@@ -5970,6 +6091,7 @@
           "id",
           "job_type",
           "status",
+          "state",
           "payload_json",
           "result_json",
           "error_message",
@@ -6529,6 +6651,39 @@
           "message"
         ],
         "title": "BoxImportRowErrorOut"
+      },
+      "CatalogSyncJobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wildberries",
+              "ozon"
+            ],
+            "title": "Marketplace"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "marketplace",
+          "state"
+        ],
+        "title": "CatalogSyncJobOut"
       },
       "ChangedBalanceOut": {
         "properties": {
@@ -7135,6 +7290,184 @@
           "row_ids"
         ],
         "title": "CreateWithdrawal"
+      },
+      "DeveloperRequestCreate": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Idempotency Key"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bug",
+              "improvement"
+            ],
+            "title": "Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "type"
+        ],
+        "title": "DeveloperRequestCreate"
+      },
+      "DeveloperRequestOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bug",
+              "improvement"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "review",
+              "queued",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "description",
+          "screen",
+          "problem",
+          "proposal",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeveloperRequestOut"
       },
       "DiscrepancyActCreate": {
         "properties": {
@@ -8837,6 +9170,11 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Idempotency Key"
+          },
+          "scan_no_wb_wait": {
+            "type": "boolean",
+            "title": "Scan No Wb Wait",
+            "default": false
           }
         },
         "type": "object",
@@ -9022,6 +9360,11 @@
               }
             ],
             "title": "External Order Id"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign",
+            "default": false
           }
         },
         "type": "object",
@@ -11372,6 +11715,11 @@
               }
             ],
             "title": "External Order Id"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign",
+            "default": false
           }
         },
         "type": "object",
@@ -11388,6 +11736,18 @@
       },
       "FbsScanAutoPrintBody": {
         "properties": {
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
           "barcode": {
             "type": "string",
             "maxLength": 128,
@@ -11413,6 +11773,11 @@
           "reprint_chz": {
             "type": "boolean",
             "title": "Reprint Chz",
+            "default": false
+          },
+          "await_honest_sign": {
+            "type": "boolean",
+            "title": "Await Honest Sign",
             "default": false
           }
         },
@@ -11522,6 +11887,11 @@
             },
             "type": "array",
             "title": "Order Errors"
+          },
+          "chz_issued_by_scan": {
+            "type": "boolean",
+            "title": "Chz Issued By Scan",
+            "default": false
           }
         },
         "type": "object",
@@ -11679,6 +12049,87 @@
           "started"
         ],
         "title": "FbsScanAutoPrintTargetClaimOut"
+      },
+      "FbsScanUndoBody": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "scan_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Id"
+          },
+          "pack_idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Idempotency Key"
+          },
+          "box_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Id"
+          },
+          "release_selection": {
+            "type": "boolean",
+            "title": "Release Selection",
+            "default": false
+          },
+          "kiz_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Kiz Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id"
+        ],
+        "title": "FbsScanUndoBody",
+        "description": "WMS-631 R19: what one packing scan did and must be undone."
+      },
+      "FbsScanUndoOut": {
+        "properties": {
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "type": "object",
+        "title": "FbsScanUndoOut"
       },
       "FbsSellerOfficeOut": {
         "properties": {
@@ -22846,6 +23297,108 @@
         "title": "OzonAccountPutIn",
         "description": "The only accepted credential shape; public responses never reuse it."
       },
+      "OzonAccountSaveOut": {
+        "properties": {
+          "marketplace": {
+            "type": "string",
+            "const": "ozon",
+            "title": "Marketplace"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "live_exchange_enabled": {
+            "type": "boolean",
+            "title": "Live Exchange Enabled"
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "valid",
+              "invalid",
+              "unavailable"
+            ],
+            "title": "Validation Status"
+          },
+          "last_validated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Validated At"
+          },
+          "last_validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Validation Error"
+          },
+          "credentials_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Updated At"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "last_sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Error"
+          },
+          "catalog_job": {
+            "$ref": "#/components/schemas/CatalogSyncJobOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marketplace",
+          "connected",
+          "live_exchange_enabled",
+          "validation_status",
+          "last_validated_at",
+          "last_validation_error",
+          "credentials_updated_at",
+          "last_synced_at",
+          "last_sync_error",
+          "catalog_job"
+        ],
+        "title": "OzonAccountSaveOut"
+      },
       "OzonAccountStatusOut": {
         "properties": {
           "marketplace": {
@@ -23443,73 +23996,6 @@
           "enabled"
         ],
         "title": "OzonReturnPreviewOut"
-      },
-      "OzonSelfSyncProductsOut": {
-        "properties": {
-          "cards_read": {
-            "type": "integer",
-            "title": "Cards Read"
-          },
-          "links_matched": {
-            "type": "integer",
-            "title": "Links Matched"
-          },
-          "links_created": {
-            "type": "integer",
-            "title": "Links Created"
-          },
-          "products_created": {
-            "type": "integer",
-            "title": "Products Created"
-          },
-          "dimensions_applied": {
-            "type": "integer",
-            "title": "Dimensions Applied"
-          },
-          "barcodes_applied": {
-            "type": "integer",
-            "title": "Barcodes Applied"
-          },
-          "images_applied": {
-            "type": "integer",
-            "title": "Images Applied"
-          },
-          "product_ids_applied": {
-            "type": "integer",
-            "title": "Product Ids Applied"
-          },
-          "skipped_manual_dimensions": {
-            "type": "integer",
-            "title": "Skipped Manual Dimensions"
-          },
-          "skipped_unknown_units": {
-            "type": "integer",
-            "title": "Skipped Unknown Units"
-          },
-          "unmatched_offer_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Unmatched Offer Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cards_read",
-          "links_matched",
-          "links_created",
-          "products_created",
-          "dimensions_applied",
-          "barcodes_applied",
-          "images_applied",
-          "product_ids_applied",
-          "skipped_manual_dimensions",
-          "skipped_unknown_units",
-          "unmatched_offer_ids"
-        ],
-        "title": "OzonSelfSyncProductsOut",
-        "description": "Ровно то, что импорт сделал, без обещаний того, чего он не делает."
       },
       "PackAllIn": {
         "properties": {
@@ -29056,6 +29542,101 @@
         ],
         "title": "SellerExceptionBody"
       },
+      "SellerFbsOrderOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace"
+          },
+          "external_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Order Id"
+          },
+          "status_group": {
+            "type": "string",
+            "enum": [
+              "new",
+              "in_work",
+              "handed",
+              "accepted",
+              "external_processing",
+              "done",
+              "cancelled",
+              "defect"
+            ],
+            "title": "Status Group"
+          },
+          "items_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items Quantity"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "marketplace",
+          "external_order_id",
+          "status_group",
+          "items_quantity",
+          "received_at"
+        ],
+        "title": "SellerFbsOrderOut"
+      },
+      "SellerFbsOrdersPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SellerFbsOrderOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "server_now": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "server_now"
+        ],
+        "title": "SellerFbsOrdersPageOut"
+      },
       "SellerLabelOptionsIn": {
         "properties": {
           "seller_id": {
@@ -32776,6 +33357,159 @@
         ],
         "title": "SubscriptionOut"
       },
+      "SupportAgentRequestOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bug",
+              "improvement"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
+          "client_name": {
+            "type": "string",
+            "title": "Client Name"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "review",
+              "queued",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "delivery_state": {
+            "type": "string",
+            "title": "Delivery State"
+          },
+          "trello_card_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trello Card Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "description",
+          "screen",
+          "problem",
+          "proposal",
+          "page_url",
+          "client_name",
+          "tenant_id",
+          "seller_id",
+          "status",
+          "created_at",
+          "updated_at",
+          "delivery_state",
+          "trello_card_id"
+        ],
+        "title": "SupportAgentRequestOut",
+        "description": "What the dispatcher agent may read about one developer request (WMS-641 R4)."
+      },
       "SwitchSellerBody": {
         "properties": {
           "seller_id": {
@@ -34263,67 +34997,6 @@
         ],
         "title": "WildberriesImportedSupplyOut"
       },
-      "WildberriesSelfSyncOut": {
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "title": "Ok",
-            "default": true
-          },
-          "cards_received": {
-            "type": "integer",
-            "title": "Cards Received"
-          },
-          "cards_saved": {
-            "type": "integer",
-            "title": "Cards Saved"
-          },
-          "products_created": {
-            "type": "integer",
-            "title": "Products Created"
-          },
-          "products_updated": {
-            "type": "integer",
-            "title": "Products Updated"
-          },
-          "products_skipped": {
-            "type": "integer",
-            "title": "Products Skipped"
-          },
-          "sizes_missing_chrt_id": {
-            "type": "integer",
-            "title": "Sizes Missing Chrt Id",
-            "default": 0
-          },
-          "duplicate_chrt_id": {
-            "type": "integer",
-            "title": "Duplicate Chrt Id",
-            "default": 0
-          },
-          "barcode_conflicts": {
-            "type": "integer",
-            "title": "Barcode Conflicts",
-            "default": 0
-          },
-          "barcode_conflict_details": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Barcode Conflict Details"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cards_received",
-          "cards_saved",
-          "products_created",
-          "products_updated",
-          "products_skipped"
-        ],
-        "title": "WildberriesSelfSyncOut"
-      },
       "WildberriesSelfTokenSaveBody": {
         "properties": {
           "content_api_token": {
@@ -34434,12 +35107,16 @@
             },
             "type": "array",
             "title": "Barcode Conflict Details"
+          },
+          "catalog_job": {
+            "$ref": "#/components/schemas/CatalogSyncJobOut"
           }
         },
         "type": "object",
         "required": [
           "cards_received",
-          "cards_saved"
+          "cards_saved",
+          "catalog_job"
         ],
         "title": "WildberriesSelfTokenSaveOut"
       },

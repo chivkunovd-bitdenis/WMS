@@ -17,7 +17,11 @@ function setup(place = vi.fn(async () => {})) {
 }
 
 describe('WMS-550 sorting scan workflow', () => {
-  it('resolves all 882 CSV cell barcodes before names in either keyboard layout, with AIM and repeat scans', async () => {
+  // 882 cells × 4 code variants × 2 scans ≈ 7 k awaited scan calls. In CI run
+  // 37144393488 this test took 6793 ms and tripped the 5 s default testTimeout
+  // (isolated macOS run completes in ~1.7 s). Harness-budget bump only;
+  // keeps every case and assertion.
+  it('resolves all 882 CSV cell barcodes before names in either keyboard layout, with AIM and repeat scans', { timeout: 20_000 }, async () => {
     const grid = [
       ['А', 'A', 5, 21], ['Б', 'B', 5, 21], ['В', 'V', 5, 21],
       ['Г', 'G', 5, 21], ['Д', 'D', 5, 21], ['Е', 'E', 5, 21],

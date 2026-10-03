@@ -1,15 +1,44 @@
 name: CI
 
-# Быстрый технический контроль на PR. Ничего, кроме сборки и тестов бэка,
-# здесь не проверяется: продуктовый гейт, таблицы тест-кейсов и браузерные
-# сценарии сняты 31.08.2026 — они стоили десять минут ожидания на каждой
-# атомарной правке и не ловили ошибок, ради которых заводились.
+# Technical checks run both before merge and on the exact etalon commit.
 on:
   pull_request:
+  push:
+    branches: [etalon]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: "Earlier trusted commit SHA (40 hex characters); never HEAD"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' || github.ref != 'refs/heads/etalon' }}
 
 jobs:
+  baseline:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      base_sha: ${{ steps.base.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Resolve trusted comparison baseline
+        id: base
+        run: python scripts/ci/resolve_ci_base.py
+
   backlog:
+    timeout-minutes: 5
+    needs: baseline
     # Гейт бэклога: каждое изменение должно называть номер задачи из
     # docs/KANONICHESKIY_BACKLOG.md. Заведён 04.09.2026 после того, как выяснилось, что за два
     # месяца 97 задач владельца жили только в переписке, а постановка по
@@ -20,9 +49,14 @@ jobs:
         with:
           fetch-depth: 0
       - name: Проверить ссылку на задачу
-        run: ./scripts/ci/check-backlog-ref.sh "origin/${{ github.base_ref || 'etalon' }}"
+        env:
+          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+        run: |
+          ./scripts/ci/check-backlog-ref.sh "$BASE_SHA"
+          python scripts/ci/check_task_documents.py "$BASE_SHA"
 
   backend:
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -82,6 +116,7 @@ jobs:
           alembic upgrade head
 
   frontend-build:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -99,5 +134,75 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.app.json
       - name: Verify WMS-517 attached CAdES auth profile
         run: npm run test:crypto-auth
+      # Probe 37144084796: minimal HTML hung in CfT but printed in system Chrome.
+      # The probe does not distinguish browser version from distribution effects.
+      - name: Install Poppler and verify real PDF renderer
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          command -v pdfimages
+          pdfimages -v
+          echo "WMS_PRINT_CHROMIUM=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: All frontend tests including WMS-613 PDF pagination
+        env:
+          WMS_REQUIRE_PRINT_PAGINATION: "1"
+        run: |
+          test -n "$WMS_PRINT_CHROMIUM"
+          test -x "$WMS_PRINT_CHROMIUM"
+          command -v pdfimages
+          npx vitest run
       - name: Build
         run: npm run build
+
+  guards:
+    timeout-minutes: 10
+    name: охрана
+    needs: baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Infrastructure tests (not business guards)
+        run: |
+          python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
+          python -m unittest discover -s scripts/ci -p 'test_check_task_documents.py' -v
+      - name: Verify against the checker and manifest from trusted BASE
+        id: integrity
+        env:
+          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+        run: |
+          CHECKER="$RUNNER_TEMP/check_regression_guards.py"
+          if git cat-file -e "$BASE_SHA:scripts/ci/check_regression_guards.py" 2>/dev/null; then
+            git show "$BASE_SHA:scripts/ci/check_regression_guards.py" > "$CHECKER"
+            python "$CHECKER" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
+          else
+            echo "Bootstrap only: trusted BASE has no checker; no business guard protection claimed."
+            python scripts/ci/check_regression_guards.py --base "$BASE_SHA" --allow-bootstrap
+          fi
+      - name: Install backend guard dependencies
+        if: steps.integrity.outputs.backend_tests != '0'
+        run: pip install -e './backend[dev]'
+      - name: Approved backend guards
+        if: steps.integrity.outputs.backend_tests != '0'
+        working-directory: backend
+        run: pytest -n auto tests/guards
+      - uses: actions/setup-node@v4
+        if: steps.integrity.outputs.frontend_tests != '0'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Approved frontend guards
+        if: steps.integrity.outputs.frontend_tests != '0'
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vitest run src/guards

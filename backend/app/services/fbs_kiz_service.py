@@ -72,7 +72,7 @@ from app.services.ozon_marking_position_service import (
     resolve_marking_position,
 )
 from app.services.wb_card_enrichment import first_photo_url_from_card
-from app.services.wildberries_client import put_marketplace_order_meta
+from app.services.wildberries_client import kiz_scan_skips_wb_readback, put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
 from app.services.wildberries_fbs_client import (
     delete_marketplace_order_meta,
@@ -1422,6 +1422,9 @@ async def _commit_one_kiz_pair(
         and current.meta_status != META_STATUS_REJECTED
     ):
         operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None and kiz_scan_skips_wb_readback():
+            # WMS-642: a repeated scan of a queued code never calls WB; the worker sends it.
+            raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
@@ -1526,6 +1529,10 @@ async def _commit_one_kiz_pair(
         new_error = exc
     except marking_svc.FbsMarkingError as exc:
         new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
+        # WMS-640: the packing scan does not send the code itself; the old code
+        # (if any) is already deleted, so the new one waits for the worker.
+        scan_deferred = kiz_scan_skips_wb_readback() and exc.code == "wb_transport_error"
+        new_write_accepted = new_write_accepted or scan_deferred
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))

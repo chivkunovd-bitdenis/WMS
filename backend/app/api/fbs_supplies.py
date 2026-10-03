@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_effective_seller_id, require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
@@ -3206,6 +3206,16 @@ async def bind_fbs_packaging_box_to_trbx(
     )
 
 
+async def _send_queued_kiz(
+    tenant_id: uuid.UUID, supply_id: uuid.UUID, http_client: httpx.AsyncClient
+) -> marking_svc.QueuedKizCheck:
+    """WMS-642: a separate session, so its commits never touch the request's rows."""
+    async with SessionLocal() as kiz_session:
+        return await marking_svc.send_queued_kiz_of_supply(
+            kiz_session, tenant_id, supply_id, http_client
+        )
+
+
 @router.post("/{supply_id}/delivery-preflight", response_model=FbsDeliveryPreflightOut)
 async def preflight_fbs_delivery(
     supply_id: uuid.UUID,
@@ -3213,6 +3223,8 @@ async def preflight_fbs_delivery(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsDeliveryPreflightOut:
     async with httpx.AsyncClient() as http_client:
+        # WMS-642: queued KIZ go to WB as soon as the operator opens the handover.
+        await _send_queued_kiz(user.tenant_id, supply_id, http_client)
         try:
             result = await shipment_svc.preflight_delivery(
                 session,
@@ -3236,6 +3248,8 @@ async def deliver_fbs_supply(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     async with httpx.AsyncClient() as http_client:
+        # WMS-642: queued KIZ go to WB first; deliver_supply refuses if any is not there.
+        await _send_queued_kiz(user.tenant_id, supply_id, http_client)
         try:
             supply = await shipment_svc.deliver_supply(
                 session,
