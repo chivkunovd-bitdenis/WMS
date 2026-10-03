@@ -33,6 +33,16 @@ def persist_task(pipe: Any, ticket_id: int) -> dict[str, Any]:
     if not version or agent.get("author_confirmation", {}).get("version") != version:
         raise CanonicalTaskError("current author confirmation missing")
     if agent.get("document_sha") and agent.get("document_version") == version:
+        remote = _remote_sha(repo, agent["document_branch"])
+        if remote and remote != agent["document_sha"]:
+            _git(repo, "fetch", "origin", agent["document_branch"])
+            check = subprocess.run(["git", "merge-base", "--is-ancestor",
+                                    agent["document_sha"], remote], cwd=repo, capture_output=True,
+                                   timeout=30, check=False)
+            if check.returncode:
+                raise CanonicalTaskError("recorded task commit is not on its remote branch")
+        elif not remote:
+            raise CanonicalTaskError("recorded task commit is not on its remote branch")
         return {"number": agent["wms_number"], "sha": agent["document_sha"],
                 "branch": agent["document_branch"]}
     if not getattr(pipe, "hotfix", None):

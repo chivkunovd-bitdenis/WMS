@@ -569,27 +569,34 @@ def test_form_ticket_moves_card_in_progress_then_done_and_sends_no_client_messag
     assert env.tg.to(CLIENT_CHAT) == []
 
 
-def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path) -> None:
+def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = env.store.add_ticket(
         kind="partner_task", source="telegram", chat_id=-100222, seller="", stage="await_mockup",
         author_id="5", now=env.clock.now, data={"draft": {"title": "Экран", "is_ui": True}, "raw": "x"})
     env.pipe.mockups = MockupRunner(env.pipe, hf.runner)
 
-    def mock(prompt: str, kw: Any) -> dict[str, Any]:
+    def mock(prompt: str, **kw: Any) -> Any:
+        from support_agent.llm import LlmResult
+
         out = Path(kw["cwd"]) / f"mockup-out-{tid}"
         out.mkdir(parents=True, exist_ok=True)
         (out / "index.html").write_text("<html></html>", encoding="utf-8")
-        assert kw["mode"] == "write" and "cli_only" not in kw
-        return {"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}
+        assert kw["mode"] == "write" and kw["model"] == "sonnet" and kw["provider"] == "claude"
+        return LlmResult(text=json.dumps({"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}),
+                         cli="claude", model="sonnet")
 
-    env.llm.on("mockup", "Opus, дизайнер", mock)
+    calls: list[str] = []
+    monkeypatch.setattr(env.llm, "agent_turn", mock, raising=False)
+    monkeypatch.setattr("support_agent.mockups.publish", lambda path, public_id:
+                        calls.append(public_id) or "https://sellerfocus.pro/wms-previews/mock/")
+    hf.shell.on("git status --porcelain", ok(out=f"?? mockup-out-{tid}/\n"))
     env.llm.on("routine", "Владелец склада написал",
                {"scope": "wms", "reply": "Макет не делаю.",
                 "actions": [{"kind": "mockup_no", "ticket_ids": [], "note": "нет"}],
                 "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "нет", user=OWNER_ID)
-    assert env.store.ticket(tid)["stage"] == "done" and not any(c["role"] == "mockup" for c in env.llm.calls)
+    assert env.store.ticket(tid)["stage"] == "done" and calls == []
     env.store.set_stage(tid, "await_mockup")
     env.llm.on("routine", "Владелец склада написал",
                {"scope": "wms", "reply": "Делаю макет.",
@@ -601,8 +608,9 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path) -> None:
     env.pipe.process_ticket(tid)
     env.flush()
     assert env.store.ticket(tid)["stage"] == "done"
-    assert any("https://mock.test/mockup-" in t and "Вариант А" in t for t in env.tg.to(OWNER_CHAT))
-    assert hf.shell.ran("publish ") == 1
+    assert any("https://sellerfocus.pro/wms-previews/mock/" in t and "Вариант А" in t
+               for t in env.tg.to(OWNER_CHAT))
+    assert len(calls) == 1 and hf.shell.ran("git push -u origin mockup/wms-support-") == 1
 
 
 @pytest.mark.parametrize("verdict", ["hotfix"])
