@@ -10,6 +10,7 @@ SSH_ORIGINAL_COMMAND принимается РОВНО одна из трёх ф
                                 вывод читается потоком с бюджетом, текст ошибки очищается от значений
   ensure-seller <uuid>          идемпотентно создать/обновить роль и политики селлера (под postgres)
   find-seller <строка>          кандидаты по названию (фиксированный запрос, строка — переменная psql)
+  sql wms_agent_t_<32 hex>      то же для роли ФУЛФИЛМЕНТА (тенанта); ensure-tenant <uuid>, find-tenant <строка>
 
 Общая роль wms_agent_ro через шлюз недоступна. Настройки: AGENT_DB_PSQL (JSON-массив базовой команды psql,
 по умолчанию docker exec -i wms_prod-db-1 psql), AGENT_DB_NAME (по умолчанию wms).
@@ -31,8 +32,10 @@ import seller_access as sa  # noqa: E402
 import sql_contract as sc  # noqa: E402
 
 DEFAULT_BASE = ["docker", "exec", "-i", "wms_prod-db-1", "psql"]
-SQL_RE = re.compile(r"^sql (wms_agent_s_[0-9a-f]{32})$")
+SQL_RE = re.compile(r"^sql (wms_agent_[st]_[0-9a-f]{32})$")
 ENSURE_RE = re.compile(r"^ensure-seller ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+ENSURE_TENANT_RE = re.compile(r"^ensure-tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+FIND_TENANT_RE = re.compile(r"^find-tenant ([0-9A-Za-zА-Яа-яЁё .,'\"«»()+&/_-]{2,80})$")
 FIND_RE = re.compile(r"^find-seller ([0-9A-Za-zА-Яа-яЁё .,'\"«»()+&/_-]{2,80})$")
 FIND_SQL = (
     "SELECT s.id AS seller_id, s.name AS seller_name, s.tenant_id, t.name AS tenant_name "
@@ -156,26 +159,76 @@ def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def ensure_seller(seller: str, env: dict[str, str] | None = None) -> str:
-    seller = seller.lower()
-    res = run_psql("postgres", f"SELECT 1 FROM sellers WHERE id = '{seller}'::uuid;\n", ["-tA"], env)
+def _apply(sql: str, env: dict[str, str] | None) -> None:
+    """Транзакция DDL под postgres: любой сбой (в том числе lock_timeout) откатывает её целиком."""
+    applied = run_psql("postgres", sql, ["-q"], env)
+    if applied.returncode != 0:
+        err = applied.stderr
+        if "lock timeout" in err or "55P03" in err:
+            raise Refused("busy: lock timeout, nothing was changed, retry later")
+        if "statement timeout" in err or "57014" in err:
+            raise Refused("busy: statement timeout, nothing was changed, retry later")
+        raise Refused("apply failed: " + err.strip().splitlines()[0][:200] if err.strip() else "apply failed")
+
+
+def ensure_scope(scope: sa.Scope, scope_id: str, env: dict[str, str] | None = None) -> str:
+    """Идемпотентно. Роль уже на текущей версии: только дешёвая проверка и ALTER ROLE SET (без табличных
+    блокировок). Версия сменилась, роли нет или нет RLS/политики: одна транзакция с lock_timeout 2 с,
+    откат целиком при сбое."""
+    scope_id = scope_id.lower()
+    table = scope.self_table  # sellers или tenants
+    res = run_psql("postgres", f"SELECT 1 FROM {table} WHERE id = '{scope_id}'::uuid;\n", ["-tA"], env)
     if res.returncode != 0 or res.stdout.strip() != "1":
-        raise Refused("seller not found")
-    pre = run_psql("postgres", sa.preflight_sql(), ["--csv"], env)
+        raise Refused(f"{scope.kind} not found")
+    pre = run_psql("postgres", sa.preflight_sql(scope_id, scope), ["--csv"], env)
     if pre.returncode != 0:
         raise Refused("preflight failed")
     rows = list(csv.reader(io.StringIO(pre.stdout)))[1:]
     catalog = sa.parse_preflight([r for r in rows if len(r) == 3])
-    sql = sa.render_sql(seller, catalog)
-    applied = run_psql("postgres", sql, ["-q"], env)
-    if applied.returncode != 0:
-        raise Refused("apply failed: " + applied.stderr.strip()[:300])
-    count = len(sa.included_tables({k: set(v) for k, v in catalog.columns.items()}))
-    return f"ok role={sa.role_name(seller)} tables={count} spec={sa.SPEC_VERSION}"
+    count = len(sa.included_tables({k: set(v) for k, v in catalog.columns.items()}, scope))
+    if sa.is_current(catalog, scope_id, scope):
+        _apply(sa.render_role_sql(scope_id, scope), env)
+        state = "unchanged"
+    else:
+        _apply(sa.render_sql(scope_id, catalog, scope), env)
+        state = "applied"
+    return f"ok role={scope.role_name(scope_id)} tables={count} spec={sa.SPEC_VERSION} state={state}"
+
+
+def ensure_seller(seller: str, env: dict[str, str] | None = None) -> str:
+    return ensure_scope(sa.SELLER, seller, env)
+
+
+def ensure_tenant(tenant: str, env: dict[str, str] | None = None) -> str:
+    return ensure_scope(sa.TENANT, tenant, env)
 
 
 def find_seller(query: str, env: dict[str, str] | None = None) -> str:
     res = run_psql("postgres", FIND_SQL, ["--csv", "-v", f"q={escape_like(query)}"], env)
+    if res.returncode != 0:
+        raise Refused("search failed")
+    return res.stdout
+
+
+def tokens_of(query: str) -> list[str]:
+    """Слова названия (от 3 символов, не более 4): название фулфилмента диктуют по-разному."""
+    words = [w for w in re.split(r"[\s.,'\"«»()+&/_-]+", query) if len(w) >= 3]
+    return words[:4] or [query.strip()]
+
+
+def find_tenant(query: str, env: dict[str, str] | None = None) -> str:
+    """Кандидаты-фулфилменты: совпадение по любому слову названия, больше совпавших слов выше;
+    слова передаются переменными psql, в SQL текст не попадает."""
+    words = tokens_of(query)
+    hit = " + ".join(f"(t.name ILIKE '%' || :'q{i}' || '%')::int" for i in range(len(words)))
+    anyhit = " OR ".join(f"t.name ILIKE '%' || :'q{i}' || '%'" for i in range(len(words)))
+    sql = ("SELECT t.id AS tenant_id, t.name AS tenant_name, count(s.id) AS sellers "
+           "FROM tenants t LEFT JOIN sellers s ON s.tenant_id = t.id "
+           f"WHERE {anyhit} GROUP BY t.id, t.name ORDER BY ({hit}) DESC, t.name LIMIT 10;\n")
+    extra = ["--csv"]
+    for i, w in enumerate(words):
+        extra += ["-v", f"q{i}={escape_like(w)}"]
+    res = run_psql("postgres", sql, extra, env)
     if res.returncode != 0:
         raise Refused("search failed")
     return res.stdout
@@ -190,6 +243,12 @@ def main(env: dict[str, str] | None = None, stdin: str | None = None) -> int:
             return run_sql(m.group(1), data, env)
         if (m := ENSURE_RE.match(command)):
             print(ensure_seller(m.group(1), env))
+            return 0
+        if (m := ENSURE_TENANT_RE.match(command)):
+            print(ensure_tenant(m.group(1), env))
+            return 0
+        if (m := FIND_TENANT_RE.match(command)):
+            sys.stdout.write(find_tenant(m.group(1), env))
             return 0
         if (m := FIND_RE.match(command)):
             sys.stdout.write(find_seller(m.group(1), env))

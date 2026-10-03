@@ -897,3 +897,484 @@ def test_gateway_session_guard_uses_a_connection_string_not_the_environment() ->
     assert "-e" not in argv and "PGOPTIONS" not in " ".join(argv)  # не зависит от передачи окружения в docker exec
     with pytest.raises(ValueError):
         gateway.psql_argv("x", None, {"AGENT_DB_NAME": "wms options='-c x'"}, session_guard=True)
+
+
+# ------------------------------------------------------------------------------ блокировки ensure-seller
+class Holder:
+    """Параллельная сессия с открытой транзакцией, держащей ACCESS EXCLUSIVE на таблице."""
+
+    def __init__(self, cluster: Cluster, table: str = "products") -> None:
+        import psycopg
+
+        self.conn = psycopg.connect(f"host={cluster.sock} port={cluster.port} dbname=wms user=postgres")
+        self.conn.execute(f"LOCK TABLE public.{table} IN ACCESS EXCLUSIVE MODE")
+
+    def release(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
+
+def new_seller(world: World) -> str:
+    return world.seed.insert("sellers", tenant_id=world.tenants["T1"], name="ИП Новый")
+
+
+def role_policies(cluster: Cluster, role: str) -> list[str]:
+    out = cluster.q("postgres", f"SELECT p.oid::text FROM pg_policy p WHERE '{role}'::regrole = ANY (p.polroles) ORDER BY p.oid")
+    return [x for x in out.stdout.split() if x]
+
+
+def role_comment(cluster: Cluster, role: str) -> str:
+    return cluster.q("postgres", f"SELECT coalesce(shobj_description(oid, 'pg_authid'), '') FROM pg_roles WHERE rolname = '{role}'").stdout.strip()
+
+
+def test_repeat_ensure_on_the_current_version_takes_no_table_locks(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = world.sellers["S1"][0]
+    role = world.role("S1")
+    first = run_gateway(cluster, f"ensure-seller {sid}")
+    assert first.returncode == 0 and "state=unchanged" in first.stdout  # фикстура уже применила эту версию
+    assert role_comment(cluster, role).startswith("wms-agent:")
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        again = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert again.returncode == 0 and "state=unchanged" in again.stdout
+    assert elapsed < 1.5, elapsed  # без ожидания блокировки, которую держит другая транзакция
+
+
+def test_first_ensure_waits_about_two_seconds_then_rolls_back_without_partial_policies(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = new_seller(world)
+    role = sa.role_name(sid)
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert res.returncode == 3 and "lock timeout" in res.stderr and "retry later" in res.stderr
+    assert 1.5 < elapsed < 15, elapsed  # lock_timeout 2 с, а не бесконечное ожидание
+    assert cluster.q("postgres", f"SELECT count(*) FROM pg_roles WHERE rolname = '{role}'").stdout.strip() == "0"
+    assert cluster.q("postgres", "SELECT count(*) FROM pg_policy WHERE polname = 'agent_" + sid.replace("-", "") + "'").stdout.strip() == "0"
+    # после снятия блокировки повтор проходит
+    ok = run_gateway(cluster, f"ensure-seller {sid}")
+    assert ok.returncode == 0 and "state=applied" in ok.stdout
+    n = int(re.search(r"tables=(\d+)", ok.stdout).group(1))  # type: ignore[union-attr]
+    assert len(role_policies(cluster, role)) == n and n > 80
+    assert role_comment(cluster, role) != ""
+
+
+def test_other_queries_are_not_queued_behind_a_blocked_ensure(cluster: Cluster, world: World) -> None:
+    """ACCESS EXCLUSIVE, ожидающий за долгой транзакцией, вешал бы очередь обычных запросов без предела: теперь он снимается за 2 с."""
+    import subprocess as sp
+    import time
+
+    sid = new_seller(world)
+    reader = Holder(cluster)
+    reader.conn.rollback()
+    reader.conn.execute("SELECT count(*) FROM public.products")  # долгая транзакция читателя (ACCESS SHARE)
+    try:
+        proc = sp.Popen([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")],
+                        env={**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"ensure-seller {sid}"},
+                        stdout=sp.PIPE, stderr=sp.PIPE, text=True)
+        time.sleep(1.0)
+        started = time.time()
+        other = cluster.q("postgres", "SELECT count(*) FROM products")  # обычный запрос не должен зависнуть
+        waited = time.time() - started
+        proc.communicate(timeout=30)
+    finally:
+        reader.release()
+    # очередь за ждущим ACCESS EXCLUSIVE ограничена lock_timeout (2 с), а не долгой транзакцией читателя
+    assert other.returncode == 0 and waited < 3.5, waited
+    assert proc.returncode == 3  # ensure не дождался и откатился
+
+
+def test_policies_are_recreated_only_when_the_policy_version_changes(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    role = world.role("S2")
+    before = role_policies(cluster, role)
+    pv, gv = sa.POLICY_VERSION, role_comment(cluster, role).split(":")[2]
+    # изменилась только версия прав (миграция добавила колонку): политики те же, права пересчитаны
+    cluster.q("postgres", f"COMMENT ON ROLE {role} IS 'wms-agent:{pv}:000000000000'")
+    holder = Holder(cluster)  # любая табличная блокировка не мешает: политик и ENABLE RLS не трогаем
+    try:
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+    finally:
+        holder.release()
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert role_policies(cluster, role) == before and role_comment(cluster, role) == f"wms-agent:{pv}:{gv}"
+    # изменилась версия политик (новый список путей): политики пересоздаются
+    cluster.q("postgres", f"COMMENT ON ROLE {role} IS 'wms-agent:oldpolicy000:{gv}'")
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    after = role_policies(cluster, role)
+    assert len(after) == len(before) and after != before  # другие oid: пересозданы
+    assert role_comment(cluster, role) == f"wms-agent:{pv}:{gv}"
+
+
+def test_role_settings_are_reapplied_on_every_ensure_even_when_current(cluster: Cluster, world: World) -> None:
+    role = world.role("S3")
+    cluster.q("postgres", f"ALTER ROLE {role} SET statement_timeout = 0")
+    res = run_gateway(cluster, f"ensure-seller {world.sellers['S3'][0]}")
+    assert res.returncode == 0 and "state=unchanged" in res.stdout
+    assert cluster.q(role, "SELECT current_setting('statement_timeout')").stdout.strip() == "20s"
+
+
+def test_rendered_script_has_lock_and_statement_timeouts_first() -> None:
+    sql = sa.render_sql("11111111-2222-3333-4444-555555555555", sa.Catalog(columns={"products": ["id", "seller_id"]}))
+    lines = sql.splitlines()
+    begin = lines.index("BEGIN;")
+    assert lines[begin + 1] == "SET LOCAL lock_timeout = '2s';" and lines[begin + 2] == "SET LOCAL statement_timeout = '60s';"
+    role_only = sa.render_role_sql("11111111-2222-3333-4444-555555555555")
+    assert "ENABLE ROW LEVEL SECURITY" not in role_only and "POLICY" not in role_only and "SET LOCAL lock_timeout" in role_only
+
+
+def test_enable_rls_and_policies_are_emitted_only_where_missing() -> None:
+    seller = "11111111-2222-3333-4444-555555555555"
+    pol = "agent_" + seller.replace("-", "")
+    cat = sa.Catalog(columns={"products": ["id", "seller_id"], "fbs_orders": ["id", "seller_id"]},
+                     rls_enabled={"products"}, policies={("products", pol)})
+    sql = sa.render_sql(seller, cat)
+    assert 'ALTER TABLE public."products" ENABLE' not in sql and 'ALTER TABLE public."fbs_orders" ENABLE' in sql
+    assert f'CREATE POLICY "{pol}" ON public."products"' not in sql and f'CREATE POLICY "{pol}" ON public."fbs_orders"' in sql
+    assert "DROP POLICY" not in sql
+    old = sa.Catalog(columns=cat.columns, rls_enabled={"products"}, policies={("products", pol)},
+                     role_version="wms-agent:other:xxxx")
+    assert f'DROP POLICY "{pol}" ON public."products"' in sa.render_sql(seller, old)
+
+
+# ------------------------------------------------------------------------------ круг 11: метка версии не доказывает состояние
+def own_product_count_matches(cluster: Cluster, world: World, tag: str) -> None:
+    role = world.role(tag)
+    sid = world.sellers[tag][0]
+    own = cluster.q("postgres", f"SELECT count(*) FROM products WHERE seller_id = '{sid}'").stdout.strip()
+    seen = cluster.q(role, "SELECT count(*), count(*) FILTER (WHERE seller_id = '" + sid + "') FROM products").stdout.strip()
+    assert seen == f"{own}|{own}", (seen, own)  # видны только свои строки
+
+
+def test_current_label_with_disabled_rls_is_repaired_not_reported_unchanged(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+    cluster.q("postgres", "ALTER TABLE public.products DISABLE ROW LEVEL SECURITY")
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert cluster.q("postgres", "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.products'::regclass").stdout.strip() == "t"
+    own_product_count_matches(cluster, world, "S2")
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+
+
+def test_current_label_with_a_deleted_own_policy_is_repaired(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S2"][0]
+    pol = "agent_" + sid.replace("-", "")
+    cluster.q("postgres", f'DROP POLICY "{pol}" ON public.products')
+    # без политики роль не видит ничего (fail closed), метка при этом прежняя
+    assert cluster.q(world.role("S2"), "SELECT count(*) FROM products").stdout.strip() == "0"
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    own_product_count_matches(cluster, world, "S2")
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+
+
+def test_current_label_with_a_deleted_shared_policy_is_repaired(cluster: Cluster, world: World) -> None:
+    sid = world.sellers["S3"][0]
+    cluster.q("postgres", 'DROP POLICY agent_ro_all ON public.products')
+    res = run_gateway(cluster, f"ensure-seller {sid}")
+    assert res.returncode == 0 and "state=applied" in res.stdout
+    assert cluster.q("postgres", "SELECT count(*) FROM pg_policy WHERE polname = 'agent_ro_all' AND polrelid = 'public.products'::regclass"
+                     ).stdout.strip() == "1"
+
+
+def test_current_branch_still_does_not_wait_for_a_held_lock_when_everything_is_in_place(cluster: Cluster, world: World) -> None:
+    import time
+
+    sid = world.sellers["S2"][0]
+    assert "state=unchanged" in run_gateway(cluster, f"ensure-seller {sid}").stdout
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        res = run_gateway(cluster, f"ensure-seller {sid}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert res.returncode == 0 and "state=unchanged" in res.stdout and elapsed < 1.5
+
+
+def test_widening_the_secret_rule_revokes_a_previously_granted_column(cluster: Cluster, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    sid = world.sellers["S2"][0]
+    role = world.role("S2")
+    env = {**cluster.gateway_env()}
+    cluster.q("postgres", "ALTER TABLE public.products ADD COLUMN access_key text")
+    try:
+        gateway.ensure_seller(sid, env)
+        assert cluster.q(role, "SELECT access_key FROM products LIMIT 1").returncode == 0  # правило её не знает: выдана
+        policies_before = role_policies(cluster, role)
+        monkeypatch.setattr(sa, "SECRET_NAME_RE", re.compile(sa.SECRET_NAME_RE.pattern[:-1] + "|access_key)", re.IGNORECASE))
+        assert sa.is_secret("products", "access_key")
+        out = gateway.ensure_seller(sid, env)
+        assert "state=applied" in out  # раньше: unchanged и колонка оставалась
+        denied = cluster.q(role, "SELECT access_key FROM products LIMIT 1")
+        assert denied.returncode != 0 and "permission denied" in denied.stderr
+        assert cluster.q(role, "SELECT id FROM products LIMIT 1").returncode == 0
+        assert role_policies(cluster, role) == policies_before  # политики не пересоздавались
+    finally:
+        monkeypatch.undo()
+        cluster.q("postgres", "ALTER TABLE public.products DROP COLUMN access_key")
+        gateway.ensure_seller(sid, env)
+
+
+# ================================================================================ роль ФУЛФИЛМЕНТА (тенанта)
+TENANT_TAGS = {"T1": ["S1", "S2"], "T2": ["S3", "S1b"]}
+TENANT_ONLY = [t.name for t in sa.TENANT_TABLES if t.kind == "direct" and t.name not in sa.BY_NAME]
+TENANT_VIA_NEW = ["ff_staff_permissions", "seller_staff_permissions", "seller_shop_delegations"]
+
+
+class TenantWorld:
+    """Строки, которых нет у селлер-роли (пользователи, склады, ячейки...), по тенантам + роли тенантов."""
+
+    def __init__(self, cluster: Cluster, world: World) -> None:
+        self.cluster, self.world = cluster, world
+        seed = world.seed
+        self.extra: dict[str, dict[str, list[str]]] = {}
+        for tag, tenant in world.tenants.items():
+            users = [seed.insert("users", tenant_id=tenant, email=f"u{n}-{tag}@x.test") for n in range(2)]
+            self.extra.setdefault("users", {}).setdefault(tag, []).extend(users)
+            for table in TENANT_ONLY:
+                if table == "users":
+                    continue
+                for _ in range(2):
+                    self.extra.setdefault(table, {}).setdefault(tag, []).append(seed.insert(table, tenant_id=tenant))
+            for table in TENANT_VIA_NEW:
+                for user in users:
+                    self.extra.setdefault(table, {}).setdefault(tag, []).append(seed.insert(table, user_id=user))
+        for tag in world.tenants:
+            res = run_gateway(cluster, f"ensure-tenant {world.tenants[tag]}")
+            assert res.returncode == 0 and res.stdout.startswith("ok role=wms_agent_t_"), res.stderr
+
+    def role(self, tag: str) -> str:
+        return sa.tenant_role_name(self.world.tenants[tag])
+
+
+@pytest.fixture(scope="module")
+def tworld(cluster: Cluster, world: World) -> TenantWorld:
+    return TenantWorld(cluster, world)
+
+
+def tenant_expected(cluster: Cluster, tw: TenantWorld, tag: str, table: str) -> list[str]:
+    """Ожидаемые id по СМЫСЛУ (не по генератору): прямой tenant_id у суперпользователя; без tenant_id: строки
+    селлеров этого тенанта по учёту посева (родитель существует и принадлежит им)."""
+    t = sa.TENANT.by_name[table]
+    tenant = tw.world.tenants[tag]
+    if t.kind == "self":
+        return [tenant]
+    if t.kind == "direct":
+        out = cluster.q("postgres", f"SELECT \"id\"::text FROM {table} WHERE tenant_id = '{tenant}' ORDER BY 1")
+        return sorted(out.stdout.split())
+    own = sorted(i for s in TENANT_TAGS[tag] for i in tw.world.rows.get(table, {}).get(s, []))
+    return sorted(own + tw.extra.get(table, {}).get(tag, []))
+
+
+def test_tenant_spec_matches_models_and_every_tenant_table_has_an_explicit_decision() -> None:
+    import importlib
+    import pkgutil
+
+    import app.models
+    from app.models.base import Base
+
+    for mod in pkgutil.iter_modules(app.models.__path__):
+        importlib.import_module(f"app.models.{mod.name}")
+    tables = Base.metadata.tables
+    listed = {t.name for t in sa.TENANT_TABLES}
+    for t in sa.TENANT_TABLES:
+        assert t.name in tables, t.name
+        cols = tables[t.name].columns
+        for col in sa._path_columns(t):
+            assert col in cols, (t.name, col)
+        for col, parent in t.hops:
+            assert parent in [fk.column.table.name for fk in cols[col].foreign_keys], (t.name, col, parent)
+            assert parent in sa.TENANT.by_name, (t.name, parent)
+    # решение по каждой таблице с tenant_id: либо в списке, либо закрыта явно (новая таблица не проскочит молча)
+    for name, table in tables.items():
+        if "tenant_id" in table.columns:
+            assert name in listed or name in sa.TENANT_CLOSED, f"нет решения по {name}"
+    assert not (listed & set(sa.TENANT_CLOSED))
+    for name in ("users", "marketplace_accounts", "seller_marking_credentials", "seller_wildberries_credentials",
+                 "print_connections", "developer_requests", "subscription_payments", "notifications", "background_jobs"):
+        assert (name in listed) == (name == "users")
+
+
+def test_tenant_roles_are_minimal_and_every_listed_table_has_exactly_one_policy(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    for tag in world.tenants:
+        role = tworld.role(tag)
+        attrs = cluster.q("postgres", f"SELECT rolsuper, rolbypassrls, rolinherit, rolcreatedb, rolcreaterole, rolconnlimit "
+                          f"FROM pg_roles WHERE rolname = '{role}'").stdout.strip()
+        assert attrs == "f|f|f|f|f|8", attrs
+        n = cluster.q("postgres", f"SELECT count(*) FROM pg_policy p WHERE '{role}'::regrole = ANY (p.polroles)").stdout.strip()
+        assert int(n) == len(sa.TENANT_TABLES)
+        assert cluster.q("postgres", f"SELECT count(DISTINCT polrelid) FROM pg_policy p WHERE '{role}'::regrole = ANY (p.polroles)"
+                         ).stdout.strip() == str(len(sa.TENANT_TABLES))
+        assert cluster.q("postgres", f"SELECT count(*) FROM pg_auth_members WHERE member = '{role}'::regrole").stdout.strip() == "0"
+        assert cluster.q("postgres", f"SELECT array_to_string(setconfig, ',') FROM pg_db_role_setting WHERE setrole = '{role}'::regrole"
+                         ).stdout.strip().count("=") >= 6
+
+
+@pytest.mark.parametrize("tag", ["T1", "T2"])
+def test_tenant_role_sees_exactly_its_tenant_rows_in_every_table_of_the_list(cluster: Cluster, world: World, tworld: TenantWorld, tag: str) -> None:
+    role = tworld.role(tag)
+    checked = 0
+    for t in sa.TENANT.tables:
+        has_id = any(c[0] == "id" for c in world.seed.columns(t.name))
+        if has_id:
+            got = sorted(cluster.q(role, f'SELECT "id"::text FROM {t.name} ORDER BY 1').stdout.split())
+            assert got == tenant_expected(cluster, tworld, tag, t.name), (tag, t.name)
+        else:  # листья без id (permissions): сверяем количество
+            count = int(cluster.q(role, f"SELECT count(*) FROM {t.name}").stdout.strip())
+            assert count == len(tenant_expected(cluster, tworld, tag, t.name)), (tag, t.name, count)
+        checked += 1
+    assert checked == len(sa.TENANT_TABLES) == 107
+
+
+def test_tenant_roles_never_overlap_and_see_all_sellers_of_their_own_tenant(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    seen: dict[str, set[str]] = {}
+    for tag, sellers in TENANT_TAGS.items():
+        rows = cluster.q(tworld.role(tag), "SELECT id::text FROM sellers").stdout.split()
+        mine = {world.sellers[s][0] for s in sellers}
+        assert mine <= set(rows)  # оба селлера ФФ
+        foreign = {world.sellers[s][0] for s in world.sellers if s not in sellers}
+        assert not (foreign & set(rows))  # чужих нет
+        assert set(cluster.q("postgres", f"SELECT id::text FROM sellers WHERE tenant_id = '{world.tenants[tag]}'").stdout.split()) == set(rows)
+        assert cluster.q(tworld.role(tag), "SELECT id::text FROM tenants").stdout.split() == [world.tenants[tag]]
+        for table in ("products", "users", "warehouses", "fbs_orders", "inventory_balances", "storage_locations"):
+            ids = set(cluster.q(tworld.role(tag), f'SELECT "id"::text FROM {table}').stdout.split())
+            assert ids, table
+            seen.setdefault(table, set()).update(ids)
+            for other in TENANT_TAGS:
+                if other != tag:
+                    foreign = set(cluster.q(tworld.role(other), f'SELECT "id"::text FROM {table}').stdout.split())
+                    assert not (ids & foreign), (table, tag, other)
+    products_total = int(cluster.q("postgres", "SELECT count(*) FROM products").stdout.strip())
+    assert len(seen["products"]) == products_total  # два тенанта вместе покрывают все товары, пересечений нет
+
+
+def test_tenant_role_denies_credentials_secrets_and_everything_outside_the_list(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    from app.models.base import Base
+
+    role = tworld.role("T1")
+    listed = {t.name for t in sa.TENANT_TABLES}
+    others = sorted(t for t in Base.metadata.tables if t not in listed)
+    assert set(sa.TENANT_CLOSED) - {"operation_fact_cutover"} <= set(others) and "operation_fact_cutover" in others
+    script = "\n".join(f"SELECT 1 FROM {t} LIMIT 1;" for t in others)
+    res = cluster.q(role, script, "-v", "ON_ERROR_STOP=0")
+    assert res.stderr.count("permission denied") == len(others), res.stderr
+    assert not res.stdout.strip()
+    # секретные колонки открытых таблиц
+    probes = ["SELECT password_hash FROM users", "SELECT must_set_password FROM users", "SELECT * FROM users",
+              "SELECT signature FROM withdrawal_documents", "SELECT token_enc FROM withdrawal_operations",
+              "SELECT auth_challenge FROM withdrawal_operations", "SELECT * FROM withdrawal_documents",
+              "SELECT storage_calculation_token FROM billing_invoice_v2_sources", "SELECT request_hash FROM fbs_wb_operations"]
+    res = cluster.q(role, ";\n".join(probes) + ";", "-v", "ON_ERROR_STOP=0")
+    assert res.stderr.count("permission denied") == len(probes), res.stderr
+    ok = cluster.q(role, "SELECT id, email, full_name, role, tenant_id, seller_id FROM users ORDER BY 1")
+    assert ok.returncode == 0 and len(ok.stdout.splitlines()) == 2
+
+
+def test_tenant_role_escape_and_cross_tenant_attempts_show_nothing_foreign(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    role = tworld.role("T1")
+    foreign_tenant, foreign_seller = world.tenants["T2"], world.sellers["S3"][0]
+    attempts = [
+        f"SELECT count(*) FROM products WHERE tenant_id = '{foreign_tenant}'",
+        f"SELECT count(*) FROM sellers WHERE id = '{foreign_seller}' OR tenant_id = '{foreign_tenant}'",
+        "SELECT count(*) FROM products p JOIN sellers s ON s.id = p.seller_id WHERE s.tenant_id <> p.tenant_id",
+        f"SELECT count(*) FROM (SELECT id FROM products UNION ALL SELECT id FROM products) x WHERE id IN "
+        f"(SELECT id FROM products WHERE tenant_id = '{foreign_tenant}')",
+        f"SELECT count(*) FROM users WHERE tenant_id = '{foreign_tenant}'",
+        f"SELECT count(*) FROM warehouses WHERE tenant_id = '{foreign_tenant}'",
+        f"SELECT count(*) FROM tenants WHERE id = '{foreign_tenant}'",
+    ]
+    for sql in attempts:
+        assert cluster.q(role, sql).stdout.strip() == "0", sql
+    for sql in (f"SET ROLE {tworld.role('T2')}", f"SET ROLE {world.role('S1')}", "SET ROLE postgres",
+                "SET row_security = off; SELECT count(*) FROM products WHERE tenant_id <> tenant_id",
+                "INSERT INTO products (id) VALUES (gen_random_uuid())", "DELETE FROM sellers",
+                "UPDATE users SET role = 'x'", "CREATE TABLE public.leak AS SELECT * FROM users"):
+        res = cluster.q(role, sql, "-v", "ON_ERROR_STOP=0")
+        assert res.returncode != 0 or "ERROR" in res.stderr or res.stdout.strip() in ("", "0"), sql
+    assert cluster.q("postgres", "SELECT count(*) FROM pg_tables WHERE tablename = 'leak'").stdout.strip() == "0"
+
+
+def test_seller_and_tenant_roles_coexist_on_the_same_tables_with_their_own_policies(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    s_role, t_role = world.role("S1"), tworld.role("T1")
+    names = cluster.q("postgres", "SELECT polname FROM pg_policy WHERE polrelid = 'public.products'::regclass ORDER BY 1").stdout.split()
+    assert sa.SELLER.policy_name(world.sellers["S1"][0]) in names and sa.TENANT.policy_name(world.tenants["T1"]) in names
+    own = cluster.q(s_role, "SELECT count(*) FROM products").stdout.strip()
+    tenant_total = cluster.q(t_role, "SELECT count(*) FROM products").stdout.strip()
+    assert int(own) < int(tenant_total)  # селлер-роль по-прежнему видит только своё
+    assert cluster.q(s_role, "SELECT 1 FROM users", "-v", "ON_ERROR_STOP=0").stderr.count("permission denied") == 1
+    assert cluster.q(s_role, "SELECT id::text FROM sellers").stdout.split() == [world.sellers["S1"][0]]
+
+
+# ---------------------------------------------------------------------------- шлюз: роль тенанта
+def tenant_sql(cluster: Cluster, tw: TenantWorld, tag: str, sql: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, str(ROOT / "scripts" / "agent_db" / "gateway.py")],
+                          env={**cluster.gateway_env(), "SSH_ORIGINAL_COMMAND": f"sql {tw.role(tag)}"}, input=sql,
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_gateway_sql_under_the_tenant_role_and_ensure_is_idempotent(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    res = tenant_sql(cluster, tworld, "T1", "SELECT DISTINCT tenant_id, count(*) OVER () AS n FROM sellers")
+    assert res.returncode == 0 and res.stdout.splitlines()[1].startswith(world.tenants["T1"])  # только свой тенант
+    assert len(res.stdout.splitlines()) == 2
+    names = tenant_sql(cluster, tworld, "T1", "SELECT name FROM sellers").stdout.splitlines()
+    assert {"ИП Иванов", "ИП Петров"} <= set(names) and "ИП Сидоров" not in names
+    again = run_gateway(cluster, f"ensure-tenant {world.tenants['T1']}")
+    assert again.returncode == 0 and "state=unchanged" in again.stdout
+    denied = tenant_sql(cluster, tworld, "T1", "SELECT * FROM users")
+    assert denied.returncode != 0 and denied.stderr.startswith("42501:")
+    assert tenant_sql(cluster, tworld, "T1", "SELECT 1 AS a$$; SELECT 2 AS b$$").returncode == 3
+    assert tenant_sql(cluster, tworld, "T1", "\\! id").returncode == 3
+    assert run_gateway(cluster, f"ensure-tenant {uuid.uuid4()}").returncode == 3
+    assert run_gateway(cluster, f"ensure-tenant {world.sellers['S1'][0]}").returncode == 3  # id селлера не тенант
+
+
+@pytest.mark.parametrize("command", ["ensure-tenant", "ensure-tenant xyz", "ensure-tenant 11111111-1111-1111-1111-111111111111; ls",
+                                     "find-tenant", "find-tenant a", "find-tenant `id`", "find-tenant $(id)", "find-tenant a\\b",
+                                     "sql wms_agent_t_XYZ", "sql wms_agent_t_" + "a" * 31, "sql wms_agent_x_" + "a" * 32,
+                                     "sql wms_agent_t_" + "a" * 32 + "; ls", "ENSURE-TENANT 11111111-1111-1111-1111-111111111111"])
+def test_gateway_refuses_malformed_tenant_commands(cluster: Cluster, world: World, command: str) -> None:
+    res = run_gateway(cluster, command, "SELECT 1")
+    assert res.returncode == 2 and res.stdout == ""
+
+
+def test_find_tenant_ranks_by_words_counts_sellers_and_is_injection_safe(cluster: Cluster, world: World) -> None:
+    rows = list(csv.DictReader(io.StringIO(run_gateway(cluster, "find-tenant Фулфилмент 1").stdout)))
+    assert rows[0]["tenant_name"] == "Фулфилмент 1" and int(rows[0]["sellers"]) >= 2  # совпали оба слова, выше
+    assert {r["tenant_name"] for r in rows} == {"Фулфилмент 1", "Фулфилмент 2"}  # по слову «Фулфилмент»
+    soft = list(csv.DictReader(io.StringIO(run_gateway(cluster, "find-tenant Фулфилмент Империя").stdout)))
+    assert len(soft) == 2  # неточная диктовка всё равно даёт кандидатов, выбирает владелец
+    assert list(csv.DictReader(io.StringIO(run_gateway(cluster, "find-tenant Несуществующий").stdout))) == []
+    odd = run_gateway(cluster, "find-tenant O'Brien \"x\" (ФФ)")
+    assert odd.returncode == 0 and "tenant_id" in odd.stdout
+    assert list(csv.DictReader(io.StringIO(run_gateway(cluster, "find-tenant Ф%лфилмент").stdout))) == []  # % экранирован
+    assert cluster.q("postgres", "SELECT count(*) FROM tenants").stdout.strip() == "2"
+
+
+def test_tenant_ensure_under_a_held_lock_behaves_like_the_seller_one(cluster: Cluster, world: World, tworld: TenantWorld) -> None:
+    import time
+
+    holder = Holder(cluster)
+    try:
+        started = time.time()
+        again = run_gateway(cluster, f"ensure-tenant {world.tenants['T2']}")
+        elapsed = time.time() - started
+    finally:
+        holder.release()
+    assert again.returncode == 0 and "state=unchanged" in again.stdout and elapsed < 1.5
+    cluster.q("postgres", "ALTER TABLE public.warehouses DISABLE ROW LEVEL SECURITY")
+    repaired = run_gateway(cluster, f"ensure-tenant {world.tenants['T2']}")
+    assert repaired.returncode == 0 and "state=applied" in repaired.stdout  # метка совпала, но RLS выключен: чинится
+    assert sorted(cluster.q(tworld.role("T2"), "SELECT id::text FROM warehouses").stdout.split()) == sorted(tworld.extra["warehouses"]["T2"])

@@ -29,6 +29,19 @@ class Candidate:
     tenant_name: str
 
 
+@dataclass(frozen=True)
+class TenantCandidate:
+    tenant_id: str
+    tenant_name: str
+    sellers: int
+
+
+def clean_tenant_name(raw: str) -> str:
+    """Название фулфилмента без слова «ФФ»/«фулфилмент» и кавычек по краям."""
+    name = " ".join(raw.replace("«", "").replace("»", "").strip(" \"'.,").split())
+    return re.sub(r"^(?:фулфилмент\w*|фф)\s+", "", name, flags=re.IGNORECASE).strip()
+
+
 def clean_name(raw: str) -> str:
     """Название без префикса «ИП»/«IP» (расшифровка может дать «IP») и без кавычек по краям."""
     name = " ".join(raw.replace("«", "").replace("»", "").strip(" \"'.,").split())
@@ -58,6 +71,32 @@ class SellerDirectory:
             found.append(Candidate(row["seller_id"], row.get("seller_name", ""), row.get("tenant_id", ""),
                                    row.get("tenant_name", "")))
         return found
+
+    def find_tenants(self, raw_name: str) -> list[TenantCandidate]:
+        name = clean_tenant_name(raw_name)
+        if not NAME_RE.match(name):
+            raise DirectoryError("некорректное название для поиска")
+        rows = list(csv.DictReader(io.StringIO(self._call(f"find-tenant {name}"))))
+        found = []
+        for row in rows[:5]:
+            if not SELLER_RE.match(row.get("tenant_id", "")):
+                raise DirectoryError("шлюз вернул некорректный идентификатор")
+            try:
+                count = int(row.get("sellers") or 0)
+            except ValueError:
+                raise DirectoryError("шлюз вернул некорректное число селлеров") from None
+            found.append(TenantCandidate(row["tenant_id"], row.get("tenant_name", ""), count))
+        return found
+
+    def ensure_tenant(self, tenant_id: str) -> None:
+        if not SELLER_RE.match(tenant_id):
+            raise DirectoryError("некорректный идентификатор фулфилмента")
+        out = self._call(f"ensure-tenant {tenant_id}")
+        if not out.startswith("ok role="):
+            raise DirectoryError("доступ не подготовлен: " + out.strip()[:200])
+
+    def ensure_scope(self, level: str, scope_id: str) -> None:
+        (self.ensure_tenant if level == "tenant" else self.ensure)(scope_id)
 
     def ensure(self, seller_id: str) -> None:
         if not SELLER_RE.match(seller_id):

@@ -25,7 +25,7 @@ from .prod_sql import SELLER_RE
 from .redact import scrub
 from .seller_directory import DirectoryError, SellerDirectory
 from .store import Store
-from .telegram import BIND_RE, Inbound, TelegramError, as_bots
+from .telegram import Inbound, TelegramError, as_bots, parse_bind_command
 from .transcribe import TranscribeError, Transcriber
 from .trello import TrelloClient, TrelloError, ensure_card
 from .wms import WmsClient, WmsError
@@ -296,14 +296,26 @@ class Pipeline:
             chat_id = int(row["chat_id"])
             known = self.cfg.telegram.chats.get(chat_id)
             if known is None or chat_id in self.dynamic_chats:
-                self.cfg.telegram.chats[chat_id] = ChatCfg(role="client", seller=str(row["seller_name"]))
+                label = str(row["seller_name"] or row["tenant_name"])  # у чата с ФФ названия селлера нет
+                self.cfg.telegram.chats[chat_id] = ChatCfg(role="client", seller=label)
                 self.dynamic_chats.add(chat_id)
 
+    def on_role_failure(self, level: str, scope_id: str, attempts: int, reason: str) -> None:
+        """Доступ к данным не подготовлен несколько раз подряд (сервер занят блокировкой и т. п.)."""
+        col, name_col = ("tenant_id", "tenant_name") if level == "tenant" else ("seller_id", "seller_name")
+        row = self.store.row(f"SELECT {name_col} AS n FROM chat_bindings WHERE {col}=? LIMIT 1", (scope_id,))
+        what = "фулфилмента" if level == "tenant" else "селлера"
+        who = f"«{row['n']}»" if row else f"{what} обращения"
+        self.say_owner(f"role_fail:{level}:{scope_id}:{attempts}",
+                       f"Доступ агента к данным {who} не подготовлен {attempts} раза подряд ({reason}). "
+                       "Обращения разбираются без базы, пока шлюз не ответит; повторю с паузой.",
+                       purpose="notice")
+
     def handle_bind_command(self, m: Any) -> None:
-        """Команда «привяжи к ИП …» от владельца в групповом чате (текст пришёл через нормализацию)."""
-        match = BIND_RE.match(m["text"])
-        if match:
-            self._propose_binding(m, match.group(1))
+        """Команда владельца о привязке чата (текст пришёл через нормализацию, упоминание бота есть)."""
+        parsed = parse_bind_command(m["text"])
+        if parsed:
+            self._propose_binding(m, *parsed)
         else:
             self.store.set_message(m["id"], status="handled")
 
@@ -314,49 +326,69 @@ class Pipeline:
         text = m["text"]
         if text.startswith(TRANSCRIPT_PREFIX):
             text = text[len(TRANSCRIPT_PREFIX):]
-        match = BIND_RE.match(text)
-        if not match:
+        parsed = parse_bind_command(text, require_mention=False)
+        if not parsed:
             return False
-        self._propose_binding(m, match.group(1))
+        self._propose_binding(m, *parsed)
         return True
 
     def _is_owner_author(self, m: Any) -> bool:
         owner = self.cfg.telegram.owner_user_id
         return bool(owner) and str(m["author_id"]) == str(owner)
 
-    def _propose_binding(self, m: Any, name: str) -> None:
+    @staticmethod
+    def _sellers_phrase(n: int) -> str:
+        forms = {1: "селлер", 2: "селлера", 3: "селлера", 4: "селлера"}
+        word = "селлеров" if 11 <= n % 100 <= 14 else forms.get(n % 10, "селлеров")
+        return f"{n} {word}"
+
+    @staticmethod
+    def _candidate_text(c: dict[str, Any]) -> str:
+        if c.get("level") == "tenant":
+            return f"фулфилмент «{c['tenant_name']}» ({Pipeline._sellers_phrase(int(c.get('sellers') or 0))})"
+        return f"селлер «{c['seller_name']}» в фулфилменте «{c['tenant_name']}»"
+
+    def _propose_binding(self, m: Any, level: str, name: str) -> None:
         self.store.set_message(m["id"], status="handled")
         chat_id = int(m["chat_id"])
         label = self._chat_label(chat_id)
         where = f"чат «{label}»"
+        what = "фулфилмент" if level == "tenant" else "селлера"
         if self.directory is None:
             self.say_owner(f"bindoff:{m['id']}", f"Привязка ({where}) недоступна: доступ к базе не настроен.",
                            purpose="bind")
             return
         try:
-            found = self.directory.find(name)
+            if level == "tenant":
+                cands: list[dict[str, Any]] = [
+                    {"level": "tenant", "tenant_id": c.tenant_id, "tenant_name": c.tenant_name,
+                     "sellers": c.sellers, "seller_id": "", "seller_name": ""}
+                    for c in self.directory.find_tenants(name)]
+            else:
+                cands = [{**c.__dict__, "level": "seller"} for c in self.directory.find(name)]
         except DirectoryError as exc:
-            log.warning("seller search failed: %s", exc)
+            log.warning("%s search failed: %s", level, exc)
             self.say_owner(f"binderr:{m['id']}",
-                           f"Привязка ({where}): поиск селлера сейчас недоступен, повторите команду позже.",
+                           f"Привязка ({where}): поиск сейчас недоступен, повторите команду позже.",
                            purpose="bind")
             return
-        if not found:
+        if not cands:
             self.say_owner(f"bindnf:{m['id']}",
-                           f"Привязка ({where}): селлера «{name[:60]}» не нашёл. Проверьте название и "
+                           f"Привязка ({where}): {what} «{name[:60]}» не нашёл. Проверьте название и "
                            "повторите команду в том чате.", purpose="bind")
             return
-        pid = self.store.add_proposal(chat_id, [c.__dict__ for c in found], str(m["author_id"]), label)
+        pid = self.store.add_proposal(chat_id, cands, str(m["author_id"]), label)
         current = self.store.binding(chat_id)
-        replace = f" Сейчас чат привязан к «{current['seller_name']}»; привязка заменится." if current else ""
-        if len(found) == 1:
-            c = found[0]
-            body = (f"Привязка: селлер «{c.seller_name}» в фулфилменте «{c.tenant_name}», {where}. "
-                    f"Если это он, ответьте на это сообщение словом «да».{replace}")
+        replace = ""
+        if current:
+            old = current["tenant_name"] if current["level"] == "tenant" else current["seller_name"]
+            replace = f" Сейчас чат привязан к «{old}»; привязка заменится."
+        if len(cands) == 1:
+            body = (f"Привязка: {self._candidate_text(cands[0])}, {where} — привязать? "
+                    f"Если да, ответьте на это сообщение словом «да».{replace}")
         else:
-            lines = [f"{i}. селлер «{c.seller_name}» в фулфилменте «{c.tenant_name}»"
-                     for i, c in enumerate(found, 1)]
-            body = (f"Привязка, {where}: нашёл несколько селлеров с таким названием:\n" + "\n".join(lines)
+            lines = [f"{i}. {self._candidate_text(c)}" for i, c in enumerate(cands, 1)]
+            body = (f"Привязка, {where}: нашёл несколько вариантов:\n" + "\n".join(lines)
                     + f"\nОтветьте на это сообщение номером нужного.{replace}")
         self.say_owner(f"bind:{pid}", body, purpose="bind")
 
@@ -377,7 +409,7 @@ class Pipeline:
         prop = self.store.proposal(pid)
         if prop is None or prop["status"] != "open":
             self.say_owner(f"bindold:{m['id']}",
-                           "Это предложение уже неактуально. Повторите команду «привяжи к …» в нужном чате.",
+                           "Это предложение уже неактуально. Повторите команду привязки в нужном чате.",
                            purpose="bind")
             return
         # чат берётся из предложения (его фиксировал код при команде), а не из слов ответа
@@ -394,24 +426,31 @@ class Pipeline:
             picked = cands[0]
         else:
             self.say_owner(f"bindask:{m['id']}",
-                           "Не понял. Ответьте на сообщение со списком номером селлера или «нет».",
+                           "Не понял. Ответьте на сообщение со списком номером нужного варианта или «нет».",
                            purpose="bind")
             return
-        if not SELLER_RE.match(picked["seller_id"]):
+        level = "tenant" if picked.get("level") == "tenant" else "seller"
+        scope_id = picked["tenant_id"] if level == "tenant" else picked["seller_id"]
+        if not SELLER_RE.match(str(scope_id)):
             return
+        picked["level"] = level
         self.store.set_binding(chat_id, picked, str(m["author_id"]), title)
         self.store.close_proposal(pid, "confirmed")
         self.register_bound_chats()
         note = ""
         if self.directory is not None:
             try:
-                self.directory.ensure(picked["seller_id"])
+                self.directory.ensure_scope(level, scope_id)
             except DirectoryError as exc:
                 log.warning("ensure failed after binding: %s", exc)
                 note = " Доступ к данным пока не подготовлен, я повторю при разборе обращения."
+        if level == "tenant":
+            count = self._sellers_phrase(int(picked.get("sellers") or 0))
+            what = f"фулфилменту «{picked['tenant_name']}» ({count}; агент видит данные всех его селлеров)"
+        else:
+            what = f"селлеру «{picked['seller_name']}» (фулфилмент «{picked['tenant_name']}»)"
         self.say_owner(f"bindok:{m['id']}",
-                       f"Чат «{title}» привязан к селлеру «{picked['seller_name']}» "
-                       f"(фулфилмент «{picked['tenant_name']}»). Теперь сообщения этого чата обслуживаются "
+                       f"Чат «{title}» привязан к {what}. Теперь сообщения этого чата обслуживаются "
                        f"как клиентские.{note}", purpose="bind")
 
     def handle_client_message(self, m: Any) -> None:
@@ -446,8 +485,8 @@ class Pipeline:
         bound = self.store.binding(m["chat_id"])
         if bound is not None:
             # R40: селлер фиксируется при создании; последующая перепривязка чата прежнее обращение не меняет
-            data.update(seller_id=bound["seller_id"], seller_name=bound["seller_name"],
-                        tenant_id=bound["tenant_id"])
+            data.update(level=bound["level"], seller_id=bound["seller_id"], seller_name=bound["seller_name"],
+                        tenant_id=bound["tenant_id"], tenant_name=bound["tenant_name"])
         tid = self.store.add_ticket(
             kind="chat", source="telegram", chat_id=m["chat_id"], seller=chat.seller,
             stage="collecting", author_id=m["author_id"], now=self.clock(), data=data,
@@ -638,7 +677,9 @@ class Pipeline:
         d = self.store.data(tid)
         context = prompts.analysis_context(
             self.ticket_context(tid), self.cfg.llm.analyst_data_hint,
-            prod_db=self.cfg.prod_db.enabled, bound=bool(d.get("seller_id")),
+            prod_db=self.cfg.prod_db.enabled,
+            bound=bool(d.get("tenant_id") if d.get("level") == "tenant" else d.get("seller_id")),
+            level=str(d.get("level") or "seller"),
             form=bool(d.get("form")))
         analysis, result = self.llm.ask_json(
             "analyst", prompts.analysis_ask(d.get("resume_note")), ticket_id=tid,
@@ -1354,9 +1395,13 @@ class Pipeline:
                     data: dict[str, Any] = {"form": row, "title": (row.get("title") or "")[:80],
                                             "card_id": row.get("trello_card_id")}
                     # R43: селлер берётся из записи на сервере (не из текста формы); нет селлера = нет базы
+                    # автор селлера: роль селлера; сотрудник ФФ без селлера: роль его фулфилмента
                     seller_id = str(row.get("seller_id") or "").lower()
+                    tenant_id = str(row.get("tenant_id") or "").lower()
                     if SELLER_RE.match(seller_id):
-                        data.update(seller_id=seller_id, tenant_id=str(row.get("tenant_id") or ""))
+                        data.update(level="seller", seller_id=seller_id, tenant_id=tenant_id)
+                    elif SELLER_RE.match(tenant_id):
+                        data.update(level="tenant", tenant_id=tenant_id)
                     tid = self.store.add_ticket(
                         kind="form", source="form", chat_id=None, seller=row["client_name"],
                         stage="form_new", category=None, now=self.clock(), data=data,
