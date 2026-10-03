@@ -78,6 +78,8 @@ def test_owner_native_job_is_source_bound_and_client_cannot_request_it(tmp_path)
     # Only the trusted dispatcher may call owner tools; a client turn never receives one.
     agent.handle_message(owner_event)
     assert "project_job" in {t["name"] for t in llm.calls[-1][1]["tools"]}
+    assert '"timezone": "Asia/Tbilisi"' in llm.calls[-1][0]
+    assert '"current_time":' in llm.calls[-1][0]
     assert store.outbox_by_key(f"agent_answer:{owner_id}") is not None
     assert store.row("SELECT status FROM messages WHERE id=?", (owner_id,))["status"] == "handled"
 
@@ -142,6 +144,7 @@ def test_arbitrary_job_uses_native_owner_mode_and_exact_source(tmp_path):
     prompt, kwargs = llm.calls[-1]
     assert kwargs["mode"] == "owner" and kwargs["owner_authorized"] is True
     assert "Export the table" in prompt and "Сделай выгрузку" in prompt
+    assert '"timezone": "Asia/Tbilisi"' in prompt
     assert kwargs["cwd"] == str(worktree)
 
 
