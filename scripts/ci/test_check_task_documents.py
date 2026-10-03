@@ -21,6 +21,18 @@ DOCUMENT = """# Задача
 Нужно исправить повторное сохранение.
 """
 
+CLASSIFIED_DOCUMENT = """# Задача
+
+| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C1 | навсегда | backend/tests/test_contract.py::test_saved_result | Подтверждено |
+| C2 | разово | backend/tests/test_contract.py::test_migration | Подтверждено |
+| C3 | руками | | Подтверждено |
+
+## Заключение
+Принято.
+"""
+
 
 class DocumentTests(unittest.TestCase):
     def test_filled_failed_verdict_is_valid(self):
@@ -64,6 +76,36 @@ class DocumentTests(unittest.TestCase):
     def test_missing_separator_is_actionable_error(self):
         errors = checker.document_errors(DOCUMENT.replace("| --- | --- | --- |", ""))
         self.assertTrue(any("разделителей" in error for error in errors))
+
+    def test_classified_checks_resolve_test_file_and_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            test = root / "backend/tests/test_contract.py"
+            test.parent.mkdir(parents=True)
+            test.write_text(
+                "def test_saved_result(): pass\ndef test_migration(): pass\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(checker.document_errors(CLASSIFIED_DOCUMENT, root), [])
+
+    def test_automated_class_requires_test_reference(self):
+        doc = CLASSIFIED_DOCUMENT.replace(
+            "backend/tests/test_contract.py::test_saved_result", ""
+        )
+        errors = checker.document_errors(doc, Path("."))
+        self.assertTrue(any("нет ссылки на тест" in error for error in errors))
+
+    def test_test_reference_requires_existing_file_and_test_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            test = root / "backend/tests/test_contract.py"
+            test.parent.mkdir(parents=True)
+            test.write_text("def test_other(): pass\n", encoding="utf-8")
+            errors = checker.document_errors(CLASSIFIED_DOCUMENT, root)
+            self.assertTrue(any("не найдено имя теста test_saved_result" in error for error in errors))
+            missing = CLASSIFIED_DOCUMENT.replace("backend/tests/test_contract.py", "missing.py")
+            errors = checker.document_errors(missing, root)
+            self.assertTrue(any("нет файла теста missing.py" in error.casefold() for error in errors))
 
 
 class GitTests(unittest.TestCase):
@@ -131,6 +173,37 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-002 legacy")
         self.write(checker.SCRIPT_PATH, "# not introduced yet\n")
         self.assertEqual(checker.task_refs(self.root, self.base), [])
+
+    def test_contract_commit_files_cannot_change_later(self):
+        rollout = self.rollout()
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-700: контракт тестов")
+        self.write("unrelated.txt", "allowed\n")
+        self.commit("WMS-700 implementation")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+        self.write("backend/tests/test_contract.py", "def test_contract(): assert False\n")
+        self.commit("WMS-700 weaken contract")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("изменён контракт тестов WMS-700 после его фиксации", errors[0])
+
+    def test_similarly_named_commit_does_not_freeze_files(self):
+        rollout = self.rollout()
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-701: контракт тестов draft")
+        self.write("backend/tests/test_contract.py", "def test_contract(): assert True\n")
+        self.commit("WMS-701 implementation")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_renaming_frozen_contract_file_is_a_change(self):
+        rollout = self.rollout()
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-702: контракт тестов")
+        self.git("mv", "backend/tests/test_contract.py", "backend/tests/test_renamed.py")
+        self.commit("WMS-702 rename contract")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("WMS-702" in error for error in errors))
 
 
 if __name__ == "__main__":

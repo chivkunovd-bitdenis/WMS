@@ -70,12 +70,16 @@ class GuardTests(unittest.TestCase):
 
     def test_changed_file_fails(self):
         (self.root / guards.ROOTS[0] / "README.md").write_text("changed")
-        with self.assertRaisesRegex(ValueError, "Protected files changed"):
+        with self.assertRaisesRegex(
+            ValueError, "изменён защищённый тест .* — нужно решение владельца"
+        ):
             guards.verify(self.root, self.base)
 
     def test_deleted_file_fails(self):
         (self.root / guards.ROOTS[0] / "README.md").unlink()
-        with self.assertRaisesRegex(ValueError, "Protected files changed"):
+        with self.assertRaisesRegex(
+            ValueError, "изменён защищённый тест .* — нужно решение владельца"
+        ):
             guards.verify(self.root, self.base)
 
     def test_added_file_fails(self):
@@ -83,16 +87,27 @@ class GuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Protected files changed"):
             guards.verify(self.root, self.base)
 
+    def test_added_file_registered_in_manifest_is_allowed(self):
+        (self.root / guards.ROOTS[0] / "test_new.py").write_text(
+            "def test_new(): assert True"
+        )
+        self.manifest["state"] = "active"
+        self.save_manifest()
+        self.assertEqual(
+            guards.verify(self.root, self.base),
+            {"backend_tests": 1, "frontend_tests": 0},
+        )
+
     def test_simultaneous_file_and_hash_change_fails(self):
         (self.root / guards.ROOTS[0] / "README.md").write_text("changed")
         self.save_manifest()
-        with self.assertRaisesRegex(ValueError, "not owner approval"):
+        with self.assertRaisesRegex(ValueError, "изменён защищённый тест"):
             guards.verify(self.root, self.base)
 
     def test_manifest_only_change_fails(self):
         self.manifest["state"] = "active"
         self.save_manifest()
-        with self.assertRaisesRegex(ValueError, "not owner approval"):
+        with self.assertRaisesRegex(ValueError, "must contain business tests"):
             guards.verify(self.root, self.base)
 
     def test_missing_baseline_requires_explicit_bootstrap(self):
@@ -110,7 +125,7 @@ class GuardTests(unittest.TestCase):
         target = self.root / guards.ROOTS[0] / "README.md"
         target.unlink()
         target.symlink_to(self.root / "baseline.txt")
-        with self.assertRaisesRegex(ValueError, "Symlinks"):
+        with self.assertRaisesRegex(ValueError, "изменён защищённый тест"):
             guards.verify(self.root, self.base)
 
     def test_baseline_checker_rejects_mutation_when_candidate_checker_is_disabled(self):
@@ -133,7 +148,7 @@ class GuardTests(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Protected files changed", result.stderr)
+        self.assertIn("изменён защищённый тест", result.stderr)
 
     def test_invalid_manifest_path_is_rejected(self):
         self.manifest["files"]["backend/tests/guards/../../escape"] = "a" * 64
