@@ -125,11 +125,40 @@ class Inbound:
     chat_title: str = ""
 
 
-# Команда владельца «привяжи к ИП …» (WMS-641 R39): допускается упоминание бота в начале
-# («@бот привяжи …»); в чате, где бот не настроен, принимается только она и только от владельца.
-BIND_RE = re.compile(
-    r"^\s*(?:@\w+[\s,:]+)?(?:пере)?привяж\w*\s+(?:(?:этот|данный|наш)\s+чат\s+)?(?:к|на)\s+(.+?)\s*$",
+# Команда владельца о привязке чата (WMS-641 R39). Чаты владельца чаще всего с ФУЛФИЛМЕНТАМИ (тенантами,
+# внутри много селлеров), реже напрямую с селлером. Распознаётся мягко, ПОСЛЕ упоминания бота:
+#   «@бот это фулфилмент <название>», «@бот это ФФ <название>», «@бот привяжи к ФФ/фулфилменту <название>»,
+#   «@бот привяжи к ИП/селлеру <название>», «@бот это ИП/селлер <название>»,
+#   «@бот привяжи к <название>» (= селлер).
+# Без упоминания бота (текстом) команда игнорируется; голосом упоминания нет, там разбор без него.
+MENTION_RE = re.compile(r"@\w+")
+_TENANT_WORD = r"(?:фулфилмент\w*|ффо?)(?=\W|$)"
+_SELLER_WORD = r"(?:ип|и\.\s?п\.|ip|индивидуальн\w+\s+предпринимател\w+|селлер\w*|продав\w+)(?=\W|$)"
+_SEP = r"[\s:\u2013\u2014-]*"
+_IS_RE = re.compile(
+    rf"^(?:это|тут|здесь)\s+(?:чат\s+)?(?:(?:с|со|для)\s+)?(?:(?P<t>{_TENANT_WORD})|(?P<s>{_SELLER_WORD})){_SEP}(?P<name>.+)$",
     re.IGNORECASE | re.DOTALL)
+_BIND_RE = re.compile(
+    rf"^(?:пере)?привяж\w*\s+(?:(?:этот|данный|наш)\s+чат\s+)?(?:к|на)\s+"
+    rf"(?:(?:(?P<t>{_TENANT_WORD})|(?P<s>{_SELLER_WORD})){_SEP})?(?P<name>.+)$",
+    re.IGNORECASE | re.DOTALL)
+
+
+def parse_bind_command(text: str, require_mention: bool = True) -> tuple[str, str] | None:
+    """(«tenant»|«seller», название) или None. require_mention: текстовая команда должна содержать
+    упоминание бота (@имя); голосовая расшифровка упоминания не содержит."""
+    if require_mention and not MENTION_RE.search(text):
+        return None
+    body = " ".join(MENTION_RE.sub(" ", text).split()).lstrip(",:;–— ").strip()
+    for pattern in (_IS_RE, _BIND_RE):
+        match = pattern.match(body)
+        if not match:
+            continue
+        name = " ".join(match.group("name").replace("«", " ").replace("»", " ").strip(" \"'.,!?;:").split())
+        if len(name) < 2:
+            return None
+        return ("tenant" if match.group("t") else "seller"), name
+    return None
 
 
 class Bots:
@@ -178,7 +207,7 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     text_only = message.get("text") or message.get("caption") or ""
     if (
         is_owner and chat_id < 0 and chat_id != owner_chat and (bot != "owner" or single)
-        and (known is None or known.role == "client") and BIND_RE.match(text_only)
+        and (known is None or known.role == "client") and parse_bind_command(text_only) is not None
     ):
         # Привязка чата (R39): принимает только бот приёма и только от владельца; это не клиентское
         # сообщение. Из любого группового чата, где есть бот, даже если чата нет в конфиге.

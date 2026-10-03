@@ -94,11 +94,22 @@ permission denied. Всегда перечисляй нужные колонки
 обращения. Владельцу в missing_for_owner и в разборе можно писать, что нужно для решения. Таблицы и
 колонки с секретами тебе недоступны на сервере."""
 
+_BOUNDARY = "Границы клиентов обеспечены самой базой"
+TENANT_DATA_RULES = DATA_RULES[: DATA_RULES.index(_BOUNDARY)] + """\
+Чат с ФУЛФИЛМЕНТОМ: твоя роль видит данные ВСЕГО этого фулфилмента (все его селлеры, склады, ячейки,
+сотрудники, документы), а других фулфилментов в базе нет. Идентификаторы фулфилмента искать и подставлять
+в запросы не нужно. Если вопрос про конкретного селлера, найди его по названию в таблице sellers и
+отфильтруй по нему. Таблиц, которых ты не видишь (ключи кабинетов, токены, платежи, служебные очереди),
+для тебя нет (permission denied): не пытайся их обойти. В ответ клиенту (info_answer, info_file)
+попадают только данные, полученные sql_query, и текст обращения. Владельцу в missing_for_owner и в разборе
+можно писать, что нужно для решения. Колонки с секретами тебе недоступны на сервере."""
+
 UNBOUND_CHAT_RULES = """\
 ВАЖНО: этот чат клиента не привязан к селлеру, поэтому доступа к базе у тебя нет вовсе. Данных для
 ответа клиенту нет: ставь answer_needs_data=true, info_answer=null, info_file=null, а в
 missing_for_owner первым пунктом напиши «чат не привязан, данных для ответа нет» и подскажи
-владельцу, что чат нужно привязать командой «привяжи к ИП <название>» в этом чате."""
+владельцу, что чат нужно привязать командой в этом чате: «@бот это фулфилмент <название>» (чат с
+фулфилментом) или «@бот привяжи к ИП <название>» (чат с селлером)."""
 
 UNBOUND_FORM_RULES = """\
 ВАЖНО: у этой записи формы сервер не определил селлера, поэтому доступа к базе у тебя нет вовсе.
@@ -130,19 +141,19 @@ ANALYSIS_SCHEMA = """\
 ANALYST_RULES = f"{ANALYST_RULES_BASE}\n{NO_DATA_RULES}"
 
 
-def analyst_rules(prod_db: bool, bound: bool = True, form: bool = False) -> str:
+def analyst_rules(prod_db: bool, bound: bool = True, form: bool = False, level: str = "seller") -> str:
     """Инструмент базы описывается только тогда, когда он у вызова есть: база включена и обращение
     привязано к селлеру. Иначе правила без данных, а при включённой базе ещё и пояснение про привязку."""
     if prod_db and bound:
-        return f"{ANALYST_RULES_BASE}\n{DATA_RULES}"
+        return f"{ANALYST_RULES_BASE}\n{TENANT_DATA_RULES if level == 'tenant' else DATA_RULES}"
     extra = (f"\n{UNBOUND_FORM_RULES if form else UNBOUND_CHAT_RULES}") if prod_db else ""
     return f"{ANALYST_RULES_BASE}\n{NO_DATA_RULES}{extra}"
 
 
 def analysis_context(ticket_context: str, data_hint: str, prod_db: bool = False, bound: bool = True,
-                     form: bool = False) -> str:
+                     form: bool = False, level: str = "seller") -> str:
     hint = f"\nКак читать данные системы (только чтение): {data_hint}\n" if data_hint else ""
-    return f"{analyst_rules(prod_db, bound, form)}\n\n{DATA_NOTE}\n{ticket_context}\n{hint}"
+    return f"{analyst_rules(prod_db, bound, form, level)}\n\n{DATA_NOTE}\n{ticket_context}\n{hint}"
 
 
 def analysis_ask(note: str | None) -> str:

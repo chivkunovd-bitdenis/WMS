@@ -230,6 +230,7 @@ def build_agent(cfg: Config) -> Agent:
             os.path.expanduser(c.known_hosts) if c.known_hosts else "", c.row_limit, c.timeout_sec,
             c.max_bytes, c.ssh_bin))
         pipe.directory = directory
-        llm.role_ensurer = directory.ensure
+        llm.role_ensurer = directory.ensure_scope
+        llm.role_alert = pipe.on_role_failure
     pipe.mockups = MockupRunner(pipe, hotfix)
     return Agent(cfg, store, tg, pipe)

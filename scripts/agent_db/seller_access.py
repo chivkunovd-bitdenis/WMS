@@ -1,4 +1,4 @@
-"""WMS-641 R41: роль Postgres на каждого привязанного селлера, только чтение, строки только этого селлера.
+"""WMS-641 R41: роль Postgres на каждого привязанного селлера ИЛИ фулфилмент (тенанта), только чтение, строки только своей области.
 
 Генератор SQL. Принцип fail closed:
   * доступны ТОЛЬКО таблицы из явного списка TABLES (новые таблицы автоматически не выдаются);
@@ -24,7 +24,9 @@ from dataclasses import dataclass, field
 SELLER_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 IDENT_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 ROLE_PREFIX = "wms_agent_s_"
+TENANT_ROLE_PREFIX = "wms_agent_t_"
 ROLE_RE = re.compile(r"^wms_agent_s_[0-9a-f]{32}$")
+TENANT_ROLE_RE = re.compile(r"^wms_agent_t_[0-9a-f]{32}$")
 SHARED_RO_ROLE = "wms_agent_ro"
 
 
@@ -142,7 +144,99 @@ SECRET_NAME_RE = re.compile(
     r"(password|passwd|secret|token|signature|credential|api_key|apikey|cookie|private_key|"
     r"_enc$|_encrypted$|^auth_|hash$|challenge)", re.IGNORECASE)
 
-SPEC_VERSION = hashlib.sha256(repr([(t.name, t.kind, t.hops, t.seller_col) for t in TABLES]).encode()
+# ---------------------------------------------------------------------------------------------------------
+# Роль ФУЛФИЛМЕНТА (тенанта): чат владельца с ФФ, внутри которого много селлеров. Путь к тенанту: прямой
+# tenant_id, либо через родителя, либо (tenants) собственная строка. Список ЯВНЫЙ (fail closed): таблицы с
+# tenant_id, которых здесь нет, закрыты и перечислены в TENANT_CLOSED (тест требует решения по каждой).
+TENANT_DIRECT = (
+    "billing_invoice_v2_lines", "billing_invoice_v2_sources", "billing_invoices", "billing_invoices_v2",
+    "billing_ledger_entries", "billing_ledger_lines", "billing_profiles", "billing_run_issues",
+    "billing_tariff_matrix_configs", "billing_tariff_service_states", "billing_tariff_versions",
+    "billing_tariff_versions_v2", "discrepancy_acts", "document_display_sequences", "document_event",
+    "document_sequences", "fbs_assembly_tasks", "fbs_binding_stock_pools", "fbs_order_markings",
+    "fbs_order_picks", "fbs_order_product_picks", "fbs_order_product_reservations", "fbs_order_reservations",
+    "fbs_orders", "fbs_packaging_fulfillments", "fbs_packing_box_items", "fbs_packing_boxes",
+    "fbs_print_assets", "fbs_shipment_reversal_ledger", "fbs_supplies", "fbs_warehouse_bindings",
+    "fbs_wb_operations", "inbound_intake_boxes", "inbound_intake_cargo_place_lines",
+    "inbound_intake_cargo_places", "inbound_intake_requests", "inbound_ozon_return_giveouts",
+    "inbound_ozon_return_items", "inventory_balances", "inventory_count_created_containers",
+    "inventory_count_found_scans", "inventory_counts", "inventory_movements", "inventory_reservations",
+    "kiz_reprints", "marketplace_unload_requests", "marketplace_unload_reservations", "marking_code_events",
+    "marking_code_import_files", "marking_code_imports", "marking_codes", "marking_pool_products",
+    "marking_pools", "marking_print_batches", "marking_reprint_requests", "operation_fact_lines",
+    "operation_facts", "outbound_shipment_requests", "packaging_task_events", "packaging_tasks", "pallets",
+    "print_templates", "product_barcodes", "product_dimension_events", "product_marketplace_links",
+    "product_tz_imports", "products", "seller_ozon_imported_cards", "seller_wildberries_imported_cards",
+    "seller_wildberries_imported_supplies", "sellers", "stock_directions", "stock_monthly_snapshots",
+    "storage_locations", "storage_measurements", "storage_statements", "tenant_wb_mp_warehouses", "users",
+    "warehouse_boxes", "warehouse_map_events", "warehouse_storage_racks", "warehouses", "withdrawal_documents",
+    "withdrawal_items", "withdrawal_operations",
+)
+# Закрыты целиком: учётные данные, секреты, платёжные и служебные таблицы (даже с tenant_id).
+TENANT_CLOSED = (
+    "marketplace_accounts",  # ключи кабинетов маркетплейсов
+    "seller_marking_credentials", "seller_wildberries_credentials",  # токены ЧЗ/СУЗ, WB
+    "print_connections",  # токены подключения печати
+    "developer_requests",  # служебная очередь запросов формы и самого агента (токены аренды)
+    "background_jobs",  # полезные нагрузки заданий могут содержать что угодно
+    "billing_invoice_v2_idempotency",  # внутренности идемпотентности
+    "subscription_payments",  # платежи подписки
+    "notifications",  # тексты и ссылки уведомлений
+    "operation_fact_cutover",  # глобальная настройка, без привязки к тенанту
+)
+TENANT_TABLES: list[Table] = [
+    Table("tenants", "self"),  # собственная строка: id = тенант
+    *[Table(n, "direct", seller_col="tenant_id") for n in TENANT_DIRECT],
+    _via("discrepancy_act_lines", "act_id", "discrepancy_acts"),
+    _via("fbs_assembly_task_supplies", "supply_id", "fbs_supplies"),
+    _via("fbs_order_pick_events", "pick_id", "fbs_order_picks"),
+    _via("fbs_order_products", "order_id", "fbs_orders"),
+    _via("fbs_stock_sync_items", "binding_id", "fbs_warehouse_bindings"),
+    _via("fbs_trbxes", "supply_id", "fbs_supplies"),
+    _via("inbound_intake_box_lines", "box_id", "inbound_intake_boxes"),
+    _via("inbound_intake_distribution_lines", "request_id", "inbound_intake_requests"),
+    _via("inbound_intake_lines", "request_id", "inbound_intake_requests"),
+    _via("inventory_count_lines", "count_id", "inventory_counts"),
+    _via("marketplace_unload_box_lines", "box_id", "marketplace_unload_boxes"),
+    _via("marketplace_unload_boxes", "request_id", "marketplace_unload_requests"),
+    _via("marketplace_unload_lines", "request_id", "marketplace_unload_requests"),
+    _via("marketplace_unload_pick_allocations", "request_id", "marketplace_unload_requests"),
+    _via("outbound_shipment_lines", "request_id", "outbound_shipment_requests"),
+    _via("packaging_task_lines", "task_id", "packaging_tasks"),
+    _via("wb_order_price_snapshots", "order_id", "fbs_orders"),
+    _via("withdrawal_observations", "document_id", "withdrawal_documents"),
+    _via("ff_staff_permissions", "user_id", "users"),
+    _via("seller_staff_permissions", "user_id", "users"),
+    _via("seller_shop_delegations", "user_id", "users"),
+]
+TENANT_BY_NAME = {t.name: t for t in TENANT_TABLES}
+
+
+class Scope:
+    """Область доступа роли: селлер или фулфилмент (тенант). Общий код генератора работает с любой."""
+
+    def __init__(self, kind: str, tables: list[Table], role_prefix: str, role_re: re.Pattern[str],
+                 policy_prefix: str, self_table: str) -> None:
+        self.kind, self.tables, self.role_prefix, self.role_re = kind, tables, role_prefix, role_re
+        self.policy_prefix, self.self_table = policy_prefix, self_table
+        self.by_name = {t.name: t for t in tables}
+        self.policy_version = hashlib.sha256(
+            repr([(t.name, t.kind, t.hops, t.seller_col) for t in tables]).encode()).hexdigest()[:12]
+
+    def role_name(self, scope_id: str) -> str:
+        scope_id = scope_id.strip().lower()
+        if not SELLER_RE.match(scope_id):
+            raise SpecError(f"{self.kind} id must be a UUID")
+        return self.role_prefix + scope_id.replace("-", "")
+
+    def policy_name(self, scope_id: str) -> str:
+        return self.policy_prefix + scope_id.strip().lower().replace("-", "")
+
+
+SELLER = Scope("seller", TABLES, ROLE_PREFIX, ROLE_RE, "agent_", "sellers")
+TENANT = Scope("tenant", TENANT_TABLES, TENANT_ROLE_PREFIX, TENANT_ROLE_RE, "agent_t_", "tenants")
+
+SPEC_VERSION = hashlib.sha256(repr([(t.name, t.kind, t.hops, t.seller_col) for t in TABLES + TENANT_TABLES]).encode()
                               + repr(sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items())).encode()).hexdigest()[:12]
 
 
@@ -151,10 +245,11 @@ class SpecError(Exception):
 
 
 def role_name(seller_id: str) -> str:
-    seller_id = seller_id.strip().lower()
-    if not SELLER_RE.match(seller_id):
-        raise SpecError("seller id must be a UUID")
-    return ROLE_PREFIX + seller_id.replace("-", "")
+    return SELLER.role_name(seller_id)
+
+
+def tenant_role_name(tenant_id: str) -> str:
+    return TENANT.role_name(tenant_id)
 
 
 def seller_from_role(role: str) -> str:
@@ -162,6 +257,15 @@ def seller_from_role(role: str) -> str:
         raise SpecError("bad role name")
     h = role[len(ROLE_PREFIX):]
     return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+
+
+def scope_of_role(role: str) -> tuple[Scope, str]:
+    """(область, uuid) по имени роли: sql-ветка шлюза принимает роли обеих областей."""
+    for scope in (SELLER, TENANT):
+        if scope.role_re.match(role):
+            h = role[len(scope.role_prefix):]
+            return scope, f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+    raise SpecError("bad role name")
 
 
 def is_secret(table: str, column: str) -> bool:
@@ -182,32 +286,32 @@ def _path_columns(table: Table) -> set[str]:
     return {c for c, _ in table.hops}
 
 
-def included_tables(catalog: dict[str, set[str]]) -> list[Table]:
-    """Таблицы списка, реально существующие с нужными колонками (fail closed): путь к селлеру
+def included_tables(catalog: dict[str, set[str]], scope: Scope = SELLER) -> list[Table]:
+    """Таблицы списка, реально существующие с нужными колонками (fail closed): путь к области
     обязан целиком существовать, родитель — быть включённым и иметь id."""
     included: dict[str, Table] = {}
     changed = True
     while changed:
         changed = False
-        for t in TABLES:
+        for t in scope.tables:
             if t.name in included or t.name not in catalog or not _path_columns(t) <= catalog[t.name]:
                 continue
             if all(p in included and "id" in catalog[p] for _, p in t.hops):
                 included[t.name] = t
                 changed = True
-    return [t for t in TABLES if t.name in included]
+    return [t for t in scope.tables if t.name in included]
 
 
-def _expr(table: Table, alias: str, seller: str, depth: int = 0) -> str:
+def _expr(table: Table, alias: str, scope_id: str, scope: Scope = SELLER, depth: int = 0) -> str:
     if table.kind == "direct":
-        return f"{alias}.{_ident(table.seller_col)} = '{seller}'::uuid"
+        return f"{alias}.{_ident(table.seller_col)} = '{scope_id}'::uuid"
     if table.kind == "self":
-        return f"{alias}.\"id\" = '{seller}'::uuid"
+        return f"{alias}.\"id\" = '{scope_id}'::uuid"
 
     def exists(col: str, parent: str, nxt: int) -> str:
         pa = f"p{nxt}"
         return (f"EXISTS (SELECT 1 FROM public.{_ident(parent)} {pa} WHERE {pa}.\"id\" = {alias}.{_ident(col)} "
-                f"AND {_expr(BY_NAME[parent], pa, seller, nxt)})")
+                f"AND {_expr(scope.by_name[parent], pa, scope_id, scope, nxt)})")
 
     if table.kind == "via":
         (col, parent), = table.hops
@@ -219,8 +323,8 @@ def _expr(table: Table, alias: str, seller: str, depth: int = 0) -> str:
     raise SpecError(table.kind)
 
 
-def policy_expression(table: Table, seller: str) -> str:
-    return _expr(table, _ident(table.name), seller)
+def policy_expression(table: Table, scope_id: str, scope: Scope = SELLER) -> str:
+    return _expr(table, _ident(table.name), scope_id, scope)
 
 
 def allowed_columns(table: str, columns: list[str], required: set[str]) -> list[str]:
@@ -237,18 +341,61 @@ class Catalog:
     columns: dict[str, list[str]]
     secdef_functions: list[str] = field(default_factory=list)  # oid::regprocedure
     shared_ro_exists: bool = False
+    rls_enabled: set[str] = field(default_factory=set)  # таблицы списка, где relrowsecurity уже включён
+    policies: set[tuple[str, str]] = field(default_factory=set)  # (таблица, политика) этой роли и общая
+    role_version: str = ""  # COMMENT ON ROLE: «wms-agent:<версия политик>:<версия прав>» или пусто
 
 
-def render_sql(seller_id: str, catalog: Catalog) -> str:
-    seller = seller_id.strip().lower()
-    role = role_name(seller)
+LOCK_TIMEOUT = "2s"
+STATEMENT_TIMEOUT = "60s"
+VERSION_PREFIX = "wms-agent:"
+# Версия ПОЛИТИК зависит только от спецификации путей области (меняется при выкладке нового списка):
+# политики пересоздаются только тогда. Версия ПРАВ зависит ещё от колонок и функций в базе (миграции):
+# меняются только гранты (они не берут блокировок таблиц) и создаются политики там, где их ещё нет.
+POLICY_VERSION = SELLER.policy_version
+
+
+def grant_version(catalog: Catalog, scope: Scope = SELLER) -> str:
+    tables = included_tables({k: set(v) for k, v in catalog.columns.items()}, scope)
+    # фактически выдаваемые колонки (после правил секретов): расширение SECRET_NAME_RE или SECRET_COLUMNS
+    # меняет список и тем самым отзывает ранее выданную колонку
+    blob = repr([
+        scope.kind,
+        sorted((t.name, allowed_columns(t.name, sorted(catalog.columns[t.name]), _required_columns(t)))
+               for t in tables),
+        sorted(catalog.secdef_functions), catalog.shared_ro_exists, SESSION_SETTINGS,
+        sorted((k, sorted(v)) for k, v in SECRET_COLUMNS.items()), SECRET_NAME_RE.pattern,
+    ])
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def target_version(catalog: Catalog, scope: Scope = SELLER) -> str:
+    return f"{VERSION_PREFIX}{scope.policy_version}:{grant_version(catalog, scope)}"
+
+
+def stored_policy_version(catalog: Catalog) -> str | None:
+    parts = catalog.role_version.split(":")
+    return parts[1] if len(parts) == 3 and parts[0] + ":" == VERSION_PREFIX else None
+
+
+def is_current(catalog: Catalog, scope_id: str, scope: Scope = SELLER) -> bool:
+    """Короткая ветка (тяжёлую часть не повторять) только если метка версии совпала И по уже прочитанному
+    состоянию на каждой таблице списка включён RLS и есть собственная политика роли (и общая agent_ro_all,
+    где положено). Метка одна не доказывает состояние: RLS могли выключить, политику удалить, таблицу пересоздать."""
+    if catalog.role_version != target_version(catalog, scope):
+        return False
+    polname = scope.policy_name(scope_id)
+    for t in included_tables({k: set(v) for k, v in catalog.columns.items()}, scope):
+        if t.name not in catalog.rls_enabled or (t.name, polname) not in catalog.policies:
+            return False
+        if catalog.shared_ro_exists and (t.name, "agent_ro_all") not in catalog.policies:
+            return False
+    return True
+
+
+def _role_statements(role: str) -> list[str]:
     r = _ident(role)
-    tables = included_tables({k: set(v) for k, v in catalog.columns.items()})
-    suffix = seller.replace("-", "")
-    pol = _ident("agent_" + suffix)
-    out = [
-        f"-- WMS-641: доступ селлера {seller} (версия списка {SPEC_VERSION}); идемпотентно",
-        "BEGIN;",
+    return [
         "DO $do$ BEGIN",
         f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN",
         f"    CREATE ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;",
@@ -257,6 +404,35 @@ def render_sql(seller_id: str, catalog: Catalog) -> str:
         f"ALTER ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT "
         "CONNECTION LIMIT 8;",
         *[f"ALTER ROLE {r} SET {name} = {value};" for name, value in SESSION_SETTINGS],
+    ]
+
+
+def _begin() -> list[str]:
+    # БЕЗ ожидания: ACCESS EXCLUSIVE не должен вставать в очередь за долгой транзакцией и вешать обычные
+    # запросы WMS; при таймауте вся транзакция откатывается (одна транзакция), повтор позже.
+    return ["BEGIN;", f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';",
+            f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}';"]
+
+
+def render_role_sql(scope_id: str, scope: Scope = SELLER) -> str:
+    """Лёгкая часть: роль и её настройки (ALTER ROLE не берёт табличных блокировок). Выполняется при каждом
+    ensure, в том числе когда роль уже на текущей версии."""
+    return "\n".join([*_begin(), *_role_statements(scope.role_name(scope_id)), "COMMIT;"]) + "\n"
+
+
+def render_sql(scope_id: str, catalog: Catalog, scope: Scope = SELLER) -> str:
+    scope_id = scope_id.strip().lower()
+    role = scope.role_name(scope_id)
+    r = _ident(role)
+    tables = included_tables({k: set(v) for k, v in catalog.columns.items()}, scope)
+    polname = scope.policy_name(scope_id)
+    pol = _ident(polname)
+    stored_pv = stored_policy_version(catalog)
+    recreate = stored_pv is not None and stored_pv != scope.policy_version
+    out = [
+        f"-- WMS-641: доступ ({scope.kind}) {scope_id} (версия списка {SPEC_VERSION}); идемпотентно",
+        *_begin(),
+        *_role_statements(role),
         f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {r};",
         f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM {r};",
@@ -271,16 +447,20 @@ def render_sql(seller_id: str, catalog: Catalog) -> str:
         tb = f"public.{_ident(t.name)}"
         cols = allowed_columns(t.name, catalog.columns[t.name], _required_columns(t))
         cols = [c for c in cols if c in catalog.columns[t.name]]
-        out += [
-            f"ALTER TABLE {tb} ENABLE ROW LEVEL SECURITY;",
-            f"DROP POLICY IF EXISTS {pol} ON {tb};",
-            f"CREATE POLICY {pol} ON {tb} AS PERMISSIVE FOR SELECT TO {r} USING ({policy_expression(t, seller)});",
-            f"GRANT SELECT ({', '.join(_ident(c) for c in cols)}) ON {tb} TO {r};",
-        ]
-        if catalog.shared_ro_exists:
-            ro = _ident("agent_ro_all")
-            out += [f"DROP POLICY IF EXISTS {ro} ON {tb};",
-                    f"CREATE POLICY {ro} ON {tb} AS PERMISSIVE FOR SELECT TO {_ident(SHARED_RO_ROLE)} USING (true);"]
+        # ACCESS EXCLUSIVE (ENABLE RLS, CREATE/DROP POLICY) только там, где это действительно нужно
+        if t.name not in catalog.rls_enabled:
+            out.append(f"ALTER TABLE {tb} ENABLE ROW LEVEL SECURITY;")
+        has_policy = (t.name, polname) in catalog.policies
+        if has_policy and recreate:
+            out.append(f"DROP POLICY {pol} ON {tb};")
+        if not has_policy or recreate:
+            out.append(f"CREATE POLICY {pol} ON {tb} AS PERMISSIVE FOR SELECT TO {r} "
+                       f"USING ({policy_expression(t, scope_id, scope)});")
+        out.append(f"GRANT SELECT ({', '.join(_ident(c) for c in cols)}) ON {tb} TO {r};")
+        if catalog.shared_ro_exists and (t.name, "agent_ro_all") not in catalog.policies:
+            out.append(f"CREATE POLICY {_ident('agent_ro_all')} ON {tb} AS PERMISSIVE FOR SELECT "
+                       f"TO {_ident(SHARED_RO_ROLE)} USING (true);")
+    out.append(f"COMMENT ON ROLE {r} IS '{target_version(catalog, scope)}';")
     out.append("COMMIT;")
     return "\n".join(out) + "\n"
 
@@ -293,13 +473,30 @@ SELECT 'secdef', p.oid::regprocedure::text, '' FROM pg_proc p JOIN pg_namespace 
  WHERE p.prosecdef AND n.nspname NOT IN ('pg_catalog', 'information_schema')
 UNION ALL
 SELECT 'ro', rolname, '' FROM pg_roles WHERE rolname = '{ro}'
-ORDER BY 1, 2, 3;
+UNION ALL
+SELECT 'rls', c.relname, '' FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity
+   AND c.relname = ANY (ARRAY[{tables}])
+UNION ALL
+SELECT 'pol', c.relname, p.polname FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
+ JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public' AND p.polname IN ('agent_ro_all'{own_policy})
+{role_version}ORDER BY 1, 2, 3;
 """
 
 
-def preflight_sql() -> str:
-    names = ", ".join(f"'{t.name}'" for t in TABLES)
-    return PREFLIGHT_SQL.format(tables=names, ro=SHARED_RO_ROLE)
+def preflight_sql(scope_id: str | None = None, scope: Scope = SELLER) -> str:
+    """Состояние для решения «что делать»: колонки, функции, уже включённый RLS, уже созданные политики
+    (общая и этой роли) и версия роли. Только чтение каталога, табличных блокировок нет."""
+    names = ", ".join(f"'{t.name}'" for t in scope.tables)
+    own, version = "", ""
+    if scope_id is not None:
+        scope_id = scope_id.strip().lower()
+        role = scope.role_name(scope_id)
+        own = f", '{scope.policy_name(scope_id)}'"
+        version = (f"UNION ALL\nSELECT 'ver', coalesce(shobj_description(oid, 'pg_authid'), ''), '' "
+                   f"FROM pg_roles WHERE rolname = '{role}'\n")
+    return PREFLIGHT_SQL.format(tables=names, ro=SHARED_RO_ROLE, own_policy=own, role_version=version)
 
 
 def parse_preflight(rows: list[list[str]]) -> Catalog:
@@ -311,4 +508,10 @@ def parse_preflight(rows: list[list[str]]) -> Catalog:
             cat.secdef_functions.append(a)
         elif kind == "ro":
             cat.shared_ro_exists = True
+        elif kind == "rls":
+            cat.rls_enabled.add(a)
+        elif kind == "pol":
+            cat.policies.add((a, b))
+        elif kind == "ver":
+            cat.role_version = a
     return cat
