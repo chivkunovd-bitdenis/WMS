@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -88,8 +89,8 @@ def test_capability_change_rolls_thread_but_identical_tools_resume(tmp_path: Pat
     second = [{"name": "two", "description": "second", "inputSchema": {"type": "object"}}]
     assert agent_capability_signature(normalize_agent_tools(first), str(tmp_path)) != (
         agent_capability_signature(normalize_agent_tools(second), str(tmp_path)))
-    kwargs = {"session_key": "job", "mode": "owner", "owner_authorized": True,
-              "cwd": str(tmp_path), "tool_handler": lambda name, args: {}}
+    kwargs: dict[str, Any] = {"session_key": "job", "mode": "owner", "owner_authorized": True,
+                              "cwd": str(tmp_path), "tool_handler": lambda name, args: {}}
     llm.agent_turn("a", tools=first, **kwargs)
     llm.agent_turn("b", tools=first, **kwargs)
     assert len(calls) == 2 and calls[1]["session_id"] == "thread-1"

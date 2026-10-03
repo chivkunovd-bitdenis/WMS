@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from support_agent.agent_coordinator import AgentCoordinator
 from support_agent.config import config_from_dict
@@ -14,8 +15,8 @@ from support_agent.store import Store
 
 class StubTools:
     def __init__(self) -> None:
-        self.calls = []
-        self.cards = []
+        self.calls: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+        self.cards: list[dict[str, Any]] = []
 
     def specs(self, scope):
         return []
@@ -30,7 +31,7 @@ class StubTools:
 
 class StubLlm:
     def __init__(self) -> None:
-        self.calls = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
         self.answer = "Проверенный ответ"
 
     def agent_turn(self, prompt, **kwargs):
@@ -98,7 +99,7 @@ def test_scheduled_owner_job_survives_restart_and_deadline_enters_finalization(t
     jid = queued["id"]
     assert queued["status"] == "scheduled"
     resumed, _, _, _ = coordinator(tmp_path, now=now, store=store)
-    submitted = []
+    submitted: list[str] = []
     resumed._submit_job = submitted.append
     now[0] = 201.0
     resumed.tick()

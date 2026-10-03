@@ -193,7 +193,7 @@ def test_read_data_uses_actual_chat_binding_and_readonly_query(tools, monkeypatc
     store.set_binding(100, {"seller_id": seller_id, "seller_name": "Test",
                             "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                             "tenant_name": "Tenant", "level": "seller"}, "42")
-    observed = {}
+    observed: dict[str, str] = {}
     def fake_query(settings, sql, on_send):
         observed.update(role=settings.db_role, sql=sql)
         on_send()
