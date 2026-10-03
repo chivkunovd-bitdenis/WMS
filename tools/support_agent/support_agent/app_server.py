@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -32,6 +33,65 @@ def _occupancy(usage: dict[str, Any]) -> int:
     return int(last.get("totalTokens") or 0)
 
 
+def _configured_mcp_names(argv: list[str], cwd: str, env: dict[str, str]) -> list[str]:
+    """Read effective server names without a model turn or exposing config values."""
+    proc = subprocess.Popen(  # noqa: S603 - fixed Codex command
+        argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True, bufsize=1,
+    )
+    inbox: queue.Queue[dict[str, Any] | None] = queue.Queue()
+
+    def reader() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            try:
+                value = json.loads(line)
+                if isinstance(value, dict):
+                    inbox.put(value)
+            except ValueError:
+                continue
+        inbox.put(None)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    def call(request_id: int, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        assert proc.stdin is not None
+        proc.stdin.write(json.dumps({"id": request_id, "method": method, "params": params}) + "\n")
+        proc.stdin.flush()
+        deadline = time.monotonic() + 8
+        while True:
+            try:
+                item = inbox.get(timeout=max(0.01, deadline - time.monotonic()))
+            except queue.Empty as exc:
+                raise AppServerError("readonly MCP config preflight timed out") from exc
+            if item is None or "error" in item:
+                raise AppServerError("readonly MCP config preflight failed")
+            if item.get("id") == request_id:
+                return item.get("result") or {}
+
+    try:
+        call(1, "initialize", {"clientInfo": {"name": "wms-support-agent", "version": "1"},
+                               "capabilities": {"experimentalApi": True}})
+        assert proc.stdin is not None
+        proc.stdin.write('{"method":"initialized","params":{}}\n')
+        proc.stdin.flush()
+        config = call(2, "config/read", {"cwd": cwd}).get("config") or {}
+        servers = config.get("mcp_servers") or {}
+        if not isinstance(servers, dict) or any(
+            not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", name)
+            for name in servers
+        ):
+            raise AppServerError("readonly MCP server names cannot be disabled safely")
+        return list(servers)
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=2)
+
+
 class AppServerTurn:
     def __init__(self, binary: str, *, timeout: int = 900) -> None:
         self.binary = binary
@@ -51,6 +111,7 @@ class AppServerTurn:
         tools: list[dict[str, Any]],
         tool_handler: ToolHandler | None,
         session_started: Callable[[str], None] | None = None,
+        progress_callback: Callable[[str], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         redact_error: Callable[[str], str] | None = None,
     ) -> tuple[str, str, int]:
@@ -73,6 +134,10 @@ class AppServerTurn:
         if mode == "readonly":
             # Client messages get service tools, not native shell/file mutation.
             argv += ["--disable", "shell_tool", "--disable", "unified_exec"]
+            # Empty mcp_servers={} does not clear inherited entries. Discover
+            # effective names in a tool-free preflight, then disable each one.
+            for server_name in _configured_mcp_names(argv, cwd, env):
+                argv += ["-c", f"mcp_servers.{server_name}.enabled=false"]
         elif mode == "write":
             # Native Codex shell/editor handles arbitrary owner jobs, including
             # exports and build commands. The workspace sandbox bounds writes.
@@ -146,6 +211,14 @@ class AppServerTurn:
             rpc("initialize", {"clientInfo": {"name": "wms-support-agent", "version": "1"},
                                "capabilities": {"experimentalApi": True}})
             send({"method": "initialized", "params": {}})
+            if mode == "readonly":
+                config = rpc("config/read", {"cwd": cwd}).get("config") or {}
+                servers = config.get("mcp_servers") or {}
+                if not isinstance(servers, dict) or any(
+                    not isinstance(value, dict) or value.get("enabled") is not False
+                    for value in servers.values()
+                ):
+                    raise AppServerError("readonly MCP tools are not fully disabled")
             if session_id:
                 # A thread may have been compacted or moved; failure is reported
                 # rather than silently losing its context.
@@ -206,8 +279,14 @@ class AppServerTurn:
                     occupied = _occupancy(params.get("tokenUsage") or {})
                 elif method == "item/completed":
                     item = params.get("item") or {}
-                    if item.get("type") == "agentMessage" and item.get("phase") in ("final_answer", None):
-                        answer = str(item.get("text") or answer)
+                    if item.get("type") == "agentMessage":
+                        phase = item.get("phase")
+                        if phase == "commentary" and progress_callback is not None:
+                            progress = str(item.get("text") or "").strip()
+                            if progress:
+                                progress_callback(progress)
+                        elif phase in ("final_answer", None):
+                            answer = str(item.get("text") or answer)
                 elif method == "turn/completed":
                     turn = params.get("turn") or {}
                     if turn.get("status") == "failed":

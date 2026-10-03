@@ -201,6 +201,9 @@ class LlmRouter:
         timeout: int = 900,
         owner_authorized: bool = False,
         cancelled: Callable[[], bool] | None = None,
+        effort: str | None = None,
+        include_project_tools: bool = True,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> LlmResult:
         """Native tool-capable turn for the agent; no provider/model fallback.
 
@@ -213,10 +216,11 @@ class LlmRouter:
             raise ValueError("agent session_key is required")
         model = model or self.cfg.agent.owner_model
         provider = provider or self.cfg.agent.owner_provider
+        chosen_effort = effort or self.cfg.llm.codex_effort
         if provider not in ("codex", "claude"):
             raise LlmUnavailable(f"agent provider {provider!r} is not configured")
         if provider == "codex":
-            check_effort(model, self.cfg.llm.codex_effort)
+            check_effort(model, chosen_effort)
         if mode not in ("readonly", "write", "owner"):
             raise ValueError("agent mode must be readonly, write or owner")
         if mode == "owner" and not owner_authorized:
@@ -226,7 +230,7 @@ class LlmRouter:
             raise ValueError("agent project cwd is required")
         work_cwd = str(Path(work_cwd).resolve())
         tools = normalize_agent_tools(tools or [])
-        if mode == "readonly":
+        if mode == "readonly" and include_project_tools:
             from .readonly_mcp import TOOLS, Reader, call_tool
 
             reader = Reader(work_cwd)
@@ -264,7 +268,7 @@ class LlmRouter:
                     "Сохрани передачу следующей сессии: цель, текущий ход работы, подтверждённые факты "
                     "и источники, открытые вопросы, уже совершённые действия и следующий шаг. "
                     "Не исполняй инструменты и не добавляй неподтверждённые факты.",
-                    model=model, provider=provider, effort=self.cfg.llm.codex_effort,
+                    model=model, provider=provider, effort=chosen_effort,
                     cwd=work_cwd, mode="readonly",
                     system=prompts.WMS_SYSTEM_POLICY, session_id=session_id,
                     tools=[], tool_handler=None,
@@ -295,11 +299,12 @@ class LlmRouter:
 
         try:
             answer, thread_id, occupied = turn.run(
-                prompt, model=model, provider=provider, effort=self.cfg.llm.codex_effort,
+                prompt, model=model, provider=provider, effort=chosen_effort,
                 cwd=work_cwd, mode=mode,
                 system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
                 session_id=session_id, tools=tools or [], tool_handler=tool_handler,
                 session_started=started, cancelled=cancelled,
+                progress_callback=progress_callback,
                 redact_error=self.cfg.redact,
             )
         except (AppServerError, OSError) as exc:
@@ -307,7 +312,7 @@ class LlmRouter:
         self.store.kv_set(key, {"thread_id": thread_id, "handoff": handoff,
                                 "rollover": occupied >= self.cfg.agent.context_limit_tokens,
                                 "capability_signature": signature})
-        self.store.log_llm(cli=provider, model=model, effort=self.cfg.llm.codex_effort,
+        self.store.log_llm(cli=provider, model=model, effort=chosen_effort,
                            role="agent", ticket_id=None, ok=True)
         return LlmResult(answer, provider, model, thread_id)
 

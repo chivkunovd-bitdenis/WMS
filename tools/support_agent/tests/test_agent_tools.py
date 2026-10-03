@@ -24,7 +24,10 @@ def tools(tmp_path):
                            _seller_for_chat=lambda chat, role: "client",
                            say_owner=say_owner, trello=SimpleNamespace(),
                            llm=SimpleNamespace(role_ensurer=None))
-    return AgentTools(pipe), store
+    api = AgentTools(pipe)
+    api.semantic_verifier = SimpleNamespace(check=lambda event, action, args:
+                                            {"authorized": True, "source_quote": "test"})
+    return api, store
 
 
 def message(store, chat, role, author, msg_id, ts=100.0):
@@ -44,6 +47,18 @@ def test_forged_owner_flag_cannot_unlock_privileged_tool(tools):
         api.dispatch("approve_task", {"ticket_id": 1, "version": "x"}, ctx(source, 100, 5, True))
     with pytest.raises(ToolDenied, match="cross_chat"):
         api.dispatch("read_context", {"chat_id": 200}, ctx(source, 100, 5))
+
+
+def test_consequential_tool_denied_without_semantic_authorization(tools):
+    api, store = tools
+    owner = message(store, 900, "owner", 42, "look-only")
+    api.semantic_verifier = SimpleNamespace(check=lambda event, action, args:
+                                            {"authorized": False, "reason": "look only"})
+    with pytest.raises(ToolDenied, match="needs_clarification"):
+        api.dispatch("queue_reply", {"chat_id": 100, "text": "Отправить"}, ctx(owner, 900, 42))
+    del api.semantic_verifier
+    with pytest.raises(ToolDenied, match="verifier_unavailable"):
+        api.dispatch("queue_reply", {"chat_id": 100, "text": "Отправить"}, ctx(owner, 900, 42))
 
 
 def test_two_topics_one_message_and_version_revokes_approval(tools):

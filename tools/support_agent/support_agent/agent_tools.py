@@ -178,6 +178,16 @@ class AgentTools:
             raise ToolDenied("tool_unavailable_for_source")
         if not isinstance(args, dict):
             raise ToolDenied("invalid_arguments")
+        consequential = (name in {"approve_task", "queue_reply", "request_mockup"}
+                         or name == "task_record" and args.get("confirm_author") is True
+                         or name == "trello_sync" and args.get("action") == "description_agreed")
+        if consequential:
+            verifier = getattr(self, "semantic_verifier", None)
+            if verifier is None:
+                raise ToolDenied("authorization_verifier_unavailable")
+            verdict = verifier.check(event, name, args)
+            if not isinstance(verdict, dict) or verdict.get("authorized") is not True:
+                raise ToolDenied("needs_clarification_for_this_action")
         method = getattr(self, f"_tool_{name}")
         return method(args, event, owner)
 
@@ -189,6 +199,8 @@ class AgentTools:
             raise ToolDenied("unknown_source_event")
         if str(row["author_id"]) != str(context.get("author_id")):
             raise ToolDenied("source_author_mismatch")
+        if context.get("revision") is not None and int(context["revision"]) != int(row["revision"]):
+            raise ToolDenied("source_event_was_edited")
         return row
 
     def _owner(self, event: Any) -> bool:

@@ -67,7 +67,7 @@ class TelegramClient:
     def get_updates(self, offset: int, timeout: int = 25) -> list[dict[str, Any]]:
         result = self._call(
             "getUpdates",
-            {"offset": offset, "timeout": timeout, "allowed_updates": ["message"]},
+            {"offset": offset, "timeout": timeout, "allowed_updates": ["message", "edited_message"]},
             timeout=timeout + 15,
         )
         assert isinstance(result, list)
@@ -123,6 +123,9 @@ class Inbound:
     file_id: str | None = None
     reply_to: str | None = None
     chat_title: str = ""
+    caption: str = ""
+    edited: bool = False
+    edit_ts: float | None = None
 
 
 # Команда владельца о привязке чата (WMS-641 R39). Чаты владельца чаще всего с ФУЛФИЛМЕНТАМИ (тенантами,
@@ -204,7 +207,8 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     Бот приёма принимает клиентские и партнёрский чаты; в них владелец обычный участник, команд он
     там не отдаёт. Команды владельца (R21) принимаются ТОЛЬКО ботом владельца, в его чате и только
     от owner_user_id. Если токен один (оба бота — один), действуют оба правила."""
-    message = update.get("message")
+    edited = isinstance(update.get("edited_message"), dict)
+    message = update.get("edited_message") if edited else update.get("message")
     if not isinstance(message, dict):
         return None
     sender = message.get("from") or {}
@@ -230,6 +234,8 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
             author_id=str(sender.get("id", "")), author_name="владелец", ts=float(message.get("date", 0)),
             kind="text", text=text_only, chat_title=title,
             reply_to=str(reply["message_id"]) if reply.get("message_id") else None,
+            caption=str(message.get("caption") or ""),
+            edited=edited, edit_ts=float(message.get("edit_date") or 0) or None,
         )
     if chat_id == owner_chat and chat_id:
         if bot != "owner" and not single:
@@ -244,9 +250,21 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     else:
         return None
     voice = message.get("voice") or message.get("audio") or message.get("video_note")
-    text = message.get("text") or message.get("caption") or ""
-    if not voice and not text:
+    photos = message.get("photo") or []
+    attachment = ((photos[-1] if photos else None) or message.get("document")
+                  or message.get("video") or message.get("sticker"))
+    caption = str(message.get("caption") or "")
+    plain_text = str(message.get("text") or "")
+    if not voice and not attachment and not plain_text:
         return None
+    if voice:
+        kind, text, file_id = "voice", "", voice.get("file_id")
+    elif attachment:
+        kind = ("photo" if photos else "document" if message.get("document") else
+                "video" if message.get("video") else "sticker")
+        text, file_id = caption or f"({kind} без подписи)", attachment.get("file_id")
+    else:
+        kind, text, file_id = "text", plain_text, None
     name = " ".join(filter(None, [sender.get("first_name"), sender.get("last_name")])) or str(
         sender.get("username", "")
     )
@@ -259,11 +277,14 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
         author_id=str(sender.get("id", "")),
         author_name=name,
         ts=float(message.get("date", 0)),
-        kind="voice" if voice and not text else "text",
+        kind=kind,
         text=text,
-        file_id=voice.get("file_id") if voice and not text else None,
+        file_id=file_id,
         reply_to=str(reply["message_id"]) if reply.get("message_id") else None,
         chat_title=title,
+        caption=caption,
+        edited=edited,
+        edit_ts=float(message.get("edit_date") or 0) or None,
     )
 
 

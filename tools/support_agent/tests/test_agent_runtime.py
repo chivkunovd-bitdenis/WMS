@@ -21,20 +21,31 @@ def fake_server(path: Path) -> None:
 import json, sys
 def send(value):
     sys.stdout.write(json.dumps(value) + '\\n'); sys.stdout.flush()
+has_project = False
 for line in sys.stdin:
     msg = json.loads(line)
     method = msg.get('method')
     if method == 'initialize':
         send({'id': msg['id'], 'result': {}})
+    elif method == 'config/read':
+        send({'id': msg['id'], 'result': {'config': {'mcp_servers': {}}}})
     elif method == 'thread/start':
         params = msg['params']
+        has_project = any(t.get('name') == 'project' for t in params.get('dynamicTools', []))
         send({'id': msg['id'], 'result': {'model': params['model'], 'thread': {'id': 'thread-1'}}})
     elif method == 'thread/resume':
         send({'id': msg['id'], 'result': {'thread': {'id': msg['params']['threadId']}}})
     elif method == 'turn/start':
         send({'id': msg['id'], 'result': {'turn': {'id': 'turn-1'}}})
-        send({'id': 99, 'method': 'item/tool/call', 'params': {'tool': 'read_file',
-              'namespace': 'project', 'arguments': {'path': 'README.md'}}})
+        send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage',
+              'phase': 'commentary', 'text': 'Reading current facts'}}})
+        if has_project:
+            send({'id': 99, 'method': 'item/tool/call', 'params': {'tool': 'read_file',
+                  'namespace': 'project', 'arguments': {'path': 'README.md'}}})
+        else:
+            send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage',
+                  'phase': 'final_answer', 'text': 'routed'}}})
+            send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
     elif msg.get('id') == 99:
         reply = msg['result']['contentItems'][0]['text']
         send({'method': 'thread/tokenUsage/updated', 'params': {'tokenUsage': {
@@ -116,6 +127,23 @@ def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> No
     state = store.kv_get("agent_session:owner:codex:gpt-5.6-sol:readonly")
     assert state["thread_id"] == "thread-1" and state["rollover"] is True
     assert "900000" not in str(state)
+
+
+def test_dispatch_turn_omits_project_reader_and_streams_completed_commentary(tmp_path: Path) -> None:
+    cfg = make_config(tmp_path)
+    Path(cfg.repo).mkdir()
+    binary = tmp_path / "fake-codex"
+    fake_server(binary)
+    cfg.llm.codex_bin = str(binary)
+    store = Store(cfg.db_path)
+    progress: list[str] = []
+    result = LlmRouter(cfg, store).agent_turn(
+        "Route new event", session_key="agent:dispatcher", mode="readonly",
+        effort="medium", include_project_tools=False, progress_callback=progress.append,
+    )
+    assert result.text == "routed" and progress == ["Reading current facts"]
+    row = store.row("SELECT effort FROM llm_calls ORDER BY id DESC LIMIT 1")
+    assert row is not None and row["effort"] == "medium"
 
 
 def test_full_project_mode_requires_trusted_owner(tmp_path: Path) -> None:
