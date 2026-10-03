@@ -1,0 +1,7 @@
+{
+  "model": "sonnet",
+  "provider": "claude",
+  "reply": "Файл создан по пути:\n\n```\n/Users/deniscivkunov/Projects/WMS/.worktrees/wms639-support-agent/.bot-audit-20261003/native-fixture/preview/index.html\n```\n\nЧто внутри: один автономный HTML без внешних зависимостей. Заголовок «Проверка макета WMS» и жёлтый бейдж «Тестовые данные» вверху. Ниже карточка с двумя строками — ячейки A-01 и A-02 с синтетическими количествами. Кнопка «Показать детали» при нажатии раскрывает блок с текстом «Интерактивность работает» и меняет подпись на «Скрыть детали»; повторное нажатие скрывает блок обратно. Всё адаптировано под узкий экран телефона через viewport-мету и резиновую вёрстку.",
+  "source": "docs/reviews/artifacts/wms-641/preview-smoke",
+  "scope": "synthetic preview; no client data"
+}
