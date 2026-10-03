@@ -137,6 +137,7 @@ class Pipeline:
         self.register_bound_chats()
         self.owner_groups = OwnerGroup(self)
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
+        self.night: Any = None  # NightRunner, подключается в runner
         self.mockups: Any = None
         self.agent: Any = None  # model-led conversation; attached by runner when enabled
         self.stages: dict[str, Callable[[int], None]] = {
@@ -149,6 +150,9 @@ class Pipeline:
             "task_create": self.stage_task_create,
             "hotfix": self.stage_hotfix,
             "mockup": self.stage_mockup,
+            "development": self.stage_development,
+            "release": self.stage_release,
+            "report": self.stage_report,
         }
 
     # ===== утилиты ====================================================================
@@ -678,7 +682,11 @@ class Pipeline:
 
     def _progress_key(self, tid: int) -> tuple[str, str]:
         t = self.store.ticket(tid)
-        return t["stage"], str(self.store.data(tid).get("hotfix", {}).get("step", ""))
+        data = self.store.data(tid)
+        step = data.get("hotfix", {}).get("step", "")
+        if t["stage"] in ("development", "release", "report"):
+            step = data.get("night", {}).get("step", step)
+        return t["stage"], str(step)
 
     def process_ticket(self, tid: int) -> None:
         """Идёт по стадиям, пока обращение готово двигаться дальше (без ожидания следующего цикла)."""
@@ -1676,6 +1684,18 @@ class Pipeline:
     # ===== хотфикс и макеты (R23-R27, R31) =============================================
     def stage_hotfix(self, tid: int) -> None:
         self.hotfix.step(tid)
+
+    def stage_development(self, tid: int) -> None:
+        if self.night is not None:
+            self.night.development(tid)
+
+    def stage_release(self, tid: int) -> None:
+        if self.night is not None:
+            self.night.release(tid)
+
+    def stage_report(self, tid: int) -> None:
+        if self.night is not None:
+            self.night.report(tid)
 
     def stage_mockup(self, tid: int) -> None:
         self.mockups.run(tid)

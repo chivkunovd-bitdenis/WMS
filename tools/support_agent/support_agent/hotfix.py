@@ -128,6 +128,50 @@ class HotfixRunner:
     def fetch(self) -> None:
         self.git("fetch", "origin")
 
+    def ensure_worktree(self, branch: str, path: str | Path,
+                        base: str = "origin/etalon") -> Path:
+        """Idempotently create a named worktree from a verified caller-selected base."""
+        target = Path(path)
+        self.fetch()
+        if not target.exists():
+            self.git("worktree", "add", "-b", branch, str(target), base)
+        return target
+
+    def push_branch(self, branch: str) -> None:
+        """Use the trusted checkout for a repeat-safe branch publication."""
+        self.git("push", "-u", "origin", branch)
+
+    def find_pr(self, branch: str) -> dict[str, Any] | None:
+        res = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
+                           "number,url,state"])
+        try:
+            rows = json.loads(res.out or "[]")
+        except ValueError:
+            rows = []
+        return rows[0] if res.rc == 0 and rows else None
+
+    def ensure_pr(self, branch: str, *, base: str, title: str, body: str) -> dict[str, Any]:
+        """Read before create and read after it, so a lost create response is not repeated."""
+        found = self.find_pr(branch)
+        if found is None:
+            self.run_gh(["gh", "pr", "create", "--base", base, "--head", branch,
+                         "--title", title, "--body", body])
+            found = self.find_pr(branch)
+        if found is None:
+            raise StepFailed("pull request не удалось найти после создания")
+        return found
+
+    def pr_checks(self, pr: int | str) -> list[dict[str, Any]]:
+        """Read PR checks; polling never reruns CI."""
+        res = self.run_gh(["gh", "pr", "checks", str(pr), "--json", "name,bucket"])
+        try:
+            checks = json.loads(res.out or "[]")
+        except ValueError as exc:
+            raise StepFailed("не удалось прочитать состояние CI") from exc
+        if not isinstance(checks, list):
+            raise StepFailed("не удалось прочитать состояние CI")
+        return checks
+
     def analysis_dir(self) -> Path:
         """Свежий origin/etalon только для чтения аналитиком (не чужой рабочий checkout)."""
         path = Path(self.cfg.repo) / ".worktrees" / "support-agent-etalon"
@@ -323,9 +367,7 @@ class HotfixRunner:
         number = h["number"]
         branch = f"hotfix/wms-{number}-support"
         path = Path(self.cfg.repo) / ".worktrees" / f"wms{number}-hotfix"
-        self.fetch()
-        if not path.exists():
-            self.git("worktree", "add", "-b", branch, str(path), "origin/etalon")
+        self.ensure_worktree(branch, path)
         self.save(tid, h, step="dev", branch=branch, path=str(path))
 
     # -- разработчик -------------------------------------------------------------------
@@ -518,28 +560,18 @@ class HotfixRunner:
 
     # -- pull request ---------------------------------------------------------------------
     def _s_pr(self, tid: int, h: dict[str, Any]) -> None:
-        number, branch, path = f"WMS-{h['number']}", h["branch"], h["path"]
+        number, branch = f"WMS-{h['number']}", h["branch"]
         self.fetch()
         if self._number_collides(h):
             raise StepFailed(f"номер {number} уже занят в origin/etalon параллельной работой")
-        self.git("push", "-u", "origin", branch)  # из доверенного основного репозитория; повтор безопасен
-        existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
-                             "number,url"], path)
-        found = json.loads(existing.out) if existing.rc == 0 and existing.out.strip() else []
-        if not found:
-            title = f"fix({number}): {self.p.title_of(tid)}"[:100]
-            body = (f"Облегчённый хотфикс по «кати» владельца (WMS-641).\n\n"
-                    f"{(h.get('dev') or {}).get('summary', '')}\n\n"
-                    "Приёмка аналитика не проводилась.\n\n"
-                    "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
-            self.must_gh(["gh", "pr", "create", "--base", "etalon", "--head", branch, "--title", title,
-                       "--body", body], path)
-            existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
-                                 "number,url"], path)
-            found = json.loads(existing.out or "[]")
-        if not found:
-            raise StepFailed("pull request не удалось найти после создания")
-        self.save(tid, h, step="ci", pr=found[0]["number"], pr_url=found[0]["url"],
+        self.push_branch(branch)
+        title = f"fix({number}): {self.p.title_of(tid)}"[:100]
+        body = (f"Облегчённый хотфикс по «кати» владельца (WMS-641).\n\n"
+                f"{(h.get('dev') or {}).get('summary', '')}\n\n"
+                "Приёмка аналитика не проводилась.\n\n"
+                "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
+        found = self.ensure_pr(branch, base="etalon", title=title, body=body)
+        self.save(tid, h, step="ci", pr=found["number"], pr_url=found["url"],
                   ci_started=self.p.clock())
 
     def _number_collides(self, h: dict[str, Any]) -> bool:
@@ -549,11 +581,7 @@ class HotfixRunner:
     # -- CI -------------------------------------------------------------------------------
     def _s_ci(self, tid: int, h: dict[str, Any]) -> None:
         # gh pr checks возвращает код 8 (ждём) и 1 (упало) и при --json: разбираем вывод, не код.
-        res = self.run_gh(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
-        try:
-            checks = json.loads(res.out or "[]")
-        except ValueError:
-            raise StepFailed("не удалось прочитать состояние CI") from None
+        checks = self.pr_checks(h["pr"])
         buckets = {c["bucket"] for c in checks}
         now = self.p.clock()
         if checks and "fail" in buckets:
