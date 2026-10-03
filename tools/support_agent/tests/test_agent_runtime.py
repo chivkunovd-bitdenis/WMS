@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from support_agent.app_server import _occupancy
-from support_agent.llm import LlmRouter
+from support_agent.llm import LlmRouter, normalize_agent_tools
 from support_agent.store import Store
 
 from .conftest import ExecResult, make_config
@@ -46,6 +46,21 @@ for line in sys.stdin:
 
 def test_actual_context_not_lifetime_total() -> None:
     assert _occupancy({"last": {"totalTokens": 123}, "total": {"totalTokens": 900_000}}) == 123
+
+
+def test_real_agent_specs_and_owner_style_use_one_native_format(tmp_path: Path) -> None:
+    from support_agent.agent_tools import AgentTools
+
+    cfg = make_config(tmp_path)
+    tools = AgentTools.__new__(AgentTools)
+    # specs() only describes tools and does not touch collaborators.
+    plain = tools.specs("owner")
+    nested = {"type": "function", "function": {"name": "project_job",
+              "description": "Execute owner project work", "parameters": {"type": "object",
+              "properties": {"goal": {"type": "string"}}}}}
+    normalized = normalize_agent_tools([*plain, nested])
+    assert all(spec["type"] == "function" and "inputSchema" in spec for spec in normalized)
+    assert {spec["name"] for spec in normalized} >= {"project_job", plain[0]["name"]}
 
 
 def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> None:

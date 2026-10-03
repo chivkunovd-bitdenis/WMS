@@ -43,6 +43,7 @@ class AppServerTurn:
         *,
         model: str,
         provider: str,
+        effort: str,
         cwd: str,
         mode: str,
         system: str,
@@ -168,7 +169,7 @@ class AppServerTurn:
                 session_started(thread_id)
             started_turn = rpc("turn/start", {"threadId": thread_id,
                                               "input": [{"type": "text", "text": prompt}],
-                                              "model": model})
+                                              "model": model, "effort": effort})
             turn_id = (started_turn.get("turn") or {}).get("id")
             if isinstance(turn_id, str):
                 active_turn.update({"threadId": thread_id, "turnId": turn_id})

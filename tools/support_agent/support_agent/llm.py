@@ -141,6 +141,26 @@ def extract_json(text: str) -> dict[str, Any]:
     raise ValueError("no JSON object in model answer")
 
 
+def normalize_agent_tools(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Accept existing AgentTools specs and OpenAI-style caller specs once."""
+    normalized: list[dict[str, Any]] = []
+    for raw in specs:
+        if raw.get("type") == "namespace":
+            inner = normalize_agent_tools(raw.get("tools") or [])
+            normalized.append({"type": "namespace", "name": raw["name"],
+                               "description": raw.get("description", ""), "tools": inner})
+            continue
+        source = raw.get("function") if isinstance(raw.get("function"), dict) else raw
+        name = source.get("name")
+        schema = source.get("inputSchema", source.get("parameters", {"type": "object"}))
+        if not isinstance(name, str) or not name or not isinstance(schema, dict):
+            raise ValueError("invalid agent tool spec")
+        normalized.append({"type": "function", "name": name,
+                           "description": str(source.get("description") or ""),
+                           "inputSchema": schema})
+    return normalized
+
+
 class LlmRouter:
     def __init__(self, cfg: Config, store: Store, exec_fn: ExecFn = default_exec) -> None:
         self.cfg = cfg
@@ -192,6 +212,7 @@ class LlmRouter:
         if not work_cwd:
             raise ValueError("agent project cwd is required")
         work_cwd = str(Path(work_cwd).resolve())
+        tools = normalize_agent_tools(tools or [])
         if mode == "readonly":
             from .readonly_mcp import TOOLS, Reader, call_tool
 
@@ -215,7 +236,7 @@ class LlmRouter:
             return self._claude_agent_turn(
                 prompt, session_key=session_key, model=model, system=system,
                 tools=tools or [], tool_handler=tool_handler, mode=mode,
-                cwd=work_cwd, timeout=timeout,
+                cwd=work_cwd, timeout=timeout, cancelled=cancelled,
             )
         key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
         saved = self.store.kv_get(key, {})
@@ -229,7 +250,8 @@ class LlmRouter:
                     "Сохрани передачу следующей сессии: цель, текущий ход работы, подтверждённые факты "
                     "и источники, открытые вопросы, уже совершённые действия и следующий шаг. "
                     "Не исполняй инструменты и не добавляй неподтверждённые факты.",
-                    model=model, provider=provider, cwd=work_cwd, mode="readonly",
+                    model=model, provider=provider, effort=self.cfg.llm.codex_effort,
+                    cwd=work_cwd, mode="readonly",
                     system=prompts.WMS_SYSTEM_POLICY, session_id=session_id,
                     tools=[], tool_handler=None,
                 )
@@ -254,7 +276,8 @@ class LlmRouter:
 
         try:
             answer, thread_id, occupied = turn.run(
-                prompt, model=model, provider=provider, cwd=work_cwd, mode=mode,
+                prompt, model=model, provider=provider, effort=self.cfg.llm.codex_effort,
+                cwd=work_cwd, mode=mode,
                 system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
                 session_id=session_id, tools=tools or [], tool_handler=tool_handler,
                 session_started=started, cancelled=cancelled,
@@ -273,6 +296,7 @@ class LlmRouter:
         tools: list[dict[str, Any]],
         tool_handler: Callable[[str, dict[str, Any]], dict[str, Any]] | None,
         mode: str, cwd: str, timeout: int,
+        cancelled: Callable[[], bool] | None,
     ) -> LlmResult:
         """Claude CLI keeps native tools; JSON tool requests bridge service tools."""
         key = f"agent_session:{session_key}:claude:{model}:{mode}"
@@ -280,6 +304,23 @@ class LlmRouter:
         state = saved if isinstance(saved, dict) else {}
         session_id = state.get("thread_id")
         system_text = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "")
+        handoff = str(state.get("handoff") or "")
+        if state.get("rollover") and session_id:
+            argv = self.build_claude(model, "text", (session_id, True), system_text, cwd)
+            transfer = self.exec(
+                argv, cwd, min(timeout, 300),
+                "Сохрани передачу следующей сессии: цель, подтверждённые факты и источники, "
+                "уже совершённые действия, открытые вопросы и следующий шаг. Ничего не выполняй.",
+            )
+            handoff_text, _, failed = _parse_claude(transfer)
+            if transfer.rc != 0 or failed or not handoff_text.strip():
+                raise LlmUnavailable("Claude context handoff unavailable; old session retained")
+            handoff = handoff_text
+            session_id = None
+            self.store.kv_set(key, {"thread_id": None, "handoff": handoff,
+                                    "rollover": False})
+        if handoff and not session_id:
+            prompt = f"Передача прошлой сессии (сверяй с авторитетным состоянием):\n{handoff}\n\n{prompt}"
         names = []
         for spec in tools:
             if spec.get("type") == "namespace":
@@ -297,15 +338,29 @@ class LlmRouter:
         allowed = {name for name, _, _ in names}
         current = prompt
         for _ in range(20):
+            if cancelled is not None and cancelled():
+                raise LlmUnavailable("Claude turn cancelled; external outcome must be verified")
             session = (str(session_id), True) if session_id else (str(uuid.uuid4()), False)
             claude_mode = "text" if mode == "readonly" else mode
             argv = self.build_claude(model, claude_mode, session, system_text, cwd)
             result = self.exec(argv, cwd, timeout, current)
             answer, new_id, is_error = _parse_claude(result)
+            if cancelled is not None and cancelled():
+                raise LlmUnavailable("Claude turn cancelled; external outcome must be verified")
             if result.rc != 0 or is_error:
                 raise LlmUnavailable("explicit Claude model unavailable or turn failed")
             session_id = new_id or session[0]
-            self.store.kv_set(key, {"thread_id": session_id})
+            try:
+                raw = json.loads(result.out)
+            except ValueError:
+                raw = {}
+            usage = raw.get("usage") or {}
+            occupied = 0
+            if int(raw.get("num_turns") or 1) == 1 and isinstance(usage, dict):
+                occupied = sum(int(usage.get(field) or 0) for field in (
+                    "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+            self.store.kv_set(key, {"thread_id": session_id, "handoff": handoff,
+                                    "rollover": occupied >= self.cfg.agent.context_limit_tokens})
             if not allowed:
                 return LlmResult(answer, "claude", model, session_id)
             try:
