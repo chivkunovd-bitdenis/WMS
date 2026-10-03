@@ -236,6 +236,7 @@ class Pipeline:
             source=inb.source, chat_id=inb.chat_id, msg_id=inb.msg_id, role=inb.role,
             author_id=inb.author_id, author_name=inb.author_name, ts=inb.ts, kind=inb.kind,
             text=inb.text, file_id=inb.file_id, reply_to=inb.reply_to,
+            edited=inb.edited, edit_ts=inb.edit_ts, caption=inb.caption,
         )
 
     def transcribe_pending(self) -> None:
@@ -264,7 +265,8 @@ class Pipeline:
             else:
                 self.store.kv_set(f"voice_retry:{m['id']}", self.clock() + 30 * attempts)
             return
-        self.store.set_message(m["id"], text=f"(расшифровка голосового) {text}", status="new")
+        self.store.complete_transcription(m["id"], int(m["revision"]),
+                                          f"(расшифровка голосового) {text}")
 
     def _seller_for_chat(self, chat_id: int, role: str) -> str:
         chat = self.cfg.telegram.chats.get(chat_id)
@@ -276,7 +278,8 @@ class Pipeline:
 
     # ===== маршрутизация сообщений =====================================================
     def route_messages(self) -> None:
-        chats = {m["chat_id"] for m in self.store.messages_with_status("new")}
+        chats = {m["chat_id"] for m in self.store.messages_with_status("new")
+                 if self.agent is None or m["role"] not in ("owner", "client", "partner")}
         for chat_id in chats:
             self.pool.submit(f"chat:{chat_id}", lambda c=chat_id: self.process_chat(c))  # type: ignore[misc]
 
@@ -647,9 +650,9 @@ class Pipeline:
     def tick(self) -> None:
         """Раз в цикл: запускает всё, что готово. Параллельность — через пул (R34)."""
         self.transcribe_pending()
-        self.route_messages()
         if self.agent is not None:
             self.agent.tick()
+        self.route_messages()
         now = self.clock()
         for t in self.store.tickets_in(*self.stages):
             if self._ready(t, now):

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from support_agent.agent_authorization import SemanticAuthorization
 from support_agent.agent_coordinator import AgentCoordinator
 from support_agent.config import config_from_dict
 from support_agent.llm import LlmResult
@@ -17,6 +19,7 @@ class StubTools:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
         self.cards: list[dict[str, Any]] = []
+        self.semantic_verifier: SemanticAuthorization | None = None
 
     def specs(self, scope):
         return []
@@ -39,6 +42,11 @@ class StubLlm:
         return LlmResult(self.answer, "codex", kwargs["model"], "session")
 
 
+class FixtureVerifier(SemanticAuthorization):
+    def check(self, event: Any, action: str, args: dict[str, Any]) -> dict[str, Any]:
+        return {"authorized": True, "reason": "fixture"}
+
+
 def coordinator(tmp_path: Path, *, now: list[float], store: Store | None = None):
     cfg = config_from_dict({"repo": str(tmp_path / "repo"), "state_dir": str(tmp_path / "state"),
                             "telegram": {"owner_user_id": 42, "owner_chat_id": 4242},
@@ -50,8 +58,12 @@ def coordinator(tmp_path: Path, *, now: list[float], store: Store | None = None)
     tools = StubTools()
     pipe = SimpleNamespace(cfg=cfg, store=db, llm=llm, clock=lambda: now[0],
                            pool=InlinePool(), _owner_snapshot=lambda: [],
+                           _is_bind_reply=lambda *_: None,
                            _seller_for_chat=lambda *_: "client", mockups=None)
-    return AgentCoordinator(pipe, tools), db, llm, tools
+    agent = AgentCoordinator(pipe, tools)
+    agent.semantic_verifier = FixtureVerifier(agent)
+    tools.semantic_verifier = agent.semantic_verifier
+    return agent, db, llm, tools
 
 
 def message(store: Store, chat: int, author: str, text: str) -> int:
@@ -237,3 +249,24 @@ def test_interrupted_mockup_is_queued_for_same_worktree_recovery(tmp_path):
     mockup = store.data(tid)["agent"]["mockup"]
     assert mockup["status"] == "queued"
     assert "inspect" in mockup["recovery_note"]
+
+
+def test_independent_project_jobs_can_run_concurrently(tmp_path: Path) -> None:
+    agent, _, _, _ = coordinator(tmp_path, now=[100.0])
+    first_started = threading.Event()
+    second_started = threading.Event()
+    release = threading.Event()
+
+    def run(job_id: str) -> None:
+        if job_id == "first":
+            first_started.set()
+            assert release.wait(2)
+        else:
+            second_started.set()
+
+    agent._run_job = run  # type: ignore[method-assign]
+    agent._submit_job("first")
+    assert first_started.wait(1)
+    agent._submit_job("second")
+    assert second_started.wait(1)
+    release.set()

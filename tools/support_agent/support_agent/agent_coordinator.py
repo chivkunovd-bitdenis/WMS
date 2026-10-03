@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .agent_authorization import SemanticAuthorization
+from .agent_dispatcher import AgentDispatcher
 from .llm import LlmUnavailable
 
 log = logging.getLogger(__name__)
@@ -67,9 +69,13 @@ class AgentCoordinator:
                      else Path(__file__).resolve().parents[3])
         self.system = INSTRUCTIONS.read_text(encoding="utf-8")
         # Project commands can run for many minutes without occupying chat workers.
-        self.jobs = ThreadPoolExecutor(max_workers=3, thread_name_prefix="support-project")
+        self.jobs = ThreadPoolExecutor(max_workers=max(1, self.cfg.limits.max_parallel),
+                                       thread_name_prefix="support-project")
         self.job_lock = threading.RLock()
         self.active_jobs: set[str] = set()
+        self.semantic_verifier = SemanticAuthorization(self)
+        self.tools.semantic_verifier = self.semantic_verifier
+        self.dispatcher = AgentDispatcher(self)
 
     def _owner(self, m: Any) -> bool:
         return (int(m["chat_id"]) == self.cfg.telegram.owner_chat_id
@@ -79,7 +85,8 @@ class AgentCoordinator:
     def _context(self, m: Any, *, owner: bool) -> dict[str, Any]:
         return {"event_id": int(m["id"]), "chat_id": int(m["chat_id"]),
                 "author_id": str(m["author_id"]), "owner": owner,
-                "source": str(m["source"]), "message_id": str(m["msg_id"])}
+                "source": str(m["source"]), "message_id": str(m["msg_id"]),
+                "revision": int(m["revision"])}
 
     def _local_now(self) -> str:
         return datetime.fromtimestamp(self.clock(), ZoneInfo(self.cfg.agent.timezone)).isoformat()
@@ -110,6 +117,8 @@ class AgentCoordinator:
         return result
 
     def handle_message(self, m: Any) -> None:
+        # Compatibility for direct callers. The normal path is the durable
+        # dispatcher; old tests exercise a single conversation turn here.
         owner = self._owner(m)
         # An owner-role message from a different author is only untrusted chat text.
         if m["role"] == "owner" and not owner:
@@ -151,10 +160,144 @@ class AgentCoordinator:
                                          purpose="agent_owner_answer", repeat_ok=False)
             self.store.set_message(int(m["id"]), status="handled")
 
+
+    def run_topic_turn(self, topic: dict[str, Any], event: dict[str, Any],
+                       source: Any | None) -> dict[str, Any]:
+        owner = bool(source is not None and self._owner(source))
+        scope = "owner" if owner else "client"
+        context = self._context(source, owner=owner) if source is not None else {
+            "event_id": 0, "chat_id": topic["chat_id"], "author_id": "", "owner": False,
+            "source": "internal", "message_id": "", "topic_id": topic["id"],
+        }
+        context["topic_id"] = topic["id"]
+        starting_generation = int(topic.get("generation", 0))
+        model_pref = self.store.kv_get("agent_owner_model", {}) if owner else {}
+        model = str(model_pref.get("model") or self.cfg.agent.owner_model)
+        provider = str(model_pref.get("provider") or self.cfg.agent.owner_provider)
+        prompt = json.dumps({
+            "event": event, "source_message": dict(source) if source is not None else None,
+            "topic": {k: v for k, v in topic.items() if k != "pending"},
+            "current_time": self._local_now(), "timezone": self.cfg.agent.timezone,
+            "current_context": self._snapshot(int(topic["chat_id"]), owner),
+            "trusted_scope": scope,
+            "instructions": "Continue this topic from its durable memory and source history. "
+            "Use tools for facts/actions. Do not infer consent from silence or from another "
+            "person. A recheck timer can continue reading or ask a process question; it "
+            "never grants a new approval, send, development job or release. If a deeper "
+            "history is needed, read it through tools. For internal "
+            "completion events, do not call owner-privileged tools. Send substantive owner "
+            "progress while working, and return a short owner answer only when appropriate. "
+            "At the end include a JSON object with summary, next_action, optional wake_at "
+            "(Unix timestamp), task_ids and affected_areas when known. Do not invent "
+            "dependencies or approvals.",
+        }, ensure_ascii=False, default=str)
+        specs = [{**spec, "type": "function"} for spec in self.tools.specs(scope=scope)]
+        if owner:
+            specs += OWNER_TOOLS
+
+        def dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
+            if event["kind"] != "input":
+                allowed_recheck = {"read_context", "read_history", "read_data",
+                                   "read_trello_card", "remember", "owner_digest",
+                                   "queue_process_reply", "job_status"}
+                if name == "task_record" and not args.get("confirm_author"):
+                    pass
+                elif name not in allowed_recheck:
+                    return {"error": "timer_or_completion_cannot_grant_new_approval"}
+            fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
+            if fresh.get("cancel_requested"):
+                return {"error": "topic_cancelled_outcome_requires_inspection"}
+            if name not in ("read_context", "read_history", "read_data", "read_trello_card",
+                            "job_status") and int(fresh.get("generation", 0)) != starting_generation:
+                return {"error": "new_followup_pending_reconsider_action"}
+            if source is not None:
+                current = self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
+                if current is None or int(current["revision"]) != int(source["revision"]):
+                    return {"error": "source_message_edited_reconsider_action"}
+            if name in {s["name"] for s in OWNER_TOOLS}:
+                return self._owner_tool(name, args, context) if owner else {"error": "owner_only"}
+            if source is None:
+                return {"error": "internal_event_has_no_source"}
+            if name == "read_history":
+                return self._read_history(args, context)
+            return self.tools.dispatch(name, args, context)
+
+        specs.append(_tool("read_history", "Search or page stored inbound and outbound chat history, "
+                           "including edits and delivery state.",
+                           {"chat_id": {"type": "integer"}, "before": {"type": "string"},
+                            "after": {"type": "string"}, "limit": {"type": "integer"},
+                            "query": {"type": "string"}}, []))
+
+        def progress(message: str) -> None:
+            if not message.strip():
+                return
+            # Commentary is an event for the single moderator, never a direct
+            # completion claim or a second independent owner notification.
+            digest = hashlib.sha256(message.encode()).hexdigest()[:16]
+            self.dispatcher.emit_internal(topic["id"], "worker_progress", {
+                "event_key": f"progress:{event['id']}:{digest}", "text": message[:1500],
+                "source_event": event["id"],
+            })
+
+        result = self.llm.agent_turn(
+            prompt, session_key=f"topic:{topic['id']}", model=model, provider=provider,
+            system=self.system, tool_handler=dispatch, tools=specs, mode="readonly",
+            cwd=str(self.repo), timeout=900, progress_callback=progress,
+            effort="high", include_project_tools=True,
+            cancelled=lambda: bool(self.store.kv_get(f"agent_topic:{topic['id']}", {})
+                                   .get("cancel_requested")),
+        )
+        body = result.text.strip()
+        try:
+            from .llm import extract_json
+
+            parsed = extract_json(body)
+        except (ValueError, TypeError):
+            parsed = {}
+        answer = str(parsed.get("answer") or "") if isinstance(parsed, dict) else ""
+        fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
+        current_source = (self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
+                          if source is not None else None)
+        answer_queued = bool(owner and source is not None and answer
+                             and not fresh.get("cancel_requested")
+                             and int(fresh.get("generation", 0)) == starting_generation
+                             and current_source is not None
+                             and int(current_source["revision"]) == int(source["revision"]))
+        if answer_queued and source is not None:
+            self.store.queue_message(key=f"agent_answer:{event['id']}",
+                                     chat_id=int(source["chat_id"]), text=answer[:4000],
+                                     reply_to=str(source["msg_id"]), purpose="agent_owner_answer",
+                                     repeat_ok=False)
+        output = {"summary": str(parsed.get("summary") or topic.get("summary") or "")[:3000],
+                "next_action": str(parsed.get("next_action") or "")[:1000],
+                "wake_at": parsed.get("wake_at") if isinstance(parsed.get("wake_at"), (int, float)) else None,
+                "task_ids": parsed.get("task_ids") if isinstance(parsed.get("task_ids"), list)
+                else topic.get("task_ids", []),
+                "affected_areas": parsed.get("affected_areas")
+                if isinstance(parsed.get("affected_areas"), list) else topic.get("affected_areas", []),
+                "result": body[:4000], "answer_queued": answer_queued}
+        return output
+
+    def _read_history(self, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        chat_id = int(args.get("chat_id") or context["chat_id"])
+        if not context["owner"] and chat_id != int(context["chat_id"]):
+            return {"error": "chat_scope"}
+        limit = min(100, max(1, int(args.get("limit") or 50)))
+        return self.store.history_page(chat_id, before=args.get("before"),
+                                       after=args.get("after"), limit=limit,
+                                       query=args.get("query"))
+
     def _owner_tool(self, name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         source = self.store.row("SELECT * FROM messages WHERE id=?", (context.get("event_id"),))
         if source is None or not self._owner(source) or int(source["chat_id"]) != context.get("chat_id"):
             return {"error": "owner_source_required"}
+        if context.get("revision") and int(source["revision"]) != int(context["revision"]):
+            return {"error": "source_message_edited"}
+        if name in ("project_job", "schedule_project_job", "cancel_job", "send_job_file",
+                    "select_model"):
+            decision = self.semantic_verifier.check(source, name, args)
+            if not decision["authorized"]:
+                return {"error": "source_does_not_authorize_action", "reason": decision["reason"]}
         if name == "select_model":
             model, provider = str(args.get("model", "")).strip(), str(args.get("provider", "")).strip()
             if not model or provider not in ("codex", "claude"):
@@ -210,6 +353,7 @@ class AgentCoordinator:
             pref = self.store.kv_get("agent_owner_model", {})
             job = {"id": job_id, "source_event_id": context["event_id"],
                    "source_chat_id": context["chat_id"], "source_message_id": context["message_id"],
+                   "topic_id": context.get("topic_id") or f"topic-{context['event_id']}",
                    "request": request, "task_ids": args.get("task_ids") or [],
                    "model": str(args.get("model") or pref.get("model") or self.cfg.agent.owner_model),
                    "provider": str(args.get("provider") or pref.get("provider")
@@ -427,6 +571,15 @@ class AgentCoordinator:
                                 ensure_ascii=False)
             context = self._context(source, owner=True)
             context.update(job_id=job_id, worktree=str(worktree))
+            def job_progress(message: str) -> None:
+                if not message.strip():
+                    return
+                digest = hashlib.sha256(message.encode()).hexdigest()[:16]
+                self.dispatcher.emit_internal(str(job.get("topic_id")), "worker_progress", {
+                    "event_key": f"job_progress:{job_id}:{digest}", "job_id": job_id,
+                    "text": message[:1500],
+                })
+
             result = self.llm.agent_turn(prompt, session_key=f"job:{job_id}", model=job["model"],
                                          provider=job["provider"], system=self.system,
                                          tools=[{**spec, "type": "function"}
@@ -435,6 +588,7 @@ class AgentCoordinator:
                                              name, args, context),
                                          mode="owner", owner_authorized=True,
                                          cwd=str(worktree), timeout=3600,
+                                         progress_callback=job_progress,
                                          cancelled=lambda: bool(
                                              self.store.kv_get(f"agent_job:{job_id}", {})
                                              .get("cancel_requested")
@@ -457,9 +611,10 @@ class AgentCoordinator:
                                                   "Исход команд нужно проверить; успех не подтверждаю.",
                                              purpose="agent_job", repeat_ok=False)
                 return  # deadline switched to finalization while this turn was ending
-            self.store.queue_message(key=f"agent_job_done:{job_id}", chat_id=self.cfg.telegram.owner_chat_id,
-                                     text=f"Работа {job_id}: {result.text[:3600]}", purpose="agent_job",
-                                     repeat_ok=False)
+            self.dispatcher.emit_internal(str(job.get("topic_id")), "job_done", {
+                "event_key": f"job_done:{job_id}", "job_id": job_id,
+                "text": result.text[:3600], "status": "done",
+            })
         except LlmUnavailable as exc:
             latest = self.store.kv_get(f"agent_job:{job_id}", {})
             if latest.get("phase") == "finalize" and not finalizing:
@@ -505,6 +660,14 @@ class AgentCoordinator:
         return {"queued": queued, "key": key, "file": path.name}
 
     def tick(self) -> None:
+        # Existing owner binding replies are a transport protocol, not topic
+        # discussion. Everything else enters the single durable dispatcher.
+        for m in self.store.messages_with_status("new", 500):
+            if m["role"] == "owner" and self._owner(m):
+                pid = self.pipe._is_bind_reply(m)
+                if pid is not None:
+                    self.pipe._confirm_binding(m, pid)
+        self.dispatcher.tick()
         now = self.clock()
         for ticket in self.store.open_tickets():
             data = self.store.data(int(ticket["id"]))
@@ -550,6 +713,7 @@ class AgentCoordinator:
             self.pipe.pool.submit("agent_hourly", self._hourly)
 
     def recover_after_restart(self) -> None:
+        self.dispatcher.recover_after_restart()
         for jid in self.store.kv_get("agent_job_index", []):
             job = self.store.kv_get(f"agent_job:{jid}", {})
             if job.get("status") == "running":
