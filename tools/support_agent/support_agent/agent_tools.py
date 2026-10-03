@@ -277,6 +277,10 @@ class AgentTools:
         tid = args.get("ticket_id")
         if tid:
             self._ticket(tid, event, owner)
+        notices = self.store.kv_get(f"agent_task_notice_event:{event['id']}", [])
+        if (tid is not None and int(tid) in notices) or (tid is None and len(notices) == 1):
+            return {"status": "covered_by_task_notice", "owner_chat_id": self.p.cfg.telegram.owner_chat_id,
+                    "source_message_id": event["id"]}
         chat_id = int(event["chat_id"])
         source = f"Чат {chat_id}, сообщение {event['msg_id']}"
         key = f"agent_digest:{event['id']}:{int(tid or 0)}:{_digest(body)}"
@@ -402,15 +406,21 @@ class AgentTools:
                         }
                         self.store.patch_data(tid, agent=latest)
                 if card["status"] == "linked":
-                    self.p.say_owner(
-                        f"agent_task_confirmed:{tid}:{version}",
-                        f"Задача WMS-{document['number']} подтверждена автором: {title}\n"
-                        f"Карточка: {card['url']}\nВетка требований: {document['branch']} "
-                        f"({document['sha'][:12]}). Для этапа «Описание согласовано» требуется ваше "
-                        "отдельное утверждение этой версии.",
-                        tid,
-                        "task_notice",
-                    )
+                    with self.store.transaction():
+                        self.p.say_owner(
+                            f"agent_task_confirmed:{tid}:{version}",
+                            f"Задача WMS-{document['number']} подтверждена автором: {title}\n"
+                            f"Карточка: {card['url']}\nВетка требований: {document['branch']} "
+                            f"({document['sha'][:12]}). Для этапа «Описание согласовано» требуется ваше "
+                            "отдельное утверждение этой версии.",
+                            tid,
+                            "task_notice",
+                        )
+                        notice_key = f"agent_task_notice_event:{event['id']}"
+                        notices = list(self.store.kv_get(notice_key, []))
+                        if tid not in notices:
+                            notices.append(tid)
+                            self.store.kv_set(notice_key, notices)
             except (CanonicalTaskError, TrelloError) as exc:
                 return {
                     "ticket_id": tid,

@@ -94,6 +94,13 @@ def test_author_confirmation_requires_sent_description_and_later_author_message(
     assert result["author_confirmed"] is True
     assert result["document"]["number"] == 700
     assert seen_owner == [False]
+    digest = api.dispatch("owner_digest", {"ticket_id": task["ticket_id"],
+                                            "text": "Задача подтверждена"}, ctx(confirmation, 100, 5))
+    assert digest["status"] == "covered_by_task_notice"
+    assert api.dispatch("owner_digest", {"text": "Задача подтверждена"},
+                        ctx(confirmation, 100, 5))["status"] == "covered_by_task_notice"
+    owner_notices = store.rows("SELECT * FROM outbox WHERE chat_id=900")
+    assert len(owner_notices) == 1 and owner_notices[0]["purpose"] == "task_notice"
 
 
 def test_mockup_retry_reuses_task_after_failure_and_reports_published_version(tools):
