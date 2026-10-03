@@ -3,5 +3,16 @@
   "provider": "claude",
   "reply": "Файл создан по пути:\n\n```\n/Users/deniscivkunov/Projects/WMS/.worktrees/wms639-support-agent/.bot-audit-20261003/native-fixture/preview/index.html\n```\n\nЧто внутри: один автономный HTML без внешних зависимостей. Заголовок «Проверка макета WMS» и жёлтый бейдж «Тестовые данные» вверху. Ниже карточка с двумя строками — ячейки A-01 и A-02 с синтетическими количествами. Кнопка «Показать детали» при нажатии раскрывает блок с текстом «Интерактивность работает» и меняет подпись на «Скрыть детали»; повторное нажатие скрывает блок обратно. Всё адаптировано под узкий экран телефона через viewport-мету и резиновую вёрстку.",
   "source": "docs/reviews/artifacts/wms-641/preview-smoke",
-  "scope": "synthetic preview; no client data"
+  "scope": "synthetic preview; no client data",
+  "source_sha": "e7859835bc6a5afaf436d1ae6a4dae84eaf87529",
+  "public_url": "https://sellerfocus.pro/wms-previews/421155f6a3b7-641202610030000000000000/",
+  "verified": "HTTP 200 and exact index.html SHA256",
+  "browser_check": {
+    "url_opened": true,
+    "clicked": "Показать детали",
+    "button_after": "Скрыть детали",
+    "visible_after": "Интерактивность работает",
+    "mobile_viewport_width": 390,
+    "document_scroll_width": 390
+  }
 }

@@ -51,7 +51,7 @@ def main() -> None:
                        capture_output=True, check=True)
         assert not subprocess.check_output(["git", "status", "--porcelain", "--", tracked], cwd=ROOT)
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        url = publish(target, public_id="6412026100300000000000001")
+        url = publish(target, public_id="64120261003".ljust(24, "0"))
         evidence = json.loads(report.read_text(encoding="utf-8"))
         evidence.update(source_sha=sha, public_url=url, verified="HTTP 200 and exact index.html SHA256")
         report.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
