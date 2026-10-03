@@ -29,33 +29,77 @@ class AgentTools:
 
     def specs(self, scope: str) -> list[dict[str, Any]]:
         common = [
-            self._spec("read_context", "Read source messages, linked tasks and memory. Paginate with before_id.",
-                       {"chat_id": "integer", "ticket_id": "integer", "before_id": "integer", "limit": "integer"}),
-            self._spec("remember", "Save a source-linked current summary, facts, open questions and next step.",
-                       {"chat_id": "integer", "summary": "string", "facts": "array", "questions": "array",
-                        "next_step": "string", "source_message_ids": "array"}),
-            self._spec("task_record", "Create or revise one task from discussion; confirmation uses the actual author's message.",
-                       {"ticket_id": "integer", "chat_id": "integer", "title": "string",
-                        "description": "string", "is_frontend": "boolean", "source_message_ids": "array",
-                        "topic_key": "string",
-                        "confirm_author": "boolean"}),
+            self._spec(
+                "read_context",
+                "Read source messages, linked tasks and memory. Paginate with before_id.",
+                {"chat_id": "integer", "ticket_id": "integer", "before_id": "integer", "limit": "integer"},
+            ),
+            self._spec(
+                "remember",
+                "Save a source-linked current summary, facts, open questions and next step.",
+                {
+                    "chat_id": "integer",
+                    "summary": "string",
+                    "facts": "array",
+                    "questions": "array",
+                    "next_step": "string",
+                    "source_message_ids": "array",
+                },
+            ),
+            self._spec(
+                "task_record",
+                "Create or revise one task from discussion; confirmation uses the actual author's message.",
+                {
+                    "ticket_id": "integer",
+                    "chat_id": "integer",
+                    "title": "string",
+                    "description": "string",
+                    "is_frontend": "boolean",
+                    "source_message_ids": "array",
+                    "topic_key": "string",
+                    "confirm_author": "boolean",
+                },
+            ),
         ]
         if scope == "owner":
-            common.extend([
-                self._spec("approve_task", "Approve the current task description version from this owner message.",
-                           {"ticket_id": "integer", "version": "string"}),
-                self._spec("queue_reply", "Queue an owner-authorized exact message to a specified chat and task.",
-                           {"ticket_id": "integer", "chat_id": "integer", "text": "string",
-                            "version": "string", "reply_to": "string"}),
-                self._spec("trello_sync", "Create/find the card or move it to Description agreed after version approval.",
-                           {"ticket_id": "integer", "action": "string"}),
-                self._spec("request_mockup", "Queue Sonnet mockup for a confirmed frontend task.",
-                           {"ticket_id": "integer"}),
-            ])
+            common.extend(
+                [
+                    self._spec(
+                        "approve_task",
+                        "Approve the current task description version from this owner message.",
+                        {"ticket_id": "integer", "version": "string"},
+                    ),
+                    self._spec(
+                        "queue_reply",
+                        "Queue an owner-authorized exact message to a specified chat and task.",
+                        {
+                            "ticket_id": "integer",
+                            "chat_id": "integer",
+                            "text": "string",
+                            "version": "string",
+                            "reply_to": "string",
+                        },
+                    ),
+                    self._spec(
+                        "trello_sync",
+                        "Create/find the card or move it to Description agreed after version approval.",
+                        {"ticket_id": "integer", "action": "string"},
+                    ),
+                    self._spec(
+                        "request_mockup",
+                        "Queue Sonnet mockup for a confirmed frontend task.",
+                        {"ticket_id": "integer"},
+                    ),
+                ]
+            )
         else:
-            common.append(self._spec("queue_process_reply", "Ask one necessary question or show description for author confirmation.",
-                                     {"ticket_id": "integer", "kind": "string", "text": "string",
-                                      "reply_to": "string"}))
+            common.append(
+                self._spec(
+                    "queue_process_reply",
+                    "Ask one necessary question or show description for author confirmation.",
+                    {"ticket_id": "integer", "kind": "string", "text": "string", "reply_to": "string"},
+                )
+            )
         return common
 
     def ready_cards(self) -> list[dict[str, Any]]:
@@ -64,17 +108,33 @@ class AgentTools:
         if not list_id:
             return []
         cards = self.p.trello.board_cards()
-        return [{"id": card.get("id"), "name": card.get("name"), "url": card.get("shortUrl")}
-                for card in cards if card.get("idList") == list_id]
+        return [
+            {"id": card.get("id"), "name": card.get("name"), "url": card.get("shortUrl")}
+            for card in cards
+            if card.get("idList") == list_id
+        ]
 
     @staticmethod
     def _spec(name: str, description: str, fields: dict[str, str]) -> dict[str, Any]:
-        return {"name": name, "description": description, "inputSchema": {
-            "type": "object", "properties": {key: ({"type": kind, "items": {"type": "integer" if key == "source_message_ids" else "string"}}
-                                                       if kind == "array" else {"type": kind})
-                                           for key, kind in fields.items()},
-            "additionalProperties": False,
-        }}
+        return {
+            "name": name,
+            "description": description,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    key: (
+                        {
+                            "type": kind,
+                            "items": {"type": "integer" if key == "source_message_ids" else "string"},
+                        }
+                        if kind == "array"
+                        else {"type": kind}
+                    )
+                    for key, kind in fields.items()
+                },
+                "additionalProperties": False,
+            },
+        }
 
     def dispatch(self, name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         event = self._event(context)
@@ -99,8 +159,11 @@ class AgentTools:
 
     def _owner(self, event: Any) -> bool:
         cfg = self.p.cfg.telegram
-        return (event["role"] == "owner" and event["chat_id"] == cfg.owner_chat_id
-                and str(event["author_id"]) == str(cfg.owner_user_id))
+        return (
+            event["role"] == "owner"
+            and event["chat_id"] == cfg.owner_chat_id
+            and str(event["author_id"]) == str(cfg.owner_user_id)
+        )
 
     def _chat(self, requested: Any, event: Any, owner: bool) -> int:
         chat = int(requested or event["chat_id"])
@@ -119,8 +182,9 @@ class AgentTools:
             raise ToolDenied("source_messages_required")
         result = sorted({int(n) for n in ids})
         marks = ",".join("?" for _ in result)
-        rows = self.store.rows(f"SELECT id FROM messages WHERE chat_id=? AND id IN ({marks})",
-                               (chat_id, *result))
+        rows = self.store.rows(
+            f"SELECT id FROM messages WHERE chat_id=? AND id IN ({marks})", (chat_id, *result)
+        )
         if len(rows) != len(result):
             raise ToolDenied("source_message_out_of_scope")
         return result
@@ -136,7 +200,8 @@ class AgentTools:
         before = int(args.get("before_id") or 2**63 - 1)
         rows = self.store.rows(
             "SELECT id,source,chat_id,msg_id,role,author_id,author_name,ts,kind,text,reply_to,ticket_id "
-            "FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?", (chat_id, before, limit),
+            "FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?",
+            (chat_id, before, limit),
         )
         task_rows = self.store.rows(
             "SELECT id,kind,stage,author_id,data FROM tickets WHERE chat_id=? ORDER BY id DESC LIMIT 30",
@@ -144,13 +209,16 @@ class AgentTools:
         )
         outgoing = self.store.rows(
             "SELECT id,key,chat_id,reply_to,text,status,tg_message_id,ticket_id,purpose,created_at,sent_at "
-            "FROM outbox WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?", (chat_id, before, limit),
+            "FROM outbox WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?",
+            (chat_id, before, limit),
         )
-        return {"messages": [dict(r) for r in reversed(rows)],
-                "outgoing": [dict(r) for r in reversed(outgoing)],
-                "next_before_id": rows[-1]["id"] if len(rows) == limit else None,
-                "tasks": [{**dict(r), "data": json.loads(r["data"])} for r in task_rows],
-                "memory": self.store.kv_get(f"agent_memory:{chat_id}", {})}
+        return {
+            "messages": [dict(r) for r in reversed(rows)],
+            "outgoing": [dict(r) for r in reversed(outgoing)],
+            "next_before_id": rows[-1]["id"] if len(rows) == limit else None,
+            "tasks": [{**dict(r), "data": json.loads(r["data"])} for r in task_rows],
+            "memory": self.store.kv_get(f"agent_memory:{chat_id}", {}),
+        }
 
     def _tool_remember(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         chat_id = self._chat(args.get("chat_id"), event, owner)
@@ -158,10 +226,14 @@ class AgentTools:
         for name in ("facts", "questions"):
             if not isinstance(args.get(name), list):
                 raise ToolDenied(f"{name}_must_be_list")
-        memory = {"summary": str(args.get("summary") or "")[:8000],
-                  "facts": args["facts"][:50], "questions": args["questions"][:20],
-                  "next_step": str(args.get("next_step") or "")[:2000],
-                  "source_message_ids": sources, "updated_by_event": event["id"]}
+        memory = {
+            "summary": str(args.get("summary") or "")[:8000],
+            "facts": args["facts"][:50],
+            "questions": args["questions"][:20],
+            "next_step": str(args.get("next_step") or "")[:2000],
+            "source_message_ids": sources,
+            "updated_by_event": event["id"],
+        }
         self.store.kv_set(f"agent_memory:{chat_id}", memory)
         return {"saved": True, "source_message_ids": sources}
 
@@ -196,10 +268,16 @@ class AgentTools:
                 if found:
                     tid = int(found["id"])
                 else:
-                    tid = self.store.add_ticket(kind="agent_task", source=str(event["source"]),
-                        chat_id=chat_id, seller=self.p._seller_for_chat(chat_id, str(event["role"])),
-                        stage="agent_discussion", author_id=str(event["author_id"]),
-                        category="task", data={"agent": {"anchor": anchor, "topic_key": topic_key}})
+                    tid = self.store.add_ticket(
+                        kind="agent_task",
+                        source=str(event["source"]),
+                        chat_id=chat_id,
+                        seller=self.p._seller_for_chat(chat_id, str(event["role"])),
+                        stage="agent_discussion",
+                        author_id=str(event["author_id"]),
+                        category="task",
+                        data={"agent": {"anchor": anchor, "topic_key": topic_key}},
+                    )
             data = self.store.data(tid)
             prior = dict(data.get("agent") or {})
             if prior.get("version") != version:
@@ -207,8 +285,12 @@ class AgentTools:
                 prior.pop("owner_approval", None)
                 prior.pop("mockup", None)
                 prior["version"] = version
-            prior.update(title=title, description=description, is_frontend=bool(args.get("is_frontend")),
-                         source_message_ids=sources)
+            prior.update(
+                title=title,
+                description=description,
+                is_frontend=bool(args.get("is_frontend")),
+                source_message_ids=sources,
+            )
             if args.get("confirm_author"):
                 if str(event["author_id"]) != str(self.store.ticket(tid)["author_id"]):
                     raise ToolDenied("confirmation_requires_actual_author")
@@ -232,22 +314,37 @@ class AgentTools:
                     mockup_key = f"agent_mockup:{tid}:{version}"
                     latest = dict(self.store.data(tid).get("agent") or {})
                     if latest.get("version") == version and self.store.kv_once(mockup_key):
-                        latest["mockup"] = {"version": version, "status": "queued",
-                                            "source_event": event["id"]}
+                        latest["mockup"] = {
+                            "version": version,
+                            "status": "queued",
+                            "source_event": event["id"],
+                        }
                         self.store.patch_data(tid, agent=latest)
                 if card["status"] == "linked":
-                    self.p.say_owner(f"agent_task_confirmed:{tid}:{version}",
+                    self.p.say_owner(
+                        f"agent_task_confirmed:{tid}:{version}",
                         f"Задача WMS-{document['number']} подтверждена автором: {title}\n"
                         f"Карточка: {card['url']}\nВетка требований: {document['branch']} "
                         f"({document['sha'][:12]}). Для этапа «Описание согласовано» требуется ваше "
-                        "отдельное утверждение этой версии.", tid, "task_notice")
+                        "отдельное утверждение этой версии.",
+                        tid,
+                        "task_notice",
+                    )
             except (CanonicalTaskError, TrelloError) as exc:
-                return {"ticket_id": tid, "version": version, "status": "pending_external",
-                        "reason": str(exc)[:200]}
-        return {"ticket_id": tid, "version": version,
-                "document": document, "card": card,
-                "author_confirmed": prior.get("author_confirmation", {}).get("version") == version,
-                "owner_approved": prior.get("owner_approval", {}).get("version") == version}
+                return {
+                    "ticket_id": tid,
+                    "version": version,
+                    "status": "pending_external",
+                    "reason": str(exc)[:200],
+                }
+        return {
+            "ticket_id": tid,
+            "version": version,
+            "document": document,
+            "card": card,
+            "author_confirmed": prior.get("author_confirmation", {}).get("version") == version,
+            "owner_approved": prior.get("owner_approval", {}).get("version") == version,
+        }
 
     def _tool_approve_task(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         tid = int(args["ticket_id"])
@@ -274,11 +371,22 @@ class AgentTools:
         if not body:
             raise ToolDenied("empty_reply")
         key = f"agent_reply:{event['id']}:{tid}:{_digest(body)}"
-        created = self.store.queue_message(key=key, chat_id=chat_id, text=body,
-                        reply_to=args.get("reply_to"), ticket_id=tid, purpose="owner_authorized",
-                        repeat_ok=False)
-        return {"queued": created, "key": key, "status": self.store.outbox_by_key(key)["status"],
-                "owner_message_id": event["id"], "version": version}
+        created = self.store.queue_message(
+            key=key,
+            chat_id=chat_id,
+            text=body,
+            reply_to=args.get("reply_to"),
+            ticket_id=tid,
+            purpose="owner_authorized",
+            repeat_ok=False,
+        )
+        return {
+            "queued": created,
+            "key": key,
+            "status": self.store.outbox_by_key(key)["status"],
+            "owner_message_id": event["id"],
+            "version": version,
+        }
 
     def _tool_queue_process_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         tid = int(args["ticket_id"])
@@ -294,9 +402,15 @@ class AgentTools:
             raise ToolDenied("description_missing")
         version = agent.get("version", "discussion")
         key = f"agent_process:{tid}:{kind}:{version}"
-        created = self.store.queue_message(key=key, chat_id=ticket["chat_id"], text=body,
-                         reply_to=args.get("reply_to"), ticket_id=tid, purpose=kind,
-                         repeat_ok=False)
+        created = self.store.queue_message(
+            key=key,
+            chat_id=ticket["chat_id"],
+            text=body,
+            reply_to=args.get("reply_to"),
+            ticket_id=tid,
+            purpose=kind,
+            repeat_ok=False,
+        )
         return {"queued": created, "key": key, "status": self.store.outbox_by_key(key)["status"]}
 
     def _tool_trello_sync(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
@@ -308,16 +422,26 @@ class AgentTools:
             raise ToolDenied("author_confirmation_required")
         action = str(args.get("action") or "create")
         if action == "create":
-            if agent.get("document_version") != version or not agent.get("document_sha") or not agent.get("wms_number"):
+            if (
+                agent.get("document_version") != version
+                or not agent.get("document_sha")
+                or not agent.get("wms_number")
+            ):
                 raise ToolDenied("canonical_document_required")
             cfg = self.p.cfg.trello
             chat_id = self.store.ticket(tid)["chat_id"]
             chat_cfg = self.p.cfg.telegram.chats.get(chat_id)
-            list_id = (cfg.partner_list_id if chat_cfg and chat_cfg.role == "partner"
-                       else cfg.client_list_id)
-            result = ensure_card(self.store, self.p.trello, key=f"agent:{tid}", ticket_id=tid,
-                                 list_id=list_id, name=f"{agent['title']} [WMS-{agent.get('wms_number', '?')}]",
-                                 body=f"{agent['description']}\n\nВерсия: {version}\nИсточник: чат {self.store.ticket(tid)['chat_id']}")
+            list_id = cfg.partner_list_id if chat_cfg and chat_cfg.role == "partner" else cfg.client_list_id
+            body = f"{agent['description']}\n\nВерсия: {version}\nИсточник: чат {chat_id}"
+            result = ensure_card(
+                self.store,
+                self.p.trello,
+                key=f"agent:{tid}",
+                ticket_id=tid,
+                list_id=list_id,
+                name=f"{agent['title']} [WMS-{agent.get('wms_number', '?')}]",
+                body=body,
+            )
             if result.status == "linked":
                 self.store.patch_data(tid, card_id=result.card_id, card_url=result.url)
             return {"status": result.status, "card_id": result.card_id, "url": result.url}
@@ -378,7 +502,17 @@ class AgentTools:
         created = self.store.kv_once(key)
         if created:
             # The scheduler runs the dedicated Sonnet runner. It must verify a public URL.
-            self.store.patch_data(tid, agent={**agent, "mockup": {"version": version,
-                                  "status": "queued", "owner_event": event["id"]}})
-        return {"queued": created, "ticket_id": tid, "version": version,
-                "model": "sonnet", "status": "queued"}
+            self.store.patch_data(
+                tid,
+                agent={
+                    **agent,
+                    "mockup": {"version": version, "status": "queued", "owner_event": event["id"]},
+                },
+            )
+        return {
+            "queued": created,
+            "ticket_id": tid,
+            "version": version,
+            "model": "sonnet",
+            "status": "queued",
+        }

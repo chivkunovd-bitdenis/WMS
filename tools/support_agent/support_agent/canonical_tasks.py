@@ -116,5 +116,5 @@ def persist_task(pipe: Any, ticket_id: int) -> dict[str, Any]:
 
 def _remote_sha(repo: Path, branch: str) -> str | None:
     run = subprocess.run(["git", "ls-remote", "--exit-code", "--heads", "origin", branch],
-                         cwd=repo, capture_output=True, timeout=60, check=False)
+                         cwd=repo, capture_output=True, text=True, timeout=60, check=False)
     return run.stdout.split()[0] if run.returncode == 0 and run.stdout.split() else None
