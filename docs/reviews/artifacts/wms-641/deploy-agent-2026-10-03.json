@@ -1,0 +1,30 @@
+{
+  "installed_sha": "dcc125b2785d33a30ac0443fffab577b4b23111a",
+  "remote_sha": "dcc125b2785d33a30ac0443fffab577b4b23111a",
+  "installed_files_verified": 34,
+  "agent": {
+    "enabled": true,
+    "owner_model": "gpt-5.6-sol",
+    "owner_provider": "codex",
+    "context_limit_tokens": 120000,
+    "hourly_interval_sec": 3600,
+    "timezone": "Asia/Tbilisi"
+  },
+  "other_config_unchanged": true,
+  "sqlite_backup_created": true,
+  "scope": "local Telegram bot service only; no main merge or WMS production deployment",
+  "owner_notice": {
+    "id": 19,
+    "status": "sent",
+    "tg_message_id": "19",
+    "purpose": "deployment_notice",
+    "sent_at": 1791042733.181267
+  },
+  "heartbeat_age_sec": 0.3,
+  "service_running": true,
+  "verified_bot_usernames": {
+    "owner": "wms_korob_bot",
+    "intake": "wms_korob_support_bot"
+  },
+  "diagnostic_secret_redaction_rechecked": true
+}
