@@ -50,6 +50,8 @@ OWNER_TOOLS = [
           {"model": {"type": "string"}, "provider": {"type": "string"}}, ["model", "provider"]),
     _tool("job_status", "Read durable state and result of an existing project job.",
           {"job_id": {"type": "string"}}, ["job_id"]),
+    _tool("cancel_job", "Stop a scheduled or running owner project job; inspect unknown external outcomes.",
+          {"job_id": {"type": "string"}}, ["job_id"]),
     _tool("send_job_file", "Queue a verified output file from an owner project job to the owner's personal chat.",
           {"job_id": {"type": "string"}, "path": {"type": "string"},
            "caption": {"type": "string"}}, ["job_id", "path"]),
@@ -151,6 +153,16 @@ class AgentCoordinator:
             return {"selected": model, "provider": provider}
         if name == "job_status":
             return self._public_job(self.store.kv_get(f"agent_job:{args.get('job_id')}", {}))
+        if name == "cancel_job":
+            job_id = str(args.get("job_id") or "")
+            job = self.store.kv_get(f"agent_job:{job_id}")
+            if not job:
+                return {"error": "job_not_found"}
+            if job.get("status") in ("scheduled", "queued"):
+                self._patch_job(job_id, status="cancelled", cancel_requested=True)
+            elif job.get("status") == "running":
+                self._patch_job(job_id, cancel_requested=True)
+            return self._public_job(self.store.kv_get(f"agent_job:{job_id}"))
         if name == "send_job_file":
             return self._send_job_file(args, context)
         if name in ("project_job", "schedule_project_job"):
@@ -211,11 +223,38 @@ class AgentCoordinator:
     @staticmethod
     def _public_job(job: dict[str, Any]) -> dict[str, Any]:
         return {k: job.get(k) for k in ("id", "status", "request", "model", "provider", "task_ids",
-                                        "run_at", "deadline_at", "worktree", "result", "error", "recovery_note")
+                                        "run_at", "deadline_at", "worktree", "result", "error",
+                                        "recovery_note", "cancel_requested")
                 if k in job}
 
     def _save_job(self, job: dict[str, Any]) -> None:
-        self.store.kv_set(f"agent_job:{job['id']}", job)
+        with self.store.transaction():
+            current = self.store.kv_get(f"agent_job:{job['id']}", {})
+            merged = {**current, **job}
+            # The deadline and preflight run in separate threads from the job.
+            # A stale worker snapshot must not undo a newer finalization or result.
+            if current.get("phase") == "finalize":
+                merged["phase"] = "finalize"
+                if job.get("phase") != "finalize" and job.get("status") == "done":
+                    merged["status"] = "queued"
+                    merged["interim_result"] = job.get("result")
+                    merged.pop("result", None)
+            if current.get("status") == "done" and job.get("status") != "done":
+                merged["status"] = "done"
+                merged["result"] = current.get("result")
+            if current.get("preflight_status") in ("reported", "unknown") and job.get("preflight_status") not in ("reported", "unknown"):
+                merged["preflight_status"] = current["preflight_status"]
+                merged["preflight_result"] = current.get("preflight_result")
+            if current.get("deadline_status") == "finalizing":
+                merged["deadline_status"] = "finalizing"
+            self.store.kv_set(f"agent_job:{job['id']}", merged)
+
+    def _patch_job(self, job_id: str, **fields: Any) -> None:
+        with self.store.transaction():
+            current = self.store.kv_get(f"agent_job:{job_id}", {})
+            if current:
+                current.update(fields)
+                self.store.kv_set(f"agent_job:{job_id}", current)
 
     def _task_snapshot(self, task_ids: list[str]) -> dict[str, Any]:
         wanted = {str(x) for x in task_ids}
@@ -278,6 +317,9 @@ class AgentCoordinator:
         job = self.store.kv_get(f"agent_job:{job_id}")
         if not job or job["status"] not in ("queued", "running", "recovering"):
             return
+        if job.get("cancel_requested"):
+            self._patch_job(job_id, status="cancelled")
+            return
         recovery = job["status"] in ("running", "recovering")
         finalizing = job.get("phase") == "finalize"
         try:
@@ -327,8 +369,10 @@ class AgentCoordinator:
                                          tool_handler=lambda name, args: self.tools.dispatch(name, args, context),
                                          mode="owner", owner_authorized=True,
                                          cwd=str(worktree), timeout=3600,
-                                         cancelled=lambda: bool(not finalizing and job.get("deadline_at") and
-                                                                self.clock() >= float(job["deadline_at"])))
+                                         cancelled=lambda: bool(
+                                             self.store.kv_get(f"agent_job:{job_id}", {}).get("cancel_requested")
+                                             or (not finalizing and job.get("deadline_at") and
+                                                 self.clock() >= float(job["deadline_at"]))))
             latest = self.store.kv_get(f"agent_job:{job_id}", {})
             if latest.get("phase") == "finalize" and not finalizing:
                 job.update(phase="finalize", status="queued", interim_result=result.text[:8000])
@@ -336,6 +380,8 @@ class AgentCoordinator:
                 return
             job.update(status="done", result=result.text[:12000], finished_at=self.clock())
             self._save_job(job)
+            if self.store.kv_get(f"agent_job:{job_id}", {}).get("status") != "done":
+                return  # deadline switched to finalization while this turn was ending
             self.store.queue_message(key=f"agent_job_done:{job_id}", chat_id=self.cfg.telegram.owner_chat_id,
                                      text=f"Работа {job_id}: {result.text[:3600]}", purpose="agent_job",
                                      repeat_ok=False)
@@ -499,11 +545,9 @@ class AgentCoordinator:
             return
         source = self.store.row("SELECT * FROM messages WHERE id=?", (job.get("source_event_id"),))
         if source is None or not self._owner(source):
-            job["preflight_status"] = "source_missing"
-            self._save_job(job)
+            self._patch_job(job_id, preflight_status="source_missing")
             return
-        job["preflight_status"] = "running"
-        self._save_job(job)
+        self._patch_job(job_id, preflight_status="running")
         try:
             preflight = {**job, "id": f"{job_id}-preflight", "task_ids": job.get("task_ids", [])}
             path = self._worktree(preflight)
@@ -518,17 +562,13 @@ class AgentCoordinator:
                                          model=job["model"], provider=job["provider"],
                                          system=self.system, mode="owner", owner_authorized=True,
                                          cwd=str(path), timeout=600)
-            job["preflight_status"] = "reported"
-            job["preflight_result"] = result.text[:8000]
-            self._save_job(job)
+            self._patch_job(job_id, preflight_status="reported", preflight_result=result.text[:8000])
             self.store.queue_message(key=f"agent_preflight:{job_id}",
                                      chat_id=self.cfg.telegram.owner_chat_id,
                                      text=f"Проверка перед сроком {job_id}: {result.text[:3500]}",
                                      purpose="agent_preflight", repeat_ok=False)
         except Exception as exc:
-            job["preflight_status"] = "unknown"
-            job["preflight_error"] = type(exc).__name__
-            self._save_job(job)
+            self._patch_job(job_id, preflight_status="unknown", preflight_error=type(exc).__name__)
             self.store.queue_message(key=f"agent_preflight_error:{job_id}",
                                      chat_id=self.cfg.telegram.owner_chat_id,
                                      text=f"Проверка перед сроком {job_id} не завершилась; "
