@@ -205,6 +205,17 @@ async function settle(ms = 0) {
   }
 }
 
+// Same 10ms act-pump as settle(), but exits early when the predicate holds.
+// Used where fixed-time settles are brittle under CI jitter.
+async function settleUntil(ready: () => boolean, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs
+  while (!ready() && Date.now() < deadline) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+}
+
 /** «Клавиатурный» сканер: символы подряд и Enter — туда, где сейчас фокус. */
 function scan(code: string) {
   const target = document.activeElement ?? document.body
@@ -455,7 +466,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
     scan(STICKER_A)
-    await settle(300)
+    await settleUntil(() => activeRow() === 'order-a')
     expect(activeRow()).toBe('order-a')
   })
 

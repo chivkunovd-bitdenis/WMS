@@ -130,14 +130,11 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.app.json
       - name: Verify WMS-517 attached CAdES auth profile
         run: npm run test:crypto-auth
-      - uses: browser-actions/setup-chrome@v2
-        id: chromium
-        with:
-          chrome-version: stable
-          install-dependencies: true
+      # Probe 37144084796: minimal HTML hung in CfT but printed in system Chrome.
+      # The probe does not distinguish browser version from distribution effects.
       - name: Install Poppler and verify real PDF renderer
         env:
-          CHROME_PATH: ${{ steps.chromium.outputs.chrome-path }}
+          CHROME_PATH: /usr/bin/google-chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils
