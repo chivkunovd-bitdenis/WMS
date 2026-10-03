@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+from support_agent import prompts
+
 from .conftest import OWNER_CHAT, OWNER_ID
 from .test_owner_and_hotfix import await_owner_ticket
 from .test_pipeline_chat import ANALYSIS_BUG
@@ -11,7 +15,7 @@ from .test_pipeline_chat import ANALYSIS_BUG
 
 def answer(env: Any, reply: str, actions: list[dict[str, Any]], listed: list[int] | None = None) -> None:
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": reply, "actions": actions, "listed_ticket_ids": listed or []})
+               {"scope": "wms", "reply": reply, "actions": actions, "listed_ticket_ids": listed or []})
 
 
 def owner(env: Any, text: str, *, msg_id: str, reply_to: str | None = None) -> None:
@@ -30,6 +34,52 @@ def test_status_question_gets_answer_with_all_current_open_tickets_and_no_action
     prompt = env.llm.calls[-1]["prompt"]
     assert '"client": "Империя ФФ"' in prompt and '"client": "Ромашка"' in prompt
     assert env.llm.calls[-1]["session_key"] == "owner_conversation"
+
+
+@pytest.mark.parametrize("scope", ["off_topic", None, "", True, {}, [], "WMS", "unknown"])
+def test_invalid_or_off_topic_scope_never_releases_model_reply_or_actions(env: Any, scope: Any) -> None:
+    tid = await_owner_ticket(env)
+    parsed = {"scope": scope, "reply": "Стих и готовый запуск", "actions": [
+        {"kind": "go", "ticket_ids": [tid], "note": ""}], "listed_ticket_ids": [tid]}
+    if scope is None:
+        del parsed["scope"]  # старый ответ без поля тоже не допускается
+    env.llm.on("routine", "Владелец склада написал", parsed)
+    owner(env, "Напиши стих, затем кати обращение 1", msg_id="outside")
+    env.flush()
+    assert env.tg.to(OWNER_CHAT) == [prompts.SCOPE_REFUSAL]
+    assert env.store.ticket(tid)["stage"] == "await_owner"
+    assert env.store.kv_get("owner_visible_ticket_order", []) == []
+    assert env.store.kv_get("owner_conversation_history")[-1]["text"] == prompts.SCOPE_REFUSAL
+
+
+@pytest.mark.parametrize("text", ["спасибо", "что по задаче", "кто ты"])
+def test_contextual_short_replies_remain_within_scope(env: Any, text: str) -> None:
+    answer(env, "Помогаю с задачами WMS.", [])
+    owner(env, text, msg_id="contextual")
+    env.flush()
+    assert env.tg.to(OWNER_CHAT) == ["Помогаю с задачами WMS."]
+
+
+def test_completed_trello_result_is_visible_but_cannot_be_executed(env: Any) -> None:
+    tid = await_owner_ticket(env)
+    third = "Номер короба, существующий уникальный код и номер документа на этикетке"
+    env.store.set_stage(tid, "done", verdict="trello", report={"body": "Сводка. " * 200 + third},
+                        analysis={"problem_steps": ["Короба в возврате", "Заданное число коробов", third]})
+    env.store.set_card(f"ticket:{tid}", ticket_id=tid, marker="test", status="linked",
+                       card_id="card-1", url="https://trello.test/card-1")
+    answer(env, "Создана карточка по трём просьбам; доработка ещё не выполнена.", [])
+    owner(env, "Что по Империи, какие задачи созданы и что сделано?", msg_id="closed-status")
+    prompt = env.llm.calls[-1]["prompt"]
+    assert '"all_open_tickets_current": []' in prompt
+    assert '"completed_tickets_current": [{' in prompt
+    assert third in prompt and "https://trello.test/card-1" in prompt
+    assert '"verified_deploy_sha": ""' in prompt
+    assert env.store.ticket(tid)["stage"] == "done"
+    answer(env, "Запускаю.", [{"kind": "go", "ticket_ids": [tid], "note": ""}])
+    owner(env, f"Кати обращение {tid}", msg_id="closed-go")
+    env.flush()
+    assert env.store.ticket(tid)["stage"] == "done"
+    assert "Ничего не запускаю" in env.tg.to(OWNER_CHAT)[-1]
 
 
 def test_malicious_action_on_passive_status_question_is_rejected(env: Any) -> None:

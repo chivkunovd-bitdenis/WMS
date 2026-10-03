@@ -50,7 +50,7 @@ def owner_says(env: Any, text: str, parsed: dict[str, Any], reply_to: str | None
         else "Понял."
     if "Не понял" in reply:
         actions = []
-    env.llm.on("routine", "Владелец склада написал", {"reply": reply, "actions": actions,
+    env.llm.on("routine", "Владелец склада написал", {"scope": "wms", "reply": reply, "actions": actions,
                                                         "listed_ticket_ids": []})
     env.say(OWNER_CHAT, text, user=OWNER_ID, name="Владелец", reply_to=reply_to)
 
@@ -117,7 +117,7 @@ def test_owner_voice_command_goes_through_transcription(env: Any) -> None:
     env.tg.files["f1"] = b"voice"
     env.tr.text = "кати"
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": "Понял.", "actions": [{"kind": "go", "ticket_ids": [], "note": "кати"}],
+               {"scope": "wms", "reply": "Понял.", "actions": [{"kind": "go", "ticket_ids": [], "note": "кати"}],
                 "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "", user=OWNER_ID, voice=True)
     env.pipe.tick()
@@ -585,14 +585,14 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path) -> None:
 
     env.llm.on("mockup", "Opus, дизайнер", mock)
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": "Макет не делаю.",
+               {"scope": "wms", "reply": "Макет не делаю.",
                 "actions": [{"kind": "mockup_no", "ticket_ids": [], "note": "нет"}],
                 "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "нет", user=OWNER_ID)
     assert env.store.ticket(tid)["stage"] == "done" and not any(c["role"] == "mockup" for c in env.llm.calls)
     env.store.set_stage(tid, "await_mockup")
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": "Делаю макет.",
+               {"scope": "wms", "reply": "Делаю макет.",
                 "actions": [{"kind": "mockup_yes", "ticket_ids": [], "note": "да"}],
                 "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "да, нарисуй", user=OWNER_ID)

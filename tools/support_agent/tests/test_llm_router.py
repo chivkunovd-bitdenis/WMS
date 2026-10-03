@@ -64,6 +64,24 @@ def test_roles_use_cheap_and_strong_models_without_api_keys(tmp_path: Path) -> N
     assert "Edit" in script.calls[2][script.calls[2].index("--disallowedTools"):]  # аналитик не пишет
 
 
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("role", ["filter", "routine", "analyst", "review", "frontend", "mockup"])
+def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
+    tmp_path: Path, cli: str, role: str,
+) -> None:
+    from support_agent import prompts
+
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    for _ in range(2):
+        llm.ask(role, "поручение", cli_only=cli, session_key="policy-test", system="Правила роли")
+        if cli == "claude":
+            delivered = script.calls[-1][script.calls[-1].index("--system-prompt") + 1]
+        else:
+            delivered = script.stdin[-1] or ""
+        assert delivered.startswith(prompts.WMS_SYSTEM_POLICY + "\n\nПравила роли")
+
+
 def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
@@ -94,6 +112,7 @@ def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_res
     script = ExecScript()
     llm, store = router(tmp_path, script)
     rules = prompts.OWNER_CHAT_SYSTEM
+    policy = prompts.WMS_SYSTEM_POLICY
     first = llm.ask("routine", "первый ход: обращение №1 в разборе", session_key="owner_conversation",
                     cli_only=cli, system=rules)
     assert first.session_id and store.rows("SELECT * FROM tickets") == []
@@ -106,12 +125,12 @@ def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_res
     if cli == "claude":
         assert script.calls[-1][script.calls[-1].index("--resume") + 1] == first.session_id
         for argv, expected in zip(script.calls, (rules, updated_rules), strict=True):
-            assert argv[argv.index("--system-prompt") + 1] == expected
+            assert argv[argv.index("--system-prompt") + 1] == f"{policy}\n\n{expected}"
         assert script.stdin[-1] == current
     else:
         assert script.calls[-1][:4] == ["codex", "exec", "resume", first.session_id]
-        assert script.stdin[0] == f"{rules}\n\nпервый ход: обращение №1 в разборе"
-        assert script.stdin[-1] == f"{updated_rules}\n\n{current}"
+        assert script.stdin[0] == f"{policy}\n\n{rules}\n\nпервый ход: обращение №1 в разборе"
+        assert script.stdin[-1] == f"{policy}\n\n{updated_rules}\n\n{current}"
     assert store.kv_get("llm_sessions:owner_conversation") == saved
     assert store.rows("SELECT * FROM tickets") == []
 
@@ -365,8 +384,9 @@ def test_resumed_analyst_receives_current_rules_history_and_state_after_restart(
         assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
     else:
         assert second[:4] == ["codex", "exec", "resume", first_result.session_id]
-    assert script.stdin[0] == "Старые правила. Клиент: короб не сканируется.\n\nразбери"
-    assert script.stdin[1] == f"{current}\n\n{note}"
+    policy = f"{prompts.WMS_SYSTEM_POLICY}\n\n" if cli == "codex" else ""
+    assert script.stdin[0] == policy + "Старые правила. Клиент: короб не сканируется.\n\nразбери"
+    assert script.stdin[1] == f"{policy}{current}\n\n{note}"
     assert store.data(tid)["sessions"]["analyst"][cli] == first_result.session_id
 
 

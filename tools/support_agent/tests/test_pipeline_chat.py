@@ -496,7 +496,7 @@ def script_owner(env: Any, parsed: dict[str, Any]) -> None:
     actions = ([{"kind": intent, "ticket_ids": ids, "note": "поручение владельца"}]
                if intent in ("go", "reject", "postpone", "mockup_yes", "mockup_no") else [])
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": "Понял.", "actions": actions, "listed_ticket_ids": []})
+               {"scope": "wms", "reply": "Понял.", "actions": actions, "listed_ticket_ids": []})
 
 
 def test_other_and_low_confidence_go_to_owner_without_card_or_hotfix(env: Any) -> None:

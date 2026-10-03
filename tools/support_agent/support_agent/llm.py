@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import prod_sql_mcp, readonly_mcp, sandbox
+from . import prod_sql_mcp, prompts, readonly_mcp, sandbox
 from .config import Config
 from .prod_sql import ROLE_RE, SqlRefused, role_for_scope
 from .store import Store
@@ -435,6 +435,7 @@ class LlmRouter:
         system: str | None = None,
         timeout: int = 900,
     ) -> LlmResult:
+        system = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "")
         options = self.candidates(role, cli_only, exclude_cli)
         if not options:
             raise LlmUnavailable("no_cli_available")

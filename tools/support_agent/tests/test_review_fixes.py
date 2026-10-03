@@ -108,7 +108,7 @@ def test_owner_free_clarification_goes_back_to_analyst(env: Any) -> None:
     script(env)
     tid = bug_to_owner(env, "не передаётся поставка", "21")
     env.llm.on("routine", "Владелец склада написал",
-               {"reply": "Передал аналитику, вернусь с обновлённым разбором.",
+               {"scope": "wms", "reply": "Передал аналитику, вернусь с обновлённым разбором.",
                 "actions": [{"kind": "analyst_note", "ticket_ids": [tid],
                              "note": "проверь ещё склад возвратов"}], "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "проверь ещё склад возвратов", user=OWNER_ID, name="Владелец",

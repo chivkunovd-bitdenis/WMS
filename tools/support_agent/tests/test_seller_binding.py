@@ -179,7 +179,7 @@ def test_group_nonbinding_status_goes_to_private_chat_and_cannot_execute(be: Any
                               stage="await_owner", data={"verdict": "hotfix", "hotfix_ok": True,
                                                                  "report": {"body": "ждёт решения"}})
     be.llm.on("routine", "Владелец склада написал",
-              {"reply": "По Империи обращение №1 ждёт решения.",
+              {"scope": "wms", "reply": "По Империи обращение №1 ждёт решения.",
                "actions": [{"kind": "go", "ticket_ids": [tid], "note": ""}],
                "listed_ticket_ids": [tid]})
     be.llm.on("routine", "Владелец упомянул бота",
@@ -195,7 +195,7 @@ def test_group_action_cue_never_trusts_a_model_reply_that_omits_the_action(be: A
     tid = be.store.add_ticket(kind="chat", source="telegram", chat_id=CLIENT_CHAT, seller="Империя ФФ",
                               stage="await_owner", data={"verdict": "hotfix", "hotfix_ok": True})
     be.llm.on("routine", "Владелец склада написал",
-              {"reply": "Запускаю обращение №1.", "actions": [], "listed_ticket_ids": [tid]})
+              {"scope": "wms", "reply": "Запускаю обращение №1.", "actions": [], "listed_ticket_ids": [tid]})
     be.llm.on("routine", "Владелец упомянул бота",
               {"is_binding": False, "level": None, "name": ""})
     be.intake.updates.append(gupd(NEW_CHAT, OWNER_ID, f"{BOT} кати Империю", title=NEW_TITLE))

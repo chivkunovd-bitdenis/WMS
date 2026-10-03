@@ -25,7 +25,7 @@ from .prod_sql import SELLER_RE
 from .redact import scrub
 from .seller_directory import DirectoryError, SellerDirectory
 from .store import Store
-from .telegram import Inbound, TelegramError, as_bots, parse_bind_command
+from .telegram import Inbound, TelegramError, as_bots, is_owner_task_chat_declaration, parse_bind_command
 from .transcribe import TranscribeError, Transcriber
 from .trello import TrelloClient, TrelloError, ensure_card
 from .wms import WmsClient, WmsError
@@ -324,6 +324,8 @@ class Pipeline:
                 label = str(row["seller_name"] or row["tenant_name"])  # у чата с ФФ названия селлера нет
                 self.cfg.telegram.chats[chat_id] = ChatCfg(role="client", seller=label)
                 self.dynamic_chats.add(chat_id)
+        for chat, title in self.store.kv_get("owner_task_chats", {}).items():
+            self.cfg.telegram.chats[int(chat)] = ChatCfg(role="partner", seller=str(title))
 
     def on_role_failure(self, level: str, scope_id: str, attempts: int, reason: str) -> None:
         """Доступ к данным не подготовлен несколько раз подряд (сервер занят блокировкой и т. п.)."""
@@ -338,6 +340,28 @@ class Pipeline:
 
     def handle_bind_command(self, m: Any) -> None:
         """Свободная команда в группе: модель понимает слова, код ищет и предлагает кандидатов."""
+        if (not self._is_owner_author(m) or int(m["chat_id"]) >= 0
+                or int(m["chat_id"]) == self.cfg.telegram.owner_chat_id):
+            self.store.set_message(m["id"], status="handled")
+            return
+        if is_owner_task_chat_declaration(str(m["text"])):
+            chat_id = int(m["chat_id"])
+            title = self._chat_label(chat_id)
+            with self.store.transaction():
+                chats = self.store.kv_get("owner_task_chats", {})
+                chats[str(chat_id)] = title
+                self.store.kv_set("owner_task_chats", chats)
+                self.store.queue_message(
+                    key=f"owner_task_chat:{chat_id}", chat_id=chat_id,
+                    text=("Этот чат зарегистрирован как общий чат задач владельцев WMS. "
+                          "Чтобы поставить задачу, напишите просьбу со словом Trello; "
+                          "я подготовлю описание и попрошу автора подтвердить. "
+                          "Команды на выкладку принимаю только в личном чате владельца."),
+                    reply_to=str(m["msg_id"]), purpose="group_registration", repeat_ok=False,
+                )
+                self.store.set_message(m["id"], status="handled")
+            self.register_bound_chats()
+            return
         try:
             parsed, _ = self.llm.ask_json(
                 "routine", prompts.binding_command_prompt(str(m["text"])),
@@ -1222,10 +1246,15 @@ class Pipeline:
             return
         self._handle_owner_conversation(m, allow_actions=True)
 
-    def _owner_snapshot(self) -> list[dict[str, object]]:
+    def _owner_snapshot(self, *, completed: bool = False) -> list[dict[str, object]]:
         result: list[dict[str, object]] = []
-        for t in self.store.open_tickets():
+        tickets = (self.store.tickets_in("done", "rejected", "failed") if completed
+                   else self.store.open_tickets())
+        for t in tickets:
             d = self.store.data(t["id"])
+            analysis = d.get("analysis") or {}
+            card_key = f"task:{t['id']}" if t["kind"] == "partner_task" else f"ticket:{t['id']}"
+            card = self.store.card(card_key)
             form = d.get("form") or {}
             messages = self.store.ticket_messages(t["id"])
             subject = str(d.get("title") or form.get("description") or form.get("problem") or "")
@@ -1235,11 +1264,25 @@ class Pipeline:
                 "id": int(t["id"]), "client": self._client_label(t),
                 "subject_untrusted": subject[:1000],
                 "stage": str(t["stage"]), "verdict": str(d.get("verdict") or ""),
-                "summary": str((d.get("report") or {}).get("body") or "")[:1200],
+                "summary": str((d.get("report") or {}).get("body") or ""),
+                "request_details": {key: analysis.get(key) for key in
+                                    ("problem_steps", "proposed_solution", "improvement_card")},
+                "approved_description": str(d.get("approved_description") or ""),
+                "card_status": str(card["status"]) if card else "not_confirmed",
+                "card_url": str(card["url"] or "") if card and card["status"] == "linked" else "",
+                "verified_deploy_sha": str((d.get("hotfix") or {}).get("verified_sha") or ""),
                 "pending_owner_note": str(d.get("resume_note") or "")[:1200],
                 "hotfix_step": str((d.get("hotfix") or {}).get("step") or ""),
                 "updated_at": _fmt_ts(float(t["updated_at"])),
             })
+        return result
+
+    def _owner_task_chats(self) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for chat, title in self.store.kv_get("owner_task_chats", {}).items():
+            confirmation = self.store.outbox_by_key(f"owner_task_chat:{chat}")
+            result.append({"chat_id": int(chat), "name": str(title), "role": "partner",
+                           "confirmation_status": str(confirmation["status"]) if confirmation else "absent"})
         return result
 
     def _owner_proposals(self) -> list[dict[str, object]]:
@@ -1277,7 +1320,8 @@ class Pipeline:
             parsed, _ = self.llm.ask_json(
                 "routine",
                 prompts.owner_chat_prompt(str(m["text"]), self._owner_snapshot(), self._owner_proposals(),
-                                          target_payload, self._owner_history(), previous_order),
+                                          target_payload, self._owner_history(), previous_order,
+                                          self._owner_snapshot(completed=True), self._owner_task_chats()),
                 session_key="owner_conversation", system=prompts.OWNER_CHAT_SYSTEM,
             )
         except (LlmError, ValueError):
@@ -1287,6 +1331,12 @@ class Pipeline:
                 self.store.set_message(m["id"], status="handled")
                 self.say_owner(f"owner_parse:{m['id']}", reply, purpose="owner_chat")
                 self._remember_owner_turn(str(m["text"]), reply)
+            return
+        if parsed.get("scope") != "wms":
+            with self.store.transaction():
+                self.store.set_message(m["id"], status="handled")
+                self.say_owner(f"owner_chat:{m['id']}", prompts.SCOPE_REFUSAL, purpose="owner_chat")
+                self._remember_owner_turn(str(m["text"]), prompts.SCOPE_REFUSAL)
             return
         reply = str(parsed.get("reply") or "").strip()
         raw_actions = parsed.get("actions") or []

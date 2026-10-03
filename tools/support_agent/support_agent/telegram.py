@@ -161,6 +161,18 @@ def parse_bind_command(text: str, require_mention: bool = True) -> tuple[str, st
     return None
 
 
+def is_owner_task_chat_declaration(text: str) -> bool:
+    """Явное назначение общего чата задач; права автора проверяет принимающий код."""
+    if not MENTION_RE.search(text):
+        return False
+    body = " ".join(MENTION_RE.sub(" ", text).casefold().split()).strip(" .,!:;–—")
+    return re.fullmatch(
+        r"(?:(?:это|тут|здесь)\s+)?(?:(?:наш|этот|общий|рабочий)\s+)*чат\s+"
+        r"(?:для\s+)?(?:задач\s+(?:от\s+)?(?:владельцев|собственников)\s+(?:системы|wms|вмс)"
+        r"|(?:владельцев|собственников)\s+(?:системы|wms|вмс)\s+для\s+задач)", body,
+    ) is not None
+
+
 class Bots:
     """Два бота: приёма (intake) и владельца (owner). Один токен — один и тот же клиент."""
 
@@ -207,7 +219,8 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     text_only = message.get("text") or message.get("caption") or ""
     if (
         is_owner and chat_id < 0 and chat_id != owner_chat and (bot != "owner" or single)
-        and (known is None or known.role == "client") and MENTION_RE.search(text_only) is not None
+        and (known is None or known.role == "client" or is_owner_task_chat_declaration(text_only))
+        and MENTION_RE.search(text_only) is not None
     ):
         # Возможная привязка чата (R39/R51): принимает только бот приёма и только от владельца.
         # Свободную формулировку после @упоминания разбирает модель; поиск и подтверждение делает код.
