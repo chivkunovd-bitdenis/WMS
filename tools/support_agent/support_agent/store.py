@@ -337,6 +337,10 @@ class Store:
     def proposal(self, proposal_id: int) -> sqlite3.Row | None:
         return self.row("SELECT * FROM binding_proposals WHERE id=?", (proposal_id,))
 
+    def open_proposals(self, requested_by: str, since: float) -> list[sqlite3.Row]:
+        return self.rows("SELECT * FROM binding_proposals WHERE status='open' AND requested_by=? "
+                         "AND created_at>=? ORDER BY id", (requested_by, since))
+
     def close_proposal(self, proposal_id: int, status: str) -> None:
         self.execute("UPDATE binding_proposals SET status=? WHERE id=?", (status, proposal_id))
 

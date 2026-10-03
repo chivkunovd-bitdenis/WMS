@@ -39,6 +39,7 @@ TRANSCRIPT_PREFIX = "(расшифровка голосового) "
 CONFIRM_RE = re.compile(
     r"^\s*(?:да|ага|угу|верно|подтверждаю|ок|окей|yes)\b[\s,.!)]*(?:этот|он|она)?[\s.!]*$", re.IGNORECASE)
 DECLINE_RE = re.compile(r"^\s*(?:нет|не он|не тот|отмена|отбой)\b", re.IGNORECASE)
+BIND_PROPOSAL_TTL_SEC = 24 * 3600  # без reply выбор засчитывается только свежему предложению
 CHOICE_RE = re.compile(r"^\s*(?:№|номер|вариант)?\s*(\d)\s*[.)!]*\s*$", re.IGNORECASE)
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 ALLOWED_EXPORT_EXT = ("csv", "tsv", "txt", "json", "md")
@@ -393,13 +394,20 @@ class Pipeline:
         self.say_owner(f"bind:{pid}", body, purpose="bind")
 
     def _is_bind_reply(self, m: Any) -> int | None:
-        """Номер предложения привязки, если владелец ответил на наше сообщение с кандидатами."""
-        if not m["reply_to"]:
+        """Номер предложения привязки: ответ (reply) на наше сообщение с кандидатами либо, без reply,
+        короткий выбор («1», «да», «нет»), когда у владельца открыто ровно одно свежее предложение."""
+        if m["reply_to"]:
+            hit = self.store.outbox_by_tg(m["chat_id"], m["reply_to"])
+            if hit is not None and str(hit["key"]).startswith("bind:"):
+                return int(str(hit["key"]).split(":")[1])
             return None
-        hit = self.store.outbox_by_tg(m["chat_id"], m["reply_to"])
-        if hit is not None and str(hit["key"]).startswith("bind:"):
-            return int(str(hit["key"]).split(":")[1])
-        return None
+        text = str(m["text"] or "")
+        if text.startswith(TRANSCRIPT_PREFIX):
+            text = text[len(TRANSCRIPT_PREFIX):]
+        if not (CHOICE_RE.match(text) or CONFIRM_RE.match(text) or DECLINE_RE.match(text)):
+            return None
+        open_ = self.store.open_proposals(str(m["author_id"]), self.clock() - BIND_PROPOSAL_TTL_SEC)
+        return int(open_[0]["id"]) if len(open_) == 1 else None
 
     def _confirm_binding(self, m: Any, pid: int) -> None:
         self.store.set_message(m["id"], status="handled")

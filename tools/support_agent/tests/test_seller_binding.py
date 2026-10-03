@@ -233,9 +233,10 @@ def test_the_chat_comes_from_the_proposal_not_from_the_reply_words(be: Any) -> N
     assert be.store.binding(-100502)["seller_id"] == SELLER
 
 
-def test_confirmation_must_be_a_reply_of_the_owner_to_our_message(be: Any) -> None:
+def test_confirmation_must_come_from_the_owner_in_the_owner_chat(be: Any) -> None:
     owner_says_in_group(be, "привяжи к ИП Василёк")
-    be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да"))  # не ответом
+    # «да» без reply теперь засчитывается единственному открытому предложению (живой случай 03.10.2026,
+    # test_plain_number_without_reply_confirms_the_only_open_proposal); здесь — только чужие пути.
     be.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "да", reply_to=777))  # ответ на чужое
     step(be)
     be.intake.updates.append(gupd(NEW_CHAT, 5, "да", reply_to=int(proposal_msg_id(be))))  # клиент в группе
