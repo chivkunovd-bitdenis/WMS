@@ -82,12 +82,16 @@ class AgentDispatcher:
                     self._submit_topic(topic_id)
             elif (topic.get("wake_at") and topic.get("status") == "waiting"
                   and float(topic["wake_at"]) <= self.agent.clock()):
-                self.emit_internal(topic_id, "recheck", {
-                    "event_key": f"recheck:{topic_id}:{topic['wake_at']}",
-                    "reason": topic.get("next_action", ""),
-                })
-                topic["wake_at"] = None
-                self.store.kv_set(f"agent_topic:{topic_id}", topic)
+                with self.store.transaction():
+                    current = self.store.kv_get(f"agent_topic:{topic_id}", {})
+                    if current.get("wake_at") and current.get("status") == "waiting" \
+                            and float(current["wake_at"]) <= self.agent.clock():
+                        self._emit_internal_locked(topic_id, "recheck", {
+                            "event_key": f"recheck:{topic_id}:{current['wake_at']}",
+                            "reason": current.get("next_action", ""),
+                        })
+                        current["wake_at"] = None
+                        self.store.kv_set(f"agent_topic:{topic_id}", current)
 
     def _submit_route(self) -> None:
         with self.lock:
