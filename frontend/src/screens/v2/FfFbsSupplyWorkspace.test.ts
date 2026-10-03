@@ -245,7 +245,7 @@ describe('summarizeDeliveryChecks', () => {
     orderId: string | null = null,
   ) => ({ code, message, ok: severity === 'info', severity, order_id: orderId })
 
-  it('схлопывает одинаковые причины и подписывает номера заказов WB', () => {
+  it('схлопывает одинаковые причины и сохраняет номера заказов отдельным списком', () => {
     const summary = summarizeDeliveryChecks(
       [
         check('marking_required', 'Честный знак не нанесён.', 'warning', 'a'),
@@ -255,9 +255,81 @@ describe('summarizeDeliveryChecks', () => {
       new Map([['a', 530009], ['b', 530011], ['c', 530015]]),
     )
     expect(summary.blockers).toEqual([])
-    expect(summary.warnings).toEqual([
-      'Честный знак не нанесён. (заказы 530009, 530011, 530015)',
-    ])
+    expect(summary.warnings).toEqual([{
+      key: 'marking_required',
+      title: 'Не нанесён Честный знак',
+      description: 'Передаче не мешает; нанести можно и после неё.',
+      orderIds: [530009, 530011, 530015],
+    }])
+  })
+
+  it('объединяет расхождения и закрытые заказы по типу, оставляя WB-номера только в раскрытии', () => {
+    const summary = summarizeDeliveryChecks([
+      check('wb_terminal_order_ignored', 'Заказ WB 530011 уже отменён или закрыт; он исключён из списания.', 'warning', 'b'),
+      check('wb_terminal_order_ignored', 'Заказ WB 530009 уже отменён или закрыт; он исключён из списания.', 'warning', 'a'),
+      check('wb_terminal_order_ignored', 'Заказ WB 530009 уже отменён или закрыт; он исключён из списания.', 'warning', 'a'),
+      check('wb_supply_composition_discrepancy', 'Заказ WB 530015: unknown_order.', 'blocker'),
+      check('wb_supply_composition_discrepancy', 'Заказ WB 530013: seller_mismatch.', 'blocker', 'missing-local-order'),
+    ], new Map([['a', 530009], ['b', 530011]]))
+    expect(summary.warnings).toEqual([{
+      key: 'wb_terminal_order_ignored',
+      title: 'Заказы уже отменены или закрыты',
+      description: 'Исключены из списания и не мешают передаче поставки.',
+      orderIds: [530009, 530011],
+    }])
+    expect(summary.blockers).toEqual([{
+      key: 'wb_supply_composition_discrepancy',
+      title: 'Состав поставки не совпадает с WB',
+      description: null,
+      orderIds: [530013, 530015],
+      orderDetails: { 530013: ['seller_mismatch.'], 530015: ['unknown_order.'] },
+    }])
+  })
+
+  it('не создаёт отдельные строки нехватки по каждому количеству', () => {
+    const summary = summarizeDeliveryChecks([
+      check('negative_stock', 'Не хватает 1 шт.; после подтверждения остаток будет списан в минус.', 'warning', 'a'),
+      check('negative_stock', 'Не хватает 5 шт.; после подтверждения остаток будет списан в минус.', 'warning', 'b'),
+    ], new Map([['a', 530009], ['b', 530011]]))
+    expect(summary.warnings).toEqual([{
+      key: 'negative_stock',
+      title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
+      description: null,
+      orderIds: [530009, 530011],
+      orderDetails: {
+        530009: ['Не хватает 1 шт.; после подтверждения остаток будет списан в минус.'],
+        530011: ['Не хватает 5 шт.; после подтверждения остаток будет списан в минус.'],
+      },
+    }])
+  })
+
+  it('сохраняет разные причины маркировки у конкретных заказов внутри одной группы', () => {
+    const pending = 'WB ещё не подтвердил маркировку.'
+    const rejected = 'WB не принял маркировку: код уже использован'
+    const replacement = 'WB подтвердил другой код маркировки.'
+    const summary = summarizeDeliveryChecks([
+      check('marking_not_allowed', pending, 'warning', 'a'),
+      check('marking_not_allowed', rejected, 'warning', 'b'),
+      check('marking_not_allowed', replacement, 'warning', 'c'),
+      check('marking_not_allowed', rejected, 'warning', 'b'),
+    ], new Map([['a', 530009], ['b', 530011], ['c', 530015]]))
+    expect(summary.warnings).toEqual([{
+      key: 'marking_not_allowed', title: 'Маркировка требует проверки', description: null,
+      orderIds: [530009, 530011, 530015],
+      orderDetails: { 530009: [pending], 530011: [rejected], 530015: [replacement] },
+    }])
+  })
+
+  it('не показывает отсутствие коробов и распределения в проверке передачи', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('physical_boxes_required', 'В поставке пока нет коробов.', 'warning'),
+        check('packed_order_unassigned', 'Для заказа не указан короб.', 'warning', 'a'),
+        check('packed_order_unassigned', 'Для заказа не указан короб.', 'warning', 'b'),
+      ],
+      new Map([['a', 530015], ['b', 530009]]),
+    )
+    expect(summary.warnings).toEqual([])
   })
 
   it('разводит запреты и предупреждения по уровню, а не по признаку ok', () => {
@@ -269,7 +341,18 @@ describe('summarizeDeliveryChecks', () => {
       ],
       new Map([['a', 777]]),
     )
-    expect(summary.blockers).toEqual(['Поставка уже передана или закрыта.'])
-    expect(summary.warnings).toEqual(['Остаток уйдёт в минус. (заказ 777)'])
+    expect(summary.blockers).toEqual([{
+      key: 'supply_bad_status',
+      title: 'Поставка уже передана или закрыта.',
+      description: null,
+      orderIds: [],
+    }])
+    expect(summary.warnings).toEqual([{
+      key: 'negative_stock',
+      title: 'Недостаточно остатка; после подтверждения он будет списан в минус.',
+      description: null,
+      orderIds: [777],
+      orderDetails: { 777: ['Остаток уйдёт в минус.'] },
+    }])
   })
 })

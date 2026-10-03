@@ -1026,8 +1026,15 @@ async def update_marketplace_unload(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer)
     ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarketplaceUnloadRequestDetailOut:
-    await _get_visible_request(session, user, request_id, credentials)
+    await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(
@@ -1059,6 +1066,7 @@ async def update_marketplace_unload(
                 user=user,
                 planned_shipment_date=planned,
                 set_planned_shipment_date=True,
+                effective_seller_id=effective_seller_id,
             )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None

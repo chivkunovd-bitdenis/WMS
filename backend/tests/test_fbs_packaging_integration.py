@@ -516,8 +516,8 @@ async def test_fbs_packaging_complete_does_not_convert_or_promote_supply(
         )
         assert int(packaging_movements or 0) == 0
 
-    # Передача возможна только после раскладки упакованных заказов по физическим
-    # коробам — гейт physical_boxes_required (см. fbs_shipment_service).
+    # Физические короба наполняются для складского процесса, но в проверку
+    # готовности передачи не входят.
     await _create_and_fill_physical_box(async_client, headers, supply_id, packed_order_ids)
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)

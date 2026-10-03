@@ -269,13 +269,14 @@ async def patch_request(
     wb_mp_warehouse_id: int | None = None,
     planned_shipment_date: date | None = None,
     set_planned_shipment_date: bool = False,
+    effective_seller_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadError("not_found")
-    assert_request_visible(user, req)
+    assert_request_visible(user, req, effective_seller_id=effective_seller_id)
 
     if wb_mp_warehouse_id is not None:
         if req.marketplace != "wb":

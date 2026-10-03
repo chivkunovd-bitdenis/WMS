@@ -62,6 +62,8 @@ import type { ProductThermalLabelData } from '../../utils/printProductThermalLab
 import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
+import { FbsCancelledDeliveryOrders } from './FbsCancelledDeliveryOrders'
+import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
@@ -83,6 +85,7 @@ import {
   fbsBoxEditingDisabled,
   fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
+  fbsDeliveryCheckOrderLabel,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
@@ -177,6 +180,7 @@ type Props = {
    */
   assemblyFrame?: FbsAssemblyFrameControl
 }
+
 
 const STAGES = [
   { key: 'composition', label: 'Состав' },
@@ -2858,6 +2862,7 @@ export function FfFbsSupplyWorkspace({
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
   const wbOrderIdByOrderId = new Map((workspace?.orders ?? []).map((order) => [order.id, order.wb_order_id]))
   const deliveryChecks = summarizeDeliveryChecks(deliveryPreflight?.checks ?? [], wbOrderIdByOrderId)
+  const deliveryCheckOrderLabel = fbsDeliveryCheckOrderLabel(isOzonSupply ? 'ozon' : 'wb', workspace?.orders ?? [])
   const cancelledDeliveryOrders = isOzonSupply ? [] : deliveryPreflight?.cancelled_orders ?? []
   const deliveryConfirmLabel = cancelledDeliveryOrders.length > 0
     ? 'Передать без этих заказов'
@@ -4312,17 +4317,13 @@ export function FfFbsSupplyWorkspace({
             {deliveryChecks.blockers.length > 0 ? (
               <Alert severity="error">
                 <Typography variant="subtitle2">Мешает передаче</Typography>
-                {deliveryChecks.blockers.map((line) => (
-                  <Typography key={line} variant="body2">{line}</Typography>
-                ))}
+                <DeliveryCheckGroupList groups={deliveryChecks.blockers} orderLabel={deliveryCheckOrderLabel} />
               </Alert>
             ) : null}
             {deliveryChecks.warnings.length > 0 ? (
               <Alert severity="warning">
                 <Typography variant="subtitle2">Можно передать с этими предупреждениями</Typography>
-                {deliveryChecks.warnings.map((line) => (
-                  <Typography key={line} variant="body2">{line}</Typography>
-                ))}
+                <DeliveryCheckGroupList groups={deliveryChecks.warnings} orderLabel={deliveryCheckOrderLabel} />
                 <Typography variant="caption" color="text.secondary">
                   Проверьте список. Чтобы продолжить, нажмите «{deliveryConfirmLabel}».
                   {isOzonSupply
@@ -4333,17 +4334,7 @@ export function FfFbsSupplyWorkspace({
             ) : null}
             {cancelledDeliveryOrders.length > 0 ? (
               <Alert severity="warning">
-                <Typography variant="subtitle2">Отменённые заказы</Typography>
-                <Typography variant="body2">Выньте эти товары из коробов перед передачей. Они будут исключены из поставки.</Typography>
-                {cancelledDeliveryOrders.map((order) => (
-                  <Typography key={order.order_id} variant="body2">
-                    WB {order.wb_order_id} · {order.article ?? 'Артикул не указан'}
-                    {order.product_name ? ` · ${order.product_name}` : ''}
-                    {' · '}{order.boxes.length > 0
-                      ? order.boxes.map((box) => `Короб ${box.box_number} (${box.box_barcode})`).join(', ')
-                      : 'Короб не назначен'}
-                  </Typography>
-                ))}
+                <FbsCancelledDeliveryOrders orders={cancelledDeliveryOrders} />
               </Alert>
             ) : null}
             {!deliveryPreflightLoading
