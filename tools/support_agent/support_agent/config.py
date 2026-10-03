@@ -117,6 +117,18 @@ class LlmCfg:
 
 
 @dataclass
+class AgentCfg:
+    """The conversational agent is opt-in while the legacy pipeline remains available."""
+
+    enabled: bool = False
+    owner_model: str = "gpt-5.6-sol"
+    owner_provider: str = "codex"
+    context_limit_tokens: int = 120_000
+    hourly_interval_sec: int = 3600
+    timezone: str = "Asia/Tbilisi"
+
+
+@dataclass
 class OpenAiCfg:
     api_key: str = field(default="", repr=False)  # или переменная окружения OPENAI_API_KEY
 
@@ -176,6 +188,7 @@ class Config:
     wms: WmsCfg = field(default_factory=WmsCfg)
     limits: LimitsCfg = field(default_factory=LimitsCfg)
     llm: LlmCfg = field(default_factory=LlmCfg)
+    agent: AgentCfg = field(default_factory=AgentCfg)
     openai: OpenAiCfg = field(default_factory=OpenAiCfg)
     transcribe: TranscribeCfg = field(default_factory=TranscribeCfg)
     hotfix: HotfixCfg = field(default_factory=HotfixCfg)
