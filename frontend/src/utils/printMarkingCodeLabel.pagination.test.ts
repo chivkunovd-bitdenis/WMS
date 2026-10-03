@@ -9,13 +9,34 @@ import { LABEL_SIZES } from './labelSize'
 import { buildMarkingTapeDocument, buildWbOrderQrLabelHtml } from './printMarkingCodeLabel'
 import { buildProductLabelSectionHtml } from './printProductThermalLabel'
 
-// Opt-in real print renderer: WMS_PRINT_CHROMIUM=/path/to/chrome npm run test:unit --
-// src/utils/printMarkingCodeLabel.pagination.test.ts. Requires Poppler pdfimages.
+// Real-renderer test for WMS-613. Local opt-in via WMS_PRINT_CHROMIUM.
+// CI must set WMS_REQUIRE_PRINT_PAGINATION=1 together with Chrome + Poppler so a
+// missing dependency fails loudly instead of green-skipping.
 const chrome = process.env.WMS_PRINT_CHROMIUM
+const requirePagination = process.env.WMS_REQUIRE_PRINT_PAGINATION === '1'
 const cases = [
   ...LABEL_SIZES.map((size) => ({ name: size.id, size, paperHeight: size.heightMm })),
   ...[39, 38.6].map((paperHeight) => ({ name: `58x${paperHeight}-driver`, size: LABEL_SIZES[0]!, paperHeight })),
 ]
+
+function pdfimagesAvailable(): boolean {
+  try {
+    execFileSync('pdfimages', ['-v'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Hard CI gate: never silently green-skip when the pipeline promised a real check.
+describe('WMS-613 CI gate · WMS_REQUIRE_PRINT_PAGINATION', () => {
+  it('requires an executable Chrome and Poppler pdfimages when the gate flag is set', () => {
+    if (!requirePagination) return
+    expect(chrome, 'WMS_PRINT_CHROMIUM must point to a Chromium/Chrome binary when WMS_REQUIRE_PRINT_PAGINATION=1').toBeTruthy()
+    expect(existsSync(chrome!), `WMS_PRINT_CHROMIUM path does not exist: ${chrome}`).toBe(true)
+    expect(pdfimagesAvailable(), 'poppler-utils (pdfimages) must be installed and on PATH when WMS_REQUIRE_PRINT_PAGINATION=1').toBe(true)
+  })
+})
 
 describe.skipIf(!chrome)('WMS-613 physical page pagination', () => {
   it.each(cases)('$name keeps 12 QR/barcode pairs on exactly 24 nonblank pages', async ({ size, paperHeight }) => {
@@ -39,20 +60,66 @@ describe.skipIf(!chrome)('WMS-613 physical page pagination', () => {
       const input = join(dir, 'tape.html')
       const output = join(dir, 'tape.pdf')
       writeFileSync(input, html)
+      // WMS-652: run the isolated local HTML renderer without Chrome background
+      // networking, component updates, account sync or default-app installation.
+      // CI 37142284424 timed out with background-network warnings; their causal
+      // role is unproven. These standard automation flags are an experiment to
+      // verify in Linux CI. PDF content, page assertions and deadlines stay unchanged.
+      // --no-sandbox is limited to this synthetic HTML and disposable test profile.
       const printing = spawn(chrome!, [
-        '--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--no-first-run',
+        '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
+        '--no-pdf-header-footer', '--no-first-run',
+        '--disable-background-networking', '--disable-component-update',
+        '--disable-sync', '--disable-default-apps',
         `--user-data-dir=${join(dir, 'profile')}`, `--print-to-pdf=${output}`, `file://${input}`,
-      ], { stdio: 'ignore' })
+      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      type ExitInfo = { code: number | null; signal: NodeJS.Signals | null }
+      const io: { stderr: string; stdout: string; error: Error | null; exit: ExitInfo | null } = {
+        stderr: '', stdout: '', error: null, exit: null,
+      }
+      printing.on('error', (error) => { io.error = error })
+      printing.stderr?.on('data', (chunk: Buffer) => { io.stderr += chunk.toString('utf8') })
+      printing.stdout?.on('data', (chunk: Buffer) => { io.stdout += chunk.toString('utf8') })
+      printing.on('exit', (code, signal) => { io.exit = { code, signal } })
       try {
         // Some macOS Chrome builds stay alive after writing the PDF. Wait for the
-        // completed file, then close only the isolated process started by this test.
+        // completed file; also fail fast if Chrome exited early without a PDF.
         const deadline = Date.now() + 30_000
         while (!existsSync(output) || !readFileSync(output).subarray(-32).includes(Buffer.from('%%EOF'))) {
-          if (Date.now() >= deadline) throw new Error('Chrome did not produce a complete PDF')
+          if (io.error) throw new Error(`Chrome spawn failed: ${io.error.message}\nstderr: ${io.stderr || '(empty)'}`)
+          if (io.exit && !existsSync(output)) {
+            throw new Error(
+              `Chrome exited early (code=${io.exit.code}, signal=${io.exit.signal}) without producing the PDF.\n` +
+              `binary: ${chrome}\nstderr: ${io.stderr || '(empty)'}\nstdout: ${io.stdout || '(empty)'}`,
+            )
+          }
+          if (Date.now() >= deadline) {
+            throw new Error(
+              `Chrome did not produce a complete PDF in 30s.\nbinary: ${chrome}\n` +
+              `exited: ${io.exit ? JSON.stringify(io.exit) : 'still running'}\n` +
+              `stderr: ${io.stderr || '(empty)'}\nstdout: ${io.stdout || '(empty)'}`,
+            )
+          }
           await new Promise((resolve) => setTimeout(resolve, 100))
         }
       } finally {
-        printing.kill('SIGTERM')
+        // Close only the isolated process this test started; wait briefly for exit
+        // so that an active Chrome does not keep writing into the dir we are about
+        // to rmSync.
+        if (!io.exit) {
+          printing.kill('SIGTERM')
+          const forceKill = Date.now() + 2_000
+          while (!io.exit && Date.now() < forceKill) {
+            await new Promise((resolve) => setTimeout(resolve, 50))
+          }
+          if (!io.exit) {
+            printing.kill('SIGKILL')
+            const hardDeadline = Date.now() + 2_000
+            while (!io.exit && Date.now() < hardDeadline) {
+              await new Promise((resolve) => setTimeout(resolve, 50))
+            }
+          }
+        }
       }
       const pdf = await PDFDocument.load(readFileSync(output))
       expect(pdf.getPageCount()).toBe(24)

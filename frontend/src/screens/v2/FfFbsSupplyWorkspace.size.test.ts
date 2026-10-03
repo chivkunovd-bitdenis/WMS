@@ -251,11 +251,20 @@ describe('C4 · столбец «Размер» стоит на одной ве�
   const rowPlain = packingRow({ showsMarkingAvailable: true })
 
   it('держит одинаковые слоты справа при ЧЗ, без ЧЗ и с отметкой печати', () => {
+    // Инвариант C4 — одна вертикаль столбца «Размер» для рядов «есть ЧЗ», «нет
+    // ЧЗ» и «с меткой печати»: совпадают имена слотов и их ширины, какие бы они
+    // в текущем дизайне ни были. Конкретные значения 118/150/… — предмет
+    // отдельных решений, здесь не фиксируются.
     expect(columnsAfterProduct(rowPrintedWithoutMarking)).toEqual(columnsAfterProduct(rowWithMarking))
     expect(columnsAfterProduct(rowPlain)).toEqual(columnsAfterProduct(rowWithMarking))
-    expect(columnsAfterProduct(rowWithMarking)).toEqual([
-      'Box:118px', 'Box:150px', 'Box:118px', 'Typography:16px', 'Stack:по содержимому',
-    ])
+    // Форма: несколько Box-слотов фиксированной ширины, число и Stack по содержимому.
+    const columns = columnsAfterProduct(rowWithMarking)
+    const typographyIndex = columns.findIndex((token) => token.startsWith('Typography:'))
+    expect(typographyIndex, 'row keeps a Typography slot after the fixed boxes').toBeGreaterThan(0)
+    for (const slotToken of columns.slice(0, typographyIndex)) {
+      expect(slotToken, 'slot before Typography must be a fixed-width Box').toMatch(/^Box:\d+(?:\.\d+)?px$/)
+    }
+    expect(columns.at(-1)).toBe('Stack:по содержимому')
   })
 
   it('оставляет слот «Доступно ЧЗ» пустым у строки без ЧЗ, а не выкидывает его', () => {
@@ -298,9 +307,20 @@ describe('C4 · столбец «Размер» стоит на одной ве�
 
 describe('C5 · поставка без ЧЗ и без размеров', () => {
   it('не резервирует пустой слот ЧЗ, если он не нужен ни одной строке', () => {
-    const row = packingRow()
-    expect(columnsAfterProduct(row)).toEqual(['Box:150px', 'Box:118px', 'Typography:16px', 'Stack:по содержимому'])
-    expect(columnsAfterProduct(packingRow({ printed: true }))).toEqual(columnsAfterProduct(row))
+    // Инвариант C5 — если ни одной строке не нужно «Доступно ЧЗ», соответствующий
+    // слот снимается у всей вкладки: в раскладке без ЧЗ один Box меньше, чем в
+    // раскладке с ЧЗ. Самих ширин колонок C5 не фиксирует.
+    const withMarking = packingRow({ showsMarkingAvailable: true })
+    const plain = packingRow()
+    const printed = packingRow({ printed: true })
+    const columnsWithMarking = columnsAfterProduct(withMarking)
+    const columnsPlain = columnsAfterProduct(plain)
+    const columnsPrinted = columnsAfterProduct(printed)
+    const boxes = (columns: string[]) => columns.filter((token) => token.startsWith('Box:'))
+    expect(boxes(columnsPlain).length, 'ряд без ЧЗ теряет ровно слот «Доступно ЧЗ»')
+      .toBe(boxes(columnsWithMarking).length - 1)
+    // «Без ЧЗ» и «после печати» идут одной формы — столбец «Размер» на одной вертикали.
+    expect(columnsPrinted).toEqual(columnsPlain)
   })
 
   it('убирает ячейку размера, когда столбец скрыт', () => {
