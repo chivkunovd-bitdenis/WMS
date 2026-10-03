@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WMS-652 DORMANT deployment gate; GET-only, no deploy or repository mutations."""
+"""WMS-652 deployment gate; GET-only, no deploy or repository mutations."""
 import argparse
 import json
 import re

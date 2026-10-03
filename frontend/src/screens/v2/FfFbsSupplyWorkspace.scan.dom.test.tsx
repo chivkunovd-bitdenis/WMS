@@ -216,21 +216,32 @@ async function settleUntil(ready: () => boolean, timeoutMs = 2_000) {
   }
 }
 
-/** «Клавиатурный» сканер: символы подряд и Enter — туда, где сейчас фокус. */
+/** «Клавиатурный» сканер: символы подряд и Enter — туда, где сейчас фокус.
+ * Freeze performance.now and advance it 5 мс только между нашими keydown/
+ * Enter; createScannerListener видит 5-мс каденцию, но вызовы между событиями
+ * (React scheduler) смотрят в тот же замороженный момент — без утечки «тиков». */
 function scan(code: string) {
   const target = document.activeElement ?? document.body
   let enter: KeyboardEvent | null = null
-  act(() => {
-    for (const key of code) {
-      target.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'KeyA', bubbles: true, cancelable: true }))
-      if (target instanceof HTMLInputElement && !target.disabled) {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(target, target.value + key)
-        target.dispatchEvent(new Event('input', { bubbles: true }))
+  let fakeNow = performance.now()
+  const spy = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow)
+  try {
+    act(() => {
+      for (const key of code) {
+        fakeNow += 5
+        target.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'KeyA', bubbles: true, cancelable: true }))
+        if (target instanceof HTMLInputElement && !target.disabled) {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(target, target.value + key)
+          target.dispatchEvent(new Event('input', { bubbles: true }))
+        }
       }
-    }
-    enter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })
-    target.dispatchEvent(enter)
-  })
+      fakeNow += 5
+      enter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })
+      target.dispatchEvent(enter)
+    })
+  } finally {
+    spy.mockRestore()
+  }
   return enter! as KeyboardEvent
 }
 
@@ -465,22 +476,18 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(rowTail('order-a')).toBe('OLD0000A')
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
-    // WMS-630 R18: the row update can precede completion of the scan
-    // operation. Wait for the actual enabled scan bar before dispatching the
-    // next sticker; waiting after a rejected scan cannot recover it.
     const scanBarInput = () =>
       document.querySelector<HTMLInputElement>('[data-testid="fbs-kiz-scan-input"] input')
     await settleUntil(() => scanBarInput()?.disabled === false)
-    expect(scanBarInput()?.disabled, 'scan bar must be ready before the next hardware scan').toBe(false)
-    scan(STICKER_A)
+    const secondEnter = scan(STICKER_A)
+    expect(secondEnter.defaultPrevented, 'document capture must absorb the STICKER_A Enter').toBe(true)
     await settleUntil(() => activeRow() === 'order-a')
+    const lookupPath = kizCalls().find((call) => call.path.includes('/kiz/lookup'))?.path
     expect(
-      activeRow(),
-      `STICKER_A was dispatched but no order became active; ` +
-        `scanBarDisabled=${scanBarInput()?.disabled}, ` +
-        `activeTag=${document.activeElement?.tagName ?? 'null'}, ` +
-        `kizCalls=[${kizCalls().map((call) => call.path).join(', ')}]`,
-    ).toBe('order-a')
+      lookupPath ? new URL(lookupPath, 'http://x').searchParams.get('sticker') : null,
+      'lookup must carry the literal STICKER_A payload',
+    ).toBe(STICKER_A)
+    expect(activeRow()).toBe('order-a')
   })
 
   it('при смене поля и ручном вводе с Enter берёт последнюю выбранную строку', async () => {

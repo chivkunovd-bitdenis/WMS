@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 import unittest
 from urllib.parse import parse_qs, urlparse
-from verify_ci import GateError, REQUIRED_JOBS, pages, verify
+
+from scripts.ci.verify_ci import GateError, REQUIRED_JOBS, pages, verify
 
 SHA = "a" * 40
 REPO = "owner/repo"
@@ -69,7 +70,8 @@ class GateTests(unittest.TestCase):
             self.verify()
 
     def test_ruleset_requires_baseline_to_block_skipped_dependency_chain(self):
-        path = Path(__file__).with_name("etalon.ruleset.disabled.json")
+        path = (Path(__file__).resolve().parents[3] / "docs" / "reviews" /
+                "WMS-652-step9-draft" / "etalon.ruleset.disabled.json")
         rules = json.loads(path.read_text())["rules"]
         checks = next(rule for rule in rules if rule["type"] == "required_status_checks")
         names = {item["context"] for item in checks["parameters"]["required_status_checks"]}
@@ -151,11 +153,13 @@ class GateTests(unittest.TestCase):
 
     def test_pagination_reads_more_than_one_page(self):
         requests = []
+
         def get(path):
             page = int(parse_qs(urlparse(path).query)["page"][0])
             requests.append(page)
             return {"total_count": 101, "jobs": [{"id": i} for i in
                     (range(100) if page == 1 else [100])]}
+
         self.assertEqual(len(pages(get, "jobs", "jobs")), 101)
         self.assertEqual(requests, [1, 2])
 
@@ -168,6 +172,7 @@ class GateTests(unittest.TestCase):
     def test_duplicate_page_refuses(self):
         def get(path):
             return {"total_count": 2, "jobs": [{"id": 1}]}
+
         with self.assertRaises(GateError):
             pages(get, "jobs", "jobs")
 
