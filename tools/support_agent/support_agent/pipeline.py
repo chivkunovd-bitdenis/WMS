@@ -1089,8 +1089,15 @@ class Pipeline:
     ) -> str:
         note = {
             "info": "Это запрос данных, а не поломка.",
-            "trello": "Вердикт: это улучшение, ушло в Trello.",
+            "trello": "Вердикт: это улучшение.",
         }.get(verdict, "")
+        if verdict == "trello" or card_note:
+            note += (
+                "\nФактическое состояние карточки по данным диспетчера: "
+                + (card_note.strip() or "Создание карточки в Trello не подтверждено.")
+                + "\nНе утверждай создание карточки без подтверждения в этом состоянии. "
+                "Предложения из материалов не означают выполненных действий."
+            )
         try:
             result = self.llm.ask("routine", prompts.summary_prompt(str(analysis), note), ticket_id=tid)
             body = result.text.strip()

@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from support_agent.llm import LlmUnavailable
 from support_agent.pipeline import FORBIDDEN_IN_SUMMARY
 from support_agent.telegram import Inbound, flush_outbox, normalize_update
@@ -263,6 +265,42 @@ def test_improvement_creates_exactly_one_card_with_label_and_marker(env: Any) ->
     env.pipe._card_for(1, improvement)  # повторная обработка
     assert env.trello.creates == 1
     assert env.store.ticket(1)["stage"] == "done"
+
+
+@pytest.mark.parametrize(("state", "expected"), [
+    ("none", "Создание карточки в Trello не подтверждено."),
+    ("not_configured", "Карточка в Trello не создана: Trello не настроен."),
+    ("unknown", "Карточка в Trello: исход создания неизвестен, повторно не создаю."),
+    ("rejected", "Карточку в Trello создать не удалось (отказ Trello)."),
+    ("linked", "Карточка в Trello создана: https://trello.test/c1"),
+])
+def test_improvement_summary_gets_actual_card_outcome(env: Any, state: str, expected: str) -> None:
+    improvement = dict(ANALYSIS_BUG, category="improvement", urgent=False)
+    script(env, improvement, category="improvement")
+    tid = env.store.add_ticket(kind="form" if state == "none" else "chat", source="test",
+                               chat_id=CLIENT_CHAT, seller="ИП Тест", stage="analysis")
+    if state == "not_configured":
+        env.cfg.trello.api_key = ""
+    elif state == "unknown":
+        env.trello.lose_response_once = True
+        env.trello.hide_after_lose = True
+    elif state == "rejected":
+        env.trello.reject = True
+    card_note = env.pipe._card_for(tid, improvement)
+    body = env.pipe._compose(tid, improvement, "trello", None, card_note)
+    prompt = env.llm.calls[-1]["prompt"]
+    trusted_note = prompt.split("\n\nМатериалы:")[0]
+    assert "Вердикт: это улучшение." in trusted_note
+    assert "ушло в Trello" not in trusted_note
+    assert expected in trusted_note
+    assert "Не утверждай создание карточки без подтверждения" in trusted_note
+    if state == "linked":
+        assert env.store.data(tid)["card_url"] == "https://trello.test/c1"
+    else:
+        assert "Карточка в Trello создана:" not in trusted_note
+        assert "card_id" not in env.store.data(tid)
+    if card_note:
+        assert body.endswith(card_note)  # фактический исход добавляется кодом и к готовой сводке
 
 
 def test_form_improvement_gets_only_a_comment_never_a_card(env: Any) -> None:
