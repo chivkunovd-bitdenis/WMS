@@ -1,7 +1,12 @@
 # WMS-652 DRAFT ONLY. Activate as .github/CODEOWNERS after owner decision.
 /.github/ @chivkunovd-bitdenis
 /backend/tests/guards/ @chivkunovd-bitdenis
+/backend/tests/conftest.py @chivkunovd-bitdenis
+/backend/pyproject.toml @chivkunovd-bitdenis
 /frontend/src/guards/ @chivkunovd-bitdenis
+/frontend/vitest.config.ts @chivkunovd-bitdenis
+/frontend/package.json @chivkunovd-bitdenis
+/frontend/package-lock.json @chivkunovd-bitdenis
 /guards/ @chivkunovd-bitdenis
 /scripts/ci/ @chivkunovd-bitdenis
 /scripts/deploy/ @chivkunovd-bitdenis

@@ -7,7 +7,7 @@ import subprocess
 import sys
 from urllib.parse import urlencode
 
-REQUIRED_JOBS = {"backlog", "backend", "frontend-build", "охрана"}
+REQUIRED_JOBS = {"baseline", "backlog", "backend", "frontend-build", "охрана"}
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 ACTIONS_APP_ID = 15368
 

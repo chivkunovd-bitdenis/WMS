@@ -1,5 +1,7 @@
 """Offline contract tests. No GitHub API, credentials or deployment access."""
 import copy
+import json
+from pathlib import Path
 import unittest
 from urllib.parse import parse_qs, urlparse
 from verify_ci import GateError, REQUIRED_JOBS, pages, verify
@@ -51,6 +53,28 @@ class GateTests(unittest.TestCase):
         self.assertEqual(self.verify()["sha"], SHA)
         self.assertTrue(any("/attempts/1/jobs?" in p for p in self.f.paths))
         self.assertEqual(self.f.run_reads, 2)
+
+    def test_baseline_is_mandatory_even_when_dependents_look_green(self):
+        self.f.jobs = [job for job in self.f.jobs if job["name"] != "baseline"]
+        with self.assertRaisesRegex(GateError, "baseline"):
+            self.verify()
+
+    def test_failed_baseline_with_skipped_dependents_refuses(self):
+        for job in self.f.jobs:
+            if job["name"] == "baseline":
+                job["conclusion"] = "failure"
+            elif job["name"] in {"backlog", "охрана"}:
+                job["conclusion"] = "skipped"
+        with self.assertRaises(GateError):
+            self.verify()
+
+    def test_ruleset_requires_baseline_to_block_skipped_dependency_chain(self):
+        path = Path(__file__).with_name("etalon.ruleset.disabled.json")
+        rules = json.loads(path.read_text())["rules"]
+        checks = next(rule for rule in rules if rule["type"] == "required_status_checks")
+        names = {item["context"] for item in checks["parameters"]["required_status_checks"]}
+        self.assertIn("baseline", names)
+        self.assertEqual(names, REQUIRED_JOBS)
 
     def test_wrong_identity_never_authorizes_deploy(self):
         for field, value in [("head_sha", "b" * 40), ("event", "pull_request"),

@@ -24,6 +24,7 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
+          {"context": "baseline", "integration_id": 15368},
           {"context": "backlog", "integration_id": 15368},
           {"context": "backend", "integration_id": 15368},
           {"context": "frontend-build", "integration_id": 15368},
