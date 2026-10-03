@@ -7,7 +7,7 @@
     "backend/tests/guards/test_guard_stock_documents.py": "b0d988452d0769762f0ae90b52e59528c49a74b6cfee9835cc63070d5f8aa514",
     "backend/tests/guards/test_guard_stock_limits.py": "046420fb0dc040526a30a6a880d913f83b66c5461792b43a75e4e3641cb39a4f",
     "backend/tests/guards/test_guard_stock_picking.py": "b6184601f48f90de28459acf3de1976f59266ab8854726cc1640b1d63ca824b5",
-    "backend/tests/guards/test_guard_stock_printing.py": "735af2fd501b52cbc689a95d81bee416a5a64ed89923a0128b306e8a09cf3bbb",
+    "backend/tests/guards/test_guard_stock_printing.py": "232f42ddf543916fb211e147cde25db0987cd779117a8b836dd612148e2cbec3",
     "backend/tests/guards/test_guard_stock_publication.py": "572adb6b04b2ccd77e7412dd91102b435cc1af527ef0f89a31df0d299068fb24",
     "backend/tests/guards/test_guard_stock_reservation.py": "5e025bedc4d20ccd67cbd1e27f3f6693a6404a48fdad99a130e54f53b9db8660",
     "backend/tests/guards/test_guard_stock_shipment.py": "9dd53849db6990875cbf8b49e6f01795cf64b03fc9b17438c37780a89ebe7044",
