@@ -115,6 +115,35 @@ def test_burst_is_one_ticket_late_message_attaches_new_topic_is_new(env: Any) ->
     assert len(env.store.rows("SELECT * FROM tickets")) == 2
 
 
+def test_filter_gets_full_voice_request_and_numbered_followups_without_forced_merging(env: Any) -> None:
+    script(env)
+    voice = ("(расшифровка голосового) Денис, помнишь момент был, сейчас ещё Светлана напишет детали. "
+             "Нужно вернуть работу с коробами в возврате, создавать заданное число коробов "
+             "в приёмке и возврате и печатать номер короба с уникальным кодом и номером документа.")
+    first_detail = "Создаём возврат и вводим 200 коробов вместо добавления каждого вручную."
+    third_request = "2. Нужно вывести номер короба, уникальный код и номер документа на этикетку и лист подбора."
+    env.say(CLIENT_CHAT, voice, msg_id="voice-source")
+    assert env.store.data(1)["title"] == voice[:60]
+
+    def followup(prompt: str, kw: Any) -> dict[str, Any]:
+        current = prompt.split("<<<ДАННЫЕ\n")[1].split("\nДАННЫЕ>>>")[0]
+        # Проверяется настоящий prompt Pipeline, а не отдельно собранный образец.
+        assert voice in prompt
+        assert "Нумерованное дополнение" in prompt
+        if current == third_request:
+            assert first_detail in prompt
+        return {"relevant": True, "ticket_id": 1 if current in (first_detail, third_request) else None}
+
+    env.llm.on("filter", "Новое сообщение из клиентского чата", followup)
+    env.say(CLIENT_CHAT, first_detail, msg_id="followup-one", user=6)
+    env.say(CLIENT_CHAT, third_request, msg_id="followup-two", user=6)
+    assert len(env.store.rows("SELECT * FROM tickets")) == 1
+    assert [m["text"] for m in env.store.ticket_messages(1)] == [voice, first_detail, third_request]
+    env.say(CLIENT_CHAT, "Отдельная задача: нужен отчёт по стоимости хранения", msg_id="independent")
+    assert len(env.store.rows("SELECT * FROM tickets")) == 2
+    assert env.store.ticket_messages(2)[0]["text"].startswith("Отдельная задача")
+
+
 def test_doubt_is_not_dropped(env: Any) -> None:
     script(env)
     env.llm.on("filter", "Новое сообщение из клиентского чата", {"relevant": "unsure", "ticket_id": None})

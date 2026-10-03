@@ -550,7 +550,11 @@ class Pipeline:
                 self.attach(m, tid)
                 return
         open_tickets = self.store.open_chat_tickets(m["chat_id"])
-        listing = [{"id": str(t["id"]), "title": self.title_of(t["id"])} for t in open_tickets]
+        listing = [{
+            "id": str(t["id"]), "title": self.title_of(t["id"]),
+            "messages": "\n".join(f"{item['author_name']}: {item['text']}"
+                                  for item in self.store.ticket_messages(t["id"])),
+        } for t in open_tickets]
         waiting = [t["id"] for t in open_tickets if t["stage"] in ("await_urgency", "await_client_data")]
         try:
             verdict, _ = self.llm.ask_json(
