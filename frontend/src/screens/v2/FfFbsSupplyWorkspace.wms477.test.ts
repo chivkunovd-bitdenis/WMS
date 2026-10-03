@@ -100,18 +100,15 @@ function sandbox(code: string, given: Record<string, unknown>) {
 function runEffect(options: {
   open: boolean; supplyId: string; stage: string; visibility: string
   respond?: (settle: () => void) => void
-  // WMS-599: WB-поставка на этапе отслеживания не опрашивается. Без снимка
-  // (undefined) условие ложно, и эффект ведёт себя как до WMS-599.
-  workspace?: { supply: { marketplace: string }; stage: string }
 }) {
   const loads: boolean[] = []
   let tick: (() => void) | null = null
   let cleared: number | null = null
   const inFlight = { current: false }
-  const factory = new Function('open', 'supplyId', 'stage', 'workspace', 'load', 'silentRefreshInFlight',
+  const factory = new Function('open', 'supplyId', 'stage', 'load', 'silentRefreshInFlight',
     'window', 'document', `return (${effect})()`) as (...args: unknown[]) => (() => void) | undefined
   const cleanup = factory(
-    options.open, options.supplyId, options.stage, options.workspace,
+    options.open, options.supplyId, options.stage,
     (silent: boolean) => {
       loads.push(silent)
       // Ответ приходит, только когда его отпустит сам тест: так проверяется
@@ -269,19 +266,7 @@ describe('WMS-477 silent workspace refresh', () => {
   // Пропажа зависимости оставила бы таймер с устаревшим load или не сняла бы его
   // при закрытии окна — оба случая означают запросы по уже закрытой поставке.
   it('re-arms the timer on every input it reads', () => {
-    // WMS-599: эффект читает площадку и этап снимка, чтобы не опрашивать
-    // WB-поставку на отслеживании, — они тоже входы таймера.
-    expect(deps).toBe('[open, supplyId, stage, workspace?.supply.marketplace, workspace?.stage, load]')
-  })
-
-  it('does not poll a WB supply that is already on the tracking stage (WMS-599)', () => {
-    const run = runEffect({
-      open: true, supplyId: 'supply-1', stage: 'packing', visibility: 'visible',
-      workspace: { supply: { marketplace: 'wb' }, stage: 'tracking' },
-    })
-    expect(run.cleanup).toBeUndefined()
-    run.tick()
-    expect(run.loads).toEqual([])
+    expect(deps).toBe('[open, supplyId, stage, load]')
   })
 })
 
