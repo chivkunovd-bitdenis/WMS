@@ -66,7 +66,7 @@ class AgentTools:
             self._spec(
                 "owner_digest",
                 "Notify the owner about meaningful discussion, a bug, agreement or blocker in this chat.",
-                {"text": "string", "ticket_id": "integer"},
+                {"text": "string", "ticket_id": "integer", "slot": "string"},
             ),
             self._spec(
                 "read_data",
@@ -91,6 +91,7 @@ class AgentTools:
                             "text": "string",
                             "version": "string",
                             "reply_to": "string",
+                            "slot": "string",
                         },
                     ),
                     self._spec(
@@ -283,11 +284,19 @@ class AgentTools:
                     "source_message_id": event["id"]}
         chat_id = int(event["chat_id"])
         source = f"Чат {chat_id}, сообщение {event['msg_id']}"
-        key = f"agent_digest:{event['id']}:{int(tid or 0)}:{_digest(body)}"
+        slot = self._slot(args.get("slot"))
+        key = f"agent_digest:{event['id']}:{int(tid or 0)}:{slot}"
         self.p.say_owner(key, f"{source}\n{body}", int(tid) if tid else None, "agent_digest")
         row = self.store.outbox_by_key(key)
         return {"key": key, "status": row["status"], "owner_chat_id": self.p.cfg.telegram.owner_chat_id,
-                "source_message_id": event["id"]}
+                "source_message_id": event["id"], "frozen_text": row["text"]}
+
+    @staticmethod
+    def _slot(value: Any) -> str:
+        slot = str(value or "default")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", slot):
+            raise ToolDenied("invalid_action_slot")
+        return slot
 
     def _tool_read_data(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         chat_id = self._chat(args.get("chat_id"), event, owner)
@@ -481,7 +490,8 @@ class AgentTools:
         body = str(args.get("text") or "").strip()
         if not body:
             raise ToolDenied("empty_reply")
-        key = f"agent_reply:{event['id']}:{chat_id}:{tid}:{_digest(body)}"
+        slot = self._slot(args.get("slot"))
+        key = f"agent_reply:{event['id']}:{chat_id}:{tid}:{slot}"
         created = self.store.queue_message(
             key=key,
             chat_id=chat_id,
@@ -495,6 +505,7 @@ class AgentTools:
             "queued": created,
             "key": key,
             "status": self.store.outbox_by_key(key)["status"],
+            "frozen_text": self.store.outbox_by_key(key)["text"],
             "owner_message_id": event["id"],
             "version": version,
         }
