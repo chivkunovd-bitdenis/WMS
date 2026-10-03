@@ -78,7 +78,8 @@ class AgentCoordinator:
         self.dispatcher = AgentDispatcher(self)
 
     def _owner(self, m: Any) -> bool:
-        return (int(m["chat_id"]) == self.cfg.telegram.owner_chat_id
+        return (str(m["role"]) == "owner"
+                and int(m["chat_id"]) == self.cfg.telegram.owner_chat_id
                 and str(m["author_id"]) == str(self.cfg.telegram.owner_user_id)
                 and bool(self.cfg.telegram.owner_user_id))
 
