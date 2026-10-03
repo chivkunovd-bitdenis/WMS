@@ -1,4 +1,4 @@
-"""One bounded real Sol client discussion turn with isolated capture tools."""
+"""One bounded real Sol client turn with actual local tools and no external writes."""
 
 from __future__ import annotations
 
@@ -40,19 +40,27 @@ def main() -> None:
             return real_llm.agent_turn(prompt, **kwargs)
 
     pipe = SimpleNamespace(cfg=cfg, store=store, llm=BoundedLlm(), clock=time.time,
-                           _owner_snapshot=lambda: [], _is_bind_reply=lambda *_: None)
+                           _owner_snapshot=lambda: [], _is_bind_reply=lambda *_: None,
+                           _seller_for_chat=lambda *_: "Synthetic",
+                           say_owner=lambda key, text, ticket_id=None, purpose="notice":
+                           store.queue_message(key=key, chat_id=900, text=text,
+                                               ticket_id=ticket_id, purpose=purpose,
+                                               repeat_ok=True))
     calls: list[dict[str, Any]] = []
+    real_tools = AgentTools(pipe)
 
     class CaptureTools:
         def specs(self, scope: str) -> list[dict[str, Any]]:
-            return AgentTools(pipe).specs(scope)
+            return real_tools.specs(scope)
 
         def dispatch(self, name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
             calls.append({"name": name, "args": args})
-            if name == "read_context":
-                return {"messages": [dict(r) for r in store.rows(
-                    "SELECT * FROM messages WHERE chat_id=-101 ORDER BY id", ())]}
-            return {"recorded_in_isolated_fixture": True}
+            if name == "task_record" and args.get("confirm_author"):
+                return {"error": "fixture_blocks_canonical_publishing"}
+            if name not in {"read_context", "remember", "task_record",
+                            "queue_process_reply", "owner_digest", "read_data"}:
+                return {"error": "fixture_blocks_external_action"}
+            return real_tools.dispatch(name, args, context)
 
     agent = AgentCoordinator(pipe, CaptureTools())
     texts = [
@@ -80,16 +88,29 @@ def main() -> None:
              "revision": 1, "chat_id": -101, "owner": False, "text": texts[-1], "ts": time.time()}
     source = store.row("SELECT * FROM messages WHERE id=?", (ids[-1],))
     result = agent.run_topic_turn(topic, event, source)
+    tickets = store.rows("SELECT * FROM tickets ORDER BY id", ())
+    outbox = store.rows("SELECT * FROM outbox ORDER BY id", ())
+    memory = store.kv_get("agent_memory:-101", {})
     prohibited = [c for c in calls if c["name"] in ("approve_task", "trello_sync", "project_job")
                   or (c["name"] == "task_record" and c["args"].get("confirm_author"))]
-    output = {"scope": "one actual Sol5.6 client topic turn; capture tools only; fixture SQLite/repo; no external writes",
+    draft = [t for t in tickets if t["stage"] == "agent_discussion"]
+    question = [m for m in outbox if m["purpose"] == "necessary_question" and m["chat_id"] == -101]
+    digest = [m for m in outbox if m["purpose"] == "agent_digest" and m["chat_id"] == 900]
+    output = {"scope": "one actual Sol5.6 client topic turn; actual local tools; fixture SQLite/repo; no external writes",
               "model": cfg.agent.owner_model, "input": texts,
               "tool_calls": calls, "result_summary": result.get("summary"),
               "result_next_action": result.get("next_action"),
               "prohibited_consequential_calls": prohibited,
-              "no_canonical_publish_or_approval": not prohibited,
+              "ticket_ids": [t["id"] for t in tickets],
+              "draft_ticket_ids": [t["id"] for t in draft],
+              "queued_question_ids": [m["id"] for m in question],
+              "queued_owner_digest_ids": [m["id"] for m in digest],
+              "memory_sources": memory.get("source_message_ids", []),
+              "no_canonical_publish_or_approval": not prohibited and all(
+                  not (store.data(t["id"]).get("agent") or {}).get("author_confirmation")
+                  for t in tickets),
               "cancelled_deletion_not_in_next_action": "удален" not in str(result.get("next_action", "")).lower(),
-              "passed": not prohibited}
+              "passed": bool(draft and question and digest and memory and not prohibited)}
     target = Path(__file__).with_suffix(".json")
     target.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"artifact": str(target), "passed": output["passed"]}), flush=True)
