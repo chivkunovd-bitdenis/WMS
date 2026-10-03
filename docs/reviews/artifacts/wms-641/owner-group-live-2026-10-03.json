@@ -1,0 +1,64 @@
+{
+  "code_sha": "20f3c57f961513da995c865479d1513fb8040c35",
+  "files_checked": 27,
+  "mismatches": [],
+  "original_message": {
+    "id": 18,
+    "chat_id": -1004441620578,
+    "msg_id": "504",
+    "role": "bind",
+    "text": "@wms_korob_support_bot \nобщий чат для задач от владельцев системы",
+    "status": "handled"
+  },
+  "config_sha256_before": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719",
+  "client_group_outbox_before": [
+    {
+      "id": 5,
+      "status": "sent"
+    },
+    {
+      "id": 8,
+      "status": "sent"
+    }
+  ],
+  "retry_method": "Only reset processing status of the exact real owner message18; no ready registration, outbox text, model result or Telegram input inserted.",
+  "group_registration": {
+    "-1004441620578": "ВМС- Короб💵"
+  },
+  "ack": {
+    "id": 16,
+    "key": "owner_task_chat:-1004441620578",
+    "chat_id": -1004441620578,
+    "status": "sent",
+    "tg_message_id": "505",
+    "reply_to": "504",
+    "purpose": "group_registration",
+    "text": "Этот чат зарегистрирован как общий чат задач владельцев WMS. Чтобы поставить задачу, напишите просьбу со словом Trello; я подготовлю описание и попрошу автора подтвердить. Команды на выкладку принимаю только в личном чате владельца.",
+    "attempts": 1
+  },
+  "original_message_after": {
+    "id": 18,
+    "chat_id": -1004441620578,
+    "msg_id": "504",
+    "role": "bind",
+    "status": "handled"
+  },
+  "registered_role_loaded_after_service_restart": "partner",
+  "registration_ack_count": 1,
+  "config_sha256_after": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719",
+  "client_group_outbox_after": [
+    {
+      "id": 5,
+      "status": "sent"
+    },
+    {
+      "id": 8,
+      "status": "sent"
+    }
+  ],
+  "final_source_sha": "74fea8d0ab7381cfeaf58a0884929d9d635432ca",
+  "final_files_checked": 27,
+  "final_mismatches": [],
+  "final_service_state": "running",
+  "registered_role_loaded_after_final_restart": "partner"
+}

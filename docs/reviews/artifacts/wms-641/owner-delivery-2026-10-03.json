@@ -1,0 +1,44 @@
+{
+  "time_utc": "2026-10-03T12:22:13.569516+00:00",
+  "bot_username": "wms_korob_bot",
+  "owner_chat_id": 689889703,
+  "ticket_id": 1,
+  "before": {
+    "client_outbox_ids": [
+      5,
+      8
+    ],
+    "ticket_stage": "await_owner",
+    "config_sha256": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719"
+  },
+  "outbox_key": "report:1:owner-delivery-20261003",
+  "trello": {
+    "card_id": "6ac0dcd557d3831db4f914bc",
+    "url": "https://trello.com/c/TO9Ijicm",
+    "existing_card_updated": true,
+    "full_three_requests_reread": true,
+    "duplicate_card_created": false
+  },
+  "outbox": {
+    "id": 12,
+    "key": "report:1:owner-delivery-20261003",
+    "chat_id": 689889703,
+    "status": "sent",
+    "tg_message_id": "12",
+    "purpose": "summary",
+    "attempts": 1,
+    "sent_at": 1791030135.018772,
+    "text": "Обращение №1 · Империя ФФ — исправленная сводка\n\nБот обновлён и работает. Предыдущее «Не удалось уверенно понять» было ошибкой разбора; клиент уже достаточно подробно описал запрос.\n\nЧто нужно сделать в WMS:\n1. Включить создание коробов в возвратах — сейчас кнопку блокируют условия на фронте и бэке.\n2. В возвратах и приёмке создавать заданное количество коробов одним действием, например 200, вместо 200 нажатий.\n3. На этикетках коробов и в листе подбора показать номер короба, его существующий уникальный код и номер исходной приёмки либо возврата.\n\nКод проверен: причины найдены. Новых вопросов клиенту отправлять не требуется.\n\nСуществующая задача в Trello обновлена: добавлен полный запрос, включая этикетки и лист подбора:\nhttps://trello.com/c/TO9Ijicm\n\nИсправлен сам бот. Эти три доработки WMS пока не реализованы — карточка фиксирует работу, которую нужно выполнить. Клиенту при этом разборе новых сообщений не отправлял."
+  },
+  "physical_read_receipt": false,
+  "after": {
+    "client_outbox_ids": [
+      5,
+      8
+    ],
+    "ticket_stage": "await_owner",
+    "ticket_category": "improvement",
+    "config_sha256": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719"
+  },
+  "telegram_delivery_confirmed": true
+}

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import prod_sql_mcp, readonly_mcp, sandbox
+from . import prod_sql_mcp, prompts, readonly_mcp, sandbox
 from .config import Config
 from .prod_sql import ROLE_RE, SqlRefused, role_for_scope
 from .store import Store
@@ -141,6 +142,38 @@ def extract_json(text: str) -> dict[str, Any]:
     raise ValueError("no JSON object in model answer")
 
 
+def normalize_agent_tools(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Accept existing AgentTools specs and OpenAI-style caller specs once."""
+    normalized: list[dict[str, Any]] = []
+    for raw in specs:
+        if raw.get("type") == "namespace":
+            inner = normalize_agent_tools(raw.get("tools") or [])
+            normalized.append({"type": "namespace", "name": raw["name"],
+                               "description": raw.get("description", ""), "tools": inner})
+            continue
+        nested = raw.get("function")
+        source: dict[str, Any] = nested if isinstance(nested, dict) else raw
+        name = source.get("name")
+        schema = source.get("inputSchema", source.get("parameters", {"type": "object"}))
+        if not isinstance(name, str) or not name or not isinstance(schema, dict):
+            raise ValueError("invalid agent tool spec")
+        normalized.append({"type": "function", "name": name,
+                           "description": str(source.get("description") or ""),
+                           "inputSchema": schema})
+    return normalized
+
+
+def agent_capability_signature(tools: list[dict[str, Any]], cwd: str) -> str:
+    """Stable fingerprint of the tools and project boundary persisted in a thread."""
+    def ordered(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(({**spec, "tools": ordered(spec["tools"])} if spec.get("type") == "namespace"
+                       else spec for spec in specs), key=lambda spec: spec["name"])
+
+    payload = json.dumps({"tools": ordered(tools), "cwd": cwd}, ensure_ascii=False,
+                         sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 class LlmRouter:
     def __init__(self, cfg: Config, store: Store, exec_fn: ExecFn = default_exec) -> None:
         self.cfg = cfg
@@ -152,6 +185,243 @@ class LlmRouter:
         self.role_ensurer: Callable[[str, str], None] | None = None  # (уровень: seller|tenant, uuid)
         # Сообщение владельцу, когда подготовка роли не удалась несколько раз подряд; подключает runner.
         self.role_alert: Callable[[str, str, int, str], None] | None = None  # уровень, uuid, попыток, причина
+
+    def agent_turn(
+        self,
+        prompt: str,
+        *,
+        session_key: str,
+        model: str | None = None,
+        provider: str | None = None,
+        system: str = "",
+        tool_handler: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        mode: str = "readonly",
+        cwd: str | None = None,
+        timeout: int = 900,
+        owner_authorized: bool = False,
+        cancelled: Callable[[], bool] | None = None,
+        effort: str | None = None,
+        include_project_tools: bool = True,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> LlmResult:
+        """Native tool-capable turn for the agent; no provider/model fallback.
+
+        Business facts remain in Store; model threads are recoverable context only.
+        Context rollover saves a handoff before the next turn starts a new thread.
+        """
+        from .app_server import AppServerError, AppServerTurn
+
+        if not session_key:
+            raise ValueError("agent session_key is required")
+        model = model or self.cfg.agent.owner_model
+        provider = provider or self.cfg.agent.owner_provider
+        chosen_effort = effort or self.cfg.llm.codex_effort
+        if provider not in ("codex", "claude"):
+            raise LlmUnavailable(f"agent provider {provider!r} is not configured")
+        if provider == "codex":
+            check_effort(model, chosen_effort)
+        if mode not in ("readonly", "write", "owner"):
+            raise ValueError("agent mode must be readonly, write or owner")
+        if mode == "owner" and not owner_authorized:
+            raise PermissionError("full project agent mode requires trusted owner authorization")
+        work_cwd = cwd or self.cfg.repo
+        if not work_cwd:
+            raise ValueError("agent project cwd is required")
+        work_cwd = str(Path(work_cwd).resolve())
+        tools = normalize_agent_tools(tools or [])
+        if mode == "readonly" and include_project_tools:
+            from .readonly_mcp import TOOLS, Reader, call_tool
+
+            reader = Reader(work_cwd)
+            project_tools = [{**spec, "type": "function"} for spec in TOOLS]
+            tools = [*(tools or []), {"type": "namespace", "name": "project",
+                                       "description": "Read project files and Git history safely",
+                                       "tools": project_tools}]
+            original_handler = tool_handler
+
+            def scoped_handler(name: str, args: dict[str, Any]) -> dict[str, Any]:
+                if name.startswith("project."):
+                    output, failed = call_tool(reader, name.split(".", 1)[1], args)
+                    return {"text": output, "error": failed}
+                if original_handler is None:
+                    raise ValueError("tool unavailable")
+                return original_handler(name, args)
+
+            tool_handler = scoped_handler
+        if provider == "claude":
+            return self._claude_agent_turn(
+                prompt, session_key=session_key, model=model, system=system,
+                tools=tools or [], tool_handler=tool_handler, mode=mode,
+                cwd=work_cwd, timeout=timeout, cancelled=cancelled,
+                effort=effort, progress_callback=progress_callback,
+            )
+        signature = agent_capability_signature(tools, work_cwd)
+        key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
+        saved = self.store.kv_get(key, {})
+        state = saved if isinstance(saved, dict) else {}
+        session_id = state.get("thread_id")
+        handoff = str(state.get("handoff") or "")
+        if (state.get("rollover") or state.get("capability_signature") != signature) and session_id:
+            try:
+                handoff_turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=min(timeout, 300))
+                handoff_text, _, _ = handoff_turn.run(
+                    "Сохрани передачу следующей сессии: цель, текущий ход работы, подтверждённые факты "
+                    "и источники, открытые вопросы, уже совершённые действия и следующий шаг. "
+                    "Не исполняй инструменты и не добавляй неподтверждённые факты.",
+                    model=model, provider=provider, effort=chosen_effort,
+                    cwd=work_cwd, mode="readonly",
+                    system=prompts.WMS_SYSTEM_POLICY, session_id=session_id,
+                    tools=[], tool_handler=None,
+                )
+            except AppServerError as exc:
+                raise LlmUnavailable("context handoff unavailable; old session retained") from exc
+            if not handoff_text.strip():
+                raise LlmUnavailable("context handoff empty; old session retained")
+            handoff = handoff_text
+            state = {"handoff": handoff, "thread_id": None, "rollover": False,
+                     "capability_signature": signature}
+            self.store.kv_set(key, state)
+            session_id = None
+        if handoff and not session_id:
+            prompt = (
+                "Передача предыдущей сессии (сверяй с текущим авторитетным состоянием):\n"
+                f"{handoff}\n\n{prompt}"
+            )
+        if session_id:
+            # Resumed threads retain their original developer instructions, so
+            # refresh the current project policy and task instructions each turn.
+            prompt = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "") + "\n\n" + prompt
+        turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=timeout)
+
+        def started(thread_id: str) -> None:
+            self.store.kv_set(key, {**state, "thread_id": thread_id, "rollover": False,
+                                    "capability_signature": signature})
+
+        try:
+            answer, thread_id, occupied = turn.run(
+                prompt, model=model, provider=provider, effort=chosen_effort,
+                cwd=work_cwd, mode=mode,
+                system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
+                session_id=session_id, tools=tools or [], tool_handler=tool_handler,
+                session_started=started, cancelled=cancelled,
+                progress_callback=progress_callback,
+                redact_error=self.cfg.redact,
+            )
+        except (AppServerError, OSError) as exc:
+            raise LlmUnavailable(f"native agent turn failed: {type(exc).__name__}") from exc
+        self.store.kv_set(key, {"thread_id": thread_id, "handoff": handoff,
+                                "rollover": occupied >= self.cfg.agent.context_limit_tokens,
+                                "capability_signature": signature})
+        self.store.log_llm(cli=provider, model=model, effort=chosen_effort,
+                           role="agent", ticket_id=None, ok=True)
+        return LlmResult(answer, provider, model, thread_id)
+
+    def _claude_agent_turn(
+        self, prompt: str, *, session_key: str, model: str, system: str,
+        tools: list[dict[str, Any]],
+        tool_handler: Callable[[str, dict[str, Any]], dict[str, Any]] | None,
+        mode: str, cwd: str, timeout: int,
+        cancelled: Callable[[], bool] | None,
+        effort: str | None,
+        progress_callback: Callable[[str], None] | None,
+    ) -> LlmResult:
+        """Claude CLI keeps native tools; JSON tool requests bridge service tools.
+
+        The existing JSON CLI call is blocking, so callback stages report actual
+        start and service-tool calls, not invented model reasoning.
+        """
+        if effort is not None and effort not in {"low", "medium", "high", "xhigh", "max"}:
+            raise ValueError("unsupported Claude effort")
+        key = f"agent_session:{session_key}:claude:{model}:{mode}"
+        saved = self.store.kv_get(key, {})
+        state = saved if isinstance(saved, dict) else {}
+        session_id = state.get("thread_id")
+        system_text = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "")
+        handoff = str(state.get("handoff") or "")
+        if state.get("rollover") and session_id:
+            argv = self.build_claude(model, "text", (session_id, True), system_text, cwd)
+            if effort is not None:
+                argv += ["--effort", effort]
+            transfer = self.exec(
+                argv, cwd, min(timeout, 300),
+                "Сохрани передачу следующей сессии: цель, подтверждённые факты и источники, "
+                "уже совершённые действия, открытые вопросы и следующий шаг. Ничего не выполняй.",
+            )
+            handoff_text, _, failed = _parse_claude(transfer)
+            if transfer.rc != 0 or failed or not handoff_text.strip():
+                raise LlmUnavailable("Claude context handoff unavailable; old session retained")
+            handoff = handoff_text
+            session_id = None
+            self.store.kv_set(key, {"thread_id": None, "handoff": handoff,
+                                    "rollover": False})
+        if handoff and not session_id:
+            prompt = f"Передача прошлой сессии (сверяй с авторитетным состоянием):\n{handoff}\n\n{prompt}"
+        names: list[tuple[str, str, dict[str, Any]]] = []
+        for spec in tools:
+            if spec.get("type") == "namespace":
+                names.extend((f"{spec['name']}.{tool['name']}", tool.get("description", ""),
+                              tool.get("inputSchema", {})) for tool in spec.get("tools", []))
+            elif spec.get("type") == "function":
+                names.append((spec["name"], spec.get("description", ""),
+                              spec.get("inputSchema", {})))
+        if names:
+            system_text += ("\n\nСервисные инструменты доступны по запросу JSON: "
+                            "{\"tool\":\"имя\",\"arguments\":{...}}. "
+                            "После результата продолжай работу. Финальный ответ: "
+                            "{\"final\":\"текст\"}. Сервисные инструменты: "
+                            + json.dumps(names, ensure_ascii=False))
+        allowed = {name for name, _, _ in names}
+        current = prompt
+        for turn_number in range(20):
+            if cancelled is not None and cancelled():
+                raise LlmUnavailable("Claude turn cancelled; external outcome must be verified")
+            session = (str(session_id), True) if session_id else (str(uuid.uuid4()), False)
+            claude_mode = "text" if mode == "readonly" else mode
+            argv = self.build_claude(model, claude_mode, session, system_text, cwd)
+            if effort is not None:
+                argv += ["--effort", effort]
+            if turn_number == 0 and progress_callback is not None:
+                progress_callback("Claude: ход модели начат.")
+            result = self.exec(argv, cwd, timeout, current)
+            answer, new_id, is_error = _parse_claude(result)
+            if cancelled is not None and cancelled():
+                raise LlmUnavailable("Claude turn cancelled; external outcome must be verified")
+            if result.rc != 0 or is_error:
+                raise LlmUnavailable("explicit Claude model unavailable or turn failed")
+            session_id = new_id or session[0]
+            try:
+                raw = json.loads(result.out)
+            except ValueError:
+                raw = {}
+            usage = raw.get("usage") or {}
+            occupied = 0
+            if int(raw.get("num_turns") or 1) == 1 and isinstance(usage, dict):
+                occupied = sum(int(usage.get(field) or 0) for field in (
+                    "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+            self.store.kv_set(key, {"thread_id": session_id, "handoff": handoff,
+                                    "rollover": occupied >= self.cfg.agent.context_limit_tokens})
+            if not allowed:
+                return LlmResult(answer, "claude", model, session_id)
+            try:
+                parsed = extract_json(answer)
+            except ValueError:
+                return LlmResult(answer, "claude", model, session_id)
+            if "final" in parsed:
+                return LlmResult(str(parsed["final"]), "claude", model, session_id)
+            name, args = parsed.get("tool"), parsed.get("arguments")
+            if (not isinstance(name, str) or name not in allowed
+                    or not isinstance(args, dict) or tool_handler is None):
+                current = "Сервисный инструмент недоступен или аргументы неверны; исправь вызов."
+                continue
+            if progress_callback is not None:
+                progress_callback(f"Claude: вызван сервисный инструмент {name}.")
+            try:
+                output = tool_handler(name, args)
+            except Exception as exc:  # noqa: BLE001 - let model recover from tool failure
+                output = {"error": type(exc).__name__}
+            current = "Результат инструмента:\n" + json.dumps(output, ensure_ascii=False)
+        raise LlmError("too many service tool calls in one Claude turn")
 
     # -- выбор CLI и модели ----------------------------------------------------------
     def cooling(self, cli: str) -> bool:
@@ -243,6 +513,12 @@ class LlmRouter:
                 allowed.append("mcp__proddb__sql_query")
             argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
             argv += ["--disallowedTools", "Edit", "Write", "NotebookEdit", *secret_read_denies()]
+        elif mode == "owner":
+            # Only a trusted personal-chat command can reach this mode. Claude's
+            # native Bash/Edit/Write tools provide general project work.
+            argv += ["--permission-mode", "dontAsk", "--allowedTools",
+                     "Bash", "Read", "Grep", "Glob", "Edit", "Write"]
+            argv += ["--disallowedTools", *secret_read_denies()]
         else:  # write: разработчик хотфикса / макетчик в своём worktree, без bypassPermissions
             allowed, denied = self.write_tools(cwd)
             denied += [d for d in secret_read_denies() if d not in denied]
@@ -435,6 +711,7 @@ class LlmRouter:
         system: str | None = None,
         timeout: int = 900,
     ) -> LlmResult:
+        system = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "")
         options = self.candidates(role, cli_only, exclude_cli)
         if not options:
             raise LlmUnavailable("no_cli_available")
@@ -443,11 +720,12 @@ class LlmRouter:
         last_error = ""
         wants_db = self.cfg.prod_db.enabled and mode == "readonly" and role in ("analyst", "review")
         db_role = self.ticket_db_role(ticket_id) if wants_db else ""
+        # Resume сохраняет историю, но правила и снимок обращения могли измениться с прошлого хода.
+        full = f"{context}\n\n{prompt}" if context else prompt
         for cli, model in options:
             sessions = self._sessions(ticket_id, session_key)
             existing = sessions.get(cli)
             for resume in ([True, False] if existing else [False]):
-                full = prompt if resume else (f"{context}\n\n{prompt}" if context else prompt)
                 db_log = self._new_db_log(role, mode, db_role)
                 try:
                     try:
@@ -474,19 +752,27 @@ class LlmRouter:
                 self.store.log_llm(cli=cli, model=model, effort=self.effort_for(cli, role),
                                    role=role, ticket_id=ticket_id, ok=True)
                 self.store.kv_set("llm_unavailable_notified", False)
-                if session_key and ticket_id is not None and result.session_id:
+                if session_key and result.session_id:
                     self._save_session(ticket_id, session_key, cli, result.session_id)
                 return result
         raise LlmUnavailable(last_error or "no_cli_available")
 
     def _sessions(self, ticket_id: int | None, key: str | None) -> dict[str, str]:
-        if ticket_id is None or not key:
+        if not key:
             return {}
+        if ticket_id is None:
+            value = self.store.kv_get(f"llm_sessions:{key}", {})
+            return dict(value) if isinstance(value, dict) else {}
         sessions = self.store.data(ticket_id).get("sessions", {})
         value = sessions.get(key, {})
         return dict(value) if isinstance(value, dict) else {}
 
-    def _save_session(self, ticket_id: int, key: str, cli: str, session_id: str) -> None:
+    def _save_session(self, ticket_id: int | None, key: str, cli: str, session_id: str) -> None:
+        if ticket_id is None:
+            sessions = self._sessions(None, key)
+            sessions[cli] = session_id
+            self.store.kv_set(f"llm_sessions:{key}", sessions)
+            return
         sessions = self.store.data(ticket_id).get("sessions", {})
         sessions.setdefault(key, {})[cli] = session_id
         self.store.patch_data(ticket_id, sessions=sessions)
@@ -540,6 +826,9 @@ class LlmRouter:
                 raise _CallFailed(blob[:200])
             return LlmResult(text, "claude", model, new_id or (session[0] if session else None))
         # codex
+        # У Codex нет используемого здесь флага --system-prompt: передаём правила в каждом ходе.
+        if system:
+            prompt = f"{system}\n\n{prompt}"
         with sandbox.temp_dir() as tmp:
             out_file = str(Path(tmp) / "last.txt")
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,

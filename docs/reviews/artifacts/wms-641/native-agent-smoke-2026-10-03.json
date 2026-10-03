@@ -1,0 +1,41 @@
+{
+  "scope": "synthetic fixture only; actual model calls; no Telegram/Trello writes",
+  "codex_read_and_tool": {
+    "model": "gpt-5.6-sol",
+    "reply": "Receipt: `transport-probe-ok`",
+    "calls": [
+      {
+        "name": "record_probe",
+        "args": {
+          "units": 9
+        }
+      }
+    ]
+  },
+  "codex_native_export": {
+    "model": "gpt-5.6-sol",
+    "reply": "`export.csv` создан и повторно проверен: заголовок, суммы по `sku` и сортировка корректны.\n\nПуть: [export.csv](/Users/deniscivkunov/Projects/WMS/.worktrees/wms639-support-agent/.bot-audit-20261003/native-fixture/export.csv)",
+    "rows": [
+      {
+        "sku": "A",
+        "units": "6"
+      },
+      {
+        "sku": "B",
+        "units": "3"
+      }
+    ]
+  },
+  "claude_service_tool": {
+    "model": "sonnet",
+    "reply": "Receipt: transport-probe-ok",
+    "calls": [
+      {
+        "name": "record_probe",
+        "args": {
+          "units": 9
+        }
+      }
+    ]
+  }
+}

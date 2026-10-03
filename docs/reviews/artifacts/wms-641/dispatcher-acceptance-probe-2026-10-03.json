@@ -1,0 +1,24 @@
+{
+  "scope": "synthetic SQLite; deterministic router; no live Telegram/Trello/Git",
+  "topics": [
+    "topic-1-1",
+    "topic-1-2"
+  ],
+  "second_started_while_first_blocked": true,
+  "owner_followup_pending_for_A": true,
+  "owner_priority_B": 10,
+  "other_client_chat_started_while_A_blocked": true,
+  "progress_notice_queued_before_A_final": true,
+  "job_completion_notice_queued_without_Telegram_input": true,
+  "repeated_completion_same_event_id": true,
+  "history_records": 25,
+  "older_than_18_found": true,
+  "paged_oldest_found": true,
+  "old_revision_text_search_found": true,
+  "voice_transcribed_once": true,
+  "edit_version_found": true,
+  "outgoing_found_after_restart": true,
+  "pending_after_restart": [
+    "in:2:1"
+  ]
+}

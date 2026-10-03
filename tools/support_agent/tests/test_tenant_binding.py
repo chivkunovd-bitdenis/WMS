@@ -113,7 +113,7 @@ def test_owner_binds_a_chat_to_a_tenant_and_the_chat_becomes_served(tb: Any) -> 
     text = tb.owner.to(OWNER_CHAT)[-1]
     assert f"фулфилмент «Империя ФФ» (3 селлера), чат «{NEW_TITLE}» — привязать?" not in text  # несколько вариантов
     assert "1. фулфилмент «Империя ФФ» (3 селлера)" in text and "2. фулфилмент «Империя Север» (1 селлер)" in text
-    assert tb.llm.calls == [] and tb.fd.tenant_finds == ["Империя Львов"]
+    assert [c["role"] for c in tb.llm.calls] == ["routine"] and tb.fd.tenant_finds == ["Империя Львов"]
     owner_replies(tb, "1", proposal_msg_id(tb))
     row = tb.store.binding(NEW_CHAT)
     assert row["level"] == "tenant" and row["tenant_id"] == TENANT and row["seller_id"] == ""
@@ -338,3 +338,24 @@ def test_clean_tenant_name() -> None:
     assert clean_tenant_name("фулфилмент Империя") == "Империя"
     assert json.dumps(clean_tenant_name("  Империя   Львов ")) == json.dumps("Империя Львов")
     assert A.seller_name  # импорт образца кандидата-селлера используется в соседних тестах
+
+
+def test_plain_number_without_reply_confirms_the_only_open_proposal(tb: Any) -> None:
+    """03.10.2026 живой случай: владелец ответил «1» отдельным сообщением, не reply — привязка должна пройти."""
+    script(tb)
+    owner_says_in_group(tb, "Это фулфилмент Империя Львов")
+    tb.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "1"))
+    step(tb)
+    row = tb.store.binding(NEW_CHAT)
+    assert row is not None and row["level"] == "tenant" and row["tenant_id"] == TENANT
+    assert [c["role"] for c in tb.llm.calls] == ["routine"]  # выбор не вызвал модель второй раз
+    assert_intake_bot_said_nothing(tb)
+
+
+def test_plain_number_is_not_guessed_when_two_proposals_are_open(tb: Any) -> None:
+    script(tb)
+    owner_says_in_group(tb, "Это фулфилмент Империя Львов")
+    owner_says_in_group(tb, "это ФФ Империя", chat=NEW_CHAT - 1, title="Другой чат")
+    tb.owner.updates.append(gupd(OWNER_CHAT, OWNER_ID, "1"))
+    step(tb)
+    assert tb.store.binding(NEW_CHAT) is None and tb.store.binding(NEW_CHAT - 1) is None
