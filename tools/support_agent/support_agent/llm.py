@@ -150,7 +150,8 @@ def normalize_agent_tools(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             normalized.append({"type": "namespace", "name": raw["name"],
                                "description": raw.get("description", ""), "tools": inner})
             continue
-        source = raw.get("function") if isinstance(raw.get("function"), dict) else raw
+        nested = raw.get("function")
+        source: dict[str, Any] = nested if isinstance(nested, dict) else raw
         name = source.get("name")
         schema = source.get("inputSchema", source.get("parameters", {"type": "object"}))
         if not isinstance(name, str) or not name or not isinstance(schema, dict):
@@ -264,7 +265,10 @@ class LlmRouter:
             self.store.kv_set(key, state)
             session_id = None
         if handoff and not session_id:
-            prompt = f"Передача предыдущей сессии (сверяй с текущим авторитетным состоянием):\n{handoff}\n\n{prompt}"
+            prompt = (
+                "Передача предыдущей сессии (сверяй с текущим авторитетным состоянием):\n"
+                f"{handoff}\n\n{prompt}"
+            )
         if session_id:
             # Resumed threads retain their original developer instructions, so
             # refresh the current project policy and task instructions each turn.
@@ -321,7 +325,7 @@ class LlmRouter:
                                     "rollover": False})
         if handoff and not session_id:
             prompt = f"Передача прошлой сессии (сверяй с авторитетным состоянием):\n{handoff}\n\n{prompt}"
-        names = []
+        names: list[tuple[str, str, dict[str, Any]]] = []
         for spec in tools:
             if spec.get("type") == "namespace":
                 names.extend((f"{spec['name']}.{tool['name']}", tool.get("description", ""),
@@ -370,7 +374,8 @@ class LlmRouter:
             if "final" in parsed:
                 return LlmResult(str(parsed["final"]), "claude", model, session_id)
             name, args = parsed.get("tool"), parsed.get("arguments")
-            if name not in allowed or not isinstance(args, dict) or tool_handler is None:
+            if (not isinstance(name, str) or name not in allowed
+                    or not isinstance(args, dict) or tool_handler is None):
                 current = "Сервисный инструмент недоступен или аргументы неверны; исправь вызов."
                 continue
             try:

@@ -53,10 +53,9 @@ def test_agent_opt_in_is_loaded_from_config() -> None:
     assert config_from_dict({"agent": {"enabled": True, "owner_model": "gpt-5.6-sol"}}).agent.enabled
 
 
-def test_real_agent_specs_and_owner_style_use_one_native_format(tmp_path: Path) -> None:
+def test_real_agent_specs_and_owner_style_use_one_native_format() -> None:
     from support_agent.agent_tools import AgentTools
 
-    cfg = make_config(tmp_path)
     tools = AgentTools.__new__(AgentTools)
     # specs() only describes tools and does not touch collaborators.
     plain = tools.specs("owner")
