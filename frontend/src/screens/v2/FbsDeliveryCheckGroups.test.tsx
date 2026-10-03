@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
 import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
-import { summarizeDeliveryChecks } from './fbsUx'
+import { fbsDeliveryCheckOrderLabel, summarizeDeliveryChecks } from './fbsUx'
 
 it('reveals each order reason and shortage without putting them in the group title', async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -37,6 +37,51 @@ it('reveals each order reason and shortage without putting them in the group tit
         expect(rows.children[1].textContent).toContain('Не хватает 5 шт.')
       }
     }
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
+  }
+})
+
+it('signs expanded rows as WB orders by default and uses the passed label for Ozon postings', async () => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  const checks = ['o1', 'o2', 'o3'].map((order_id) => ({
+    code: 'marking_required',
+    message: 'Не нанесён Честный знак',
+    order_id,
+    ok: false,
+    severity: 'warning' as const,
+  }))
+  const { warnings } = summarizeDeliveryChecks(checks, new Map([['o1', -4839201], ['o2', -77], ['o3', -12]]))
+  const expandedRows = async () => {
+    await act(async () => host.querySelector<HTMLElement>('[data-testid="fbs-delivery-check-marking_required"]')!.click())
+    return [...host.querySelector('[data-testid="fbs-delivery-check-orders-marking_required"]')!.children]
+      .map((row) => row.textContent)
+  }
+  try {
+    await act(async () => root.render(<DeliveryCheckGroupList groups={warnings} />))
+    expect(await expandedRows()).toEqual(['Заказ WB №-4839201', 'Заказ WB №-77', 'Заказ WB №-12'])
+
+    await act(async () => root.render(<DeliveryCheckGroupList key="custom" groups={warnings} orderLabel={(id) => `Метка ${id}`} />))
+    expect(await expandedRows()).toEqual(['Метка -4839201', 'Метка -77', 'Метка -12'])
+
+    const wbLabel = fbsDeliveryCheckOrderLabel('wb', [])
+    await act(async () => root.render(<DeliveryCheckGroupList key="wb" groups={warnings} orderLabel={wbLabel} />))
+    expect(await expandedRows()).toEqual(['Заказ WB №-4839201', 'Заказ WB №-77', 'Заказ WB №-12'])
+
+    // o1 пришёл со служебным номером строкой, у o2 нет номера отправления, o3 нет среди заказов поставки.
+    const ozonLabel = fbsDeliveryCheckOrderLabel('ozon', [
+      { wb_order_id: '-4839201', external_order_id: '87654321-0001-1' },
+      { wb_order_id: -77, external_order_id: null },
+    ])
+    await act(async () => root.render(<DeliveryCheckGroupList key="ozon" groups={warnings} orderLabel={ozonLabel} />))
+    const ozonRows = await expandedRows()
+    expect(ozonRows).toEqual(['Отправление Ozon №87654321-0001-1', 'Отправление Ozon', 'Отправление Ozon'])
+    expect(ozonRows.join(' ')).not.toContain('Заказ WB')
+    expect(ozonRows.join(' ')).not.toMatch(/-4839201|-77|-12/)
   } finally {
     await act(async () => root.unmount())
     host.remove()

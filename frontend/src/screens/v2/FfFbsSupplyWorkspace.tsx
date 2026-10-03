@@ -85,6 +85,7 @@ import {
   fbsBoxEditingDisabled,
   fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
+  fbsDeliveryCheckOrderLabel,
   fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
@@ -2883,6 +2884,7 @@ export function FfFbsSupplyWorkspace({
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
   const wbOrderIdByOrderId = new Map((workspace?.orders ?? []).map((order) => [order.id, order.wb_order_id]))
   const deliveryChecks = summarizeDeliveryChecks(deliveryPreflight?.checks ?? [], wbOrderIdByOrderId)
+  const deliveryCheckOrderLabel = fbsDeliveryCheckOrderLabel(isOzonSupply ? 'ozon' : 'wb', workspace?.orders ?? [])
   const cancelledDeliveryOrders = isOzonSupply ? [] : deliveryPreflight?.cancelled_orders ?? []
   const deliveryConfirmLabel = cancelledDeliveryOrders.length > 0
     ? 'Передать без этих заказов'
@@ -4337,13 +4339,13 @@ export function FfFbsSupplyWorkspace({
             {deliveryChecks.blockers.length > 0 ? (
               <Alert severity="error">
                 <Typography variant="subtitle2">Мешает передаче</Typography>
-                <DeliveryCheckGroupList groups={deliveryChecks.blockers} />
+                <DeliveryCheckGroupList groups={deliveryChecks.blockers} orderLabel={deliveryCheckOrderLabel} />
               </Alert>
             ) : null}
             {deliveryChecks.warnings.length > 0 ? (
               <Alert severity="warning">
                 <Typography variant="subtitle2">Можно передать с этими предупреждениями</Typography>
-                <DeliveryCheckGroupList groups={deliveryChecks.warnings} />
+                <DeliveryCheckGroupList groups={deliveryChecks.warnings} orderLabel={deliveryCheckOrderLabel} />
                 <Typography variant="caption" color="text.secondary">
                   Проверьте список. Чтобы продолжить, нажмите «{deliveryConfirmLabel}».
                   {isOzonSupply

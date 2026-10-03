@@ -3,7 +3,11 @@ import { Box, Collapse, List, ListItemButton, ListItemText, Stack, Typography } 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { ordersWord, type FbsDeliveryCheckGroup } from './fbsUx'
 
-export function DeliveryCheckGroupList({ groups }: { groups: FbsDeliveryCheckGroup[] }) {
+export function DeliveryCheckGroupList({ groups, orderLabel }: {
+  groups: FbsDeliveryCheckGroup[]
+  /** Подпись строки заказа; без неё — «Заказ WB №…». Ozon передаёт номер отправления. */
+  orderLabel?: (orderId: number) => string
+}) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set())
 
   return (
@@ -66,7 +70,7 @@ export function DeliveryCheckGroupList({ groups }: { groups: FbsDeliveryCheckGro
               >
                 {group.orderIds.map((orderId) => (
                   <Box key={orderId} sx={{ py: 0.35, overflowWrap: 'anywhere' }}>
-                    <Typography variant="body2">Заказ WB №{orderId}</Typography>
+                    <Typography variant="body2">{orderLabel ? orderLabel(orderId) : `Заказ WB №${orderId}`}</Typography>
                     {group.orderDetails?.[orderId]?.map((detail) => (
                       <Typography key={detail} variant="body2" color="text.secondary">{detail}</Typography>
                     ))}

@@ -677,6 +677,24 @@ export function summarizeDeliveryChecks(
   return { blockers: collect('blocker'), warnings: collect('warning') }
 }
 
+/**
+ * WMS-612: подпись заказа в раскрытых строках окна передачи. Проверки группируют
+ * заказы по wb_order_id, но у Ozon это служебный (отрицательный) номер, который
+ * оператору ничего не говорит: показываем номер отправления Ozon, а если его нет —
+ * просто «Отправление Ozon». Сравниваем строками: номер может прийти и числом, и строкой.
+ */
+export function fbsDeliveryCheckOrderLabel(
+  marketplace: 'wb' | 'ozon',
+  orders: Array<{ wb_order_id: number | string; external_order_id: string | null }>,
+): (orderId: number) => string {
+  if (marketplace !== 'ozon') return (orderId) => `Заказ WB №${orderId}`
+  const postingByWbOrderId = new Map(orders.map((order) => [String(order.wb_order_id), order.external_order_id?.trim() ?? '']))
+  return (orderId) => {
+    const posting = postingByWbOrderId.get(String(orderId))
+    return posting ? `Отправление Ozon №${posting}` : 'Отправление Ozon'
+  }
+}
+
 /** Only the confirmed remote status is an acceptance; no UI navigation gates. */
 export function fbsOrderMarkingAccepted(metadata: FbsOrderMetadata): boolean {
   const kinds = [...new Set([...metadata.required, ...metadata.states.filter((state) => state.value_tail).map((state) => state.kind)])]
