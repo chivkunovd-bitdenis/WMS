@@ -1,0 +1,16 @@
+{
+  "installed_sha": "ceefe3a1a4bcf1ed1e16dd4b6896cc45954b6bb5",
+  "remote_sha": "ceefe3a1a4bcf1ed1e16dd4b6896cc45954b6bb5",
+  "installed_files_verified": 36,
+  "agent": {
+    "enabled": true,
+    "owner_model": "gpt-5.6-sol",
+    "owner_provider": "codex",
+    "context_limit_tokens": 120000,
+    "hourly_interval_sec": 3600,
+    "timezone": "Asia/Tbilisi"
+  },
+  "all_config_unchanged": true,
+  "sqlite_backup_created": true,
+  "scope": "local Telegram bot service only; no main merge or WMS production deployment"
+}

@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from support_agent.llm import LlmUnavailable
 from support_agent.pipeline import FORBIDDEN_IN_SUMMARY
 from support_agent.telegram import Inbound, flush_outbox, normalize_update
@@ -111,6 +113,35 @@ def test_burst_is_one_ticket_late_message_attaches_new_topic_is_new(env: Any) ->
     assert len(env.store.ticket_messages(1)) == 6
     env.say(CLIENT_CHAT, "[новая] нужна выгрузка")
     assert len(env.store.rows("SELECT * FROM tickets")) == 2
+
+
+def test_filter_gets_full_voice_request_and_numbered_followups_without_forced_merging(env: Any) -> None:
+    script(env)
+    voice = ("(расшифровка голосового) Денис, помнишь момент был, сейчас ещё Светлана напишет детали. "
+             "Нужно вернуть работу с коробами в возврате, создавать заданное число коробов "
+             "в приёмке и возврате и печатать номер короба с уникальным кодом и номером документа.")
+    first_detail = "Создаём возврат и вводим 200 коробов вместо добавления каждого вручную."
+    third_request = "2. Нужно вывести номер короба, уникальный код и номер документа на этикетку и лист подбора."
+    env.say(CLIENT_CHAT, voice, msg_id="voice-source")
+    assert env.store.data(1)["title"] == voice[:60]
+
+    def followup(prompt: str, kw: Any) -> dict[str, Any]:
+        current = prompt.split("<<<ДАННЫЕ\n")[1].split("\nДАННЫЕ>>>")[0]
+        # Проверяется настоящий prompt Pipeline, а не отдельно собранный образец.
+        assert voice in prompt
+        assert "Нумерованное дополнение" in prompt
+        if current == third_request:
+            assert first_detail in prompt
+        return {"relevant": True, "ticket_id": 1 if current in (first_detail, third_request) else None}
+
+    env.llm.on("filter", "Новое сообщение из клиентского чата", followup)
+    env.say(CLIENT_CHAT, first_detail, msg_id="followup-one", user=6)
+    env.say(CLIENT_CHAT, third_request, msg_id="followup-two", user=6)
+    assert len(env.store.rows("SELECT * FROM tickets")) == 1
+    assert [m["text"] for m in env.store.ticket_messages(1)] == [voice, first_detail, third_request]
+    env.say(CLIENT_CHAT, "Отдельная задача: нужен отчёт по стоимости хранения", msg_id="independent")
+    assert len(env.store.rows("SELECT * FROM tickets")) == 2
+    assert env.store.ticket_messages(2)[0]["text"].startswith("Отдельная задача")
 
 
 def test_doubt_is_not_dropped(env: Any) -> None:
@@ -263,6 +294,68 @@ def test_improvement_creates_exactly_one_card_with_label_and_marker(env: Any) ->
     env.pipe._card_for(1, improvement)  # повторная обработка
     assert env.trello.creates == 1
     assert env.store.ticket(1)["stage"] == "done"
+
+
+@pytest.mark.parametrize(("state", "expected"), [
+    ("none", "Создание карточки в Trello не подтверждено."),
+    ("not_configured", "Карточка в Trello не создана: Trello не настроен."),
+    ("unknown", "Карточка в Trello: исход создания неизвестен, повторно не создаю."),
+    ("rejected", "Карточку в Trello создать не удалось (отказ Trello)."),
+    ("linked", "Карточка в Trello создана: https://trello.test/c1"),
+])
+def test_improvement_summary_gets_actual_card_outcome(env: Any, state: str, expected: str) -> None:
+    improvement = dict(ANALYSIS_BUG, category="improvement", urgent=False)
+    script(env, improvement, category="improvement")
+    tid = env.store.add_ticket(kind="form" if state == "none" else "chat", source="test",
+                               chat_id=CLIENT_CHAT, seller="ИП Тест", stage="analysis")
+    if state == "not_configured":
+        env.cfg.trello.api_key = ""
+    elif state == "unknown":
+        env.trello.lose_response_once = True
+        env.trello.hide_after_lose = True
+    elif state == "rejected":
+        env.trello.reject = True
+    card_note = env.pipe._card_for(tid, improvement)
+    body = env.pipe._compose(tid, improvement, "trello", None, card_note)
+    prompt = env.llm.calls[-1]["prompt"]
+    trusted_note = prompt.split("\n\nМатериалы:")[0]
+    assert "Вердикт: это улучшение." in trusted_note
+    assert "ушло в Trello" not in trusted_note
+    assert expected in trusted_note
+    assert "Не утверждай создание карточки без подтверждения" in trusted_note
+    if state == "linked":
+        assert env.store.data(tid)["card_url"] == "https://trello.test/c1"
+    else:
+        assert "Карточка в Trello создана:" not in trusted_note
+        assert "card_id" not in env.store.data(tid)
+    if card_note:
+        assert body.endswith(card_note)  # фактический исход добавляется кодом и к готовой сводке
+
+
+@pytest.mark.parametrize(("kind", "need_data", "answer_needs_data", "keeps_missing"), [
+    ("chat", None, False, False),
+    ("form", None, False, True),
+    ("chat", {"points": ["Какой лист подбора?"]}, False, True),
+    ("chat", None, True, True),
+])
+def test_chat_summary_does_not_invent_a_question_from_form_only_field(
+    env: Any, kind: str, need_data: Any, answer_needs_data: bool, keeps_missing: bool,
+) -> None:
+    missing = "Уточнить у клиента какой лист подбора"
+    analysis = dict(ANALYSIS_BUG, category="improvement", need_data=need_data,
+                    missing_for_owner=[missing], answer_needs_data=answer_needs_data)
+    script(env, analysis)
+    tid = env.store.add_ticket(kind=kind, source="test", chat_id=CLIENT_CHAT, seller="Клиент",
+                               stage="analysis")
+    card_note = " Карточка в Trello создана: https://trello.test/existing"
+    env.pipe._compose(tid, analysis, "trello", None, card_note)
+    prompt = env.llm.calls[-1]["prompt"]
+    assert (missing in prompt) is keeps_missing
+    assert card_note.strip() in prompt
+    if not keeps_missing:
+        assert "Новый вопрос клиенту не планируется" in prompt
+        assert "не ставь передачу задачи в Trello в зависимость от уточнения" in prompt
+    assert analysis["missing_for_owner"] == [missing]  # сохранённый результат аналитика не переписывается
 
 
 def test_form_improvement_gets_only_a_comment_never_a_card(env: Any) -> None:
@@ -451,7 +544,14 @@ def test_file_changed_after_preview_is_not_sent(env: Any) -> None:
 
 
 def script_owner(env: Any, parsed: dict[str, Any]) -> None:
-    env.llm.on("filter", "Владелец склада ответил", parsed)
+    intent = str(parsed.get("intent", "other"))
+    ids = list(parsed.get("ticket_ids") or [])
+    if parsed.get("all"):
+        ids = [int(t["id"]) for t in env.store.open_tickets()]
+    actions = ([{"kind": intent, "ticket_ids": ids, "note": "поручение владельца"}]
+               if intent in ("go", "reject", "postpone", "mockup_yes", "mockup_no") else [])
+    env.llm.on("routine", "Владелец склада написал",
+               {"scope": "wms", "reply": "Понял.", "actions": actions, "listed_ticket_ids": []})
 
 
 def test_other_and_low_confidence_go_to_owner_without_card_or_hotfix(env: Any) -> None:
@@ -549,3 +649,47 @@ def test_message_that_keeps_failing_is_reported_not_looped(env: Any) -> None:
     assert env.store.messages_with_status("error")
     assert sum("обработать не получилось" in t for t in env.tg.to(OWNER_CHAT)) == 1
     assert env.tg.to(CLIENT_CHAT) == []
+
+
+def test_default_bug_goes_straight_to_analysis_without_urgency_question(env: Any) -> None:
+    """Владелец: клиента не дёргаем вопросом о срочности, её оценивает аналитик."""
+    env.cfg.limits.ask_client_urgency = False
+    script(env)
+    env.say(CLIENT_CHAT, "не работает передача поставки", msg_id="500")
+    run_until_report(env)
+    env.clock.advance(60)
+    env.pipe.tick()
+    env.flush()
+    assert env.tg.to(CLIENT_CHAT) == []
+    assert not env.store.tickets_in("await_urgency")
+    assert env.store.ticket(1)["stage"] == "await_owner"
+    assert any(c["role"] == "analyst" for c in env.llm.calls)
+
+
+def test_client_is_asked_at_most_once_per_ticket_and_at_most_two_questions(env: Any) -> None:
+    """Даже если аналитик снова просит данные после ответа клиента, второго опроса нет."""
+    env.cfg.limits.ask_client_urgency = False
+    need = dict(ANALYSIS_BUG, need_data={"why": "x", "points": ["первое", "второе", "третье", "четвёртое"]})
+    script(env, need)
+    env.say(CLIENT_CHAT, "не получается передать поставку", msg_id="9")
+    run_until_report(env)
+    env.flush()
+    asks = [t for t in env.tg.to(CLIENT_CHAT) if t.startswith("Чтобы разобраться")]
+    assert len(asks) == 1
+    assert "2. второе" in asks[0] and "третье" not in asks[0]
+    env.say(CLIENT_CHAT, "вот ответ", user=5)
+    env.pipe.tick()  # аналитик опять вернул need_data
+    env.clock.advance(60)
+    env.pipe.tick()
+    env.flush()
+    assert len([t for t in env.tg.to(CLIENT_CHAT) if t.startswith("Чтобы разобраться")]) == 1
+    assert env.store.ticket(1)["stage"] == "await_owner"
+
+
+def test_analyst_rules_require_own_investigation_before_asking() -> None:
+    from support_agent import prompts
+
+    rules = prompts.analyst_rules(prod_db=True)
+    assert "клиент делает минимум" in rules
+    assert "1–2 коротких точечных вопроса" in rules
+    assert "Никогда не спрашивай то, что клиент уже написал" in rules

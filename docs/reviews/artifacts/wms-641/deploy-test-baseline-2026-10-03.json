@@ -1,0 +1,12 @@
+{
+  "baseline_commit": "7e9f56b7c9b957ae2833c837745446463c8c6205",
+  "unchanged_files": [
+    "tools/support_agent/tests/test_deploy_files.py",
+    ".github/workflows/deploy.yml",
+    "scripts/deploy/prod-update.sh"
+  ],
+  "test": "test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything",
+  "exit_code": 1,
+  "result": "pre-existing failure on uppercase SHA",
+  "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything _\n\ntmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-119/test_workflow_server_part_refu0')\n\n    def test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything(tmp_path: Path) -> None:\n        origin, clone, shas = make_remote(tmp_path, stub_script)\n        for bad in (shas[\"side\"], \"abc123\", \"G\" * 40, \"0\" * 40, shas[\"c2\"].upper()):\n            res = run_remote_part(clone, tmp_path, bad)\n>           assert res.returncode != 0 and \"STUB\" not in res.stdout, bad\nE           AssertionError: 6B542F59360135E18201E3F3A46C89F0C69F7E10\nE           assert (0 != 0)\nE            +  where 0 = CompletedProcess(args=['bash', '-c', 'set -euo pipefail\\n# Тот же обход протокола v2, что и в самом скрипте. Здесь он ...TUB script=c2 pin=6B542F59360135E18201E3F3A46C89F0C69F7E10 head=b66dc19abcef9093c47078d013194fc8f11ae72e\\n', stderr='').returncode\n\n/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms641-baseline-test-9awzcqfl/tools/support_agent/tests/test_deploy_files.py:118: AssertionError\n=========================== short test summary info ============================\nFAILED ../../../../../../var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms641-baseline-test-9awzcqfl/tools/support_agent/tests/test_deploy_files.py::test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything\n1 failed in 0.77s\n"
+}

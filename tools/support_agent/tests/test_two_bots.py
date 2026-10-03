@@ -80,6 +80,83 @@ def test_routing_of_incoming_updates_by_bot(tmp_path: Path) -> None:
     assert normalize_update(upd(9, PARTNER_CHAT, 5), cfg, "owner") is None
 
 
+def test_owner_registers_task_group_once_and_registration_survives_restart(tmp_path: Path) -> None:
+    e = two_bot_env(tmp_path)
+    group = -1004441620578
+    declaration = "@wms_korob_support_bot\nобщий чат для задач от владельцев системы"
+    update = upd(504, group, OWNER_ID, declaration)
+    update["message"]["chat"]["title"] = "ВМС — Короб"
+    incoming = normalize_update(update, e.cfg, "intake")
+    assert incoming is not None and incoming.role == "bind"
+    assert e.pipe.ingest(incoming) is not None
+    e.pipe.route_messages()
+    assert e.cfg.telegram.chats[group].role == "partner"
+    assert e.store.binding(group) is None and e.llm.calls == []
+    assert e.pipe.ingest(incoming) is None
+    flush_outbox(e.store, e.pipe.bots, e.cfg)
+    assert len(e.intake.sent) == 1 and e.intake.sent[0][0] == group
+    assert "зарегистрирован" in e.intake.sent[0][1] and e.owner.sent == []
+    assert e.store.rows("SELECT * FROM outbox")[0]["purpose"] == "group_registration"
+    # Чистая конфигурация с тем же SQLite: регистрируется без повторного подтверждения.
+    restarted = two_bot_env(tmp_path)
+    assert restarted.cfg.telegram.chats[group].role == "partner"
+    again = normalize_update(upd(505, group, OWNER_ID, declaration), restarted.cfg, "intake")
+    assert again is not None
+    restarted.pipe.ingest(again)
+    restarted.pipe.route_messages()
+    flush_outbox(restarted.store, restarted.pipe.bots, restarted.cfg)
+    assert restarted.intake.sent == [] and restarted.owner.sent == []
+    task = normalize_update(upd(506, group, 11, "Trello: создай задачу по отчёту WMS"),
+                            restarted.cfg, "intake")
+    assert task is not None and task.role == "partner"
+    def group_decision(prompt: str, kw: Any) -> dict[str, Any]:
+        data = json.loads(prompt.split("<<<ДАННЫЕ\n", 1)[1].split("\nДАННЫЕ>>>", 1)[0])
+        mid = data["current_message"]["id"]
+        return {"scope": "wms", "intent": "request", "facts": [], "actions": [{
+            "kind": "create", "ticket_id": None, "title": "Отчёт WMS",
+            "description": "Создать отчёт WMS", "source_message_ids": [mid],
+        }]}
+
+    restarted.llm.on("routine", "Разбери новое сообщение общего чата", group_decision)
+    restarted.pipe.ingest(task)
+    restarted.pipe.route_messages()
+    ticket = restarted.store.rows("SELECT * FROM tickets")[0]
+    assert ticket["kind"] == "partner_task" and ticket["stage"] == "done"
+    go = normalize_update(upd(507, group, OWNER_ID, "кати"), restarted.cfg, "intake")
+    assert go is not None and go.role == "partner"
+    restarted.llm.on("routine", "Разбери новое сообщение общего чата",
+                     {"scope": "wms", "intent": "blocked", "facts": [], "actions": []})
+    restarted.pipe.ingest(go)
+    restarted.pipe.route_messages()
+    assert restarted.store.ticket(ticket["id"])["stage"] == "done"
+    restarted.llm.on("routine", "Владелец склада написал", {
+        "scope": "wms", "reply": "Да, общий чат зарегистрирован.", "actions": [], "listed_ticket_ids": [],
+    })
+    question = normalize_update(upd(508, OWNER_CHAT, OWNER_ID, "Ты видишь, где я тебя тегнул?"),
+                                restarted.cfg, "owner")
+    assert question is not None
+    restarted.pipe.ingest(question)
+    restarted.pipe.route_messages()
+    prompt = restarted.llm.calls[-1]["prompt"]
+    assert '"owner_task_chats_current": [{' in prompt and '"name": "ВМС — Короб"' in prompt
+    assert '"role": "partner"' in prompt and '"confirmation_status": "sent"' in prompt
+
+
+def test_foreign_author_or_wrong_bot_cannot_register_task_group(tmp_path: Path) -> None:
+    e = two_bot_env(tmp_path)
+    group = -1004441620578
+    text = "@wms_korob_support_bot общий чат для задач от владельцев системы"
+    assert normalize_update(upd(1, group, 777, text), e.cfg, "intake") is None
+    assert normalize_update(upd(2, group, OWNER_ID, text), e.cfg, "owner") is None
+    # Даже уже нормализованное ложное bind-сообщение повторно проверяется кодом Pipeline.
+    e.pipe.ingest(Inbound(source="telegram", chat_id=group, msg_id="3", role="bind",
+                          author_id="777", author_name="чужой", ts=1, kind="text", text=text))
+    e.pipe.route_messages()
+    assert group not in e.cfg.telegram.chats
+    assert e.store.kv_get("owner_task_chats", {}) == {}
+    assert e.store.rows("SELECT * FROM outbox") == [] and e.llm.calls == []
+
+
 def test_single_bot_mode_keeps_both_rules(env: Any) -> None:
     cfg = env.cfg
     assert cfg.telegram.single_bot
@@ -93,7 +170,8 @@ def test_each_bot_has_own_offset_that_survives_restart_and_duplicates_are_ignore
     script(e)
     e.intake.updates = [upd(10, CLIENT_CHAT, 5, "не работает передача")]
     e.owner.updates = [upd(50, OWNER_CHAT, OWNER_ID, "ничего")]
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"scope": "wms", "reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.agent.poll_telegram(1)
     assert e.store.kv_get("tg_offset:intake") == 11 and e.store.kv_get("tg_offset:owner") == 51
     e.agent.poll_telegram(1)  # те же обновления Telegram отдаёт снова: повторов нет
@@ -172,7 +250,8 @@ def test_voice_is_downloaded_by_the_bot_that_received_it(tmp_path: Path) -> None
 
     e.pipe.transcriber = Rec()  # type: ignore[assignment]
     e.llm.on("filter", "Новое сообщение из клиентского чата", {"relevant": False, "ticket_id": None})
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"scope": "wms", "reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.pipe.ingest(Inbound("telegram", CLIENT_CHAT, "1", "client", "5", "А", 1.0, "voice", "", file_id="fi"))
     e.pipe.ingest(Inbound("telegram", OWNER_CHAT, "2", "owner", str(OWNER_ID), "В", 1.0, "voice", "", file_id="fo"))
     e.pipe.tick()
@@ -185,7 +264,8 @@ def test_catchup_notice_waits_until_both_bots_are_drained(tmp_path: Path) -> Non
     e.agent.startup()
     e.intake.updates = []
     e.owner.updates = [upd(5, OWNER_CHAT, OWNER_ID, "x")]
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"scope": "wms", "reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.agent.poll_bot("intake", 1)  # приёма уже пуст, у владельца ещё есть
     flush_outbox(e.store, Bots(e.intake, e.owner, OWNER_CHAT), e.cfg)
     assert e.owner.to(OWNER_CHAT) == []

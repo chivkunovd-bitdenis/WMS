@@ -25,6 +25,7 @@ from .pipeline import Pipeline
 log = logging.getLogger(__name__)
 MAX_FIX_ROUNDS = 2
 DEPLOY_LOOKUP_SEC = 120
+MERGE_LOOKUP_SEC = 120
 GIT_HARDEN = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.editor=true",
               "-c", "diff.external=", "-c", "core.untrackedCache=false", "-c", "core.pager=cat"]
 FORBIDDEN_PATHS = (".github/", "scripts/deploy/", "scripts/ci/", ".claude/", ".cursor/",
@@ -127,6 +128,50 @@ class HotfixRunner:
     def fetch(self) -> None:
         self.git("fetch", "origin")
 
+    def ensure_worktree(self, branch: str, path: str | Path,
+                        base: str = "origin/etalon") -> Path:
+        """Idempotently create a named worktree from a verified caller-selected base."""
+        target = Path(path)
+        self.fetch()
+        if not target.exists():
+            self.git("worktree", "add", "-b", branch, str(target), base)
+        return target
+
+    def push_branch(self, branch: str) -> None:
+        """Use the trusted checkout for a repeat-safe branch publication."""
+        self.git("push", "-u", "origin", branch)
+
+    def find_pr(self, branch: str) -> dict[str, Any] | None:
+        res = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
+                           "number,url,state"])
+        try:
+            rows = json.loads(res.out or "[]")
+        except ValueError:
+            rows = []
+        return rows[0] if res.rc == 0 and rows else None
+
+    def ensure_pr(self, branch: str, *, base: str, title: str, body: str) -> dict[str, Any]:
+        """Read before create and read after it, so a lost create response is not repeated."""
+        found = self.find_pr(branch)
+        if found is None:
+            self.run_gh(["gh", "pr", "create", "--base", base, "--head", branch,
+                         "--title", title, "--body", body])
+            found = self.find_pr(branch)
+        if found is None:
+            raise StepFailed("pull request не удалось найти после создания")
+        return found
+
+    def pr_checks(self, pr: int | str) -> list[dict[str, Any]]:
+        """Read PR checks; polling never reruns CI."""
+        res = self.run_gh(["gh", "pr", "checks", str(pr), "--json", "name,bucket"])
+        try:
+            checks = json.loads(res.out or "[]")
+        except ValueError as exc:
+            raise StepFailed("не удалось прочитать состояние CI") from exc
+        if not isinstance(checks, list):
+            raise StepFailed("не удалось прочитать состояние CI")
+        return checks
+
     def analysis_dir(self) -> Path:
         """Свежий origin/etalon только для чтения аналитиком (не чужой рабочий checkout)."""
         path = Path(self.cfg.repo) / ".worktrees" / "support-agent-etalon"
@@ -167,6 +212,8 @@ class HotfixRunner:
     # ===== шаги ========================================================================
     def step(self, tid: int) -> None:
         h = dict(self.store.data(tid).get("hotfix") or {"step": "start"})
+        if self._pause_at_boundary(tid, h):
+            return
         now = self.p.clock()
         if now < float(h.get("next_poll", 0)):
             return
@@ -185,31 +232,126 @@ class HotfixRunner:
 
     def save(self, tid: int, h: dict[str, Any], **changes: Any) -> dict[str, Any]:
         """Сливает изменения в сохранённое состояние и обновляет h на месте (без устаревших копий)."""
-        current = dict(self.store.data(tid).get("hotfix") or {})
-        current.update(changes)
-        self.store.patch_data(tid, hotfix=current)
+        with self.store.transaction():
+            current = dict(self.store.data(tid).get("hotfix") or {})
+            current.update(changes)
+            self.store.patch_data(tid, hotfix=current)
         h.clear()
         h.update(current)
         return h
 
+    def _refresh(self, tid: int, h: dict[str, Any]) -> dict[str, Any]:
+        current = dict(self.store.data(tid).get("hotfix") or {})
+        h.clear()
+        h.update(current)
+        return h
+
+    def _pause_at_boundary(self, tid: int, h: dict[str, Any]) -> bool:
+        """Останавливает только между шагами; уже отправленный merge/deploy сначала выясняет."""
+        self._refresh(tid, h)
+        if not h.get("hold_requested"):
+            return False
+        step = str(h.get("step") or "start")
+        if h.get("deploy_intent") and step in ("deploy", "verify"):
+            return False
+        if h.get("merge_intent") and not h.get("merged") and step == "merge":
+            return False
+        return self._pause_for_analysis(tid, h)
+
+    def _pause_for_analysis(self, tid: int, h: dict[str, Any]) -> bool:
+        """Атомарно сохраняет весь hotfix snapshot и передаёт накопленное поручение аналитику."""
+        with self.store.transaction():
+            if self.store.ticket(tid)["stage"] != "hotfix":
+                return False
+            d = self.store.data(tid)
+            current = dict(d.get("hotfix") or {})
+            if not current.get("hold_requested") or not d.get("resume_note"):
+                return False
+            step = str(current.get("step") or "start")
+            current.update(hotfix_paused=True, resume_step=step, hold_requested=False)
+            self.store.set_stage(
+                tid, "analysis", hotfix=current, rev=int(d.get("rev", 0)) + 1,
+                client_answer=None, preview_sha=None, hotfix_ok=False, verdict=None,
+            )
+            seq = int(current.get("hold_seq", 0))
+            if step == "start":
+                phase = "подготовку исправления ещё не начинаю"
+            elif step == "report" and current.get("deploy_intent"):
+                phase = "выкладка уже проверена; отчёт и сообщение клиенту пока не отправляю"
+            elif current.get("merged") or step == "deploy":
+                phase = "подготовленное исправление сохранено; выкладку пока не запускаю"
+            else:
+                phase = "закончил текущий этап и остановился перед выкладкой"
+            self.p.say_owner(
+                f"hotfix_hold:{tid}:{seq}",
+                f"По обращению №{tid} достиг безопасной границы: {phase}. Подготовленное исправление "
+                "сохранено; поручение передал аналитику.",
+                tid,
+            )
+            h.clear()
+            h.update(current)
+            return True
+
+    def _claim_intent(self, tid: int, h: dict[str, Any], **intent: Any) -> bool:
+        """Линеаризует owner hold и внешний dispatch, не удерживая SQLite lock на внешнем вызове."""
+        with self.store.transaction():
+            d = self.store.data(tid)
+            current = dict(d.get("hotfix") or {})
+            if current.get("hold_requested"):
+                h.clear()
+                h.update(current)
+                return False
+            current.update(intent)
+            self.store.patch_data(tid, hotfix=current)
+            h.clear()
+            h.update(current)
+            return True
+
     def fail(self, tid: int, h: dict[str, Any], reason: str) -> None:
         """R25: не повторяем бесконечно; владельцу — что не вышло и что уже выложено."""
-        done = []
-        if h.get("pr_url"):
-            done.append(f"pull request создан ({h['pr_url']})")
-        if h.get("merged"):
-            done.append("изменение влито в основную ветку")
-        if h.get("deploy_intent"):
-            done.append("выкладка запускалась")
-        state = "; ".join(done) if done else "ничего не выложено"
-        self.store.set_stage(tid, "failed", hotfix={**h, "step": "failed", "failure": reason})
-        self.p.say_owner(
-            f"hotfix_fail:{tid}",
-            f"Хотфикс по обращению №{tid} ({self.p.seller_of(tid)}) остановлен: {reason}\n"
-            f"Что уже сделано: {state}. Клиенту «пробуйте» не отправлялось. "
-            "Решение за вами, предлагаю разобрать вручную.",
-            tid,
-        )
+        with self.store.transaction():
+            d = self.store.data(tid)
+            current = dict(d.get("hotfix") or {})
+            done = []
+            if current.get("pr_url"):
+                done.append(f"pull request создан ({current['pr_url']})")
+            if current.get("merged"):
+                done.append("изменение влито в основную ветку")
+            if current.get("deploy_intent"):
+                done.append("выкладка запускалась")
+            state = "; ".join(done) if done else "ничего не выложено"
+            failed = {**current, "step": "failed", "failure": reason}
+            pending_hold = bool(current.get("hold_requested") and d.get("resume_note"))
+            if pending_hold:
+                failed.update(hotfix_paused=True, resume_step="failed", resume_blocked=True,
+                              hold_requested=False)
+                self.store.set_stage(
+                    tid, "analysis", hotfix=failed, rev=int(d.get("rev", 0)) + 1,
+                    client_answer=None, preview_sha=None, hotfix_ok=False, verdict=None,
+                )
+            else:
+                self.store.set_stage(tid, "failed", hotfix=failed)
+            if pending_hold:
+                if current.get("deploy_intent"):
+                    progress = "Выкладка запускалась, но её успешный результат не подтверждён."
+                elif current.get("pr_url") or current.get("merged"):
+                    progress = "Подготовленное исправление сохранено; выкладка не запускалась."
+                else:
+                    progress = "Исправление не выкладывалось."
+                message = (
+                    f"По обращению №{tid} не удалось надёжно завершить текущий этап. {progress} "
+                    "Клиенту «пробуйте» не отправлялось. Сохранённое поручение передаю аналитику; "
+                    "это действие автоматически не повторяю."
+                )
+            else:
+                message = (
+                    f"Хотфикс по обращению №{tid} ({self.p.seller_of(tid)}) остановлен: {reason}\n"
+                    f"Что уже сделано: {state}. Клиенту «пробуйте» не отправлялось. Решение за вами, "
+                    "предлагаю разобрать вручную."
+                )
+            self.p.say_owner(
+                f"hotfix_fail:{tid}", message, tid,
+            )
 
     # -- start -------------------------------------------------------------------------
     def _s_start(self, tid: int, h: dict[str, Any]) -> None:
@@ -225,9 +367,7 @@ class HotfixRunner:
         number = h["number"]
         branch = f"hotfix/wms-{number}-support"
         path = Path(self.cfg.repo) / ".worktrees" / f"wms{number}-hotfix"
-        self.fetch()
-        if not path.exists():
-            self.git("worktree", "add", "-b", branch, str(path), "origin/etalon")
+        self.ensure_worktree(branch, path)
         self.save(tid, h, step="dev", branch=branch, path=str(path))
 
     # -- разработчик -------------------------------------------------------------------
@@ -420,28 +560,18 @@ class HotfixRunner:
 
     # -- pull request ---------------------------------------------------------------------
     def _s_pr(self, tid: int, h: dict[str, Any]) -> None:
-        number, branch, path = f"WMS-{h['number']}", h["branch"], h["path"]
+        number, branch = f"WMS-{h['number']}", h["branch"]
         self.fetch()
         if self._number_collides(h):
             raise StepFailed(f"номер {number} уже занят в origin/etalon параллельной работой")
-        self.git("push", "-u", "origin", branch)  # из доверенного основного репозитория; повтор безопасен
-        existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
-                             "number,url"], path)
-        found = json.loads(existing.out) if existing.rc == 0 and existing.out.strip() else []
-        if not found:
-            title = f"fix({number}): {self.p.title_of(tid)}"[:100]
-            body = (f"Облегчённый хотфикс по «кати» владельца (WMS-641).\n\n"
-                    f"{(h.get('dev') or {}).get('summary', '')}\n\n"
-                    "Приёмка аналитика не проводилась.\n\n"
-                    "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
-            self.must_gh(["gh", "pr", "create", "--base", "etalon", "--head", branch, "--title", title,
-                       "--body", body], path)
-            existing = self.run_gh(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
-                                 "number,url"], path)
-            found = json.loads(existing.out or "[]")
-        if not found:
-            raise StepFailed("pull request не удалось найти после создания")
-        self.save(tid, h, step="ci", pr=found[0]["number"], pr_url=found[0]["url"],
+        self.push_branch(branch)
+        title = f"fix({number}): {self.p.title_of(tid)}"[:100]
+        body = (f"Облегчённый хотфикс по «кати» владельца (WMS-641).\n\n"
+                f"{(h.get('dev') or {}).get('summary', '')}\n\n"
+                "Приёмка аналитика не проводилась.\n\n"
+                "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
+        found = self.ensure_pr(branch, base="etalon", title=title, body=body)
+        self.save(tid, h, step="ci", pr=found["number"], pr_url=found["url"],
                   ci_started=self.p.clock())
 
     def _number_collides(self, h: dict[str, Any]) -> bool:
@@ -451,11 +581,7 @@ class HotfixRunner:
     # -- CI -------------------------------------------------------------------------------
     def _s_ci(self, tid: int, h: dict[str, Any]) -> None:
         # gh pr checks возвращает код 8 (ждём) и 1 (упало) и при --json: разбираем вывод, не код.
-        res = self.run_gh(["gh", "pr", "checks", str(h["pr"]), "--json", "name,bucket"], h["path"])
-        try:
-            checks = json.loads(res.out or "[]")
-        except ValueError:
-            raise StepFailed("не удалось прочитать состояние CI") from None
+        checks = self.pr_checks(h["pr"])
         buckets = {c["bucket"] for c in checks}
         now = self.p.clock()
         if checks and "fail" in buckets:
@@ -484,6 +610,16 @@ class HotfixRunner:
         pr = str(h["pr"])
         view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"], h["path"]))
         if view.get("state") != "MERGED":
+            if h.get("merge_intent"):
+                if view.get("state") != "OPEN":
+                    raise StepFailed(f"слияние завершилось в состоянии {view.get('state')}, не MERGED")
+                if self.p.clock() - float(h.get("merge_ts", self.p.clock())) > MERGE_LOOKUP_SEC:
+                    raise StepFailed(
+                        "намерение слить pull request сохранено, но слияние не подтверждено; "
+                        "повторно команду не запускаю"
+                    )
+                self.save(tid, h, next_poll=self.p.clock() + 10)
+                return
             self.fetch()
             deployed = self.deployed_sha()
             extra = int(self.git("rev-list", "--count", f"{deployed}..origin/etalon").strip() or 0)
@@ -494,9 +630,17 @@ class HotfixRunner:
                 )
             if self.cfg.hotfix.preflight_cmd:
                 self.must(["bash", "-lc", self.cfg.hotfix.preflight_cmd], timeout=120)
-            self.must_gh(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
+            if not self._claim_intent(tid, h, merge_intent=True, merge_ts=self.p.clock()):
+                self._pause_for_analysis(tid, h)
+                return
+            # После durable intent код выхода не доказывает исход: сначала перечитываем PR и не
+            # повторяем merge вслепую при потерянном ответе GitHub.
+            self.run_gh(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
             view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"],
                                         h["path"]))
+            if view.get("state") != "MERGED":
+                self.save(tid, h, next_poll=self.p.clock() + 10)
+                return
         oid = str((view.get("mergeCommit") or {}).get("oid") or "")
         if not re.fullmatch(r"[0-9a-f]{40}", oid):
             raise StepFailed("не удалось определить коммит слияния хотфикса")
@@ -548,7 +692,11 @@ class HotfixRunner:
                 raise StepFailed(f"вместе с хотфиксом выложились бы ещё {len(extra)} чужих изменений: "
                                  "без вашего решения не запускаю")
             attempt = "wms641-" + uuid.uuid4().hex[:12]
-            self.save(tid, h, deploy_intent=True, attempt_id=attempt, deploy_ts=now)  # до запуска
+            if not self._claim_intent(
+                tid, h, deploy_intent=True, attempt_id=attempt, deploy_ts=now
+            ):
+                self._pause_for_analysis(tid, h)
+                return
             # Код выхода не важен: исход выясняется чтением списка запусков, повторно не запускаем.
             self.run_gh(["gh", "workflow", "run", "deploy.yml", "--ref", "etalon", "-f", f"sha={sha}",
                          "-f", f"attempt_id={attempt}"])
@@ -620,29 +768,44 @@ class HotfixRunner:
         except (LlmUnavailable, LlmError):
             body = facts
         t = self.store.ticket(tid)
+        client_text: str | None = None
+        reply_to: str | None = None
+        if not d.get("form") and t["chat_id"]:
+            first = self.store.ticket_messages(tid)
+            reply_to = first[0]["msg_id"] if first else None
+            try:
+                client_text = self.p.llm.ask("routine", prompts.client_done_prompt(
+                    json.dumps(d.get("analysis", {}), ensure_ascii=False)), ticket_id=tid).text.strip()
+            except (LlmUnavailable, LlmError):
+                client_text = "Мы исправили проблему. Попробуйте, пожалуйста, ещё раз."
         card_note = ""
         if d.get("form"):  # В1: форма — карточка «Готово»; перенос доводится позже, если связи ещё нет
             self.p.want_card(tid, "completed")
             if self.store.data(tid).get("card_applied") != "completed":
                 card_note = ("\nКарточка формы в Trello пока не обновлена (связь ещё не появилась или "
                              "Trello не ответил): «Готово» проставлю, как только получится.")
-        self.p.say_owner(
-            f"hotfix_report:{tid}",
-            f"Исправление по обращению №{tid} ({self.p.seller_of(tid)}) выложено.\n\n{body}{card_note}"
-            f"\n\n{HONEST_STATUS}", tid, "report",
-        )
-        if not d.get("form") and t["chat_id"]:
-            first = self.store.ticket_messages(tid)
-            try:
-                text = self.p.llm.ask("routine", prompts.client_done_prompt(
-                    json.dumps(d.get("analysis", {}), ensure_ascii=False)), ticket_id=tid).text.strip()
-            except (LlmUnavailable, LlmError):
-                text = "Мы исправили проблему. Попробуйте, пожалуйста, ещё раз."
-            then = {"stage": "done", "patch": {"hotfix": {**h, "step": "done"}}}
-            # один раз на обращение; если по нему читалась база, только через предпросмотр владельцу
-            if self.p.send_client_gated(tid, f"t{tid}:tryit", text,
-                                        first[0]["msg_id"] if first else None, then):
-                self.p.apply_then(tid, then)
-            return
-        self.store.set_stage(tid, "done", hotfix={**h, "step": "done"})
-
+        pause = False
+        with self.store.transaction():
+            live_d = self.store.data(tid)
+            live_h = dict(live_d.get("hotfix") or {})
+            if live_h.get("hold_requested"):
+                pause = True
+                h.clear()
+                h.update(live_h)
+            else:
+                self.p.say_owner(
+                    f"hotfix_report:{tid}",
+                    f"Исправление по обращению №{tid} ({self.p.seller_of(tid)}) выложено.\n\n"
+                    f"{body}{card_note}\n\n{HONEST_STATUS}", tid, "report",
+                )
+                if client_text is not None:
+                    then = {"stage": "done", "patch": {"hotfix": {**live_h, "step": "done"}}}
+                    # Локальные outbox + stage фиксируются одной transaction с последней hold-проверкой.
+                    if self.p.send_client_gated(
+                        tid, f"t{tid}:tryit", client_text, reply_to, then
+                    ):
+                        self.p.apply_then(tid, then)
+                else:
+                    self.store.set_stage(tid, "done", hotfix={**live_h, "step": "done"})
+        if pause:
+            self._pause_for_analysis(tid, h)

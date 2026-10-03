@@ -1,0 +1,63 @@
+{
+  "config_hash": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719",
+  "owner_group_messages": [
+    {
+      "id": 18,
+      "chat_id": -1004441620578,
+      "msg_id": "504",
+      "role": "bind",
+      "author_id": "689889703",
+      "author_name": "владелец",
+      "ts": 1791030626.0,
+      "kind": "text",
+      "text": "@wms_korob_support_bot \nобщий чат для задач от владельцев системы",
+      "status": "handled",
+      "ticket_id": null,
+      "reply_to": "2"
+    },
+    {
+      "id": 21,
+      "chat_id": -1004441620578,
+      "msg_id": "506",
+      "role": "partner",
+      "author_id": "689889703",
+      "author_name": "Ch",
+      "ts": 1791034831.0,
+      "kind": "voice",
+      "text": "(расшифровка голосового) Проводим тестирование бота, заведи задачу на изменение процесса адресного хранения.",
+      "status": "handled",
+      "ticket_id": null,
+      "reply_to": "505"
+    }
+  ],
+  "owner_group_outbox": [
+    {
+      "id": 16,
+      "chat_id": -1004441620578,
+      "reply_to": "504",
+      "purpose": "group_registration",
+      "status": "sent",
+      "tg_message_id": "505"
+    }
+  ],
+  "client_outbox": [
+    {
+      "id": 5,
+      "chat_id": -4899527415,
+      "status": "sent",
+      "tg_message_id": "25"
+    },
+    {
+      "id": 8,
+      "chat_id": -4899527415,
+      "status": "sent",
+      "tg_message_id": "32"
+    }
+  ],
+  "bot_identity": {
+    "id": 8515024711,
+    "username": "wms_korob_support_bot",
+    "can_join_groups": true,
+    "can_read_all_group_messages": true
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "installed_sha": "8c60ffc6bb9ce6399beb3aa30d9c239e169a5af4",
+  "checked_files": [
+    "README.md",
+    "config.example.json",
+    "launchd/install.sh",
+    "launchd/pro.sellerfocus.wms-support-agent.plist.template",
+    "pyproject.toml",
+    "requirements-dev.txt",
+    "requirements.txt",
+    "support_agent/__init__.py",
+    "support_agent/__main__.py",
+    "support_agent/config.py",
+    "support_agent/hotfix.py",
+    "support_agent/llm.py",
+    "support_agent/mockups.py",
+    "support_agent/owner_group.py",
+    "support_agent/pipeline.py",
+    "support_agent/prod_sql.py",
+    "support_agent/prod_sql_mcp.py",
+    "support_agent/prompts.py",
+    "support_agent/readonly_mcp.py",
+    "support_agent/redact.py",
+    "support_agent/runner.py",
+    "support_agent/sandbox.py",
+    "support_agent/seller_directory.py",
+    "support_agent/store.py",
+    "support_agent/telegram.py",
+    "support_agent/transcribe.py",
+    "support_agent/trello.py",
+    "support_agent/wms.py"
+  ],
+  "mismatch": [],
+  "service_at_install": {
+    "state": "running",
+    "pid": "64691"
+  },
+  "config_unchanged": true,
+  "reprocessed_original_message_id": 21,
+  "reprocessed_telegram_message_id": "506",
+  "ready_actions_or_cards_injected": false,
+  "real_service_processes_original_voice": true,
+  "voice": {
+    "id": 21,
+    "msg_id": "506",
+    "status": "handled",
+    "attempts": 0
+  },
+  "created_task": {
+    "id": 3,
+    "kind": "partner_task",
+    "source": "telegram",
+    "chat_id": -1004441620578,
+    "seller": "ВМС- Короб💵",
+    "stage": "done",
+    "category": "task",
+    "author_id": "689889703",
+    "created_at": 1791036398.81654,
+    "updated_at": 1791036399.554579,
+    "last_activity": 1791036398.81654,
+    "data": {
+      "owner_group": true,
+      "raw": "(расшифровка голосового) Проводим тестирование бота, заведи задачу на изменение процесса адресного хранения.",
+      "msg_id": "506",
+      "author_name": "Ch",
+      "group_title": "Изменение процесса адресного хранения",
+      "group_description": "Пересмотреть и изменить процесс адресного хранения в WMS. Детали и объём изменений подлежат уточнению.",
+      "group_sources": [
+        21
+      ],
+      "group_delivery": {
+        "operation": "21:0",
+        "status": "confirmed"
+      },
+      "card_id": "6ac10befe5fffb1d6130ab99",
+      "card_url": "https://trello.com/c/e4huKt0s"
+    }
+  },
+  "trello_card_readback": {
+    "id": "6ac10befe5fffb1d6130ab99",
+    "idList": "6a14741a0fee7b427b6698e9",
+    "desc": "Пересмотреть и изменить процесс адресного хранения в WMS. Детали и объём изменений подлежат уточнению.\n\nИсточник: ВМС- Короб💵, https://t.me/c/4441620578/506\n\nWMS-AGENT-ID: task:3",
+    "shortUrl": "https://trello.com/c/e4huKt0s"
+  },
+  "decision": {
+    "scope": "wms",
+    "intent": "request",
+    "facts": [
+      {
+        "topic": "Изменение процесса адресного хранения",
+        "state": "agreed",
+        "message_id": 21,
+        "quote": "заведи задачу на изменение процесса адресного хранения",
+        "author_id": "689889703"
+      }
+    ],
+    "actions": [
+      {
+        "kind": "create",
+        "ticket_id": 3,
+        "title": "Изменение процесса адресного хранения",
+        "description": "Пересмотреть и изменить процесс адресного хранения в WMS. Детали и объём изменений подлежат уточнению.",
+        "source_message_ids": [
+          21
+        ],
+        "raw": "(расшифровка голосового) Проводим тестирование бота, заведи задачу на изменение процесса адресного хранения.",
+        "done": true
+      }
+    ]
+  },
+  "memory": [
+    {
+      "topic": "Изменение процесса адресного хранения",
+      "state": "agreed",
+      "message_id": 21,
+      "quote": "заведи задачу на изменение процесса адресного хранения",
+      "author_id": "689889703"
+    }
+  ],
+  "group_outbox": [
+    {
+      "id": 16,
+      "key": "owner_task_chat:-1004441620578",
+      "chat_id": -1004441620578,
+      "reply_to": "504",
+      "text": "Этот чат зарегистрирован как общий чат задач владельцев WMS. Чтобы поставить задачу, напишите просьбу со словом Trello; я подготовлю описание и попрошу автора подтвердить. Команды на выкладку принимаю только в личном чате владельца.",
+      "status": "sent",
+      "tg_message_id": "505",
+      "purpose": "group_registration",
+      "attempts": 1
+    },
+    {
+      "id": 18,
+      "key": "owner_group:21:confirmed:0",
+      "chat_id": -1004441620578,
+      "reply_to": "506",
+      "text": "Создана задача: Изменение процесса адресного хранения\nhttps://trello.com/c/e4huKt0s",
+      "status": "sent",
+      "tg_message_id": "515",
+      "purpose": "owner_group",
+      "attempts": 1
+    }
+  ],
+  "client_outbox": [
+    {
+      "id": 5,
+      "chat_id": -4899527415,
+      "status": "sent",
+      "tg_message_id": "25"
+    },
+    {
+      "id": 8,
+      "chat_id": -4899527415,
+      "status": "sent",
+      "tg_message_id": "32"
+    }
+  ],
+  "llm_calls": [
+    {
+      "role": "routine",
+      "model": "sonnet",
+      "ok": 1,
+      "ts": 1791036398.8132842
+    },
+    {
+      "role": "filter",
+      "model": "haiku",
+      "ok": 1,
+      "ts": 1791036291.05736
+    },
+    {
+      "role": "filter",
+      "model": "haiku",
+      "ok": 1,
+      "ts": 1791036160.8399
+    }
+  ],
+  "client_outbox_unchanged": true
+}
