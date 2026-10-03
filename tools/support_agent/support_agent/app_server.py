@@ -206,7 +206,7 @@ class AppServerTurn:
                     occupied = _occupancy(params.get("tokenUsage") or {})
                 elif method == "item/completed":
                     item = params.get("item") or {}
-                    if item.get("type") == "agentMessage" and item.get("phase") in ("final", None):
+                    if item.get("type") == "agentMessage" and item.get("phase") in ("final_answer", None):
                         answer = str(item.get("text") or answer)
                 elif method == "turn/completed":
                     turn = params.get("turn") or {}

@@ -39,7 +39,7 @@ for line in sys.stdin:
         send({'method': 'thread/tokenUsage/updated', 'params': {'tokenUsage': {
               'last': {'totalTokens': 122000}, 'total': {'totalTokens': 900000}}}})
         send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage',
-              'phase': 'final', 'text': reply}}})
+              'phase': 'final_answer', 'text': reply}}})
         send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
 """, encoding="utf-8")
     path.chmod(0o755)
