@@ -365,6 +365,8 @@ class AgentTools:
             raise ToolDenied("frontend_description_required")
         if agent.get("author_confirmation", {}).get("version") != version:
             raise ToolDenied("author_confirmation_required")
+        if agent.get("document_version") != version or not agent.get("document_branch"):
+            raise ToolDenied("canonical_document_required")
         key = f"agent_mockup:{tid}:{version}"
         created = self.store.kv_once(key)
         if created:
