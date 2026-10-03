@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -197,3 +198,31 @@ def test_cancel_topic_stops_linked_project_job(tmp_path: Path) -> None:
     agent.dispatcher._route_once()
     assert store.kv_get(f"agent_topic:{target}")["cancel_requested"] is True
     assert store.kv_get("agent_job:job-a")["cancel_requested"] is True
+
+
+def test_authorization_sees_only_prior_same_chat_and_reply_target(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    store.queue_message(key="shown", chat_id=4242, text="Описание v1: Обработано",
+                        purpose="proposal")
+    store.execute("UPDATE outbox SET status='sent',tg_message_id='proposal-7' WHERE key='shown'")
+    _message(store, -10, "secret", "Другая клиентская переписка")
+    source_id = store.add_message(source="telegram", chat_id=4242, msg_id="approval",
+                                  role="owner", author_id="42", author_name="Owner",
+                                  ts=time.time() + 10, kind="text", text="Да, утверждаю",
+                                  file_id=None, reply_to="proposal-7")
+    assert source_id is not None
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    seen: dict[str, Any] = {}
+
+    def checker(prompt: str, **kwargs: Any) -> LlmResult:
+        seen.update(json.loads(prompt))
+        return LlmResult('{"authorized":true,"source_quote":"утверждаю","reason":"reply"}',
+                         "codex", "sol", "session")
+
+    agent.llm.agent_turn = checker  # type: ignore[method-assign]
+    decision = agent.semantic_verifier.check(source, "queue_reply", {"chat_id": -10})
+    assert decision["authorized"] is True
+    assert seen["actual_source"]["verified_owner_private"] is True
+    assert seen["actual_source"]["reply_to"] == "proposal-7"
+    assert any(x.get("msg_id") == "proposal-7" for x in seen["prior_same_chat"])
+    assert "Другая клиентская переписка" not in json.dumps(seen, ensure_ascii=False)

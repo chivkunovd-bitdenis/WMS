@@ -34,11 +34,13 @@ class SemanticAuthorization:
             "mockup": agent_data.get("mockup"),
             "owner_approval": agent_data.get("owner_approval"),
         }
+        prior = self._prior_context(source)
         # The exact source revision, target and proposed effect define this
         # authorization. A model rewrite of the same Telegram event cannot widen it.
         material = json.dumps({"event_id": event["id"], "revision": event["revision"],
                                "source_text": event["text"], "action": action,
-                               "arguments": args, "proposal": proposal},
+                               "arguments": args, "proposal": proposal,
+                               "prior": prior},
                               ensure_ascii=False, sort_keys=True, default=str)
         key = "agent_semantic_auth:" + hashlib.sha256(material.encode()).hexdigest()
         cached = store.kv_get(key)
@@ -48,10 +50,15 @@ class SemanticAuthorization:
             "actual_source": {"id": event["id"], "revision": event["revision"],
                               "role": event["role"], "chat_id": event["chat_id"],
                               "author_id": event["author_id"], "text": event["text"],
+                              "reply_to": event["reply_to"],
                               "verified_owner_private": verified_owner_private},
             "proposed_action": action, "arguments": args, "current_object": proposal,
+            "prior_same_chat": prior,
             "instruction": "Independently decide whether the actual source message explicitly "
             "authorizes this exact consequential action on this object and current version. "
+            "Use actual same-chat prior messages, especially a verified reply target, "
+            "to resolve short answers such as 'да, утверждаю'. Only a sent outgoing "
+            "message was shown to the person. An unrelated 'да' is not authorization. "
             "A request to inspect/explain is not approval, send, develop or release. "
             "No silence or prior unrelated message is approval. For author confirmation, "
             "the author must affirm the shown process/description. For owner actions, "
@@ -74,3 +81,36 @@ class SemanticAuthorization:
                     "reason": str(parsed.get("reason") or "")[:300]}
         store.kv_set(key, decision)
         return decision
+
+    def _prior_context(self, source: Any) -> list[dict[str, Any]]:
+        store = self.agent.store
+        chat_id, ts = int(source["chat_id"]), float(source["ts"])
+        incoming = store.rows(
+            "SELECT msg_id,author_id,text,reply_to,ts,revision FROM messages "
+            "WHERE chat_id=? AND (ts<? OR (ts=? AND id<?)) ORDER BY ts DESC,id DESC LIMIT 8",
+            (chat_id, ts, ts, int(source["id"])),
+        )
+        outgoing = store.rows(
+            "SELECT tg_message_id AS msg_id,text,reply_to,created_at AS ts,status "
+            "FROM outbox WHERE chat_id=? AND created_at<=? AND status='sent' "
+            "ORDER BY created_at DESC,id DESC LIMIT 8", (chat_id, ts),
+        )
+        items = [{**dict(x), "direction": "in"} for x in incoming]
+        items.extend({**dict(x), "direction": "out"} for x in outgoing)
+        reply_to = str(source["reply_to"] or "")
+        if reply_to and not any(str(x.get("msg_id")) == reply_to for x in items):
+            target_in = store.row(
+                "SELECT msg_id,author_id,text,reply_to,ts,revision FROM messages "
+                "WHERE chat_id=? AND msg_id=? AND ts<=?", (chat_id, reply_to, ts),
+            )
+            target_out = store.row(
+                "SELECT tg_message_id AS msg_id,text,reply_to,created_at AS ts,status "
+                "FROM outbox WHERE chat_id=? AND tg_message_id=? AND created_at<=? AND status='sent'",
+                (chat_id, reply_to, ts),
+            )
+            target = target_in or target_out
+            if target is not None:
+                items.append({**dict(target), "direction": "in" if target_in else "out",
+                              "explicit_reply_target": True})
+        items.sort(key=lambda x: float(x["ts"]))
+        return items[-16:]
