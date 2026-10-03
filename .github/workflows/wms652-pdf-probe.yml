@@ -1,0 +1,79 @@
+name: WMS-652 isolated PDF probe
+on:
+  push:
+    branches: [codex/wms652-pdf-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: browser-actions/setup-chrome@v2
+        id: chromium
+        with:
+          chrome-version: stable
+          install-dependencies: true
+      - name: Install PDF inspection tool
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+      - name: Compare minimal HTML rendering
+        env:
+          CHROME_PATH: ${{ steps.chromium.outputs.chrome-path }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import signal
+          import subprocess
+          import tempfile
+          from pathlib import Path
+
+          root = Path(tempfile.mkdtemp(prefix="wms652-probe-"))
+          html = root / "minimal.html"
+          html.write_text('<!doctype html><html><head><meta charset="utf-8"><title>Probe</title></head><body><p>WMS652_PROBE_OK</p></body></html>')
+          flags = ["--headless=new", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage",
+                   "--no-pdf-header-footer", "--no-first-run", "--disable-background-networking",
+                   "--disable-component-update", "--disable-sync", "--disable-default-apps"]
+          results = []
+
+          def run(args, seconds):
+              proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+              timed_out = False
+              try:
+                  out, err = proc.communicate(timeout=seconds)
+              except subprocess.TimeoutExpired:
+                  timed_out = True
+                  os.killpg(proc.pid, signal.SIGKILL)
+                  out, err = proc.communicate(timeout=3)
+              return proc.returncode, timed_out, out.decode(errors="replace"), err.decode(errors="replace")
+
+          def probe(name, binary, dom=False):
+              code, timeout, version, err = run([binary, "--version"], 5)
+              print(f"{name}: version_exit={code} timeout={timeout} {version.strip()[:200]} {err[:200]}")
+              version_ok = code == 0 and not timeout
+              pdf = root / f"{name}.pdf"
+              mode = ["--dump-dom"] if dom else [f"--print-to-pdf={pdf}"]
+              code, timeout, out, err = run([binary, *flags, f"--user-data-dir={root / name}", *mode, html.as_uri()], 10 if dom else 20)
+              print(f"{name}: exit={code} timeout={timeout} pdf_exists={pdf.exists()} pdf_size={pdf.stat().st_size if pdf.exists() else 0}")
+              print("stdout:\n" + "\n".join(out.splitlines()[:10])[:3000])
+              print("stderr:\n" + "\n".join(err.splitlines()[:10])[:3000])
+              valid = "WMS652_PROBE_OK" in out if dom else False
+              if not dom and pdf.exists():
+                  info_code, info_timeout, info, info_err = run(["pdfinfo", str(pdf)], 5)
+                  print(f"pdfinfo: exit={info_code} timeout={info_timeout}\n" + "\n".join(info.splitlines()[:4]) + info_err[:300])
+                  valid = info_code == 0 and not info_timeout and pdf.stat().st_size > 0
+              passed = version_ok and code == 0 and not timeout and valid
+              results.append((name, passed))
+              print(f"{name}: {'PASS' if passed else 'FAIL'}", flush=True)
+
+          probe("cft-pdf", os.environ["CHROME_PATH"])
+          system = "/usr/bin/google-chrome"
+          if os.path.isfile(system) and os.access(system, os.X_OK):
+              probe("system-pdf", system)
+          else:
+              print("system-pdf: NOT INSTALLED (comparison unavailable)")
+          probe("cft-dom", os.environ["CHROME_PATH"], dom=True)
+          print("SUMMARY: " + ", ".join(f"{name}={'PASS' if passed else 'FAIL'}" for name, passed in results))
+          raise SystemExit(0 if all(passed for _, passed in results) else 1)
+          PY
