@@ -1,0 +1,9 @@
+# WMS-652 DRAFT ONLY. Activate as .github/CODEOWNERS after owner decision.
+/.github/ @chivkunovd-bitdenis
+/backend/tests/guards/ @chivkunovd-bitdenis
+/frontend/src/guards/ @chivkunovd-bitdenis
+/guards/ @chivkunovd-bitdenis
+/scripts/ci/ @chivkunovd-bitdenis
+/scripts/deploy/ @chivkunovd-bitdenis
+/AGENTS.md @chivkunovd-bitdenis
+/CLAUDE.md @chivkunovd-bitdenis
