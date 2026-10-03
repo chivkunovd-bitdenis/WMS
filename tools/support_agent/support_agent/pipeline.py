@@ -1119,6 +1119,15 @@ class Pipeline:
             "info": "Это запрос данных, а не поломка.",
             "trello": "Вердикт: это улучшение.",
         }.get(verdict, "")
+        summary_analysis = dict(analysis)
+        if (self.store.ticket(tid)["kind"] == "chat" and analysis.get("need_data") is None
+                and not analysis.get("answer_needs_data")):
+            # Это поле предназначено для формы; не превращаем его в опрос после достаточного разбора чата.
+            summary_analysis.pop("missing_for_owner", None)
+            note += (
+                "\nПо результату аналитика данных для разбора достаточно. Новый вопрос клиенту не планируется; "
+                "не ставь передачу задачи в Trello в зависимость от уточнения."
+            )
         if verdict == "trello" or card_note:
             note += (
                 "\nФактическое состояние карточки по данным диспетчера: "
@@ -1127,7 +1136,7 @@ class Pipeline:
                 "Предложения из материалов не означают выполненных действий."
             )
         try:
-            result = self.llm.ask("routine", prompts.summary_prompt(str(analysis), note), ticket_id=tid)
+            result = self.llm.ask("routine", prompts.summary_prompt(str(summary_analysis), note), ticket_id=tid)
             body = result.text.strip()
             if FORBIDDEN_IN_SUMMARY.search(body):
                 body = self.llm.ask("routine", prompts.rewrite_summary_prompt(body),

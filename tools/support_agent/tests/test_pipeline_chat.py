@@ -332,6 +332,32 @@ def test_improvement_summary_gets_actual_card_outcome(env: Any, state: str, expe
         assert body.endswith(card_note)  # фактический исход добавляется кодом и к готовой сводке
 
 
+@pytest.mark.parametrize(("kind", "need_data", "answer_needs_data", "keeps_missing"), [
+    ("chat", None, False, False),
+    ("form", None, False, True),
+    ("chat", {"points": ["Какой лист подбора?"]}, False, True),
+    ("chat", None, True, True),
+])
+def test_chat_summary_does_not_invent_a_question_from_form_only_field(
+    env: Any, kind: str, need_data: Any, answer_needs_data: bool, keeps_missing: bool,
+) -> None:
+    missing = "Уточнить у клиента какой лист подбора"
+    analysis = dict(ANALYSIS_BUG, category="improvement", need_data=need_data,
+                    missing_for_owner=[missing], answer_needs_data=answer_needs_data)
+    script(env, analysis)
+    tid = env.store.add_ticket(kind=kind, source="test", chat_id=CLIENT_CHAT, seller="Клиент",
+                               stage="analysis")
+    card_note = " Карточка в Trello создана: https://trello.test/existing"
+    env.pipe._compose(tid, analysis, "trello", None, card_note)
+    prompt = env.llm.calls[-1]["prompt"]
+    assert (missing in prompt) is keeps_missing
+    assert card_note.strip() in prompt
+    if not keeps_missing:
+        assert "Новый вопрос клиенту не планируется" in prompt
+        assert "не ставь передачу задачи в Trello в зависимость от уточнения" in prompt
+    assert analysis["missing_for_owner"] == [missing]  # сохранённый результат аналитика не переписывается
+
+
 def test_form_improvement_gets_only_a_comment_never_a_card(env: Any) -> None:
     improvement = dict(ANALYSIS_BUG, category="improvement", urgent=False)
     script(env, improvement, category="improvement")
