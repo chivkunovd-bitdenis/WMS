@@ -36,8 +36,13 @@ class MockupRunner:
                 self.hf.git("worktree", "add", "-b", branch, str(path), base)
             task = str(agent.get("description") or
                        (self.p._task_text(d) if d.get("draft") else d.get("raw", "")))
+            prompt = prompts.mockup_prompt(task, str(tid)).replace("Ты — Opus", "Ты — Sonnet")
+            if mockup.get("recovery_note"):
+                prompt += ("\n\nPrevious run was interrupted. Inspect the existing worktree and "
+                           "already published URL before changing files or publishing. "
+                           "Reuse the completed artifact if valid; do not delete or duplicate it.")
             turn = self.p.llm.agent_turn(
-                prompts.mockup_prompt(task, str(tid)).replace("Ты — Opus", "Ты — Sonnet"),
+                prompt,
                 session_key=f"mockup:{tid}", model="sonnet", provider="claude",
                 mode="write", cwd=str(path), timeout=3600,
             )

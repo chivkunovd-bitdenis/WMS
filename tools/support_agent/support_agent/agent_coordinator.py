@@ -262,6 +262,12 @@ class AgentCoordinator:
             if current.get("status") == "done" and job.get("status") != "done":
                 merged["status"] = "done"
                 merged["result"] = current.get("result")
+            if current.get("cancel_requested") and job.get("status") == "done":
+                merged["status"] = "needs_review"
+                merged["interim_result"] = job.get("result")
+                merged["recovery_note"] = ("Cancel raced completion; inspect actual commands "
+                                           "and external outcome")
+                merged.pop("result", None)
             if (current.get("preflight_status") in ("reported", "unknown")
                     and job.get("preflight_status") not in ("reported", "unknown")):
                 merged["preflight_status"] = current["preflight_status"]
@@ -432,8 +438,10 @@ class AgentCoordinator:
                                          cancelled=lambda: bool(
                                              self.store.kv_get(f"agent_job:{job_id}", {})
                                              .get("cancel_requested")
-                                             or (not finalizing and job.get("deadline_at") and
-                                                 self.clock() >= float(job["deadline_at"]))))
+                                             or (not finalizing and
+                                                 (deadline := self.store.kv_get(
+                                                     f"agent_job:{job_id}", {}).get("deadline_at"))
+                                                 and self.clock() >= float(deadline))))
             latest = self.store.kv_get(f"agent_job:{job_id}", {})
             if latest.get("phase") == "finalize" and not finalizing:
                 job.update(phase="finalize", status="queued", interim_result=result.text[:8000])
@@ -442,6 +450,12 @@ class AgentCoordinator:
             job.update(status="done", result=result.text[:12000], finished_at=self.clock())
             self._save_job(job)
             if self.store.kv_get(f"agent_job:{job_id}", {}).get("status") != "done":
+                if self.store.kv_get(f"agent_job:{job_id}", {}).get("cancel_requested"):
+                    self.store.queue_message(key=f"agent_job_cancel_unknown:{job_id}",
+                                             chat_id=self.cfg.telegram.owner_chat_id,
+                                             text=f"Работа {job_id} была остановлена во время завершения. "
+                                                  "Исход команд нужно проверить; успех не подтверждаю.",
+                                             purpose="agent_job", repeat_ok=False)
                 return  # deadline switched to finalization while this turn was ending
             self.store.queue_message(key=f"agent_job_done:{job_id}", chat_id=self.cfg.telegram.owner_chat_id,
                                      text=f"Работа {job_id}: {result.text[:3600]}", purpose="agent_job",
@@ -476,7 +490,8 @@ class AgentCoordinator:
         if not job or job.get("status") != "done":
             return {"error": "job_not_done"}
         root = Path(str(job.get("worktree", ""))).resolve()
-        path = Path(str(args.get("path", ""))).resolve()
+        raw_path = Path(str(args.get("path", "")))
+        path = (raw_path if raw_path.is_absolute() else root / raw_path).resolve()
         if root not in path.parents or not path.is_file():
             return {"error": "file_not_in_job_worktree"}
         if path.stat().st_size > 50_000_000:
@@ -548,7 +563,9 @@ class AgentCoordinator:
         for ticket in self.store.open_tickets():
             agent = self.store.data(int(ticket["id"])).get("agent") or {}
             if (agent.get("mockup") or {}).get("status") == "running":
-                agent["mockup"] = {**agent["mockup"], "status": "unknown"}
+                agent["mockup"] = {**agent["mockup"], "status": "queued",
+                                   "recovery_note": "Interrupted run: inspect existing files and public URL "
+                                                    "before creating or publishing again"}
                 self.store.patch_data(int(ticket["id"]), agent=agent)
 
     def _submit_mockup(self, tid: int) -> None:

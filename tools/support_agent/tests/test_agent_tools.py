@@ -84,12 +84,38 @@ def test_author_confirmation_requires_sent_description_and_later_author_message(
     confirmation = message(store, 100, "client", 5, "2", ts=20000000000.0)
     monkeypatch.setattr("support_agent.agent_tools.persist_task", lambda pipe, tid:
                         {"number": 700, "sha": "a" * 40, "branch": "test"})
-    monkeypatch.setattr(api, "_tool_trello_sync", lambda args, event, owner:
-                        {"status": "linked", "url": "https://trello.test/1"})
+    seen_owner = []
+    def sync(args, event, owner):
+        seen_owner.append(owner)
+        return {"status": "linked", "url": "https://trello.test/1"}
+    monkeypatch.setattr(api, "_tool_trello_sync", sync)
     result = api.dispatch("task_record", {**base, "ticket_id": task["ticket_id"],
                                           "confirm_author": True}, ctx(confirmation, 100, 5))
     assert result["author_confirmed"] is True
     assert result["document"]["number"] == 700
+    assert seen_owner == [False]
+
+
+def test_mockup_retry_reuses_task_after_failure_and_reports_published_version(tools):
+    api, store = tools
+    owner = message(store, 900, "owner", 42, "retry-mockup")
+    tid = store.add_ticket(kind="agent_task", source="telegram", chat_id=100, seller="client",
+                           stage="failed", data={"agent": {
+                               "version": "v1", "is_frontend": True,
+                               "author_confirmation": {"version": "v1"},
+                               "document_version": "v1", "document_branch": "codex/wms700",
+                               "mockup": {"version": "v1", "status": "failed"}}})
+    store.kv_once(f"agent_mockup:{tid}:v1")
+    result = api.dispatch("request_mockup", {"ticket_id": tid}, ctx(owner, 900, 42))
+    assert result["queued"] is True and result["status"] == "queued"
+    assert store.ticket(tid)["stage"] == "agent_discussion"
+    agent = store.data(tid)["agent"]
+    assert agent["mockup"]["recovery_note"]
+    agent["mockup"] = {"version": "v1", "status": "published", "url": "https://example.test/v1"}
+    store.patch_data(tid, agent=agent)
+    result = api.dispatch("request_mockup", {"ticket_id": tid}, ctx(owner, 900, 42))
+    assert result["queued"] is False and result["status"] == "published"
+    assert result["url"] == "https://example.test/v1"
 
 
 def test_client_digest_only_reaches_owner_and_deduplicates(tools):

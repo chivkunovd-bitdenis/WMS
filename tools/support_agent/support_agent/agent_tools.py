@@ -390,7 +390,7 @@ class AgentTools:
         if args.get("confirm_author"):
             try:
                 document = persist_task(self.p, tid)
-                card = self._tool_trello_sync({"ticket_id": tid, "action": "create"}, event, True)
+                card = self._tool_trello_sync({"ticket_id": tid, "action": "create"}, event, owner)
                 if bool(args.get("is_frontend")):
                     mockup_key = f"agent_mockup:{tid}:{version}"
                     latest = dict(self.store.data(tid).get("agent") or {})
@@ -599,21 +599,28 @@ class AgentTools:
             raise ToolDenied("author_confirmation_required")
         if agent.get("document_version") != version or not agent.get("document_branch"):
             raise ToolDenied("canonical_document_required")
+        mockup = agent.get("mockup") or {}
+        if mockup.get("version") == version and mockup.get("status") == "published":
+            return {"queued": False, "ticket_id": tid, "version": version, "model": "sonnet",
+                    "status": "published", "url": mockup.get("url")}
+        if mockup.get("version") == version and mockup.get("status") in ("queued", "running", "unknown"):
+            return {"queued": False, "ticket_id": tid, "version": version, "model": "sonnet",
+                    "status": mockup["status"]}
         key = f"agent_mockup:{tid}:{version}"
+        retry = mockup.get("version") == version and mockup.get("status") == "failed"
         created = self.store.kv_once(key)
-        if created:
-            # The scheduler runs the dedicated Sonnet runner. It must verify a public URL.
-            self.store.patch_data(
-                tid,
-                agent={
-                    **agent,
-                    "mockup": {"version": version, "status": "queued", "owner_event": event["id"]},
-                },
-            )
+        if retry or created:
+            # Reuse the same worktree/publication ID after an explicit owner retry.
+            self.store.set_stage(tid, "agent_discussion")
+            self.store.patch_data(tid, agent={**agent, "mockup": {
+                "version": version, "status": "queued", "owner_event": event["id"],
+                "recovery_note": ("Inspect existing worktree and publication before continuing"
+                                  if retry else ""),
+            }})
         return {
-            "queued": created,
+            "queued": retry or created,
             "ticket_id": tid,
             "version": version,
             "model": "sonnet",
-            "status": "queued",
+            "status": "queued" if retry or created else "unknown",
         }

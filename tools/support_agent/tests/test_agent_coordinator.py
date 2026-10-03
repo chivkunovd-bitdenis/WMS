@@ -172,3 +172,67 @@ def test_selected_frontend_task_needs_current_description_and_mockup_approval(tm
     accepted = agent._owner_tool("project_job", args, context)
     assert accepted["status"] == "queued"
     assert accepted["task_ids"] == ["WMS-700"]
+
+
+def test_job_file_relative_path_is_anchored_under_verified_worktree(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "Пришли экспорт")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    root = tmp_path / "repo" / ".worktrees" / "support-job-abc"
+    output = root / "out" / "export.csv"
+    output.parent.mkdir(parents=True)
+    output.write_text("a,b\n1,2\n")
+    store.kv_set("agent_job:abc", {"id": "abc", "status": "done", "worktree": str(root)})
+    result = agent._send_job_file({"job_id": "abc", "path": "out/export.csv"},
+                                  agent._context(source, owner=True))
+    assert result["queued"] is True
+    assert store.outbox_by_key(result["key"])["file_path"] == str(output)
+    denied = agent._send_job_file({"job_id": "abc", "path": "../outside.csv"},
+                                  agent._context(source, owner=True))
+    assert denied["error"] == "file_not_in_job_worktree"
+
+
+def test_cancel_race_is_reported_unknown_and_deadline_callback_reads_current_state(tmp_path):
+    now = [100.0]
+    agent, store, llm, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "Сделай работу")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    agent._submit_job = lambda _: None
+    created = agent._owner_tool("project_job", {"request": "Do work",
+                                                    "deadline_at": "1970-01-01T01:00:00+00:00"},
+                                agent._context(source, owner=True))
+    jid = created["id"]
+    worktree = tmp_path / "repo" / ".worktrees" / f"support-job-{jid}"
+    worktree.mkdir(parents=True)
+    agent._worktree = lambda _: worktree
+
+    def complete_while_cancelled(prompt, **kwargs):
+        assert kwargs["cancelled"]() is False
+        agent._patch_job(jid, deadline_at=99.0)
+        assert kwargs["cancelled"]() is True
+        agent._patch_job(jid, cancel_requested=True)
+        return LlmResult("work may have finished", "codex", kwargs["model"], "session")
+
+    llm.agent_turn = complete_while_cancelled
+    agent._run_job(jid)
+    saved = store.kv_get(f"agent_job:{jid}")
+    assert saved["status"] == "needs_review"
+    assert saved["cancel_requested"] is True
+    assert store.outbox_by_key(f"agent_job_done:{jid}") is None
+    assert store.outbox_by_key(f"agent_job_cancel_unknown:{jid}") is not None
+
+
+def test_interrupted_mockup_is_queued_for_same_worktree_recovery(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    tid = store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
+                           seller="client", stage="agent_discussion",
+                           data={"agent": {"version": "v1", "mockup": {
+                               "version": "v1", "status": "running"}}})
+    agent.recover_after_restart()
+    mockup = store.data(tid)["agent"]["mockup"]
+    assert mockup["status"] == "queued"
+    assert "inspect" in mockup["recovery_note"]
