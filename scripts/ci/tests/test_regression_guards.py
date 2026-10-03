@@ -147,9 +147,21 @@ class GuardTests(unittest.TestCase):
             guards.verify(self.root, self.base)
 
     def test_missing_baseline_requires_explicit_bootstrap(self):
-        with self.assertRaisesRegex(ValueError, "explicit empty bootstrap"):
+        with self.assertRaisesRegex(ValueError, "only explicit bootstrap"):
             guards.verify(self.root, self.initial)
         self.assertEqual(sum(guards.verify(self.root, self.initial, True).values()), 0)
+
+    def test_first_introduction_may_add_active_business_tests(self):
+        test = self.root / guards.ROOTS[0] / "test_first_guard.py"
+        test.write_text("def test_guard():\n    assert True\n")
+        self.manifest["state"] = "active"
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "only explicit bootstrap"):
+            guards.verify(self.root, self.initial)
+        self.assertEqual(
+            guards.verify(self.root, self.initial, True),
+            {"backend_tests": 1, "frontend_tests": 0},
+        )
 
     def test_bootstrap_cannot_introduce_business_tests_or_helpers(self):
         (self.root / guards.ROOTS[0] / "conftest.py").write_text("raise RuntimeError()")

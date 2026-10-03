@@ -76,9 +76,11 @@ def verify(root: Path, base: str, allow_bootstrap: bool = False) -> dict[str, in
         .splitlines()
     )
     if MANIFEST not in base_paths:
-        if not allow_bootstrap or base_paths or candidate["state"] != "bootstrap":
+        # First introduction of the guard set: adding files is allowed, exactly as in
+        # the regular mode where only changing or deleting existing guards is refused.
+        if not allow_bootstrap or base_paths:
             raise ValueError(
-                "Trusted baseline has no manifest: only explicit empty bootstrap is allowed"
+                "Trusted baseline has no manifest: only explicit bootstrap is allowed"
             )
         print(
             "BOOTSTRAP: baseline has no guard infrastructure; this is not owner approval."
