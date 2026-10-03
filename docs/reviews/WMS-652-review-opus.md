@@ -287,6 +287,10 @@ GitHub, деплой с проверкой зелёных обязательны
 бизнес-тестов, «забетонированность») этой задачей **не** достигаются и
 корректно отмечены как последующие в документе требований.
 
+### F13. Follow-up: CfT → system Chrome в CI — PASS
+
+`.github/workflows/ci.yml:133-153`: `setup-chrome` убран, `CHROME_PATH=/usr/bin/google-chrome` (ubuntu-latest preinstalled, probe 37144084796 подтвердил). `test -x` падает жёстко — тихого skip нет; `--version`, Poppler, `WMS_PRINT_CHROMIUM`, `WMS_REQUIRE_PRINT_PAGINATION`, полный `npx vitest run` сохранены; `backend`/`deploy` не затронуты. Ограничение: полный Linux-прогон не предъявлен.
+
 ### F12. Follow-up: WMS-349 merge test drain — PASS
 
 Правка `backend/tests/test_product_merge_service_wms349.py:243,266-268` (+5 строк)
