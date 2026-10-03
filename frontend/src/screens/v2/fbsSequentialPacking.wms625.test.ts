@@ -27,7 +27,7 @@ vi.mock('./fbsApi', async (original) => ({
 
 import { makePackingScanDeps } from './fbsSequentialPacking'
 import type { FbsScanAutoPrintResult, FbsWorkspace } from './fbsApi'
-import { directQrHash, forgetDirectQrProtocol, qrAttemptStore, type DurableQrAttempt } from '../../utils/durableDirectQr'
+import { directQrHash, qrAttemptStore, type DurableQrAttempt } from '../../utils/durableDirectQr'
 
 const PNG = 'data:image/png;base64,AQID'
 const workspace = { supply: { id: 'supply-1', packaging_task_id: 'task-1' }, orders: [], boxes: [] } as unknown as FbsWorkspace
@@ -38,8 +38,8 @@ const result = {
 } as FbsScanAutoPrintResult
 const context = { tenantId: 'unknown-tenant', userId: 'unknown-user', supplyId: 'supply-1', orderId: 'order-1', scanId: 'scan-1',
   barcode: 'order:order-1', marketplace: 'wildberries', wbOrderId: 777 }
-/** The body production sends to WMS Print for an order QR, plus the order context older programs ignore. */
-const productionBody = { imageDataUrl: PNG, idempotencyKey: 'scan-1', widthMm: 58, heightMm: 40, context }
+/** The body production sends to WMS Print for an order QR, plus the order and protocolVersion older programs ignore. */
+const productionBody = { imageDataUrl: PNG, idempotencyKey: 'scan-1', widthMm: 58, heightMm: 40, context, protocolVersion: 2 }
 
 type Program = 'old' | 'modern' | 'off'
 let program: Program
@@ -67,7 +67,6 @@ async function native(input: RequestInfo | URL, init?: RequestInit): Promise<Res
     }
     return json({}, 404)
   }
-  if (url.pathname === '/health') return json({ app: 'WMS Print Direct', protocolVersion: 2 })
   if (method === 'POST' && url.pathname === '/print') {
     const job = jobs.get(body.idempotencyKey) ?? { ...body, protocolVersion: undefined, hash: await directQrHash(body), status: 'accepted', receipt: `queue-${jobs.size + 1}` }
     delete job.protocolVersion
@@ -93,7 +92,6 @@ beforeEach(() => {
   server.claims.length = 0
   server.marks.length = 0
   window.localStorage.clear()
-  forgetDirectQrProtocol()
   vi.stubGlobal('fetch', vi.fn(native))
   // jsdom has no IndexedDB: the browser record lives in memory, with the same contract.
   storeSpies = [
@@ -137,7 +135,7 @@ describe('WMS-625 · older WMS Print v2026.09.30.4/.5 (only POST /print)', () =>
   it('an already started order asks the older program nothing', async () => {
     server.started.add('scan-1')
     await deps().print(result, PNG, '58x40', 'scan-1')
-    expect(nativeCalls.filter((call) => call.path !== '/health')).toEqual([])
+    expect(nativeCalls).toEqual([])
   })
 
   it('a program that is not running gives the production message', async () => {
@@ -152,22 +150,33 @@ describe('WMS-625 · WMS Print with the job journal (protocol 2)', () => {
     program = 'modern'
     await deps().print(result, PNG, '58x40', 'scan-1')
     expect(posts()).toHaveLength(1)
-    expect(posts()[0].body).toEqual({ ...productionBody, protocolVersion: 2 })
+    expect(posts()[0].body).toEqual(productionBody)
+    expect(nativeCalls.map((call) => `${call.method} ${call.path}`)).toEqual(['POST /print'])
     expect(rows.get('scan-1')?.input.imageDataUrl).toBe(PNG)
     expect(rows.get('scan-1')?.result?.status).toBe('accepted')
     expect(server.marks).toEqual(['scan-1'])
   })
 
-  it('a lost answer and a reload: the repeated scan finds the same job, no second POST', async () => {
+  it('a lost answer and a reload: the repeated scan is the same job with the first label, no second job', async () => {
     program = 'modern'
     loseNextPost = true
     await expect(deps().print(result, PNG, '58x40', 'scan-1')).rejects.toThrow('Нет ответа WMS Print')
     expect(server.marks).toEqual([])
     // A reload builds new dependencies; the browser record and the program journal remain.
     await deps().print(result, 'data:image/png;base64,BBBB', '70x120', 'scan-1')
-    expect(posts()).toHaveLength(1)
+    expect(posts().map((call) => call.body)).toEqual([productionBody, productionBody])
+    expect(jobs.size).toBe(1)
     expect(server.marks).toEqual(['scan-1'])
     expect(rows.get('scan-1')?.input).toMatchObject({ imageDataUrl: PNG, widthMm: 58, heightMm: 40 })
+  })
+
+  it('works without browser storage: the label is printed and marked (review F2)', async () => {
+    program = 'modern'
+    vi.mocked(qrAttemptStore.get).mockRejectedValue(new Error('no IndexedDB'))
+    vi.mocked(qrAttemptStore.put).mockRejectedValue(new Error('no IndexedDB'))
+    await deps().print(result, PNG, '58x40', 'scan-1')
+    expect(posts()).toHaveLength(1)
+    expect(server.marks).toEqual(['scan-1'])
   })
 
   it('a stopped queue keeps the order unpacked and names it; the retry checks the same job', async () => {

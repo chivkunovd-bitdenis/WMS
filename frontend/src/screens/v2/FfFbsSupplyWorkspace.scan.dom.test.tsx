@@ -8,7 +8,7 @@ import type { FbsWorkspace } from './fbsApi'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
-import { directQrHash, forgetDirectQrProtocol, qrAttemptStore, type DurableQrAttempt } from '../../utils/durableDirectQr'
+import { directQrHash, qrAttemptStore, type DurableQrAttempt } from '../../utils/durableDirectQr'
 
 // Only the actual workspace and scanner participate in these tests.
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
@@ -135,7 +135,6 @@ async function nativeServer(method: string, path: string, body: unknown): Promis
     if (state.loseNextPost) { state.loseNextPost = false; throw new TypeError('response lost') }
     return json({ receipt })
   }
-  if (path === '/health') return json({ app: 'WMS Print Direct', protocolVersion: 2 })
   if (method === 'POST' && path === '/print') {
     if (!state.jobs.has(sent.idempotencyKey)) {
       // The journal keeps the key, size and order; the PNG stays behind its own endpoint.
@@ -688,7 +687,6 @@ describe('WMS-625 · обычная карточка WB: QR заказа чер�
   beforeEach(() => {
     printing = { program: 'old', loseNextPost: false, selections: new Map(), started: new Set(), jobs: new Map(), native: [] }
     rows = new Map()
-    forgetDirectQrProtocol()
     // jsdom has no IndexedDB: the browser record lives in memory, with the same contract.
     storeSpies = [
       vi.spyOn(qrAttemptStore, 'get').mockImplementation(async (key) => structuredClone(rows.get(key))),
@@ -701,13 +699,14 @@ describe('WMS-625 · обычная карточка WB: QR заказа чер�
     for (const spy of storeSpies) spy.mockRestore()
   })
 
-  it('старая программа (только POST /print): одна этикетка тем же запросом, что на production (плюс контекст заказа, который она не читает), заказ упакован', async () => {
+  it('старая программа (только POST /print): одна этикетка тем же запросом, что на production (плюс поля, которые она не читает), заказ упакован', async () => {
     await openPackingTab()
     scan(PRODUCT)
     await settle(200)
     expect(nativePosts()).toHaveLength(1)
     const body = nativePosts()[0].body as Record<string, unknown>
-    expect(Object.keys(body)).toEqual(['imageDataUrl', 'idempotencyKey', 'widthMm', 'heightMm', 'context'])
+    expect(printing!.native.map((call) => `${call.method} ${call.path}`)).toEqual(['POST /print'])
+    expect(Object.keys(body)).toEqual(['imageDataUrl', 'idempotencyKey', 'widthMm', 'heightMm', 'context', 'protocolVersion'])
     expect(body).toMatchObject({ idempotencyKey: 'ordinary-scan-1', widthMm: 58, heightMm: 40,
       context: { orderId: 'order-a', scanId: 'ordinary-scan-1', barcode: PRODUCT, marketplace: 'wildberries', wbOrderId: 5001 } })
     expect(String(body.imageDataUrl)).toMatch(/^data:image\/png;base64,/)
@@ -716,7 +715,7 @@ describe('WMS-625 · обычная карточка WB: QR заказа чер�
     expect(document.body.textContent).not.toContain('WMS Print')
   })
 
-  it('новая программа: ответ потерян, страница перезагружена — повторный скан того же товара берёт тот же заказ и ту же этикетку, второй копии нет', async () => {
+  it('новая программа: ответ потерян, страница перезагружена — повторный скан того же товара берёт тот же заказ и то же задание, второго задания нет', async () => {
     printing!.program = 'modern'
     printing!.loseNextPost = true
     await openPackingTab()
@@ -733,8 +732,26 @@ describe('WMS-625 · обычная карточка WB: QR заказа чер�
     expect((productScans()[1].body as { idempotency_key: string }).idempotency_key)
       .toBe((productScans()[0].body as { idempotency_key: string }).idempotency_key)
     expect(printing!.selections.size).toBe(1)
+    // The repeated POST carries the same key: WMS Print returns the job it already holds.
+    expect(nativePosts()).toHaveLength(2)
+    expect(new Set(nativePosts().map((call) => (call.body as { idempotencyKey: string }).idempotencyKey))).toEqual(new Set(['ordinary-scan-1']))
+    expect(printing!.jobs.size).toBe(1)
+    expect(packs()).toHaveLength(1)
+  })
+
+  it('хранилище браузера недоступно — этикетка печатается и заказ упаковывается (ревью F2)', async () => {
+    printing!.program = 'modern'
+    for (const spy of storeSpies) spy.mockRestore()
+    storeSpies = [
+      vi.spyOn(qrAttemptStore, 'get').mockRejectedValue(new Error('IndexedDB unavailable')),
+      vi.spyOn(qrAttemptStore, 'put').mockRejectedValue(new Error('IndexedDB unavailable')),
+    ]
+    await openPackingTab()
+    scan(PRODUCT)
+    await settle(200)
     expect(nativePosts()).toHaveLength(1)
     expect(packs()).toHaveLength(1)
+    expect(document.body.textContent).not.toContain('Не удалось сохранить попытку')
   })
 
   it('WMS-643: галка QR снята — WMS Print не нужен и не вызывается', async () => {
