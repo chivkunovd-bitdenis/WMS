@@ -138,6 +138,7 @@ class Pipeline:
         self.owner_groups = OwnerGroup(self)
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
         self.mockups: Any = None
+        self.agent: Any = None  # model-led conversation; attached by runner when enabled
         self.stages: dict[str, Callable[[int], None]] = {
             "collecting": self.stage_collecting,
             "form_new": self.stage_form_new,
@@ -282,6 +283,15 @@ class Pipeline:
     def process_chat(self, chat_id: int) -> None:
         for m in [x for x in self.store.messages_with_status("new", 500) if x["chat_id"] == chat_id]:
             try:
+                if self.agent is not None and m["role"] in ("owner", "client", "partner"):
+                    # Keep the established owner-only chat binding reply protocol.
+                    if m["role"] == "owner":
+                        pid = self._is_bind_reply(m)
+                        if pid is not None:
+                            self._confirm_binding(m, pid)
+                            continue
+                    self.agent.handle_message(m)
+                    continue
                 if m["role"] == "owner":
                     self.handle_owner_message(m)
                 elif m["role"] == "partner":
@@ -296,6 +306,11 @@ class Pipeline:
             except GroupDeliveryPending:
                 continue  # намерение сохранено, другие темы этого чата могут обрабатываться
             except LlmError:
+                if self.agent is not None and m["role"] in ("owner", "client", "partner"):
+                    # Native turn/tool protocol errors are retryable. An action may already have
+                    # been durably queued, so dropping the source would lose the rest of the turn.
+                    self.store.set_message(m["id"], attempts=m["attempts"] + 1)
+                    return
                 if m["role"] == "partner" and self.owner_groups.registered(m["chat_id"]):
                     return  # не теряем исходное поручение при сбое модели/проверки решения
                 self.store.set_message(m["id"], status="attached" if m["ticket_id"] else "dropped")
@@ -633,6 +648,8 @@ class Pipeline:
         """Раз в цикл: запускает всё, что готово. Параллельность — через пул (R34)."""
         self.transcribe_pending()
         self.route_messages()
+        if self.agent is not None:
+            self.agent.tick()
         now = self.clock()
         for t in self.store.tickets_in(*self.stages):
             if self._ready(t, now):

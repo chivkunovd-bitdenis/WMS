@@ -1,0 +1,145 @@
+"""Coordination boundaries: actual source identity, durable schedules, and deadline wakeup."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+
+from support_agent.agent_coordinator import AgentCoordinator
+from support_agent.config import config_from_dict
+from support_agent.llm import LlmResult
+from support_agent.pipeline import InlinePool
+from support_agent.store import Store
+
+
+class StubTools:
+    def __init__(self) -> None:
+        self.calls = []
+        self.cards = []
+
+    def specs(self, scope):
+        return []
+
+    def dispatch(self, name, args, context):
+        self.calls.append((name, args, context))
+        return {"ok": True}
+
+    def ready_cards(self):
+        return self.cards
+
+
+class StubLlm:
+    def __init__(self) -> None:
+        self.calls = []
+        self.answer = "Проверенный ответ"
+
+    def agent_turn(self, prompt, **kwargs):
+        self.calls.append((prompt, kwargs))
+        return LlmResult(self.answer, "codex", kwargs["model"], "session")
+
+
+def coordinator(tmp_path: Path, *, now: list[float], store: Store | None = None):
+    cfg = config_from_dict({"repo": str(tmp_path / "repo"), "state_dir": str(tmp_path / "state"),
+                            "telegram": {"owner_user_id": 42, "owner_chat_id": 4242},
+                            "agent": {"enabled": True, "hourly_interval_sec": 3600}})
+    cfg_path = Path(cfg.repo)
+    cfg_path.mkdir(exist_ok=True)
+    db = store or Store(cfg.db_path)
+    llm = StubLlm()
+    tools = StubTools()
+    pipe = SimpleNamespace(cfg=cfg, store=db, llm=llm, clock=lambda: now[0],
+                           pool=InlinePool(), _owner_snapshot=lambda: [],
+                           _seller_for_chat=lambda *_: "client", mockups=None)
+    return AgentCoordinator(pipe, tools), db, llm, tools
+
+
+def message(store: Store, chat: int, author: str, text: str) -> int:
+    got = store.add_message(source="telegram", chat_id=chat, msg_id=f"{chat}-{author}-{text}",
+                            role="owner" if chat == 4242 else "client", author_id=author,
+                            author_name="person", ts=100, kind="text", text=text,
+                            file_id=None, reply_to=None)
+    assert got is not None
+    return got
+
+
+def test_owner_native_job_is_source_bound_and_client_cannot_request_it(tmp_path):
+    now = [100.0]
+    agent, store, llm, _ = coordinator(tmp_path, now=now)
+    owner_id = message(store, 4242, "42", "Сделай выгрузку")
+    client_id = message(store, -100, "99", "Сделай выгрузку")
+    owner_event = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    client_event = store.row("SELECT * FROM messages WHERE id=?", (client_id,))
+    assert owner_event and client_event
+    agent.handle_message(client_event)
+    assert "project_job" not in {t["name"] for t in llm.calls[-1][1]["tools"]}
+    client_context = agent._context(client_event, owner=False)
+    assert agent._owner_tool("project_job", {"request": "export"}, client_context) == {
+        "error": "owner_source_required"}
+    # Only the trusted dispatcher may call owner tools; a client turn never receives one.
+    agent.handle_message(owner_event)
+    assert "project_job" in {t["name"] for t in llm.calls[-1][1]["tools"]}
+    assert store.outbox_by_key(f"agent_answer:{owner_id}") is not None
+    assert store.row("SELECT status FROM messages WHERE id=?", (owner_id,))["status"] == "handled"
+
+
+def test_scheduled_owner_job_survives_restart_and_deadline_enters_finalization(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "К сроку выпусти проверенную часть")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    context = agent._context(source, owner=True)
+    queued = agent._owner_tool("schedule_project_job", {
+        "request": "Prepare chosen changes and release verified ready subset",
+        "run_at": "1970-01-01T00:03:20+00:00", "release_authorized": True,
+    }, context)
+    jid = queued["id"]
+    assert queued["status"] == "scheduled"
+    resumed, _, _, _ = coordinator(tmp_path, now=now, store=store)
+    submitted = []
+    resumed._submit_job = submitted.append
+    now[0] = 201.0
+    resumed.tick()
+    assert submitted == [jid]
+    assert store.kv_get(f"agent_job:{jid}")["status"] == "queued"
+    job = store.kv_get(f"agent_job:{jid}")
+    job.update(deadline_at=202.0, deadline_status="pending", status="running")
+    store.kv_set(f"agent_job:{jid}", job)
+    now[0] = 203.0
+    resumed.tick()
+    updated = store.kv_get(f"agent_job:{jid}")
+    assert updated["phase"] == "finalize"
+    assert updated["deadline_status"] == "finalizing"
+    assert updated["source_event_id"] == source_id
+
+
+def test_hourly_list_reads_live_board_and_deduplicates_slot(tmp_path):
+    now = [4000.0]
+    agent, store, _, tools = coordinator(tmp_path, now=now)
+    tools.cards = [{"id": "c1", "name": "WMS-700 Исправить выбор", "url": "https://trello.test/c1"}]
+    agent._hourly()
+    agent._hourly()
+    queued = store.rows("SELECT * FROM outbox WHERE purpose='agent_hourly'")
+    assert len(queued) == 1
+    assert "WMS-700" in queued[0]["text"]
+
+
+def test_arbitrary_job_uses_native_owner_mode_and_exact_source(tmp_path):
+    now = [100.0]
+    agent, store, llm, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "Сделай выгрузку таблицы")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    agent._submit_job = lambda _: None
+    created = agent._owner_tool("project_job", {"request": "Export the table to CSV"},
+                                agent._context(source, owner=True))
+    job_id = created["id"]
+    worktree = tmp_path / "repo" / ".worktrees" / f"support-job-{job_id}"
+    worktree.mkdir(parents=True)
+    agent._worktree = lambda _: worktree
+    agent._run_job(job_id)
+    assert store.kv_get(f"agent_job:{job_id}")["status"] == "done"
+    prompt, kwargs = llm.calls[-1]
+    assert kwargs["mode"] == "owner" and kwargs["owner_authorized"] is True
+    assert "Export the table" in prompt and "Сделай выгрузку" in prompt
+    assert kwargs["cwd"] == str(worktree)
