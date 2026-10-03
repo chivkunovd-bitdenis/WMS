@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "state": "bootstrap",
+  "files": {
+    "backend/tests/guards/README.md": "bcffa4f8582ca692bfa9fb58be078e20f3492fc5be3258973eca3afcb110534f",
+    "frontend/src/guards/README.md": "0296dbe18f64cf69e054d982cab3587a11912cfa162c0815254510ea40ae6e6f"
+  }
+}
