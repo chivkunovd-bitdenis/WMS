@@ -130,6 +130,8 @@ class FakeTrello:
         self.comments_by: dict[str, list[str]] = {}
         self.creates = 0
         self.moves: list[tuple[str, str]] = []
+        self.updates: list[tuple[str, str]] = []
+        self.lose_update_response_once = False
         self.lose_response_once = False
         self.reject = False
         self.hide_after_lose = False
@@ -157,6 +159,15 @@ class FakeTrello:
 
     def get_card(self, card_id: str) -> dict[str, Any]:
         return self.cards[card_id]
+
+    def update_description(self, card_id: str, desc: str) -> None:
+        if self.reject:
+            raise TrelloError("http_400", rejected=True)
+        self.updates.append((card_id, desc))
+        self.cards[card_id]["desc"] = desc
+        if self.lose_update_response_once:
+            self.lose_update_response_once = False
+            raise TrelloError("transport_ReadTimeout")
 
     def comments(self, card_id: str) -> list[str]:
         return self.comments_by.get(card_id, [])

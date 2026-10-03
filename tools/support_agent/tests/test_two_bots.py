@@ -109,17 +109,26 @@ def test_owner_registers_task_group_once_and_registration_survives_restart(tmp_p
     task = normalize_update(upd(506, group, 11, "Trello: создай задачу по отчёту WMS"),
                             restarted.cfg, "intake")
     assert task is not None and task.role == "partner"
-    restarted.llm.on("filter", "Сообщение из партнёрского чата",
-                     {"is_task_request": True, "task": "отчёт WMS"})
+    def group_decision(prompt: str, kw: Any) -> dict[str, Any]:
+        data = json.loads(prompt.split("<<<ДАННЫЕ\n", 1)[1].split("\nДАННЫЕ>>>", 1)[0])
+        mid = data["current_message"]["id"]
+        return {"scope": "wms", "intent": "request", "facts": [], "actions": [{
+            "kind": "create", "ticket_id": None, "title": "Отчёт WMS",
+            "description": "Создать отчёт WMS", "source_message_ids": [mid],
+        }]}
+
+    restarted.llm.on("routine", "Разбери новое сообщение общего чата", group_decision)
     restarted.pipe.ingest(task)
     restarted.pipe.route_messages()
     ticket = restarted.store.rows("SELECT * FROM tickets")[0]
-    assert ticket["kind"] == "partner_task" and ticket["stage"] == "task_draft"
+    assert ticket["kind"] == "partner_task" and ticket["stage"] == "done"
     go = normalize_update(upd(507, group, OWNER_ID, "кати"), restarted.cfg, "intake")
     assert go is not None and go.role == "partner"
+    restarted.llm.on("routine", "Разбери новое сообщение общего чата",
+                     {"scope": "wms", "intent": "blocked", "facts": [], "actions": []})
     restarted.pipe.ingest(go)
     restarted.pipe.route_messages()
-    assert restarted.store.ticket(ticket["id"])["stage"] == "task_draft"
+    assert restarted.store.ticket(ticket["id"])["stage"] == "done"
     restarted.llm.on("routine", "Владелец склада написал", {
         "scope": "wms", "reply": "Да, общий чат зарегистрирован.", "actions": [], "listed_ticket_ids": [],
     })

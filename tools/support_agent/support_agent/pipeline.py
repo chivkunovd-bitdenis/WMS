@@ -21,6 +21,7 @@ from typing import Any
 from . import prompts
 from .config import ChatCfg, Config
 from .llm import LlmError, LlmRouter, LlmUnavailable, extract_json
+from .owner_group import GroupDeliveryPending, OwnerGroup
 from .prod_sql import SELLER_RE
 from .redact import scrub
 from .seller_directory import DirectoryError, SellerDirectory
@@ -134,6 +135,7 @@ class Pipeline:
         self.directory: SellerDirectory | None = None  # поиск селлеров через шлюз; подключает runner
         self.dynamic_chats: set[int] = set()  # чаты, добавленные привязкой, а не конфигом
         self.register_bound_chats()
+        self.owner_groups = OwnerGroup(self)
         self.hotfix: Any = None  # HotfixRunner, подключается в runner (избегаем цикла импортов)
         self.mockups: Any = None
         self.stages: dict[str, Callable[[int], None]] = {
@@ -291,7 +293,11 @@ class Pipeline:
             except LlmUnavailable as exc:
                 self._llm_down(str(exc))
                 return  # сообщение остаётся 'new': обработается, когда модель вернётся
+            except GroupDeliveryPending:
+                continue  # намерение сохранено, другие темы этого чата могут обрабатываться
             except LlmError:
+                if m["role"] == "partner" and self.owner_groups.registered(m["chat_id"]):
+                    return  # не теряем исходное поручение при сбое модели/проверки решения
                 self.store.set_message(m["id"], status="attached" if m["ticket_id"] else "dropped")
             except Exception as exc:
                 log.exception("message %s failed", m["id"])
@@ -354,8 +360,9 @@ class Pipeline:
                 self.store.queue_message(
                     key=f"owner_task_chat:{chat_id}", chat_id=chat_id,
                     text=("Этот чат зарегистрирован как общий чат задач владельцев WMS. "
-                          "Чтобы поставить задачу, напишите просьбу со словом Trello; "
-                          "я подготовлю описание и попрошу автора подтвердить. "
+                          "Учитываю беседу и голосовые сообщения. Ясные поручения и договорённости "
+                          "сам превращаю в задачи, а уточнения добавляю к существующим карточкам. "
+                          "Ссылку на результат пришлю сюда. "
                           "Команды на выкладку принимаю только в личном чате владельца."),
                     reply_to=str(m["msg_id"]), purpose="group_registration", repeat_ok=False,
                 )
@@ -1272,7 +1279,8 @@ class Pipeline:
             card = self.store.card(card_key)
             form = d.get("form") or {}
             messages = self.store.ticket_messages(t["id"])
-            subject = str(d.get("title") or form.get("description") or form.get("problem") or "")
+            subject = str(d.get("group_title") or d.get("title") or form.get("description")
+                          or form.get("problem") or "")
             if not subject and messages:
                 subject = " / ".join(str(m["text"]) for m in messages[-5:])
             result.append({
@@ -1286,7 +1294,8 @@ class Pipeline:
                 "summary": str((d.get("report") or {}).get("body") or ""),
                 "request_details": {key: analysis.get(key) for key in
                                     ("problem_steps", "proposed_solution", "improvement_card")},
-                "approved_description": str(d.get("approved_description") or ""),
+                "approved_description": str(d.get("group_description")
+                                            or d.get("approved_description") or ""),
                 "card_status": str(card["status"]) if card else "not_confirmed",
                 "card_url": str(card["url"] or "") if card and card["status"] == "linked" else "",
                 "verified_deploy_sha": str((d.get("hotfix") or {}).get("verified_sha") or ""),
@@ -1655,7 +1664,10 @@ class Pipeline:
     def handle_partner_message(self, m: Any) -> None:
         """Сообщение считается обработанным только ПОСЛЕ сохранения результата (F8): при недоступной
         модели оно остаётся 'new' и обрабатывается после возврата, без второй задачи."""
-        self._partner(m)
+        if self.owner_groups.registered(m["chat_id"]):
+            self.owner_groups.handle(m)
+        else:
+            self._partner(m)
         self.store.set_message(m["id"], status="handled")
 
     def _partner(self, m: Any) -> None:

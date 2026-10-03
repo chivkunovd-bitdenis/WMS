@@ -88,7 +88,8 @@ class TrelloClient:
 
     def get_card(self, card_id: str) -> dict[str, Any]:
         card = self._request("GET", f"cards/{card_id}", params={"fields": "id,idList,desc,shortUrl"})
-        assert isinstance(card, dict)
+        if not isinstance(card, dict) or not card.get("id"):
+            raise TrelloError("invalid_card")
         return card
 
     def comments(self, card_id: str) -> list[str]:
@@ -102,6 +103,43 @@ class TrelloClient:
 
     def move_card(self, card_id: str, list_id: str) -> None:
         self._request("PUT", f"cards/{card_id}", data={"idList": list_id})
+
+    def update_description(self, card_id: str, desc: str) -> None:
+        self._request("PUT", f"cards/{card_id}", data={"desc": self.redact(desc)})
+
+
+def ensure_card_update(store: Store, trello: TrelloClient, *, key: str, operation: str,
+                       addition: str) -> CardResult:
+    """Добавляет уточнение к существующей карточке, сохраняя чужой текст и проверяя неизвестный исход."""
+    row = store.card(key)
+    if row is None or row["status"] != "linked":
+        return CardResult("unknown")
+    marker, update_marker = agent_marker(key), f"WMS-AGENT-UPDATE: {operation}"
+    state_key = f"trello_update:{operation}"
+    state = store.kv_get(state_key)
+    try:
+        card = trello.get_card(row["card_id"])
+    except TrelloError:
+        return CardResult("unknown")
+    text = str(card.get("desc") or "")
+    if card.get("id") != row["card_id"] or marker not in text.splitlines():
+        return CardResult("rejected")
+    if update_marker in text.splitlines():
+        store.kv_set(state_key, {"status": "confirmed"})
+        return CardResult("linked", row["card_id"], card.get("shortUrl") or row["url"])
+    if state and state.get("status") in ("sending", "unknown", "confirmed"):
+        return CardResult("unknown")  # исход пока не выяснен: повторного внешнего действия нет
+    desc = text + f"\n\n{addition}\n{update_marker}"
+    if len(desc) > 16000:
+        return CardResult("rejected")  # не обрезаем прежнее описание или новое уточнение
+    store.kv_set(state_key, {"status": "sending"})
+    try:
+        trello.update_description(row["card_id"], desc)
+    except TrelloError as exc:
+        store.kv_set(state_key, {"status": "rejected" if exc.rejected else "unknown"})
+        return CardResult("rejected" if exc.rejected else "unknown")
+    # Проверка фактического результата нужна и после успешного HTTP-ответа.
+    return ensure_card_update(store, trello, key=key, operation=operation, addition=addition)
 
 
 @dataclass
