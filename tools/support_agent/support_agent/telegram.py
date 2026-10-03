@@ -207,10 +207,10 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     text_only = message.get("text") or message.get("caption") or ""
     if (
         is_owner and chat_id < 0 and chat_id != owner_chat and (bot != "owner" or single)
-        and (known is None or known.role == "client") and parse_bind_command(text_only) is not None
+        and (known is None or known.role == "client") and MENTION_RE.search(text_only) is not None
     ):
-        # Привязка чата (R39): принимает только бот приёма и только от владельца; это не клиентское
-        # сообщение. Из любого группового чата, где есть бот, даже если чата нет в конфиге.
+        # Возможная привязка чата (R39/R51): принимает только бот приёма и только от владельца.
+        # Свободную формулировку после @упоминания разбирает модель; поиск и подтверждение делает код.
         reply = message.get("reply_to_message") or {}
         return Inbound(
             source="telegram", chat_id=chat_id, msg_id=str(message["message_id"]), role="bind",

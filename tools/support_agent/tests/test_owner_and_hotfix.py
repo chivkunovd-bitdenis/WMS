@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -38,7 +39,19 @@ def await_owner_ticket(env: Any, *, verdict: str = "hotfix", chat: int = CLIENT_
 
 
 def owner_says(env: Any, text: str, parsed: dict[str, Any], reply_to: str | None = None) -> None:
-    env.llm.on("filter", "Владелец склада ответил", parsed)
+    intent = str(parsed.get("intent", "other"))
+    ids = list(parsed.get("ticket_ids") or [])
+    if parsed.get("all"):
+        ids = [int(t["id"]) for t in env.store.open_tickets()]
+    actions = ([{"kind": intent, "ticket_ids": ids, "note": text}]
+               if intent in ("go", "reject", "postpone", "mockup_yes", "mockup_no") else [])
+    reply = "Не понял, уточните одной строкой." if intent == "unclear" or (actions and not ids and not reply_to
+                                                                           and len(env.store.open_tickets()) > 1) \
+        else "Понял."
+    if "Не понял" in reply:
+        actions = []
+    env.llm.on("routine", "Владелец склада написал", {"reply": reply, "actions": actions,
+                                                        "listed_ticket_ids": []})
     env.say(OWNER_CHAT, text, user=OWNER_ID, name="Владелец", reply_to=reply_to)
 
 
@@ -103,7 +116,9 @@ def test_owner_voice_command_goes_through_transcription(env: Any) -> None:
     tid = await_owner_ticket(env)
     env.tg.files["f1"] = b"voice"
     env.tr.text = "кати"
-    env.llm.on("filter", "Владелец склада ответил", {"intent": "go", "ticket_ids": [], "all": False})
+    env.llm.on("routine", "Владелец склада написал",
+               {"reply": "Понял.", "actions": [{"kind": "go", "ticket_ids": [], "note": "кати"}],
+                "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "", user=OWNER_ID, voice=True)
     env.pipe.tick()
     assert env.store.ticket(tid)["stage"] == "hotfix"
@@ -279,6 +294,168 @@ def test_light_hotfix_happy_path_end_to_end(env: Any, tmp_path: Path) -> None:
     assert hf.http.urls == ["https://wms.test/", "https://wms.test/seller/", "https://wms.test/api/health"]
 
 
+def test_owner_hold_before_start_pauses_without_trello_or_worktree(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    env.pipe._request_hotfix_hold(tid, "проверь склад возвратов")
+    env.pipe.hotfix.step(tid)
+    data = env.store.data(tid)
+    assert env.store.ticket(tid)["stage"] == "analysis"
+    assert data["hotfix"]["hotfix_paused"] is True and data["hotfix"]["resume_step"] == "start"
+    assert "склад возвратов" in data["resume_note"]
+    assert hf.shell.calls == [] and env.trello.creates == 0
+    notice = env.store.rows("SELECT text FROM outbox WHERE key LIKE 'hotfix_hold:%'")[-1]["text"]
+    assert "подготовку исправления ещё не начинаю" in notice
+    assert all(word not in notice for word in ("worktree", "pull request", "branch", "step"))
+
+
+def test_go_after_analyst_resumes_saved_step_without_restarting(env: Any, tmp_path: Path) -> None:
+    hotfix_env(env, tmp_path)
+    tid = await_owner_ticket(env)
+    saved = {"step": "checks", "hotfix_paused": True, "resume_step": "checks",
+             "number": 651, "branch": "hotfix/wms-651-support", "path": "/saved/worktree", "pr": 7}
+    env.store.set_stage(tid, "await_owner", hotfix=saved, verdict="hotfix", hotfix_ok=True,
+                        resume_note=None)
+    owner_says(env, f"Кати обращение {tid}", {"intent": "go", "ticket_ids": [tid], "all": False})
+    h = env.store.data(tid)["hotfix"]
+    assert env.store.ticket(tid)["stage"] == "hotfix" and h["step"] == "checks"
+    assert h["branch"] == saved["branch"] and h["path"] == saved["path"] and h["pr"] == 7
+    assert h["hotfix_paused"] is False and "resume_step" not in h
+    notice = env.store.rows("SELECT text FROM outbox WHERE key LIKE 'resume:%'")[-1]["text"]
+    assert "продолжаю подготовленное исправление" in notice
+    assert all(word not in notice for word in ("checks", "worktree", "pull request", "step"))
+
+
+def test_hold_arriving_during_merge_preserves_merge_outcome_and_pauses_before_deploy(
+    env: Any, tmp_path: Path,
+) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    h = {"step": "merge", "number": 651, "branch": "hotfix/wms-651-support",
+         "path": str(Path(env.cfg.repo) / "wt"), "pr": 7, "pr_url": "https://gh.test/pr/7"}
+    env.store.set_stage(tid, "hotfix", hotfix=h)
+
+    def merge_with_owner_note(_argv: list[str]) -> ExecResult:
+        hf.state["merged"] = True
+        with env.store.transaction():
+            env.pipe._request_hotfix_hold(tid, "перед выкладкой проверь печать")
+        return ok()
+
+    hf.shell.on("gh pr merge", merge_with_owner_note)
+    env.pipe.hotfix.step(tid)
+    after_merge = env.store.data(tid)["hotfix"]
+    assert after_merge["merged"] is True and after_merge["merge_intent"] is True
+    assert after_merge["hold_requested"] is True and after_merge["step"] == "deploy"
+    env.pipe.hotfix.step(tid)
+    paused = env.store.data(tid)["hotfix"]
+    assert env.store.ticket(tid)["stage"] == "analysis" and paused["resume_step"] == "deploy"
+    assert hf.shell.ran("gh pr merge") == 1 and hf.shell.ran("gh workflow run") == 0
+
+
+def test_merge_intent_after_restart_is_observed_and_never_dispatched_twice(env: Any, tmp_path: Path) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    env.store.set_stage(tid, "hotfix", hotfix={
+        "step": "merge", "number": 651, "branch": "hotfix/wms-651-support",
+        "path": str(Path(env.cfg.repo) / "wt"), "pr": 7, "merge_intent": True,
+        "merge_ts": env.clock.now,
+    })
+    env.pipe.hotfix.step(tid)
+    assert env.store.ticket(tid)["stage"] == "hotfix" and hf.shell.ran("gh pr merge") == 0
+    env.clock.advance(180)
+    env.pipe.hotfix.step(tid)
+    assert env.store.ticket(tid)["stage"] == "failed" and hf.shell.ran("gh pr merge") == 0
+    assert "повторно команду не запускаю" in env.store.data(tid)["hotfix"]["failure"]
+
+
+def test_hold_after_deploy_intent_finishes_outcome_then_pauses_before_client_report(
+    env: Any, tmp_path: Path,
+) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-hold", deploy_ts=env.clock.now)
+    hf.state["attempt"] = "wms641-hold"
+    hf.state["deployed"] = "b" * 40
+    env.pipe._request_hotfix_hold(tid, "проверь склад возвратов")
+    env.pipe.hotfix.step(tid)  # выясняет успешный workflow
+    env.pipe.hotfix.step(tid)  # проверяет SHA и health
+    env.pipe.hotfix.step(tid)  # граница перед отчётом/сообщением клиенту
+    data = env.store.data(tid)
+    assert env.store.ticket(tid)["stage"] == "analysis" and data["hotfix"]["resume_step"] == "report"
+    assert hf.shell.ran("gh workflow run") == 0
+    assert env.store.outbox_by_key(f"t{tid}:tryit") is None
+
+    env.store.set_stage(tid, "await_owner", verdict="hotfix", hotfix_ok=True, resume_note=None)
+    owner_says(env, f"Кати обращение {tid}", {"intent": "go", "ticket_ids": [tid], "all": False})
+    assert env.store.data(tid)["hotfix"]["step"] == "report"
+    env.pipe.hotfix.step(tid)
+    assert env.store.ticket(tid)["stage"] == "done"
+    assert hf.shell.ran("gh workflow run") == 0 and env.store.outbox_by_key(f"t{tid}:tryit") is not None
+
+
+def test_hold_arriving_during_report_llm_blocks_owner_and_client_report(env: Any, tmp_path: Path) -> None:
+    hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    env.store.set_stage(tid, "hotfix", hotfix={
+        "step": "report", "number": 651, "branch": "hotfix/wms-651-support",
+        "path": str(Path(env.cfg.repo) / "wt"), "pr": 7, "merged": True,
+        "merge_sha": "b" * 40, "deploy_intent": True, "verified_sha": "b" * 40,
+    })
+
+    def report_with_owner_note(_prompt: str, _kw: dict[str, Any]) -> str:
+        with env.store.transaction():
+            env.pipe._request_hotfix_hold(tid, "перед сообщением клиенту проверь возвраты")
+        return "Исправление выложено и проверено."
+
+    env.llm.on("routine", "короткий отчёт", report_with_owner_note)
+    env.pipe.hotfix.step(tid)
+    data = env.store.data(tid)
+    assert env.store.ticket(tid)["stage"] == "analysis" and data["hotfix"]["resume_step"] == "report"
+    assert env.store.outbox_by_key(f"hotfix_report:{tid}") is None
+    assert env.store.outbox_by_key(f"t{tid}:tryit") is None
+
+
+def test_atomic_hotfix_save_cannot_drop_concurrent_owner_hold(env: Any, tmp_path: Path) -> None:
+    hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    h = env.store.data(tid)["hotfix"]
+    read = threading.Event()
+    attempted = threading.Event()
+    release = threading.Event()
+    original_data = env.store.data
+
+    def delayed_data(ticket_id: int) -> dict[str, Any]:
+        value = original_data(ticket_id)
+        if ticket_id == tid and threading.current_thread().name == "hotfix-saver" and not read.is_set():
+            read.set()
+            assert attempted.wait(1)
+            assert release.wait(1)
+        return value
+
+    env.store.data = delayed_data  # type: ignore[method-assign]
+
+    saver = threading.Thread(target=lambda: env.pipe.hotfix.save(tid, h, step="checks"),
+                             name="hotfix-saver")
+
+    def request_hold() -> None:
+        attempted.set()
+        with env.store.transaction():
+            env.pipe._request_hotfix_hold(tid, "проверь печать")
+
+    owner_thread = threading.Thread(target=request_hold, name="owner-hold")
+    saver.start()
+    assert read.wait(1)
+    owner_thread.start()
+    assert attempted.wait(1)
+    release.set()
+    saver.join(2)
+    owner_thread.join(2)
+    env.store.data = original_data  # type: ignore[method-assign]
+    data = env.store.data(tid)
+    assert data["hotfix"]["step"] == "checks" and data["hotfix"]["hold_requested"] is True
+    assert "проверь печать" in data["resume_note"]
+
+
 def test_second_hotfix_gets_next_number(env: Any, tmp_path: Path) -> None:
     hotfix_env(env, tmp_path)
     a, b = start_hotfix(env), start_hotfix(env)
@@ -407,11 +584,17 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path) -> None:
         return {"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}
 
     env.llm.on("mockup", "Opus, дизайнер", mock)
-    env.llm.on("filter", "Владелец склада ответил", {"intent": "mockup_no", "ticket_ids": [], "all": False})
+    env.llm.on("routine", "Владелец склада написал",
+               {"reply": "Макет не делаю.",
+                "actions": [{"kind": "mockup_no", "ticket_ids": [], "note": "нет"}],
+                "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "нет", user=OWNER_ID)
     assert env.store.ticket(tid)["stage"] == "done" and not any(c["role"] == "mockup" for c in env.llm.calls)
     env.store.set_stage(tid, "await_mockup")
-    env.llm.on("filter", "Владелец склада ответил", {"intent": "mockup_yes", "ticket_ids": [], "all": False})
+    env.llm.on("routine", "Владелец склада написал",
+               {"reply": "Делаю макет.",
+                "actions": [{"kind": "mockup_yes", "ticket_ids": [], "note": "да"}],
+                "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "да, нарисуй", user=OWNER_ID)
     assert env.store.ticket(tid)["stage"] == "mockup"
     Path(env.cfg.repo, ".worktrees", f"mockup-{tid}").mkdir(parents=True, exist_ok=True)
@@ -597,6 +780,26 @@ def test_unconfirmed_dispatch_after_restart_stops_instead_of_retrying(env: Any, 
     env.pipe.process_ticket(tid)
     assert env.store.ticket(tid)["stage"] == "failed" and hf.shell.ran("gh workflow run") == 0
     assert "не подтверждён" in env.store.data(tid)["hotfix"]["failure"]
+
+
+def test_failed_dispatched_deploy_with_pending_hold_goes_to_analyst_without_retry(
+    env: Any, tmp_path: Path,
+) -> None:
+    hf = hotfix_env(env, tmp_path)
+    tid = start_hotfix(env)
+    merged_state(env, hf, tid, deploy_intent=True, attempt_id="wms641-hold-fail",
+                 deploy_ts=env.clock.now)
+    env.pipe._request_hotfix_hold(tid, "проверь печать до дальнейших действий")
+    env.pipe.hotfix.step(tid)
+    env.clock.advance(300)
+    env.pipe.hotfix.step(tid)
+    data = env.store.data(tid)
+    assert env.store.ticket(tid)["stage"] == "analysis"
+    assert data["hotfix"]["resume_blocked"] is True and data["hotfix"]["resume_step"] == "failed"
+    assert "проверь печать" in data["resume_note"] and hf.shell.ran("gh workflow run") == 0
+    notice = env.store.outbox_by_key(f"hotfix_fail:{tid}")["text"]
+    assert "Сохранённое поручение передаю аналитику" in notice
+    assert all(word not in notice for word in ("pull request", "branch", "worktree", "step"))
 
 
 def test_neighbour_run_without_our_attempt_id_is_never_adopted(env: Any, tmp_path: Path) -> None:

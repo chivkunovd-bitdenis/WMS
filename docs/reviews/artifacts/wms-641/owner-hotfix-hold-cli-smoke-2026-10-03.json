@@ -1,0 +1,78 @@
+{
+  "scope": "isolated SQLite; real owner CLI; runner phase boundary; analysis completion stubbed; fake Telegram; privileged command runner refuses any I/O",
+  "records": [
+    {
+      "input": "Подожди, перед выкаткой по обращению №1 проверь, не затрагивает ли это печать этикеток.",
+      "replies": [
+        "По обращению №1 поручение сохранил. Текущий шаг «checks» не сбрасываю; на ближайшей безопасной границе до слияния и выкладки передам аналитику."
+      ],
+      "stage": "hotfix",
+      "hotfix": {
+        "step": "checks",
+        "branch": "codex/example-existing-fix",
+        "path": "/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms641-real-owner-hold-aqj9ag29/candidate",
+        "number": 900,
+        "pr": 321,
+        "marker": "preserve-existing-state",
+        "hold_requested": true,
+        "hold_requested_at": 1700000000.0,
+        "hold_seq": 1
+      },
+      "resume_note": "Владелец поручил дополнительно проверить. Оригинал: <<<ДАННЫЕ\nПодожди, перед выкаткой по обращению №1 проверь, не затрагивает ли это печать этикеток.\nДАННЫЕ>>>\nИнтерпретация собеседника: <<<ДАННЫЕ\nПеред выкаткой хотфикса проверить: не затрагивает ли изменение логику или функциональность печати этикеток.\nДАННЫЕ>>>"
+    },
+    {
+      "input": "Дополнительную проверку приняли. Кати обращение №1.",
+      "replies": [
+        "По обращению №1 достиг безопасной границы: остановился перед следующим шагом «checks», до слияния и выкладки. Состояние ветки, рабочей копии и pull request сохранено; поручение передал аналитику.",
+        "Принято, катим №1 («Печать этикеток»).",
+        "Принято: по обращению №1 продолжаю сохранённый хотфикс с шага «checks». Уже выполненные шаги не повторяю."
+      ],
+      "stage": "hotfix",
+      "hotfix": {
+        "step": "checks",
+        "branch": "codex/example-existing-fix",
+        "path": "/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms641-real-owner-hold-aqj9ag29/candidate",
+        "number": 900,
+        "pr": 321,
+        "marker": "preserve-existing-state",
+        "hold_requested": false,
+        "hold_requested_at": 1700000000.0,
+        "hold_seq": 1,
+        "hotfix_paused": false
+      },
+      "resume_note": null
+    }
+  ],
+  "passed": true,
+  "boundary": {
+    "stage": "analysis",
+    "hotfix": {
+      "step": "checks",
+      "branch": "codex/example-existing-fix",
+      "path": "/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms641-real-owner-hold-aqj9ag29/candidate",
+      "number": 900,
+      "pr": 321,
+      "marker": "preserve-existing-state",
+      "hold_requested": false,
+      "hold_requested_at": 1700000000.0,
+      "hold_seq": 1,
+      "hotfix_paused": true,
+      "resume_step": "checks"
+    }
+  },
+  "llm_calls": [
+    {
+      "cli": "claude",
+      "model": "sonnet",
+      "role": "routine",
+      "ok": 1
+    },
+    {
+      "cli": "claude",
+      "model": "sonnet",
+      "role": "routine",
+      "ok": 1
+    }
+  ],
+  "measurement_note": "Observed before the final owner-facing wording change. The phase/state behavior is unchanged; recorded replies are preserved verbatim."
+}

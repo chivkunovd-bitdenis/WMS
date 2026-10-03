@@ -451,7 +451,14 @@ def test_file_changed_after_preview_is_not_sent(env: Any) -> None:
 
 
 def script_owner(env: Any, parsed: dict[str, Any]) -> None:
-    env.llm.on("filter", "Владелец склада ответил", parsed)
+    intent = str(parsed.get("intent", "other"))
+    ids = list(parsed.get("ticket_ids") or [])
+    if parsed.get("all"):
+        ids = [int(t["id"]) for t in env.store.open_tickets()]
+    actions = ([{"kind": intent, "ticket_ids": ids, "note": "поручение владельца"}]
+               if intent in ("go", "reject", "postpone", "mockup_yes", "mockup_no") else [])
+    env.llm.on("routine", "Владелец склада написал",
+               {"reply": "Понял.", "actions": actions, "listed_ticket_ids": []})
 
 
 def test_other_and_low_confidence_go_to_owner_without_card_or_hotfix(env: Any) -> None:

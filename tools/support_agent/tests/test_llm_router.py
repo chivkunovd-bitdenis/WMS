@@ -85,6 +85,19 @@ def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_
     assert llm.ask("analyst", "back", mode="readonly").cli == "claude"
 
 
+def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_restart(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    first = llm.ask("routine", "первый ход", session_key="owner_conversation")
+    assert first.session_id and store.rows("SELECT * FROM tickets") == []
+    saved = store.kv_get("llm_sessions:owner_conversation")
+    assert saved == {"claude": first.session_id}
+    restarted = LlmRouter(llm.cfg, store, exec_fn=script)
+    restarted.ask("routine", "второй ход", session_key="owner_conversation")
+    assert "--resume" in script.calls[-1]
+    assert script.calls[-1][script.calls[-1].index("--resume") + 1] == first.session_id
+
+
 def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)

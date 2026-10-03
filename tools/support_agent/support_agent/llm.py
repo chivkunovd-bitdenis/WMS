@@ -474,19 +474,27 @@ class LlmRouter:
                 self.store.log_llm(cli=cli, model=model, effort=self.effort_for(cli, role),
                                    role=role, ticket_id=ticket_id, ok=True)
                 self.store.kv_set("llm_unavailable_notified", False)
-                if session_key and ticket_id is not None and result.session_id:
+                if session_key and result.session_id:
                     self._save_session(ticket_id, session_key, cli, result.session_id)
                 return result
         raise LlmUnavailable(last_error or "no_cli_available")
 
     def _sessions(self, ticket_id: int | None, key: str | None) -> dict[str, str]:
-        if ticket_id is None or not key:
+        if not key:
             return {}
+        if ticket_id is None:
+            value = self.store.kv_get(f"llm_sessions:{key}", {})
+            return dict(value) if isinstance(value, dict) else {}
         sessions = self.store.data(ticket_id).get("sessions", {})
         value = sessions.get(key, {})
         return dict(value) if isinstance(value, dict) else {}
 
-    def _save_session(self, ticket_id: int, key: str, cli: str, session_id: str) -> None:
+    def _save_session(self, ticket_id: int | None, key: str, cli: str, session_id: str) -> None:
+        if ticket_id is None:
+            sessions = self._sessions(None, key)
+            sessions[cli] = session_id
+            self.store.kv_set(f"llm_sessions:{key}", sessions)
+            return
         sessions = self.store.data(ticket_id).get("sessions", {})
         sessions.setdefault(key, {})[cli] = session_id
         self.store.patch_data(ticket_id, sessions=sessions)

@@ -93,7 +93,8 @@ def test_each_bot_has_own_offset_that_survives_restart_and_duplicates_are_ignore
     script(e)
     e.intake.updates = [upd(10, CLIENT_CHAT, 5, "не работает передача")]
     e.owner.updates = [upd(50, OWNER_CHAT, OWNER_ID, "ничего")]
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.agent.poll_telegram(1)
     assert e.store.kv_get("tg_offset:intake") == 11 and e.store.kv_get("tg_offset:owner") == 51
     e.agent.poll_telegram(1)  # те же обновления Telegram отдаёт снова: повторов нет
@@ -172,7 +173,8 @@ def test_voice_is_downloaded_by_the_bot_that_received_it(tmp_path: Path) -> None
 
     e.pipe.transcriber = Rec()  # type: ignore[assignment]
     e.llm.on("filter", "Новое сообщение из клиентского чата", {"relevant": False, "ticket_id": None})
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.pipe.ingest(Inbound("telegram", CLIENT_CHAT, "1", "client", "5", "А", 1.0, "voice", "", file_id="fi"))
     e.pipe.ingest(Inbound("telegram", OWNER_CHAT, "2", "owner", str(OWNER_ID), "В", 1.0, "voice", "", file_id="fo"))
     e.pipe.tick()
@@ -185,7 +187,8 @@ def test_catchup_notice_waits_until_both_bots_are_drained(tmp_path: Path) -> Non
     e.agent.startup()
     e.intake.updates = []
     e.owner.updates = [upd(5, OWNER_CHAT, OWNER_ID, "x")]
-    e.llm.on("filter", "Владелец склада ответил", {"intent": "other", "ticket_ids": [], "all": False})
+    e.llm.on("routine", "Владелец склада написал",
+             {"reply": "Понял.", "actions": [], "listed_ticket_ids": []})
     e.agent.poll_bot("intake", 1)  # приёма уже пуст, у владельца ещё есть
     flush_outbox(e.store, Bots(e.intake, e.owner, OWNER_CHAT), e.cfg)
     assert e.owner.to(OWNER_CHAT) == []

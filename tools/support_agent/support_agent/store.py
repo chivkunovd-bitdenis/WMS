@@ -6,7 +6,8 @@ import json
 import sqlite3
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +88,19 @@ class Store:
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
         with self.lock:
             return self.db.execute(sql, params)
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Короткая атомарная пачка локальных изменений; допускает вызовы методов Store внутри."""
+        with self.lock:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
+            else:
+                self.db.execute("COMMIT")
 
     def rows(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self.lock:
@@ -188,6 +202,12 @@ class Store:
     def tickets_in(self, *stages: str) -> list[sqlite3.Row]:
         marks = ",".join("?" for _ in stages)
         return self.rows(f"SELECT * FROM tickets WHERE stage IN ({marks}) ORDER BY id", stages)
+
+    def open_tickets(self) -> list[sqlite3.Row]:
+        """Все незакрытые обращения для актуального контекста беседы владельца."""
+        closed = ("done", "closed", "rejected", "failed")
+        marks = ",".join("?" for _ in closed)
+        return self.rows(f"SELECT * FROM tickets WHERE stage NOT IN ({marks}) ORDER BY id", closed)
 
     def open_chat_tickets(self, chat_id: int) -> list[sqlite3.Row]:
         closed = ("done", "closed", "rejected", "failed")
@@ -340,6 +360,9 @@ class Store:
     def open_proposals(self, requested_by: str, since: float) -> list[sqlite3.Row]:
         return self.rows("SELECT * FROM binding_proposals WHERE status='open' AND requested_by=? "
                          "AND created_at>=? ORDER BY id", (requested_by, since))
+
+    def all_open_proposals(self) -> list[sqlite3.Row]:
+        return self.rows("SELECT * FROM binding_proposals WHERE status='open' ORDER BY id")
 
     def close_proposal(self, proposal_id: int, status: str) -> None:
         self.execute("UPDATE binding_proposals SET status=? WHERE id=?", (status, proposal_id))

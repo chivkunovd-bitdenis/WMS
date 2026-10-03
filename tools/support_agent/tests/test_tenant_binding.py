@@ -113,7 +113,7 @@ def test_owner_binds_a_chat_to_a_tenant_and_the_chat_becomes_served(tb: Any) -> 
     text = tb.owner.to(OWNER_CHAT)[-1]
     assert f"фулфилмент «Империя ФФ» (3 селлера), чат «{NEW_TITLE}» — привязать?" not in text  # несколько вариантов
     assert "1. фулфилмент «Империя ФФ» (3 селлера)" in text and "2. фулфилмент «Империя Север» (1 селлер)" in text
-    assert tb.llm.calls == [] and tb.fd.tenant_finds == ["Империя Львов"]
+    assert [c["role"] for c in tb.llm.calls] == ["routine"] and tb.fd.tenant_finds == ["Империя Львов"]
     owner_replies(tb, "1", proposal_msg_id(tb))
     row = tb.store.binding(NEW_CHAT)
     assert row["level"] == "tenant" and row["tenant_id"] == TENANT and row["seller_id"] == ""
@@ -348,7 +348,7 @@ def test_plain_number_without_reply_confirms_the_only_open_proposal(tb: Any) -> 
     step(tb)
     row = tb.store.binding(NEW_CHAT)
     assert row is not None and row["level"] == "tenant" and row["tenant_id"] == TENANT
-    assert tb.llm.calls == []  # выбор разобрал код, модель не вызывалась
+    assert [c["role"] for c in tb.llm.calls] == ["routine"]  # выбор не вызвал модель второй раз
     assert_intake_bot_said_nothing(tb)
 
 
