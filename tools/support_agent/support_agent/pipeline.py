@@ -1266,6 +1266,10 @@ class Pipeline:
                 subject = " / ".join(str(m["text"]) for m in messages[-5:])
             result.append({
                 "id": int(t["id"]), "client": self._client_label(t),
+                "source_chat_id": t["chat_id"] if t["kind"] in ("chat", "partner_task") else None,
+                "source_chat_name": str(self.store.kv_get(f"chat_title:{t['chat_id']}", "") or "")
+                if t["kind"] in ("chat", "partner_task") else "",
+                "source_chat_role": {"chat": "client", "partner_task": "partner"}.get(t["kind"], ""),
                 "subject_untrusted": subject[:1000],
                 "stage": str(t["stage"]), "verdict": str(d.get("verdict") or ""),
                 "summary": str((d.get("report") or {}).get("body") or ""),
@@ -1286,6 +1290,7 @@ class Pipeline:
         for chat, title in self.store.kv_get("owner_task_chats", {}).items():
             confirmation = self.store.outbox_by_key(f"owner_task_chat:{chat}")
             result.append({"chat_id": int(chat), "name": str(title), "role": "partner",
+                           "purpose": "Общий чат для всех задач владельцев WMS; не чат отдельного клиента.",
                            "confirmation_status": str(confirmation["status"]) if confirmation else "absent"})
         return result
 

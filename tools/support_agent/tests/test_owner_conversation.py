@@ -82,6 +82,29 @@ def test_completed_trello_result_is_visible_but_cannot_be_executed(env: Any) -> 
     assert "Ничего не запускаю" in env.tg.to(OWNER_CHAT)[-1]
 
 
+def test_group_status_context_distinguishes_task_group_from_client_ticket(env: Any) -> None:
+    tid = await_owner_ticket(env)
+    client_chat, task_chat = -4899527415, -1004441620578
+    env.store.set_ticket(tid, chat_id=client_chat, seller="Империя ФФ")
+    env.store.kv_set(f"chat_title:{client_chat}", "Короб ВМС — ФФ Империя")
+    env.store.kv_set("owner_task_chats", {str(task_chat): "ВМС- Короб💵"})
+    answer(env, "Зарегистрирован общий чат задач владельцев WMS.", [])
+    owner(env, "Ты привязал общий чат владельцев? Что там можно делать?", msg_id="group-status")
+    snapshot = env.pipe._owner_snapshot()[0]
+    assert snapshot["source_chat_id"] == client_chat
+    assert snapshot["source_chat_name"] == "Короб ВМС — ФФ Империя"
+    assert snapshot["source_chat_role"] == "client"
+    prompt = env.llm.calls[-1]["prompt"]
+    assert f'"source_chat_id": {client_chat}' in prompt
+    assert f'"chat_id": {task_chat}' in prompt
+    assert "Общий чат для всех задач владельцев WMS" in prompt
+    rules = env.llm.calls[-1]["system"]
+    assert "Не связывай общий чат с единственным открытым обращением" in rules
+    assert "неизвестный source_chat_id не подтверждает связь" in rules
+    env.store.kv_set(f"chat_title:{client_chat}", "")
+    assert env.pipe._owner_snapshot()[0]["source_chat_name"] == ""
+
+
 def test_malicious_action_on_passive_status_question_is_rejected(env: Any) -> None:
     tid = await_owner_ticket(env)
     answer(env, "Запускаю.", [{"kind": "go", "ticket_ids": [tid], "note": ""}])
